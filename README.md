@@ -121,7 +121,7 @@ export type IgniterAppContext = Awaited<ReturnType<typeof createIgniterAppContex
 // src/features/user/controllers/user.controller.ts
 import { igniter } from '@/igniter'
 
-export const usersController = igniter.controller({
+export const userController = igniter.controller({
   path: '/users',
   actions: {
     // Query action (GET)
@@ -169,12 +169,13 @@ export const usersController = igniter.controller({
 ```typescript
 // src/igniter.router.ts
 import { igniter } from '@/igniter'
+import { userController } from '@/features/user'
 
 export const AppRouter = igniter.router({
   baseURL: 'http://localhost:3000',
   basePATH: '/api/v1',
   controllers: {
-    users: usersController
+    users: userController
   }
 })
 
@@ -270,7 +271,7 @@ Controllers organize related functionality:
 ```typescript
 import { igniter } from '@/igniter'
 
-const usersController = igniter.controller({
+const userController = igniter.controller({
   path: 'users',
   actions: {
     list: igniter.query({
@@ -351,7 +352,7 @@ First, create your API client:
 
 ```typescript
 // src/igniter.client.ts
-import { createIgniterClient, useIgniterQueryClient } from '@igniter-js/core';
+import { createIgniterClient, useIgniterQueryClient } from '@igniter-js/core/client';
 import { AppRouter } from './igniter.router';
 
 /**
@@ -361,11 +362,7 @@ import { AppRouter } from './igniter.router';
  * It uses the createIgniterClient function to create a client instance
  * 
  */
-export const client = createIgniterClient({
-  baseURL: "http://localhost:3000",
-  basePATH: "/api/v1",
-  router: AppRouter,
-});
+export const api = createIgniterClient(AppRouter);
 
 /**
  * Query client for Igniter
@@ -381,7 +378,7 @@ Then, wrap your app with the Igniter provider:
 
 ```tsx
 // app/providers.tsx
-import { IgniterProvider } from '@igniter-js/core'
+import { IgniterProvider } from '@igniter-js/core/client'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
