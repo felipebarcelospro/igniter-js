@@ -28,9 +28,15 @@ export default defineConfig([
   
   // Configuração específica para o código client-side
   {
-    entry: ['src/client/igniter.hooks.ts', 'src/client/igniter.context.tsx', 'src/client/igniter.client.ts'], // Use um array em vez de um objeto
+    entry: {
+      'igniter.context': 'src/client/igniter.context.tsx',
+      'igniter.hooks': 'src/client/igniter.hooks.ts',
+      'igniter.client': 'src/client/igniter.client.ts',
+    },
     format: ['cjs', 'esm'],
-    dts: true,
+    dts: {
+      entry: 'src/client/index.ts',
+    },
     splitting: false,
     sourcemap: true,
     treeshake: true,
