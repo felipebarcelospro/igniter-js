@@ -17,5 +17,5 @@ export type IgniterRouter<
 > = {
   handler: (request: Request) => Promise<Response>;
   controllers: TControllers;
-  processor: RequestProcessor<IgniterRouterConfig<TContext, TControllers>>;
+  processor: RequestProcessor<IgniterRouterConfig<any, any>>;
 }

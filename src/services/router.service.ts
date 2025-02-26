@@ -34,11 +34,12 @@ import type { IgniterControllerConfig, IgniterRouter, IgniterRouterConfig } from
  */
 export const createIgniterRouter = <
   TContext extends object,
-  TControllers extends Record<string, IgniterControllerConfig<TContext, any>>
+  TControllers extends Record<string, IgniterControllerConfig<TContext, any>>,
+  TConfig extends IgniterRouterConfig<any, any> = IgniterRouterConfig<TContext, TControllers>
 >(
-  config: IgniterRouterConfig<TContext, TControllers>
+  config: TConfig
 ): IgniterRouter<TContext, TControllers> => {
-  const requestProcessor = new RequestProcessor(config);
+  const requestProcessor = new RequestProcessor<TConfig>(config);
 
   return {
     controllers: config.controllers,
