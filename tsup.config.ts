@@ -28,7 +28,7 @@ export default defineConfig([
   
   // Configuração específica para o código client-side
   {
-    entry: ['src/client/index.ts'], // Use um array em vez de um objeto
+    entry: ['src/client/igniter.hooks.ts', 'src/client/igniter.context.tsx', 'src/client/igniter.client.ts'], // Use um array em vez de um objeto
     format: ['cjs', 'esm'],
     dts: true,
     splitting: false,
@@ -36,7 +36,7 @@ export default defineConfig([
     treeshake: true,
     outDir: 'dist/client',
     external: ['react', 'react-dom'],
-    onSuccess: "node scripts/add-client-directive.js", // Adiciona a diretiva 'use client' nos arquivos de saída
+    onSuccess: "node scripts/post-build.js", // Adiciona a diretiva 'use client' nos arquivos de saída
     esbuildOptions(options) {
       options.banner = {
         js: "'use client';",
