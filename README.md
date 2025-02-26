@@ -728,9 +728,8 @@ We welcome contributions! Please see our [contributing guidelines](CONTRIBUTING.
 
 ## Support and Community
 
-- 📚 [Documentation](https://felipebarcelospro.github.io/igniter)
-- 💬 [Discord Community](https://discord.gg/igniter)
-- 🐛 [Issue Tracker](https://github.com/igniter/core/issues)
+- 📚 [Documentation](https://felipebarcelospro.github.io/igniter-js)
+- 🐛 [Issue Tracker](https://github.com/felipebarcelospro/igniter-js/core/issues)
 - 🤝 [Contributing Guidelines](CONTRIBUTING.md)
 
 ## License

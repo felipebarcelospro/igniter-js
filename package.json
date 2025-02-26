@@ -6,12 +6,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/felipebarcelospro/igniter.git"
+    "url": "git+https://github.com/felipebarcelospro/igniter-js.git"
   },
   "bugs": {
-    "url": "https://github.com/felipebarcelospro/igniter/issues"
+    "url": "https://github.com/felipebarcelospro/igniter-js/issues"
   },
-  "homepage": "https://felipebarcelospro.github.io/igniter",
+  "homepage": "https://felipebarcelospro.github.io/igniter-js",
   "keywords": [
     "typescript",
     "api",
@@ -21,7 +21,9 @@
     "nextjs",
     "express",
     "fastify",
-    "type-safe"
+    "type-safe",
+    "middleware",
+    "server"
   ],
   "main": "dist/index.js",
   "module": "dist/index.mjs",
