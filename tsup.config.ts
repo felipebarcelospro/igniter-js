@@ -12,6 +12,19 @@ export default defineConfig([
     treeshake: true,
     external: ['react', 'react-dom'],
   },
+
+  // Configuração para o código dos adapters (server-side)
+  {
+    entry: ['src/adapters/index.ts'],
+    format: ['cjs', 'esm'],
+    outDir: 'dist/adapters',
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    clean: true,
+    treeshake: true,
+    external: ['react', 'react-dom'],
+  },
   
   // Configuração específica para o código client-side
   {

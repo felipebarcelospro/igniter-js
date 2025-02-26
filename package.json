@@ -36,6 +36,11 @@
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.mjs",
       "require": "./dist/client/index.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.mjs",
+      "require": "./dist/adapters/index.js"
     }
   },
   "files": [

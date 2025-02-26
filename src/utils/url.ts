@@ -6,20 +6,20 @@
  * 
  * @example
  * // Relative paths
- * mergePathUrl('users', 'profile') // Returns '/users/profile'
- * mergePathUrl('/users/', '/profile/') // Returns '/users/profile'
- * mergePathUrl('', 'users', '', 'profile') // Returns '/users/profile'
+ * parseURL('users', 'profile') // Returns '/users/profile'
+ * parseURL('/users/', '/profile/') // Returns '/users/profile'
+ * parseURL('', 'users', '', 'profile') // Returns '/users/profile'
  * 
  * @example
  * // With protocol and domain
- * mergePathUrl('https://example.com', 'api', 'users') // Returns 'https://example.com/api/users'
- * mergePathUrl('http://example.com/') // Returns 'http://example.com'
+ * parseURL('https://example.com', 'api', 'users') // Returns 'https://example.com/api/users'
+ * parseURL('http://example.com/') // Returns 'http://example.com'
  * 
  * @example
  * // Edge cases
- * mergePathUrl() // Returns '/'
- * mergePathUrl('') // Returns '/'
- * mergePathUrl('users', '', 'profile') // Returns '/users/profile'
+ * parseURL() // Returns '/'
+ * parseURL('') // Returns '/'
+ * parseURL('users', '', 'profile') // Returns '/users/profile'
  * 
  * @remarks
  * - Removes leading and trailing slashes from individual segments
@@ -28,32 +28,27 @@
  * - Always returns a path starting with '/' unless a protocol is present
  */
 export function parseURL(...args: string[]) {
-  // Extract protocol and domain if present in the first argument
   let protocol = '';
-  let domain = '';
   
   if (args[0]?.match(/^https?:\/\//)) {
     const urlParts = args[0].match(/^(https?:\/\/[^\/]+)(.*)?/);
     if (urlParts) {
-      protocol = urlParts[1];
-      args[0] = urlParts[2] || '';
+      protocol = urlParts[1]; // http://localhost:3000
+      args[0] = urlParts[2] || ''; // '/' ou vazio
     }
   }
 
-  // Filter out empty strings and normalize paths
   const paths = args
     .filter(Boolean)
     .map(path => path.trim())
-    .map(path => path.replace(/^\/+|\/+$/g, '')); // Remove leading/trailing slashes
+    .map(path => path.replace(/^\/+|\/+$/g, ''));
 
-  // Join paths and ensure single forward slashes
   const mergedPath = paths.join('/').replace(/\/+/g, '/');
 
-  // If we have a protocol, don't add leading slash
   if (protocol) {
-    return `${protocol}${mergedPath}`;
+    // Adiciona '/' antes de mergedPath, se ele não estiver vazio
+    return mergedPath ? `${protocol}/${mergedPath}` : protocol;
   }
 
-  // Ensure path starts with / if any arguments were provided
   return mergedPath.length > 0 ? `/${mergedPath}` : '/';
 }

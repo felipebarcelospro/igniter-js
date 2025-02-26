@@ -1,4 +1,4 @@
-import type { IgniterAction, IgniterControllerConfig, IgniterRouter, ClientCallerOptions, ClientConfig, InferRouterCaller, ServerResponse  } from '../types';
+import type { IgniterAction, IgniterControllerConfig, IgniterRouter, ClientCallerOptions, ClientConfig, InferRouterCaller, QueryActionCallerResult, MutationActionCallerResult  } from '../types';
 
 import { isServer } from '../utils/client';
 import { parseURL } from '../utils/url';
@@ -60,15 +60,15 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any>>(
       // Add hooks for GET requests
       if (action.method === 'GET') {
         (client[controllerName as keyof typeof client] as any)[actionName] = {
-          useQuery: !isServer ? createUseQuery(serverCaller) : undefined,
-          call: isServer ? createCaller(controllerName, actionName, router) : undefined,
+          useQuery: !isServer ? createUseQuery(serverCaller) : () => ({} as QueryActionCallerResult<typeof action>),
+          call: isServer ? createCaller(controllerName, actionName, router) : () => ({} as QueryActionCallerResult<typeof action>),
         }
       }
 
       // Add hooks for non-GET requests
       if (action.method !== 'GET') {
         (client[controllerName as keyof typeof client] as any)[actionName] = {
-          useMutation: !isServer ? createUseMutation(serverCaller) : undefined,
+          useMutation: !isServer ? createUseMutation(serverCaller) : () => ({} as MutationActionCallerResult<typeof action>),
           call: isServer ? createCaller(controllerName, actionName, router) : undefined,
         }
       }
@@ -124,14 +124,13 @@ const createFetcher = <TAction extends IgniterAction<any, any, any, any, any, an
 
     // Make the request
     const response = await fetch(url, requestOptions);
+    const data = await response.json();
 
-    // Parse the response
-    const data = await response.json() as ServerResponse;
-
+    // Handle errors
     if (!response.ok) {
-      throw data || new Error(`Request failed with status ${response.status}`);
+      throw new Error(data.message || response.statusText);
     }
 
-    return data;
+    return data as TAction['$Infer']['$Output'];
   };
 };
