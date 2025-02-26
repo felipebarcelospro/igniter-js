@@ -1,0 +1,20 @@
+{
+  "name": "@igniter/core",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/lodash": "^4.17.15",
+    "@types/react": "^19.0.10",
+    "vitest": "^3.0.7"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "lodash": "^4.17.21",
+    "rou3": "^0.5.1",
+    "uncrypto": "^0.1.3",
+  }
+}
