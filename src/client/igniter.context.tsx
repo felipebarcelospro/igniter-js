@@ -4,8 +4,6 @@ import type { IgniterRouter } from '../types';
 import type { IgniterContextType, RefetchFn } from '../types/client.interface';
 
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, type PropsWithChildren } from 'react';
-import { IgniterError } from '../error';
-
 
 /**
  * Igniter context provider type
@@ -150,10 +148,7 @@ export const useIgniterQueryClient = <TRouter extends IgniterRouter<any, any>>()
   const context = useContext(IgniterContext) as IgniterContextType<TRouter> | undefined;
 
   if (!context) {
-    throw new IgniterError({
-      code: 'NO_IGNITER_CONTEXT',
-      message: 'useIgniterQueryClient must be used within an IgniterProvider'
-    });
+    throw new Error('useIgniterQueryClient must be used within an IgniterProvider');
   }
 
   return context;

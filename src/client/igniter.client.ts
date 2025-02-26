@@ -1,7 +1,8 @@
 import type { IgniterAction, IgniterControllerConfig, IgniterRouter, ClientCallerOptions, ClientConfig, InferRouterCaller, ServerResponse  } from '../types';
 
 import { isServer } from '../utils/client';
-import { createUseQuery, createUseMutation } from './hooks';
+import { parseURL } from '../utils/url';
+import { createUseQuery, createUseMutation } from './igniter.hooks';
 
 /**
  * Creates a caller for server actions
@@ -44,10 +45,14 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any>>(
 
     for (const actionName in controller.actions) {
       const action = controller.actions[actionName] as IgniterAction<any, any, any, any, any, any, any, any, any>;
-      const endpoint = `${config.endpoint || '/api/v1'}/${controller.path}`.replace(/\/\//g, '/');
+
+      if(!config.baseURL) config.baseURL = process.env.IGNITER_APP_URL || 'http://localhost:3000'
+      if(!config.basePATH) config.basePATH = process.env.IGNITER_APP_PATH || '/api/v1'
+
+      const baseURL = parseURL(config.baseURL, config.basePATH, controller.path);
 
       // Create server caller
-      const serverCaller = createFetcher(action, endpoint);
+      const serverCaller = createFetcher(action, baseURL);
 
       // Store action path for caching in hooks
       (serverCaller as any).__actionPath = `${controllerName}.${actionName}`;
@@ -78,7 +83,7 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any>>(
  */
 const createFetcher = <TAction extends IgniterAction<any, any, any, any, any, any, any, any, any>>(
   action: TAction,
-  endpoint: string
+  baseURL: string
 ) => {
   return async (options?: ClientCallerOptions<TAction>): Promise<TAction['$Infer']['$Output']> => {
     // Extract path parameters
@@ -91,7 +96,7 @@ const createFetcher = <TAction extends IgniterAction<any, any, any, any, any, an
     }
 
     // Construct full URL
-    let url = `${endpoint}/${path}`;
+    let url = parseURL(baseURL, path);
 
     // Add query parameters for GET requests
     if (action.method === 'GET' && options?.query) {

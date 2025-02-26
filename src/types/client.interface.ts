@@ -3,8 +3,9 @@ import type { IgniterRouter, IgniterAction, NonUnknownObject, Prettify, DeepPart
 export type ClientConfig<
   TRouter extends IgniterRouter<any, any>
 > = {
-  endpoint?: string;
-  router?: TRouter;
+  baseURL?: string
+  basePATH?: string
+  router?: TRouter
 }
 
 export type ClientCallerFetcher<

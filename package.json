@@ -26,14 +26,26 @@
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.mjs",
+      "require": "./dist/client/index.js"
+    }
+  },
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "dev": "tsup --watch",
-    "build": "tsup",
+    "dev": "tsup --config tsup.config.ts --watch",
+    "build": "tsup --config tsup.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src --ext .ts,.tsx",
@@ -43,8 +55,8 @@
     "release": "npm publish --access public"
   },
   "peerDependencies": {
-    "react": ">=18",
-    "react-dom": ">=18",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "typescript": ">=5.0.0"
   },
   "devDependencies": {
@@ -52,6 +64,7 @@
     "@types/bun": "latest",
     "@types/lodash": "^4.17.15",
     "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
     "tsup": "^8.4.0",
     "typescript": "^5.0.0",
     "vitest": "^3.0.7"

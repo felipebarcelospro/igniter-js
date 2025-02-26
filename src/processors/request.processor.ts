@@ -4,6 +4,7 @@ import { IgniterError } from "../error";
 import { IgniterCookie } from "../services/cookie.service";
 import { IgniterResponseProcessor } from "./response.processor";
 import { getHeadersSafe } from "../adapters/next";
+import { parseURL } from "../utils/url";
 
 /**
  * Handles HTTP request processing for the Igniter Framework.
@@ -126,8 +127,8 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> {
       for (const endpoint of Object.values(controller.actions) as IgniterAction<any, any, any, any, any, any, any, any, any>[]) {
         if(!config.baseURL) config.baseURL = process.env.IGNITER_APP_URL || 'http://localhost:3000'
         if(!config.basePath) config.basePath = process.env.IGNITER_APP_PATH || '/api/v1'
-        let path = `${config.basePath.replace(/\/$/, "")}/${controller.path}/${endpoint.path}`;
-        path = path.replace(/\/\//g, "/");
+
+        let path = parseURL(config.basePath, controller.path, endpoint.path);
 
         addRoute(router, endpoint.method, path, endpoint);
       }
@@ -298,7 +299,7 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> {
     if(!this.config.basePath) this.config.basePath = process.env.IGNITER_APP_PATH || '/api/v1'
 
     // Prepare the endpoint
-    const endpoint = `${this.config.baseURL}${this.config.basePath}/${controller.path}/${action.path}`.replace(/\/\//g, '/');
+    const actionEndpointURL = parseURL(this.config.baseURL, this.config.basePath, controller.path, action.path);
 
     // Safely get headers in the server environment
     const reqHeaders = new Headers({});
@@ -314,7 +315,7 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> {
     });
 
     // Prepare context with the input data
-    const request = new Request(endpoint, {
+    const request = new Request(actionEndpointURL, {
       method: action.method,
       headers: reqHeaders,
       body: input?.body ? JSON.stringify(input.body) : undefined

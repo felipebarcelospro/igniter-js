@@ -170,7 +170,7 @@ export const usersController = igniter.controller({
 // src/igniter.router.ts
 import { igniter } from '@/igniter'
 
-export const router = igniter.router({
+export const AppRouter = igniter.router({
   baseURL: 'http://localhost:3000',
   basePATH: '/api/v1',
   controllers: {
@@ -180,22 +180,26 @@ export const router = igniter.router({
 
 // Use with any HTTP framework
 // Example with Express:
+import { AppRouter } from '@/igniter.router'
+
 app.use(async (req, res) => {
-  const response = await router.handler(req)
+  const response = await AppRouter.handler(req)
   res.status(response.status).json(response)
 })
 
 // Example with Bun:
+import { AppRouter } from '@/igniter.router'
+
 Bun.serve({
-  fetch: router.handler
+  fetch: AppRouter.handler
 })
 
 // Example with Next Route Handlers:
 // src/app/api/v1/[[...all]]/route.ts
-import { router } from '@/igniter.router'
+import { AppRouter } from '@/igniter.router'
 import { nextRouteHandlerAdapter } from '@igniter-js/core/adapters/next'
 
-export const { GET, POST, PUT, DELETE } = nextRouteHandlerAdapter(router)
+export const { GET, POST, PUT, DELETE } = nextRouteHandlerAdapter(AppRouter)
 ```
 
 ## Core Concepts
@@ -322,14 +326,14 @@ Secure cookie handling made easy:
 ```typescript
 handler: async (ctx) => {
   // Set cookies
-  await ctx.request.cookies.set('session', 'value', {
+  await ctx.response.setCookie('session', 'value', {
     httpOnly: true,
     secure: true,
     sameSite: 'strict'
   })
 
   // Set signed cookies
-  await ctx.request.cookies.setSigned('token', 'sensitive-data', 'secret-key')
+  await ctx.response.setSignedCookie('token', 'sensitive-data', 'secret-key')
 
   // Get cookies
   const session = ctx.request.cookies.get('session')
@@ -348,7 +352,7 @@ First, create your API client:
 ```typescript
 // src/igniter.client.ts
 import { createIgniterClient, useIgniterQueryClient } from '@igniter-js/core';
-import { router } from './igniter.router';
+import { AppRouter } from './igniter.router';
 
 /**
  * Client for Igniter
@@ -357,7 +361,11 @@ import { router } from './igniter.router';
  * It uses the createIgniterClient function to create a client instance
  * 
  */
-export const client = createIgniterClient(router);
+export const client = createIgniterClient({
+  baseURL: "http://localhost:3000",
+  basePATH: "/api/v1",
+  router: AppRouter,
+});
 
 /**
  * Query client for Igniter
@@ -366,7 +374,7 @@ export const client = createIgniterClient(router);
  * and handles data fetching with respect to the application router.
  * It will enable the necessary hooks for query management.
  */
-export const useQueryClient = useIgniterQueryClient<typeof router>;
+export const useQueryClient = useIgniterQueryClient<typeof AppRouter>;
 ```
 
 Then, wrap your app with the Igniter provider:
