@@ -28,10 +28,8 @@ export const createCaller = <TAction extends IgniterAction<any, any, any, any, a
  * @returns A typed client for calling server actions
  */
 export const createIgniterClient = <TRouter extends IgniterRouter<any, any>>(
-  config: ClientConfig<TRouter>
+  router: ClientConfig<TRouter>
 ): InferRouterCaller<TRouter> => {
-  const router = config.router;
-
   if (!router) {
     throw new Error('Router is required to create an Igniter client');
   }
@@ -46,13 +44,13 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any>>(
     for (const actionName in controller.actions) {
       const action = controller.actions[actionName] as IgniterAction<any, any, any, any, any, any, any, any, any>;
 
-      if(!config.baseURL) config.baseURL = process.env.IGNITER_APP_URL || 'http://localhost:3000'
-      if(!config.basePATH) config.basePATH = process.env.IGNITER_APP_PATH || '/api/v1'
+      let basePATH = router.config.basePATH || process.env.IGNITER_APP_URL || 'http://localhost:3000';
+      let baseURL = router.config.baseURL || process.env.IGNITER_APP_PATH || '/api/v1';
 
-      const baseURL = parseURL(config.baseURL, config.basePATH, controller.path);
+      const parsedBaseURL = parseURL(baseURL, basePATH, controller.path);
 
       // Create server caller
-      const serverCaller = createFetcher(action, baseURL);
+      const serverCaller = createFetcher(action, parsedBaseURL);
 
       // Store action path for caching in hooks
       (serverCaller as any).__actionPath = `${controllerName}.${actionName}`;

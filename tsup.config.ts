@@ -5,7 +5,9 @@ export default defineConfig([
   {
     entry: ['src/index.ts'],
     format: ['cjs', 'esm'],
-    dts: true,
+    dts: {
+      resolve: true,
+    },
     splitting: false,
     sourcemap: true,
     clean: true,
@@ -18,7 +20,9 @@ export default defineConfig([
     entry: ['src/adapters/index.ts'],
     format: ['cjs', 'esm'],
     outDir: 'dist/adapters',
-    dts: true,
+    dts: {
+      resolve: true,
+    },
     splitting: false,
     sourcemap: true,
     clean: true,
@@ -35,7 +39,9 @@ export default defineConfig([
       'igniter.client': 'src/client/igniter.client.ts',
     },
     format: ['cjs', 'esm'],
-    dts: true,
+    dts: {
+      resolve: true,
+    },
     splitting: true, // Habilita o code splitting
     treeshake: true,
     outDir: 'dist/client',

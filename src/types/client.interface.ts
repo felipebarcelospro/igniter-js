@@ -1,12 +1,6 @@
 import type { IgniterRouter, IgniterAction, NonUnknownObject, Prettify, DeepPartial } from ".";
 
-export type ClientConfig<
-  TRouter extends IgniterRouter<any, any>
-> = {
-  baseURL?: string
-  basePATH?: string
-  router?: TRouter
-}
+export type ClientConfig<TRouter extends IgniterRouter<any, any>> = TRouter
 
 export type ClientCallerFetcher<
   TAction extends IgniterAction<any, any, any, any, any, any, any, any, any>

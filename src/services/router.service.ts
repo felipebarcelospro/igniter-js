@@ -44,6 +44,10 @@ export const createIgniterRouter = <
   return {
     controllers: config.controllers,
     processor: requestProcessor,
+    config: {
+      baseURL: config.baseURL,
+      basePATH: config.basePATH
+    },
     handler: async (request: Request) => {
       const response = await requestProcessor.process(request);
       return response;

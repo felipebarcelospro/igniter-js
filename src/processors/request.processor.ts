@@ -5,6 +5,7 @@ import { IgniterCookie } from "../services/cookie.service";
 import { IgniterResponseProcessor } from "./response.processor";
 import { getHeadersSafe } from "../adapters/next";
 import { parseURL } from "../utils/url";
+import type { RequestProcessorInterface } from "../types/request.processor";
 
 /**
  * Handles HTTP request processing for the Igniter Framework.
@@ -25,9 +26,9 @@ import { parseURL } from "../utils/url";
  * const response = await processor.process(request);
  * ```
  */
-export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> {
-  private config: TConfig;
-  private router: RouterContext<IgniterAction<any, any, any, any, any, any, any, any, any>>;
+export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> implements RequestProcessorInterface<TConfig> {
+  public config: TConfig;
+  public router: RouterContext<IgniterAction<any, any, any, any, any, any, any, any, any>>;
 
   /**
    * Creates a new RequestProcessor instance.
@@ -120,21 +121,19 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> {
    * @returns Configured router instance
    * 
   */
-  private register(config: IgniterRouterConfig<any, any>) {
-    const router = createRouter<IgniterAction<any, any, any, any, any, any, any, any, any>>();
+  private register(router: IgniterRouterConfig<any, any>) {
+    const innerRouter = createRouter<IgniterAction<any, any, any, any, any, any, any, any, any>>();
 
-    for (const controller of Object.values(config.controllers) as IgniterControllerConfig<any, any>[]) {
+    for (const controller of Object.values(router.controllers) as IgniterControllerConfig<any, any>[]) {
       for (const endpoint of Object.values(controller.actions) as IgniterAction<any, any, any, any, any, any, any, any, any>[]) {
-        if(!config.baseURL) config.baseURL = process.env.IGNITER_APP_URL || 'http://localhost:3000'
-        if(!config.basePath) config.basePath = process.env.IGNITER_APP_PATH || '/api/v1'
+        let basePATH = router.basePATH || process.env.IGNITER_APP_URL || 'http://localhost:3000';
+        let path = parseURL(basePATH, controller.path, endpoint.path);
 
-        let path = parseURL(config.basePath, controller.path, endpoint.path);
-
-        addRoute(router, endpoint.method, path, endpoint);
+        addRoute(innerRouter, endpoint.method, path, endpoint);
       }
     }
 
-    return router;
+    return innerRouter;
   }
 
   /**
@@ -295,11 +294,12 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> {
       })
     }
 
-    if(!this.config.baseURL) this.config.baseURL = process.env.IGNITER_APP_URL || 'http://localhost:3000'
-    if(!this.config.basePath) this.config.basePath = process.env.IGNITER_APP_PATH || '/api/v1'
+    // Get the base path and URL
+    const basePATH = this.config.basePATH || process.env.IGNITER_APP_URL || 'http://localhost:3000';
+    const baseURL = this.config.baseURL || process.env.IGNITER_APP_PATH || '/api/v1';
 
     // Prepare the endpoint
-    const actionEndpointURL = parseURL(this.config.baseURL, this.config.basePath, controller.path, action.path);
+    const actionEndpointURL = parseURL(baseURL, basePATH, controller.path, action.path);
 
     // Safely get headers in the server environment
     const reqHeaders = new Headers({});

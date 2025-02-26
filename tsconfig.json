@@ -8,22 +8,28 @@
     "jsx": "react-jsx",
     "allowJs": true,
 
-    // Bundler mode
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
+    // Configurações importantes para biblioteca
+    "moduleResolution": "node",
+    "declaration": true,
+    "declarationDir": "./dist",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "esModuleInterop": true,
+    "isolatedModules": true,
 
-    // Best practices
+    // Configurações de tipo mais estritas
     "strict": true,
     "skipLibCheck": true,
-    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Remove noEmit pois precisamos gerar declarações
+    // "noEmit": true,
 
     // Some stricter flags (disabled by default)
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
 }
