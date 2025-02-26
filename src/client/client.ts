@@ -1,7 +1,7 @@
 import type { IgniterAction, IgniterControllerConfig, IgniterRouter, ClientCallerOptions, ClientConfig, InferRouterCaller, ServerResponse  } from '../types';
 
+import { isServer } from '../utils/client';
 import { createUseQuery, createUseMutation } from './hooks';
-import { isServer } from '../../../utils/client';
 
 /**
  * Creates a caller for server actions

@@ -4,7 +4,7 @@ import type { IgniterRouter } from '../types';
 import type { IgniterContextType, RefetchFn } from '../types/client.interface';
 
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, type PropsWithChildren } from 'react';
-import { IgniterError } from '../../../core/error';
+import { IgniterError } from '../error';
 
 
 /**

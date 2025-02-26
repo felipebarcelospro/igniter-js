@@ -1,6 +1,6 @@
 import type { IgniterRouterConfig, IgniterAction, IgniterControllerConfig, IgniterActionContext, IgniterProcedure } from "../types";
 import { addRoute, createRouter, findRoute, type RouterContext } from "rou3";
-import { IgniterError } from "../../../core/error";
+import { IgniterError } from "../error";
 import { IgniterCookie } from "../services/cookie.service";
 import { IgniterResponseProcessor } from "./response.processor";
 import { getHeadersSafe } from "../adapters/next";
