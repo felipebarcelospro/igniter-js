@@ -1,6 +1,6 @@
 # Igniter
 
-[![npm version](https://img.shields.io/npm/v/@igniter/core.svg?style=flat)](https://www.npmjs.com/package/@igniter/core)
+[![npm version](https://img.shields.io/npm/v/@igniter-js/core.svg?style=flat)](https://www.npmjs.com/package/@igniter-js/core)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -31,13 +31,13 @@ Igniter is a modern, type-safe HTTP framework designed to streamline the develop
 ### Installation
 
 ```bash
-npm install @igniter/core
+npm install @igniter-js/core
 # or
-yarn add @igniter/core
+yarn add @igniter-js/core
 # or
-pnpm add @igniter/core
+pnpm add @igniter-js/core
 # or
-bun add @igniter/core
+bun add @igniter-js/core
 ```
 
 ### Quick Start Guide
@@ -80,7 +80,7 @@ src/
 ```typescript
 // src/igniter.ts
 
-import { Igniter } from "@igniter/core";
+import { Igniter } from "@igniter-js/core";
 import type { IgniterAppContext } from "./igniter.context";
 
 /**
@@ -119,6 +119,8 @@ export type IgniterAppContext = Awaited<ReturnType<typeof createIgniterAppContex
 ### 3. Create your first controller
 ```typescript
 // src/features/user/controllers/user.controller.ts
+import { igniter } from '@/igniter'
+
 export const usersController = igniter.controller({
   path: '/users',
   actions: {
@@ -166,6 +168,8 @@ export const usersController = igniter.controller({
 
 ```typescript
 // src/igniter.router.ts
+import { igniter } from '@/igniter'
+
 export const router = igniter.router({
   baseURL: 'http://localhost:3000',
   basePATH: '/api/v1',
@@ -188,8 +192,8 @@ Bun.serve({
 
 // Example with Next Route Handlers:
 // src/app/api/v1/[[...all]]/route.ts
-import { router } from '@/igniter.router.ts'
-import { nextRouteHandlerAdapter } from '@igniter/core/adapters/next'
+import { router } from '@/igniter.router'
+import { nextRouteHandlerAdapter } from '@igniter-js/core/adapters/next'
 
 export const { GET, POST, PUT, DELETE } = nextRouteHandlerAdapter(router)
 ```
@@ -221,6 +225,8 @@ const igniter = Igniter.context<AppContext>().create()
 Procedures provide a powerful way to handle cross-cutting concerns:
 
 ```typescript
+import { igniter } from '@/igniter'
+
 const auth = igniter.procedure({
   handler: async (_, ctx) => {
     const token = ctx.request.headers.get('authorization')
@@ -258,6 +264,8 @@ const protectedAction = igniter.query({
 Controllers organize related functionality:
 
 ```typescript
+import { igniter } from '@/igniter'
+
 const usersController = igniter.controller({
   path: 'users',
   actions: {
@@ -339,9 +347,8 @@ First, create your API client:
 
 ```typescript
 // src/igniter.client.ts
-import { createIgniterClient } from '@igniter/cpre';
+import { createIgniterClient, useIgniterQueryClient } from '@igniter-js/core';
 import { router } from './igniter.router';
-import { useIgniterQueryClient } from '@igniter/core';
 
 /**
  * Client for Igniter
@@ -366,7 +373,7 @@ Then, wrap your app with the Igniter provider:
 
 ```tsx
 // app/providers.tsx
-import { IgniterProvider } from '@igniter/core'
+import { IgniterProvider } from '@igniter-js/core'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -382,7 +389,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 Use the `useQuery` hook for data fetching with automatic caching and revalidation:
 
 ```tsx
-import { api } from '@/api/client'
+import { api } from '@/igniter.client'
 
 function UsersList() {
   const listUsers = api.users.list.useQuery({
@@ -503,7 +510,7 @@ Use direct server calls with React Server Components:
 
 ```tsx
 // app/users/page.tsx
-import { api } from '@/api/client'
+import { api } from '@/igniter.client'
 
 export default async function UsersPage() {
   const users = await api.users.list.call()
@@ -524,7 +531,7 @@ Use with Server Actions:
 // app/users/actions.ts
 'use server'
 
-import { api } from '@/api/client'
+import { api } from '@/igniter.client'
 
 export async function createUser(formData: FormData) {
   const name = formData.get('name') as string
@@ -551,7 +558,7 @@ Combine Server and Client Components:
 
 ```tsx
 // app/users/hybrid-page.tsx
-import { api } from '@/api/client'
+import { api } from '@/igniter.client'
 
 // Server Component
 async function UsersList() {
@@ -626,7 +633,7 @@ Use direct server calls with React Server Components:
 
 ```tsx
 // app/users/page.tsx
-import { api } from '@/api/client'
+import { api } from '@/igniter.client'
 
 export default async function UsersPage() {
   const users = await api.users.list.call()
@@ -646,13 +653,9 @@ export default async function UsersPage() {
 Igniter is designed with testability in mind:
 
 ```typescript
-import { createTestRouter } from '@igniter/core/testing'
+import { router } from '@/igniter.router'
 
 describe('User API', () => {
-  const router = createTestRouter({
-    // Your router configuration
-  })
-
   it('should create a user', async () => {
     const result = await router.users.create.call({
       body: {
@@ -679,6 +682,8 @@ describe('User API', () => {
 ### Performance Monitoring
 
 ```typescript
+import { igniter } from '@/igniter'
+
 const monitor = igniter.procedure({
   handler: async (_, ctx) => {
     const start = performance.now()

@@ -1,5 +1,5 @@
 {
-  "name": "@igniter/core",
+  "name": "@igniter-js/core",
   "version": "0.1.0",
   "description": "A modern, type-safe, and flexible HTTP framework for building scalable APIs with TypeScript",
   "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
@@ -39,7 +39,8 @@
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "prepublishOnly": "bun run build",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "release": "npm publish --access public"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -47,16 +48,11 @@
     "typescript": ">=5.0.0"
   },
   "devDependencies": {
+    "@igniter-js/eslint-config": "^0.1.0",
     "@types/bun": "latest",
     "@types/lodash": "^4.17.15",
     "@types/react": "^19.0.10",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0",
-    "eslint": "^8.0.0",
-    "eslint-config-prettier": "^9.0.0",
-    "eslint-plugin-prettier": "^5.0.0",
-    "prettier": "^3.0.0",
-    "tsup": "^8.0.0",
+    "tsup": "^8.4.0",
     "typescript": "^5.0.0",
     "vitest": "^3.0.7"
   },
