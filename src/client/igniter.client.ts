@@ -44,8 +44,8 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any>>(
     for (const actionName in controller.actions) {
       const action = controller.actions[actionName] as IgniterAction<any, any, any, any, any, any, any, any, any>;
 
-      let basePATH = router.config.basePATH || process.env.IGNITER_APP_URL || 'http://localhost:3000';
-      let baseURL = router.config.baseURL || process.env.IGNITER_APP_PATH || '/api/v1';
+      const basePATH = router.config.basePATH || process.env.IGNITER_APP_PATH || '/api/v1';
+      const baseURL = router.config.baseURL || process.env.IGNITER_APP_URL || 'http://localhost:3000';
 
       const parsedBaseURL = parseURL(baseURL, basePATH, controller.path);
 

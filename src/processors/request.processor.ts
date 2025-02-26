@@ -126,7 +126,7 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
 
     for (const controller of Object.values(router.controllers) as IgniterControllerConfig<any, any>[]) {
       for (const endpoint of Object.values(controller.actions) as IgniterAction<any, any, any, any, any, any, any, any, any>[]) {
-        let basePATH = router.basePATH || process.env.IGNITER_APP_URL || 'http://localhost:3000';
+        let basePATH = router.basePATH || process.env.IGNITER_APP_BASE_PATH || '/api/v1';
         let path = parseURL(basePATH, controller.path, endpoint.path);
 
         addRoute(innerRouter, endpoint.method, path, endpoint);
@@ -295,8 +295,8 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
     }
 
     // Get the base path and URL
-    const basePATH = this.config.basePATH || process.env.IGNITER_APP_URL || 'http://localhost:3000';
-    const baseURL = this.config.baseURL || process.env.IGNITER_APP_PATH || '/api/v1';
+    const basePATH = this.config.basePATH || process.env.IGNITER_APP_PATH || '/api/v1';
+    const baseURL = this.config.baseURL || process.env.IGNITER_APP_URL || 'http://localhost:3000';
 
     // Prepare the endpoint
     const actionEndpointURL = parseURL(baseURL, basePATH, controller.path, action.path);

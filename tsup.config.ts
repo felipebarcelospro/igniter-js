@@ -30,29 +30,29 @@ export default defineConfig([
     external: ['react', 'react-dom'],
   },
   
-  // Configuração específica para o código client-side
+  // Uma configuração unificada para client com preserveModules
   {
     entry: {
-      'index': 'src/client/index.ts',
       'igniter.context': 'src/client/igniter.context.tsx',
       'igniter.hooks': 'src/client/igniter.hooks.ts',
       'igniter.client': 'src/client/igniter.client.ts',
+      'index': 'src/client/index.ts',
     },
     format: ['cjs', 'esm'],
     dts: {
       resolve: true,
     },
-    splitting: true, // Habilita o code splitting
     treeshake: true,
+    splitting: true,
     outDir: 'dist/client',
-    external: ['react', 'react-dom'],
-    esbuildOptions(options) {
-      options.banner = {
-        js: "'use client';",
-      };
-      options.bundle = true;
-      options.platform = 'neutral';
-      options.mainFields = ['module', 'main'];
-    },
+    external: [
+      'react', 
+      'react-dom',
+      // Importante: marque as importações internas como externas
+      './igniter.hooks',
+      './igniter.context',
+      './igniter.client'
+    ],
+    onSuccess: 'node scripts/post-build.js'
   }
 ])
