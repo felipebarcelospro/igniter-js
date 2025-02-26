@@ -198,7 +198,7 @@ Bun.serve({
 // Example with Next Route Handlers:
 // src/app/api/v1/[[...all]]/route.ts
 import { AppRouter } from '@/igniter.router'
-import { nextRouteHandlerAdapter } from '@igniter-js/core/adapters/next'
+import { nextRouteHandlerAdapter } from '@igniter-js/core/adapters'
 
 export const { GET, POST, PUT, DELETE } = nextRouteHandlerAdapter(AppRouter)
 ```
