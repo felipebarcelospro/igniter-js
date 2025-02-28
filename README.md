@@ -399,7 +399,8 @@ import { api } from '@/igniter.client'
 function UsersList() {
   const listUsers = api.users.list.useQuery({
     // Optional configuration
-    initialData: [], // Initial data while loading
+    data: [], // Initial data while loading
+    params: {}, // Params for query
     staleTime: 1000 * 60, // Data stays fresh for 1 minute
     refetchInterval: 1000 * 30, // Refetch every 30 seconds
     refetchOnWindowFocus: true, // Refetch when window regains focus
@@ -641,7 +642,7 @@ Use direct server calls with React Server Components:
 import { api } from '@/igniter.client'
 
 export default async function UsersPage() {
-  const users = await api.users.list.call()
+  const users = await api.users.list.query()
   
   return (
     <div>
@@ -662,7 +663,7 @@ import { router } from '@/igniter.router'
 
 describe('User API', () => {
   it('should create a user', async () => {
-    const result = await router.users.create.call({
+    const result = await router.users.create.mutate({
       body: {
         name: 'Test User',
         email: 'test@example.com'

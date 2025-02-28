@@ -1,5 +1,6 @@
-import type { IgniterAction, IgniterControllerConfig, IgniterRouter, ClientCallerOptions, ClientConfig, InferRouterCaller, QueryActionCallerResult, MutationActionCallerResult  } from '../types';
+import type { IgniterAction, IgniterControllerConfig, IgniterRouter, ClientCallerOptions, ClientConfig, InferRouterCaller, QueryActionCallerResult, MutationActionCallerResult, ClientCallerFetcher  } from '../types';
 
+import { cache } from 'react';
 import { isServer } from '../utils/client';
 import { parseURL } from '../utils/url';
 import { createUseQuery, createUseMutation } from './igniter.hooks';
@@ -12,14 +13,17 @@ import { createUseQuery, createUseMutation } from './igniter.hooks';
  * @returns A function to call server actions
  */
 export const createCaller = <TAction extends IgniterAction<any, any, any, any, any, any, any, any, any>>(
-  controller: string,
-  action: string,
   router: IgniterRouter<any, any>,
+  fetcher: ClientCallerFetcher<TAction>,
+
+  controller: string,
+  action: string,  
 ) => {
-  return async (input: ClientCallerOptions<TAction>) => {
-    if (!isServer) throw new Error('Client calls are only available on the server');
-    return await router.processor.call(controller, action, input);
-  }
+  return cache(async (input: ClientCallerOptions<TAction>) => {
+    if (!isServer) return fetcher(input);
+    const response = await router.processor.call(controller, action, input);
+    return response;
+  })
 }
 
 /**
@@ -59,7 +63,7 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any>>(
       if (action.method === 'GET') {
         (client[controllerName as keyof typeof client] as any)[actionName] = {
           useQuery: !isServer ? createUseQuery(serverCaller) : () => ({} as QueryActionCallerResult<typeof action>),
-          call: isServer ? createCaller(controllerName, actionName, router) : () => ({} as QueryActionCallerResult<typeof action>),
+          query: createCaller(router, serverCaller, controllerName, actionName),
         }
       }
 
@@ -67,7 +71,7 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any>>(
       if (action.method !== 'GET') {
         (client[controllerName as keyof typeof client] as any)[actionName] = {
           useMutation: !isServer ? createUseMutation(serverCaller) : () => ({} as MutationActionCallerResult<typeof action>),
-          call: isServer ? createCaller(controllerName, actionName, router) : undefined,
+          mutate: createCaller(router, serverCaller, controllerName, actionName),
         }
       }
     }

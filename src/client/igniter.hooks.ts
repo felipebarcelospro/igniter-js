@@ -29,9 +29,7 @@ export const createUseQuery = <TAction extends IgniterAction<any, any, any, any,
     const { register, unregister } = useIgniterQueryClient();
     
     const [loading, setLoading] = useState(false);
-    const [data, setData] = useState<Awaited<TAction['$Infer']['$Output']> | null>(
-      options?.initialData || null
-    );
+    const [data, setData] = useState<Awaited<TAction['$Infer']['$Output']> | null>(options?.data || null);
     
     const optionsRef = useRef(options);
     optionsRef.current = options;
@@ -62,7 +60,7 @@ export const createUseQuery = <TAction extends IgniterAction<any, any, any, any,
         }
         
         console.log(`[Igniter] Fetching fresh data for key: ${regKey}`);
-        const result = await serverCaller(params);
+        const result = await serverCaller(params || options?.params);
         
         setData(result);
         if (optionsRef.current?.staleTime) {
@@ -98,7 +96,7 @@ export const createUseQuery = <TAction extends IgniterAction<any, any, any, any,
             return;
           }
           // Using empty params, assuming that GET requests can work without body
-          execute({} as ClientCallerOptions<TAction>);
+          execute(options?.params as ClientCallerOptions<TAction>);
         }, options.refetchInterval);
         
         return () => clearInterval(interval);
@@ -109,7 +107,7 @@ export const createUseQuery = <TAction extends IgniterAction<any, any, any, any,
     useEffect(() => {
       if (options?.refetchOnWindowFocus !== false) {
         const handleFocus = () => {
-          execute({} as ClientCallerOptions<TAction>);
+          execute(options?.params as ClientCallerOptions<TAction>);
         };
         
         window.addEventListener('focus', handleFocus);
@@ -121,7 +119,7 @@ export const createUseQuery = <TAction extends IgniterAction<any, any, any, any,
     useEffect(() => {
       if (options?.refetchOnReconnect !== false) {
         const handleOnline = () => {
-          execute({} as ClientCallerOptions<TAction>);
+          execute(options?.params as ClientCallerOptions<TAction>);
         };
         
         window.addEventListener('online', handleOnline);
@@ -132,7 +130,7 @@ export const createUseQuery = <TAction extends IgniterAction<any, any, any, any,
     // Initial fetch
     useEffect(() => {
       if (options?.refetchOnMount !== false) {
-        execute({} as ClientCallerOptions<TAction>);
+        execute(options?.params as ClientCallerOptions<TAction>);
       }
     }, [execute, options?.refetchOnMount]);
     

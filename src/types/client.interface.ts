@@ -30,7 +30,9 @@ export type ServerResponse<T = unknown> = {
 export type QueryActionCallerOptions<
   TAction extends IgniterAction<any, any, any, any, any, any, any, any, any>
 > = {
-  initialData?: Awaited<TAction['$Infer']['$Output']>;
+  enabled?: boolean;
+  data?: Awaited<TAction['$Infer']['$Output']>;
+  params?: TAction['$Infer']['$Input'];
   staleTime?: number;
   refetchInterval?: number;
   refetchIntervalInBackground?: boolean;
@@ -76,10 +78,10 @@ export type ClientActionCaller<
 > = 
   TAction extends { method: 'GET' } ? { 
     useQuery: QueryActionCaller<TAction>;
-    call: ClientCallerHandler<TAction>;
+    query: ClientCallerHandler<TAction>;
    } : { 
-    useMutation: MutationActionCaller<TAction> 
-    call: ClientCallerHandler<TAction>;
+    useMutation: MutationActionCaller<TAction>; 
+    mutate: ClientCallerHandler<TAction>;
   }
 
 export type InferCacheKeysFromRouter<TRouter extends IgniterRouter<any, any>> = {
