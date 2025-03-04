@@ -80,7 +80,6 @@ export class IgniterResponseProcessor {
    */
   success<T>(data?: T) {
     this._response.error = null
-    // @ts-expect-error - data can be undefined
     this._response.data = data
     this._status = this._status || 200
     return this as unknown as IgniterResponse<T>
@@ -101,7 +100,6 @@ export class IgniterResponseProcessor {
    */
   created<T>(data?: T) {
     this._response.error = null
-    // @ts-expect-error - data can be undefined
     this._response.data = data
     this._status = 201
     return this as unknown as IgniterResponse<T>
@@ -344,7 +342,6 @@ export class IgniterResponseProcessor {
    * ```
    */
   json<T>(data: T): IgniterResponse<T> {
-    // @ts-expect-error - data can be undefined
     this._response.data = data
     this._response.error = null
     return this as unknown as IgniterResponse<T>
@@ -374,7 +371,7 @@ export class IgniterResponseProcessor {
     if(this._response.error) {
       headers.set("Content-Type", "application/json")
 
-      return new Response(JSON.stringify({ data: null, error: this._response.error }), {
+      return new Response(JSON.stringify(this._response.error), {
         status: this._status,
         headers,
       })
@@ -383,7 +380,7 @@ export class IgniterResponseProcessor {
     if(this._response.data) {
       headers.set("Content-Type", "application/json")
       
-      return new Response(JSON.stringify({ data: this._response.data, error: null }), {
+      return new Response(JSON.stringify(this._response.data), {
         status: this._status,
         headers,
       })

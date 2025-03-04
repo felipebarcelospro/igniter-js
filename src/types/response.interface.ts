@@ -4,6 +4,7 @@ export type IgniterResponseSuccess<TData = any> = {
 };
 
 export type IgniterResponseError = {
+  data: null,
   error: {
     code: 'ERR_UNKNOWN_ERROR';
     data: unknown;
@@ -11,6 +12,7 @@ export type IgniterResponseError = {
 };
 
 export type IgniterResponseBadRequest = {
+  data: null,
   error: {
     code: 'ERR_BAD_REQUEST';
     data: unknown;
@@ -18,6 +20,7 @@ export type IgniterResponseBadRequest = {
 };
 
 export type IgniterResponseRedirect = {
+  data: null,
   error: {
     code: 'ERR_REDIRECT';
     data: {
@@ -36,6 +39,7 @@ export type IgniterResponseNotFound = {
 };
 
 export type IgniterResponseUnauthorized = {
+  data: null,
   error: {
     code: 'ERR_UNAUTHORIZED';
     data: unknown;
@@ -43,6 +47,7 @@ export type IgniterResponseUnauthorized = {
 };
 
 export type IgniterResponseForbidden = {
+  data: null,
   error: {
     code: 'ERR_FORBIDDEN';
     data: unknown;

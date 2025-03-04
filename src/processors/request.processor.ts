@@ -325,6 +325,8 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
     const response = await this.process(request);
     const data = await response.json();
 
+    console.log(`[Igniter] Successful response from ${controllerKey.toString()}.${actionKey.toString()}`);
+
     return data;
   }
 }

@@ -168,6 +168,7 @@ export const createUseMutation = <TAction extends IgniterAction<any, any, any, a
           : params;
           
         const result = await serverCaller(mergedParams);
+        console.log({result})
         
         setData(result);
         optionsRef.current?.onRequest?.(result);
