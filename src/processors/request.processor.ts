@@ -6,7 +6,6 @@ import { IgniterResponseProcessor } from "./response.processor";
 import { getHeadersSafe } from "../adapters/next";
 import { parseURL } from "../utils/url";
 import type { RequestProcessorInterface } from "../types/request.processor";
-import { isClient } from "../utils";
 
 /**
  * Handles HTTP request processing for the Igniter Framework.
@@ -153,8 +152,6 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
    * const response = await processor.process(request);
   */
   async process(request: Request) {
-    if(isClient) return {} as any
-
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
@@ -327,8 +324,6 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
     // Call the action handler directly
     const response = await this.process(request);
     const data = await response.json();
-
-    console.log(`[Igniter] Successful response from ${controllerKey.toString()}.${actionKey.toString()}`);
 
     return data;
   }
