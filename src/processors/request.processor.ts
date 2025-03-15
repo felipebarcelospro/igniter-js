@@ -272,9 +272,9 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
     TActionKey extends keyof TConfig['controllers'][TControllerKey]["actions"],
     TAction extends TConfig['controllers'][TControllerKey]["actions"][TActionKey]
   >(
-    controllerKey: TControllerKey, 
-    actionKey: TActionKey, 
-    input: TAction['$Infer']['$Input']
+    controllerKey: TControllerKey,
+    actionKey: TActionKey,
+    input: TAction['$Infer']['$Input'] & { params?: Record<string, string | number> }
   ): Promise<TAction['$Infer']['$Output']> {
     // Get the controller
     const controller = this.config.controllers[controllerKey];
@@ -290,23 +290,39 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
     if (!action) {
       throw new IgniterError({
         code: 'ACTION_NOT_FOUND',
-        message: `Action ${actionKey.toString()} not found`
-      })
+        message: `Action ${actionKey.toString()} not found`,
+      });
     }
 
     // Get the base path and URL
     const basePATH = this.config.basePATH || process.env.IGNITER_APP_PATH || '/api/v1';
     const baseURL = this.config.baseURL || process.env.IGNITER_APP_URL || 'http://localhost:3000';
 
-    // Prepare the endpoint
-    const actionEndpointURL = parseURL(baseURL, basePATH, controller.path, action.path);
+    // Construct the URL with parameters
+    function constructURL(
+      baseURL: string,
+      basePATH: string,
+      controllerPath: string,
+      actionPath: string,
+      params?: Record<string, string | number>
+    ) {
+      let url = parseURL(baseURL, basePATH, controllerPath, actionPath);
+      if (params) {
+        for (const [key, value] of Object.entries(params)) {
+          url = url.replace(`:${key}`, String(value));
+        }
+      }
+      return url;
+    }
+
+    const actionEndpointURL = constructURL(baseURL, basePATH, controller.path, action.path, input.params);
 
     // Safely get headers in the server environment
     const reqHeaders = new Headers({});
-    
+
     // Safely try to get headers from next/headers if we're in a RSC
     const serverHeaders = await getHeadersSafe();
-    
+
     // Merge server headers with request headers (request headers take precedence)
     serverHeaders.forEach((value, key) => {
       if (!reqHeaders.has(key)) {
@@ -318,9 +334,9 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
     const request = new Request(actionEndpointURL, {
       method: action.method,
       headers: reqHeaders,
-      body: input?.body ? JSON.stringify(input.body) : undefined
+      body: input?.body ? JSON.stringify(input.body) : undefined,
     });
-    
+
     // Call the action handler directly
     const response = await this.process(request);
     const data = await response.json();

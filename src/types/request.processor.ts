@@ -25,6 +25,6 @@ export interface RequestProcessorInterface<TConfig extends IgniterRouterConfig<a
   >(
     controllerKey: TControllerKey,
     actionKey: TActionKey,
-    input: TAction['$Infer']['$Input']
+    input: TAction['$Infer']['$Input'] & { params?: Record<string, string | number> }
   ): Promise<TAction['$Infer']['$Output']>
 }
