@@ -304,18 +304,19 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
       basePATH: string,
       controllerPath: string,
       actionPath: string,
-      params?: Record<string, string | number>
+      input: Record<string, any>
     ) {
       let url = parseURL(baseURL, basePATH, controllerPath, actionPath);
-      if (params) {
-        for (const [key, value] of Object.entries(params)) {
-          url = url.replace(`:${key}`, String(value));
-        }
+      if (!input || !input.params) return url
+      
+      for (const [key, value] of Object.entries(input.params)) {
+        url = url.replace(`:${key}`, String(value));
       }
+
       return url;
     }
 
-    const actionEndpointURL = constructURL(baseURL, basePATH, controller.path, action.path, input.params);
+    const actionEndpointURL = constructURL(baseURL, basePATH, controller.path, action.path, input);
 
     // Safely get headers in the server environment
     const reqHeaders = new Headers({});
