@@ -5,6 +5,7 @@ import { isServer } from '../utils/client';
 import { parseURL } from '../utils/url';
 import { createUseQuery, createUseMutation } from './igniter.hooks';
 import { tryCatch } from '../utils';
+import { parseResponse } from '../utils/response';
 
 /**
  * Creates a caller for server actions
@@ -22,8 +23,7 @@ export const createCaller = <TAction extends IgniterAction<any, any, any, any, a
 ) => {
   return cache(async (input: ClientCallerOptions<TAction>) => {
     if (!isServer) return fetcher(input);
-    const response = await tryCatch(router.processor.call(controller, action, input));
-    return response
+    return router.processor.call(controller, action, input);
   })
 }
 
@@ -127,13 +127,7 @@ const createFetcher = <TAction extends IgniterAction<any, any, any, any, any, an
 
     // Make the request
     const response = await fetch(url, requestOptions);
-    const data = await response.json();
-
-    // Handle errors
-    if (!response.ok) {
-      return { error: data, data: null };
-    }
-
-    return {error: null, data: data} as TAction['$Infer']['$Output'];
+    const result = await parseResponse(response);
+    return result;
   };
 };
