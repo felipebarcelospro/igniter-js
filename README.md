@@ -1,738 +1,337 @@
-# Igniter
+<div align="center">
+  <a href="https://github.com/felipebarcelospro/igniter-js">
+    <img src="https://raw.githubusercontent.com/felipebarcelospro/igniter-js/main/.github/assets/igniter-logo-light.svg" alt="Igniter Logo" width="200">
+  </a>
+  <br />
+  <h1>Igniter</h1>
+  <p>
+    <b>Type-Safe, Builder-Centric HTTP Framework for Modern TypeScript Applications</b>
+  </p>
+  <p>
+    Build robust, scalable, and type-safe APIs with an unparalleled developer experience. Igniter combines the power of a builder-centric architecture with first-class support for modern protocols like MCP, making it the ultimate choice for your next project.
+  </p>
+  <br />
+  <a href="https://www.npmjs.com/package/@igniter-js/core">
+    <img src="https://img.shields.io/npm/v/@igniter-js/core.svg?style=flat&colorA=000000&colorB=000000" alt="NPM Version">
+  </a>
+  <a href="https://github.com/felipebarcelospro/igniter-js/blob/main/LICENSE">
+    <img src="https://img.shields.io/npm/l/@igniter-js/core.svg?style=flat&colorA=000000&colorB=000000" alt="License">
+  </a>
+  <a href="https://www.typescriptlang.org/">
+    <img src="https://img.shields.io/badge/TypeScript-5.0+-blue.svg?style=flat&colorA=000000&colorB=000000" alt="TypeScript">
+  </a>
+</div>
 
-[![npm version](https://img.shields.io/npm/v/@igniter-js/core.svg?style=flat)](https://www.npmjs.com/package/@igniter-js/core)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+---
 
-Igniter is a modern, type-safe HTTP framework designed to streamline the development of scalable TypeScript applications. It combines the flexibility of traditional HTTP frameworks with the power of full-stack type safety, making it the ideal choice for teams building robust web applications.
+Igniter is not just another framework; it's a new way of building APIs. Designed from the ground up to be **incrementally adoptable**, **fully type-safe**, and **incredibly flexible**. Whether you're building a simple API for your startup or a complex, multi-tenant system for an enterprise, Igniter provides the tools you need to succeed.
 
-## Why Igniter?
+## Key Features
 
-- **Type Safety Without Compromise**: End-to-end type safety from your API routes to your client code, catching errors before they reach production
-- **Framework Agnostic**: Seamlessly integrates with Next.js, Express, Fastify, or any Node.js framework
-- **Developer Experience First**: Built with TypeScript best practices and modern development patterns in mind
-- **Production Ready**: Being used in production by companies of all sizes
-- **Minimal Boilerplate**: Get started quickly without sacrificing scalability
-- **Flexible Architecture**: Adapts to your project's needs, from small APIs to large-scale applications
+- 🏗️ **Builder-Centric Architecture**: A fluent, chainable API to build your server by composing middleware, security policies, and configurations with full type-safety.
+- 🤖 **First-Class MCP Support**: Seamlessly create [Model Context Protocol](https://docs.google.com/document/d/1W2adwGVIe_k1iSV_Mh_3oT2sA8x0aW_95T2j3IG53gM/edit) servers with automatic type inference from your existing Igniter router.
+- 🛡️ **Built-in Security Procedures**: Production-ready procedures for Authentication (JWT/Session), CORS, and Rate Limiting. Highly configurable and secure by default.
+- 🔄 **End-to-End Type Safety**: From your database to your client, Igniter guarantees type safety, catching errors at build time, not runtime.
+- 🔌 **Framework Agnostic**: Deploy anywhere. Igniter integrates effortlessly with Next.js, Express, Fastify, Bun, or any Node.js environment.
+- ⚡ **Optimized for DX**: Enjoy a world-class developer experience with minimal boilerplate, intuitive APIs, and comprehensive IntelliSense.
 
-## Features
+## Installation
 
-- 🎯 **Full TypeScript Support**: End-to-end type safety from your API routes to your client code
-- 🚀 **Modern Architecture**: Built with modern TypeScript features and best practices
-- 🔒 **Type-Safe Routing**: Route parameters and query strings are fully typed
-- 🔌 **Middleware System**: Powerful and flexible middleware support with full type inference
-- 🎭 **Context Sharing**: Share context between middlewares and route handlers
-- 🔄 **Built-in Error Handling**: Comprehensive error handling with type-safe error responses
-- 🍪 **Cookie Management**: Built-in cookie handling with signing support
-- 📦 **Framework Agnostic**: Works with any Node.js framework (Express, Fastify, Next.js, etc.)
-
-## Getting Started
-
-### Installation
+Get started in seconds. Igniter is a single package with zero required dependencies.
 
 ```bash
-npm install @igniter-js/core
-# or
-yarn add @igniter-js/core
-# or
-pnpm add @igniter-js/core
-# or
 bun add @igniter-js/core
+# or pnpm, yarn, npm
 ```
 
-### Quick Start Guide
+## Quick Start: Your First API in 5 Minutes
 
-Building an API with Igniter is straightforward and intuitive. Here's how to get started:
+Let's create a fully-functional, type-safe API endpoint.
 
-## Project Structure
+### 1. Define the Context
 
-Igniter promotes a feature-based architecture that scales with your application:
+The context is the heart of your application, holding shared data like database connections or user info.
 
-```
-src/
-├── igniter.ts                            # Core initialization
-├── igniter.client.ts                     # Client implementation
-├── igniter.context.ts                    # Context management
-├── igniter.router.ts                     # Router configuration
-├── features/                             # Application features
-│   └── [feature]/
-│       ├── presentation/                 # Feature presentation layer
-│       │   ├── components/               # Feature-specific components
-│       │   ├── hooks/                    # Custom hooks
-│       │   ├── contexts/                 # Feature contexts
-│       │   └── utils/                    # Utility functions
-│       ├── controllers/                  # Feature controllers
-│       │   └── [feature].controller.ts
-│       ├── procedures/                   # Feature procedures/middleware
-│       │   └── [feature].procedure.ts
-│       ├── [feature].interfaces.ts       # Type definitions(interfaces, entities, inputs and outputs)
-│       └── index.ts                      # Feature exports
-```
-
-### Understanding the Structure
-
-- **Feature-based Organization**: Each feature is self-contained with its own controllers, procedures, and types
-- **Clear Separation of Concerns**: Presentation, business logic, and data access are clearly separated
-- **Scalable Architecture**: Easy to add new features without affecting existing ones
-- **Maintainable Codebase**: Consistent structure makes it easy for teams to navigate and maintain
-
-### 1. Initialize Igniter
 ```typescript
-// src/igniter.ts
-
-import { Igniter } from "@igniter-js/core";
-import type { IgniterAppContext } from "./igniter.context";
-
-/**
- * @description Initialize the Igniter Router
- * @see https://igniter.felipebarcelospro.github.io/docs/getting-started/installation
- */
-export const igniter = Igniter.context<IgniterAppContext>().create()
-```
-
-### 2. Define your App Global Context
-```typescript
-// src/igniter.context
-import { prisma } from "@/lib/db";
-import { Invariant } from "@/utils";
-
-/**
- * @description Create the context of the application
- * @see https://igniter.felipebarcelospro.github.io/docs/getting-started/installation
- */
-export const createIgniterAppContext = () => {
-  return {
-    providers: {
-      database: prisma,
-      rules: Invariant.initialize('Igniter')
+// src/igniter/context.ts
+export interface AppContext {
+  db: {
+    // Your DB client, e.g., Prisma
+    user: {
+      findFirst: (args: any) => Promise<{ id: string; name: string } | null>
     }
-  }
+  },
+  user?: { id: string; name: string; role: 'admin' | 'user' }
 }
-
-/**
- * @description The context of the application
- * @see https://igniter.felipebarcelospro.github.io/docs/getting-started/installation
- */
-export type IgniterAppContext = Awaited<ReturnType<typeof createIgniterAppContext>>;
 ```
 
-### 3. Create your first controller
+### 2. Initialize with the Builder
+
+Create your Igniter instance using the powerful builder pattern.
+
 ```typescript
-// src/features/user/controllers/user.controller.ts
-import { igniter } from '@/igniter'
+// src/igniter/index.ts
+import { Igniter } from '@igniter-js/core';
+import type { AppContext } from './context';
+
+export const igniter = Igniter.context<AppContext>().create();
+```
+
+### 3. Create a Controller
+
+Controllers group related API actions together.
+
+```typescript
+// src/features/users/user.controller.ts
+import { z } from 'zod';
+import { igniter } from '@/igniter';
 
 export const userController = igniter.controller({
   path: '/users',
   actions: {
-    // Query action (GET)
-    list: igniter.query({
-      path: '/',
-      use: [auth()],
-      query: z.object({
-        page: z.number().optional(),
-        limit: z.number().optional()
+    getById: igniter.query({
+      path: '/:id',
+      params: z.object({
+        id: z.string(),
       }),
-      handler: async (ctx) => {
-        return ctx.response.success({
-          users: [
-            { id: 1, name: 'John Doe' }
-          ]
-        })
-      }
-    }),
+      handler: async ({ request, response, context }) => {
+        const { id } = request.params;
+        const user = await context.db.user.findFirst({ where: { id } });
 
-    // Mutation action (POST)
-    create: igniter.mutation({
-      path: '/',
-      method: 'POST',
-      use: [auth()],
-      body: z.object({
-        name: z.string(),
-        email: z.string().email()
-      }),
-      handler: async (ctx) => {
-        const { name, email } = ctx.request.body
-        
-        return ctx.response.created({
-          id: '1',
-          name,
-          email
-        })
-      }
-    })
-  }
-})
+        if (!user) {
+          return response.notFound(`User with id ${id} not found`);
+        }
+
+        return response.success({ user });
+      },
+    }),
+  },
+});
 ```
 
-### 4. Initialize Igniter Router with your framework
+### 4. Build the Router
+
+The router assembles all your controllers into a single, cohesive API.
 
 ```typescript
-// src/igniter.router.ts
-import { igniter } from '@/igniter'
-import { userController } from '@/features/user'
+// src/igniter/router.ts
+import { igniter } from '.';
+import { userController } from '@/features/users/user.controller';
 
-export const AppRouter = igniter.router({
-  baseURL: 'http://localhost:3000',
-  basePATH: '/api/v1',
+export const appRouter = igniter.router({
   controllers: {
-    users: userController
-  }
-})
+    users: userController,
+  },
+});
 
-// Use with any HTTP framework
-// Example with Express:
-import { AppRouter } from '@/igniter.router'
-
-app.use(async (req, res) => {
-  const response = await AppRouter.handler(req)
-  res.status(response.status).json(response)
-})
-
-// Example with Bun:
-import { AppRouter } from '@/igniter.router'
-
-Bun.serve({
-  fetch: AppRouter.handler
-})
-
-// Example with Next Route Handlers:
-// src/app/api/v1/[[...all]]/route.ts
-import { AppRouter } from '@/igniter.router'
-import { nextRouteHandlerAdapter } from '@igniter-js/core/adapters'
-
-export const { GET, POST, PUT, DELETE } = nextRouteHandlerAdapter(AppRouter)
+export type AppRouter = typeof appRouter;
 ```
+
+### 5. Deploy Anywhere
+
+Expose your router using your favorite framework. Here's an example with **Next.js Route Handlers**:
+
+```typescript
+// src/app/api/[[...igniter]]/route.ts
+import { nextRouteHandlerAdapter } from '@igniter-js/core/adapters';
+import { appRouter } from '@/igniter/router';
+import { createContext } from '@/igniter/context'; // Your function to create the context
+
+const handler = nextRouteHandlerAdapter({
+  router: appRouter,
+  context: createContext, // Pass your context creation function
+});
+
+export { handler as GET, handler as POST, handler as PUT, handler as DELETE, handler as PATCH };
+```
+
+That's it! You now have a fully type-safe endpoint at `/api/users/:id`.
+
+---
 
 ## Core Concepts
 
-### Application Context
+Dive deeper into the powerful features that make Igniter unique.
 
-The context system is the backbone of your application:
+### The Builder-Centric API
 
-```typescript
-type AppContext = {
-  db: Database
-  user?: User
-}
-
-const igniter = Igniter.context<AppContext>().create()
-```
-
-#### Best Practices for Context
-
-- Keep context focused and specific to your application needs
-- Use TypeScript interfaces to define context shape
-- Consider splitting large contexts into domain-specific contexts
-- Avoid storing request-specific data in global context
-
-### Procedures (Middleware)
-
-Procedures provide a powerful way to handle cross-cutting concerns:
+Go beyond the basics by extending the Igniter builder to apply global middleware, security policies, and configurations. The context is automatically enriched and typed every step of the way.
 
 ```typescript
-import { igniter } from '@/igniter'
+// src/igniter/index.ts
+import { Igniter } from '@igniter-js/core';
+import { corsProcedure, rateLimitProcedure } from '@igniter-js/core/procedures';
+import type { AppContext } from './context';
 
-const auth = igniter.procedure({
-  handler: async (_, ctx) => {
-    const token = ctx.request.headers.get('authorization')
-    if (!token) {
-      return ctx.response.unauthorized()
-    }
-    
-    const user = await verifyToken(token)
-    return { user }
-  }
-})
-
-// Use in actions
-const protectedAction = igniter.query({
-  path: '/protected',
-  use: [auth()],
-  handler: (ctx) => {
-    // ctx.context.user is typed!
-    return ctx.response.success({ user: ctx.context.user })
-  }
-})
-```
-
-#### Common Use Cases for Procedures
-
-- Authentication and Authorization
-- Request Validation
-- Logging and Monitoring
-- Error Handling
-- Performance Tracking
-- Data Transformation
-
-### Controllers and Actions
-
-Controllers organize related functionality:
-
-```typescript
-import { igniter } from '@/igniter'
-
-const userController = igniter.controller({
-  path: 'users',
-  actions: {
-    list: igniter.query({
-      path: '/',
-      handler: (ctx) => ctx.response.success({ users: [] })
-    }),
-    
-    get: igniter.query({
-      path: '/:id',
-      handler: (ctx) => {
-        // ctx.request.params.id is typed!
-        return ctx.response.success({ user: { id: ctx.request.params.id } })
-      }
-    })
-  }
-})
-```
-
-#### Controller Best Practices
-
-- Group related actions together
-- Keep controllers focused on a single resource or domain
-- Use meaningful names that reflect the resource
-- Implement proper error handling
-- Follow RESTful conventions where appropriate
-
-### Type-Safe Responses
-
-Igniter provides a robust response system:
-
-```typescript
-handler: async (ctx) => {
-  // Success responses
-  ctx.response.success({ data: 'ok' })
-  ctx.response.created({ id: 1 })
-  ctx.response.noContent()
-
-  // Error responses
-  ctx.response.badRequest('Invalid input')
-  ctx.response.unauthorized()
-  ctx.response.forbidden('Access denied')
-  ctx.response.notFound('Resource not found')
-  
-  // Custom responses
-  ctx.response.status(418).setHeader('X-Custom', 'value').json({ message: "I'm a teapot" })
-}
-```
-
-### Cookie Management
-
-Secure cookie handling made easy:
-
-```typescript
-handler: async (ctx) => {
-  // Set cookies
-  await ctx.response.setCookie('session', 'value', {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'strict'
-  })
-
-  // Set signed cookies
-  await ctx.response.setSignedCookie('token', 'sensitive-data', 'secret-key')
-
-  // Get cookies
-  const session = ctx.request.cookies.get('session')
-  const token = await ctx.request.cookies.getSigned('token', 'secret-key')
-}
-```
-
-## React Client Integration
-
-The Igniter React client provides a seamless integration with your frontend:
-
-### Setup
-
-First, create your API client:
-
-```typescript
-// src/igniter.client.ts
-import { createIgniterClient, useIgniterQueryClient } from '@igniter-js/core/client';
-import { AppRouter } from './igniter.router';
-
-/**
- * Client for Igniter
- * 
- * This client is used to fetch data on the client-side
- * It uses the createIgniterClient function to create a client instance
- * 
- */
-export const api = createIgniterClient(AppRouter);
-
-/**
- * Query client for Igniter
- * 
- * This client provides access to the Igniter query functions
- * and handles data fetching with respect to the application router.
- * It will enable the necessary hooks for query management.
- */
-export const useQueryClient = useIgniterQueryClient<typeof AppRouter>;
-```
-
-Then, wrap your app with the Igniter provider:
-
-```tsx
-// app/providers.tsx
-import { IgniterProvider } from '@igniter-js/core/client'
-
-export function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <IgniterProvider>
-      {children}
-    </IgniterProvider>
-  )
-}
-```
-
-### Queries
-
-Use the `useQuery` hook for data fetching with automatic caching and revalidation:
-
-```tsx
-import { api } from '@/igniter.client'
-
-function UsersList() {
-  const listUsers = api.users.list.useQuery({
-    // Optional configuration
-    data: [], // Initial data while loading
-    params: {}, // Params for query
-    staleTime: 1000 * 60, // Data stays fresh for 1 minute
-    refetchInterval: 1000 * 30, // Refetch every 30 seconds
-    refetchOnWindowFocus: true, // Refetch when window regains focus
-    refetchOnMount: true, // Refetch when component mounts
-    refetchOnReconnect: true, // Refetch when reconnecting
-    onLoading: (isLoading) => console.log('Loading:', isLoading),
-    onRequest: (response) => console.log('Data received:', response)
-  })
-
-  if (loading) return <div>Loading...</div>
-
-  return (
-    <div>
-      <button onClick={() => refetch()}>Refresh</button>
-      {users.map(user => (
-        <div key={user.id}>{user.name}</div>
-      ))}
-    </div>
-  )
-}
-```
-
-### Mutations
-
-Use the `useMutation` hook for data modifications:
-
-```tsx
-function CreateUserForm() {
-  const createUser = api.users.create.useMutation({
-    // Optional configuration
-    defaultValues: { name: '', email: '' },
-    onLoading: (isLoading) => console.log('Loading:', isLoading),
-    onRequest: (response) => console.log('Created user:', response)
-  })
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      await createUser.mutate({
-        body: {
-          name: 'John Doe',
-          email: 'john@example.com'
-        }
+const t = Igniter.context<AppContext>()
+  .extend(builder => builder
+    // Apply global middleware that runs on every request
+    .middleware([
+      corsProcedure({
+        origin: (origin) => origin.endsWith('.your-domain.com'),
+        credentials: true
+      }),
+      rateLimitProcedure({
+        windowMs: 60 * 1000, // 1 minute
+        max: 100,
+        message: "You are being rate limited."
       })
-      // Handle success
-    } catch (error) {
-      // Handle error
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit}>
-      {/* Form fields */}
-      <button type="submit" disabled={createUser.loading}>
-        {createUser.loading ? 'Creating...' : 'Create User'}
-      </button>
-    </form>
-  )
-}
-```
-
-### Cache Invalidation
-
-Invalidate queries manually or automatically after mutations:
-
-```tsx
-function AdminPanel() {
-  const queryClient = useIgniterQueryClient()
-
-  // Invalidate specific queries
-  const invalidateUsers = () => {
-    queryClient.invalidate('users.list')
-  }
-
-  // Invalidate multiple queries
-  const invalidateAll = () => {
-    queryClient.invalidate([
-      'users.list',
-      'users.get'
     ])
-  }
-
-  return (
-    <button onClick={invalidateUsers}>
-      Refresh Users
-    </button>
-  )
-}
-```
-
-### Automatic Type Inference
-
-The client provides full type inference for your API:
-
-```typescript
-// All these types are automatically inferred
-type User = InferOutput<typeof api.users.get>
-type CreateUserInput = InferInput<typeof api.users.create>
-type QueryKeys = InferCacheKeysFromRouter<typeof router>
-
-// TypeScript will show errors for invalid inputs
-api.users.create.useMutation({
-  onRequest: (data) => {
-    data.id // ✅ Typed as string
-    data.invalid // ❌ TypeScript error
-  }
-})
-```
-
-### Server Actions (Next.js App Router)
-
-Use direct server calls with React Server Components:
-
-```tsx
-// app/users/page.tsx
-import { api } from '@/igniter.client'
-
-export default async function UsersPage() {
-  const users = await api.users.list.call()
-  
-  return (
-    <div>
-      {users.map(user => (
-        <div key={user.id}>{user.name}</div>
-      ))}
-    </div>
-  )
-}
-```
-
-Use with Server Actions:
-
-```tsx
-// app/users/actions.ts
-'use server'
-
-import { api } from '@/igniter.client'
-
-export async function createUser(formData: FormData) {
-  const name = formData.get('name') as string
-  const email = formData.get('email') as string
-
-  return api.users.create.call({
-    body: { name, email }
-  })
-}
-
-// app/users/create-form.tsx
-export function CreateUserForm() {
-  return (
-    <form action={createUser}>
-      <input name="name" />
-      <input name="email" type="email" />
-      <button type="submit">Create User</button>
-    </form>
-  )
-}
-```
-
-Combine Server and Client Components:
-
-```tsx
-// app/users/hybrid-page.tsx
-import { api } from '@/igniter.client'
-
-// Server Component
-async function UsersList() {
-  const users = await api.users.list.call()
-  return (
-    <div>
-      {users.map(user => (
-        <div key={user.id}>{user.name}</div>
-      ))}
-    </div>
-  )
-}
-
-// Client Component
-'use client'
-function UserCount() {
-  const { count } = api.users.count.useQuery()
-  return <div>Total Users: {count}</div>
-}
-
-// Main Page Component
-export default function UsersPage() {
-  return (
-    <div>
-      <UserCount />
-      <Suspense fallback={<div>Loading...</div>}>
-        <UsersList />
-      </Suspense>
-    </div>
-  )
-}
-```
-
-### Performance Optimization
-
-- **Caching Strategy**: Configure caching behavior per query
-- **Automatic Revalidation**: Keep data fresh with smart revalidation
-- **Prefetching**: Improve perceived performance
-- **Optimistic Updates**: Provide instant feedback
-- **Parallel Queries**: Handle multiple requests efficiently
-
-### Error Handling and Recovery
-
-```typescript
-function UserProfile() {
-  const { data, error, retry } = api.users.get.useQuery({
-    onError: (error) => {
-      console.error('Failed to fetch user:', error)
-    },
-    retry: 3, // Retry failed requests
-    retryDelay: 1000, // Wait 1 second between retries
-  })
-
-  if (error) {
-    return (
-      <div>
-        Error loading profile
-        <button onClick={retry}>Try Again</button>
-      </div>
-    )
-  }
-
-  return <div>{/* ... */}</div>
-}
-```
-
-## Advanced Usage
-
-### Server-Side Rendering
-
-Use direct server calls with React Server Components:
-
-```tsx
-// app/users/page.tsx
-import { api } from '@/igniter.client'
-
-export default async function UsersPage() {
-  const users = await api.users.list.query()
-  
-  return (
-    <div>
-      {users.map(user => (
-        <div key={user.id}>{user.name}</div>
-      ))}
-    </div>
-  )
-}
-```
-
-### Testing
-
-Igniter is designed with testability in mind:
-
-```typescript
-import { router } from '@/igniter.router'
-
-describe('User API', () => {
-  it('should create a user', async () => {
-    const result = await router.users.create.mutate({
-      body: {
-        name: 'Test User',
-        email: 'test@example.com'
-      }
+    // Add security policies and other configurations
+    .security({
+      // ... your security configs
     })
+  )
+  .create();
 
-    expect(result.status).toBe(201)
-    expect(result.data).toHaveProperty('id')
-  })
-})
+// Now, create a procedure that enriches the context
+const authProcedure = t.procedure({
+  handler: async ({ request }) => {
+    // Imagine you validate a token and get a user
+    const user = { id: '123', name: 'John Doe', role: 'admin' as const };
+    return { user }; // This 'user' is now added to the context
+  }
+});
+
+// Use it in an action, and `ctx.user` is fully typed!
+const protectedAction = t.query({
+  use: [authProcedure()],
+  handler: ({ context, response }) => {
+    // context.user is available and typed as { id: string; name: string; role: 'admin' }
+    if (context.user.role !== 'admin') {
+      return response.forbidden('Admins only');
+    }
+    return response.success({ secret: 'data' });
+  }
+});
 ```
 
-### Security Best Practices
+### Security Procedures
 
-- Use procedures for authentication and authorization
-- Implement rate limiting
-- Validate all inputs
-- Use secure cookie options
-- Handle errors safely
-- Implement CORS properly
+Stop reinventing the wheel. Igniter provides production-grade security middleware out of the box.
 
-### Performance Monitoring
+- `authProcedure`: Handles complex authentication flows (JWT, Session, Custom) and enriches the context with the authenticated user.
+- `corsProcedure`: Manages Cross-Origin Resource Sharing with fine-grained control.
+- `rateLimitProcedure`: Protects your API from abuse with flexible rate-limiting strategies.
+
+**Example: A secure-by-default builder**
 
 ```typescript
-import { igniter } from '@/igniter'
+import { authProcedure, corsProcedure, rateLimitProcedure } from '@igniter-js/core/procedures';
 
-const monitor = igniter.procedure({
-  handler: async (_, ctx) => {
-    const start = performance.now()
-    
-    // Wait for the next middleware/handler
-    const result = await ctx.next()
-    
-    const duration = performance.now() - start
-    console.log(`${ctx.request.method} ${ctx.request.path} - ${duration}ms`)
-    
-    return result
-  }
-})
+const igniter = Igniter.context<AppContext>()
+  .extend(builder => builder
+    .middleware([
+      corsProcedure({ /* ... */ }),
+      rateLimitProcedure({ /* ... */ }),
+      authProcedure({ // This will now run on every request
+        jwt: { secret: process.env.JWT_SECRET! },
+        onError: ({ response }) => response.unauthorized('Invalid Token')
+      })
+    ])
+  )
+  .create();
+
+// Every handler created with this `igniter` instance will now have
+// `ctx.user` automatically typed and available, or will fail with a 401.
 ```
 
-## TypeScript Configuration
+## Advanced: Model Context Protocol (MCP)
 
-Recommended `tsconfig.json` settings:
+Supercharge your application by exposing your API to Large Language Models (LLMs) through the Model Context Protocol. Igniter's adapter makes this incredibly simple and **fully type-safe**.
 
-```json
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "lib": ["ES2020"],
-    "module": "CommonJS",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
-  }
+The `createMcpAdapter` automatically infers all your routes, inputs, and outputs from your `AppRouter`, creating a compliant MCP server instantly.
+
+```typescript
+// src/mcp/server.ts
+import { createMcpAdapter } from '@igniter-js/core/adapters';
+import { appRouter } from '@/igniter/router';
+import { createContext, AppContext } from '@/igniter/context';
+
+const mcpServer = createMcpAdapter(appRouter, {
+  server: {
+    name: 'MyAwesomeApp',
+    version: '1.0.0',
+  },
+  // The context function is fully typed.
+  // `baseContext` is the initial context from your HTTP request.
+  context: async (baseContext: AppContext) => {
+    // You can add more context specific to your MCP server
+    return {
+      ...baseContext,
+      llm: { // e.g., an LLM client
+        generate: (prompt: string) => `Generated: ${prompt}`,
+      },
+    };
+  },
+  // Define custom tools the LLM can use.
+  tools: {
+    summarizeText: {
+      name: 'summarizeText',
+      description: 'Summarizes a given text.',
+      inputSchema: {
+        type: 'object',
+        properties: { text: { type: 'string' } },
+        required: ['text'],
+      },
+      // The context here is the enriched MCP context!
+      handler: async ({ text }, context) => {
+        const summary = await context.llm.generate(`Summarize: ${text}`);
+        return { summary };
+      },
+    },
+  },
+  instructions: 'You are a helpful assistant for MyAwesomeApp. Use the available tools to help the user.',
+});
+
+// Expose the MCP handler, e.g., in a Next.js route
+export default mcpServer.handler;
+```
+
+With this, you have a powerful, type-safe bridge between your API and the world of AI.
+
+## Client-Side Integration (React)
+
+Igniter provides a seamless experience for frontend development with its React client, offering hooks for queries, mutations, and cache management.
+
+### 1. Create the Client
+
+```typescript
+// src/lib/igniter-client.ts
+import { createIgniterClient } from '@igniter-js/core/client';
+import type { AppRouter } from '@/igniter/router';
+
+export const api = createIgniterClient<AppRouter>({
+  // Configure your API client
+});
+```
+
+### 2. Use the Hooks
+
+Fetch data and perform mutations with fully-typed hooks that feel like magic.
+
+```tsx
+// src/components/UserProfile.tsx
+import { api } from '@/lib/igniter-client';
+
+function UserProfile({ userId }: { userId: string }) {
+  const { data, isLoading, error } = api.users.getById.useQuery({
+    params: { id: userId },
+  });
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  // `data` is fully typed based on your `getById` action's return type!
+  // e.g., { user: { id: string; name: string } }
+  return <h1>{data.user.name}</h1>;
 }
 ```
 
 ## Contributing
 
-We welcome contributions! Please see our [contributing guidelines](CONTRIBUTING.md) for details.
-
-## Support and Community
-
-- 📚 [Documentation](https://felipebarcelospro.github.io/igniter-js)
-- 🐛 [Issue Tracker](https://github.com/felipebarcelospro/igniter-js/core/issues)
-- 🤝 [Contributing Guidelines](CONTRIBUTING.md)
+Contributions are welcome! Please see our [contributing guidelines](CONTRIBUTING.md) for more details on how to get involved.
 
 ## License
 
-MIT License - see the [LICENSE](LICENSE) file for details.
+Igniter is licensed under the [MIT License](LICENSE). 
