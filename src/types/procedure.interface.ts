@@ -55,19 +55,26 @@ export type IgniterProcedure<
 }
 
 /**
+ * Extracts the output type from a single procedure.
+ */
+type ExtractProcedureOutput<T> = T extends IgniterProcedure<any, any, infer TOutput> ? TOutput : never;
+
+/**
  * Infers the procedure context type from an array of IgniterProcedure instances.
  * 
  * @typeParam TActionProcedures - An array of IgniterProcedure instances with generic types for input, output, and context
- * @returns A union-to-intersection type of the awaited return types of all procedure handlers
+ * @returns A union-to-intersection type of the output types of all procedures
  * 
  * @example
  * ```typescript
  * type Procedures = [
- *   IgniterProcedure<Input1, Output1, Context1>,
- *   IgniterProcedure<Input2, Output2, Context2>
+ *   IgniterProcedure<any, any, { user: User }>,
+ *   IgniterProcedure<any, any, { requestId: string }>
  * ]
- * type Context = InferProcedureContext<Procedures> // Context1 & Context2
+ * type Context = InferProcedureContext<Procedures> // { user: User } & { requestId: string }
  * ```
  */
 export type InferProcedureContext<TActionProcedures extends readonly IgniterProcedure<any, any, any>[]> = 
-  UnionToIntersection<Awaited<ReturnType<TActionProcedures[number]['handler']>>>;
+  TActionProcedures extends readonly []
+    ? {}
+    : UnionToIntersection<ExtractProcedureOutput<TActionProcedures[number]>>;

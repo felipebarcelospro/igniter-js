@@ -7,6 +7,7 @@ import { getHeadersSafe } from "../adapters/next";
 import { parseURL } from "../utils/url";
 import type { RequestProcessorInterface } from "../types/request.processor";
 import { parseResponse } from "../utils/response";
+import { createAuthProcedure, createRateLimitProcedure, createCorsProcedure } from "../procedures/security";
 
 /**
  * Handles HTTP request processing for the Igniter Framework.
@@ -39,6 +40,29 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
   constructor(config: TConfig) {
     this.config = config;
     this.router = this.register(config);
+  }
+
+  /**
+   * Creates global security procedures based on router configuration.
+   * 
+   * @returns Array of security procedures
+   */
+  private createSecurityProcedures(): IgniterProcedure<any, any, any>[] {
+    const procedures: IgniterProcedure<any, any, any>[] = [];
+    
+    if (this.config.security?.cors) {
+      procedures.push(createCorsProcedure(this.config.security.cors)());
+    }
+    
+    if (this.config.security?.rateLimit) {
+      procedures.push(createRateLimitProcedure(this.config.security.rateLimit)());
+    }
+    
+    if (this.config.security?.auth) {
+      procedures.push(createAuthProcedure(this.config.security.auth)());
+    }
+    
+    return procedures;
   }
 
   /**
@@ -191,7 +215,50 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
       context: routeContext,
     };
 
-    // Only execute middlewares if they exist
+    // Execute global security procedures first
+    const securityProcedures = this.createSecurityProcedures();
+    for (const procedure of securityProcedures) {
+      // @ts-expect-error - This is a hack to get around the fact that the middleware handler is not typed
+      const result = await procedure.handler(context);
+
+      if (result instanceof Response) {
+        return result;
+      }
+
+      if (result instanceof IgniterResponseProcessor) {
+        return result.toResponse();
+      }
+
+      // Merge the middleware result into context.context
+      context.context = {
+        ...context.context,
+        ...result
+      };
+    }
+
+    // Execute global middlewares
+    if (this.config.use && Array.isArray(this.config.use)) {
+      for (const use of this.config.use) {
+        // @ts-expect-error - This is a hack to get around the fact that the middleware handler is not typed
+        const result = await use.handler(context);
+
+        if (result instanceof Response) {
+          return result;
+        }
+
+        if (result instanceof IgniterResponseProcessor) {
+          return result.toResponse();
+        }
+
+        // Merge the middleware result into context.context
+        context.context = {
+          ...context.context,
+          ...result
+        };
+      }
+    }
+
+    // Execute action-specific middlewares
     if (handler.use && Array.isArray(handler.use)) {
       for (const use of handler.use as IgniterProcedure<any, any, any>[]) {
         // @ts-expect-error - This is a hack to get around the fact that the middleware handler is not typed

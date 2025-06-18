@@ -1,5 +1,7 @@
 import type { IgniterControllerConfig } from "./controller.interface";
 import type { RequestProcessorInterface } from "./request.processor";
+import type { IgniterProcedure } from "./procedure.interface";
+import type { SecurityConfig } from "../procedures/security";
 
 export type IgniterRouterConfig<
   TContext extends object,
@@ -9,6 +11,10 @@ export type IgniterRouterConfig<
   basePATH?: string;
   controllers: TControllers;
   context?: (request: Request) => TContext | Promise<TContext>;
+  /** Global security configuration */
+  security?: SecurityConfig;
+  /** Global middleware procedures */
+  use?: IgniterProcedure<TContext, any, any>[];
 }
 
 export type IgniterRouter<
