@@ -7,4 +7,5 @@ export type IgniterControllerConfig<
   name: string;
   path: string;
   actions: TControllerActions;
+  [key: string]: any;
 }

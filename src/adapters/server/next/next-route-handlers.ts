@@ -1,4 +1,4 @@
-import type { IgniterRouter } from "../../types"
+import type { IgniterRouter } from "../../../types"
 
 /**
  * Adapter function to convert an IgniterRouter instance into Next.js route handlers

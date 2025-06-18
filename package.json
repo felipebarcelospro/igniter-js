@@ -64,11 +64,28 @@
   "peerDependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "typescript": ">=5.0.0"
+    "typescript": ">=5.0.0",
+    "ioredis": "",
+    "bullmq": ""
+  },
+  "peerDependenciesMeta": {
+    "@vercel/mcp-adapter": {
+      "optional": true
+    },
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    },
+    "bullmq": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@igniter-js/eslint-config": "^0.1.0",
     "@types/bun": "latest",
+    "@types/ioredis": "^5.0.0",
     "@types/lodash": "^4.17.15",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",

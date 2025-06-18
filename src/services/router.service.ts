@@ -1,5 +1,48 @@
 import { RequestProcessor } from "../processors/request.processor";
-import type { IgniterControllerConfig, IgniterRouter, IgniterRouterConfig } from "../types";
+import type { IgniterControllerConfig, IgniterRouter, IgniterRouterConfig, IgniterRouterSchema } from "../types";
+
+/**
+ * Extracts a clean schema from router for client-side usage.
+ * Removes all server-side logic (handlers, middleware, adapters).
+ */
+function extractRouterSchema<
+  TContext extends object,
+  TControllers extends Record<string, IgniterControllerConfig<TContext, any>>
+>(router: IgniterRouter<TContext, TControllers>) {
+  const controllersSchema: Record<string, any> = {};
+  
+  for (const [controllerName, controller] of Object.entries(router.controllers)) {
+    const actionsSchema: Record<string, any> = {};
+    
+    for (const [actionName, action] of Object.entries(controller.actions) as IgniterControllerConfig<TContext, any>['actions']) {
+      // Extract only safe metadata - NO handlers, middleware, etc.
+      actionsSchema[actionName] = {
+        path: action.path,
+        method: action.method,
+        description: action.description,
+        // Keep type inference data
+        $Infer: action.$Infer,
+        // Remove: handler, use, $Caller
+      };
+    }
+    
+    controllersSchema[controllerName] = {
+      name: controller.name,
+      path: controller.path,
+      actions: actionsSchema,
+      // Remove any other controller metadata that might contain server logic
+    };
+  }
+  
+  return {
+    config: {
+      baseURL: router.config.baseURL,
+      basePATH: router.config.basePATH,
+    },
+    controllers: controllersSchema,
+    // Explicitly NOT including: processor, handler, context functions
+  };
+}
 
 /**
  * Creates a new router instance for the Igniter Framework.

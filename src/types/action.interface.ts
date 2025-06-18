@@ -29,6 +29,7 @@ export type IgniterActionContext<
   }
   context: Prettify<TActionContext & InferProcedureContext<TActionMiddlewares>>;
   response: IgniterResponseProcessor
+  [key: string]: any;
 }
 
 export type IgniterActionHandler<
@@ -51,6 +52,7 @@ export type IgniterQueryOptions<
   query?: TActionQuery;
   use?: TActionMiddlewares;
   handler: TActionHandler;
+  [key: string]: any;
 };
 
 export type IgniterMutationOptions<
@@ -68,6 +70,7 @@ export type IgniterMutationOptions<
   body?: TActionBody;
   use?: TActionMiddlewares;
   handler: TActionHandler;
+  [key: string]: any;
 };
 
 export type IgniterAction<
@@ -90,6 +93,7 @@ export type IgniterAction<
   handler: TActionHandler;
   $Infer: TActionInfer;
   $Caller: (input: NonUnknownObject<TActionInfer['$Input']>) => ReturnType<TActionHandler>;
+  [key: string]: any;
 }
 
 export type InferEndpoint<
@@ -115,4 +119,5 @@ export type InferEndpoint<
   handler: TActionHandler;
   $Input: TActionInferInput;
   $Output: ReturnType<TActionHandler>;
+  [key: string]: any;
 }>;

@@ -1,6 +1,6 @@
 'use client'
 
-import type { IgniterAction, IgniterRouter, ClientCallerFetcher, ClientCallerOptions, MutationActionCallerOptions, MutationActionCallerResult, QueryActionCallerOptions, QueryActionCallerResult } from '../types';
+import type { IgniterAction, IgniterRouter, ClientCallerFetcher, ClientCallerOptions, MutationActionCallerOptions, MutationActionCallerResult, QueryActionCallerOptions, QueryActionCallerResult, IgniterStoreAdapter, IgniterLogger } from '../types';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useIgniterQueryClient } from './igniter.context';

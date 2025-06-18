@@ -1,4 +1,4 @@
-import type { IgniterRouter, IgniterAction, NonUnknownObject, Prettify, DeepPartial } from ".";
+import type { IgniterRouter, IgniterAction, NonUnknownObject, Prettify, DeepPartial, IgniterRouterSchema } from ".";
 
 export type ClientConfig<TRouter extends IgniterRouter<any, any>> = TRouter
 
@@ -92,13 +92,22 @@ export type InferCacheKeysFromRouter<TRouter extends IgniterRouter<any, any>> = 
   }[keyof TRouter['controllers'][TControllerName]['actions']];
 }[keyof TRouter['controllers']];
 
-export type InferRouterCaller<
-  TRouter extends IgniterRouter<any, any>
-> = {
-  [TControllerName in keyof TRouter['controllers']]: {
-    [TActionName in keyof TRouter['controllers'][TControllerName]['actions']]: ClientActionCaller<TRouter['controllers'][TControllerName]['actions'][TActionName]>
-  }
-}
+
+// MODIFICAR linha 109 (InferRouterCaller):
+export type InferRouterCaller<TRouterOrSchema> = 
+  TRouterOrSchema extends IgniterRouter<any, infer TControllers>
+    ? {
+        [TControllerName in keyof TControllers]: {
+          [TActionName in keyof TControllers[TControllerName]['actions']]: ClientActionCaller<TControllers[TControllerName]['actions'][TActionName]>
+        }
+      }
+    : TRouterOrSchema extends IgniterRouterSchema<any, infer TControllers>
+    ? {
+        [TControllerName in keyof TControllers]: {
+          [TActionName in keyof TControllers[TControllerName]['actions']]: ClientActionCaller<TControllers[TControllerName]['actions'][TActionName]>
+        }
+      }
+    : never;
 
 
 export type IgniterContextType<TRouter extends IgniterRouter<any, any>> = {

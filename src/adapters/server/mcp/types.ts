@@ -1,4 +1,4 @@
-import type { IgniterRouter, IgniterControllerConfig } from "../../types";
+import type { IgniterRouter, IgniterControllerConfig } from "../../../types";
 
 /**
  * MCP context passed to event handlers and instructions function.
@@ -124,6 +124,8 @@ export interface McpAdapterOptions<TContext = any, TInferredContext = any> {
     onRequest?: (request: Request, context: McpContext<TInferredContext>) => void | Promise<void>;
     /** Called on MCP response */
     onResponse?: (response: any, context: McpContext<TInferredContext>) => void | Promise<void>;
+    /** Called on general MCP adapter errors */
+    onError?: (error: Error, context: McpContext<TInferredContext>) => void | Promise<void>;
   };
   
   /** Context creation function with automatic type inference */

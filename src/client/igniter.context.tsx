@@ -51,11 +51,15 @@ export function IgniterProvider({ children }: PropsWithChildren) {
   const [listeners] = useState(() => new Map<string, Set<RefetchFn>>());
   
   // Registra uma função de refetch para uma queryKey específica
-  const register = useCallback((key: string, refetch: RefetchFn) => {   
+  const register = useCallback((key: string, refetch: RefetchFn) => {
+    console.log(`[Igniter] Registering refetch function for key: ${key}`);
+    
     const current = listeners.get(key) || new Set();
     current.add(refetch);
-    listeners.set(key, current);    
-  
+    listeners.set(key, current);
+    
+    console.log(`[Igniter] Current listeners for ${key}:`, current.size);
+    
     return () => {
       const listenerSet = listeners.get(key);
       if (listenerSet) {
@@ -63,18 +67,22 @@ export function IgniterProvider({ children }: PropsWithChildren) {
         if (listenerSet.size === 0) {
           listeners.delete(key);
         }
+        console.log(`[Igniter] Unregistered refetch function for key: ${key}`);
       }
     };
   }, [listeners]);
 
   // Remove o registro de uma função de refetch
-  const unregister = useCallback((key: string, refetch: RefetchFn) => {    
+  const unregister = useCallback((key: string, refetch: RefetchFn) => {
+    console.log(`[Igniter] Unregistering refetch function for key: ${key}`);
+    
     const current = listeners.get(key);
     if (current) {
       current.delete(refetch);
       if (current.size === 0) {
         listeners.delete(key);
       }
+      console.log(`[Igniter] Current listeners for ${key}:`, current.size);
     }
   }, [listeners]);
 
@@ -83,16 +91,21 @@ export function IgniterProvider({ children }: PropsWithChildren) {
     const keysArray = Array.isArray(keys) ? keys : [keys];
 
     keysArray.forEach(key => {
+      console.log(`[Igniter] Invalidating query for key: ${key}`);
       const registered = listeners.get(key);
       
       if (registered) {
+        console.log(`[Igniter] Found ${registered.size} listeners for key: ${key}`);
         registered.forEach(refetch => {
           try {
+            console.log(`[Igniter] Executing refetch for key: ${key}`);
             refetch();
           } catch (err) {
             console.error(`[Igniter] Error refetching query for key '${key}':`, err);
           }
         });
+      } else {
+        console.log(`[Igniter] No listeners found for key: ${key}`);
       }
     });
   }, [listeners]);

@@ -1,4 +1,4 @@
-import type { IgniterRouter, IgniterControllerConfig, IgniterAction } from "../../types";
+import type { IgniterRouter, IgniterControllerConfig, IgniterAction } from "../../../types";
 import type { 
   McpAdapterOptions, 
   McpContext, 
@@ -83,12 +83,12 @@ export function createMcpAdapter<
 export function createMcpAdapter<
   TContext extends object,
   TControllers extends Record<string, IgniterControllerConfig<TContext, any>>,
-  TOptions extends McpAdapterOptions<TContext, any> = McpAdapterOptions<TContext, TContext>,
-  TInferredContext = InferMcpContext<TContext, TOptions>
+  TOptions extends McpAdapterOptions<TContext, any> = McpAdapterOptions<TContext, TContext>
 >(
   router: IgniterRouter<TContext, TControllers>,
   options: TOptions = {} as TOptions
 ): McpHandler {
+  type TInferredContext = InferMcpContext<TContext, TOptions>;
   // Extract tools from router
   const tools = extractToolsFromRouter(router, options);
   
@@ -200,8 +200,17 @@ export function createMcpAdapter<
       return response;
     } catch (error) {
       console.error('MCP Adapter Error:', error);
+      
+      // Trigger onError event if available
+      if (options.events?.onError) {
+        await options.events.onError(error as Error, context);
+      }
+      
       return new Response(
-        JSON.stringify({ error: 'Internal MCP server error' }),
+        JSON.stringify({ 
+          error: 'Internal MCP server error',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -218,7 +227,7 @@ export function createMcpAdapter<
 /**
  * Extract tools from Igniter router.
  */
-function extractToolsFromRouter<TContext extends object, TControllers extends Record<string, IgniterControllerConfig<TContext, any>>, TInferredContext = any>(
+function extractToolsFromRouter<TContext extends object, TControllers extends Record<string, IgniterControllerConfig<TContext, any>>, TInferredContext>(
   router: IgniterRouter<TContext, TControllers>,
   options: McpAdapterOptions<TContext, TInferredContext>
 ): McpToolInfo[] {
@@ -277,26 +286,40 @@ function extractToolsFromRouter<TContext extends object, TControllers extends Re
 /**
  * Create MCP context for tool execution with type inference.
  */
-async function createMcpContext<TContext extends object, TInferredContext = any>(
+async function createMcpContext<TContext extends object, TInferredContext>(
   router: IgniterRouter<TContext, any>,
   options: McpAdapterOptions<TContext, TInferredContext>,
   args: any,
   request?: Request
 ): Promise<McpContext<TInferredContext>> {
   const tools = extractToolsFromRouter(router, options);
+  const req = request || new Request('http://localhost');
   
   // Use custom context function if provided
   if (options.context) {
-    return await options.context(request || new Request('http://localhost'));
+    return await options.context(req);
+  }
+  
+  // Create context using router's context function
+  let routerContext: TContext | undefined;
+  if (router.config && 'context' in router.config) {
+    const contextFn = (router.config as { context?: (req: Request) => TContext | Promise<TContext> }).context;
+    if (typeof contextFn === 'function') {
+      try {
+        routerContext = await contextFn(req);
+      } catch (error) {
+        console.warn('Failed to create router context:', error);
+      }
+    }
   }
   
   // Create base context using router's context type
   const baseContext: McpContext<TInferredContext> = {
-    context: {} as TInferredContext,
+    context: (routerContext || {}) as TInferredContext,
     tools,
-    request: request || new Request('http://localhost'),
+    request: req,
     timestamp: Date.now(),
-    client: request?.headers.get('user-agent') || 'unknown'
+    client: req.headers.get('user-agent') || 'unknown'
   };
   
   return baseContext;
@@ -305,7 +328,7 @@ async function createMcpContext<TContext extends object, TInferredContext = any>
 /**
  * Execute a tool using the Igniter router with type inference.
  */
-async function executeTool<TContext extends object, TInferredContext = any>(
+async function executeTool<TContext extends object, TInferredContext>(
   router: IgniterRouter<TContext, any>,
   tool: McpToolInfo,
   args: any,
@@ -315,8 +338,8 @@ async function executeTool<TContext extends object, TInferredContext = any>(
   try {
     // Call the router action
     const result = await router.processor.call(
-      tool.controller as any,
-      tool.action as any,
+      tool.controller,
+      tool.action,
       args
     );
     
@@ -342,7 +365,7 @@ async function executeTool<TContext extends object, TInferredContext = any>(
 /**
  * Resolve instructions synchronously (for initial setup).
  */
-function resolveInstructionsSync<TContext extends object, TInferredContext = any>(
+function resolveInstructionsSync<TContext extends object, TInferredContext>(
   options: McpAdapterOptions<TContext, TInferredContext>,
   tools: McpToolInfo[]
 ): string {
@@ -362,7 +385,7 @@ function resolveInstructionsSync<TContext extends object, TInferredContext = any
 /**
  * Resolve instructions (can be string or function) with type inference.
  */
-async function resolveInstructions<TContext extends object, TInferredContext = any>(
+async function resolveInstructions<TContext extends object, TInferredContext>(
   options: McpAdapterOptions<TContext, TInferredContext>,
   tools: McpToolInfo[]
 ): Promise<string> {
@@ -388,68 +411,28 @@ async function resolveInstructions<TContext extends object, TInferredContext = a
 
 /**
  * Import createMcpHandler from @vercel/mcp-adapter
- * This is a placeholder - in real implementation, you'd import from the actual package
  */
+let mcpHandlerImport: any;
+
+try {
+  // Dynamic import to handle cases where the package might not be installed
+  mcpHandlerImport = require('@vercel/mcp-adapter');
+} catch (error) {
+  console.warn('[@igniter-js/core] @vercel/mcp-adapter not found. Please install it to use MCP functionality.');
+  console.warn('Run: npm install @vercel/mcp-adapter @modelcontextprotocol/sdk');
+}
+
 function createMcpHandler(
   serverSetup: (server: any) => void,
   serverOptions: any,
   adapterOptions: any
 ) {
-  // This is a mock implementation
-  // In real usage, you'd use: import { createMcpHandler } from '@vercel/mcp-adapter'
+  if (!mcpHandlerImport?.createMcpHandler) {
+    throw new Error(
+      'The @vercel/mcp-adapter package is required to use MCP functionality. ' +
+      'Please install it with: npm install @vercel/mcp-adapter @modelcontextprotocol/sdk'
+    );
+  }
   
-  return async (request: Request): Promise<Response> => {
-    // Mock MCP handler implementation
-    // This would be replaced by the actual @vercel/mcp-adapter implementation
-    
-    if (request.method === 'POST') {
-      try {
-        const body = await request.json();
-        
-        // Mock tool execution
-        if (body.method === 'tools/call') {
-          const toolName = body.params?.name;
-          const args = body.params?.arguments || {};
-          
-          return new Response(JSON.stringify({
-            content: [
-              {
-                type: 'text',
-                text: `Mock execution of tool: ${toolName} with args: ${JSON.stringify(args)}`
-              }
-            ]
-          }), {
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
-        
-        // Mock tools list
-        if (body.method === 'tools/list') {
-          return new Response(JSON.stringify({
-            tools: [
-              {
-                name: 'mock_tool',
-                description: 'A mock tool for testing',
-                inputSchema: {
-                  type: 'object',
-                  properties: {}
-                }
-              }
-            ]
-          }), {
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
-      } catch (error) {
-        return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-    }
-    
-    return new Response(JSON.stringify({ message: 'MCP Server Ready' }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  };
+  return mcpHandlerImport.createMcpHandler(serverSetup, serverOptions, adapterOptions);
 } 

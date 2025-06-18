@@ -4,3 +4,4 @@ export * from './controller.service';
 export * from './cookie.service';
 export * from './procedure.service';
 export * from './router.service';
+export * from './jobs.service';

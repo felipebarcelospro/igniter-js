@@ -52,6 +52,7 @@ export type IgniterProcedure<
 > = {
   name: string;
   handler: (options: TOptions, ctx: IgniterProcedureContext<TActionContext>) => Promise<TOutput> | TOutput;
+  [key: string]: any;
 }
 
 /**

@@ -17,20 +17,30 @@ import type {
   IgniterControllerConfig, 
   IgniterRouterConfig, 
   IgniterAction,
-  InferProcedureContext
+  InferProcedureContext,
+  IgniterRouter
 } from "../types";
 import type { SecurityConfig } from "../procedures/security";
+import type { IgniterStoreAdapter } from "../types/store.interface";
+import type { IgniterLogger } from "../types/logger.interface";
+import type { IgniterJobQueueAdapter } from "../types/jobs.interface";
 
 /**
  * Configuration for the enhanced builder setup.
  */
-export interface IgniterBuilderConfig<TContext extends object> {
+export interface IgniterBuilderConfig<TContext extends object, TStore extends IgniterStoreAdapter | undefined = undefined, TLogger extends IgniterLogger | undefined = undefined, TJobs extends IgniterJobQueueAdapter<TContext> | undefined = undefined> {
   /** Base context function */
   context?: (request: Request) => TContext | Promise<TContext>;
   /** Global security configuration */
   security?: SecurityConfig;
   /** Global middleware procedures */
-  middleware?: readonly IgniterProcedure<any, any, any>[];
+  middleware?: readonly IgniterProcedure<any, any, any>[];  
+  /** Store adapter for caching, events, and more */
+  store?: TStore;
+  /** Logger adapter for logging */
+  logger?: TLogger;
+  /** Job queue adapter for background processing */
+  jobs?: TJobs;
   /** Router configuration */
   config?: {
     baseURL?: string;
@@ -50,36 +60,54 @@ export type IgniterBuilderExtension<TContext extends object> = (
  */
 export class IgniterEnhancedBuilder<
   TContext extends object,
-  TMiddlewares extends readonly IgniterProcedure<any, any, any>[] = []
+  TMiddlewares extends readonly IgniterProcedure<any, any, any>[] = [],
+  TStore extends IgniterStoreAdapter | undefined = undefined,
+  TLogger extends IgniterLogger | undefined = undefined,
+  TJobs extends IgniterJobQueueAdapter<TContext> | undefined = undefined
 > {
-  private _config: IgniterBuilderConfig<TContext> = {};
+  private _config: IgniterBuilderConfig<TContext, TStore, TLogger, TJobs> = {};
   private _middlewares: TMiddlewares = [] as any;
+  private _store: TStore | undefined;
+  private _logger: TLogger | undefined;
+  private _jobs: TJobs | undefined;
 
   constructor(
-    config: IgniterBuilderConfig<TContext> = {},
-    middlewares: TMiddlewares = [] as any
+    config: IgniterBuilderConfig<TContext, TStore, TLogger, TJobs> = {},
+    middlewares: TMiddlewares = [] as any,
+    store?: TStore,
+    logger?: TLogger,
+    jobs?: TJobs
   ) {
     this._config = config;
     this._middlewares = middlewares;
+    this._store = store;
+    this._logger = logger;
+    this._jobs = jobs;
   }
 
   /**
    * Configure the context function.
    */
-  context(contextFn: (request: Request) => TContext | Promise<TContext>): IgniterEnhancedBuilder<TContext, TMiddlewares> {
+  context(contextFn: (request: Request) => TContext | Promise<TContext>): IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, TLogger, TJobs> {
     return new IgniterEnhancedBuilder(
       { ...this._config, context: contextFn },
-      this._middlewares
+      this._middlewares,
+      this._store,
+      this._logger,
+      this._jobs
     );
   }
 
   /**
    * Configure global security settings.
    */
-  security(securityConfig: SecurityConfig): IgniterEnhancedBuilder<TContext, TMiddlewares> {
+  security(securityConfig: SecurityConfig): IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, TLogger, TJobs> {
     return new IgniterEnhancedBuilder(
       { ...this._config, security: securityConfig },
-      this._middlewares
+      this._middlewares,
+      this._store,
+      this._logger,
+      this._jobs
     );
   }
 
@@ -88,34 +116,79 @@ export class IgniterEnhancedBuilder<
    */
   middleware<TNewMiddlewares extends readonly IgniterProcedure<any, any, any>[]>(
     middlewares: TNewMiddlewares
-  ): IgniterEnhancedBuilder<TContext, TNewMiddlewares> {
+  ): IgniterEnhancedBuilder<TContext, TNewMiddlewares, TStore, TLogger, TJobs> {
     return new IgniterEnhancedBuilder(
       { ...this._config, middleware: middlewares },
-      middlewares
+      middlewares,
+      this._store,
+      this._logger,
+      this._jobs
     );
   }
 
   /**
    * Configure router settings.
    */
-  config(routerConfig: { baseURL?: string; basePATH?: string }): IgniterEnhancedBuilder<TContext, TMiddlewares> {
+  config(routerConfig: { baseURL?: string; basePATH?: string }): IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, TLogger, TJobs> {
     return new IgniterEnhancedBuilder(
       { ...this._config, config: routerConfig },
-      this._middlewares
+      this._middlewares,
+      this._store,
+      this._logger,
+      this._jobs
+    );
+  }
+
+  /**
+   * Configure a store adapter for caching, events, and more.
+   */
+  store(storeAdapter: IgniterStoreAdapter): IgniterEnhancedBuilder<TContext, TMiddlewares, IgniterStoreAdapter, TLogger, TJobs> {
+    return new IgniterEnhancedBuilder<TContext, TMiddlewares, IgniterStoreAdapter, TLogger, TJobs>(
+      { ...this._config, store: storeAdapter },
+      this._middlewares,
+      storeAdapter,
+      this._logger,
+      this._jobs
+    );
+  }
+
+  /**
+   * Configure a logger adapter for logging.
+   */
+  logger(loggerAdapter: IgniterLogger): IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, IgniterLogger, TJobs> {
+    return new IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, IgniterLogger, TJobs>(
+      { ...this._config, logger: loggerAdapter },
+      this._middlewares,
+      this._store,
+      loggerAdapter,
+      this._jobs
+    );
+  }
+
+  /**
+   * Configure a job queue adapter for background processing.
+   */
+  jobs(jobsAdapter: IgniterJobQueueAdapter<TContext>): IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, TLogger, IgniterJobQueueAdapter<TContext>> {
+    return new IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, TLogger, IgniterJobQueueAdapter<TContext>>(
+      { ...this._config, jobs: jobsAdapter },
+      this._middlewares,
+      this._store,
+      this._logger,
+      jobsAdapter
     );
   }
 
   /**
    * Creates the enriched API with global middleware types inferred.
    */
-  create(): IgniterEnrichedAPI<TContext, TMiddlewares> {
-    type EnrichedContext = TContext & InferProcedureContext<TMiddlewares>;
-    
+  create(): IgniterEnrichedAPI<TContext, TMiddlewares, TStore, TLogger, TJobs> {
+    type EnrichedContext = TContext & InferProcedureContext<TMiddlewares> & { store: TStore, logger: TLogger, jobs: TJobs };
+
     return {
       /**
        * Creates a query action for retrieving data.
        */
-      // @ts-expect-error - TResponse is not used
+      // @ts-expect-error - TResponse is not used [DO NOT REMOVE THIS - ITS WORKING]
       query: <
         TPath extends string,
         TQuery extends StandardSchemaV1 | undefined,
@@ -136,12 +209,12 @@ export class IgniterEnhancedBuilder<
         TActionMiddlewares,
         THandler,
         TInfer
-      >(options),
+      >({ ...options, context: { store: this._store, logger: this._logger, ...options.context } }),
 
       /**
        * Creates a mutation action for modifying data.
        */
-      // @ts-expect-error - TResponse is not used
+      // @ts-expect-error - TResponse is not used [DO NOT REMOVE THIS - ITS WORKING]
       mutation: <
         TPath extends string,
         TMethod extends MutationMethod,
@@ -164,7 +237,7 @@ export class IgniterEnhancedBuilder<
         TActionMiddlewares,
         THandler,
         TInfer
-      >(options),
+      >({ ...options, context: { store: this._store, logger: this._logger, jobs: this._jobs, ...options.context } }),
 
       /**
        * Creates a controller to group related actions.
@@ -174,7 +247,7 @@ export class IgniterEnhancedBuilder<
         TActions extends Record<string, IgniterAction<EnrichedContext, any, any, any, any, any, any, any>>
       >(
         config: IgniterControllerConfig<EnrichedContext, TActions>
-      ) => createIgniterController<EnrichedContext, TActions>(config),
+      ) => createIgniterController<EnrichedContext, TActions>({ ...config, context: { store: this._store, logger: this._logger, jobs: this._jobs, ...config.context } }),
 
       /**
        * Creates a router with enhanced configuration.
@@ -195,8 +268,11 @@ export class IgniterEnhancedBuilder<
         context: config.context || this._config.context as any,
         security: this._config.security,
         use: this._config.middleware as any,
+        store: this._store,
         baseURL: config.baseURL || this._config.config?.baseURL,
-        basePATH: config.basePATH || this._config.config?.basePATH
+        basePATH: config.basePATH || this._config.config?.basePATH,
+        logger: this._logger,
+        jobs: this._jobs
       }),
 
       /**
@@ -207,7 +283,16 @@ export class IgniterEnhancedBuilder<
         TOutput
       >(
         middleware: IgniterProcedure<EnrichedContext, TOptions, TOutput>
-      ) => createIgniterProcedure(middleware),
+      ) => createIgniterProcedure({ ...middleware, context: { store: this._store, logger: this._logger, jobs: this._jobs, ...middleware.context } }),
+
+      // @ts-expect-error - TStore is not used [DO NOT REMOVE THIS - ITS WORKING]
+      store: this._store,
+
+      // @ts-expect-error - TLogger is not used [DO NOT REMOVE THIS - ITS WORKING]
+      logger: this._logger,
+
+      // @ts-expect-error - TJobs is not used [DO NOT REMOVE THIS - ITS WORKING]
+      jobs: this._jobs,
 
       /**
        * Internal context type for debugging/inspection.
@@ -217,7 +302,7 @@ export class IgniterEnhancedBuilder<
       /**
        * Internal config for debugging/inspection.
        */
-      $config: this._config
+      $config: { ...this._config }
     };
   }
 }
@@ -227,7 +312,10 @@ export class IgniterEnhancedBuilder<
  */
 export interface IgniterEnrichedAPI<
   TContext extends object,
-  TMiddlewares extends readonly IgniterProcedure<any, any, any>[]
+  TMiddlewares extends readonly IgniterProcedure<any, any, any>[],
+  TStore extends IgniterStoreAdapter | undefined = undefined,
+  TLogger extends IgniterLogger | undefined = undefined,
+  TJobs extends IgniterJobQueueAdapter<TContext> | undefined = undefined
 > {
   query: <
     TPath extends string,
@@ -274,7 +362,7 @@ export interface IgniterEnrichedAPI<
       baseURL?: string;
       basePATH?: string;
     }
-  ) => any; // Router type will be simplified
+  ) => IgniterRouter<TContext & InferProcedureContext<TMiddlewares>, TControllers>;
 
   procedure: <
     TOptions extends Record<string, any>,
@@ -283,8 +371,12 @@ export interface IgniterEnrichedAPI<
     middleware: IgniterProcedure<TContext & InferProcedureContext<TMiddlewares>, TOptions, TOutput>
   ) => (options?: TOptions) => IgniterProcedure<TContext & InferProcedureContext<TMiddlewares>, TOptions, TOutput>;
 
+  store: TStore;
+  logger: TLogger;
+  jobs: TJobs;
+
   $context: TContext & InferProcedureContext<TMiddlewares>;
-  $config: IgniterBuilderConfig<TContext>;
+  $config: IgniterBuilderConfig<TContext, TStore, TLogger, TJobs>;
 }
 
 /**

@@ -3,11 +3,12 @@ import { addRoute, createRouter, findRoute, type RouterContext } from "rou3";
 import { IgniterError } from "../error";
 import { IgniterCookie } from "../services/cookie.service";
 import { IgniterResponseProcessor } from "./response.processor";
-import { getHeadersSafe } from "../adapters/next";
+import { getHeadersSafe } from "../adapters/server/next";
 import { parseURL } from "../utils/url";
 import type { RequestProcessorInterface } from "../types/request.processor";
 import { parseResponse } from "../utils/response";
 import { createAuthProcedure, createRateLimitProcedure, createCorsProcedure } from "../procedures/security";
+import type { IgniterLogger } from "../types/logger.interface";
 
 /**
  * Handles HTTP request processing for the Igniter Framework.
@@ -28,7 +29,7 @@ import { createAuthProcedure, createRateLimitProcedure, createCorsProcedure } fr
  * const response = await processor.process(request);
  * ```
  */
-export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> implements RequestProcessorInterface<TConfig> {
+export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any, any, any>> implements RequestProcessorInterface<TConfig> {
   public config: TConfig;
   public router: RouterContext<IgniterAction<any, any, any, any, any, any, any, any, any>>;
 
@@ -182,24 +183,35 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
    * const request = new Request('https://api.example.com/users');
    * const response = await processor.process(request);
   */
-  async process(request: Request) {
+  async process(request: Request, logger?: IgniterLogger) {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
 
+    logger?.debug(`[RequestProcessor] Processing request: ${request.url}`);
+
     if (!path?.length) {
+      logger?.warn(`[RequestProcessor] Route not found: ${request.url}`);
       return new Response(null, { status: 404, statusText: "Not Found" });
     }
 
     const route = findRoute(this.router, method, path);
     if (!route?.data) {
+      logger?.warn(`[RequestProcessor] Route not found: ${request.url}`);
       return new Response(null, { status: 404, statusText: "Not Found" });
     }
 
     const handler = route.data as IgniterAction<any, any, any, any, any, any, any, any, any>;
+    logger?.debug(`[RequestProcessor] Route found: ${request.url}`);
+
     const cookies = new IgniterCookie(request.headers);
+    logger?.debug(`[RequestProcessor] Cookies: ${JSON.stringify(cookies)}`);
+
     const response = new IgniterResponseProcessor();
+    logger?.debug(`[RequestProcessor] Response: ${JSON.stringify(response)}`);
+
     const routeContext = await this.config.context?.(request);
+    logger?.debug(`[RequestProcessor] Route context: ${JSON.stringify(routeContext)}`);
 
     const context: IgniterActionContext<any, any, any, any, any, any> = {
       request: {
@@ -214,18 +226,34 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
       response: response,
       context: routeContext,
     };
+    logger?.debug(`[RequestProcessor] Context: ${JSON.stringify(context)}`);
+
+    // Injetar o store no contexto, se existir
+    if (this.config.store) {
+      logger?.debug(`[RequestProcessor] Injecting store into context`);
+      context.context.store = this.config.store;
+    }
+
+    // Injetar o logger no contexto, se existir
+    if (this.config.logger) {
+      logger?.debug(`[RequestProcessor] Injecting logger into context`);
+      context.context.logger = this.config.logger;
+    }
 
     // Execute global security procedures first
     const securityProcedures = this.createSecurityProcedures();
     for (const procedure of securityProcedures) {
+      logger?.debug(`[RequestProcessor] Executing security procedure: ${procedure.name}`);
       // @ts-expect-error - This is a hack to get around the fact that the middleware handler is not typed
       const result = await procedure.handler(context);
 
       if (result instanceof Response) {
+        logger?.debug(`[RequestProcessor] Security procedure returned a response`);
         return result;
       }
 
       if (result instanceof IgniterResponseProcessor) {
+        logger?.debug(`[RequestProcessor] Security procedure returned a response processor`);
         return result.toResponse();
       }
 
@@ -239,14 +267,17 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
     // Execute global middlewares
     if (this.config.use && Array.isArray(this.config.use)) {
       for (const use of this.config.use) {
+        logger?.debug(`[RequestProcessor] Executing global middleware: ${use.name}`);
         // @ts-expect-error - This is a hack to get around the fact that the middleware handler is not typed
         const result = await use.handler(context);
 
         if (result instanceof Response) {
+          logger?.debug(`[RequestProcessor] Global middleware returned a response`);
           return result;
         }
 
         if (result instanceof IgniterResponseProcessor) {
+          logger?.debug(`[RequestProcessor] Global middleware returned a response processor`);
           return result.toResponse();
         }
 
@@ -261,14 +292,17 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
     // Execute action-specific middlewares
     if (handler.use && Array.isArray(handler.use)) {
       for (const use of handler.use as IgniterProcedure<any, any, any>[]) {
+        logger?.debug(`[RequestProcessor] Executing action-specific middleware: ${use.name}`);
         // @ts-expect-error - This is a hack to get around the fact that the middleware handler is not typed
         const result = await use.handler(context)
 
         if (result instanceof Response) {
+          logger?.debug(`[RequestProcessor] Action-specific middleware returned a response`);
           return result;
         }
 
         if (result instanceof IgniterResponseProcessor) {
+          logger?.debug(`[RequestProcessor] Action-specific middleware returned a response processor`);
           return result.toResponse();
         }
 
@@ -281,16 +315,21 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
     }
 
     try {
+      logger?.debug(`[RequestProcessor] Parsing request body and query`);
       if (handler.body) handler.body.parse(context.request.body)
       if (handler.query) handler.query.parse(context.request.query)
 
+      logger?.debug(`[RequestProcessor] Executing action handler`);
       const response = await route.data.handler(context);
+      logger?.debug(`[RequestProcessor] Action handler returned: ${JSON.stringify(response)}`);
 
       if (response instanceof Response) {
+        logger?.debug(`[RequestProcessor] Action handler returned a response`);
         return response;
       }
 
       if (response instanceof IgniterResponseProcessor) {
+        logger?.debug(`[RequestProcessor] Action handler returned a response processor`);
         return response.toResponse();
       }
 
@@ -301,7 +340,7 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
         },
       });
     } catch (error) {
-      console.error(`# SERVER_ERROR: `, error);
+      logger?.error(`[RequestProcessor] Error processing request: ${error}`);
 
       // Zod validation errors
       if (error && typeof error === 'object' && 'issues' in error) {
@@ -320,6 +359,7 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
 
       // IgniterError instances
       if (error instanceof IgniterError) {
+        logger?.error(`[RequestProcessor] IgniterError: ${error.message}`);
         return new Response(JSON.stringify({
           error: {
             message: error.message,
@@ -335,6 +375,7 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
 
       // Generic errors
       const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
+      logger?.error(`[RequestProcessor] Generic error: ${errorMessage}`);
       return new Response(JSON.stringify({
         error: {
           message: errorMessage,
