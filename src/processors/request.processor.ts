@@ -6,6 +6,7 @@ import { IgniterResponseProcessor } from "./response.processor";
 import { getHeadersSafe } from "../adapters/next";
 import { parseURL } from "../utils/url";
 import type { RequestProcessorInterface } from "../types/request.processor";
+import { parseResponse } from "../utils/response";
 
 /**
  * Handles HTTP request processing for the Igniter Framework.
@@ -108,8 +109,14 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
 
       return await request.text();
     } catch (error) {
-      console.error(`# ERROR: `, error);
-      return undefined
+      console.error(`# BODY_PARSE_ERROR: `, error);
+      
+      // Throw structured error instead of returning undefined
+      throw new IgniterError({
+        code: 'BODY_PARSE_ERROR',
+        message: 'Failed to parse request body',
+        details: error instanceof Error ? error.message : 'Invalid request body format'
+      });
     }
   }
 
@@ -184,23 +191,26 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
       context: routeContext,
     };
 
-    for (const use of handler.use as IgniterProcedure<any, any, any>[]) {
-      // @ts-expect-error - This is a hack to get around the fact that the middleware handler is not typed
-      const result = await use.handler(context)
+    // Only execute middlewares if they exist
+    if (handler.use && Array.isArray(handler.use)) {
+      for (const use of handler.use as IgniterProcedure<any, any, any>[]) {
+        // @ts-expect-error - This is a hack to get around the fact that the middleware handler is not typed
+        const result = await use.handler(context)
 
-      if (result instanceof Response) {
-        return result;
+        if (result instanceof Response) {
+          return result;
+        }
+
+        if (result instanceof IgniterResponseProcessor) {
+          return result.toResponse();
+        }
+
+        // Merge the middleware result into context.context
+        context.context = {
+          ...context.context,
+          ...result
+        };
       }
-
-      if (result instanceof IgniterResponseProcessor) {
-        return result.toResponse();
-      }
-
-      // Merge the middleware result into context.context
-      context.context = {
-        ...context.context,
-        ...result
-      };
     }
 
     try {
@@ -226,19 +236,48 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
     } catch (error) {
       console.error(`# SERVER_ERROR: `, error);
 
+      // Zod validation errors
       if (error && typeof error === 'object' && 'issues' in error) {
         return new Response(JSON.stringify({
-          message: "Validation Error",
-          data: error.issues,
+          error: {
+            message: "Validation Error",
+            code: 'VALIDATION_ERROR',
+            details: error.issues,
+          },
+          data: null
         }), {
           status: 400,
           headers: { "Content-Type": "application/json" },
         });
       }
 
-      return new Response(null, {
+      // IgniterError instances
+      if (error instanceof IgniterError) {
+        return new Response(JSON.stringify({
+          error: {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+          },
+          data: null
+        }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Generic errors
+      const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
+      return new Response(JSON.stringify({
+        error: {
+          message: errorMessage,
+          code: 'INTERNAL_SERVER_ERROR',
+          details: process.env.NODE_ENV === 'development' ? error : undefined,
+        },
+        data: null
+      }), {
         status: 500,
-        statusText: "Internal Server Error",
+        headers: { "Content-Type": "application/json" },
       });
     }
   }
@@ -340,8 +379,7 @@ export class RequestProcessor<TConfig extends IgniterRouterConfig<any, any>> imp
 
     // Call the action handler directly
     const response = await this.process(request);
-    const data = await response.json();
-
-    return data;
+    const result = await parseResponse(response);
+    return result;
   }
 }
