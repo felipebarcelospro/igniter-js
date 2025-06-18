@@ -368,25 +368,15 @@ export class IgniterResponseProcessor {
       headers.append("Set-Cookie", cookie)
     }
 
-    if(this._response.error) {
-      headers.set("Content-Type", "application/json")
+    headers.set("Content-Type", "application/json")
 
-      return new Response(JSON.stringify(this._response.error), {
-        status: this._status,
-        headers,
-      })
+    // Always return structured format {error, data}
+    const responseBody = {
+      error: this._response.error || null,
+      data: this._response.error ? null : (this._response.data || null)
     }
 
-    if(this._response.data) {
-      headers.set("Content-Type", "application/json")
-      
-      return new Response(JSON.stringify(this._response.data), {
-        status: this._status,
-        headers,
-      })
-    }
-
-    return new Response(null, {
+    return new Response(JSON.stringify(responseBody), {
       status: this._status,
       headers,
     })
