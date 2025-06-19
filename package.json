@@ -66,7 +66,9 @@
     "react-dom": "^19.0.0",
     "typescript": ">=5.0.0",
     "ioredis": "",
-    "bullmq": ""
+    "bullmq": "",
+    "next": ">=13.0.0",
+    "webpack": ">=5.0.0"
   },
   "peerDependenciesMeta": {
     "@vercel/mcp-adapter": {
@@ -80,6 +82,12 @@
     },
     "bullmq": {
       "optional": true
+    },
+    "next": {
+      "optional": true
+    },
+    "webpack": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -87,14 +95,20 @@
     "@types/bun": "latest",
     "@types/ioredis": "^5.0.0",
     "@types/lodash": "^4.17.15",
+    "@types/next": "^9.0.0",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
-    "tsup": "^8.4.0",
-    "typescript": "^5.0.0",
-    "vitest": "^3.0.7"
+    "@types/webpack": "^5.28.5",
+    "@types/node": "^22.9.0",
+    "eslint": "^8.57.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4",
+    "chokidar": "^3.6.0"
   },
   "dependencies": {
     "chalk": "^5.4.1",
+    "glob": "^11.0.0",
     "lodash": "^4.17.21",
     "rou3": "^0.5.1",
     "uncrypto": "^0.1.3"

@@ -5,7 +5,7 @@ import type { IgniterControllerConfig, IgniterRouter, IgniterRouterConfig, Ignit
  * Extracts a clean schema from router for client-side usage.
  * Removes all server-side logic (handlers, middleware, adapters).
  */
-function extractRouterSchema<
+export function extractRouterSchema<
   TContext extends object,
   TControllers extends Record<string, IgniterControllerConfig<TContext, any>>
 >(router: IgniterRouter<TContext, TControllers>) {

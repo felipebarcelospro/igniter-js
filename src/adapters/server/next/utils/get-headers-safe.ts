@@ -5,7 +5,6 @@
 export const getHeadersSafe = async (): Promise<Headers> => {
   if (typeof window === 'undefined') {
     try {
-      // @ts-expect-error - Dynamic import to prevent the import from being included in client bundles
       const { headers } = await import('next/headers');
       return headers();
     } catch (error) {
