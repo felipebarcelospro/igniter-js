@@ -1,9 +1,0 @@
-{
-  "extends": [
-    "@igniter-js/eslint-config/node"
-  ],
-  rulers: {
-    "@typescript-eslint/no-unused-vars": "off",
-    "@typescript-eslint/no-explicit-any": "off"
-  }
-}

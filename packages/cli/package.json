@@ -1,0 +1,51 @@
+{
+  "name": "@igniter-js/cli",
+  "version": "0.2.0",
+  "description": "CLI for Igniter.js type-safe client generation",
+  "main": "dist/index.js",
+  "bin": {
+    "igniter": "./bin/igniter"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "igniter",
+    "cli",
+    "typescript",
+    "code-generation",
+    "api"
+  ],
+  "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "commander": "^11.0.0",
+    "tsx": "^4.7.0"
+  },
+  "devDependencies": {
+    "@igniter-js/eslint-config": "*",
+    "@igniter-js/typescript-config": "*",
+    "eslint": "^8.57.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+} 

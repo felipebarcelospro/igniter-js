@@ -1,0 +1,30 @@
+{
+  "name": "@igniter-js/example-nextjs",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Example Next.js application using Igniter.js",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next start",
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@igniter-js/core": "*",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@igniter-js/eslint-config": "*",
+    "@igniter-js/typescript-config": "*",
+    "@types/node": "^22.9.0",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^15.0.0",
+    "typescript": "^5.6.3"
+  }
+} 
