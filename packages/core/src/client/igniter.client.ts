@@ -1,3 +1,10 @@
+/**
+ * @jsxRuntime classic
+ * @jsx createIgniterClient
+ */
+
+"use client";
+
 import type { IgniterRouter, ClientConfig, InferRouterCaller } from '../types';
 import { isServer } from '../utils/client';
 
