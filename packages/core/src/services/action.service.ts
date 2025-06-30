@@ -1,4 +1,6 @@
+import type { IgniterPlugin } from "../types/plugin.interface";
 import type { StandardSchemaV1, IgniterProcedure, IgniterActionHandler, IgniterActionContext, QueryMethod, InferEndpoint, IgniterQueryOptions, IgniterAction, MutationMethod, IgniterMutationOptions } from "../types";
+import { z } from "zod";
 
 /**
  * Creates a type-safe query action for the Igniter Framework.
@@ -12,7 +14,7 @@ import type { StandardSchemaV1, IgniterProcedure, IgniterActionHandler, IgniterA
  * @template TActionHandler - The action handler function type
  * @template TActionInfer - The inferred types for the action
  * 
- * @param options - Configuration options for the query action
+ * @param input - Configuration options for the query action
  * @returns A configured query action
  * 
  * @example
@@ -29,47 +31,53 @@ import type { StandardSchemaV1, IgniterProcedure, IgniterActionHandler, IgniterA
  * ```
  */
 export const createIgniterQuery = <
-  TActionContext,
-  TActionPath extends string,
-  TActionQuery extends StandardSchemaV1 | undefined,
-  TActionResponse,
-  TActionMiddlewares extends readonly IgniterProcedure<any, any, any>[],
-  TActionHandler extends IgniterActionHandler<
-    IgniterActionContext<TActionContext, TActionPath, QueryMethod, undefined, TActionQuery, TActionMiddlewares>,
-    TActionResponse
+  TQueryContext extends object,
+  TQueryPath extends string,
+  TQueryQuery extends StandardSchemaV1 | undefined,
+  TQueryMiddlewares extends readonly IgniterProcedure<TQueryContext, unknown, unknown>[],
+  TQueryPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>,
+  TQueryHandler extends IgniterActionHandler<
+    IgniterActionContext<TQueryContext, TQueryPath, QueryMethod, undefined, TQueryQuery, TQueryMiddlewares, TQueryPlugins>,
+    unknown
   >,
-  TActionInfer extends InferEndpoint<
-    TActionContext,
-    TActionPath,
+  TQueryResponse extends ReturnType<TQueryHandler>,
+  TQueryInfer extends InferEndpoint<
+    TQueryContext,
+    TQueryPath,
     QueryMethod,
     undefined,
-    TActionQuery,
-    TActionResponse,
-    TActionMiddlewares,
-    TActionHandler
+    TQueryQuery,
+    TQueryMiddlewares,
+    TQueryPlugins,
+    TQueryHandler,
+    TQueryResponse
   >
 >(options: IgniterQueryOptions<
-  TActionContext,
-  TActionPath,
-  TActionQuery,
-  TActionResponse,
-  TActionMiddlewares,
-  TActionHandler
+  TQueryContext,
+  TQueryPath,
+  TQueryQuery,
+  TQueryMiddlewares,
+  TQueryPlugins,
+  TQueryHandler
 >) => {
-  return {
-    ...options,
-    method: 'GET' as const
-  } as IgniterAction<
-    TActionContext,
-    TActionPath,
+  type TQuery = IgniterAction<
+    TQueryContext,
+    TQueryPath,
     QueryMethod,
     undefined,
-    TActionQuery,
-    TActionResponse,
-    TActionMiddlewares,
-    TActionHandler,
-    TActionInfer
-  >;
+    TQueryQuery,
+    TQueryMiddlewares,
+    TQueryPlugins,
+    TQueryHandler,
+    TQueryResponse,
+    TQueryInfer
+  >
+
+  return {
+    ...options,
+    method: 'GET' as const,
+    $Infer: {} as TQueryInfer
+  } as TQuery;
 }
 
 /**
@@ -106,44 +114,76 @@ export const createIgniterQuery = <
  * ```
  */
 export const createIgniterMutation = <
-  TActionContext,
-  TActionPath extends string,
-  TActionMethod extends MutationMethod,
-  TActionBody extends StandardSchemaV1 | undefined,
-  TActionResponse,
-  TActionMiddlewares extends readonly IgniterProcedure<any, any, any>[],
-  TActionHandler extends IgniterActionHandler<
-    IgniterActionContext<TActionContext, TActionPath, TActionMethod, TActionBody, undefined, TActionMiddlewares>,
-    TActionResponse
+  TMutationContext extends object,
+  TMutationPath extends string,
+  TMutationMethod extends MutationMethod,
+  TMutationBody extends StandardSchemaV1 | undefined,
+  TMutationQuery extends StandardSchemaV1 | undefined,
+  TMutationMiddlewares extends readonly IgniterProcedure<TMutationContext, any, any>[],
+  TMutationPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>,
+  TMutationHandler extends IgniterActionHandler<
+    IgniterActionContext<TMutationContext, TMutationPath, TMutationMethod, TMutationBody, TMutationQuery, TMutationMiddlewares, TMutationPlugins>,
+    any
   >,
-  TActionInfer extends InferEndpoint<
-    TActionContext,
-    TActionPath,
-    TActionMethod,
-    TActionBody,
-    undefined,
-    TActionResponse,
-    TActionMiddlewares,
-    TActionHandler
+  TMutationResponse extends ReturnType<TMutationHandler>,
+  TMutationInfer extends InferEndpoint<
+    TMutationContext,
+    TMutationPath,
+    TMutationMethod,
+    TMutationBody,
+    TMutationQuery,
+    TMutationMiddlewares,
+    TMutationPlugins,
+    TMutationHandler,
+    TMutationResponse
+  >,
+>(action: {
+  name?: string,
+  path: TMutationPath,
+  method: TMutationMethod,
+  description?: string,
+  body?: TMutationBody,
+  query?: TMutationQuery,
+  use?: TMutationMiddlewares,
+  handler: TMutationHandler,
+}) => {
+  type TMutation = IgniterAction<
+    TMutationContext,
+    TMutationPath,
+    TMutationMethod,
+    TMutationBody,
+    TMutationQuery,
+    TMutationMiddlewares,
+    TMutationPlugins,
+    TMutationHandler,
+    TMutationResponse,
+    TMutationInfer
   >
->(options: IgniterMutationOptions<
-  TActionContext,
-  TActionPath,
-  TActionMethod,
-  TActionBody,
-  TActionResponse,
-  TActionMiddlewares,
-  TActionHandler
->) => {
-  return options as IgniterAction<
-    TActionContext,
-    TActionPath,
-    TActionMethod,
-    TActionBody,
-    undefined,
-    TActionResponse,
-    TActionMiddlewares,
-    TActionHandler,
-    TActionInfer
-  >;
+
+  return {
+    name: action.name,
+    type: 'mutation' as const,
+    path: action.path,
+    method: action.method,
+    description: action.description,
+    body: action.body,
+    query: action.query,
+    use: action.use,
+    handler: action.handler,
+    $Infer: {} as TMutationInfer
+  } as TMutation;
 }
+
+export const testAction = createIgniterMutation({
+  name: 'test',
+  path: '/test',
+  method: 'POST',
+  handler: ({ request, response }) => {
+    const authorization = request.headers.get('authorization');
+    if(!authorization) {
+      return response.unauthorized('Unauthorized');
+    }
+
+    return response.success({ message: 'Hello, world!' });
+  }
+})

@@ -55,8 +55,19 @@ export class IgniterCookie {
 
     const cookies = cookieHeader.split(";");
     for (const cookie of cookies) {
-      const [key, value] = cookie.split("=");
-      this.cookies.set(key, value);
+      try {
+        const trimmedCookie = cookie.trim();
+        if (!trimmedCookie) continue;
+        
+        const [key, ...valueParts] = trimmedCookie.split("=");
+        if (!key) continue;
+        
+        const value = valueParts.join("="); // Handle values with = in them
+        this.cookies.set(key.trim(), value ? value.trim() : "");
+      } catch (error) {
+        // Gracefully handle malformed cookies - skip them
+        continue;
+      }
     }
   }
 
@@ -71,31 +82,39 @@ export class IgniterCookie {
    */
   private serialize(key: string, value: string, opt: CookieOptions = {}) {
     let cookie: string;
+    let finalKey = key;
 
     if (opt?.prefix === "secure") {
-      cookie = `${`__Secure-${key}`}=${value}`;
+      finalKey = `__Secure-${key}`;
+      cookie = `${finalKey}=${value}`;
     } else if (opt?.prefix === "host") {
-      cookie = `${`__Host-${key}`}=${value}`;
+      finalKey = `__Host-${key}`;
+      cookie = `${finalKey}=${value}`;
     } else {
       cookie = `${key}=${value}`;
     }
 
-    if (key.startsWith("__Secure-") && !opt.secure) {
+    // Check both the original key and the final key for prefixes
+    if ((key.startsWith("__Secure-") || finalKey.startsWith("__Secure-")) && !opt.secure) {
       opt.secure = true;
     }
 
-    if (key.startsWith("__Host-")) {
+    if (key.startsWith("__Host-") || finalKey.startsWith("__Host-")) {
       if (!opt.secure) {
         opt.secure = true;
       }
 
-      if (opt.path !== "/") {
-        opt.path = "/";
-      }
+      // __Host- prefix MUST have path="/" - override any other path
+      opt.path = "/";
 
       if (opt.domain) {
         opt.domain = undefined;
       }
+    }
+
+    // Handle partitioned attribute - must be secure
+    if (opt.partitioned && !opt.secure) {
+      opt.secure = true;
     }
 
     if (opt && typeof opt.maxAge === "number" && opt.maxAge >= 0) {
@@ -137,9 +156,6 @@ export class IgniterCookie {
     }
 
     if (opt.partitioned) {
-      if (!opt.secure) {
-        opt.secure = true;
-      }
       cookie += "; Partitioned";
     }
 
@@ -204,17 +220,22 @@ export class IgniterCookie {
     const value = this.cookies.get(key);
     if (!value) return null;
 
-    const [content, signature] = decodeURIComponent(value).split('.');
-    if (!content || !signature) return null;
+    try {
+      const [content, signature] = decodeURIComponent(value).split('.');
+      if (!content || !signature) return null;
 
-    const encodedSecret = new TextEncoder().encode(secret);
+      const encodedSecret = new TextEncoder().encode(secret);
 
-    const cryptoKey = await subtle.importKey("raw", encodedSecret, this.HMAC_ALGORITHM, false, ["verify"]);
-    const binarySignature = Uint8Array.from(atob(signature), c => c.charCodeAt(0));
-    
-    const isValid = await subtle.verify(this.HMAC_ALGORITHM, cryptoKey, binarySignature, new TextEncoder().encode(content));
+      const cryptoKey = await subtle.importKey("raw", encodedSecret, this.HMAC_ALGORITHM, false, ["verify"]);
+      const binarySignature = Uint8Array.from(atob(signature), c => c.charCodeAt(0));
+      
+      const isValid = await subtle.verify(this.HMAC_ALGORITHM, cryptoKey, binarySignature, new TextEncoder().encode(content));
 
-    return isValid ? content : null;
+      return isValid ? content : null;
+    } catch (error) {
+      // Handle base64 decode errors and other crypto errors gracefully
+      return null;
+    }
   }
 
   /**
@@ -234,21 +255,26 @@ export class IgniterCookie {
    * });
    */
   async setSigned(key: string, value: string, secret: string, options?: CookieOptions) {
-    const encodedSecret = new TextEncoder().encode(secret);
+    try {
+      const encodedSecret = new TextEncoder().encode(secret);
 
-    const cryptoKey = await subtle.importKey("raw", encodedSecret, this.HMAC_ALGORITHM, false, ["sign"]);
-    const signature = await subtle.sign(this.HMAC_ALGORITHM, cryptoKey, new TextEncoder().encode(value));
+      const cryptoKey = await subtle.importKey("raw", encodedSecret, this.HMAC_ALGORITHM, false, ["sign"]);
+      const signature = await subtle.sign(this.HMAC_ALGORITHM, cryptoKey, new TextEncoder().encode(value));
 
-    const base64Signature = btoa(String.fromCharCode(...new Uint8Array(signature)));
-    const signedValue = `${value}.${base64Signature}`;
-    const encodedSignedValue = encodeURIComponent(signedValue);
+      const base64Signature = btoa(String.fromCharCode(...new Uint8Array(signature)));
+      const signedValue = `${value}.${base64Signature}`;
+      const encodedSignedValue = encodeURIComponent(signedValue);
 
-    const cookie = this.serialize(key, encodedSignedValue, options);
+      const cookie = this.serialize(key, encodedSignedValue, options);
 
-    this.headers.set("Set-Cookie", cookie);
-    this.cookies.set(key, encodedSignedValue);
+      this.headers.set("Set-Cookie", cookie);
+      this.cookies.set(key, encodedSignedValue);
 
-    return cookie;
+      return cookie;
+    } catch (error) {
+      // Propagate crypto errors as expected by tests
+      throw error;
+    }
   }
 
   /**

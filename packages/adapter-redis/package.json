@@ -1,0 +1,29 @@
+{
+  "name": "@igniter-js/adapter-redis",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "browser": {
+    "ioredis": false
+  },
+  "files": ["dist"],
+  "scripts": {
+    "dev": "tsup src/index.ts --dts --format esm,cjs --out-dir dist --watch",
+    "build": "tsup src/index.ts --dts --format esm,cjs --out-dir dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@igniter-js/core": "*",
+    "ioredis": "^5.3.2",
+    "vitest": "^2.1.4",
+    "typescript": "^5.6.3"
+  },
+  "peerDependencies": {
+    "@igniter-js/core": "*",
+    "ioredis": "^5.3.2"
+  },
+  "license": "MIT"
+} 

@@ -29,6 +29,16 @@ export default defineConfig([
     treeshake: true,
     external: ['react', 'react-dom'],
   },
+
+  // Configuração para o código dos plugins (server-side)
+  {
+    entry: ['src/plugins/index.ts'],
+    format: ['cjs', 'esm'],
+    outDir: 'dist/plugins',
+    dts: {
+      resolve: true,
+    },
+  },
   
   // Uma configuração unificada para client com preserveModules
   {

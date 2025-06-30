@@ -1,65 +1,37 @@
 import type { IgniterControllerConfig } from "./controller.interface";
-import type { RequestProcessorInterface } from "./request.processor";
-import type { IgniterProcedure } from "./procedure.interface";
-import type { SecurityConfig } from "../procedures/security";
-import type { IgniterStoreAdapter } from "./store.interface";
-import type { IgniterLogger } from "./logger.interface";
+import type { IgniterBaseConfig } from "./builder.interface";
+import type { ContextCallback } from "./context.interface";
 
-// Schema types - clean version without server logic
-export type IgniterRouterSchema<
-  TContext extends object,
-  TControllers extends Record<string, IgniterControllerConfig<TContext, any>>
+export type IgniterRouterCaller<
+  TControllers extends Record<string, IgniterControllerConfig<any>>, // ✅ Simplificado
 > = {
-  config: { 
-    baseURL?: string; 
-    basePATH?: string; 
-  };
-  controllers: {
-    [K in keyof TControllers]: {
-      name: string;
-      path: string;
-      actions: {
-        [A in keyof TControllers[K]['actions']]: {
-          path: string;
-          method: string;
-          description?: string;
-          $Infer: TControllers[K]['actions'][A]['$Infer'];
-          // Explicitly NO: handler, use, $Caller
-        }
-      }
-    }
-  };
-  // Explicitly NO: processor, handler, context functions
-};
+  [C in keyof TControllers]: {
+    [A in keyof TControllers[C]['actions']]: TControllers[C]['actions'][A]['$Infer']['$Caller']
+  }
+}
 
 export type IgniterRouterConfig<
-  TContext extends object,
-  TControllers extends Record<string, IgniterControllerConfig<TContext, any>>,
-  TStore extends IgniterStoreAdapter = IgniterStoreAdapter,
-  TLogger extends IgniterLogger = IgniterLogger
+  TContext extends object | ContextCallback,
+  TControllers extends Record<string, IgniterControllerConfig<any>>, // ✅ Simplificado
+  TConfig extends IgniterBaseConfig,
+  TPlugins extends Record<string, any>
 > = {
-  baseURL?: string;
-  basePATH?: string;
+  config: TConfig;
   controllers: TControllers;
-  context?: (request: Request) => TContext | Promise<TContext>;
-  /** Global security configuration */
-  security?: SecurityConfig;
-  /** Global middleware procedures */
-  use?: IgniterProcedure<TContext, any, any>[];
-  /** Store adapter for caching, events, and more */
-  store?: TStore;
-  /** Logger adapter for logging */
-  logger?: TLogger;
-  /** Extended parameters */
-  [key: string]: any;
+  context: TContext;  
+  plugins: TPlugins;
 }
 
 export type IgniterRouter<
-  TContext extends object,
-  TControllers extends Record<string, IgniterControllerConfig<TContext, any>>,
+  TContext extends object | ContextCallback,
+  TControllers extends Record<string, IgniterControllerConfig<any>>, // ✅ Simplificado
+  TConfig extends IgniterBaseConfig,
+  TPlugins extends Record<string, any>
 > = {
-  config: { baseURL?: string; basePATH?: string; }
+  config: TConfig,
   handler: (request: Request) => Promise<Response>;
   controllers: TControllers;
-  processor: RequestProcessorInterface<IgniterRouterConfig<any, any, any, any>>;
+  $context: TContext;
+  $plugins: TPlugins;
+  $caller: IgniterRouterCaller<TControllers>;
 }

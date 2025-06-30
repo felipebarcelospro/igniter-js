@@ -37,6 +37,10 @@ export interface IgniterLoggerOptions {
    */
   formatter?: (entry: IgniterLogEntry) => string;
   /**
+   * Optional: Show timestamp in log messages
+   */
+  showTimestamp?: boolean;
+  /**
    * Optional: Additional provider-specific options.
    */
   [key: string]: unknown;
@@ -56,37 +60,53 @@ export interface IgniterLogger {
    * @param context Optional structured context (request, user, etc).
    * @param error Optional error object.
    */
-  log(level: IgniterLogLevel, message: string, context?: Record<string, unknown>, error?: Error | unknown): void;
+  log(level: IgniterLogLevel, message: string, context?: any, error?: Error | unknown): void;
 
   /**
    * Log a fatal error (system crash, unrecoverable).
    */
-  fatal(message: string, context?: Record<string, unknown>, error?: Error | unknown): void;
+  fatal(message: string, context?: any, error?: Error | unknown): void;
 
   /**
    * Log an error message.
    */
-  error(message: string, context?: Record<string, unknown>, error?: Error | unknown): void;
+  error(message: string, context?: any, error?: Error | unknown): void;
 
   /**
    * Log a warning message.
    */
-  warn(message: string, context?: Record<string, unknown>): void;
+  warn(message: string, ...args: any[]): void;
 
   /**
    * Log an informational message.
    */
-  info(message: string, context?: Record<string, unknown>): void;
+  info(message: string, ...args: any[]): void;
 
   /**
    * Log a debug message (for development).
    */
-  debug(message: string, context?: Record<string, unknown>): void;
+  debug(message: string, ...args: any[]): void;
 
   /**
    * Log a trace message (very verbose, for tracing execution).
    */
-  trace(message: string, context?: Record<string, unknown>): void;
+  trace(message: string, ...args: any[]): void;
+
+  /**
+   * Log a success message (custom extension for better UX)
+   */
+  success(message: string, ...args: any[]): void;
+
+  /**
+   * Start a new logging group (increases indent)
+   * @param name Optional group name to log
+   */
+  group(name?: string): void;
+
+  /**
+   * End the current logging group (decreases indent)
+   */
+  groupEnd(): void;
 
   /**
    * Create a child logger with additional context (e.g., per-request).
@@ -95,12 +115,31 @@ export interface IgniterLogger {
   child(context: Record<string, unknown>): IgniterLogger;
 
   /**
-   * Optional: Set the minimum log level at runtime.
+   * Set the minimum log level at runtime.
    */
-  setLevel?(level: IgniterLogLevel): void;
+  setLevel(level: IgniterLogLevel): void;
 
   /**
-   * Optional: Flush any buffered logs (for async/file/network loggers).
+   * Flush any buffered logs (for async/file/network loggers).
    */
-  flush?(): Promise<void> | void;
+  flush(): Promise<void>;
+
+  /**
+   * Log a message at the specified level.
+   * @param level The log level
+   * @param message The message to log
+   * @param context Optional context object
+   * @param error Optional error object
+   */
+  log(
+    level: IgniterLogLevel,
+    message: string,
+    context?: Record<string, unknown>,
+    error?: Error | unknown
+  ): void;
+
+  /**
+   * Create a separator
+   */
+  separator(): void;
 }

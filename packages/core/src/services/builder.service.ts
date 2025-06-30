@@ -2,395 +2,55 @@ import { createIgniterProcedure } from "./procedure.service";
 import { createIgniterMutation, createIgniterQuery } from "./action.service";
 import { createIgniterRouter } from "./router.service";
 import { createIgniterController } from "./controller.service";
-import type { 
-  ContextCallback, 
-  Unwrap, 
-  StandardSchemaV1, 
-  IgniterProcedure, 
-  IgniterActionHandler, 
-  IgniterActionContext, 
-  QueryMethod, 
-  InferEndpoint, 
-  IgniterQueryOptions, 
-  MutationMethod, 
-  IgniterMutationOptions, 
-  IgniterControllerConfig, 
-  IgniterRouterConfig, 
+import type {
+  StandardSchemaV1,
+  IgniterProcedure,
+  IgniterActionHandler,
+  IgniterActionContext,
+  QueryMethod,
+  InferEndpoint,
+  IgniterQueryOptions,
+  MutationMethod,
+  IgniterMutationOptions,
+  IgniterControllerConfig,
   IgniterAction,
   InferProcedureContext,
-  IgniterRouter
+  ContextCallback,
+  Unwrap,
+  IgniterBaseConfig,
+  IgniterBuilderConfig,
+  InferActionProcedureContext,
+  InferIgniterContext,
+  IgniterControllerBaseAction,
+  IgniterRealtimeService as IgniterRealtimeServiceType,
 } from "../types";
-import type { SecurityConfig } from "../procedures/security";
 import type { IgniterStoreAdapter } from "../types/store.interface";
 import type { IgniterLogger } from "../types/logger.interface";
-import type { IgniterJobQueueAdapter } from "../types/jobs.interface";
-
-/**
- * Configuration for the enhanced builder setup.
- */
-export interface IgniterBuilderConfig<TContext extends object, TStore extends IgniterStoreAdapter | undefined = undefined, TLogger extends IgniterLogger | undefined = undefined, TJobs extends IgniterJobQueueAdapter<TContext> | undefined = undefined> {
-  /** Base context function */
-  context?: (request: Request) => TContext | Promise<TContext>;
-  /** Global security configuration */
-  security?: SecurityConfig;
-  /** Global middleware procedures */
-  middleware?: readonly IgniterProcedure<any, any, any>[];  
-  /** Store adapter for caching, events, and more */
-  store?: TStore;
-  /** Logger adapter for logging */
-  logger?: TLogger;
-  /** Job queue adapter for background processing */
-  jobs?: TJobs;
-  /** Router configuration */
-  config?: {
-    baseURL?: string;
-    basePATH?: string;
-  };
-}
-
-/**
- * Extension function type for builder configuration.
- */
-export type IgniterBuilderExtension<TContext extends object> = (
-  builder: IgniterEnhancedBuilder<TContext>
-) => IgniterEnhancedBuilder<TContext>;
-
-/**
- * Enhanced builder with middleware and security configuration.
- */
-export class IgniterEnhancedBuilder<
-  TContext extends object,
-  TMiddlewares extends readonly IgniterProcedure<any, any, any>[] = [],
-  TStore extends IgniterStoreAdapter | undefined = undefined,
-  TLogger extends IgniterLogger | undefined = undefined,
-  TJobs extends IgniterJobQueueAdapter<TContext> | undefined = undefined
-> {
-  private _config: IgniterBuilderConfig<TContext, TStore, TLogger, TJobs> = {};
-  private _middlewares: TMiddlewares = [] as any;
-  private _store: TStore | undefined;
-  private _logger: TLogger | undefined;
-  private _jobs: TJobs | undefined;
-
-  constructor(
-    config: IgniterBuilderConfig<TContext, TStore, TLogger, TJobs> = {},
-    middlewares: TMiddlewares = [] as any,
-    store?: TStore,
-    logger?: TLogger,
-    jobs?: TJobs
-  ) {
-    this._config = config;
-    this._middlewares = middlewares;
-    this._store = store;
-    this._logger = logger;
-    this._jobs = jobs;
-  }
-
-  /**
-   * Configure the context function.
-   */
-  context(contextFn: (request: Request) => TContext | Promise<TContext>): IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, TLogger, TJobs> {
-    return new IgniterEnhancedBuilder(
-      { ...this._config, context: contextFn },
-      this._middlewares,
-      this._store,
-      this._logger,
-      this._jobs
-    );
-  }
-
-  /**
-   * Configure global security settings.
-   */
-  security(securityConfig: SecurityConfig): IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, TLogger, TJobs> {
-    return new IgniterEnhancedBuilder(
-      { ...this._config, security: securityConfig },
-      this._middlewares,
-      this._store,
-      this._logger,
-      this._jobs
-    );
-  }
-
-  /**
-   * Add global middleware procedures.
-   */
-  middleware<TNewMiddlewares extends readonly IgniterProcedure<any, any, any>[]>(
-    middlewares: TNewMiddlewares
-  ): IgniterEnhancedBuilder<TContext, TNewMiddlewares, TStore, TLogger, TJobs> {
-    return new IgniterEnhancedBuilder(
-      { ...this._config, middleware: middlewares },
-      middlewares,
-      this._store,
-      this._logger,
-      this._jobs
-    );
-  }
-
-  /**
-   * Configure router settings.
-   */
-  config(routerConfig: { baseURL?: string; basePATH?: string }): IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, TLogger, TJobs> {
-    return new IgniterEnhancedBuilder(
-      { ...this._config, config: routerConfig },
-      this._middlewares,
-      this._store,
-      this._logger,
-      this._jobs
-    );
-  }
-
-  /**
-   * Configure a store adapter for caching, events, and more.
-   */
-  store(storeAdapter: IgniterStoreAdapter): IgniterEnhancedBuilder<TContext, TMiddlewares, IgniterStoreAdapter, TLogger, TJobs> {
-    return new IgniterEnhancedBuilder<TContext, TMiddlewares, IgniterStoreAdapter, TLogger, TJobs>(
-      { ...this._config, store: storeAdapter },
-      this._middlewares,
-      storeAdapter,
-      this._logger,
-      this._jobs
-    );
-  }
-
-  /**
-   * Configure a logger adapter for logging.
-   */
-  logger(loggerAdapter: IgniterLogger): IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, IgniterLogger, TJobs> {
-    return new IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, IgniterLogger, TJobs>(
-      { ...this._config, logger: loggerAdapter },
-      this._middlewares,
-      this._store,
-      loggerAdapter,
-      this._jobs
-    );
-  }
-
-  /**
-   * Configure a job queue adapter for background processing.
-   */
-  jobs(jobsAdapter: IgniterJobQueueAdapter<TContext>): IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, TLogger, IgniterJobQueueAdapter<TContext>> {
-    return new IgniterEnhancedBuilder<TContext, TMiddlewares, TStore, TLogger, IgniterJobQueueAdapter<TContext>>(
-      { ...this._config, jobs: jobsAdapter },
-      this._middlewares,
-      this._store,
-      this._logger,
-      jobsAdapter
-    );
-  }
-
-  /**
-   * Creates the enriched API with global middleware types inferred.
-   */
-  create(): IgniterEnrichedAPI<TContext, TMiddlewares, TStore, TLogger, TJobs> {
-    type EnrichedContext = TContext & InferProcedureContext<TMiddlewares> & { store: TStore, logger: TLogger, jobs: TJobs };
-
-    return {
-      /**
-       * Creates a query action for retrieving data.
-       */
-      // @ts-expect-error - TResponse is not used [DO NOT REMOVE THIS - ITS WORKING]
-      query: <
-        TPath extends string,
-        TQuery extends StandardSchemaV1 | undefined,
-        TResponse,
-        TActionMiddlewares extends readonly IgniterProcedure<EnrichedContext, any, any>[],
-        THandler extends IgniterActionHandler<
-          IgniterActionContext<EnrichedContext, TPath, QueryMethod, undefined, TQuery, TActionMiddlewares>, 
-          TResponse
-        >,
-        TInfer extends InferEndpoint<EnrichedContext, TPath, QueryMethod, undefined, TQuery, TResponse, TActionMiddlewares, THandler>
-      >(
-        options: IgniterQueryOptions<EnrichedContext, TPath, TQuery, TResponse, TActionMiddlewares, THandler>
-      ) => createIgniterQuery<
-        EnrichedContext,
-        TPath,
-        TQuery,
-        TResponse,
-        TActionMiddlewares,
-        THandler,
-        TInfer
-      >({ ...options, context: { store: this._store, logger: this._logger, ...options.context } }),
-
-      /**
-       * Creates a mutation action for modifying data.
-       */
-      // @ts-expect-error - TResponse is not used [DO NOT REMOVE THIS - ITS WORKING]
-      mutation: <
-        TPath extends string,
-        TMethod extends MutationMethod,
-        TBody extends StandardSchemaV1 | undefined,
-        TResponse,
-        TActionMiddlewares extends readonly IgniterProcedure<EnrichedContext, any, any>[],
-        THandler extends IgniterActionHandler<
-          IgniterActionContext<EnrichedContext, TPath, TMethod, TBody, undefined, TActionMiddlewares>, 
-          TResponse
-        >,
-        TInfer extends InferEndpoint<EnrichedContext, TPath, TMethod, TBody, undefined, TResponse, TActionMiddlewares, THandler>
-      >(
-        options: IgniterMutationOptions<EnrichedContext, TPath, TMethod, TBody, TResponse, TActionMiddlewares, THandler>
-      ) => createIgniterMutation<
-        EnrichedContext,
-        TPath,
-        TMethod,
-        TBody,
-        TResponse,
-        TActionMiddlewares,
-        THandler,
-        TInfer
-      >({ ...options, context: { store: this._store, logger: this._logger, jobs: this._jobs, ...options.context } }),
-
-      /**
-       * Creates a controller to group related actions.
-       */
-      controller: <
-        // @ts-expect-error - TActions is not used
-        TActions extends Record<string, IgniterAction<EnrichedContext, any, any, any, any, any, any, any>>
-      >(
-        config: IgniterControllerConfig<EnrichedContext, TActions>
-      ) => createIgniterController<EnrichedContext, TActions>({ ...config, context: { store: this._store, logger: this._logger, jobs: this._jobs, ...config.context } }),
-
-      /**
-       * Creates a router with enhanced configuration.
-       */
-      router: <
-        TControllers extends Record<string, IgniterControllerConfig<EnrichedContext, any>>
-      >(
-        config: { 
-          controllers: TControllers;
-          /** Fallback context function if not configured in builder */
-          context?: (request: Request) => EnrichedContext | Promise<EnrichedContext>;
-          /** Router-specific configuration */
-          baseURL?: string;
-          basePATH?: string;
-        }
-      ) => createIgniterRouter<EnrichedContext, TControllers>({
-        controllers: config.controllers,
-        context: config.context || this._config.context as any,
-        security: this._config.security,
-        use: this._config.middleware as any,
-        store: this._store,
-        baseURL: config.baseURL || this._config.config?.baseURL,
-        basePATH: config.basePATH || this._config.config?.basePATH,
-        logger: this._logger,
-        jobs: this._jobs
-      }),
-
-      /**
-       * Creates a reusable middleware procedure.
-       */
-      procedure: <
-        TOptions extends Record<string, any>,
-        TOutput
-      >(
-        middleware: IgniterProcedure<EnrichedContext, TOptions, TOutput>
-      ) => createIgniterProcedure({ ...middleware, context: { store: this._store, logger: this._logger, jobs: this._jobs, ...middleware.context } }),
-
-      // @ts-expect-error - TStore is not used [DO NOT REMOVE THIS - ITS WORKING]
-      store: this._store,
-
-      // @ts-expect-error - TLogger is not used [DO NOT REMOVE THIS - ITS WORKING]
-      logger: this._logger,
-
-      // @ts-expect-error - TJobs is not used [DO NOT REMOVE THIS - ITS WORKING]
-      jobs: this._jobs,
-
-      /**
-       * Internal context type for debugging/inspection.
-       */
-      $context: {} as EnrichedContext,
-
-      /**
-       * Internal config for debugging/inspection.
-       */
-      $config: { ...this._config }
-    };
-  }
-}
-
-/**
- * Type for the enriched API with global middleware types.
- */
-export interface IgniterEnrichedAPI<
-  TContext extends object,
-  TMiddlewares extends readonly IgniterProcedure<any, any, any>[],
-  TStore extends IgniterStoreAdapter | undefined = undefined,
-  TLogger extends IgniterLogger | undefined = undefined,
-  TJobs extends IgniterJobQueueAdapter<TContext> | undefined = undefined
-> {
-  query: <
-    TPath extends string,
-    TQuery extends StandardSchemaV1 | undefined,
-    TResponse,
-    TActionMiddlewares extends readonly IgniterProcedure<TContext & InferProcedureContext<TMiddlewares>, any, any>[],
-    THandler extends IgniterActionHandler<
-      IgniterActionContext<TContext & InferProcedureContext<TMiddlewares>, TPath, QueryMethod, undefined, TQuery, TActionMiddlewares>, 
-      TResponse
-    >,
-    TInfer extends InferEndpoint<TContext & InferProcedureContext<TMiddlewares>, TPath, QueryMethod, undefined, TQuery, TResponse, TActionMiddlewares, THandler>
-  >(
-    options: IgniterQueryOptions<TContext & InferProcedureContext<TMiddlewares>, TPath, TQuery, TResponse, TActionMiddlewares, THandler>
-  ) => IgniterAction<TContext & InferProcedureContext<TMiddlewares>, TPath, QueryMethod, undefined, TQuery, TResponse, TActionMiddlewares, THandler, TInfer>;
-
-  mutation: <
-    TPath extends string,
-    TMethod extends MutationMethod,
-    TBody extends StandardSchemaV1 | undefined,
-    TResponse,
-    TActionMiddlewares extends readonly IgniterProcedure<TContext & InferProcedureContext<TMiddlewares>, any, any>[],
-    THandler extends IgniterActionHandler<
-      IgniterActionContext<TContext & InferProcedureContext<TMiddlewares>, TPath, TMethod, TBody, undefined, TActionMiddlewares>, 
-      TResponse
-    >,
-    TInfer extends InferEndpoint<TContext & InferProcedureContext<TMiddlewares>, TPath, TMethod, TBody, undefined, TResponse, TActionMiddlewares, THandler>
-  >(
-    options: IgniterMutationOptions<TContext & InferProcedureContext<TMiddlewares>, TPath, TMethod, TBody, TResponse, TActionMiddlewares, THandler>
-  ) => IgniterAction<TContext & InferProcedureContext<TMiddlewares>, TPath, TMethod, TBody, undefined, TResponse, TActionMiddlewares, THandler, TInfer>;
-
-  controller: <
-  // @ts-expect-error - TActions is not used
-    TActions extends Record<string, IgniterAction<TContext & InferProcedureContext<TMiddlewares>, any, any, any, any, any, any, any>>
-  >(
-    config: IgniterControllerConfig<TContext & InferProcedureContext<TMiddlewares>, TActions>
-  ) => IgniterControllerConfig<TContext & InferProcedureContext<TMiddlewares>, TActions>;
-
-  router: <
-    TControllers extends Record<string, IgniterControllerConfig<TContext & InferProcedureContext<TMiddlewares>, any>>
-  >(
-    config: { 
-      controllers: TControllers;
-      context?: (request: Request) => TContext & InferProcedureContext<TMiddlewares> | Promise<TContext & InferProcedureContext<TMiddlewares>>;
-      baseURL?: string;
-      basePATH?: string;
-    }
-  ) => IgniterRouter<TContext & InferProcedureContext<TMiddlewares>, TControllers>;
-
-  procedure: <
-    TOptions extends Record<string, any>,
-    TOutput
-  >(
-    middleware: IgniterProcedure<TContext & InferProcedureContext<TMiddlewares>, TOptions, TOutput>
-  ) => (options?: TOptions) => IgniterProcedure<TContext & InferProcedureContext<TMiddlewares>, TOptions, TOutput>;
-
-  store: TStore;
-  logger: TLogger;
-  jobs: TJobs;
-
-  $context: TContext & InferProcedureContext<TMiddlewares>;
-  $config: IgniterBuilderConfig<TContext, TStore, TLogger, TJobs>;
-}
+import type {
+  JobsNamespaceProxy,
+  MergedJobsExecutor,
+} from "../types/jobs.interface";
+import type { IgniterTelemetryProvider } from "../types/telemetry.interface";
+import { IgniterRealtimeService } from "./realtime.service";
 
 /**
  * Main builder class for the Igniter Framework.
  * Provides a fluent interface for creating and configuring all framework components.
- * 
+ *
  * @template TContext - The type of the application context
- * 
+ * @template TMiddlewares - The global middleware procedures
+ * @template TStore - The store adapter type
+ * @template TLogger - The logger adapter type
+ * @template TJobs - The job queue adapter type
+ *
  * @example
  * // Initialize with custom context
  * const igniter = Igniter
  *   .context<{ db: Database }>()
+ *   .middleware([authMiddleware])
+ *   .store(redisStore)
  *   .create();
- * 
+ *
  * // Create controllers and actions
  * const userController = igniter.controller({
  *   path: 'users',
@@ -400,176 +60,710 @@ export interface IgniterEnrichedAPI<
  *   }
  * });
  */
-class IgniterBuilder<TContext extends object> {
+export class IgniterBuilder<
+  TContext extends object | ContextCallback,
+  TConfig extends IgniterBaseConfig,
+  TMiddlewares extends readonly IgniterProcedure<any, any, any>[],
+  TStore extends IgniterStoreAdapter,
+  TLogger extends IgniterLogger,
+  TJobs extends JobsNamespaceProxy<any>,
+  TTelemetry extends IgniterTelemetryProvider,
+  TRealtime extends IgniterRealtimeServiceType<any>,
+  TPlugins extends Record<string, any>,
+> {
+  private _config: IgniterBuilderConfig<
+    TContext,
+    TConfig,
+    TStore,
+    TLogger,
+    TJobs,
+    TTelemetry,
+    TPlugins
+  > = {} as any;
+  private _middlewares: TMiddlewares = [] as any;
+  private _store: TStore;
+  private _logger: TLogger;
+  private _jobs: TJobs;
+  private _telemetry: TTelemetry;
+  private _realtime: TRealtime;
+  private _plugins: TPlugins = {} as TPlugins;
+
+  constructor(
+    config: IgniterBuilderConfig<
+      TContext,
+      TConfig,
+      TStore,
+      TLogger,
+      TJobs,
+      TTelemetry,
+      TPlugins
+    > = {} as any,
+    middlewares: TMiddlewares = [] as any,
+    store?: TStore,
+    logger?: TLogger,
+    jobs?: TJobs,
+    telemetry?: TTelemetry,
+    realtime?: TRealtime,
+    plugins?: TPlugins,
+  ) {
+    this._config = config;
+    this._middlewares = middlewares;
+    this._store = store || ({} as TStore);
+    this._logger = logger || ({} as TLogger);
+    this._jobs = jobs || ({} as TJobs);
+    this._telemetry = telemetry || ({} as TTelemetry);
+    this._realtime = realtime || ({} as TRealtime);
+    this._plugins = plugins || ({} as TPlugins);
+  }
+
   /**
-   * Sets up a new context type for the application.
-   * 
-   * @template TNewContext - The new context type to use
-   * @returns An enhanced builder instance with fluent API
+   * Configure the context function.
    */
   context<TNewContext extends object | ContextCallback>(
-    contextFn?: TNewContext extends ContextCallback ? TNewContext : (request: Request) => TNewContext | Promise<TNewContext>
-  ): IgniterEnhancedBuilder<TNewContext extends ContextCallback ? Unwrap<TNewContext> : TNewContext> {
-    type ResolvedContext = TNewContext extends ContextCallback ? Unwrap<TNewContext> : TNewContext;
-    const enhancedBuilder = new IgniterEnhancedBuilder<ResolvedContext>();
-    
-    if (contextFn) {
-      return enhancedBuilder.context(contextFn as any);
-    }
-    
-    return enhancedBuilder;
+    contextFn: TNewContext,
+  ): IgniterBuilder<
+    TNewContext,
+    TConfig,
+    TMiddlewares,
+    TStore,
+    TLogger,
+    TJobs,
+    TTelemetry,
+    TRealtime,
+    TPlugins
+  > {
+    return new IgniterBuilder(
+      { ...this._config, context: contextFn },
+      this._middlewares,
+      this._store,
+      this._logger,
+      this._jobs,
+      this._telemetry,
+      this._realtime,
+      this._plugins,
+    );
   }
 
   /**
-   * Extend the builder with modular configuration.
-   * This is the new recommended way to configure global settings.
-   * 
-   * @param extension - Function that configures the enhanced builder
-   * @returns Enhanced builder with configuration applied
+   * Add global middleware procedures.
    */
-  extend(extension: IgniterBuilderExtension<TContext>): IgniterEnhancedBuilder<TContext> {
-    const enhancedBuilder = new IgniterEnhancedBuilder<TContext>();
-    return extension(enhancedBuilder);
+  middleware<
+    TNewMiddlewares extends readonly IgniterProcedure<any, any, any>[],
+  >(
+    middlewares: TNewMiddlewares,
+  ): IgniterBuilder<
+    TContext,
+    TConfig,
+    TNewMiddlewares,
+    TStore,
+    TLogger,
+    TJobs,
+    TTelemetry,
+    TRealtime,
+    TPlugins
+  > {
+    return new IgniterBuilder(
+      { ...this._config, middleware: middlewares },
+      middlewares,
+      this._store,
+      this._logger,
+      this._jobs,
+      this._telemetry,
+      this._realtime,
+      this._plugins,
+    );
   }
 
   /**
-   * Creates the main API builder with all framework components.
-   * 
-   * @deprecated Use .extend() for better type inference and global middleware support
-   * @returns An object containing factory functions for all framework components
+   * Configure router settings.
+   */
+  config<TNewConfig extends TConfig>(
+    routerConfig: TNewConfig,
+  ): IgniterBuilder<
+    TContext,
+    TNewConfig,
+    TMiddlewares,
+    TStore,
+    TLogger,
+    TJobs,
+    TTelemetry,
+    TRealtime,
+    TPlugins
+  > {
+    return new IgniterBuilder(
+      { ...this._config, config: routerConfig },
+      this._middlewares,
+      this._store,
+      this._logger,
+      this._jobs,
+      this._telemetry,
+      this._realtime,
+      this._plugins,
+    );
+  }
+
+  /**
+   * Configure a store adapter for caching, events, and more.
+   */
+  store(
+    storeAdapter: IgniterStoreAdapter,
+  ): IgniterBuilder<
+    TContext,
+    TConfig,
+    TMiddlewares,
+    IgniterStoreAdapter,
+    TLogger,
+    TJobs,
+    TTelemetry,
+    IgniterRealtimeServiceType,
+    TPlugins
+  > {
+    const realtime = new IgniterRealtimeService(storeAdapter);
+
+    return new IgniterBuilder<
+      TContext,
+      TConfig,
+      TMiddlewares,
+      IgniterStoreAdapter,
+      TLogger,
+      TJobs,
+      TTelemetry,
+      IgniterRealtimeServiceType,
+      TPlugins
+    >(
+      { ...this._config, store: storeAdapter, realtime },
+      this._middlewares,
+      storeAdapter,
+      this._logger,
+      this._jobs,
+      this._telemetry,
+      realtime,
+      this._plugins,
+    );
+  }
+
+  /**
+   * Configure a logger adapter for logging.
+   */
+  logger(
+    loggerAdapter: IgniterLogger,
+  ): IgniterBuilder<
+    TContext,
+    TConfig,
+    TMiddlewares,
+    TStore,
+    IgniterLogger,
+    TJobs,
+    TTelemetry,
+    TRealtime,
+    TPlugins
+  > {
+    return new IgniterBuilder<
+      TContext,
+      TConfig,
+      TMiddlewares,
+      TStore,
+      IgniterLogger,
+      TJobs,
+      TTelemetry,
+      TRealtime,
+      TPlugins
+    >(
+      { ...this._config, logger: loggerAdapter },
+      this._middlewares,
+      this._store,
+      loggerAdapter,
+      this._jobs,
+      this._telemetry,
+      this._realtime,
+      this._plugins,
+    );
+  }
+
+  /**
+   * Configure a job queue adapter for background processing.
+   */
+  jobs<
+    TJobs extends MergedJobsExecutor<any>,
+    TJobsProxy extends JobsNamespaceProxy<any> = ReturnType<Awaited<TJobs>["createProxy"]>
+  >(jobsAdapter: TJobs) {
+    const jobsProxy = jobsAdapter.createProxy() as TJobsProxy;
+
+    return new IgniterBuilder<
+      TContext,
+      TConfig,
+      TMiddlewares,
+      TStore,
+      TLogger,
+      TJobsProxy,
+      TTelemetry,
+      TRealtime,
+      TPlugins
+    >(
+      // @ts-expect-error - TJobsProxy is not used [DO NOT REMOVE THIS - ITS WORKING]
+      { ...this._config, jobs: jobsProxy },
+      this._middlewares,
+      this._store,
+      this._logger,
+      jobsProxy,
+      this._telemetry,
+      this._realtime,
+      this._plugins,
+    );
+  }
+
+  /**
+   * Configure a telemetry provider for observability.
+   * Enables distributed tracing, metrics collection, and structured logging.
+   */
+  telemetry<TTelemetryProvider extends IgniterTelemetryProvider>(
+    telemetryProvider: TTelemetryProvider,
+  ): IgniterBuilder<
+    TContext,
+    TConfig,
+    TMiddlewares,
+    TStore,
+    TLogger,
+    TJobs,
+    TTelemetryProvider,
+    TRealtime,
+    TPlugins
+  > {
+    return new IgniterBuilder<
+      TContext,
+      TConfig,
+      TMiddlewares,
+      TStore,
+      TLogger,
+      TJobs,
+      TTelemetryProvider,
+      TRealtime,
+      TPlugins
+    >(
+      // @ts-expect-error - TTelemetryProvider is not used
+      { ...this._config, telemetry: telemetryProvider },
+      this._middlewares,
+      this._store,
+      this._logger,
+      this._jobs,
+      telemetryProvider,
+      this._realtime,
+      this._plugins,
+    );
+  }
+
+  /**
+   * Register plugins with the Igniter Router
+   *
+   * Plugins provide self-contained functionality with actions, controllers, events, and lifecycle hooks.
+   * They can access their own actions type-safely through the `self` parameter.
+   *
+   * @param pluginsRecord - Record of plugin name to plugin instance
+   *
+   * @example
+   * ```typescript
+   * const igniter = Igniter
+   *   .context<MyContext>()
+   *   .plugins({
+   *     auth: authPlugin,
+   *     email: emailPlugin,
+   *     audit: auditPlugin
+   *   })
+   *   .create();
+   *
+   * // Usage in actions
+   * const userController = igniter.controller({
+   *   actions: {
+   *     create: igniter.mutation({
+   *       handler: async (ctx) => {
+   *         await ctx.plugins.auth.actions.validateToken({ token });
+   *         await ctx.plugins.email.actions.sendWelcome({ email });
+   *         await ctx.plugins.audit.emit('user:created', { userId });
+   *       }
+   *     })
+   *   }
+   * });
+   * ```
+   */
+  plugins<TNewPlugins extends Record<string, any>>(
+    pluginsRecord: TNewPlugins,
+  ): IgniterBuilder<
+    TContext,
+    TConfig,
+    TMiddlewares,
+    TStore,
+    TLogger,
+    TJobs,
+    TTelemetry,
+    TRealtime,
+    TNewPlugins
+  > {
+    return new IgniterBuilder<
+      TContext,
+      TConfig,
+      TMiddlewares,
+      TStore,
+      TLogger,
+      TJobs,
+      TTelemetry,
+      TRealtime,
+      TNewPlugins
+    >(
+      // Store plugins in config for RequestProcessor access
+      { ...this._config, plugins: pluginsRecord },
+      this._middlewares,
+      this._store,
+      this._logger,
+      this._jobs,
+      this._telemetry,
+      this._realtime,
+      pluginsRecord,
+    );
+  }
+
+  /**
+   * Creates the API with global middleware types inferred.
    */
   create() {
+    type TContextCallback = Unwrap<TContext>;
+    type TEnrichedContext = TContextCallback extends object
+      ? TContextCallback
+      : TContext & InferActionProcedureContext<TMiddlewares>;
+
     return {
       /**
        * Creates a query action for retrieving data.
        */
+      /**
+       * Creates a query action for retrieving data.
+       */
       query: <
-        TPath extends string,
-        TQuery extends StandardSchemaV1 | undefined,
-        TResponse,
-        TMiddlewares extends readonly IgniterProcedure<TContext, any, any>[],
-        THandler extends IgniterActionHandler<IgniterActionContext<TContext, TPath, QueryMethod, undefined, TQuery, TMiddlewares>, TResponse>,
-        TInfer extends InferEndpoint<TContext, TPath, QueryMethod, undefined, TQuery, TResponse, TMiddlewares, THandler>
+        TQueryPath extends string,
+        TQueryQuery extends StandardSchemaV1 | undefined,
+        TQueryMiddlewares extends readonly IgniterProcedure<any, any, any>[],
+        TQueryHandler extends IgniterActionHandler<
+          IgniterActionContext<
+            TEnrichedContext,
+            TQueryPath,
+            QueryMethod,
+            undefined,
+            TQueryQuery,
+            TQueryMiddlewares,
+            TPlugins
+          >,
+          unknown // 🔄 MUDANÇA: 'any' → 'unknown' para melhor inferência
+        >,
+        TQueryResponse extends ReturnType<TQueryHandler>,
+        TQueryInfer extends InferEndpoint<
+          TEnrichedContext,
+          TQueryPath,
+          QueryMethod,
+          undefined,
+          TQueryQuery,
+          TQueryMiddlewares,
+          TPlugins,
+          TQueryHandler,
+          TQueryResponse
+        >,
       >(
-        options: IgniterQueryOptions<TContext, TPath, TQuery, TResponse, TMiddlewares, THandler>
-      ) => createIgniterQuery<
-        TContext,
-        TPath,
-        TQuery,
-        TResponse,
-        TMiddlewares,
-        THandler,
-        TInfer
-      >(options),
+        // 🔄 MUDANÇA: Remoção do constraint genérico no handler para permitir inferência livre
+        options: IgniterQueryOptions<
+          TEnrichedContext,
+          TQueryPath,
+          TQueryQuery,
+          TQueryMiddlewares,
+          TPlugins,
+          TQueryHandler
+        >,
+      ) =>
+        createIgniterQuery<
+          TEnrichedContext,
+          TQueryPath,
+          TQueryQuery,
+          TQueryMiddlewares,
+          TPlugins,
+          TQueryHandler,
+          TQueryResponse,
+          TQueryInfer
+        >(options),
 
       /**
        * Creates a mutation action for modifying data.
        */
       mutation: <
-        TPath extends string,
-        TMethod extends MutationMethod,
-        TBody extends StandardSchemaV1 | undefined,
-        TResponse,
-        TMiddlewares extends readonly IgniterProcedure<any, any, any>[],
-        THandler extends IgniterActionHandler<IgniterActionContext<TContext, TPath, TMethod, TBody, undefined, TMiddlewares>, TResponse>,
-        TInfer extends InferEndpoint<TContext, TPath, TMethod, TBody, undefined, TResponse, TMiddlewares, THandler>
+        TMutationPath extends string,
+        TMutationMethod extends MutationMethod,
+        TMutationBody extends StandardSchemaV1 | undefined,
+        TMutationQuery extends StandardSchemaV1 | undefined,
+        TMutationMiddlewares extends readonly IgniterProcedure<any, any, any>[],
+        TMutationHandler extends IgniterActionHandler<
+          IgniterActionContext<
+            TEnrichedContext,
+            TMutationPath,
+            TMutationMethod,
+            TMutationBody,
+            TMutationQuery,
+            TMutationMiddlewares,
+            TPlugins
+          >,
+          unknown // 🔄 MUDANÇA: 'any' → 'unknown' para melhor inferência
+        >,
+        TMutationResponse extends ReturnType<TMutationHandler>,
+        TMutationInfer extends InferEndpoint<
+          TEnrichedContext,
+          TMutationPath,
+          TMutationMethod,
+          TMutationBody,
+          TMutationQuery,
+          TMutationMiddlewares,
+          TPlugins,
+          TMutationHandler,
+          TMutationResponse
+        >,
       >(
-        options: IgniterMutationOptions<TContext, TPath, TMethod, TBody, TResponse, TMiddlewares, THandler>
-      ) => createIgniterMutation<
-        TContext,
-        TPath,
-        TMethod,
-        TBody,
-        TResponse,
-        TMiddlewares,
-        THandler,
-        TInfer
-      >(options),
+        // 🔄 MUDANÇA: Remoção do constraint genérico no handler para permitir inferência livre
+        options: IgniterMutationOptions<
+          TEnrichedContext,
+          TMutationPath,
+          TMutationMethod,
+          TMutationBody,
+          TMutationQuery,
+          TMutationMiddlewares,
+          TPlugins,
+          TMutationHandler
+        >,
+      ) =>
+        createIgniterMutation<
+          TEnrichedContext,
+          TMutationPath,
+          TMutationMethod,
+          TMutationBody,
+          TMutationQuery,
+          TMutationMiddlewares,
+          TPlugins,
+          TMutationHandler,
+          TMutationResponse,
+          TMutationInfer
+        >(options),
 
       /**
        * Creates a controller to group related actions.
        */
-      controller: <
-       // @ts-expect-error - TActions is not used
-        TActions extends Record<string, IgniterAction<TContext, any, any, any, any, any, any, any>>
-      >(
-        config: IgniterControllerConfig<TContext, TActions>
-      ) => createIgniterController<TContext, TActions>(config),
+      controller: <TActions extends Record<string, IgniterControllerBaseAction>>(
+        config: IgniterControllerConfig<TActions>,
+      ) =>
+        createIgniterController<TActions>(config),
 
       /**
-       * Creates a router to handle HTTP requests.
+       * Creates a router with enhanced configuration.
        */
       router: <
-        TControllers extends Record<string, IgniterControllerConfig<TContext, any>>
-      >(
-        config: IgniterRouterConfig<TContext, TControllers>
-      ) => createIgniterRouter<TContext, TControllers>(config),
+        TContext extends object | ContextCallback,
+        TControllers extends Record<
+          string,
+          IgniterControllerConfig<any>
+        >,
+      >(config: {
+        context?: TContext;
+        controllers: TControllers;
+      }) => {
+        type TRouterContext = TContext extends object | ContextCallback
+          ? InferIgniterContext<TContext>
+          : TEnrichedContext;
+
+        return createIgniterRouter<
+          // @ts-expect-error - TRouterContext is not used [DO NOT REMOVE THIS - ITS WORKING]
+          TRouterContext,
+          TControllers,
+          TConfig,
+          TPlugins
+        >({
+          controllers: config.controllers,
+          context: (config.context || this._config.context) as TRouterContext,
+          config: this._config.config || ({} as TConfig),
+          plugins: this._plugins,
+        });
+      },
 
       /**
        * Creates a reusable middleware procedure.
        */
-      procedure: <
-        TOptions extends Record<string, any>,
-        TOutput
-      >(
-        middleware: IgniterProcedure<TContext, TOptions, TOutput>
-      ) => createIgniterProcedure(middleware)
+      procedure: <TOptions extends Record<string, any>, TOutput>(
+        middleware: IgniterProcedure<TEnrichedContext, TOptions, TOutput>,
+      ) => createIgniterProcedure(middleware),
+
+      helpers: {
+        /**
+         * Configure context function.
+         */
+        withContext:
+          <TContext extends object>(
+            contextFn: (request: Request) => TContext | Promise<TContext>,
+          ) =>
+          (
+            builder: IgniterBuilder<
+              TContext,
+              TConfig,
+              TMiddlewares,
+              TStore,
+              TLogger,
+              TJobs,
+              TTelemetry,
+              TRealtime,
+              TPlugins
+            >,
+          ) =>
+            builder.context(contextFn),
+
+        /**
+         * Configure authentication middleware.
+         */
+        withAuth:
+          <TContext extends object>(
+            authMiddleware: IgniterProcedure<TContext, any, any>,
+          ) =>
+          (
+            builder: IgniterBuilder<
+              TContext,
+              TConfig,
+              TMiddlewares,
+              TStore,
+              TLogger,
+              TJobs,
+              TTelemetry,
+              TRealtime,
+              TPlugins
+            >,
+          ) =>
+            builder.middleware([authMiddleware] as const),
+
+        /**
+         * Configure multiple middlewares.
+         */
+        withMiddlewares:
+          <
+            TContext extends object,
+            TMiddlewares extends readonly IgniterProcedure<any, any, any>[],
+          >(
+            middlewares: TMiddlewares,
+          ) =>
+          (
+            builder: IgniterBuilder<
+              TContext,
+              TConfig,
+              TMiddlewares,
+              TStore,
+              TLogger,
+              TJobs,
+              TTelemetry,
+              TRealtime,
+              TPlugins
+            >,
+          ) =>
+            builder.middleware(middlewares),
+
+        /**
+         * Configure router settings.
+         */
+        withConfig:
+          <TContext extends object, TNewConfig extends TConfig>(
+            config: TNewConfig,
+          ) =>
+          (
+            builder: IgniterBuilder<
+              TContext,
+              TConfig,
+              TMiddlewares,
+              TStore,
+              TLogger,
+              TJobs,
+              TTelemetry,
+              TRealtime,
+              TPlugins
+            >,
+          ) =>
+            builder.config(config as TConfig),
+
+        /**
+         * Compose multiple configuration functions.
+         */
+        compose:
+          <TContext extends object>(
+            ...configs: Array<
+              (
+                builder: IgniterBuilder<
+                  TContext,
+                  TConfig,
+                  TMiddlewares,
+                  TStore,
+                  TLogger,
+                  TJobs,
+                  TTelemetry,
+                  TRealtime,
+                  TPlugins
+                >,
+              ) => IgniterBuilder<
+                TContext,
+                TConfig,
+                TMiddlewares,
+                TStore,
+                TLogger,
+                TJobs,
+                TTelemetry,
+                TRealtime,
+                TPlugins
+              >
+            >
+          ) =>
+          (
+            builder: IgniterBuilder<
+              TContext,
+              TConfig,
+              TMiddlewares,
+              TStore,
+              TLogger,
+              TJobs,
+              TTelemetry,
+              TRealtime,
+              TPlugins
+            >,
+          ) =>
+            configs.reduce((acc, config) => config(acc), builder),
+      },
+
+      store: this._store,
+      logger: this._logger,
+      jobs: this._jobs,
+      telemetry: this._telemetry,
+      realtime: this._realtime,
+      plugins: this._plugins,
+
+      /**
+       * Internal context type for debugging/inspection.
+       */
+      $context: {} as TEnrichedContext,
+
+      /**
+       * Internal config for debugging/inspection.
+       */
+      $config: { ...this._config },
     };
   }
 }
 
-export const Igniter = new IgniterBuilder();
-export type { IgniterBuilder };
-
 /**
- * Helper functions for common builder configurations.
+ * Factory function to create a new Igniter builder instance.
+ *
+ * @template TContext - The type of the application context
+ * @returns A new IgniterBuilder instance
+ *
+ * @example
+ * // Initialize with custom context
+ * const igniter = Igniter
+ *   .context<{ db: Database }>()
+ *   .middleware([authMiddleware])
+ *   .store(redisStore)
+ *   .create();
  */
-export const IgniterHelpers = {
-  /**
-   * Configure context function.
-   */
-  withContext: <TContext extends object>(
-    contextFn: (request: Request) => TContext | Promise<TContext>
-  ) => (builder: IgniterEnhancedBuilder<TContext>) =>
-    builder.context(contextFn),
+export const Igniter = new IgniterBuilder();
 
-  /**
-   * Configure authentication middleware.
-   */
-  withAuth: <TContext extends object>(
-    authMiddleware: IgniterProcedure<TContext, any, any>
-  ) => (builder: IgniterEnhancedBuilder<TContext>) =>
-    builder.middleware([authMiddleware] as const),
-
-  /**
-   * Configure multiple middlewares.
-   */
-  withMiddlewares: <TContext extends object, TMiddlewares extends readonly IgniterProcedure<any, any, any>[]>(
-    middlewares: TMiddlewares
-  ) => (builder: IgniterEnhancedBuilder<TContext>) =>
-    builder.middleware(middlewares),
-
-  /**
-   * Configure security settings.
-   */
-  withSecurity: <TContext extends object>(
-    securityConfig: SecurityConfig
-  ) => (builder: IgniterEnhancedBuilder<TContext>) =>
-    builder.security(securityConfig),
-
-  /**
-   * Configure router settings.
-   */
-  withConfig: <TContext extends object>(
-    config: { baseURL?: string; basePATH?: string }
-  ) => (builder: IgniterEnhancedBuilder<TContext>) =>
-    builder.config(config),
-
-  /**
-   * Compose multiple configuration functions.
-   */
-  compose: <TContext extends object>(
-    ...configs: Array<(builder: IgniterEnhancedBuilder<TContext>) => IgniterEnhancedBuilder<TContext>>
-  ) => (builder: IgniterEnhancedBuilder<TContext>) =>
-    configs.reduce((acc, config) => config(acc), builder)
-};

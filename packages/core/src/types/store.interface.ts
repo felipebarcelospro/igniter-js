@@ -1,5 +1,3 @@
-import type { Redis } from "ioredis";
-
 /**
  * Options for setting a key-value pair in the store.
  */
@@ -21,12 +19,12 @@ export type EventCallback = (message: any) => void | Promise<void>;
  * A Store Adapter provides a unified interface for various storage backends (e.g., Redis, Memcached, in-memory)
  * to handle key-value caching, atomic operations, and Pub/Sub messaging.
  */
-export interface IgniterStoreAdapter {
+export interface IgniterStoreAdapter<TClient extends unknown = unknown> {
   /**
    * The underlying client instance (e.g., Redis client).
    * Can be used for advanced operations not covered by the adapter.
    */
-  readonly client: unknown;
+  readonly client: TClient;
 
   // --- Key-Value Operations ---
 

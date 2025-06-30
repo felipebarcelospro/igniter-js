@@ -1,43 +1,24 @@
-import type { IgniterAction, IgniterControllerConfig, IgniterRouter, ClientCallerOptions, ClientConfig, InferRouterCaller, QueryActionCallerResult, MutationActionCallerResult, ClientCallerFetcher  } from '../types';
-
-import { cache } from 'react';
+import type { IgniterAction, IgniterControllerConfig, IgniterRouter, ClientConfig, InferRouterCaller, QueryActionCallerResult, MutationActionCallerResult  } from '../types';
 import { isServer } from '../utils/client';
 import { parseURL } from '../utils/url';
 import { createUseQuery, createUseMutation } from './igniter.hooks';
 
 /**
- * Creates a caller for server actions
- * @param controller Controller name
- * @param action Action name
- * @param router Igniter router
- * @returns A function to call server actions
- */
-export const createCaller = <TAction extends IgniterAction<any, any, any, any, any, any, any, any, any>>(
-  router: IgniterRouter<any, any>,
-  fetcher: ClientCallerFetcher<TAction>,
-
-  controller: string,
-  action: string,  
-) => {
-  return cache(async (input: ClientCallerOptions<TAction>) => {
-    if (!isServer) return fetcher(input);
-    const response = await router.processor.call(controller, action, input);
-    return response;
-  })
-}
-
-/**
  * Creates a client for interacting with Igniter Router
- * @param config Client configuration - can be a router instance or a function that returns a router
+ * @param config Client configuration
  * @returns A typed client for calling server actions
  */
-export const createIgniterClient = <TRouter extends IgniterRouter<any, any>>(
-  router: ClientConfig<TRouter> | (() => ClientConfig<TRouter>)
+export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any, any>>(
+  {
+    router,
+    baseURL,
+    basePath,
+  }: ClientConfig<TRouter>
 ): InferRouterCaller<TRouter> => {
   if (!router) {
     throw new Error('Router is required to create an Igniter client');
   }
-  
+
   if (typeof router === 'function') {
     router = router();
   }
@@ -47,35 +28,48 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any>>(
   // Build client structure from router
   for (const controllerName in router.controllers) {
     client[controllerName as keyof typeof client] = {} as any;
-    const controller = router.controllers[controllerName] as IgniterControllerConfig<any, any>;
+    const controller = router.controllers[controllerName] as IgniterControllerConfig<any>;
 
     for (const actionName in controller.actions) {
-      const action = controller.actions[actionName] as IgniterAction<any, any, any, any, any, any, any, any, any>;
+      const action = controller.actions[actionName] as IgniterAction<any, any, any, any, any, any, any, any, any, any>;
 
       const basePATH = router.config.basePATH || process.env.IGNITER_APP_PATH || '/api/v1';
       const baseURL = router.config.baseURL || process.env.IGNITER_APP_URL || 'http://localhost:3000';
 
       const parsedBaseURL = parseURL(baseURL, basePATH, controller.path);
 
-      // Create server caller
-      const serverCaller = createFetcher(action, parsedBaseURL);
-
-      // Store action path for caching in hooks
-      (serverCaller as any).__actionPath = `${controllerName}.${actionName}`;
-
       // Add hooks for GET requests
       if (action.method === 'GET') {
-        (client[controllerName as keyof typeof client] as any)[actionName] = {
-          useQuery: !isServer ? createUseQuery(serverCaller) : () => ({} as QueryActionCallerResult<typeof action>),
-          query: createCaller(router, serverCaller, controllerName, actionName),
+        if (isServer) {
+          const caller = router.$caller[controllerName][actionName];
+          (client[controllerName as keyof typeof client] as any)[actionName] = {
+            useQuery: () => ({} as QueryActionCallerResult<typeof action>),
+            query: caller,
+          }
+        } else {
+          const fetcher = createFetcher(action, parsedBaseURL);
+
+          (client[controllerName as keyof typeof client] as any)[actionName] = {
+            useQuery: createUseQuery(controllerName, actionName, fetcher),
+            query: fetcher,
+          }
         }
       }
 
       // Add hooks for non-GET requests
       if (action.method !== 'GET') {
-        (client[controllerName as keyof typeof client] as any)[actionName] = {
-          useMutation: !isServer ? createUseMutation(serverCaller) : () => ({} as MutationActionCallerResult<typeof action>),
-          mutate: createCaller(router, serverCaller, controllerName, actionName),
+        if (isServer) {
+          const caller = router.$caller[controllerName][actionName];
+          (client[controllerName as keyof typeof client] as any)[actionName] = {
+            useMutation: () => ({} as MutationActionCallerResult<typeof action>),
+            mutation: caller,
+          }
+        } else {
+          const caller = createFetcher(action, parsedBaseURL);
+          (client[controllerName as keyof typeof client] as any)[actionName] = {
+            useMutation: createUseMutation(controllerName, actionName, caller),
+            mutation: caller,
+          }
         }
       }
     }
@@ -87,11 +81,11 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any>>(
 /**
  * Creates a function to call server actions
  */
-const createFetcher = <TAction extends IgniterAction<any, any, any, any, any, any, any, any, any>>(
+const createFetcher = <TAction extends IgniterAction<any, any, any, any, any, any, any, any, any, any>>(
   action: TAction,
-  baseURL: string
+  baseURL: string,
 ) => {
-  return async (options?: ClientCallerOptions<TAction>): Promise<TAction['$Infer']['$Output']> => {
+  return async (options?: TAction['$Infer']['$Input']): Promise<TAction['$Infer']['$Output']> => {
     // Extract path parameters
     const params = options?.params || {};
     let path = action.path;
@@ -128,15 +122,40 @@ const createFetcher = <TAction extends IgniterAction<any, any, any, any, any, an
       requestOptions.body = JSON.stringify(options.body);
     }
 
-    // Make the request
-    const response = await fetch(url, requestOptions);
-    const data = await response.json();
+    try {
+      const response = await fetch(url, requestOptions);
 
-    // Handle errors
-    if (!response.ok) {
-      throw new Error(data.message || response.statusText);
+      let data: any;
+      const contentType = response.headers.get("Content-Type") || "";
+
+      if (!response.ok) {
+        // Try to parse error details if possible
+        if (contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          data = await response.text();
+        }
+        throw new Error(
+          typeof data === "string"
+            ? `Request failed with status ${response.status}: ${data}`
+            : data?.message || `Request failed with status ${response.status}`
+        );
+      }
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        data = await response.text();
+      }
+
+      return data as TAction['$Infer']['$Output'];
+    } catch (error: any) {
+      // You can customize error handling/logging here
+      throw new Error(
+        error?.message
+          ? `IgniterClient fetch error: ${error.message}`
+          : "IgniterClient fetch error"
+      );
     }
-
-    return data as TAction['$Infer']['$Output'];
   };
 };

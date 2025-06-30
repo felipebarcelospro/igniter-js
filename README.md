@@ -4,7 +4,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Igniter is a modern, type-safe HTTP framework designed to streamline the development of scalable TypeScript applications. It combines the flexibility of traditional HTTP frameworks with the power of full-stack type safety, making it the ideal choice for teams building robust web applications.
+Igniter.js is a modern, type-safe HTTP framework designed to streamline the development of scalable TypeScript applications. It combines the flexibility of traditional HTTP frameworks with the power of full-stack type safety, making it the ideal choice for teams building robust web applications.
 
 ## Why Igniter?
 
@@ -61,11 +61,11 @@ npm install @vercel/mcp-adapter @modelcontextprotocol/sdk
 
 ### Quick Start Guide
 
-Building an API with Igniter is straightforward and intuitive. Here's how to get started:
+Building an API with Igniter.js is straightforward and intuitive. Here's how to get started:
 
 ## Project Structure
 
-Igniter promotes a feature-based architecture that scales with your application:
+Igniter.js promotes a feature-based architecture that scales with your application:
 
 ```
 src/
@@ -98,37 +98,77 @@ src/
 ### 1. Initialize Igniter
 ```typescript
 // src/igniter.ts
-
-import { Igniter } from "@igniter-js/core";
-import { createRedisStoreAdapter } from "@igniter-js/core/adapters";
-import { createBullMQAdapter } from "@igniter-js/core/adapters";
-import { createConsoleLogger } from "@igniter-js/core/adapters";
-import { Redis } from "ioredis";
 import type { IgniterAppContext } from "./igniter.context";
-
-// Setup Redis for store and jobs
-const redis = new Redis(process.env.REDIS_URL);
-const store = createRedisStoreAdapter(redis);
-const jobs = createBullMQAdapter({ store });
-const logger = createConsoleLogger({ level: 'info' });
+import { Igniter.js } from "@igniter-js/core";
+import { store } from "@/services/store"
+import { prisma } from "@/services/prisma"
+import { jobs } from "@/services/jobs"
+import { logger } from "@/services/logger"
 
 /**
- * @description Initialize the Igniter Router with enhanced features
+ * @description Initialize the Igniter.js Router with enhanced features
  * @see https://igniter.felipebarcelospro.github.io/docs/getting-started/installation
  */
 export const igniter = Igniter
   .context<IgniterAppContext>()
-  .store(store)        // Add Redis store support
-  .jobs(jobs)          // Add background job processing
   .logger(logger)      // Add structured logging
   .create()
 ```
 
+### 2. Setup your services
+```typescript
+// src/services/prisma
+import { PrismaClient } from '@prisma/client'
+
+/**
+ * Prisma client instance for database operations
+ * @description Provides type-safe database access with Prisma ORM
+ */
+export const database = createPrismaClient(PrismaClient)
+
+// src/services/redis
+import { Redis } from "ioredis";
+
+/**
+ * Redis client instance for caching and pub/sub
+ * @description Handles caching, session storage and real-time messaging
+ */
+export const redis = new Redis(process.env.REDIS_URL);
+
+// src/services/store
+import { createRedisStoreAdapter } from "@igniter-js/core/adapters";
+
+/**
+ * Store adapter for data persistence
+ * @description Provides a unified interface for data storage operations
+ */
+export const store = createRedisStoreAdapter({ store });
+
+// src/services/jobs
+import { createBullMQAdapter } from "@igniter-js/core/adapters";
+
+/**
+ * Job queue adapter for background processing
+ * @description Handles asynchronous job processing with BullMQ
+ */
+export const jobs = createBullMQAdapter({ store });
+
+// src/services/logger
+import { createConsoleLogger } from "@igniter-js/core/adapters";
+
+/**
+ * Logger instance for application logging
+ * @description Provides structured logging with configurable log levels
+ */
+export const logger = createConsoleLogger({ level: 'info' });
+
 ### 2. Define your App Global Context
 ```typescript
 // src/igniter.context
-import { prisma } from "@/lib/db";
-import { Invariant } from "@/utils";
+import { database } from "@/services/database"
+import { jobs } from "@/services/jobs"
+import { logger } from "@/services/logger"
+import { logger } from "@/services/logger"
 
 /**
  * @description Create the context of the application
@@ -136,16 +176,16 @@ import { Invariant } from "@/utils";
  */
 export const createIgniterAppContext = () => {
   return {
-    providers: {
-      database: prisma,
-      rules: Invariant.initialize('Igniter')
-    }
+    jobs,
+    prisma,
+    logger,
+    database
   }
 }
 
 /**
  * @description The context of the application
- * Enhanced with store, jobs, and logger from Igniter builder
+ * Enhanced with store, jobs, and logger from Igniter.js builder
  * @see https://igniter.felipebarcelospro.github.io/docs/getting-started/installation
  */
 export type IgniterAppContext = Awaited<ReturnType<typeof createIgniterAppContext>>;
@@ -185,41 +225,41 @@ export const userController = igniter.controller({
         name: z.string(),
         email: z.string().email()
       }),
-      handler: async (ctx) => {
-        const { name, email } = ctx.request.body
+      handler: async ({ request, response, context }) => {
+        const { name, email } = request.body
         
         // Log the operation
-        igniter.logger.info('Creating new user', { email });
+        context.logger.info('Creating new user', { email });
         
         // Create user in database
-        const user = await ctx.providers.database.user.create({
+        const user = await context.database.user.create({
           data: { name, email }
         });
         
         // Cache user data
-        await igniter.store.set(`user:${user.id}`, user, { ttl: 3600 });
+        await context.store.set(`user:${user.id}`, user, { ttl: 3600 });
         
         // Queue welcome email job (if jobs are configured)
         if (ctx.jobs) {
-          await igniter.jobs.invoke({
+          await context.jobs.invoke({
             id: 'sendWelcomeEmail',
             payload: { userId: user.id, email, name }
           });
         }
         
-        igniter.logger.info('User created successfully', { 
+        context.logger.info('User created successfully', { 
           userId: user.id, 
           email: user.email 
         });
         
-        return igniter.response.created(user)
+        return response.created(user)
       }
     })
   }
 })
 ```
 
-### 4. Initialize Igniter Router with your framework
+### 4. Initialize Igniter.js Router with your framework
 
 ```typescript
 // src/igniter.router.ts
@@ -227,8 +267,8 @@ import { igniter } from '@/igniter'
 import { userController } from '@/features/user'
 
 export const AppRouter = igniter.router({
-  baseURL: 'http://localhost:3000',
-  basePATH: '/api/v1',
+  baseURL: process.env.NEXT_PUBLIC_IGNITER_APP_URL, // Default is http://localhost:3000
+  basePATH: process.env.NEXT_PUBLIC_IGNITER_APP_BASE_PATH, // Default is /api/v1
   controllers: {
     users: userController
   }
@@ -287,28 +327,69 @@ Procedures provide a powerful way to handle cross-cutting concerns:
 ```typescript
 import { igniter } from '@/igniter'
 
+type AuthOptions = {
+ isAuthRequired?: boolean
+}
+
 const auth = igniter.procedure({
-  handler: async (_, ctx) => {
-    const token = ctx.request.headers.get('authorization')
-    if (!token) {
-      return ctx.response.unauthorized()
+  handler: async (options: AuthOptions, { request, response, context }) => {
+    // Get authorization token from cookies
+    const token = request.cookies.get('authorization')
+
+    // Return unauthorized response if token is missing and auth is required
+    if (!token && options.isAuthRequired) {
+      return response.unauthorized()
     }
     
+    // Verify token and get user data
     const user = await verifyToken(token)
-    return { user }
+
+    return { 
+      auth: {
+        // Return authenticated user
+        user,
+
+        // Helper method to sign out user
+        signOut: () => {
+          // Remove auth cookie
+          request.cookies.delete('authorization')
+
+          // Publish logout event to store for real-time updates
+          // This allows other parts of the app to react to logout events
+          context.store.publish('user_logged_out', {
+            userId: user.id,
+          })
+        }
+      }
+    }
   }
 })
 
 // Use in actions
 const protectedAction = igniter.query({
   path: '/protected',
-  use: [auth()],
-  handler: (ctx) => {
+  use: [auth({ isAuthRequired: true })],
+  handler: ({ request, response, context }) => {
     // ctx.context.user is typed!
-    return ctx.response.success({ user: ctx.context.user })
+    return response.success({ user: ctx.context.user })
   }
 })
-```
+
+// Example of a protected action that requires authentication
+const protectedAction = igniter.query({
+  path: '/protected/logout',
+  // Use auth procedure with required authentication
+  use: [auth({ isAuthRequired: true })],
+  handler: ({ request, response, context }) => {
+    // Call signOut() from auth procedure to handle logout logic
+    // This separates authentication business logic into reusable procedures
+    await context.auth.signOut()
+
+    // Return success response with user data
+    // The user property is fully typed thanks to the auth procedure
+    return response.success({ user: ctx.context.user })
+  }
+})
 
 #### Common Use Cases for Procedures
 
@@ -355,7 +436,7 @@ const userController = igniter.controller({
 
 ### Type-Safe Responses
 
-Igniter provides a robust response system:
+Igniter.js provides a robust response system:
 
 ```typescript
 handler: async (ctx) => {
@@ -380,26 +461,26 @@ handler: async (ctx) => {
 Secure cookie handling made easy:
 
 ```typescript
-handler: async (ctx) => {
+handler: async ({ response }) => {
   // Set cookies
-  await ctx.response.setCookie('session', 'value', {
+  await response.setCookie('session', 'value', {
     httpOnly: true,
     secure: true,
     sameSite: 'strict'
   })
 
   // Set signed cookies
-  await ctx.response.setSignedCookie('token', 'sensitive-data', 'secret-key')
+  await response.setSignedCookie('token', 'sensitive-data', 'secret-key')
 
   // Get cookies
-  const session = ctx.request.cookies.get('session')
-  const token = await ctx.request.cookies.getSigned('token', 'secret-key')
+  const session = request.cookies.get('session')
+  const token = await request.cookies.getSigned('token', 'secret-key')
 }
 ```
 
 ## React Client Integration
 
-The Igniter React client provides a seamless integration with your frontend:
+The Igniter.js React client provides a seamless integration with your frontend:
 
 ### Setup
 
@@ -422,14 +503,14 @@ export const api = createIgniterClient(AppRouter);
 /**
  * Query client for Igniter
  * 
- * This client provides access to the Igniter query functions
+ * This client provides access to the Igniter.js query functions
  * and handles data fetching with respect to the application router.
  * It will enable the necessary hooks for query management.
  */
 export const useQueryClient = useIgniterQueryClient<typeof AppRouter>;
 ```
 
-Then, wrap your app with the Igniter provider:
+Then, wrap your app with the Igniter.js provider:
 
 ```tsx
 // app/providers.tsx
@@ -454,8 +535,8 @@ import { api } from '@/igniter.client'
 function UsersList() {
   const listUsers = api.users.list.useQuery({
     // Optional configuration
-    data: [], // Initial data while loading
-    params: {}, // Params for query
+    initialData: [], // Initial data while loading
+    initialParams: {}, // Params for query
     staleTime: 1000 * 60, // Data stays fresh for 1 minute
     refetchInterval: 1000 * 30, // Refetch every 30 seconds
     refetchOnWindowFocus: true, // Refetch when window regains focus
@@ -567,28 +648,38 @@ api.users.create.useMutation({
 
 ## Store Adapters
 
-Igniter provides powerful store adapters for caching, session management, and pub/sub messaging. The Redis adapter is the recommended choice for production applications.
+Igniter.js provides powerful store adapters for caching, session management, and pub/sub messaging. The Redis adapter is the recommended choice for production applications.
 
 ### Redis Store Adapter
 
 Set up Redis store for caching and real-time features:
 
 ```typescript
+// src/services/store
 import { createRedisStoreAdapter } from "@igniter-js/core/adapters";
-import { Redis } from "ioredis";
 
-const redis = new Redis({
-  host: 'localhost',
-  port: 6379,
-  // Additional Redis configuration
-});
+/**
+ * Store adapter for data persistence
+ * @description Provides a unified interface for data storage operations
+ */
+///
+export const store = createRedisStoreAdapter({ store });
 
-const store = createRedisStoreAdapter(redis);
+// src/igniter.context
+// ...another services
+import { store } from "@/services/store"
 
-const igniter = Igniter
-  .context<AppContext>()
-  .store(store)
-  .create();
+/**
+ * @description Create the context of the application
+ * @see https://igniter.felipebarcelospro.github.io/docs/getting-started/installation
+ */
+export const createIgniterAppContext = () => {
+  return {
+    // ...another services
+    store,
+  }
+}
+// @/igniter.context.ts
 ```
 
 ### Using Store in Actions
@@ -600,7 +691,7 @@ import { igniter } from '@/igniter.ts'
 
 const cacheExample = igniter.query({
   path: '/cache-demo',
-  handler: async ({ response }) => {
+  handler: async ({ request, response, context }) => {
     // Cache operations
     await igniter.store.set('user:123', { name: 'John' }, { ttl: 3600 });
     const user = await igniter.store.get('user:123');
@@ -629,8 +720,8 @@ const realtimeHandler = igniter.mutation({
     userId: z.string(),
     message: z.string()
   }),
-  handler: async (ctx) => {
-    const { userId, message } = ctx.request.body;
+  handler: async ({ request, response, context }) => {
+    const { userId, message } = request.body;
     
     // Publish to user-specific channel
     await igniter.store.publish(`user:${userId}`, {
@@ -639,7 +730,7 @@ const realtimeHandler = igniter.mutation({
       timestamp: new Date()
     });
     
-    return ctx.response.success({ sent: true });
+    return response.success({ sent: true });
   }
 });
 
@@ -651,18 +742,24 @@ await igniter.store.subscribe('user:123', (message) => {
 
 ## Background Jobs
 
-Igniter includes a powerful job queue system built on BullMQ for handling background tasks, scheduled jobs, and long-running processes.
+Igniter.js includes a powerful job queue system built on BullMQ for handling background tasks, scheduled jobs, and long-running processes.
 
 ### Setup Job Queue
 
 Configure the job system with Redis:
 
 ```typescript
+// src/services/store
 import { createBullMQAdapter } from "@igniter-js/core/adapters";
 
+/**
+ * Store adapter for data persistence
+ * @description Provides a unified interface for data storage operations
+ */
+///
 const jobs = createBullMQAdapter({
   store: redisStore,
-  globalPrefix: 'myapp', // Optional: for multi-tenancy
+  globalPrefix: 'igniter-app', // Optional: for multi-tenancy
   queueOptions: {
     defaultJobOptions: {
       removeOnComplete: 10,
@@ -671,11 +768,21 @@ const jobs = createBullMQAdapter({
   }
 });
 
-const igniter = Igniter
-  .context<AppContext>()
-  .store(store)
-  .jobs(jobs)
-  .create();
+// src/igniter.context
+// ...another services
+import { jobs } from "@/services/store"
+
+/**
+ * @description Create the context of the application
+ * @see https://igniter.felipebarcelospro.github.io/docs/getting-started/installation
+ */
+export const createIgniterAppContext = () => {
+  return {
+    // ...another services
+    jobs,
+  }
+}
+// @/igniter.context.ts
 ```
 
 ### Define Jobs
@@ -687,18 +794,18 @@ Create type-safe job definitions:
 import { z } from 'zod';
 
 export const emailJobs = {
-  sendWelcomeEmail: {
+  sendWelcomeEmail: igniter.jobs.register({
     name: 'Send Welcome Email',
-    payload: z.object({
+    input: z.object({
       userId: z.string(),
       email: z.string().email(),
       name: z.string()
     }),
-    run: async ({ payload, ctx }) => {
+    handler: async ({ request, response, context }) => {
       const { userId, email, name } = payload;
       
       // Send email using your email service
-      await ctx.providers.email.send({
+      await igniter.email.send({
         to: email,
         subject: 'Welcome!',
         template: 'welcome',
@@ -706,18 +813,16 @@ export const emailJobs = {
       });
       
       // Log the action
-      ctx.logger.info('Welcome email sent', { userId, email });
+      igniter.logger.info('Welcome email sent', { userId, email });
       
       return { emailId: 'email_123', sentAt: new Date() };
     },
     options: {
       queue: { name: 'emails' },
-      defaultOptions: {
-        attempts: 3,
-        removeOnComplete: 100
-      }
+      attempts: 3,
+      removeOnComplete: 100
     }
-  },
+  }),
 
   sendDigest: {
     name: 'Send Daily Digest',
@@ -799,10 +904,10 @@ const jobsController = igniter.controller({
         status: z.enum(['waiting', 'active', 'completed', 'failed']).optional(),
         limit: z.number().max(100).default(20)
       }),
-      handler: async (ctx) => {
-        const { status, limit } = ctx.request.query;
+      handler: async ({ request, response, context }) => {
+        const { status, limit } = request.query;
         
-        const jobs = await ctx.jobs.search({
+        const jobs = await igniter.jobs.search({
           filter: {
             status: status ? [status] : undefined,
             limit,
@@ -843,7 +948,7 @@ await igniter.jobs.worker({
 
 ## Structured Logging
 
-Igniter provides a flexible logging system with multiple adapters for different output targets.
+Igniter.js provides a flexible logging system with multiple adapters for different output targets.
 
 ### Console Logger
 
@@ -871,14 +976,14 @@ Access structured logging in your handlers:
 ```typescript
 const userAction = igniter.query({
   path: '/users/:id',
-  handler: async (ctx) => {
-    const { id } = ctx.request.params;
+  handler: async ({ request, response, context }) => {
+    const { id } = request.params;
     
     // Log with context
-    ctx.logger.info('Fetching user', { userId: id });
+    igniter.logger.info('Fetching user', { userId: id });
     
     try {
-      const user = await ctx.providers.database.user.findUnique({
+      const user = await igniter.database.user.findUnique({
         where: { id }
       });
       
@@ -887,14 +992,14 @@ const userAction = igniter.query({
         return ctx.response.notFound('User not found');
       }
       
-      ctx.logger.info('User fetched successfully', { 
+      igniter.logger.info('User fetched successfully', { 
         userId: id, 
         userEmail: user.email 
       });
       
-      return ctx.response.success({ user });
+      return response.success({ user });
     } catch (error) {
-      ctx.logger.error('Failed to fetch user', { userId: id }, error);
+      logger.error('Failed to fetch user', { userId: id }, error);
       throw error;
     }
   }
@@ -907,17 +1012,17 @@ Create child loggers with additional context:
 
 ```typescript
 const authProcedure = igniter.procedure({
-  handler: async (_, ctx) => {
-    const token = ctx.request.headers.get('authorization');
+  handler: async (, { request, response, context }) => {
+    const token = request.headers.get('authorization');
     
     if (!token) {
-      return ctx.response.unauthorized();
+      return response.unauthorized();
     }
     
     const user = await verifyToken(token);
     
     // Create child logger with user context
-    const userLogger = ctx.logger.child({
+    const userLogger = igniter.logger.child({
       userId: user.id,
       userEmail: user.email
     });
@@ -937,12 +1042,12 @@ const authProcedure = igniter.procedure({
 Available log levels in order of severity:
 
 ```typescript
-logger.fatal('System crash', { error: 'critical' });  // Most severe
-logger.error('Request failed', { statusCode: 500 });
-logger.warn('Deprecated API used', { endpoint: '/old-api' });
-logger.info('Request processed', { duration: '120ms' });
-logger.debug('Cache hit', { key: 'user:123' });       // Development
-logger.trace('Function entry', { function: 'handler' }); // Most verbose
+igniter.logger.fatal('System crash', { error: 'critical' });  // Most severe
+igniter.logger.error('Request failed', { statusCode: 500 });
+igniter.logger.warn('Deprecated API used', { endpoint: '/old-api' });
+igniter.logger.info('Request processed', { duration: '120ms' });
+igniter.logger.debug('Cache hit', { key: 'user:123' });       // Development
+igniter.logger.trace('Function entry', { function: 'handler' }); // Most verbose
 ```
 
 ### Server Actions (Next.js App Router)
@@ -954,7 +1059,7 @@ Use direct server calls with React Server Components:
 import { api } from '@/igniter.client'
 
 export default async function UsersPage() {
-  const users = await api.users.list.call()
+  const users = await api.users.list.query()
   
   return (
     <div>
@@ -978,7 +1083,7 @@ export async function createUser(formData: FormData) {
   const name = formData.get('name') as string
   const email = formData.get('email') as string
 
-  return api.users.create.call({
+  return api.users.create.query({
     body: { name, email }
   })
 }
@@ -1003,7 +1108,7 @@ import { api } from '@/igniter.client'
 
 // Server Component
 async function UsersList() {
-  const users = await api.users.list.call()
+  const users = await api.users.list.query()
   return (
     <div>
       {users.map(user => (
@@ -1091,7 +1196,7 @@ export default async function UsersPage() {
 
 ### Testing
 
-Igniter is designed with testability in mind:
+Igniter.js is designed with testability in mind:
 
 ```typescript
 import { router } from '@/igniter.router'
@@ -1142,7 +1247,7 @@ const monitor = igniter.procedure({
 
 ## Adapters
 
-Igniter features a modular adapter system for integrating with different services and frameworks. All adapters are available through the `@igniter-js/core/adapters` import.
+Igniter.js features a modular adapter system for integrating with different services and frameworks. All adapters are available through the `@igniter-js/core/adapters` import.
 
 ### Available Adapters
 
@@ -1151,16 +1256,6 @@ import {
   // Server Adapters
   nextRouteHandlerAdapter,  // Next.js App Router integration
   createMcpAdapter,         // Model Context Protocol server
-
-  // Store Adapters  
-  createRedisStoreAdapter,  // Redis for caching and pub/sub
-
-  // Job Queue Adapters
-  createBullMQAdapter,      // BullMQ for background jobs
-
-  // Logger Adapters
-  createConsoleLogger,      // Console output with colors
-  IgniterLogLevel,          // Log level enumeration
 } from "@igniter-js/core/adapters";
 ```
 
@@ -1183,28 +1278,86 @@ export const { GET, POST, PUT, DELETE, PATCH } = nextRouteHandlerAdapter(AppRout
 Create MCP servers for AI integration:
 
 ```typescript
+// app/api/mcp/[transport]
 import { createMcpAdapter } from '@igniter-js/core/adapters';
+import { AppRouter } from '@/igniter.router.ts'
 
-const mcpServer = createMcpAdapter({
-  router: AppRouter,
-  info: {
-    name: 'my-api-server',
+const mcpHandler = createMcpAdapter(AppRouter, {
+  // Optional custom context function with automatic type inference
+  context: async (req) => ({
+    context: { user: await getUser(req) },
+    tools: [],
+    request: req,
+    timestamp: Date.now(),
+    client: req.headers.get('user-agent') || 'unknown'
+  }),
+
+  // Optional event handlers
+  events: {
+    onToolCall: (name, args, ctx) => {
+      console.log(`Tool ${name} called with args:`, args);
+    },
+    onToolSuccess: (name, result, duration, ctx) => {
+      console.log(`Tool ${name} succeeded in ${duration}ms`);
+    }
+  },
+
+  // Optional server configuration
+  serverInfo: {
+    name: 'My MCP Server',
     version: '1.0.0'
   },
-  capabilities: {
-    tools: true,
-    resources: true
+
+  // Optional custom instructions
+  instructions: 'You have access to tools from the Igniter router.',
+
+  // Optional adapter configuration
+  adapter: {
+    basePath: '/api/mcp',
+    maxDuration: 60,
+    verboseLogs: true
   }
 });
 
-// Use with any MCP-compatible client (Cursor, Claude Desktop, etc.)
+// Export for Next.js route handlers
+export { mcpHandler as GET, mcpHandler as POST };
+
+
 ```
+
+### Connect with MCP-Compatible Clients
+
+#### Cursor Desktop
+1. Open Cursor Desktop
+2. Go to Settings > AI > Custom MCP Server
+3. Enter your server URL: `http://localhost:3000/api/mcp/sse`
+4. Click "Test Connection" to verify setup
+
+#### Claude Desktop
+1. Open Claude Desktop
+2. Go to Settings > Advanced > Custom MCP Server
+3. Enter your server URL: `http://localhost:3000/api/mcp/sse`
+4. Click "Connect" to test the connection
+
+#### Other MCP Clients
+You can connect any MCP-compatible client using:
+
+- SSE Endpoint: `http://localhost:3000/api/mcp/sse`
+- WebSocket Endpoint: `ws://localhost:3000/api/mcp/ws`
+
+Some popular MCP clients include:
+- CopilotKit's Open MCP Client
+- Windsurf
+- Blender MCP
+- Ghidra MCP
+
+For more MCP clients and servers, check out [MCP Repository](https://mcprepository.com)
 
 ### Adapter Architecture
 
 Adapters follow a consistent pattern:
 
-1. **Server Adapters**: Connect Igniter to HTTP frameworks
+1. **Server Adapters**: Connect Igniter.js to HTTP frameworks
 2. **Store Adapters**: Provide storage and caching capabilities  
 3. **Queue Adapters**: Handle background job processing
 4. **Logger Adapters**: Structured logging output

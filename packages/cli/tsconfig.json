@@ -10,7 +10,8 @@
     "moduleResolution": "node",
     "types": ["node"],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@igniter-js/core": ["../core/src"],
     }
   },
   "include": [

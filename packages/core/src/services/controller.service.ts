@@ -1,4 +1,7 @@
-import type { IgniterAction, IgniterControllerConfig } from "../types";
+import type { IgniterPlugin } from "../types/plugin.interface";
+import type { HTTPMethod, IgniterAction, IgniterActionHandler, IgniterControllerBaseAction, IgniterControllerConfig, IgniterProcedure, InferEndpoint } from "../types";
+import { createIgniterQuery, testAction } from "./action.service";
+import type { StandardSchemaV1 } from "zod/dist/types/v3/standard-schema";
 
 /**
  * Creates a controller configuration for the Igniter Framework.
@@ -30,10 +33,17 @@ import type { IgniterAction, IgniterControllerConfig } from "../types";
  * ```
  */
 export const createIgniterController = <
-  TControllerContext extends object, 
-  TControllerActions extends Record<string, IgniterAction<TControllerContext, any, any, any, any, any, any, any, any>>
+  TControllerActions extends Record<string, IgniterControllerBaseAction>
 >(
-  config: IgniterControllerConfig<TControllerContext, TControllerActions>
+  config: IgniterControllerConfig<TControllerActions>
 ) => {
-  return config;
-}
+  return config as IgniterControllerConfig<TControllerActions>;
+};
+
+export const testController = createIgniterController({
+  name: 'test',
+  path: '/test',
+  actions: {
+    test: testAction
+  }
+})

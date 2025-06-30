@@ -1,2 +1,3 @@
-export { createIgniterClient } from './igniter.client';
-export { IgniterProvider, useIgniterQueryClient } from './igniter.context'
+export { createIgniterClient } from "./igniter.client";
+export { IgniterProvider, useIgniterQueryClient } from "./igniter.context";
+export { useStream } from "./igniter.hooks";

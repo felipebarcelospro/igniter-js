@@ -2,6 +2,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { pathToFileURL } from 'url'
 import { generateSchemaFromRouter } from './generator'
+import { createChildLogger } from '../logger'
+import { createDetachedSpinner } from '@/lib/spinner'
 
 export type IgniterBuildConfig = {
   framework?: 'nextjs' | 'vite' | 'webpack' | 'generic'
@@ -21,6 +23,10 @@ export class IgniterWatcher {
   private watcher: any = null
   private config: IgniterBuildConfig
   private isGenerating = false
+  private logger = createChildLogger({ component: 'watcher' })
+  private watchingSpinner: any = null // Spinner permanente para "watching"
+  private watchingSpinnerActive = false // Track spinner state
+  private isInteractiveMode = false // Detect interactive mode
 
   constructor(config: IgniterBuildConfig) {
     this.config = {
@@ -33,23 +39,99 @@ export class IgniterWatcher {
       debug: false,
       ...config
     }
+    
+    // Detect if we're in interactive mode
+    this.isInteractiveMode = !!(
+      process.env.IGNITER_INTERACTIVE_MODE === 'true' ||
+      process.argv.includes('--interactive')
+    )
+    
+    if (this.isInteractiveMode) {
+      this.logger.debug('Interactive mode detected - spinners disabled')
+    }
+  }
+
+  /**
+   * Start the permanent "watching" spinner with proper management
+   */
+  private startWatchingSpinner() {
+    // Skip spinners in interactive mode
+    if (this.isInteractiveMode) {
+      this.logger.info('Watching for changes...')
+      return
+    }
+    
+    if (!this.watchingSpinner && !this.watchingSpinnerActive) {
+      this.watchingSpinner = createDetachedSpinner('Watching for changes...')
+      this.watchingSpinner.start()
+      this.watchingSpinnerActive = true
+    }
+  }
+
+  /**
+   * Pause the watching spinner to allow other messages
+   */
+  private pauseWatchingSpinner() {
+    // Skip spinners in interactive mode
+    if (this.isInteractiveMode) {
+      return
+    }
+    
+    if (this.watchingSpinner && this.watchingSpinnerActive) {
+      this.watchingSpinner.stop()
+      this.watchingSpinnerActive = false
+      // Add a small delay to ensure terminal is clear
+      process.stdout.write('\n')
+    }
+  }
+
+  /**
+   * Resume the watching spinner after other messages
+   */
+  private resumeWatchingSpinner() {
+    // Skip spinners in interactive mode
+    if (this.isInteractiveMode) {
+      return
+    }
+    
+    if (!this.watchingSpinnerActive && !this.isGenerating) {
+      // Create a new spinner instance for clean resume
+      this.watchingSpinner = createDetachedSpinner('Watching for changes...')
+      this.watchingSpinner.start()
+      this.watchingSpinnerActive = true
+    }
+  }
+
+  /**
+   * Stop the permanent "watching" spinner completely
+   */
+  private stopWatchingSpinner() {
+    // Skip spinners in interactive mode
+    if (this.isInteractiveMode) {
+      return
+    }
+    
+    if (this.watchingSpinner) {
+      this.watchingSpinner.stop()
+      this.watchingSpinner = null
+      this.watchingSpinnerActive = false
+      // Clear the line and add spacing
+      process.stdout.write('\n')
+    }
   }
 
   /**
    * Load router from file with simplified approach
    */
   private async loadRouter(routerPath: string): Promise<any> {
+    const logger = createChildLogger({ component: 'router-loader' })
     const fullPath = path.resolve(process.cwd(), routerPath)
     
-    if (this.config.debug) {
-      console.log('routerPath', routerPath)
-      console.log('fullPath', fullPath)
-    }
+    logger.debug('Loading router', { path: routerPath })
     
     try {
-      if (this.config.debug) {
-        console.log('🔧 Attempting to load router with TypeScript support...')
-      }
+      // const spinner = logger.spinner('Loading router with TypeScript support...')
+      // spinner.start()
       
       // Try using tsx or ts-node if available
       const module = await this.loadWithTypeScriptSupport(fullPath)
@@ -57,58 +139,56 @@ export class IgniterWatcher {
       if (module) {
         // Check if it's already a router object (TSX returns direct router data)
         if (module?.config && module?.controllers) {
-          if (this.config.debug) {
-            console.log('✅ Router loaded successfully (direct structure)')
-          }
+          const controllerCount = Object.keys(module.controllers || {}).length
+          // spinner.success(`Router loaded successfully - ${controllerCount} controllers`)
           return module
         }
         
-        // Otherwise look for exported router
-        const router = module?.AppRouter || module?.default || module?.router
+                        // Otherwise look for exported router
+                const router = module?.AppRouter || module?.default?.AppRouter || module?.default || module?.router
         
         if (router && typeof router === 'object') {
-          if (this.config.debug) {
-            console.log('✅ Router loaded successfully (exported property)')
-          }
+          const controllerCount = Object.keys(router.controllers || {}).length
+          // spinner.success(`Router loaded successfully - ${controllerCount} controllers`)
           return router
-        } else if (this.config.debug) {
-          console.log('⚠️  Module loaded but no router found:', Object.keys(module || {}))
+        } else {
+          // spinner.warn('Module loaded but no router found')
+          logger.debug('Available exports', { 
+            exports: Object.keys(module || {}) 
+          })
         }
-      } else if (this.config.debug) {
-        console.log('⚠️  TypeScript loading failed, trying import resolution...')
+      } else {
+        // spinner.warn('TypeScript loading failed, trying fallback...')
       }
       
       // Fallback: Try with import resolution
+      const fallbackSpinner = createDetachedSpinner('Trying fallback loading method...')
+      fallbackSpinner.start()
+      
       const fallbackModule = await this.loadRouterWithIndexResolution(fullPath)
       
       if (fallbackModule) {
         // Check if it's already a router object (TSX returns direct router data)
         if (fallbackModule?.config && fallbackModule?.controllers) {
-          if (this.config.debug) {
-            console.log('✅ Router loaded successfully (fallback direct structure)')
-          }
+          const controllerCount = Object.keys(fallbackModule.controllers || {}).length
+          fallbackSpinner.success(`Router loaded successfully - ${controllerCount} controllers`)
           return fallbackModule
         }
         
         // Otherwise look for exported router
-        const router = fallbackModule?.AppRouter || fallbackModule?.default || fallbackModule?.router
+        const router = fallbackModule?.AppRouter || fallbackModule?.default?.AppRouter || fallbackModule?.default || fallbackModule?.router
         
         if (router && typeof router === 'object') {
-          if (this.config.debug) {
-            console.log('✅ Router loaded successfully (fallback exported property)')
-          }
+          const controllerCount = Object.keys(router.controllers || {}).length
+          fallbackSpinner.success(`Router loaded successfully - ${controllerCount} controllers`)
           return router
         }
       }
       
-    } catch (error) {
-      console.log(`💥 Error loading router:`, (error as Error)?.message || error)
+      fallbackSpinner.error('Could not load router')
       
-      if (this.config.debug) {
-        console.error('🔍 Full error details:', error)
-        console.error('   Router path:', routerPath) 
-        console.error('   Full path:', fullPath)
-      }
+    } catch (error) {
+      logger.error('Failed to load router', { path: routerPath }, error)
     }
     
     return null
@@ -119,60 +199,42 @@ export class IgniterWatcher {
    * This is the NEW robust approach that replaces the problematic transpilation
    */
   private async loadWithTypeScriptSupport(filePath: string): Promise<any> {
+    const logger = createChildLogger({ component: 'tsx-loader' })
+    
     // Method 1: Try to find and use compiled JS version first (faster)
     const jsPath = filePath.replace(/\.ts$/, '.js')
     if (fs.existsSync(jsPath)) {
       try {
-        if (this.config.debug) {
-          console.log('🔧 Found compiled JS version, loading...')
-        }
+        logger.debug('Using compiled JS version')
         
         delete require.cache[jsPath]
         const module = require(jsPath)
         
-        if (this.config.debug) {
-          console.log('✅ Compiled JS loaded:', Object.keys(module || {}))
-        }
-        
         return module
       } catch (error) {
-        if (this.config.debug) {
-          console.log('⚠️  Compiled JS loading failed:', (error as Error).message)
-        }
+        logger.debug('Compiled JS loading failed, trying TypeScript...')
       }
     }
     
     // Method 2: Use TSX runtime loader (MAIN STRATEGY)
     if (filePath.endsWith('.ts')) {
       try {
-        if (this.config.debug) {
-          console.log('🔧 Trying TSX runtime loader...')
-        }
+        logger.debug('Using TSX runtime loader')
         
         const { spawn } = require('child_process')
         
         // First, check if TSX is available
         const tsxCheckResult = await new Promise<boolean>((resolve) => {
-          if (this.config.debug) {
-            console.log('🔍 Checking if TSX is available...')
-          }
-          
           const checkChild = spawn('npx', ['tsx', '--version'], {
             stdio: 'pipe',
             cwd: process.cwd()
           })
           
-          checkChild.on('close', (code) => {
-            if (this.config.debug) {
-              console.log('TSX check result code:', code)
-            }
+          checkChild.on('close', (code: number | null) => {
             resolve(code === 0)
           })
           
-          checkChild.on('error', (error) => {
-            if (this.config.debug) {
-              console.log('TSX check error:', error.message)
-            }
+          checkChild.on('error', () => {
             resolve(false)
           })
           
@@ -183,14 +245,7 @@ export class IgniterWatcher {
         })
         
         if (!tsxCheckResult) {
-          if (this.config.debug) {
-            console.log('⚠️  TSX not available, cannot use runtime loader')
-          }
           throw new Error('TSX not available')
-        }
-        
-        if (this.config.debug) {
-          console.log('✅ TSX is available')
         }
         
         const result = await new Promise<any>((resolve, reject) => {
@@ -199,7 +254,7 @@ export class IgniterWatcher {
             async function loadRouter() {
               try {
                 const module = await import('${pathToFileURL(filePath).href}');
-                const router = module?.AppRouter || module?.default || module?.router;
+                const router = module?.AppRouter || module?.default?.AppRouter || module?.default || module?.router;
                 
                 if (router && typeof router === 'object') {
                   // Extract safe metadata for CLI use
@@ -254,73 +309,34 @@ export class IgniterWatcher {
             loadRouter();
           `;
           
-          if (this.config.debug) {
-            console.log('🔧 About to spawn TSX process...')
-            console.log('   Command: npx tsx -e [script]')
-            console.log('   CWD:', process.cwd())
-            console.log('   File path:', filePath)
-          }
-
           const child = spawn('npx', ['tsx', '-e', tsxScript], {
             stdio: 'pipe',
             cwd: process.cwd(),
             env: { ...process.env, NODE_NO_WARNINGS: '1' }
           })
           
-          if (this.config.debug) {
-            console.log('✅ TSX process spawned, PID:', child.pid)
-          }
-          
           let output = ''
           let errorOutput = ''
           
-          child.stdout?.on('data', (data) => {
+          child.stdout?.on('data', (data: Buffer) => {
             output += data.toString()
-            if (this.config.debug) {
-              console.log('📤 TSX stdout:', data.toString().trim())
-            }
           })
           
-          child.stderr?.on('data', (data) => {
+          child.stderr?.on('data', (data: Buffer) => {
             errorOutput += data.toString()
-            if (this.config.debug) {
-              console.log('📤 TSX stderr:', data.toString().trim())
-            }
           })
           
-          child.on('close', (code) => {
-            if (this.config.debug) {
-              console.log('🏁 TSX process closed with code:', code)
-              console.log('📊 Total output length:', output.length)
-              console.log('📊 Total error length:', errorOutput.length)
-              console.log('TSX execution output:', output)
-              console.log('TSX execution errors:', errorOutput)
-            }
-            
+          child.on('close', (code: number | null) => {
             if (output.includes('__ROUTER_SUCCESS__')) {
               const resultLine = output.split('\n').find(line => line.includes('__ROUTER_SUCCESS__'))
               if (resultLine) {
                 try {
                   const routerData = JSON.parse(resultLine.replace('__ROUTER_SUCCESS__', ''))
-                  if (this.config.debug) {
-                    console.log('🎯 About to resolve with router data...')
-                    console.log('   Controllers count:', Object.keys(routerData?.controllers || {}).length)
-                  }
                   resolve(routerData)
-                  if (this.config.debug) {
-                    console.log('✅ Router data resolved successfully!')
-                  }
-                } catch (e) {
-                  if (this.config.debug) {
-                    console.log('💥 JSON parse error:', e.message)
-                    console.log('   Raw line:', resultLine.substring(0, 200) + '...')
-                  }
+                } catch (e: any) {
                   reject(new Error('Failed to parse router data: ' + e.message))
                 }
               } else {
-                if (this.config.debug) {
-                  console.log('⚠️  Router success marker found but no result line')
-                }
                 reject(new Error('Router success marker found but no data'))
               }
             } else if (output.includes('__ROUTER_ERROR__')) {
@@ -332,32 +348,20 @@ export class IgniterWatcher {
             }
           })
           
-          child.on('error', (error) => {
-            if (this.config.debug) {
-              console.log('💥 TSX process error:', error.message)
-            }
+          child.on('error', (error: any) => {
             reject(new Error('Failed to spawn TSX process: ' + error.message))
           })
           
           setTimeout(() => {
-            if (this.config.debug) {
-              console.log('⏰ TSX process timeout after 30s, killing...')
-            }
             child.kill()
             reject(new Error('Timeout loading TypeScript file with TSX'))
           }, 30000) // Increased timeout for TSX
         })
         
-        if (this.config.debug) {
-          console.log('✅ TSX runtime loader succeeded')
-        }
-        
         return result
         
       } catch (error) {
-        if (this.config.debug) {
-          console.log('⚠️  TSX runtime loader failed:', (error as Error).message)
-        }
+        logger.debug('TSX runtime loader failed', {}, error)
         // Don't throw, let it fall back to the old method
       }
     }
@@ -369,6 +373,8 @@ export class IgniterWatcher {
    * Load router by resolving directory imports to index files
    */
   private async loadRouterWithIndexResolution(routerPath: string): Promise<any> {
+    const logger = createChildLogger({ component: 'index-resolver' })
+    
     try {
       // Read the router file content
       const routerContent = fs.readFileSync(routerPath, 'utf8')
@@ -392,24 +398,12 @@ export class IgniterWatcher {
         if (importPath.startsWith('@/')) {
           // @/something maps to src/something
           resolvedPath = path.resolve(process.cwd(), 'src', importPath.substring(2))
-          if (this.config.debug) {
-            console.log(`🔍 Processing import: ${importPath}`)
-            console.log(`   Resolved to: ${resolvedPath}`)
-          }
         } else if (importPath.startsWith('./')) {
           // Relative import from current directory
           resolvedPath = path.resolve(basePath, importPath)
-          if (this.config.debug) {
-            console.log(`🔍 Processing import: ${importPath}`)
-            console.log(`   Resolved to: ${resolvedPath}`)
-          }
         } else {
           // Direct path relative to current directory
           resolvedPath = path.resolve(basePath, importPath)
-          if (this.config.debug) {
-            console.log(`🔍 Processing import: ${importPath}`)
-            console.log(`   Resolved to: ${resolvedPath}`)
-          }
         }
         
         // Check if it's a directory import or needs extension
@@ -431,11 +425,6 @@ export class IgniterWatcher {
               const ext = path.extname(filePath)
               finalPath = importPath + ext
               fileFound = true
-              
-              if (this.config.debug) {
-                console.log(`✅ Found file: ${filePath}`)
-                console.log(`🔄 Resolved file import: ${importPath} -> ${finalPath}`)
-              }
               break
             }
           }
@@ -453,11 +442,6 @@ export class IgniterWatcher {
               if (fs.existsSync(indexFile)) {
                 const ext = path.extname(indexFile)
                 finalPath = importPath + '/index' + ext
-                
-                if (this.config.debug) {
-                  console.log(`✅ Found index file: ${indexFile}`)
-                  console.log(`🔄 Resolved directory import: ${importPath} -> ${finalPath}`)
-                }
                 break
               }
             }
@@ -484,9 +468,7 @@ export class IgniterWatcher {
         // Write the resolved TypeScript content (no conversion needed!)
         fs.writeFileSync(tempFilePath, resolvedContent)
         
-        if (this.config.debug) {
-          console.log('🔧 Loading resolved module via TSX...')
-        }
+        logger.debug('Loading resolved module via TSX')
         
         // Use TSX to load the resolved TypeScript file
         const { spawn } = require('child_process')
@@ -496,7 +478,7 @@ export class IgniterWatcher {
             async function loadResolvedRouter() {
               try {
                 const module = await import('${pathToFileURL(tempFilePath).href}');
-                const router = module?.AppRouter || module?.default || module?.router;
+                const router = module?.AppRouter || module?.default?.AppRouter || module?.default || module?.router;
                 
                 if (router && typeof router === 'object') {
                   // Extract safe metadata
@@ -557,27 +539,22 @@ export class IgniterWatcher {
           let output = ''
           let errorOutput = ''
           
-          child.stdout?.on('data', (data) => {
+          child.stdout?.on('data', (data: Buffer) => {
             output += data.toString()
           })
           
-          child.stderr?.on('data', (data) => {
+          child.stderr?.on('data', (data: Buffer) => {
             errorOutput += data.toString()
           })
           
-          child.on('close', (code) => {
-            if (this.config.debug) {
-              console.log('TSX resolved module output:', output)
-              console.log('TSX resolved module errors:', errorOutput)
-            }
-            
+          child.on('close', (code: number | null) => {
             if (output.includes('__ROUTER_SUCCESS__')) {
               const resultLine = output.split('\n').find(line => line.includes('__ROUTER_SUCCESS__'))
               if (resultLine) {
                 try {
                   const routerData = JSON.parse(resultLine.replace('__ROUTER_SUCCESS__', ''))
                   resolve(routerData)
-                } catch (e) {
+                } catch (e: any) {
                   reject(new Error('Failed to parse resolved router data: ' + e.message))
                 }
               } else {
@@ -592,7 +569,7 @@ export class IgniterWatcher {
             }
           })
           
-          child.on('error', (error) => {
+          child.on('error', (error: any) => {
             reject(new Error('Failed to spawn TSX process for resolved module: ' + error.message))
           })
           
@@ -612,15 +589,10 @@ export class IgniterWatcher {
       }
       
     } catch (error) {
-      if (this.config.debug) {
-        console.error('❌ Error in index resolution:', error)
-        console.error('   Router path:', routerPath)
-      }
+      logger.error('Index resolution failed', { path: routerPath }, error)
       throw error
     }
   }
-
-
 
   /**
    * Start watching controller files
@@ -630,11 +602,10 @@ export class IgniterWatcher {
       // Dynamic import of chokidar to avoid bundling issues
       const chokidar = await import('chokidar')
       
-      if (this.config.debug) {
-        console.log('🔍 Starting Igniter file watcher...')
-        console.log('📁 Output directory:', this.config.outputDir)
-        console.log('👀 Watching patterns:', this.config.controllerPatterns)
-      }
+      this.logger.info('Starting file watcher', {
+        output: this.config.outputDir,
+        patterns: this.config.controllerPatterns?.join(', ')
+      })
 
       // Setup file watcher
       this.watcher = chokidar.watch(this.config.controllerPatterns!, {
@@ -643,28 +614,36 @@ export class IgniterWatcher {
         ignoreInitial: false
       })
 
-      // Handle file changes
-      this.watcher.on('add', this.handleFileChange.bind(this))
-      this.watcher.on('change', this.handleFileChange.bind(this))
-      this.watcher.on('unlink', this.handleFileChange.bind(this))
+      // Wait for watcher to be ready
+      await new Promise<void>((resolve, reject) => {
+        // Handle file changes
+        this.watcher.on('add', this.handleFileChange.bind(this))
+        this.watcher.on('change', this.handleFileChange.bind(this))
+        this.watcher.on('unlink', this.handleFileChange.bind(this))
 
-      // Handle watcher ready
-      this.watcher.on('ready', () => {
-        if (this.config.debug) {
-          console.log('✅ File watcher is ready')
-        }
+        // Handle watcher ready
+        this.watcher.on('ready', () => {
+          this.logger.success('File watcher is ready', { 
+            watching: this.config.controllerPatterns?.join(', ') 
+          })
+          resolve()
+        })
+
+        // Handle errors
+        this.watcher.on('error', (error: Error) => {
+          this.logger.error('File watcher error', {}, error)
+          reject(error)
+        })
       })
 
-      // Handle errors
-      this.watcher.on('error', (error: Error) => {
-        console.error('❌ File watcher error:', error)
-      })
-
-      // Initial generation
+      // Initial generation after watcher is ready
       await this.regenerateSchema()
 
+      // Start the permanent watching spinner after initial generation
+      this.startWatchingSpinner()
+
     } catch (error) {
-      console.error('❌ Failed to start file watcher:', error)
+      this.logger.error('Failed to start file watcher', {}, error)
       throw error
     }
   }
@@ -674,12 +653,17 @@ export class IgniterWatcher {
    */
   async stop() {
     if (this.watcher) {
+      // Stop the watching spinner first
+      this.stopWatchingSpinner()
+      
+      const spinner = createDetachedSpinner('Stopping file watcher...')
+      spinner.start()
+      
       await this.watcher.close()
       this.watcher = null
       
-      if (this.config.debug) {
-        console.log('🛑 File watcher stopped')
-      }
+      spinner.success('File watcher stopped')
+      this.logger.groupEnd()
     }
   }
 
@@ -691,16 +675,21 @@ export class IgniterWatcher {
       return
     }
 
-    if (this.config.debug) {
-      console.log('📝 Controller file changed:', filePath)
-    }
+    // Pause the watching spinner to allow clean message display
+    this.pauseWatchingSpinner()
 
     // Debounce rapid changes
     if (this.isGenerating) {
+      this.logger.debug('Generation already in progress, skipping...')
+      // Resume watching spinner after a brief delay
+      setTimeout(() => this.resumeWatchingSpinner(), 100)
       return
     }
 
     await this.regenerateSchema()
+
+    // Resume the watching spinner after regeneration with a small delay
+    setTimeout(() => this.resumeWatchingSpinner(), 500)
   }
 
   /**
@@ -721,9 +710,10 @@ export class IgniterWatcher {
     this.isGenerating = true
 
     try {
-      if (this.config.debug) {
-        console.log('🔄 Regenerating client schema...')
-      }
+      // Ensure spinner is paused during generation
+      this.pauseWatchingSpinner()
+      
+      this.logger.separator()
 
       // Find router file automatically
       const possibleRouterPaths = [
@@ -740,56 +730,31 @@ export class IgniterWatcher {
       let router: any = null
       
       for (const routerPath of possibleRouterPaths) {
-        if (fs.existsSync(routerPath)) {
-          if (this.config.debug) {
-            console.log('📂 Loading router from:', routerPath)
-          }
-          
+        if (fs.existsSync(routerPath)) {          
           router = await this.loadRouter(routerPath)
           if (router) {
-            if (this.config.debug) {
-              console.log('✅ Router loaded successfully!')
-              console.log('   Router type:', typeof router)
-              console.log('   Router keys:', Object.keys(router || {}))
-              console.log('   Controllers found:', Object.keys(router?.controllers || {}).length)
-            }
             break
           } else {
-            if (this.config.debug) {
-              console.log('⚠️  Router loading returned null for:', routerPath)
-            }
+            this.logger.debug('Router loading returned null', { path: routerPath })
           }
         }
       }
       
       if (!router) {
-        console.warn('⚠️  Could not load router for schema generation')
+        this.logger.warn('No router found', { 
+          searched: possibleRouterPaths 
+        })
         return
       }
 
-      if (this.config.debug) {
-        console.log('🚀 About to call generateSchemaFromRouter...')
-      }
-
-      // Generate client files
+      // Generate client files (the generator will handle its own logging)
       await generateSchemaFromRouter(router, this.config)
-      
-      if (this.config.debug) {
-        console.log('✅ generateSchemaFromRouter completed!')
-      }
-
-      if (this.config.debug) {
-        console.log('✅ Client schema regenerated successfully')
-      }
 
     } catch (error) {
-      console.error('❌ Schema generation failed:', error)
-      
-      if (this.config.debug) {
-        console.error('Full error:', error)
-      }
+      this.logger.error('Schema generation failed', {}, error)
     } finally {
       this.isGenerating = false
+      // Don't resume spinner here - let handleFileChange or start() handle it
     }
   }
 } 

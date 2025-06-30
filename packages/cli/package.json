@@ -30,14 +30,24 @@
   "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "@igniter-js/core": "*",
+    "c12": "^3.0.4",
+    "chalk": "^5.4.1",
     "chokidar": "^3.6.0",
     "commander": "^11.0.0",
+    "concurrently": "^7.6.0",
+    "execa": "^8.0.1",
+    "ora": "^8.2.0",
+    "prompts": "^2.4.2",
     "tsx": "^4.7.0"
   },
   "devDependencies": {
     "@igniter-js/eslint-config": "*",
     "@igniter-js/typescript-config": "*",
+    "@types/ioredis": "^4.28.10",
+    "@types/prompts": "^2.4.9",
     "eslint": "^8.57.0",
+    "ioredis": "^5.6.1",
     "tsup": "^8.0.0",
     "typescript": "^5.6.3",
     "vitest": "^2.1.4"
@@ -48,4 +58,4 @@
   "publishConfig": {
     "access": "public"
   }
-} 
+}

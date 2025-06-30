@@ -1,4 +1,54 @@
 import { IgniterError } from "../error";
+import type { IgniterResponseProcessor } from "../processors/response.processor";
+
+/**
+ * Helper function to preserve union types in conditional returns.
+ * Use this when TypeScript's control flow analysis is too aggressive
+ * and only recognizes one return path instead of creating a union.
+ * 
+ * @template T - The union type you want to preserve
+ * @param value - The actual return value
+ * @returns The value with preserved union type
+ * 
+ * @example
+ * ```typescript
+ * return preserveUnion<
+ *   IgniterResponseProcessor<any, { data: string }> |
+ *   IgniterResponseProcessor<any, IgniterResponseNotFound>
+ * >(response.success({ data: "test" }));
+ * ```
+ */
+export function preserveUnion<T>(value: T): T {
+  return value;
+}
+
+/**
+ * Helper function for conditional responses that preserves union types.
+ * Use this pattern to ensure TypeScript recognizes both success and error paths.
+ * 
+ * @template TSuccess - Type of the success response
+ * @template TError - Type of the error response
+ * @param condition - Boolean condition to evaluate
+ * @param errorFn - Function that returns error response when condition is true
+ * @param successFn - Function that returns success response when condition is false
+ * @returns Either success or error response with preserved union type
+ * 
+ * @example
+ * ```typescript
+ * return conditionalResponse(
+ *   !todo,
+ *   () => response.notFound('Todo not found'),
+ *   () => response.success({ todos: updatedTodos })
+ * );
+ * ```
+ */
+export function conditionalResponse<TSuccess, TError>(
+  condition: boolean,
+  errorFn: () => TError,
+  successFn: () => TSuccess
+): TSuccess | TError {
+  return condition ? errorFn() : successFn();
+}
 
 /**
  * Parses a Response object and returns a standardized result with `data` and `error` fields.

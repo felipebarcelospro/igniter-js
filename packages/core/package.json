@@ -43,6 +43,11 @@
       "types": "./dist/adapters/index.d.ts",
       "import": "./dist/adapters/index.mjs",
       "require": "./dist/adapters/index.js"
+    },
+    "./plugins": {
+      "types": "./dist/plugins/index.d.ts",
+      "import": "./dist/plugins/index.mjs",
+      "require": "./dist/plugins/index.js"
     }
   },
   "files": [
@@ -52,6 +57,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "postbuild": "node ../../scripts/post-build.js",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -69,28 +75,11 @@
     "webpack": ">=5.0.0"
   },
   "peerDependenciesMeta": {
-    "@vercel/mcp-adapter": {
-      "optional": true
-    },
-    "@modelcontextprotocol/sdk": {
-      "optional": true
-    },
-    "ioredis": {
-      "optional": true
-    },
-    "bullmq": {
-      "optional": true
-    },
-    "next": {
-      "optional": true
-    },
     "webpack": {
       "optional": true
     }
   },
   "devDependencies": {
-    "@igniter-js/eslint-config": "*",
-    "@igniter-js/typescript-config": "*",
     "@types/lodash": "^4.17.15",
     "@types/next": "^9.0.0",
     "@types/node": "^22.9.0",
@@ -100,7 +89,8 @@
     "eslint": "^8.57.0",
     "tsup": "^8.3.5",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "zod": "^3.25.67"
   },
   "dependencies": {
     "chalk": "^5.4.1",
@@ -112,4 +102,4 @@
   "publishConfig": {
     "access": "public"
   }
-} 
+}
