@@ -1,9 +1,11 @@
 {
   "name": "@igniter-js/adapter-mcp-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "tsup src/index.ts --dts --format esm,cjs --out-dir dist --watch",
     "build": "tsup src/index.ts --dts --format esm,cjs --out-dir dist"
@@ -19,4 +21,4 @@
     "@modelcontextprotocol/sdk": "^1.10.2"
   },
   "license": "MIT"
-} 
+}

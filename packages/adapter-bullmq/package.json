@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/adapter-bullmq",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "sideEffects": false,
@@ -9,7 +9,9 @@
     "node:child_process": false,
     "child_process": false
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "tsup src/index.ts --dts --format esm,cjs --out-dir dist --watch",
     "build": "tsup src/index.ts --dts --format esm,cjs --out-dir dist",
@@ -29,4 +31,4 @@
     "bullmq": "^4.10.3"
   },
   "license": "MIT"
-} 
+}
