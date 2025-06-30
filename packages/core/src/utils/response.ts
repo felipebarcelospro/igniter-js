@@ -1,5 +1,4 @@
 import { IgniterError } from "../error";
-import type { IgniterResponseProcessor } from "../processors/response.processor";
 
 /**
  * Helper function to preserve union types in conditional returns.

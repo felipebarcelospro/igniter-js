@@ -43,9 +43,3 @@ export const isServer = typeof window === 'undefined';
  * ```
  */
 export const isClient = !isServer;
-
-
-/**
- * Check if code is running in a development environment
- */
-export const isDevelopment = process.env.NODE_ENV === 'development'
