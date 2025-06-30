@@ -40,12 +40,14 @@ export default defineConfig([
     },
   },
   
-  // Uma configuração unificada para client com preserveModules
+  // Configuração unificada para client com arquivos separados para máxima otimização
   {
     entry: {
       'igniter.context': 'src/client/igniter.context.tsx',
       'igniter.hooks': 'src/client/igniter.hooks.ts',
       'igniter.client': 'src/client/igniter.client.ts',
+      'igniter.client.browser': 'src/client/igniter.client.browser.ts',
+      'igniter.client.server': 'src/client/igniter.client.server.ts',
       'index': 'src/client/index.ts',
     },
     format: ['cjs', 'esm'],
@@ -58,10 +60,14 @@ export default defineConfig([
     external: [
       'react', 
       'react-dom',
-      // Importante: marque as importações internas como externas
+      // Importante: marque as importações internas como externas para permitir lazy loading
       './igniter.hooks',
       './igniter.context',
-      './igniter.client'
+      './igniter.client',
+      './igniter.client.browser',
+      './igniter.client.server',
+      '../utils/url',
+      '../utils/client'
     ]
   }
 ])
