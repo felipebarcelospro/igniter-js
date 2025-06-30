@@ -60,14 +60,12 @@ export default defineConfig([
     external: [
       'react', 
       'react-dom',
-      // Importante: marque as importações internas como externas para permitir lazy loading
+      // Apenas os imports internos do client (não utils)
       './igniter.hooks',
       './igniter.context',
       './igniter.client',
       './igniter.client.browser',
-      './igniter.client.server',
-      '../utils/url',
-      '../utils/client'
+      './igniter.client.server'
     ]
   }
 ])

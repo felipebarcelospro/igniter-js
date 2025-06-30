@@ -3,7 +3,8 @@
  * This file contains all browser-only code and dependencies
  */
 
-import type { IgniterAction, IgniterControllerConfig, IgniterRouter, InferRouterCaller } from '../types';
+import type { IgniterAction, IgniterControllerConfig, IgniterRouter, InferRouterCaller, QueryActionCallerResult, MutationActionCallerResult } from '../types';
+import { parseURL } from '../utils/url';
 
 /**
  * Browser-side client implementation
@@ -14,13 +15,12 @@ export function createBrowserClient<TRouter extends IgniterRouter<any, any, any,
 ): InferRouterCaller<TRouter> {
   // Import client-only dependencies
   const { createUseQuery, createUseMutation } = require('./igniter.hooks');
-  const { parseURL } = require('../utils/url');
   
   const client = {} as InferRouterCaller<TRouter>;
   
   // Extract base configuration once
-  const basePATH = router.config.basePATH || '/api/v1';
-  const baseURL = router.config.baseURL || 'http://localhost:3000';
+  const basePATH = router.config.basePATH || process.env.IGNITER_APP_PATH || '/api/v1';
+  const baseURL = router.config.baseURL || process.env.IGNITER_APP_URL || 'http://localhost:3000';
 
   // Build client structure from router
   for (const controllerName in router.controllers) {
@@ -61,8 +61,6 @@ function createActionFetcher<TAction extends IgniterAction<any, any, any, any, a
   baseURL: string,
 ) {
   return async (options?: TAction['$Infer']['$Input']): Promise<TAction['$Infer']['$Output']> => {
-    const { parseURL } = require('../utils/url');
-    
     // Extract path parameters
     const params = options?.params || {};
     let path = action.path;
