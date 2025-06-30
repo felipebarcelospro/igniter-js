@@ -43,10 +43,6 @@ Object.assign(
 ["dist/client/igniter.context.js", "dist/client/igniter.context.mjs"].forEach(addClientDirective);
 ["dist/client/igniter.hooks.js", "dist/client/igniter.hooks.mjs"].forEach(addClientDirective);
 
-// IMPORTANTE: Não aplicar "use client" nos arquivos .server.ts pois eles são server-only
-// O arquivo .browser.ts precisa de "use client" pois contém hooks do React
-["dist/client/igniter.client.browser.js", "dist/client/igniter.client.browser.mjs"].forEach(addClientDirective);
-
 // O arquivo principal igniter.client.ts não precisa de "use client" pois faz lazy loading
 // O arquivo .server.ts definitivamente NÃO deve ter "use client"
 

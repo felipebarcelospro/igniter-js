@@ -1,12 +1,4 @@
-/**
- * @jsxRuntime classic
- * @jsx createIgniterClient
- */
-
-"use client";
-
 import type { IgniterRouter, ClientConfig, InferRouterCaller } from '../types';
-import { isServer } from '../utils/client';
 
 /**
  * Creates a client for interacting with Igniter Router
@@ -28,7 +20,7 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any,
 
   // Split implementation completely based on environment
   // This ensures maximum tree-shaking and bundle optimization
-  if (typeof window === 'undefined') {
+  if (typeof window === 'undefined' && typeof process !== 'undefined') {
     // Server-side: Use direct router.$caller (zero browser dependencies)
     const { createServerClient } = require('./igniter.client.server');
     return createServerClient(router);

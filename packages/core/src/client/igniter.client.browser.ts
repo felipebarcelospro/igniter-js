@@ -60,7 +60,7 @@ function createActionFetcher<TAction extends IgniterAction<any, any, any, any, a
   action: TAction,
   baseURL: string,
 ) {
-  return async (options?: TAction['$Infer']['$Input']): Promise<TAction['$Infer']['$Output']> => {
+  return async (options?: TAction['$Infer']['$Input']): Promise<TAction['$Infer']['$Response']> => {
     // Extract path parameters
     const params = options?.params || {};
     let path = action.path;
