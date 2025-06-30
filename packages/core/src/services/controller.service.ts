@@ -1,7 +1,4 @@
-import type { IgniterPlugin } from "../types/plugin.interface";
-import type { HTTPMethod, IgniterAction, IgniterActionHandler, IgniterControllerBaseAction, IgniterControllerConfig, IgniterProcedure, InferEndpoint } from "../types";
-import { createIgniterQuery, testAction } from "./action.service";
-import type { StandardSchemaV1 } from "zod/dist/types/v3/standard-schema";
+import type { IgniterControllerBaseAction, IgniterControllerConfig } from "../types";
 
 /**
  * Creates a controller configuration for the Igniter Framework.
@@ -39,11 +36,3 @@ export const createIgniterController = <
 ) => {
   return config as IgniterControllerConfig<TControllerActions>;
 };
-
-export const testController = createIgniterController({
-  name: 'test',
-  path: '/test',
-  actions: {
-    test: testAction
-  }
-})

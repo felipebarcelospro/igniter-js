@@ -62,14 +62,12 @@ import type { StandardSchemaV1 } from "../types/schema.interface";
  * @see {@link createEnhancedProcedureFactories} For the new Factory functions
  */
 export const createIgniterProcedure = <
-  TActionContext = unknown,
-  TOptions = unknown,
-  TOutput = unknown
->(Procedure: IgniterProcedure<TActionContext, TOptions, TOutput>) => (options?: TOptions): IgniterProcedure<TActionContext, TOptions, TOutput> => {
+  TActionContext = object,
+  TOptions = object,
+  TOutput = object
+>(Procedure: IgniterProcedure<TActionContext, TOptions, TOutput>) => (_options?: TOptions): IgniterProcedure<TActionContext, TOptions, TOutput> => {
   return {
-    ...Procedure,
-    // @ts-expect-error - This is a hack to get around the circular dependency
-    handler: (ctx: IgniterProcedureContext<TActionContext>) => Procedure.handler(options, ctx)
+    ...Procedure
   }
 };
 

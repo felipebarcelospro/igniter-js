@@ -1,7 +1,6 @@
 import type {
   IgniterRouter,
   IgniterAction,
-  NonUnknownObject,
   Prettify,
   DeepPartial,
 } from ".";

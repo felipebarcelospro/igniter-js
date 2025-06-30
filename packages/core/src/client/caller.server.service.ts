@@ -22,7 +22,7 @@ export function createServerCaller<
       }
       return new Proxy({}, {
         get(_, actionName: string) {
-          const action = controller.actions[actionName as keyof typeof controller.actions];
+          const action = controller.actions[actionName];
           if (!action) {
             throw new Error(`Action "${actionName}" not found in controller "${controllerName}".`);
           }

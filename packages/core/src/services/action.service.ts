@@ -1,6 +1,5 @@
 import type { IgniterPlugin } from "../types/plugin.interface";
-import type { StandardSchemaV1, IgniterProcedure, IgniterActionHandler, IgniterActionContext, QueryMethod, InferEndpoint, IgniterQueryOptions, IgniterAction, MutationMethod, IgniterMutationOptions } from "../types";
-import { z } from "zod";
+import type { StandardSchemaV1, IgniterProcedure, IgniterActionHandler, IgniterActionContext, QueryMethod, InferEndpoint, IgniterQueryOptions, IgniterAction, MutationMethod } from "../types";
 
 /**
  * Creates a type-safe query action for the Igniter Framework.
@@ -173,17 +172,3 @@ export const createIgniterMutation = <
     $Infer: {} as TMutationInfer
   } as TMutation;
 }
-
-export const testAction = createIgniterMutation({
-  name: 'test',
-  path: '/test',
-  method: 'POST',
-  handler: ({ request, response }) => {
-    const authorization = request.headers.get('authorization');
-    if(!authorization) {
-      return response.unauthorized('Unauthorized');
-    }
-
-    return response.success({ message: 'Hello, world!' });
-  }
-})

@@ -11,8 +11,6 @@ import { createUseQuery, createUseMutation } from './igniter.hooks';
 export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any, any>>(
   {
     router,
-    baseURL,
-    basePath,
   }: ClientConfig<TRouter>
 ): InferRouterCaller<TRouter> => {
   if (!router) {
@@ -41,7 +39,13 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any,
       // Add hooks for GET requests
       if (action.method === 'GET') {
         if (isServer) {
-          const caller = router.$caller[controllerName][actionName];
+          let caller = router.$caller[controllerName][actionName];
+
+          if (!caller) {
+            // use the fetcher for fallback 
+            caller = createFetcher(action, parsedBaseURL);
+          }
+
           (client[controllerName as keyof typeof client] as any)[actionName] = {
             useQuery: () => ({} as QueryActionCallerResult<typeof action>),
             query: caller,

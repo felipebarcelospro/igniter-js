@@ -1,6 +1,3 @@
-import { testAction } from './action.service';
-import { testController } from './controller.service';
-
 export * from './action.service';
 export * from './builder.service';
 export * from './controller.service';

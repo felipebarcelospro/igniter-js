@@ -700,16 +700,28 @@ type ExtractProcedureOutput<T> = T extends IgniterProcedure<any, any, infer TOut
 export type InferProcedureContext<TActionProcedures extends readonly IgniterProcedure<any, any, any>[]> = 
   TActionProcedures extends readonly []
     ? {}
-    : UnionToIntersection<ExtractProcedureOutput<TActionProcedures[number]>>;
+    : UnionToIntersection<
+        TActionProcedures extends readonly (infer TProcedure)[]
+          ? TProcedure extends IgniterProcedure<any, any, infer TOutput>
+            ? TOutput extends Promise<infer TResolved>
+              ? TResolved
+              : TOutput
+            : never
+          : never
+      >;
 
 /**
  * Infers the context type from an array of IgniterProcedure instances.
  */
-export type InferActionProcedureContext<
-  TActionProcedures extends readonly IgniterProcedure<any, any, any>[] | undefined
-> =
-  TActionProcedures extends readonly [any, ...any[]]
-    ? UnionToIntersection<
-        Awaited<ReturnType<TActionProcedures[number]['handler']>>
-      >
-    : {};
+export type InferActionProcedureContext<TActionProcedures extends readonly IgniterProcedure<any, any, any>[]> = 
+TActionProcedures extends readonly []
+  ? {}
+  : UnionToIntersection<
+      TActionProcedures extends readonly (infer TProcedure)[]
+        ? TProcedure extends IgniterProcedure<any, any, infer TOutput>
+          ? TOutput extends Promise<infer TResolved>
+            ? TResolved
+            : TOutput
+          : never
+        : never
+    >;

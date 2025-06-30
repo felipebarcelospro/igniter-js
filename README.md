@@ -165,10 +165,7 @@ export const logger = createConsoleLogger({ level: 'info' });
 ### 2. Define your App Global Context
 ```typescript
 // src/igniter.context
-import { database } from "@/services/database"
-import { jobs } from "@/services/jobs"
-import { logger } from "@/services/logger"
-import { logger } from "@/services/logger"
+import { database } from "@/lib/database"
 
 /**
  * @description Create the context of the application
@@ -176,9 +173,6 @@ import { logger } from "@/services/logger"
  */
 export const createIgniterAppContext = () => {
   return {
-    jobs,
-    prisma,
-    logger,
     database
   }
 }
@@ -207,8 +201,8 @@ export const userController = igniter.controller({
         page: z.number().optional(),
         limit: z.number().optional()
       }),
-      handler: async (ctx) => {
-        return igniter.response.success({
+      handler: async ({ response }) => {
+        return response.success({
           users: [
             { id: 1, name: 'John Doe' }
           ]
