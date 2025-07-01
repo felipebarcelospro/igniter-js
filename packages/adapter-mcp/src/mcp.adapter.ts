@@ -5,9 +5,6 @@ import type {
   McpToolInfo, 
   McpResponse, 
   McpHandler, 
-  McpCustomTool,
-  InferMcpContextFromFunction,
-  InferMcpContextFromRouter,
   InferMcpContext
 } from "./types";
 

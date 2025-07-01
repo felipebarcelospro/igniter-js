@@ -10,6 +10,11 @@ type IgniterRouterSchema = {
     basePATH: string
   }
   controllers: Record<string, any>
+  processor: any
+  handler: any
+  $context: any
+  $plugins: any
+  $caller: any
 }
 
 type IgniterRouter = {
@@ -20,6 +25,9 @@ type IgniterRouter = {
   controllers: Record<string, any>
   processor: any
   handler: any
+  $context: any
+  $plugins: any
+  $caller: any
 }
 
 /**
@@ -42,9 +50,7 @@ function getFileSize(filePath: string): string {
  * Extracts a clean schema from router for client-side usage.
  * Removes all server-side logic (handlers, middleware, adapters).
  */
-function extractRouterSchema(router: IgniterRouter): { schema: IgniterRouterSchema, stats: { controllers: number, actions: number } } {
-  const logger = createChildLogger({ component: 'schema-extractor' })
-  
+function extractRouterSchema(router: IgniterRouter): { schema: IgniterRouterSchema, stats: { controllers: number, actions: number } } {  
   const controllersSchema: Record<string, any> = {};
   let totalActions = 0;
   
@@ -56,11 +62,10 @@ function extractRouterSchema(router: IgniterRouter): { schema: IgniterRouterSche
       for (const [actionName, action] of Object.entries(controller.actions)) {
         // Extract only safe properties
         actionsSchema[actionName] = {
+          name: (action as any)?.name || actionName,
+          description: (action as any)?.description || '',
           path: (action as any)?.path || '',
           method: (action as any)?.method || 'GET',
-          description: (action as any)?.description,
-          // Keep type inference data
-          $Infer: (action as any)?.$Infer,
         };
         totalActions++;
       }
@@ -68,6 +73,7 @@ function extractRouterSchema(router: IgniterRouter): { schema: IgniterRouterSche
     
     controllersSchema[controllerName] = {
       name: (controller as any)?.name || controllerName,
+      description: (controller as any)?.description || '',
       path: (controller as any)?.path || '',
       actions: actionsSchema,
     };
@@ -79,6 +85,11 @@ function extractRouterSchema(router: IgniterRouter): { schema: IgniterRouterSche
       basePATH: router.config?.basePATH || '',
     },
     controllers: controllersSchema,
+    processor: {} as any,
+    handler: {} as any,
+    $context: {} as any,
+    $plugins: {} as any,
+    $caller: {} as any,
   };
   
   return {

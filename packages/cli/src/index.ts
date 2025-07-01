@@ -305,7 +305,7 @@ program
     "--framework <type>",
     `Framework type (${getFrameworkList()}, generic)`,
   )
-  .option("--output <dir>", "Output directory", "lib")
+  .option("--output <dir>", "Output directory", "src")
   .option("--debug", "Enable debug mode")
   .action(async (options) => {
     const startTime = performance.now();
@@ -317,8 +317,6 @@ program
         ? options.framework
         : "generic"
       : detectedFramework;
-
-    const cmdLogger = createChildLogger({ command: "generate" });
 
     logger.group("Igniter.js CLI");
     logger.info("Starting client generation", {
