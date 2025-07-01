@@ -4,6 +4,17 @@ import { createServerCaller } from "../client/caller.server.service";
 import type { IgniterPlugin } from "../types/plugin.interface";
 
 /**
+ * Cache for the RequestProcessor instance.
+ * - In production, this will be a module-scoped variable.
+ * - In development, we'll use `globalThis` to persist across hot reloads.
+ */
+let processor: RequestProcessor<any> | undefined;
+
+const globalForIgniter = globalThis as unknown as {
+  processor: typeof processor;
+};
+
+/**
  * Creates a fully-typed, production-ready router instance for the Igniter Framework.
  *
  * The router is the central entrypoint for all HTTP requests, mapping them to your controllers and actions.
@@ -84,7 +95,8 @@ import type { IgniterPlugin } from "../types/plugin.interface";
  * ## Parameters
  * @template TContext - The type of the application context (inferred from your context factory)
  * @template TControllers - Record of controllers configured for this router
- * @template TPlugins - Record of plugins available in this router
+ * @template TConfig extends IgniterBaseConfig - The router configuration object
+ * @template TPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>> - Record of plugins available in this router
  *
  * @param config - The router configuration object:
  *   - `context`: The context factory or object (async or sync) available to all actions.
@@ -128,13 +140,30 @@ export const createIgniterRouter = <
 }): IgniterRouter<TContext, TControllers, TConfig, TPlugins> => {
   type TRouter = IgniterRouter<TContext, TControllers, TConfig, TPlugins>;
 
-  const processor = new RequestProcessor<TRouter>({
-    baseURL: params.config.baseURL,
-    basePATH: params.config.basePATH,
-    controllers: params.controllers,
-    plugins: params.plugins,
-    context: params.context,
-  });
+  // In production, we use the module-scoped `processor`.
+  // In development, we use `globalForIgniter.processor`.
+  // If either exists, we use it. Otherwise, we create a new one.
+  const existingProcessor =
+    process.env.NODE_ENV === "production"
+      ? processor
+      : globalForIgniter.processor;
+
+  const currentProcessor =
+    existingProcessor ??
+    new RequestProcessor<TRouter>({
+      baseURL: params.config.baseURL,
+      basePATH: params.config.basePATH,
+      controllers: params.controllers,
+      plugins: params.plugins,
+      context: params.context,
+    });
+
+  // After creating, we cache it in the appropriate place for next time.
+  if (process.env.NODE_ENV === "production") {
+    processor = currentProcessor;
+  } else {
+    globalForIgniter.processor = currentProcessor;
+  }
 
   return {
     /**
@@ -156,7 +185,7 @@ export const createIgniterRouter = <
      * @example
      * const result = await router.$caller.users.getUserById({ id: "123" });
      */
-    $caller: createServerCaller(params.controllers, processor),
+    $caller: createServerCaller(params.controllers, currentProcessor),
 
     /**
      * The registered controllers for this router.
@@ -187,7 +216,7 @@ export const createIgniterRouter = <
      * }
      */
     handler: async (request: Request) => {
-      return processor.process(request) as Promise<Response>;
+      return currentProcessor.process(request) as Promise<Response>;
     },
   };
 };

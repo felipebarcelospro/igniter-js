@@ -29,8 +29,8 @@ export type IgniterRouter<
   TPlugins extends Record<string, any>
 > = {
   config: TConfig,
-  handler: (request: Request) => Promise<Response>;
   controllers: TControllers;
+  handler: (request: Request) => Promise<Response>;
   $context: TContext;
   $plugins: TPlugins;
   $caller: IgniterRouterCaller<TControllers>;
