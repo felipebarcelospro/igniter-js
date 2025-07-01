@@ -119,11 +119,12 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
   private _store?: IgniterStoreAdapter
   private _context?: TContext
   private logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.NODE_ENV === 'production' ? IgniterLogLevel.INFO : IgniterLogLevel.DEBUG,
+    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
     context: {
-      processor: 'ResponseProcessor',
-      package: 'core'
-    }
+      processor: 'RequestProcessor',
+      component: 'Response'
+    },
+    showTimestamp: true,
   })
   /**
    * Creates a new instance of IgniterResponseProcessor.
@@ -147,6 +148,10 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
     instance._store = store;
     instance._context = context;
     
+    instance.logger.debug("ResponseProcessor initialized.", {
+      has_store: !!store,
+      has_context: !!context
+    });
     return instance;
   }
 
@@ -186,6 +191,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   status(code: number): this {
+    this.logger.debug(`Setting response status to ${code}.`);
     this._status = code
     this._statusExplicitlySet = true
     return this
@@ -215,6 +221,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
       options.channelId = `action::${options.controllerKey}.${options.actionKey}`;
     }
     
+    this.logger.info(`Configuring response as SSE stream.`, { channelId: options.channelId });
     const newInstance = this.withData<IgniterProcessorResponse<TStreamData, null>>();
     newInstance._isStream = true;
     newInstance._streamOptions = options as StreamOptions<ResponseData>;
@@ -252,6 +259,10 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
       };
     }
 
+    this.logger.info("Configuring client cache revalidation.", {
+      keys: this._revalidateOptions.queryKeys,
+      has_scopes: !!this._revalidateOptions.scopes
+    });
     return this;
   }
 
@@ -318,7 +329,10 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
     instance._response = {} as IgniterProcessorResponse<null, null>;
     instance._response.data = null;
     instance._response.error = null;
-    if (!this._statusExplicitlySet) instance._status = 204;
+    if (!this._statusExplicitlySet) {
+      instance._status = 204;
+      this.logger.debug("Setting response status to 204 No Content.");
+    }
     return instance;
   }
 
@@ -335,6 +349,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   setHeader(name: string, value: string): this {
+    this.logger.debug(`Setting header: '${name}' to '${value}'`);
     this._headers.set(name, value)
     return this;
   }
@@ -358,6 +373,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    */
   setCookie(name: string, value: string, options?: CookieOptions): this {
     const cookie = this.buildCookieString(name, value, options)
+    this.logger.debug(`Setting cookie: '${name}'`);
     this._cookies.push(cookie)
     return this
   }
@@ -429,6 +445,11 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
     instance._response = {} as IgniterProcessorResponse<null, IgniterErrorResponse<TErrorCode, TData>>;
     instance._response.data = null;
     instance._response.error = error;
+    if (!this._statusExplicitlySet) {
+      const defaultStatus = this.getDefaultStatusForErrorCode(error.code);
+      instance._status = defaultStatus;
+      this.logger.debug(`Setting response status to ${defaultStatus} for error code '${error.code}'.`);
+    }
     return instance;
   }
 
@@ -591,9 +612,11 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
     let scopeIds: string[] | undefined;
     if (scopes && this._context) {
       try {
+        this.logger.debug("Resolving scopes for revalidation...");
         scopeIds = await scopes(this._context);
+        this.logger.debug(`Scopes resolved: [${scopeIds.join(', ')}]`);
       } catch (error) {
-        this.logger.error('Error resolving scopes:', error);
+        this.logger.error('Error resolving revalidation scopes. Revalidation will be broadcasted globally.', { error });
         // Continue without scopes if resolution fails
       }
     }
@@ -609,12 +632,10 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
       },
     });
 
-    if (process.env.NODE_ENV === 'development') {
-      this.logger.info(`Scoped revalidation: ${clientCount} clients`, {
-        queryKeys: keysArray,
-        scopes: scopeIds
-      });
-    }
+    this.logger.info(`Revalidation event published for keys [${keysArray.join(', ')}].`, {
+      notified_clients: clientCount,
+      scopes: scopeIds || 'global'
+    });
   }
 
   
@@ -627,7 +648,9 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    */
   private createStream(): Response {
     if (!this._streamOptions) {
-      throw new Error('Stream options are required for streaming responses');
+      const err = new Error('Stream options are required for streaming responses but were not provided.');
+      this.logger.error("Stream creation failed.", { error: err });
+      throw err;
     }
 
     const { channelId, initialData } = this._streamOptions;
@@ -635,30 +658,26 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
 
     // For backward compatibility, we'll redirect the client to the central SSE endpoint
     // This allows us to keep the API surface the same while migrating to the new architecture
-    if (process.env.NODE_ENV === 'development') {
-      this.logger.info(`Creating stream response with channelId: ${channelId}`);
-    }
+    this.logger.info(`Creating stream response for channel: '${channelId}'`);
 
     if (!channelId) {
-      throw new Error('Channel ID is required for streaming responses');
+      const err = new Error('Channel ID is required for streaming responses but was not provided.');
+      this.logger.error("Stream creation failed due to missing channel ID.", { error: err });
+      throw err;
     }
 
     // Check if the channel exists, register it if not
     if (!SSEProcessor.channelExists(channelId)) {
+      this.logger.warn(`Dynamically registering non-pre-registered SSE channel: '${channelId}'. It's recommended to pre-register channels.`);
       SSEProcessor.registerChannel({
         id: channelId,
         description: `Dynamic channel created by IgniterResponseProcessor`
       });
-      if (process.env.NODE_ENV === 'development') {
-        this.logger.info(`Registered new SSE channel: ${channelId}`);
-      }
     }
 
     // If initial data is provided, publish it to the channel
     if (initialData) {
-      if (process.env.NODE_ENV === 'development') {
-        this.logger.info(`Publishing initial data to channel ${channelId}:`, initialData);
-      }
+      this.logger.debug(`Publishing initial data to channel '${channelId}'.`);
       SSEProcessor.publishEvent({
         channel: channelId,
         type: 'data',
@@ -680,6 +699,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
       timestamp: new Date().toISOString()
     };
 
+    this.logger.debug("Returning stream connection info to client.", { channelId });
     // Return a regular JSON response with connection information
     return new Response(JSON.stringify({
       error: null,
@@ -708,11 +728,21 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
           }
           seen.add(value);
         }
+        // BigInt serialization
+        if (typeof value === 'bigint') {
+          return value.toString();
+        }
         return value;
       });
     } catch (error) {
-      this.logger.warn('Failed to stringify response data, using fallback', { error });
-      return JSON.stringify({ error: 'Failed to serialize response data' });
+      this.logger.error('Failed to stringify response data due to an unhandled error. Returning a generic error response.', { error });
+      return JSON.stringify({
+        data: null,
+        error: {
+          code: 'SERIALIZATION_ERROR',
+          message: 'Failed to serialize response data'
+        }
+      });
     }
   }
 
@@ -731,11 +761,16 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   async toResponse(): Promise<Response> {
+    this.logger.debug("Building final response...");
     // Handle revalidation first
-    await this.handleRevalidation();
+    if(this._revalidateOptions) {
+      this.logger.debug("Handling revalidation before building response.");
+      await this.handleRevalidation();
+    }
 
     // If this is a streaming response, handle it with the new SSE system
     if (this._isStream) {
+      this.logger.debug("Response is a stream, creating SSE stream response.");
       return this.createStream();
     }
 
@@ -746,13 +781,38 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
       headers.append("Set-Cookie", cookie);
     }
 
-    headers.set("Content-Type", "application/json");
+    if(!headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+      this.logger.debug("Defaulted Content-Type header to 'application/json'.");
+    }
 
-    const response = this._response
+    const response = this._response;
+    const body = this.safeStringify(response);
 
-    return new Response(this.safeStringify(response), {
+    this.logger.debug("Final response built.", {
+      status: this._status,
+      header_keys: Array.from(headers.keys())
+    });
+
+    return new Response(body, {
       status: this._status,
       headers,
     });
+  }
+
+  private getDefaultStatusForErrorCode(code: string): number {
+    if(code.startsWith('ERR_')) {
+      switch(code) {
+        case 'ERR_BAD_REQUEST': return 400;
+        case 'ERR_UNAUTHORIZED': return 401;
+        case 'ERR_FORBIDDEN': return 403;
+        case 'ERR_NOT_FOUND': return 404;
+        case 'ERR_CONFLICT': return 409;
+        case 'ERR_UNPROCESSABLE_ENTITY': return 422;
+        case 'ERR_REDIRECT': return 302;
+        default: return 500;
+      }
+    }
+    return 500;
   }
 }

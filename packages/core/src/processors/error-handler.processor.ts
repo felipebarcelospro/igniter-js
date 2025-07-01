@@ -19,10 +19,10 @@ export interface ErrorHandlingResult {
  */
 export class ErrorHandlerProcessor {
   private static logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.NODE_ENV === 'production' ? IgniterLogLevel.INFO : IgniterLogLevel.DEBUG,
+    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
     context: {
-      processor: 'ErrorHandlerProcessor',
-      package: 'core'
+      processor: 'RequestProcessor',
+      component: 'ErrorHandler'
     }
   })
 
@@ -42,10 +42,19 @@ export class ErrorHandlerProcessor {
     startTime: number
   ): Promise<ErrorHandlingResult> {
     const statusCode = 400;
-    
-    this.logger.error(
-      `Validation error: ${JSON.stringify(error.issues)}`
-    );
+    const normalizedError = this.normalizeError(error);
+
+    this.logger.warn(`Request validation failed.`, {
+      error: {
+        code: normalizedError.code,
+        message: normalizedError.message,
+        details: normalizedError.details
+      },
+      request: {
+        path: context.request.path,
+        method: context.request.method
+      }
+    });
 
     // Track validation error for CLI dashboard
     await this.trackError(context, startTime, statusCode, error);
@@ -90,10 +99,19 @@ export class ErrorHandlerProcessor {
     startTime: number
   ): Promise<ErrorHandlingResult> {
     const statusCode = 500;
+    const normalizedError = this.normalizeError(error);
     
-    this.logger.error(
-      `IgniterError: ${error.message}`
-    );
+    this.logger.error(`An IgniterError occurred.`, {
+      error: {
+        code: normalizedError.code,
+        message: normalizedError.message,
+        details: normalizedError.details
+      },
+      request: {
+        path: context.request.path,
+        method: context.request.method
+      }
+    });
 
     // Track igniter error for CLI dashboard
     await this.trackError(context, startTime, statusCode, error);
@@ -138,11 +156,20 @@ export class ErrorHandlerProcessor {
     startTime: number
   ): Promise<ErrorHandlingResult> {
     const statusCode = 500;
-    const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
+    const normalizedError = this.normalizeError(error);
+    const errorMessage = normalizedError.message || "Internal Server Error";
     
-    this.logger.error(
-      `Generic error: ${errorMessage}`
-    );
+    this.logger.error(`A generic error occurred.`, {
+      error: {
+        code: normalizedError.code,
+        message: errorMessage,
+        stack: normalizedError.stack?.substring(0, 300) // Truncate stack
+      },
+      request: {
+        path: context.request.path,
+        method: context.request.method
+      }
+    });
 
     // Track generic error for CLI dashboard
     await this.trackError(context, startTime, statusCode, error as Error);
@@ -187,9 +214,20 @@ export class ErrorHandlerProcessor {
     startTime: number
   ): Promise<ErrorHandlingResult> {
     const statusCode = 500;
+    const normalizedError = this.normalizeError(error);
     
     this.logger.error(
-      `Context initialization error: ${error}`
+      `Context initialization failed. This is a critical error.`, {
+        error: {
+          code: normalizedError.code,
+          message: normalizedError.message,
+          stack: normalizedError.stack?.substring(0, 300)
+        },
+        request: {
+          path: context?.request?.path,
+          method: context?.request?.method
+        }
+      }
     );
 
     // Clean up telemetry span if it exists
@@ -238,8 +276,15 @@ export class ErrorHandlerProcessor {
     startTime: number
   ): Promise<ErrorHandlingResult> {
     // Zod validation errors
-    if (error && typeof error === "object" && "issues" in error) {
-      return this.handleValidationError(error, context, telemetrySpan, startTime);
+    if (error && typeof error === "object" && "issues" in error && Array.isArray(error.issues)) {
+      const zodError = {
+        ...error,
+        name: 'ZodValidationError',
+        message: 'Request validation failed',
+        code: 'VALIDATION_ERROR',
+        details: error.issues
+      };
+      return this.handleValidationError(zodError, context, telemetrySpan, startTime);
     }
 
     // IgniterError instances
@@ -251,14 +296,6 @@ export class ErrorHandlerProcessor {
     return this.handleGenericError(error, context, telemetrySpan, startTime);
   }
 
-  /**
-   * Tracks error for CLI dashboard (placeholder for request tracking).
-   * 
-   * @param context - The processed context
-   * @param startTime - Request start time
-   * @param statusCode - HTTP status code
-   * @param error - The error that occurred
-   */
   /**
    * Normalizes error objects to ensure they have the expected structure
    */
@@ -282,7 +319,7 @@ export class ErrorHandlerProcessor {
     if (typeof error === 'string') {
       return { 
         message: error, 
-        code: 'ERROR',
+        code: 'GENERIC_ERROR',
         stack: new Error(error).stack 
       };
     }
@@ -301,16 +338,26 @@ export class ErrorHandlerProcessor {
       return {
         ...error,
         message: error.message || 'Unknown error',
-        code: (error as any).code || 'ERROR',
+        code: (error as any).code || 'GENERIC_ERROR',
         stack: error.stack,
       };
     }
 
     // Handle objects with message property
     if (typeof error === 'object' && error !== null) {
+      // Zod-like error
+      if ("issues" in error && Array.isArray(error.issues)) {
+        return {
+          message: error.message || 'Validation failed',
+          code: (error as any).code || 'VALIDATION_ERROR',
+          stack: (error as any).stack || new Error().stack,
+          details: (error as any).issues,
+          ...error
+        };
+      }
       return {
-        message: error.message || 'Unknown error',
-        code: error.code || 'ERROR',
+        message: error.message || 'Object-based error',
+        code: error.code || 'GENERIC_ERROR',
         stack: error.stack || new Error().stack,
         details: error.details || error,
         ...error
@@ -336,44 +383,53 @@ export class ErrorHandlerProcessor {
   ): Promise<void> {
     try {
       // Skip if context is not available
-      if (!context) {
-        this.logger.warn('Cannot track error: missing context');
+      if (!context?.request) {
+        this.logger.warn('Cannot track error: request context is missing.');
         return;
       }
 
       // Skip if tracking is disabled
       if (process.env.DISABLE_ERROR_TRACKING === 'true') {
+        this.logger.debug("Error tracking is disabled via environment variable.");
         return;
       }
 
       // Extract request information
       const requestInfo = {
-        url: context?.request?.url,
-        method: context?.request?.method,
-        headers: context?.request?.headers ? Object.fromEntries(context.request.headers.entries()) : {},
-        body: context?.request?.body ? '[REDACTED]' : undefined,
+        path: context.request.path,
+        method: context.request.method,
+        // Headers can be large, only log keys
+        header_keys: context.request.headers ? Array.from(context.request.headers.keys()) : [],
+        has_body: !!context.request.body,
       };
 
+      const normalizedError = this.normalizeError(error);
+
       // Log the error with context
-      this.logger.error('Error tracked', {
-        error: this.normalizeError(error),
-        statusCode,
-        duration: Date.now() - startTime,
+      this.logger.info('Error has been tracked for monitoring.', {
+        error: {
+          code: normalizedError.code,
+          message: normalizedError.message,
+        },
         request: requestInfo,
-        timestamp: new Date().toISOString(),
+        statusCode,
+        duration_ms: Date.now() - startTime,
       });
 
       // TODO: Implement actual error tracking integration
-      // await ErrorTrackingService.track({
-      //   error,
-      //   request: requestInfo,
-      //   statusCode,
-      //   timestamp: new Date().toISOString(),
-      //   duration: Date.now() - startTime,
-      // });
+      // Example:
+      // if (context.$plugins.errorTracker) {
+      //   await context.$plugins.errorTracker.captureException(normalizedError, {
+      //     extra: {
+      //       request: requestInfo,
+      //       statusCode,
+      //       duration: Date.now() - startTime,
+      //     }
+      //   });
+      // }
     } catch (trackingError) {
       // Use console.error to avoid circular logging
-      console.error('Failed to track error:', trackingError);
+      console.error('CRITICAL: Failed to track an error. This may indicate a problem with the tracking system itself.', trackingError);
     }
   }
 } 

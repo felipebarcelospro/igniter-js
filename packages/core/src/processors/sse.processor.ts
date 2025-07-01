@@ -90,11 +90,12 @@ export interface SSEStreamOptions {
  */
 export class SSEProcessor {
   private static logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.NODE_ENV === 'production' ? IgniterLogLevel.INFO : IgniterLogLevel.DEBUG,
+    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
     context: {
-      processor: 'SSEProcessor',
-      package: 'core'
-    }
+      processor: 'RequestProcessor',
+      component: 'SSE'
+    },
+    showTimestamp: true,
   })
 
   /**
@@ -125,11 +126,11 @@ export class SSEProcessor {
   static registerChannel(channel: SSEChannel): void {
     if (this.channels.has(channel.id)) {
       this.logger.warn(
-        `Channel '${channel.id}' already registered, updating metadata`,
+        `Channel '${channel.id}' is already registered. Metadata will be updated.`,
       );
     }
 
-    this.logger.info(`Registering channel: ${channel.id}`);
+    this.logger.info(`Registering SSE channel: '${channel.id}'`, { description: channel.description });
     this.channels.set(channel.id, channel);
 
     // Initialize connection set if it doesn't exist
@@ -146,7 +147,7 @@ export class SSEProcessor {
   static unregisterChannel(channelId: string): void {
     if (!this.channels.has(channelId)) {
       this.logger.warn(
-        `Cannot unregister non-existent channel: ${channelId}`,
+        `Attempted to unregister a non-existent channel: '${channelId}'`,
       );
       return;
     }
@@ -160,18 +161,19 @@ export class SSEProcessor {
         channel: channelId,
         type: "channel.close",
         data: {
-          message: "Channel has been closed",
+          message: "Channel has been closed by the server.",
           timestamp: new Date().toISOString(),
         },
       };
 
+      this.logger.info(`Notifying ${connections.size} client(s) about closure of channel '${channelId}'.`);
       connections.forEach((handler) => {
         try {
           handler.handler(closeEvent);
         } catch (error) {
           this.logger.error(
-            `Error notifying connection about channel closure:`,
-            error,
+            `Error while notifying a connection about channel closure for '${channelId}'.`,
+            { error },
           );
         }
       });
@@ -233,14 +235,25 @@ export class SSEProcessor {
    * @throws {IgniterError} When channel validation fails
    */
   static async handleConnection(request: Request): Promise<Response> {
-    // Parse query parameters to get requested channels
     const url = new URL(request.url);
     const channelsParam = url.searchParams.get("channels");
     const channels = channelsParam ? channelsParam.split(",") : [];
+    const scopesParam = url.searchParams.get("scopes");
+    const scopes = scopesParam ? scopesParam.split(",") : [];
+    
+    this.logger.info(`New SSE connection request received.`, {
+      requested_channels: channels,
+      requested_scopes: scopes,
+      from_ip: request.headers.get('x-forwarded-for')
+    });
 
     // Validate that requested channels exist
     for (const channel of channels) {
       if (!this.channelExists(channel)) {
+        this.logger.error(`SSE connection refused: Requested channel '${channel}' is not registered.`, {
+          requestedChannel: channel,
+          availableChannels: this.getRegisteredChannels().map((c) => c.id),
+        });
         throw new IgniterError({
           code: "INVALID_SSE_CHANNEL",
           message: `Channel '${channel}' is not registered`,
@@ -260,6 +273,7 @@ export class SSEProcessor {
     return this.createSSEStream({
       channels: targetChannels,
       keepAliveInterval: 30000, // 30 seconds default
+      scopes,
     });
   }
 
@@ -272,12 +286,17 @@ export class SSEProcessor {
   private static createSSEStream(options: SSEStreamOptions): Response {
     const { channels, keepAliveInterval = 30000, headers = {}, scopes } = options;
     const encoder = new TextEncoder();
+    const connectionId = crypto.randomUUID();
 
     // Create a new ReadableStream for SSE
     const stream = new ReadableStream({
       start: (controller) => {
         this.logger.info(
-          `Creating new SSE stream for channels: ${channels.join(", ")}`,
+          `SSE stream started for connection '${connectionId}'.`, {
+            channels: channels.join(", "),
+            scopes: scopes?.join(", "),
+            keep_alive_ms: keepAliveInterval
+          }
         );
 
         // Send initial connection message
@@ -301,6 +320,7 @@ export class SSEProcessor {
             
             // Check if controller is still active before enqueueing
             if (controller.desiredSize === null) {
+              // This indicates the client has disconnected. The 'cancel' method will handle cleanup.
               throw new Error("Controller is closed");
             }
 
@@ -308,7 +328,10 @@ export class SSEProcessor {
             if (event.scopes && event.scopes.length > 0) {
               // Se o evento tem lista de subscribers específicos
               if (!scopes || !event.scopes.some(scope => scopes.includes(scope))) {
-                this.logger.info(`Event filtered out for subscriber '${scopes}' on channel '${event.channel}'`);
+                this.logger.debug(`Event on channel '${event.channel}' filtered out for connection '${connectionId}' due to scope mismatch.`, {
+                  event_scopes: event.scopes,
+                  connection_scopes: scopes
+                });
                 return; // 🚫 Não envia se o client não está na lista
               }
             }
@@ -324,9 +347,14 @@ export class SSEProcessor {
               })
             });
             
+            this.logger.debug(`Sending event to connection '${connectionId}'.`, {
+              channel: event.channel,
+              event_type: event.type,
+              event_id: event.id
+            });
             controller.enqueue(message);
           } catch (error) {
-            this.logger.error(`Failed to send event to client:`, error);
+            this.logger.warn(`Failed to send event to client on connection '${connectionId}'. The connection may have been closed.`, { error });
             
             // Don't rethrow the error - we'll handle cleanup elsewhere
             // This prevents the error from bubbling up
@@ -353,16 +381,17 @@ export class SSEProcessor {
           try {
             // Check if controller is still active
             if (controller.desiredSize === null) {
-              this.logger.info(`Controller closed, stopping keepalive for channels: ${channels.join(", ")}`);
+              this.logger.info(`Controller is closed, stopping keep-alive for connection '${connectionId}'.`);
               clearInterval(keepAliveTimer);
               return;
             }
             
             // Send comment as keep-alive to prevent connection timeout
+            this.logger.debug(`Sending keep-alive ping to connection '${connectionId}'.`);
             controller.enqueue(encoder.encode(": keepalive\n\n"));
           } catch (error) {
             // Connection might be closed already, clear interval
-            this
+            this.logger.warn(`Error during keep-alive for connection '${connectionId}', cleaning up timer.`, { error });
             clearInterval(keepAliveTimer);
           }
         }, keepAliveInterval);
@@ -370,7 +399,7 @@ export class SSEProcessor {
         // Return cleanup function
         return () => {
           this.logger.info(
-            `Closing SSE connection for channels: ${channels.join(", ")}`,
+            `Closing SSE connection '${connectionId}' for channels: ${channels.join(", ")}`,
           );
           clearInterval(keepAliveTimer);
 
@@ -419,19 +448,24 @@ export class SSEProcessor {
     // Validate channel exists
     if (!this.channelExists(channel)) {
       this.logger.warn(
-        `Attempting to publish to unknown channel: ${channel}`,
+        `Attempting to publish to an unknown or unregistered SSE channel: '${channel}', event will be dropped.`,
       );
       return 0;
     }
 
     const connections = this.connections.get(channel);
     if (!connections || connections.size === 0) {
+      this.logger.debug(`No active connections on channel '${channel}', event will not be sent.`);
       // No active connections for this channel
       return 0;
     }
 
     this.logger.info(
-      `Publishing event to ${connections.size} connections on channel '${channel}'`,
+      `Publishing event to ${connections.size} connection(s) on channel '${channel}'.`, {
+        event_type: event.type,
+        event_id: event.id,
+        has_scopes: !!event.scopes && event.scopes.length > 0
+      }
     );
 
     // Add timestamp if not present
@@ -460,7 +494,7 @@ export class SSEProcessor {
         connection.handler(event);
         sentCount++;
       } catch (error) {
-        this.logger.error(`Error sending event to client:`, error);
+        this.logger.warn(`Error sending event to a client, it might have disconnected.`, { error });
         
         // Check if error is related to closed controller
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -509,7 +543,7 @@ export class SSEProcessor {
    * Close all connections and cleanup resources
    */
   static closeAllConnections(): void {
-    this.logger.info(`Closing all SSE connectins`);
+    this.logger.info(`Closing all SSE connections and streams.`);
     
     // Get connection counts before cleanup
     const channelCounts = Array.from(this.connections.entries()).map(([channel, conns]) => 
@@ -526,15 +560,15 @@ export class SSEProcessor {
       try {
         if (stream.locked && 'cancel' in stream) {
           // @ts-ignore - TypeScript doesn't recognize cancel method but it exists
-          stream.cancel();
+          stream.cancel("Server is shutting down all connections.");
           closedCount++;
         }
       } catch (error) {
-        this.logger.error(`Error closing stream:`, error);
+        this.logger.error(`Error while closing an active SSE stream:`, { error });
       }
     });
     
-    this.logger.info(`Closed ${closedCount} active strems`);
+    this.logger.info(`Closed ${closedCount} active streams.`);
     this.activeStreams.clear();
   }
   
@@ -545,6 +579,7 @@ export class SSEProcessor {
   static cleanupDeadConnections(): number {
     let totalRemoved = 0;
     
+    this.logger.debug("Starting periodic cleanup of dead SSE connections...");
     for (const [channel, connections] of this.connections.entries()) {
       const beforeCount = connections.size;
       
@@ -573,11 +608,12 @@ export class SSEProcessor {
       
       const removed = beforeCount - connections.size;
       if (removed > 0) {
-        this.logger.info(`Removed ${removed} dead connections from channel '${channel}'`);
+        this.logger.info(`Cleaned up ${removed} dead connection(s) from channel '${channel}'.`);
         totalRemoved += removed;
       }
     }
     
+    this.logger.debug(`Dead connection cleanup finished. Total removed: ${totalRemoved}.`);
     return totalRemoved;
   }
 

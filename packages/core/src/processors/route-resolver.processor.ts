@@ -22,11 +22,12 @@ export interface RouteResult {
  */
 export class RouteResolverProcessor {
   private static logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.IGNITER_LOG_LEVEL === 'production' ? IgniterLogLevel.INFO : IgniterLogLevel.DEBUG,
+    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
     context: {
-      processor: 'RouteResolverProcessor',
-      package: 'core'
-    }
+      processor: 'RequestProcessor',
+      component: 'RouteResolver'
+    },
+    showTimestamp: true,
   })
   /**
    * Resolves a route based on method and path.
@@ -41,9 +42,10 @@ export class RouteResolverProcessor {
     method: string,
     path: string
   ): RouteResult {
+    this.logger.debug(`Attempting to resolve route: ${method} ${path}`);
     // Validate path
     if (!path?.length) {
-      this.logger.warn(`Empty path provided for method: ${method}`);
+      this.logger.warn(`Route resolution failed: empty or invalid path provided for method '${method}'.`);
       return {
         success: false,
         error: {
@@ -57,7 +59,7 @@ export class RouteResolverProcessor {
     const route = findRoute(router, method, path);
     
     if (!route?.data) {
-      this.logger.warn(`Route not found for method: ${method} and path: ${path}`);
+      this.logger.warn(`Route resolution failed: no matching route found for ${method} ${path}.`);
       return {
         success: false,
         error: {
@@ -67,10 +69,16 @@ export class RouteResolverProcessor {
       };
     }
 
+    const finalParams = route.params ? JSON.parse(JSON.stringify(route.params)) : {};
+
+    this.logger.debug(`Route resolved successfully: ${method} ${path}`, {
+      params: finalParams
+    });
+
     return {
       success: true,
       action: route.data as IgniterAction<any, any, any, any, any, any, any, any, any, any>,
-      params: route.params ? JSON.parse(JSON.stringify(route.params)) : {}
+      params: finalParams
     };
   }
 } 

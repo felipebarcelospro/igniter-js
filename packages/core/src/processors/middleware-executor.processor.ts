@@ -20,11 +20,12 @@ export interface MiddlewareExecutionResult {
  */
 export class MiddlewareExecutorProcessor {
   private static logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.NODE_ENV === 'production' ? IgniterLogLevel.INFO : IgniterLogLevel.DEBUG,
+    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
     context: {
-      processor: 'MiddlewareExecutorProcessor',
-      package: 'core'
-    }
+      processor: 'RequestProcessor',
+      component: 'MiddlewareExecutor'
+    },
+    showTimestamp: true,
   })
 
   /**
@@ -41,15 +42,23 @@ export class MiddlewareExecutorProcessor {
   ): Promise<MiddlewareExecutionResult> {
     let updatedContext = { ...context };
 
+    if (middlewares.length === 0) {
+      this.logger.debug("No global middlewares to execute.");
+      return { success: true, updatedContext };
+    }
+
+    this.logger.debug(`Executing ${middlewares.length} global middleware(s)...`);
+
     for (const middleware of middlewares) {
+      const middlewareName = middleware.name || 'anonymous';
       this.logger.debug(
-        `Executing global middleware: ${middleware.name}`
+        `Executing global middleware: '${middlewareName}'`
       );
 
       // Validate middleware has handler
       if (!middleware.handler || typeof middleware.handler !== "function") {
         this.logger.warn(
-          `Middleware ${middleware.name} has no valid handler`
+          `Global middleware '${middlewareName}' is missing a valid handler. Skipping.`
         );
         continue;
       }
@@ -63,8 +72,8 @@ export class MiddlewareExecutorProcessor {
 
         // Check for early return (Response)
         if (result instanceof Response) {
-          this.logger.debug(
-            `Global middleware returned early response`
+          this.logger.info(
+            `Global middleware '${middlewareName}' returned an early response.`
           );
           return {
             success: false,
@@ -75,8 +84,8 @@ export class MiddlewareExecutorProcessor {
 
         // Check for early return (ResponseProcessor)
         if (result instanceof IgniterResponseProcessor) {
-          this.logger.debug(
-            `Global middleware returned early response processor`
+          this.logger.info(
+            `Global middleware '${middlewareName}' returned an early response processor.`
           );
           return {
             success: false,
@@ -87,16 +96,22 @@ export class MiddlewareExecutorProcessor {
 
         // Safely merge middleware result
         if (result && typeof result === "object" && !Array.isArray(result)) {
-          updatedContext = this.mergeContextSafely(updatedContext, result, middleware.name);
+          const previousKeys = Object.keys(updatedContext.$context);
+          updatedContext = this.mergeContextSafely(updatedContext, result, middlewareName);
+          const newKeys = Object.keys(updatedContext.$context).filter(k => !previousKeys.includes(k));
+          if (newKeys.length > 0) {
+            this.logger.debug(`Context updated by '${middlewareName}' with new keys: [${newKeys.join(', ')}]`);
+          }
         }
       } catch (error) {
         this.logger.error(
-          `Error in global middleware ${middleware.name}: ${error}`
+          `Error executing global middleware '${middlewareName}'.`, { error }
         );
-        throw error;
+        throw error; // Re-throw to be caught by the main processor
       }
     }
 
+    this.logger.debug("All global middlewares executed successfully.");
     return {
       success: true,
       updatedContext
@@ -117,16 +132,23 @@ export class MiddlewareExecutorProcessor {
   ): Promise<MiddlewareExecutionResult> {
     let updatedContext = { ...context };
 
-    for (const middleware of middlewares) {
+    if (middlewares.length === 0) {
+      this.logger.debug("No action-specific middlewares to execute.");
+      return { success: true, updatedContext };
+    }
+    
+    this.logger.debug(`Executing ${middlewares.length} action middleware(s)...`);
 
+    for (const middleware of middlewares) {
+      const middlewareName = middleware.name || 'anonymous';
       this.logger.debug(
-        `Executing action middleware: ${middleware.name}`
+        `Executing action middleware: '${middlewareName}'`
       );
 
       // Validate middleware has handler
       if (!middleware.handler || typeof middleware.handler !== "function") {
         this.logger.warn(
-          `Action middleware ${middleware.name} has no valid handler`
+          `Action middleware '${middlewareName}' is missing a valid handler. Skipping.`
         );
         continue;
       }
@@ -135,14 +157,13 @@ export class MiddlewareExecutorProcessor {
         // Build proper procedure context
         const procedureContext = this.buildProcedureContext(updatedContext);
         
-
         // @ts-expect-error - Its correct
         const result = await middleware.handler(procedureContext);
 
         // Check for early return (Response)
         if (result instanceof Response) {
-          this.logger.debug(
-            `Action middleware returned early response`
+          this.logger.info(
+            `Action middleware '${middlewareName}' returned an early response.`
           );
           return {
             success: false,
@@ -153,8 +174,8 @@ export class MiddlewareExecutorProcessor {
 
         // Check for early return (ResponseProcessor)
         if (result instanceof IgniterResponseProcessor) {
-          this.logger.debug(
-            `Action middleware returned early response processor`
+          this.logger.info(
+            `Action middleware '${middlewareName}' returned an early response processor.`
           );
           return {
             success: false,
@@ -165,16 +186,22 @@ export class MiddlewareExecutorProcessor {
 
         // Safely merge middleware result
         if (result && typeof result === "object" && !Array.isArray(result)) {
-          updatedContext = this.mergeContextSafely(updatedContext, result, middleware.name);
+          const previousKeys = Object.keys(updatedContext.$context);
+          updatedContext = this.mergeContextSafely(updatedContext, result, middlewareName);
+          const newKeys = Object.keys(updatedContext.$context).filter(k => !previousKeys.includes(k));
+          if (newKeys.length > 0) {
+            this.logger.debug(`Context updated by '${middlewareName}' with new keys: [${newKeys.join(', ')}]`);
+          }
         }
       } catch (error) {
         this.logger.error(
-          `Error in action middleware ${middleware.name}: ${error}`
+          `Error executing action middleware '${middlewareName}'.`, { error }
         );
-        throw error;
+        throw error; // Re-throw to be caught by the main processor
       }
     }
 
+    this.logger.debug("All action middlewares executed successfully.");
     return {
       success: true,
       updatedContext
@@ -189,7 +216,6 @@ export class MiddlewareExecutorProcessor {
    * @returns Properly structured procedure context
    */
   private static buildProcedureContext(context: ProcessedContext): IgniterProcedureContext<any> {
-
     // Extract and validate required components
     const processedRequest = context.request;
     
@@ -210,6 +236,7 @@ export class MiddlewareExecutorProcessor {
 
     // Validate cookies specifically (this was the source of the bug)
     if (!procedureRequest.cookies) {
+      this.logger.warn("Cookies object was missing in procedure context. Creating a fallback instance. This might indicate an issue in the context building process.");
       // Create a fallback cookies instance if missing
       procedureRequest.cookies = new IgniterCookie(procedureRequest.headers);
     }
@@ -251,6 +278,8 @@ export class MiddlewareExecutorProcessor {
     for (const [key, value] of Object.entries(result)) {
       if (!protectedKeys.includes(key)) {
         safeResult[key] = value;
+      } else {
+        this.logger.warn(`Middleware '${middlewareName}' attempted to overwrite protected context key: '${key}'. This was prevented.`);
       }
     }
 
