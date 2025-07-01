@@ -34,6 +34,11 @@ export function generateIgniterRouter(config: ProjectSetupConfig): TemplateFile 
   if (config.database.provider !== 'none') {
     serviceImports.push('import { database } from "@/services/database"')
   }
+
+  // Telemetry service import
+  if (features.telemetry) {
+    serviceImports.push('import { telemetry } from "@/services/telemetry"')
+  }
   
   const allImports = [...imports, ...serviceImports].join('\n')
   
@@ -43,13 +48,14 @@ export function generateIgniterRouter(config: ProjectSetupConfig): TemplateFile 
   if (features.store) configChain.push('  .store(store)')
   if (features.jobs) configChain.push('  .jobs(jobs)')
   if (features.logging) configChain.push('  .logger(logger)')
+  if (features.telemetry) configChain.push('  .telemetry(telemetry)')
   
   configChain.push('  .create()')
   
   const content = `${allImports}
 
 /**
- * @description Initialize the Igniter.js Router with enhanced features
+ * @description Initialize the Igniter.js
  * @see https://github.com/felipebarcelospro/igniter-js
  */
 ${configChain.join('\n')}
@@ -65,26 +71,10 @@ ${configChain.join('\n')}
  * Generate igniter.context.ts file with proper type definitions
  */
 export function generateIgniterContext(config: ProjectSetupConfig): TemplateFile {
-  const { features, database } = config
+  const { database } = config
   
   let serviceImports: string[] = []
   let contextProperties: string[] = []
-  
-  // Add service imports and their properties
-  if (features.store) {
-    serviceImports.push('import { store } from "@/services/store"')
-    contextProperties.push('    store,')
-  }
-  
-  if (features.jobs) {
-    serviceImports.push('import { jobs } from "@/services/jobs"')
-    contextProperties.push('    jobs,')
-  }
-  
-  if (features.logging) {
-    serviceImports.push('import { logger } from "@/services/logger"')
-    contextProperties.push('    logger,')
-  }
   
   if (database.provider !== 'none') {
     serviceImports.push('import { database } from "@/services/database"')
@@ -96,7 +86,7 @@ export function generateIgniterContext(config: ProjectSetupConfig): TemplateFile
   const content = `${allImports}
 
 /**
- * @description Create the context of the application
+ * @description Create the context of the Igniter.js application
  * @see https://github.com/felipebarcelospro/igniter-js
  */
 export const createIgniterAppContext = () => {
@@ -106,8 +96,7 @@ ${contextProperties.join('\n')}
 }
 
 /**
- * @description The context of the application
- * Enhanced with store, jobs, and logger from Igniter.js builder
+ * @description The context of the Igniter.js application
  * @see https://github.com/felipebarcelospro/igniter-js
  */
 export type IgniterAppContext = Awaited<ReturnType<typeof createIgniterAppContext>>
@@ -246,8 +235,8 @@ import { exampleController } from '@/features/example'
  * @see https://github.com/felipebarcelospro/igniter-js
  */
 export const AppRouter = igniter.router({
-  baseURL: process.env.NEXT_PUBLIC_IGNITER_APP_URL, // Default is http://localhost:3000
-  basePATH: process.env.NEXT_PUBLIC_IGNITER_APP_BASE_PATH, // Default is /api/v1
+  baseURL: process.env.NEXT_PUBLIC_IGNITER_APP_URL || 'http://localhost:3000',
+  basePATH: process.env.NEXT_PUBLIC_IGNITER_APP_BASE_PATH || '/api/v1',
   controllers: {
     example: exampleController
   }
@@ -277,49 +266,72 @@ export * from './example.interfaces'
 }
 
 /**
- * Generate service files based on enabled features
+ * Generates service files based on enabled features and database provider.
+ * 
+ * @param config - The project setup configuration.
+ * @returns An array of TemplateFile objects representing service files.
+ * 
+ * @see https://github.com/felipebarcelospro/igniter-js
  */
 export function generateServiceFiles(config: ProjectSetupConfig): TemplateFile[] {
   const { features, database } = config
   const files: TemplateFile[] = []
 
-  // Store service
+  // Initialize Redis service if store or jobs feature is enabled
+  if (features.store || features.jobs) {
+    files.push({
+      path: 'src/services/redis.ts',
+      content: `import { Redis } from 'ioredis'
+
+/**
+ * Redis client instance for caching, session storage, and pub/sub.
+ * 
+ * @remarks
+ * Used for caching, session management, and real-time messaging.
+ * 
+ * @see https://github.com/luin/ioredis
+ */
+export const redis = new Redis(process.env.REDIS_URL!, {
+  maxRetriesPerRequest: null,
+})
+`
+    })
+  }
+
+  // Store service (requires Redis)
   if (features.store) {
     files.push({
       path: 'src/services/store.ts',
       content: `import { createRedisStoreAdapter } from '@igniter-js/adapter-redis'
-import { Redis } from 'ioredis'
+import { redis } from '@/services/redis'
 
 /**
- * Redis client instance for caching and pub/sub
- * @description Handles caching, session storage and real-time messaging
- */
-const redis = new Redis(process.env.REDIS_URL!)
-
-/**
- * Store adapter for data persistence
- * @description Provides a unified interface for data storage operations
+ * Store adapter for data persistence.
+ * 
+ * @remarks
+ * Provides a unified interface for data storage operations using Redis.
+ * 
+ * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/adapter-redis
  */
 export const store = createRedisStoreAdapter({ redis })
 `
     })
   }
 
-  // Jobs service
+  // Jobs service (requires Redis)
   if (features.jobs) {
     files.push({
       path: 'src/services/jobs.ts',
       content: `import { createBullMQAdapter } from '@igniter-js/adapter-bullmq'
-import { Redis } from 'ioredis'
+import { redis } from '@/services/redis'
 
 /**
- * Redis connection for job queue
- */
-const redis = new Redis(process.env.REDIS_URL!)
-
-/**
- * Job queue adapter for background processing
- * @description Handles asynchronous job processing with BullMQ
+ * Job queue adapter for background processing.
+ * 
+ * @remarks
+ * Handles asynchronous job processing with BullMQ.
+ * 
+ * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/adapter-bullmq
  */
 export const jobs = createBullMQAdapter({ redis })
 `
@@ -330,46 +342,97 @@ export const jobs = createBullMQAdapter({ redis })
   if (features.logging) {
     files.push({
       path: 'src/services/logger.ts',
-      content: `import { createConsoleLogger } from '@igniter-js/core'
+      content: `import { createConsoleLogger, IgniterLogLevel } from '@igniter-js/core'
 
 /**
- * Logger instance for application logging
- * @description Provides structured logging with configurable log levels
+ * Logger instance for application logging.
+ * 
+ * @remarks
+ * Provides structured logging with configurable log levels.
+ * 
+ * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/core
  */
-export const logger = createConsoleLogger({ 
-  level: process.env.LOG_LEVEL as any || 'info' 
+export const logger = createConsoleLogger({
+  level: IgniterLogLevel.DEBUG,
+  showTimestamp: true,
 })
 `
     })
   }
 
-  // Database service
+  // Database service (Prisma)
   if (database.provider !== 'none') {
-    if (database.provider === 'mongodb') {
-      files.push({
-        path: 'src/services/database.ts',
-        content: `import mongoose from 'mongoose'
+    files.push({
+      path: 'src/services/database.ts',
+      content: `import { PrismaClient } from '@prisma/client'
 
 /**
- * MongoDB connection configuration
- * @description Connects to MongoDB using Mongoose
- */
-export const database = mongoose.connect(process.env.DATABASE_URL!)
-`
-      })
-    } else {
-      files.push({
-        path: 'src/services/database.ts',
-        content: `import { PrismaClient } from '@prisma/client'
-
-/**
- * Prisma client instance for database operations
- * @description Provides type-safe database access with Prisma ORM
+ * Prisma client instance for database operations.
+ * 
+ * @remarks
+ * Provides type-safe database access with Prisma ORM.
+ * 
+ * @see https://www.prisma.io/docs/concepts/components/prisma-client
  */
 export const database = new PrismaClient()
 `
-      })
-    }
+    })
+  }
+
+  // Telemetry service
+  if (features.telemetry) {
+    files.push({
+      path: 'src/services/telemetry.ts',
+      content: `import { createTelemetryService } from '@igniter-js/core'
+
+/**
+ * Telemetry service for tracking requests and errors.
+ * 
+ * @remarks
+ * Provides telemetry tracking with configurable options.
+ * 
+ * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/core
+ */
+export const telemetry = createTelemetryService({
+  enableTracing: process.env.IGNITER_TELEMETRY_ENABLE_TRACING === 'true',
+  enableMetrics: process.env.IGNITER_TELEMETRY_ENABLE_METRICS === 'true',
+  enableEvents: process.env.IGNITER_TELEMETRY_ENABLE_EVENTS === 'true',
+  enableCLI: process.env.IGNITER_TELEMETRY_ENABLE_CLI_INTEGRATION === 'true',
+})
+`
+    })
+  }
+
+  // MCP service
+
+  // MCP service
+  if (features.mcp) {
+    files.push({
+      path: 'src/app/api/mcp/[transport].ts',
+      content: `import { createMcpAdapter } from '@igniter-js/adapter-mcp'
+import { appRouter } from '@/igniter.router'
+
+/**
+ * MCP server instance for exposing API as a MCP server.
+ * 
+ * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/adapter-mcp
+ */
+export default createMcpAdapter(appRouter, {
+  serverInfo: {
+    name: 'Igniter.js MCP Server',
+    version: '1.0.0',
+  },
+  adapter: {
+    redis: {
+      url: process.env.REDIS_URL!,
+      maxRetriesPerRequest: null,
+    },
+    basePath: process.env.IGNITER_MCP_SERVER_BASE_PATH || '/api/mcp',
+    maxDuration: process.env.IGNITER_MCP_SERVER_TIMEOUT || 60,
+  },
+})
+`
+    })
   }
 
   return files
@@ -452,7 +515,7 @@ export function generatePackageJson(config: ProjectSetupConfig, dependencies: st
   }
 
   // Add database scripts if using Prisma
-  if (config.database.provider !== 'none' && config.database.provider !== 'mongodb') {
+  if (config.database.provider !== 'none') {
     scripts["db:generate"] = "prisma generate"
     scripts["db:push"] = "prisma db push"
     scripts["db:studio"] = "prisma studio"
@@ -595,7 +658,7 @@ export function generateEnvFile(config: ProjectSetupConfig): TemplateFile {
   return {
     path: '.env.example',
     content
-  }
+  } 
 }
 
 /**
@@ -754,7 +817,7 @@ ${config.dockerCompose ? `2. **Start services with Docker:**
    docker-compose up -d
    \`\`\`
 
-` : ''}${config.database.provider !== 'none' && config.database.provider !== 'mongodb' ? `3. **Setup database:**
+` : ''}${config.database.provider !== 'none' ? `3. **Setup database:**
    \`\`\`bash
    ${config.packageManager} run db:push
    \`\`\`
@@ -774,13 +837,14 @@ src/
 ├── igniter.client.ts              # Client implementation
 ├── igniter.context.ts             # Context management
 ├── igniter.router.ts              # Router configuration
+├── igniter.schema.ts             # Schemas configuration
 ├── features/                      # Application features
 │   └── example/
 │       ├── controllers/           # Feature controllers
 │       ├── procedures/            # Feature procedures/middleware
 │       ├── example.interfaces.ts  # Type definitions
-│       └── index.ts              # Feature exports
-└── services/                      # Service layer
+│       └── index.ts               # Feature exports
+└── providers/                     # Providers layer
 \`\`\`
 
 ## API Endpoints
@@ -793,8 +857,7 @@ ${config.features.jobs ? '- `POST /api/v1/example/schedule-job` - Schedule backg
 
 - [Igniter.js Documentation](https://github.com/felipebarcelospro/igniter-js)
 - [${config.framework} Documentation](https://docs.${config.framework === 'nextjs' ? 'nextjs.org' : config.framework + '.dev'})
-${config.database.provider !== 'none' && config.database.provider !== 'mongodb' ? '- [Prisma Documentation](https://prisma.io/docs)' : ''}
-${config.database.provider === 'mongodb' ? '- [Mongoose Documentation](https://mongoosejs.com/docs)' : ''}
+${config.database.provider !== 'none' ? '- [Prisma Documentation](https://prisma.io/docs)' : ''}
 
 ## Contributing
 

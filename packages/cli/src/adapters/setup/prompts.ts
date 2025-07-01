@@ -129,6 +129,12 @@ export async function runSetupPrompts(targetDir?: string): Promise<ProjectSetupC
             description: 'Advanced console logging with structured output',
             value: 'logging',
             selected: true // Default selected
+          },
+          {
+            title: `${chalk.yellow('Telemetry')}`,
+            description: 'Telemetry for tracking requests and errors',
+            value: 'telemetry',
+            selected: true // Default selected
           }
         ],
         instructions: chalk.dim('Use ↑↓ to navigate, space to select, enter to confirm')
@@ -154,10 +160,6 @@ export async function runSetupPrompts(targetDir?: string): Promise<ProjectSetupC
             title: `${chalk.green('SQLite + Prisma')} ${chalk.dim('- Local development')}`, 
             value: 'sqlite' 
           },
-          { 
-            title: `${chalk.yellow('MongoDB + Mongoose')} ${chalk.dim('- Document database')}`, 
-            value: 'mongodb' 
-          }
         ],
         initial: 0
       },
@@ -216,7 +218,8 @@ export async function runSetupPrompts(targetDir?: string): Promise<ProjectSetupC
       store: answers.features.includes('store'),
       jobs: answers.features.includes('jobs'),
       mcp: answers.features.includes('mcp'),
-      logging: answers.features.includes('logging')
+      logging: answers.features.includes('logging'),
+      telemetry: answers.features.includes('telemetry')
     }
 
     const config: ProjectSetupConfig = {

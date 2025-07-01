@@ -46,6 +46,7 @@ export const IGNITER_FEATURES: Record<string, FeatureDefinition> = {
     name: 'BullMQ Jobs',
     description: 'Background task processing and job queues',
     dependencies: [
+      { name: '@igniter-js/adapter-redis', version: '*' },
       { name: '@igniter-js/adapter-bullmq', version: '*' },
       { name: 'bullmq', version: '^5.0.0' },
       { name: 'ioredis', version: '^5.6.1' }
@@ -66,22 +67,40 @@ export const IGNITER_FEATURES: Record<string, FeatureDefinition> = {
     ],
     envVars: [
       { key: 'REDIS_URL', value: 'redis://localhost:6379', description: 'Redis connection URL for jobs' },
-      { key: 'QUEUE_PREFIX', value: 'igniter', description: 'Job queue prefix' }
+      { key: 'IGNITER_JOBS_QUEUE_PREFIX', value: 'igniter', description: 'Job queue prefix' }
     ]
   },
 
   mcp: {
     key: 'mcp',
     name: 'MCP Server',
-    description: 'AI assistant integration with Model Context Protocol',
+    description: 'Easy expose your API as a MCP server for AI assistants like Cursor, Claude, etc.',
     dependencies: [
       { name: '@igniter-js/adapter-mcp', version: '*' },
       { name: '@vercel/mcp-adapter', version: '^0.2.0' },
-      { name: '@modelcontextprotocol/sdk', version: '^1.10.2' }
+      { name: '@modelcontextprotocol/sdk', version: '^1.10.2' },
+      { name: 'ioredis', version: '^5.6.1' }
+    ],
+    devDependencies: [
+      { name: '@types/ioredis', version: '^4.28.10' }
+    ],
+    dockerServices: [
+      {
+        name: 'redis',
+        image: 'redis:7-alpine',
+        ports: ['6379:6379'],
+        environment: {
+          REDIS_PASSWORD: '',
+        },
+        volumes: ['redis_data:/data']
+      }
     ],
     envVars: [
-      { key: 'MCP_SERVER_URL', value: 'http://localhost:3000/mcp', description: 'MCP server endpoint' },
-      { key: 'MCP_SESSION_TIMEOUT', value: '3600000', description: 'MCP session timeout in ms' }
+      { key: 'IGNITER_MCP_SERVER_BASE_PATH', value: '/api/mcp', description: 'MCP server base path' },
+      { key: 'IGNITER_MCP_SERVER_TIMEOUT', value: '3600000', description: 'MCP session timeout in ms' },
+      { key: 'REDIS_URL', value: 'redis://localhost:6379', description: 'Redis connection URL' },
+      { key: 'REDIS_HOST', value: 'localhost', description: 'Redis host' },
+      { key: 'REDIS_PORT', value: '6379', description: 'Redis port' }
     ]
   },
 
@@ -93,8 +112,22 @@ export const IGNITER_FEATURES: Record<string, FeatureDefinition> = {
       { name: '@igniter-js/core', version: '*' }
     ],
     envVars: [
-      { key: 'LOG_LEVEL', value: 'info', description: 'Logging level (debug, info, warn, error)' },
-      { key: 'LOG_FORMAT', value: 'pretty', description: 'Log output format (pretty, json)' }
+      { key: 'IGNITER_LOG_LEVEL', value: 'info', description: 'Logging level (debug, info, warn, error)' },
+    ]
+  },
+
+  telemetry: {
+    key: 'telemetry',
+    name: 'Telemetry',
+    description: 'Telemetry for tracking requests and errors',
+    dependencies: [
+      { name: '@igniter-js/core', version: '*' }
+    ],
+    envVars: [
+      { key: 'IGNITER_TELEMETRY_ENABLE_TRACING', value: 'true', description: 'Enable telemetry tracing' },
+      { key: 'IGNITER_TELEMETRY_ENABLE_METRICS', value: 'true', description: 'Enable telemetry metrics' },
+      { key: 'IGNITER_TELEMETRY_ENABLE_EVENTS', value: 'true', description: 'Enable telemetry metrics' },
+      { key: 'IGNITER_TELEMETRY_ENABLE_CLI_INTEGRATION', value: 'true', description: 'Enable telemetry metrics' },
     ]
   }
 }
@@ -268,8 +301,9 @@ export function getEnvironmentVariables(
     // Replace database name placeholder
     const dbEnvVars = dbConfig.envVars.map(envVar => ({
       ...envVar,
-      value: envVar.value.replace('igniter_db', `${projectName.replace(/[^a-z0-9]/gi, '_')}_db`)
+      value: envVar.value
     }))
+    
     envVars.push(...dbEnvVars)
   }
 

@@ -89,7 +89,7 @@ export class ProjectGenerator {
         )
       }
 
-      if (this.config.database.provider !== 'none' && this.config.database.provider !== 'mongodb') {
+      if (this.config.database.provider !== 'none') {
         dirs.push('prisma')
       }
 
@@ -121,7 +121,7 @@ export class ProjectGenerator {
       const dbConfig = DATABASE_CONFIGS[this.config.database.provider]
       const allDependencies = [
         '@igniter-js/core@*',
-        'zod@^3.22.0',
+        'zod@3.25.48',
         ...featureDeps.dependencies.map(dep => `${dep.name}@${dep.version}`),
         ...dbConfig.dependencies.map(dep => `${dep.name}@${dep.version}`)
       ]
@@ -159,7 +159,7 @@ export class ProjectGenerator {
       }
 
       // Generate Prisma schema if using Prisma
-      if (this.config.database.provider !== 'none' && this.config.database.provider !== 'mongodb') {
+      if (this.config.database.provider !== 'none') {
         await this.generatePrismaSchema()
       }
 
@@ -191,30 +191,6 @@ generator client {
 datasource db {
   provider = "${providerName}"
   url      = ${datasourceUrl}
-}
-
-// Example model - customize as needed
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("users")
-}
-
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  author    User     @relation(fields: [authorId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("posts")
 }
 `
 
@@ -294,7 +270,7 @@ model Post {
    * Run post-setup tasks like Prisma generation
    */
   private async runPostSetupTasks(): Promise<void> {
-    if (this.config.database.provider !== 'none' && this.config.database.provider !== 'mongodb') {
+    if (this.config.database.provider !== 'none') {
       this.spinner.start('Generating Prisma client...')
 
       try {
@@ -349,7 +325,7 @@ model Post {
       console.log(`  ${chalk.cyan('docker-compose')} up -d`)
     }
     
-    if (this.config.database.provider !== 'none' && this.config.database.provider !== 'mongodb') {
+    if (this.config.database.provider !== 'none') {
       console.log(`  ${chalk.cyan(this.config.packageManager)} run db:push`)
     }
     
@@ -360,7 +336,7 @@ model Post {
     console.log(`  ${chalk.dim('Start development:')} ${chalk.cyan(`${this.config.packageManager} run dev`)}`)
     console.log(`  ${chalk.dim('Build for production:')} ${chalk.cyan(`${this.config.packageManager} run build`)}`)
     
-    if (this.config.database.provider !== 'none' && this.config.database.provider !== 'mongodb') {
+    if (this.config.database.provider !== 'none') {
       console.log(`  ${chalk.dim('Database operations:')} ${chalk.cyan(`${this.config.packageManager} run db:studio`)}`)
     }
     

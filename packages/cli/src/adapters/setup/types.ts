@@ -8,6 +8,7 @@ export interface IgniterFeatures {
   jobs: boolean         // BullMQ Jobs - Background task processing
   mcp: boolean          // MCP Server - AI assistant integration
   logging: boolean      // Enhanced console logger
+  telemetry: boolean    // Telemetry for tracking requests and errors
 }
 
 /**

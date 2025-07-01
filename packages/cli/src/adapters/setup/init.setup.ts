@@ -194,6 +194,7 @@ export function showInitHelp(): void {
   console.log('  🔄 BullMQ Jobs       Background task processing')
   console.log('  🤖 MCP Server        AI assistant integration')
   console.log('  📝 Enhanced Logging  Structured console output')
+  console.log('  📊 Telemetry        Tracking requests and errors')
   console.log()
   
   console.log(chalk.bold('Supported Frameworks:'))
