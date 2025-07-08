@@ -1,43 +1,24 @@
-/**
- * Server-specific client implementation
- * This file contains only server-side code with zero browser dependencies
- */
-
-import type { IgniterAction, IgniterControllerConfig, IgniterRouter, InferRouterCaller, QueryActionCallerResult, MutationActionCallerResult } from '../types';
+import type { IgniterRouter, ClientConfig, InferRouterCaller } from '../types';
 
 /**
- * Server-side client implementation
- * Uses direct router.$caller for optimal performance
- * No client-side dependencies included
+ * Creates a server-side client for Igniter Router
+ * This version uses router.$caller directly (zero browser dependencies)
+ * @param config Client configuration
+ * @returns A typed client for calling server actions
  */
-export function createServerClient<TRouter extends IgniterRouter<any, any, any, any>>(
-  router: TRouter
-): InferRouterCaller<TRouter> {
-  const client = {} as InferRouterCaller<TRouter>;
-
-  // Build client structure from router
-  for (const controllerName in router.controllers) {
-    client[controllerName as keyof typeof client] = {} as any;
-    const controller = router.controllers[controllerName] as IgniterControllerConfig<any>;
-
-    for (const actionName in controller.actions) {
-      const action = controller.actions[actionName] as IgniterAction<any, any, any, any, any, any, any, any, any, any>;
-      const caller = router.$caller[controllerName][actionName];
-
-      // Server-side implementation - direct caller access
-      if (action.method === 'GET') {
-        (client[controllerName as keyof typeof client] as any)[actionName] = {
-          useQuery: () => ({} as QueryActionCallerResult<typeof action>),
-          query: caller,
-        };
-      } else {
-        (client[controllerName as keyof typeof client] as any)[actionName] = {
-          useMutation: () => ({} as MutationActionCallerResult<typeof action>),
-          mutation: caller,
-        };
-      }
-    }
+export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any, any>>(
+  {
+    router,
+  }: ClientConfig<TRouter>
+): InferRouterCaller<TRouter> => {
+  if (!router) {
+    throw new Error('Router is required to create an Igniter client');
   }
 
-  return client;
-} 
+  if (typeof router === 'function') {
+    router = router();
+  }
+
+  // Server-side: Use direct router.$caller (zero browser dependencies)
+  return router.$caller as unknown as InferRouterCaller<TRouter>;
+}; 

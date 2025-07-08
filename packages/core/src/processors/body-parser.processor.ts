@@ -7,14 +7,21 @@ import { IgniterConsoleLogger } from "../services/logger.service";
  * Handles parsing of request bodies based on content type.
  */
 export class BodyParserProcessor {
-  private static logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-    context: {
-      processor: 'RequestProcessor',
-      component: 'BodyParser'
-    },
-    showTimestamp: true,
-  });
+  private static _logger: IgniterLogger;
+
+  private static get logger(): IgniterLogger {
+    if (!this._logger) {
+      this._logger = IgniterConsoleLogger.create({
+        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
+        context: {
+          processor: 'RequestProcessor',
+          component: 'BodyParser'
+        },
+        showTimestamp: true,
+      });
+    }
+    return this._logger;
+  }
 
   /**
    * Extracts and parses the request body based on content type.

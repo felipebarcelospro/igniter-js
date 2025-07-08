@@ -67,17 +67,15 @@ export class RequestProcessor<
   >;
   public pluginManager?: IgniterPluginManager<any>;
 
-  private logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-    context: {
-      processor: 'RequestProcessor',
-    },
-    showTimestamp: true,
-  })
+  private logger: IgniterLogger;
 
-  private static isProduction = process.env.NODE_ENV === "production";
-  private static isInteractiveMode =
-    process.env.IGNITER_INTERACTIVE_MODE === "true";
+  private static get isProduction() {
+    return process.env.NODE_ENV === "production";
+  }
+
+  private static get isInteractiveMode() {
+    return process.env.IGNITER_INTERACTIVE_MODE === "true";
+  }
 
   /**
    * Creates a new RequestProcessor instance.
@@ -87,10 +85,17 @@ export class RequestProcessor<
   constructor(config: TConfig) {
     this.config = config;
     this.plugins = new Map<string, any>();
-    
+    this.logger = IgniterConsoleLogger.create({
+      level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
+      context: {
+        processor: 'RequestProcessor',
+      },
+      showTimestamp: true,
+    })
+
     // Initialize PluginManager if plugins exist
     this.initializePluginManager();
-    
+
     // Initialize router with async plugin registration
     this.router = createRouter<IgniterAction<any, any, any, any, any, any, any, any, any, any>>();
     this.logger.info("RequestProcessor instantiated. Initializing asynchronously...");
@@ -104,13 +109,13 @@ export class RequestProcessor<
     try {
       // Register plugins first
       await this.registerPlugins();
-      
+
       // Then register all routes (controllers + plugins)
       this.registerRoutes();
-      
+
       // Initialize SSE channels
       this.initializeSSEChannels();
-      
+
       this.logger.info('RequestProcessor initialized successfully.');
     } catch (error) {
       this.logger.error('FATAL: RequestProcessor initialization failed.', { error });
@@ -268,7 +273,7 @@ export class RequestProcessor<
       $Infer: {} as any,
     };
     addRoute(this.router, "GET", sseEndpoint, sseAction);
-    
+
     this.logger.info(`Registered central SSE endpoint at '${sseEndpoint}'`);
     this.logger.info(`Route registration completed. Total routes: ${routeCount + (this.pluginManager ? this.pluginManager.getPluginNames().length : 0)}`);
   }
@@ -352,7 +357,7 @@ export class RequestProcessor<
     const path = url.pathname;
     const method = request.method;
     const startTime = Date.now();
-    
+
     this.logger.info(`Request received: ${method} ${path}`, {
       url: request.url,
       ip: request.headers.get('x-forwarded-for') || 'unknown'

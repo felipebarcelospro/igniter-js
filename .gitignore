@@ -8,8 +8,6 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
-.todos/*
-docs/*
 
 # Caches
 .cache
@@ -119,6 +117,8 @@ dist
 
 # DynamoDB Local files
 .dynamodb/
+
+.todos/
 
 # TernJS port file
 .tern-port

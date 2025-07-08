@@ -19,19 +19,26 @@ export interface MiddlewareExecutionResult {
  * Handles execution of global and action-specific middlewares.
  */
 export class MiddlewareExecutorProcessor {
-  private static logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-    context: {
-      processor: 'RequestProcessor',
-      component: 'MiddlewareExecutor'
-    },
-    showTimestamp: true,
-  })
+  private static _logger: IgniterLogger;
+
+  private static get logger(): IgniterLogger {
+    if (!this._logger) {
+      this._logger = IgniterConsoleLogger.create({
+        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
+        context: {
+          processor: 'RequestProcessor',
+          component: 'MiddlewareExecutor'
+        },
+        showTimestamp: true,
+      });
+    }
+    return this._logger;
+  }
 
   /**
    * Executes global middlewares in sequence.
    * Protects core providers from being overwritten.
-   * 
+   *
    * @param context - The processed context
    * @param middlewares - Array of global middlewares to execute
    * @returns Promise resolving to execution result
@@ -66,7 +73,7 @@ export class MiddlewareExecutorProcessor {
       try {
         // Build proper procedure context
         const procedureContext = this.buildProcedureContext(updatedContext);
-        
+
         // @ts-expect-error - Its correct
         const result = await middleware.handler(procedureContext);
 
@@ -121,7 +128,7 @@ export class MiddlewareExecutorProcessor {
   /**
    * Executes action-specific middlewares in sequence.
    * Uses the same protection logic as global middlewares.
-   * 
+   *
    * @param context - The processed context
    * @param middlewares - Array of action-specific middlewares to execute
    * @returns Promise resolving to execution result
@@ -136,7 +143,7 @@ export class MiddlewareExecutorProcessor {
       this.logger.debug("No action-specific middlewares to execute.");
       return { success: true, updatedContext };
     }
-    
+
     this.logger.debug(`Executing ${middlewares.length} action middleware(s)...`);
 
     for (const middleware of middlewares) {
@@ -156,7 +163,7 @@ export class MiddlewareExecutorProcessor {
       try {
         // Build proper procedure context
         const procedureContext = this.buildProcedureContext(updatedContext);
-        
+
         // @ts-expect-error - Its correct
         const result = await middleware.handler(procedureContext);
 
@@ -211,14 +218,14 @@ export class MiddlewareExecutorProcessor {
   /**
    * Builds the correct procedure context from ProcessedContext.
    * Maps ProcessedRequest to the format expected by IgniterProcedureContext.
-   * 
+   *
    * @param context - The processed context
    * @returns Properly structured procedure context
    */
   private static buildProcedureContext(context: ProcessedContext): IgniterProcedureContext<any> {
     // Extract and validate required components
     const processedRequest = context.request;
-    
+
     if (!processedRequest) {
       throw new Error('Request is missing from processed context');
     }
@@ -253,7 +260,7 @@ export class MiddlewareExecutorProcessor {
 
   /**
    * Safely merges middleware result into context, protecting core providers.
-   * 
+   *
    * @param context - Current context
    * @param result - Result from middleware execution
    * @param middlewareName - Name of the middleware for logging
@@ -266,7 +273,7 @@ export class MiddlewareExecutorProcessor {
   ): ProcessedContext {
     const protectedKeys = [
       "store",
-      "logger", 
+      "logger",
       "jobs",
       "telemetry",
       "span",
@@ -291,4 +298,4 @@ export class MiddlewareExecutorProcessor {
       },
     };
   }
-} 
+}

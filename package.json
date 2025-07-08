@@ -30,7 +30,7 @@
   ],
   "workspaces": [
     "packages/*",
-    "apps/*",
+    "!packages/mcp-server",
     "tooling/*"
   ],
   "scripts": {

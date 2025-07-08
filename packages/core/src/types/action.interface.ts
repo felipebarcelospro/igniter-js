@@ -19,7 +19,7 @@ export type IgniterHeaders = Headers;
  * Otherwise, returns a function with no input and a Promise of output.
  */
 export type InferActionCaller<TActionInput, TActionOutput> =
-  TActionInput extends undefined
+  NonUnknownObject<TActionInput> extends never
     ? () => Promise<TActionOutput>
     : (input: NonUnknownObject<TActionInput>) => Promise<TActionOutput>;
 

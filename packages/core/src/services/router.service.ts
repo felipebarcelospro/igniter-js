@@ -1,18 +1,7 @@
 import type { ContextCallback, IgniterBaseConfig, IgniterControllerConfig, IgniterRouter } from "../types";
-import { RequestProcessor } from "../processors";
-import { createServerCaller } from "../client/caller.server.service";
 import type { IgniterPlugin } from "../types/plugin.interface";
-
-/**
- * Cache for the RequestProcessor instance.
- * - In production, this will be a module-scoped variable.
- * - In development, we'll use `globalThis` to persist across hot reloads.
- */
-let processor: RequestProcessor<any> | undefined;
-
-const globalForIgniter = globalThis as unknown as {
-  processor: typeof processor;
-};
+import { RequestProcessor } from "../processors";
+import { createServerCaller } from "./caller.server.service";
 
 /**
  * Creates a fully-typed, production-ready router instance for the Igniter Framework.
@@ -140,30 +129,13 @@ export const createIgniterRouter = <
 }): IgniterRouter<TContext, TControllers, TConfig, TPlugins> => {
   type TRouter = IgniterRouter<TContext, TControllers, TConfig, TPlugins>;
 
-  // In production, we use the module-scoped `processor`.
-  // In development, we use `globalForIgniter.processor`.
-  // If either exists, we use it. Otherwise, we create a new one.
-  const existingProcessor =
-    process.env.NODE_ENV === "production"
-      ? processor
-      : globalForIgniter.processor;
-
-  const currentProcessor =
-    existingProcessor ??
-    new RequestProcessor<TRouter>({
-      baseURL: params.config.baseURL,
-      basePATH: params.config.basePATH,
-      controllers: params.controllers,
-      plugins: params.plugins,
-      context: params.context,
-    });
-
-  // After creating, we cache it in the appropriate place for next time.
-  if (process.env.NODE_ENV === "production") {
-    processor = currentProcessor;
-  } else {
-    globalForIgniter.processor = currentProcessor;
-  }
+  const processor = new RequestProcessor<TRouter>({
+    baseURL: params.config.baseURL,
+    basePATH: params.config.basePATH,
+    controllers: params.controllers,
+    plugins: params.plugins,
+    context: params.context,
+  });
 
   return {
     /**
@@ -185,7 +157,7 @@ export const createIgniterRouter = <
      * @example
      * const result = await router.$caller.users.getUserById({ id: "123" });
      */
-    $caller: createServerCaller(params.controllers, currentProcessor),
+    $caller: createServerCaller(params.controllers, processor),
 
     /**
      * The registered controllers for this router.
@@ -216,7 +188,7 @@ export const createIgniterRouter = <
      * }
      */
     handler: async (request: Request) => {
-      return currentProcessor.process(request) as Promise<Response>;
+      return processor.process(request) as Promise<Response>;
     },
   };
 };

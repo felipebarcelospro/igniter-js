@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/core",
-  "version": "0.2.0-alpha.6",
+  "version": "0.2.0-alpha.30",
   "description": "A modern, type-safe, and flexible HTTP framework for building scalable APIs with TypeScript",
   "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
   "license": "MIT",
@@ -35,9 +35,26 @@
       "require": "./dist/index.js"
     },
     "./client": {
-      "types": "./dist/client/index.d.ts",
-      "import": "./dist/client/index.mjs",
-      "require": "./dist/client/index.js"
+      "browser": {
+        "types": "./dist/client/index.browser.d.ts",
+        "import": "./dist/client/index.browser.mjs",
+        "require": "./dist/client/index.browser.js"
+      },
+      "node": {
+        "types": "./dist/client/index.server.d.ts",
+        "import": "./dist/client/index.server.mjs",
+        "require": "./dist/client/index.server.js"
+      },
+      "worker": {
+        "types": "./dist/client/index.browser.d.ts",
+        "import": "./dist/client/index.browser.mjs",
+        "require": "./dist/client/index.browser.js"
+      },
+      "default": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.mjs",
+        "require": "./dist/client/index.js"
+      }
     },
     "./adapters": {
       "types": "./dist/adapters/index.d.ts",
@@ -57,7 +74,6 @@
   ],
   "scripts": {
     "build": "tsup",
-    "postbuild": "node ../../scripts/post-build.js",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -90,7 +106,7 @@
     "tsup": "^8.3.5",
     "typescript": "^5.6.3",
     "vitest": "^2.1.4",
-    "zod": "^3.25.67"
+    "zod": "3.25.67"
   },
   "dependencies": {
     "chalk": "^5.4.1",

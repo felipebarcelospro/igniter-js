@@ -34,18 +34,25 @@ export interface ProcessedContext<TContext = any, TPlugins = any> {
  * Handles the construction and enhancement of request contexts.
  */
 export class ContextBuilderProcessor {
-  private static logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-    context: {
-      processor: 'RequestProcessor',
-      component: 'ContextBuilder'
-    },
-    showTimestamp: true,
-  })  
+  private static _logger: IgniterLogger;
+
+  private static get logger(): IgniterLogger {
+    if (!this._logger) {
+      this._logger = IgniterConsoleLogger.create({
+        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
+        context: {
+          processor: 'RequestProcessor',
+          component: 'ContextBuilder'
+        },
+        showTimestamp: true,
+      });
+    }
+    return this._logger;
+  }
 
   /**
    * Builds a complete processed context from a request and configuration.
-   * 
+   *
    * @param request - The incoming HTTP request
    * @param config - The router configuration
    * @param routeParams - Parameters extracted from the route
@@ -61,7 +68,7 @@ export class ContextBuilderProcessor {
     this.logger.debug("Building request context...");
     // Build base context
     let contextValue = {};
-    
+
     try {
       if (config?.context) {
         this.logger.debug("User-defined context found, executing...");
@@ -81,7 +88,7 @@ export class ContextBuilderProcessor {
     const cookies = new IgniterCookie(request.headers);
     const response = new IgniterResponseProcessor();
     let body = null;
-    
+
     try {
       body = await BodyParserProcessor.parse(request);
     } catch (error) {
@@ -90,7 +97,7 @@ export class ContextBuilderProcessor {
     }
 
     // Build processed request
-    const processedRequest: ProcessedRequest = {      
+    const processedRequest: ProcessedRequest = {
       ...request,
       path: url.pathname,
       method: request.method,
@@ -121,13 +128,13 @@ export class ContextBuilderProcessor {
   /**
    * Enhances the context with plugin providers (store, logger, jobs, telemetry).
    * Safely injects providers while protecting against overwrites.
-   * 
+   *
    * @param context - The base processed context
    * @param pluginManager - Optional plugin manager for plugin proxy injection
    * @returns Enhanced context with plugin providers
    */
   static async enhanceWithPlugins(
-    context: ProcessedContext, 
+    context: ProcessedContext,
     pluginManager?: IgniterPluginManager<any>
   ): Promise<ProcessedContext> {
     this.logger.debug("Enhancing context with plugin providers...");
@@ -204,7 +211,7 @@ export class ContextBuilderProcessor {
 
   /**
    * Injects plugin proxies into the context for type-safe plugin access
-   * 
+   *
    * @param context - The base processed context
    * @param pluginManager - The plugin manager instance
    * @returns Plugin proxies with context reference
@@ -270,4 +277,4 @@ export class ContextBuilderProcessor {
       return {};
     }
   }
-} 
+}

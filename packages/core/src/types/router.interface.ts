@@ -1,12 +1,22 @@
 import type { IgniterControllerConfig } from "./controller.interface";
 import type { IgniterBaseConfig } from "./builder.interface";
 import type { ContextCallback } from "./context.interface";
+import type { MutationActionCallerResult, QueryActionCallerResult } from "./client.interface";
 
 export type IgniterRouterCaller<
   TControllers extends Record<string, IgniterControllerConfig<any>>, // ✅ Simplificado
 > = {
   [C in keyof TControllers]: {
-    [A in keyof TControllers[C]['actions']]: TControllers[C]['actions'][A]['$Infer']['$Caller']
+    [A in keyof TControllers[C]['actions']]:
+    TControllers[C]['actions'][A]['type'] extends 'query' ? {
+      type: 'query';
+      useQuery: (...args: any[]) => QueryActionCallerResult<TControllers[C]['actions'][A]>
+      query: (input: any) => Promise<TControllers[C]['actions'][A]['$Infer']['$Response']>
+    } : {
+      type: 'mutation';
+      useMutation: (...args: any[]) => MutationActionCallerResult<TControllers[C]['actions'][A]>
+      mutation: (input: any) => Promise<TControllers[C]['actions'][A]['$Infer']['$Response']>
+    }
   }
 }
 

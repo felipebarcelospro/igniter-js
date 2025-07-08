@@ -3,8 +3,32 @@
  * This file contains all browser-only code and dependencies
  */
 
-import type { IgniterAction, IgniterControllerConfig, IgniterRouter, InferRouterCaller, QueryActionCallerResult, MutationActionCallerResult } from '../types';
+import type { IgniterAction, IgniterControllerConfig, IgniterRouter, InferRouterCaller, ClientConfig } from '../types';
 import { parseURL } from '../utils/url';
+import { createUseQuery, createUseMutation } from './igniter.hooks';
+
+/**
+ * Creates a browser-side client for Igniter Router
+ * This version uses fetch + hooks (zero server dependencies)
+ * @param config Client configuration
+ * @returns A typed client for calling server actions
+ */
+export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any, any>>(
+  {
+    router,
+  }: ClientConfig<TRouter>
+): InferRouterCaller<TRouter> => {
+  if (!router) {
+    throw new Error('Router is required to create an Igniter client');
+  }
+
+  if (typeof router === 'function') {
+    router = router();
+  }
+
+  // Browser-side: Use fetch-based client (zero server dependencies)
+  return createBrowserClient(router) as unknown as InferRouterCaller<TRouter>;
+};
 
 /**
  * Browser-side client implementation
@@ -13,14 +37,12 @@ import { parseURL } from '../utils/url';
 export function createBrowserClient<TRouter extends IgniterRouter<any, any, any, any>>(
   router: TRouter
 ): InferRouterCaller<TRouter> {
-  // Import client-only dependencies
-  const { createUseQuery, createUseMutation } = require('./igniter.hooks');
   
   const client = {} as InferRouterCaller<TRouter>;
   
   // Extract base configuration once
-  const basePATH = router.config.basePATH || process.env.IGNITER_APP_PATH || '/api/v1';
-  const baseURL = router.config.baseURL || process.env.IGNITER_APP_URL || 'http://localhost:3000';
+  const basePATH = router.config.basePATH || '/api/v1';
+  const baseURL = router.config.baseURL || 'http://localhost:3000';
 
   // Build client structure from router
   for (const controllerName in router.controllers) {
@@ -43,7 +65,7 @@ export function createBrowserClient<TRouter extends IgniterRouter<any, any, any,
       } else {
         (client[controllerName as keyof typeof client] as any)[actionName] = {
           useMutation: createUseMutation(controllerName, actionName, fetcher),
-          mutation: fetcher,
+          mutate: fetcher,
         };
       }
     }
@@ -111,11 +133,8 @@ function createActionFetcher<TAction extends IgniterAction<any, any, any, any, a
           data = await response.text();
         }
         
-        const errorMessage = typeof data === "string"
-          ? `Request failed with status ${response.status}: ${data}`
-          : (data as any)?.message || `Request failed with status ${response.status}`;
-          
-        throw new Error(errorMessage);
+        // Throw the structured error data directly to be handled by the hooks
+        throw data;
       }
 
       if (contentType.includes("application/json")) {
@@ -126,11 +145,14 @@ function createActionFetcher<TAction extends IgniterAction<any, any, any, any, a
 
       return data as TAction['$Infer']['$Output'];
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error 
-        ? `IgniterClient fetch error: ${error.message}`
-        : "IgniterClient fetch error";
-        
-      throw new Error(errorMessage);
+      // The error is either the parsed body from a non-ok response,
+      // or a network error from fetch itself.
+      // In both cases, we re-throw it to be handled by the hooks.
+      if (error instanceof Error) {
+        // Add more context to network errors
+        throw new Error(`IgniterClient fetch error: ${error.message}`);
+      }
+      throw error;
     }
   };
 } 

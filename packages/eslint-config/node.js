@@ -22,6 +22,7 @@ module.exports = {
         semi: false,
       },
     ],
+    '@typescript-eslint/no-require-imports': 'warn'
   },
   settings: {
     'import/parsers': {

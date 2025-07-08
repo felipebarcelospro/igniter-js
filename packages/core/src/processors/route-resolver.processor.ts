@@ -21,17 +21,24 @@ export interface RouteResult {
  * Handles route finding and validation logic.
  */
 export class RouteResolverProcessor {
-  private static logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-    context: {
-      processor: 'RequestProcessor',
-      component: 'RouteResolver'
-    },
-    showTimestamp: true,
-  })
+  private static _logger: IgniterLogger;
+
+  private static get logger(): IgniterLogger {
+    if (!this._logger) {
+      this._logger = IgniterConsoleLogger.create({
+        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
+        context: {
+          processor: 'RequestProcessor',
+          component: 'RouteResolver'
+        },
+        showTimestamp: true,
+      });
+    }
+    return this._logger;
+  }
   /**
    * Resolves a route based on method and path.
-   * 
+   *
    * @param router - The router context containing registered routes
    * @param method - HTTP method (GET, POST, etc.)
    * @param path - URL path to resolve
@@ -57,7 +64,7 @@ export class RouteResolverProcessor {
 
     // Find route in router
     const route = findRoute(router, method, path);
-    
+
     if (!route?.data) {
       this.logger.warn(`Route resolution failed: no matching route found for ${method} ${path}.`);
       return {
@@ -81,4 +88,4 @@ export class RouteResolverProcessor {
       params: finalParams
     };
   }
-} 
+}

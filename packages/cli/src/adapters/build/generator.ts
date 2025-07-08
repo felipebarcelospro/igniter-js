@@ -37,7 +37,7 @@ function getFileSize(filePath: string): string {
   try {
     const stats = fs.statSync(filePath)
     const bytes = stats.size
-    
+
     if (bytes < 1024) return `${bytes}b`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}kb`
     return `${(bytes / (1024 * 1024)).toFixed(1)}mb`
@@ -50,13 +50,13 @@ function getFileSize(filePath: string): string {
  * Extracts a clean schema from router for client-side usage.
  * Removes all server-side logic (handlers, middleware, adapters).
  */
-function extractRouterSchema(router: IgniterRouter): { schema: IgniterRouterSchema, stats: { controllers: number, actions: number } } {  
+function extractRouterSchema(router: IgniterRouter): { schema: IgniterRouterSchema, stats: { controllers: number, actions: number } } {
   const controllersSchema: Record<string, any> = {};
   let totalActions = 0;
-  
+
   for (const [controllerName, controller] of Object.entries(router.controllers)) {
     const actionsSchema: Record<string, any> = {};
-    
+
     // Correctly access actions from controller
     if (controller && controller.actions) {
       for (const [actionName, action] of Object.entries(controller.actions)) {
@@ -70,7 +70,7 @@ function extractRouterSchema(router: IgniterRouter): { schema: IgniterRouterSche
         totalActions++;
       }
     }
-    
+
     controllersSchema[controllerName] = {
       name: (controller as any)?.name || controllerName,
       description: (controller as any)?.description || '',
@@ -78,7 +78,7 @@ function extractRouterSchema(router: IgniterRouter): { schema: IgniterRouterSche
       actions: actionsSchema,
     };
   }
-  
+
   const schema: IgniterRouterSchema = {
     config: {
       baseURL: router.config?.baseURL || '',
@@ -91,7 +91,7 @@ function extractRouterSchema(router: IgniterRouter): { schema: IgniterRouterSche
     $plugins: {} as any,
     $caller: {} as any,
   };
-  
+
   return {
     schema,
     stats: {
@@ -110,27 +110,27 @@ export async function generateSchemaFromRouter(
 ) {
   const logger = createChildLogger({ component: 'generator' })
   const startTime = performance.now()
-  
+
   // Detect if we're in interactive mode
   const isInteractiveMode = !!(
     process.env.IGNITER_INTERACTIVE_MODE === 'true' ||
     process.argv.includes('--interactive')
   )
-  
+
   try {
     // Step 1: Extract router schema
     let extractSpinner: any = null
-    
+
     if (isInteractiveMode) {
       logger.info('Extracting router schema...')
     } else {
       extractSpinner = createDetachedSpinner('Extracting router schema...')
       extractSpinner.start()
     }
-    
+
     // Extract schema (always needed)
     const { schema, stats } = extractRouterSchema(router)
-    
+
     if (isInteractiveMode) {
       logger.success(`Schema extracted - ${stats.controllers} controllers, ${stats.actions} actions`)
     } else if (extractSpinner) {
@@ -139,19 +139,19 @@ export async function generateSchemaFromRouter(
 
     // Step 2: Prepare output directory
     let dirSpinner: any = null
-    
+
     if (isInteractiveMode) {
       logger.info('Preparing output directory...')
     } else {
       dirSpinner = createDetachedSpinner('Preparing output directory...')
       dirSpinner.start()
     }
-    
+
     // Prepare directory (always needed)
     const outputDir = config.outputDir || 'generated'
     await ensureDirectoryExists(outputDir)
     const outputPath = path.resolve(outputDir)
-    
+
     if (isInteractiveMode) {
       logger.success(`Output directory ready ${outputPath}`)
     } else if (dirSpinner) {
@@ -160,20 +160,20 @@ export async function generateSchemaFromRouter(
 
     // Step 3: Generate all files
     let filesSpinner: any = null
-    
+
     if (isInteractiveMode) {
       logger.info('Generating client files...')
     } else {
       filesSpinner = createDetachedSpinner('Generating client files...')
       filesSpinner.start()
     }
-    
+
     // Generate files (always needed)
     const filePaths = await Promise.all([
       generateSchemaFile(schema, outputDir, config),
       generateClientFile(schema, outputDir, config),
     ])
-    
+
     if (isInteractiveMode) {
       logger.success('Files generated successfully')
     } else if (filesSpinner) {
@@ -186,7 +186,7 @@ export async function generateSchemaFromRouter(
         { name: 'igniter.schema.ts', path: filePaths[0] },
         { name: 'igniter.client.ts', path: filePaths[1] },
       ]
-      
+
       let totalSize = 0
       files.forEach(file => {
         const size = getFileSize(file.path)
@@ -196,11 +196,11 @@ export async function generateSchemaFromRouter(
 
       // Final summary (only in non-interactive mode)
       const duration = ((performance.now() - startTime) / 1000).toFixed(2)
-      const totalSizeFormatted = totalSize < 1024 
-        ? `${totalSize}b` 
-        : totalSize < 1024 * 1024 
+      const totalSizeFormatted = totalSize < 1024
+        ? `${totalSize}b`
+        : totalSize < 1024 * 1024
           ? `${(totalSize / 1024).toFixed(1)}kb`
-          : `${(totalSize / (1024 * 1024)).toFixed(1)}mb`       
+          : `${(totalSize / (1024 * 1024)).toFixed(1)}mb`
 
       logger.separator()
       logger.success('Igniter.js development server is up and running')
@@ -214,7 +214,7 @@ export async function generateSchemaFromRouter(
         duration: `${duration}s`,
         timestamp: new Date().toISOString()
       })
-      
+
       logger.groupEnd()
     } else {
       // Simplified summary for interactive mode
@@ -245,7 +245,7 @@ export type AppRouterSchemaType = typeof AppRouterSchema
 
   const filePath = path.join(outputDir, 'igniter.schema.ts')
   await writeFileWithHeader(filePath, content, config)
-  
+
   return filePath
 }
 
@@ -257,53 +257,53 @@ async function generateClientFile(
   outputDir: string,
   config: IgniterBuildConfig
 ): Promise<string> {
-  const content = `// Generated by @igniter-js/cli - DO NOT EDIT
-
-import { isServer } from '@igniter-js/core'
-import { createIgniterClient, useIgniterQueryClient } from '@igniter-js/core/client'
-import { AppRouterSchema } from './igniter.schema'
+  const content = `import { createIgniterClient, useIgniterQueryClient } from '@igniter-js/core/client'
 import type { AppRouterType } from './igniter.router'
 
 /**
- * Type-safe API client generated from your Igniter router
- * 
- * Usage in Server Components:
- * const users = await api.users.list.query()
- * 
- * Usage in Client Components:
- * const { data } = api.users.list.useQuery()
- */
-export const api = createIgniterClient<AppRouterType>(() => {
-  if (isServer) {
-    return require('./igniter.router').AppRouter
-  }
+  * Type-safe API client generated from your Igniter router
+  *
+  * Usage in Server Components:
+  * const users = await api.users.list.query()
+  *
+  * Usage in Client Components:
+  * const { data } = api.users.list.useQuery()
+  */
+export const api = createIgniterClient<AppRouterType>({
+  baseURL: 'http://localhost:3000',
+  basePath: '/api/v1/',
+  router: () => {
+    if (typeof window === 'undefined') {
+      return require('./igniter.router').AppRouter
+    }
 
-  return AppRouterSchema
+    return require('./igniter.schema').AppRouterSchema
+  },
 })
 
 /**
- * Type-safe API client generated from your Igniter router
- * 
- * Usage in Server Components:
- * const users = await api.users.list.query()
- * 
- * Usage in Client Components:
- * const { data } = api.users.list.useQuery()
- */
+  * Type-safe API client generated from your Igniter router
+  *
+  * Usage in Server Components:
+  * const users = await api.users.list.query()
+  *
+  * Usage in Client Components:
+  * const { data } = api.users.list.useQuery()
+  */
 export type ApiClient = typeof api
 
 /**
- * Type-safe query client generated from your Igniter router
- * 
- * Usage in Client Components:
- * const { invalidate } = useQueryClient()
- */
+  * Type-safe query client generated from your Igniter router
+  *
+  * Usage in Client Components:
+  * const { invalidate } = useQueryClient()
+  */
 export const useQueryClient = useIgniterQueryClient<AppRouterType>;
 `
 
   const filePath = path.join(outputDir, 'igniter.client.ts')
   await writeFileWithHeader(filePath, content, config)
-  
+
   return filePath
 }
 
@@ -317,7 +317,7 @@ async function writeFileWithHeader(
 ) {
   const header = generateFileHeader(config)
   const fullContent = header + '\n\n' + content
-  
+
   await fs.promises.writeFile(filePath, fullContent, 'utf8')
 }
 
@@ -326,17 +326,19 @@ async function writeFileWithHeader(
  */
 function generateFileHeader(config: IgniterBuildConfig): string {
   const timestamp = new Date().toISOString()
-  
-  return `/**
+
+  return `/* eslint-disable @typescript-eslint/no-var-requires */
+
+/**
  * Generated by @igniter-js/cli
- * 
+ *
  * WARNING: DO NOT EDIT THIS FILE MANUALLY
- * 
+ *
  * This file was automatically generated from your Igniter router.
  * Any changes made to this file will be overwritten when the CLI regenerates it.
- * 
+ *
  * To modify the client API, update your controller files instead.
- * 
+ *
  * Generated: ${timestamp}
  * Framework: ${config.framework}
  * Output: ${config.outputDir}
@@ -353,4 +355,4 @@ async function ensureDirectoryExists(dirPath: string) {
     // Directory doesn't exist, create it
     await fs.promises.mkdir(dirPath, { recursive: true })
   }
-} 
+}

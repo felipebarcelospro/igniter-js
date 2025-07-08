@@ -31,6 +31,7 @@
   "license": "MIT",
   "dependencies": {
     "@igniter-js/core": "*",
+
     "c12": "^3.0.4",
     "chalk": "^5.4.1",
     "chokidar": "^3.6.0",

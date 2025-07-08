@@ -338,7 +338,14 @@ async function executeTool<TContext extends object, TInferredContext>(
       throw new Error(`Action ${tool.action} not found in controller ${tool.controller}`);
     }
     // Call the router action
-    const result = await caller(args);
+    let result: any;
+    if (caller.type === 'query') {
+      result = await caller.query(args);
+    } else if (caller.type === 'mutation') {
+      result = await caller.mutation(args);
+    } else {
+      throw new Error(`Neither query nor mutation function found for action ${tool.action} in controller ${tool.controller}`);
+    }
     
     // Transform response if custom transformer provided
     if (options.response?.transform) {

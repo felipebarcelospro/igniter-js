@@ -1,35 +1,35 @@
-import type { 
-  ProjectSetupConfig, 
-  TemplateFile, 
+import type {
+  ProjectSetupConfig,
+  TemplateFile,
 } from './types'
 import { getEnvironmentVariables, getDockerServices, DATABASE_CONFIGS } from './features'
 import type { SupportedFramework } from '../framework'
 
 /**
- * Generate main igniter.ts file with proper imports and configuration  
+ * Generate main igniter.ts file with proper imports and configuration
  */
 export function generateIgniterRouter(config: ProjectSetupConfig): TemplateFile {
   const { features } = config
-  
+
   let imports = [`import { Igniter } from '@igniter-js/core'`]
   let serviceImports: string[] = []
-  
+
   // Add context import
   imports.push('import type { IgniterAppContext } from "./igniter.context"')
-  
+
   // Add feature service imports based on enabled features
   if (features.store) {
     serviceImports.push('import { store } from "@/services/store"')
   }
-  
+
   if (features.jobs) {
     serviceImports.push('import { jobs } from "@/services/jobs"')
   }
-  
+
   if (features.logging) {
     serviceImports.push('import { logger } from "@/services/logger"')
   }
-  
+
   // Database service import
   if (config.database.provider !== 'none') {
     serviceImports.push('import { database } from "@/services/database"')
@@ -39,19 +39,19 @@ export function generateIgniterRouter(config: ProjectSetupConfig): TemplateFile 
   if (features.telemetry) {
     serviceImports.push('import { telemetry } from "@/services/telemetry"')
   }
-  
+
   const allImports = [...imports, ...serviceImports].join('\n')
-  
+
   // Build configuration chain
   let configChain = ['export const igniter = Igniter', '  .context<IgniterAppContext>()']
-  
+
   if (features.store) configChain.push('  .store(store)')
   if (features.jobs) configChain.push('  .jobs(jobs)')
   if (features.logging) configChain.push('  .logger(logger)')
   if (features.telemetry) configChain.push('  .telemetry(telemetry)')
-  
+
   configChain.push('  .create()')
-  
+
   const content = `${allImports}
 
 /**
@@ -72,17 +72,17 @@ ${configChain.join('\n')}
  */
 export function generateIgniterContext(config: ProjectSetupConfig): TemplateFile {
   const { database } = config
-  
+
   let serviceImports: string[] = []
   let contextProperties: string[] = []
-  
+
   if (database.provider !== 'none') {
     serviceImports.push('import { database } from "@/services/database"')
     contextProperties.push('    database,')
   }
-  
+
   const allImports = serviceImports.join('\n')
-  
+
   const content = `${allImports}
 
 /**
@@ -113,7 +113,7 @@ export type IgniterAppContext = Awaited<ReturnType<typeof createIgniterAppContex
  */
 export function generateExampleController(config: ProjectSetupConfig): TemplateFile {
   const { features } = config
-  
+
   let imports = `import { igniter } from '@/igniter'
 import { z } from 'zod'`
 
@@ -122,8 +122,8 @@ import { z } from 'zod'`
       path: '/',
       handler: async ({ request, response, context }) => {
         ${features.logging ? 'context.logger.info(\'Health check requested\')' : ''}
-        return response.success({ 
-          status: 'ok', 
+        return response.success({
+          status: 'ok',
           timestamp: new Date().toISOString(),
           features: {
             store: ${features.store},
@@ -148,26 +148,26 @@ import { z } from 'zod'`
       handler: async ({ request, response, context }) => {
         const { key } = request.params
         const cached = await context.store.get(key)
-        
+
         if (cached) {
-          return response.success({ 
-            data: cached, 
-            source: 'cache' 
+          return response.success({
+            data: cached,
+            source: 'cache'
           })
         }
-        
+
         // Generate sample data
-        const data = { 
+        const data = {
           message: \`Hello from \${key}\`,
           timestamp: new Date().toISOString()
         }
-        
+
         // Cache for 1 hour
         await context.store.set(key, data, { ttl: 3600 })
-        
-        return response.success({ 
-          data, 
-          source: 'generated' 
+
+        return response.success({
+          data,
+          source: 'generated'
         })
       }
     })`
@@ -186,18 +186,18 @@ import { z } from 'zod'`
       }),
       handler: async ({ request, response, context }) => {
         const { message, delay = 0 } = request.body
-        
+
         const jobId = await context.jobs.add('processMessage', {
           message,
           timestamp: new Date().toISOString()
         }, { delay })
-        
+
         ${features.logging ? 'context.logger.info(\'Job scheduled\', { jobId, message })' : ''}
-        
-        return response.success({ 
+
+        return response.success({
           jobId,
           message: 'Job scheduled successfully',
-          delay 
+          delay
         })
       }
     })`
@@ -235,8 +235,6 @@ import { exampleController } from '@/features/example'
  * @see https://github.com/felipebarcelospro/igniter-js
  */
 export const AppRouter = igniter.router({
-  baseURL: process.env.NEXT_PUBLIC_IGNITER_APP_URL || 'http://localhost:3000',
-  basePATH: process.env.NEXT_PUBLIC_IGNITER_APP_BASE_PATH || '/api/v1',
   controllers: {
     example: exampleController
   }
@@ -267,10 +265,10 @@ export * from './example.interfaces'
 
 /**
  * Generates service files based on enabled features and database provider.
- * 
+ *
  * @param config - The project setup configuration.
  * @returns An array of TemplateFile objects representing service files.
- * 
+ *
  * @see https://github.com/felipebarcelospro/igniter-js
  */
 export function generateServiceFiles(config: ProjectSetupConfig): TemplateFile[] {
@@ -284,13 +282,13 @@ export function generateServiceFiles(config: ProjectSetupConfig): TemplateFile[]
       content: `import { Redis } from 'ioredis'
 
 /**
- * Redis client instance for caching, session storage, and pub/sub.
- * 
- * @remarks
- * Used for caching, session management, and real-time messaging.
- * 
- * @see https://github.com/luin/ioredis
- */
+  * Redis client instance for caching, session storage, and pub/sub.
+  *
+  * @remarks
+  * Used for caching, session management, and real-time messaging.
+  *
+  * @see https://github.com/luin/ioredis
+  */
 export const redis = new Redis(process.env.REDIS_URL!, {
   maxRetriesPerRequest: null,
 })
@@ -306,14 +304,14 @@ export const redis = new Redis(process.env.REDIS_URL!, {
 import { redis } from '@/services/redis'
 
 /**
- * Store adapter for data persistence.
- * 
- * @remarks
- * Provides a unified interface for data storage operations using Redis.
- * 
- * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/adapter-redis
- */
-export const store = createRedisStoreAdapter({ redis })
+  * Store adapter for data persistence.
+  *
+  * @remarks
+  * Provides a unified interface for data storage operations using Redis.
+  *
+  * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/adapter-redis
+  */
+export const store = createRedisStoreAdapter(redis)
 `
     })
   }
@@ -322,18 +320,41 @@ export const store = createRedisStoreAdapter({ redis })
   if (features.jobs) {
     files.push({
       path: 'src/services/jobs.ts',
-      content: `import { createBullMQAdapter } from '@igniter-js/adapter-bullmq'
-import { redis } from '@/services/redis'
+      content: `import { store } from '@/services/store'
+import { createBullMQAdapter } from '@igniter-js/adapter-bullmq'
+import { z } from 'zod'
 
 /**
- * Job queue adapter for background processing.
- * 
- * @remarks
- * Handles asynchronous job processing with BullMQ.
- * 
- * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/adapter-bullmq
- */
-export const jobs = createBullMQAdapter({ redis })
+  * Job queue adapter for background processing.
+  *
+  * @remarks
+  * Handles asynchronous job processing with BullMQ.
+  *
+  * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/adapter-bullmq
+  */
+export const jobs = createBullMQAdapter({
+  store,
+  autoStartWorker: {
+    concurrency: 1,
+    queues: ['*']
+  }
+})
+
+export const REGISTERED_JOBS = jobs.merge({
+  system: jobs.router({
+    jobs: {
+      sampleJob: jobs.register({
+        name: 'sampleJob',
+        input: z.object({
+          message: z.string()
+        }),
+        handler: async ({ input }) => {
+          console.log(input.message)
+        }
+      })
+    }
+  })
+})
 `
     })
   }
@@ -345,15 +366,15 @@ export const jobs = createBullMQAdapter({ redis })
       content: `import { createConsoleLogger, IgniterLogLevel } from '@igniter-js/core'
 
 /**
- * Logger instance for application logging.
- * 
- * @remarks
- * Provides structured logging with configurable log levels.
- * 
- * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/core
- */
+  * Logger instance for application logging.
+  *
+  * @remarks
+  * Provides structured logging with configurable log levels.
+  *
+  * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/core
+  */
 export const logger = createConsoleLogger({
-  level: IgniterLogLevel.DEBUG,
+  level: IgniterLogLevel.INFO,
   showTimestamp: true,
 })
 `
@@ -368,10 +389,10 @@ export const logger = createConsoleLogger({
 
 /**
  * Prisma client instance for database operations.
- * 
+ *
  * @remarks
  * Provides type-safe database access with Prisma ORM.
- * 
+ *
  * @see https://www.prisma.io/docs/concepts/components/prisma-client
  */
 export const database = new PrismaClient()
@@ -383,22 +404,26 @@ export const database = new PrismaClient()
   if (features.telemetry) {
     files.push({
       path: 'src/services/telemetry.ts',
-      content: `import { createTelemetryService } from '@igniter-js/core'
+      content: `import { createConsoleTelemetryAdapter } from '@igniter-js/core/adapters'
+      import { store } from './store'
 
-/**
- * Telemetry service for tracking requests and errors.
- * 
- * @remarks
- * Provides telemetry tracking with configurable options.
- * 
- * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/core
- */
-export const telemetry = createTelemetryService({
-  enableTracing: process.env.IGNITER_TELEMETRY_ENABLE_TRACING === 'true',
-  enableMetrics: process.env.IGNITER_TELEMETRY_ENABLE_METRICS === 'true',
-  enableEvents: process.env.IGNITER_TELEMETRY_ENABLE_EVENTS === 'true',
-  enableCLI: process.env.IGNITER_TELEMETRY_ENABLE_CLI_INTEGRATION === 'true',
-})
+      /**
+       * Telemetry service for tracking requests and errors.
+       *
+       * @remarks
+       * Provides telemetry tracking with configurable options.
+       *
+       * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/core
+       */
+      export const telemetry = createConsoleTelemetryAdapter({
+        serviceName: 'my-igniter-app',
+        enableEvents: process.env.IGNITER_TELEMETRY_ENABLE_EVENTS === 'true',
+        enableMetrics: process.env.IGNITER_TELEMETRY_ENABLE_METRICS === 'true',
+        enableTracing: process.env.IGNITER_TELEMETRY_ENABLE_TRACING === 'true',
+      }, {
+        enableCliIntegration: process.env.IGNITER_TELEMETRY_ENABLE_CLI_INTEGRATION === 'true',
+        store: store
+      })
 `
     })
   }
@@ -414,7 +439,7 @@ import { appRouter } from '@/igniter.router'
 
 /**
  * MCP server instance for exposing API as a MCP server.
- * 
+ *
  * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/adapter-mcp
  */
 export default createMcpAdapter(appRouter, {
@@ -442,19 +467,48 @@ export default createMcpAdapter(appRouter, {
  * Generate client file for frontend usage
  */
 export function generateIgniterClient(config: ProjectSetupConfig): TemplateFile {
-  const content = `import { createIgniterClient } from '@igniter-js/core/client'
-import type { AppRouter } from '@/igniter.router'
+  const content = `import { createIgniterClient, useIgniterQueryClient } from '@igniter-js/core/client'
+import type { AppRouterType } from './igniter.router'
 
 /**
- * @description Igniter.js client for frontend usage
- * @see https://github.com/felipebarcelospro/igniter-js
- */
-export const client = createIgniterClient<AppRouter>({
-  baseURL: process.env.NEXT_PUBLIC_IGNITER_APP_URL || 'http://localhost:3000',
-  basePATH: process.env.NEXT_PUBLIC_IGNITER_APP_BASE_PATH || '/api/v1'
+  * Type-safe API client generated from your Igniter router
+  *
+  * Usage in Server Components:
+  * const users = await api.users.list.query()
+  *
+  * Usage in Client Components:
+  * const { data } = api.users.list.useQuery()
+  */
+export const api = createIgniterClient<AppRouterType>({
+  baseURL: 'http://localhost:3000',
+  basePath: '/api/v1/',
+  router: () => {
+    if (typeof window === 'undefined') {
+      return require('./igniter.router').AppRouter
+    }
+
+    return require('./igniter.schema').AppRouterSchema
+  },
 })
 
-export type IgniterClient = typeof client
+/**
+  * Type-safe API client generated from your Igniter router
+  *
+  * Usage in Server Components:
+  * const users = await api.users.list.query()
+  *
+  * Usage in Client Components:
+  * const { data } = api.users.list.useQuery()
+  */
+export type ApiClient = typeof api
+
+/**
+  * Type-safe query client generated from your Igniter router
+  *
+  * Usage in Client Components:
+  * const { invalidate } = useQueryClient()
+  */
+export const useQueryClient = useIgniterQueryClient<AppRouterType>;
 `
 
   return {
@@ -508,7 +562,7 @@ export interface ExampleJobPayload {
 export function generatePackageJson(config: ProjectSetupConfig, dependencies: string[], devDependencies: string[]): TemplateFile {
   const scripts: Record<string, string> = {
     "dev": "next dev",
-    "build": "next build", 
+    "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit"
@@ -658,7 +712,7 @@ export function generateEnvFile(config: ProjectSetupConfig): TemplateFile {
   return {
     path: '.env.example',
     content
-  } 
+  }
 }
 
 /**
@@ -685,7 +739,7 @@ export function generateDockerCompose(config: ProjectSetupConfig): TemplateFile 
       }
       return acc
     }, {} as any),
-    volumes: services.some(s => s.volumes) ? 
+    volumes: services.some(s => s.volumes) ?
       services.reduce((acc, service) => {
         service.volumes?.forEach(volume => {
           const volumeName = volume.split(':')[0]
@@ -888,12 +942,12 @@ export function generateAllTemplates(config: ProjectSetupConfig, dependencies: s
     generateIgniterContext(config),
     generateMainRouter(config),
     generateIgniterClient(config),
-    
+
     // Feature files
     generateExampleController(config),
     generateFeatureIndex(config),
     generateExampleInterfaces(),
-    
+
     // Configuration files
     generatePackageJson(config, dependencies, devDependencies),
     generateTsConfig(config.framework),
@@ -913,4 +967,4 @@ export function generateAllTemplates(config: ProjectSetupConfig, dependencies: s
   }
 
   return templates
-} 
+}

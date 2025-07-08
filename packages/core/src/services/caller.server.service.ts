@@ -1,5 +1,5 @@
 import type { RequestProcessor } from "../processors";
-import type { ContextCallback, IgniterBaseConfig, IgniterControllerConfig, IgniterRouter, IgniterRouterCaller } from "../types";
+import type { ContextCallback, IgniterBaseConfig, IgniterControllerBaseAction, IgniterControllerConfig, IgniterRouter, IgniterRouterCaller, MutationActionCallerResult, QueryActionCallerResult } from "../types";
 
 /**
  * Creates a proxy-based caller for invoking actions via controller namespace (server-only).
@@ -22,17 +22,32 @@ export function createServerCaller<
       }
       return new Proxy({}, {
         get(_, actionName: string) {
-          const action = controller.actions[actionName];
+          const action = controller.actions[actionName] as IgniterControllerBaseAction;
           if (!action) {
             throw new Error(`Action "${actionName}" not found in controller "${controllerName}".`);
           }
 
-          return (input: any) => {
-            if (!processor) {
-              throw new Error('Processor is required to call actions on server');
+          if(action.method === 'GET') {
+            return {
+              useQuery: (...args: any[]) => ({} as QueryActionCallerResult<typeof action>),
+              query: async (input: any) => {
+                if (!processor) {
+                  throw new Error('Processor is required to call actions on server');
+                }
+                return processor.call(controllerName, actionName, input);
+              }
             }
+          }
 
-            return processor.call(controllerName, actionName, input);
+          return {
+            useMutation: (...args: any[]) => ({} as MutationActionCallerResult<typeof action>),
+            mutate: async (input: any) => {
+              if (!processor) {
+                throw new Error('Processor is required to call actions on server');
+              }
+
+              return processor.call(controllerName, actionName, input);
+            }
           }
         }
       });

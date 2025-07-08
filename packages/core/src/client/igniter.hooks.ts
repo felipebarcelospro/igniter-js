@@ -7,8 +7,8 @@ import type {
   MutationActionCallerResult,
   QueryActionCallerOptions,
   QueryActionCallerResult,
-  StreamActionCallerOptions,
-  StreamActionCallerResult,
+  RealtimeActionCallerOptions,
+  RealtimeActionCallerResult,
 } from "../types";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
@@ -68,7 +68,7 @@ export const createUseQuery = <
       const path = `${controller}.${action}`;
       if (!path) {
         console.warn("[Igniter] Server caller missing __actionPath property");
-        // Gere um ID único como fallback
+        // Generate a unique ID as a fallback
         return `query-${Math.random().toString(36).substr(2, 9)}`;
       }
 
@@ -91,7 +91,7 @@ export const createUseQuery = <
           console.log(`[Igniter] Executing query for key: ${regKey}`, {
             params,
           });
-          
+
           setLoading(true);
           optionsRef.current?.onLoading?.(true);
 
@@ -124,7 +124,11 @@ export const createUseQuery = <
           return result;
         } catch (error) {
           console.error(`[Igniter] Query error for key: ${regKey}:`, error);
-          throw error;
+
+          const errorResponse = { data: null, error: error as TAction["$Infer"]["$Output"]["error"] };
+          setResponse(errorResponse);
+          optionsRef.current?.onRequest?.(errorResponse);
+
         } finally {
           setLoading(false);
           optionsRef.current?.onLoading?.(false);
@@ -199,7 +203,7 @@ export const createUseQuery = <
             options.initialParams as unknown as TAction["$Infer"]["$Input"],
           );
         } else {
-          // Execute sem parâmetros se não houver initialParams
+          // Execute without params if initialParams is not provided
           execute({} as any);
         }
       }
@@ -251,17 +255,17 @@ export const createUseMutation = <
 
         // No mutate:
         const result = await fetcher(mergedParams);
-      
+
         setResponse(result);
-        
+
         optionsRef.current?.onRequest?.(result);
 
         return result;
       } catch (error) {
-        // @ts-expect-error TODO: fix this
-        setResponse({ data: null, error: error });
-        // @ts-expect-error TODO: fix this
-        optionsRef.current?.onRequest?.({ data: null, error: error });
+        const errorResponse = { data: null, error: error as TAction["$Infer"]["$Output"]["error"] };
+        setResponse(errorResponse);
+        optionsRef.current?.onRequest?.(errorResponse);
+        return errorResponse;
       } finally {
         setLoading(false);
         optionsRef.current?.onLoading?.(false);
@@ -281,12 +285,12 @@ export const createUseMutation = <
 
 /**
  * Generic hook for subscribing to SSE events from the central connection
- * 
+ *
  * @param channelId - The channel ID to subscribe to
  * @param options - Configuration options for the subscription
  * @returns Stream data and connection status
  */
-export function useStream<T = any>(
+export function useRealtime<T = any>(
   channelId: string,
   options: {
     initialData?: T;
@@ -300,15 +304,15 @@ export function useStream<T = any>(
 } {
   const [data, setData] = useState<T | null>(options.initialData || null);
   const [isConnected, setIsConnected] = useState(false);
-  const { subscribeToStream } = useIgniterQueryClient();
-  
+  const { subscribeToRealtime } = useIgniterQueryClient();
+
   // Store callback references that shouldn't trigger effect reruns
   const callbacksRef = useRef({
     onMessage: options.onMessage,
     onConnect: options.onConnect,
     onDisconnect: options.onDisconnect
   });
-  
+
   // Update refs when callbacks change
   useEffect(() => {
     callbacksRef.current = {
@@ -317,14 +321,14 @@ export function useStream<T = any>(
       onDisconnect: options.onDisconnect
     };
   }, [options.onMessage, options.onConnect, options.onDisconnect]);
-  
+
   useEffect(() => {
     setIsConnected(true);
-    
+
     if (callbacksRef.current.onConnect) {
       callbacksRef.current.onConnect();
     }
-    
+
     // Callback for processing incoming messages
     const handleMessage = (message: any) => {
       setData(message);
@@ -332,10 +336,10 @@ export function useStream<T = any>(
         callbacksRef.current.onMessage(message);
       }
     };
-    
+
     // Subscribe to the channel
-    const unsubscribe = subscribeToStream(channelId, handleMessage);
-    
+    const unsubscribe = subscribeToRealtime(channelId, handleMessage);
+
     return () => {
       setIsConnected(false);
       if (callbacksRef.current.onDisconnect) {
@@ -344,7 +348,7 @@ export function useStream<T = any>(
       unsubscribe();
     };
   }, [channelId, subscribeToStream]);
-  
+
   return {
     data,
     isConnected
@@ -352,16 +356,16 @@ export function useStream<T = any>(
 }
 
 /**
- * Creates a useStream hook for real-time data streaming
+ * Creates a useRealtime hook for real-time data streaming
  * @param actionPath The action path for the stream endpoint
  * @returns A React hook for subscribing to real-time updates
  */
-export const createUseStream = <TAction extends IgniterAction<any, any, any, any, any, any, any, any, any, any>>(
+export const createUseRealtime = <TAction extends IgniterAction<any, any, any, any, any, any, any, any, any, any>>(
   baseURL: string,
   basePATH: string,
   actionPath: string,
 ) => {
-  return (options?: StreamActionCallerOptions<TAction>): StreamActionCallerResult<TAction> => {
+  return (options?: RealtimeActionCallerOptions<TAction>): RealtimeActionCallerResult<TAction> => {
     const [isConnected, setIsConnected] = useState(false);
     const [isReconnecting, setIsReconnecting] = useState(false);
     const [response, setResponse] = useState<InferIgniterResponse<Awaited<TAction["$Infer"]["$Output"]>>>(() => {
@@ -370,14 +374,14 @@ export const createUseStream = <TAction extends IgniterAction<any, any, any, any
         error: null,
       } as InferIgniterResponse<Awaited<TAction["$Infer"]["$Output"]>>;
     });
-    
+
     // Get the channel ID from the action path
     const channelId = useMemo(() => {
       return `${actionPath}`;
     }, [actionPath]);
 
-    // Use the centralized stream hook
-    const streamResult = useStream(channelId, {
+    // Use the centralized realtime hook
+    const streamResult = useRealtime(channelId, {
       initialData: options?.initialParams,
       onMessage: (newData) => {
         setResponse(newData);
@@ -427,6 +431,6 @@ export const createUseStream = <TAction extends IgniterAction<any, any, any, any
       isReconnecting,
       disconnect,
       reconnect,
-    } as StreamActionCallerResult<TAction>;
+    } as RealtimeActionCallerResult<TAction>;
   };
 };

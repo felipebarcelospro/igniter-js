@@ -12,7 +12,10 @@ export default defineConfig([
     sourcemap: true,
     clean: true,
     treeshake: true,
-    external: ['react', 'react-dom'],
+    external: [
+      'react', 
+      'react-dom',
+    ],
   },
 
   // Configuração para o código dos adapters (server-side)
@@ -40,15 +43,54 @@ export default defineConfig([
     },
   },
   
-  // Configuração unificada para client com arquivos separados para máxima otimização
+  // Configuração para hooks React (com banner 'use client')
+  {
+    entry: {
+      'igniter.hooks': 'src/client/igniter.hooks.ts',
+    },
+    format: ['esm'],
+    dts: {
+      resolve: true,
+    },
+    splitting: true,
+    outDir: 'dist/client',
+    external: [
+      'react', 
+      'react-dom',
+    ],
+    esbuildOptions(options) {
+      options.banner = {
+        js: '"use client"',
+      }
+    },
+  },
+  // Configuração para context React (com banner 'use client')
   {
     entry: {
       'igniter.context': 'src/client/igniter.context.tsx',
-      'igniter.hooks': 'src/client/igniter.hooks.ts',
-      'igniter.client': 'src/client/igniter.client.ts',
-      'igniter.client.browser': 'src/client/igniter.client.browser.ts',
-      'igniter.client.server': 'src/client/igniter.client.server.ts',
+    },
+    format: ['esm'],
+    dts: {
+      resolve: true,
+    },
+    splitting: true,
+    outDir: 'dist/client',
+    external: [
+      'react', 
+      'react-dom',
+    ],    
+    esbuildOptions(options) {
+      options.banner = {
+        js: '"use client"',
+      }
+    },
+  },
+  // Configuração para client (browser client, server client e barrel files)
+  {
+    entry: {
       'index': 'src/client/index.ts',
+      'index.server': 'src/client/index.server.ts',
+      'index.browser': 'src/client/index.browser.ts',
     },
     format: ['cjs', 'esm'],
     dts: {
@@ -60,12 +102,6 @@ export default defineConfig([
     external: [
       'react', 
       'react-dom',
-      // Apenas os imports internos do client (não utils)
-      './igniter.hooks',
-      './igniter.context',
-      './igniter.client',
-      './igniter.client.browser',
-      './igniter.client.server'
-    ]
+    ],
   }
 ])

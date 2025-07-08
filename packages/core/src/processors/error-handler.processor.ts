@@ -18,17 +18,24 @@ export interface ErrorHandlingResult {
  * Provides unified error handling for different types of errors.
  */
 export class ErrorHandlerProcessor {
-  private static logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-    context: {
-      processor: 'RequestProcessor',
-      component: 'ErrorHandler'
+  private static _logger: IgniterLogger;
+
+  private static get logger(): IgniterLogger {
+    if (!this._logger) {
+      this._logger = IgniterConsoleLogger.create({
+        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
+        context: {
+          processor: 'RequestProcessor',
+          component: 'ErrorHandler'
+        },
+      });
     }
-  })
+    return this._logger;
+  }
 
   /**
    * Handles validation errors (e.g., Zod validation).
-   * 
+   *
    * @param error - The validation error
    * @param context - The processed context
    * @param telemetrySpan - The telemetry span for tracking
@@ -85,7 +92,7 @@ export class ErrorHandlerProcessor {
 
   /**
    * Handles IgniterError instances.
-   * 
+   *
    * @param error - The IgniterError instance
    * @param context - The processed context
    * @param telemetrySpan - The telemetry span for tracking
@@ -100,7 +107,7 @@ export class ErrorHandlerProcessor {
   ): Promise<ErrorHandlingResult> {
     const statusCode = 500;
     const normalizedError = this.normalizeError(error);
-    
+
     this.logger.error(`An IgniterError occurred.`, {
       error: {
         code: normalizedError.code,
@@ -142,7 +149,7 @@ export class ErrorHandlerProcessor {
 
   /**
    * Handles generic errors.
-   * 
+   *
    * @param error - The generic error
    * @param context - The processed context
    * @param telemetrySpan - The telemetry span for tracking
@@ -158,7 +165,7 @@ export class ErrorHandlerProcessor {
     const statusCode = 500;
     const normalizedError = this.normalizeError(error);
     const errorMessage = normalizedError.message || "Internal Server Error";
-    
+
     this.logger.error(`A generic error occurred.`, {
       error: {
         code: normalizedError.code,
@@ -200,7 +207,7 @@ export class ErrorHandlerProcessor {
 
   /**
    * Handles initialization errors that occur during context setup.
-   * 
+   *
    * @param error - The initialization error
    * @param context - The processed context (may be partial)
    * @param telemetrySpan - The telemetry span for tracking
@@ -215,7 +222,7 @@ export class ErrorHandlerProcessor {
   ): Promise<ErrorHandlingResult> {
     const statusCode = 500;
     const normalizedError = this.normalizeError(error);
-    
+
     this.logger.error(
       `Context initialization failed. This is a critical error.`, {
         error: {
@@ -262,7 +269,7 @@ export class ErrorHandlerProcessor {
 
   /**
    * Determines the type of error and routes to appropriate handler.
-   * 
+   *
    * @param error - The error to classify and handle
    * @param context - The processed context
    * @param telemetrySpan - The telemetry span for tracking
@@ -308,19 +315,19 @@ export class ErrorHandlerProcessor {
   } {
     // Handle undefined/null
     if (error === null || error === undefined) {
-      return { 
+      return {
         message: 'Unknown error occurred',
         code: 'UNKNOWN_ERROR',
-        stack: new Error().stack 
+        stack: new Error().stack
       };
     }
 
     // Handle string errors
     if (typeof error === 'string') {
-      return { 
-        message: error, 
+      return {
+        message: error,
         code: 'GENERIC_ERROR',
-        stack: new Error(error).stack 
+        stack: new Error(error).stack
       };
     }
 
@@ -432,4 +439,4 @@ export class ErrorHandlerProcessor {
       console.error('CRITICAL: Failed to track an error. This may indicate a problem with the tracking system itself.', trackingError);
     }
   }
-} 
+}

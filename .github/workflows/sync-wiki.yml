@@ -1,0 +1,91 @@
+# .github/workflows/sync-wiki.yml
+
+# Name for the GitHub Action workflow.
+# This is what will be displayed in the "Actions" tab of the repository.
+name: Sync Documentation to Wiki
+
+# This section defines the triggers that will run this workflow.
+on:
+  # Trigger the workflow on a 'push' event.
+  push:
+    # Only run for pushes to the 'main' branch.
+    branches:
+      - main
+    # Further refine the trigger to only run if files within the
+    # 'docs/wiki-content/' directory have been changed. This prevents
+    # the action from running on every single push to main, saving resources.
+    paths:
+      - 'docs/wiki-content/**'
+
+# Define the permissions required by this workflow.
+# The GITHUB_TOKEN provided by GitHub Actions needs 'write' permissions
+# on the repository's contents to be able to push changes to the wiki.
+permissions:
+  contents: write
+
+# This section defines the jobs that will be run as part of the workflow.
+jobs:
+  # Define a single job named 'sync-wiki-job'.
+  sync-wiki-job:
+    # Specify the runner environment. 'ubuntu-latest' is a standard and reliable choice.
+    runs-on: ubuntu-latest
+
+    # The sequence of steps that make up the job.
+    steps:
+      # Step 1: Check out the main repository's code.
+      # This step downloads the source code of the 'main' branch,
+      # making the 'docs/wiki-content/' directory available to the job.
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+        with:
+          # persist-credentials: false is a good practice when the token is only used for a single checkout
+          persist-credentials: false
+
+      # Step 2: Check out the repository's wiki.
+      # The wiki is a separate git repository. We check it out into a subdirectory
+      # named 'wiki' to keep it separate from the main repository's code.
+      - name: Checkout wiki repository
+        uses: actions/checkout@v4
+        with:
+          # The wiki repository URL is the main repository URL with '.wiki' appended.
+          repository: ${{ github.repository }}.wiki
+          # The destination path for the checkout.
+          path: wiki
+          # persist-credentials: false is a good practice when the token is only used for a single checkout
+          persist-credentials: false
+
+      # Step 3: Synchronize the documentation files to the wiki directory.
+      # This step uses 'rsync' to mirror the contents. It's a powerful tool
+      # that efficiently copies new and updated files.
+      - name: Sync documentation files to wiki
+        run: |
+          # The -av flags mean "archive" (preserves permissions, etc.) and "verbose".
+          # The --delete flag is crucial: it removes any files from the 'wiki' directory
+          # that no longer exist in the 'docs/wiki-content' directory, keeping them perfectly in sync.
+          # The --exclude flag prevents copying the .git directory itself.
+          rsync -av --delete --exclude='.git/' docs/wiki-content/ ./wiki/
+
+      # Step 4: Commit and push any changes to the wiki repository.
+      - name: Commit and push changes
+        run: |
+          # Navigate into the wiki's local directory.
+          cd wiki
+
+          # Configure the git user identity for the commit.
+          # This attributes the commit to the github-actions bot.
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Stage all changes (new, modified, and deleted files).
+          git add .
+
+          # Check if there are any staged changes. If there are no changes,
+          # the 'git diff-index --quiet HEAD' command will exit with code 0.
+          # This prevents creating empty commits if no documentation was changed.
+          if ! git diff-index --quiet HEAD; then
+            echo "Changes detected in wiki. Committing and pushing."
+            git commit -m "docs: Sync wiki from main repository"
+            git push
+          else
+            echo "No changes to sync."
+          fi

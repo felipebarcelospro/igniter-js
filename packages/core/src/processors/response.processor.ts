@@ -28,27 +28,27 @@ export interface StreamOptions<TData = ResponseData> {
    * Channel ID for the SSE stream
    */
   channelId?: string;
-  
+
   /**
    * Controller key for action streams
    */
   controllerKey?: string;
-  
+
   /**
    * Action key for action streams
    */
   actionKey?: string;
-  
+
   /**
    * Custom filter function to process incoming messages
    */
   filter?: (message: StreamMessage<TData>) => boolean;
-  
+
   /**
    * Transform function to modify messages before sending to client
    */
   transform?: <TResult = TData>(message: StreamMessage<TData>) => StreamMessage<TResult>;
-  
+
   /**
    * Initial data to send when connection is established
    */
@@ -68,12 +68,12 @@ export interface RevalidateOptions<TContext = unknown, TData = ResponseData> {
    * Query keys to invalidate on the client
    */
   queryKeys: string | string[];
-  
+
   /**
    * Optional data to send along with revalidation
    */
   data?: TData;
-  
+
   /**
    * Whether to broadcast to all connected clients (default: true)
    */
@@ -96,7 +96,7 @@ export interface RevalidateOptions<TContext = unknown, TData = ResponseData> {
  * @remarks
  * This class uses the builder pattern to construct responses. Each method returns
  * a new instance with updated types, enabling full type safety throughout the chain.
- * 
+ *
  * @example
  * ```typescript
  * // Create a success response with typed data
@@ -118,36 +118,43 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
   private _revalidateOptions?: RevalidateOptions<TContext>
   private _store?: IgniterStoreAdapter
   private _context?: TContext
-  private logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-    context: {
-      processor: 'RequestProcessor',
-      component: 'Response'
-    },
-    showTimestamp: true,
-  })
+  private _logger?: IgniterLogger
+
+  private get logger(): IgniterLogger {
+    if (!this._logger) {
+      this._logger = IgniterConsoleLogger.create({
+        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
+        context: {
+          processor: 'RequestProcessor',
+          component: 'Response'
+        },
+        showTimestamp: true,
+      })
+    }
+    return this._logger;
+  }
   /**
    * Creates a new instance of IgniterResponseProcessor.
    * Use this method to start building a new response.
-   * 
+   *
    * @template TContext - The type of the request context
    * @param store - Optional store adapter for streaming and revalidation
    * @param context - Optional context for scoped operations
    * @returns A new IgniterResponseProcessor instance
-   * 
+   *
    * @example
    * ```typescript
    * const response = IgniterResponseProcessor.init<MyContext>(store, context);
    * ```
    */
   static init<TContext = unknown>(
-    store?: IgniterStoreAdapter, 
+    store?: IgniterStoreAdapter,
     context?: TContext
   ): IgniterResponseProcessor<TContext, unknown> {
     const instance = new IgniterResponseProcessor<TContext, unknown>();
     instance._store = store;
     instance._context = context;
-    
+
     instance.logger.debug("ResponseProcessor initialized.", {
       has_store: !!store,
       has_context: !!context
@@ -158,7 +165,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
   /**
    * Creates a new instance with the same configuration but different data type.
    * Internal method used by other methods to preserve type safety.
-   * 
+   *
    * @template TNewData - The new data type
    * @returns A new typed instance
    * @private
@@ -175,16 +182,15 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
     newInstance._revalidateOptions = this._revalidateOptions;
     newInstance._store = this._store;
     newInstance._context = this._context;
-    newInstance.logger = this.logger;
     return newInstance
   }
 
   /**
    * Sets the HTTP status code for the response.
-   * 
+   *
    * @param code - HTTP status code (e.g., 200, 201, 400, etc.)
    * @returns Current instance for chaining
-   * 
+   *
    * @example
    * ```typescript
    * response.status(201).success(createdUser);
@@ -200,11 +206,11 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
   /**
    * Creates a Server-Sent Events stream response.
    * Enables real-time communication with the client.
-   * 
+   *
    * @template TStreamData - Type of the stream data
    * @param options - Stream configuration options
    * @returns New instance configured for streaming with typed data
-   * 
+   *
    * @example
    * ```typescript
    * response.stream<NotificationData>({
@@ -220,7 +226,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
     if (options.controllerKey && options.actionKey && !options.channelId) {
       options.channelId = `action::${options.controllerKey}.${options.actionKey}`;
     }
-    
+
     this.logger.info(`Configuring response as SSE stream.`, { channelId: options.channelId });
     const newInstance = this.withData<IgniterProcessorResponse<TStreamData, null>>();
     newInstance._isStream = true;
@@ -269,11 +275,11 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
   /**
    * Creates a success response with typed data.
    * Sets error to null and includes the provided data.
-   * 
+   *
    * @template TSuccessData - Type of the success response data
    * @param data - Data to include in the response
    * @returns New instance typed with the success data
-   * 
+   *
    * @example
    * ```typescript
    * const user = { id: 1, name: 'John' };
@@ -292,11 +298,11 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
   /**
    * Creates a 201 Created response with typed data.
    * Useful for responses after resource creation.
-   * 
+   *
    * @template TCreatedData - Type of the created resource data
    * @param data - Data representing the created resource
    * @returns New instance typed with the created data
-   * 
+   *
    * @example
    * ```typescript
    * const newUser = { id: 1, status: 'active' };
@@ -316,9 +322,9 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * Creates a No Content response.
    * Useful for successful operations that don't return data.
    * Uses status 200 to maintain consistent JSON response structure.
-   * 
+   *
    * @returns Current instance for chaining
-   * 
+   *
    * @example
    * ```typescript
    * response.noContent();
@@ -338,11 +344,11 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
 
   /**
    * Sets a header in the response.
-   * 
+   *
    * @param name - Header name
    * @param value - Header value
    * @returns Current instance for chaining
-   * 
+   *
    * @example
    * ```typescript
    * response.setHeader('Cache-Control', 'no-cache');
@@ -356,12 +362,12 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
 
   /**
    * Sets a cookie in the response.
-   * 
+   *
    * @param name - Cookie name
    * @param value - Cookie value
    * @param options - Optional cookie configuration
    * @returns Current instance for chaining
-   * 
+   *
    * @example
    * ```typescript
    * response.setCookie('session', token, {
@@ -381,18 +387,18 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
   /**
    * Builds a cookie string with the provided options.
    * Internal helper method for cookie serialization.
-   * 
+   *
    * @param name - Cookie name
    * @param value - Cookie value
    * @param options - Cookie options
    * @returns Serialized cookie string
-   * 
+   *
    * @private
    */
   private buildCookieString(name: string, value: string, options?: CookieOptions): string {
     let cookieName = name;
     let cookie = `${cookieName}=${encodeURIComponent(value)}`;
-    
+
     if (options) {
       if (options.maxAge !== undefined) cookie += `; Max-Age=${Math.floor(options.maxAge)}`;
       if (options.domain) cookie += `; Domain=${options.domain}`;
@@ -455,10 +461,10 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
 
   /**
    * Creates a 400 Bad Request response.
-   * 
+   *
    * @param message - Optional error message
    * @returns New instance typed with BadRequest error
-   * 
+   *
    * @example
    * ```typescript
    * response.badRequest('Invalid request parameters');
@@ -478,10 +484,10 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
 
   /**
    * Creates a 401 Unauthorized response.
-   * 
+   *
    * @param message - Optional error message
    * @returns New instance typed with Unauthorized error
-   * 
+   *
    * @example
    * ```typescript
    * response.unauthorized('Invalid credentials');
@@ -501,10 +507,10 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
 
   /**
    * Creates a 403 Forbidden response.
-   * 
+   *
    * @param message - Optional error message
    * @returns New instance typed with Forbidden error
-   * 
+   *
    * @example
    * ```typescript
    * response.forbidden('Access denied');
@@ -524,10 +530,10 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
 
   /**
    * Creates a 404 Not Found response.
-   * 
+   *
    * @param message - Optional error message
    * @returns New instance typed with NotFound error
-   * 
+   *
    * @example
    * ```typescript
    * response.notFound('User not found');
@@ -547,11 +553,11 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
 
   /**
    * Creates a redirect response.
-   * 
+   *
    * @param destination - URL to redirect to
    * @param type - Type of redirect ('replace' or 'push')
    * @returns Current instance for chaining
-   * 
+   *
    * @example
    * ```typescript
    * response.redirect('/dashboard', 'push');
@@ -576,11 +582,11 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
 
   /**
    * Creates a JSON response with typed data.
-   * 
+   *
    * @template TJsonData - Type of the JSON response data
    * @param data - Data to be serialized as JSON
    * @returns New instance typed with the JSON data
-   * 
+   *
    * @example
    * ```typescript
    * const result = { status: 'success', data: results };
@@ -599,7 +605,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
   /**
    * Handles cache revalidation by publishing to Redis channels.
    * Internal method called during response processing.
-   * 
+   *
    * @private
    */
   private async handleRevalidation(): Promise<void> {
@@ -607,7 +613,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
 
     const { queryKeys, data, scopes } = this._revalidateOptions;
     const keysArray = Array.isArray(queryKeys) ? queryKeys : [queryKeys];
-    
+
     // Resolve scope IDs if scopes function is provided
     let scopeIds: string[] | undefined;
     if (scopes && this._context) {
@@ -625,10 +631,10 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
       channel: 'revalidation',
       type: 'revalidate',
       scopes: scopeIds, // Use subscribers for scoped revalidation
-      data: { 
-        queryKeys: keysArray, 
-        data, 
-        timestamp: new Date().toISOString() 
+      data: {
+        queryKeys: keysArray,
+        data,
+        timestamp: new Date().toISOString()
       },
     });
 
@@ -638,12 +644,12 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
     });
   }
 
-  
+
 
   /**
    * Creates a Server-Sent Events stream.
    * Internal method for handling streaming responses.
-   * 
+   *
    * @private
    */
   private createStream(): Response {
@@ -749,9 +755,9 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
   /**
    * Builds and returns the final response object.
    * Combines all the configured options into a Web API Response.
-   * 
+   *
    * @returns Web API Response object
-   * 
+   *
    * @example
    * ```typescript
    * const finalResponse = response

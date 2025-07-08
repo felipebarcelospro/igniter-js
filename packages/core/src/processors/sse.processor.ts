@@ -89,14 +89,21 @@ export interface SSEStreamOptions {
  * Manages event channels, connections, and message distribution
  */
 export class SSEProcessor {
-  private static logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-    context: {
-      processor: 'RequestProcessor',
-      component: 'SSE'
-    },
-    showTimestamp: true,
-  })
+  private static _logger: IgniterLogger;
+
+  private static get logger(): IgniterLogger {
+    if (!this._logger) {
+      this._logger = IgniterConsoleLogger.create({
+        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
+        context: {
+          processor: 'RequestProcessor',
+          component: 'SSE'
+        },
+        showTimestamp: true,
+      });
+    }
+    return this._logger;
+  }
 
   /**
    * Map of registered channels and their metadata
@@ -240,7 +247,7 @@ export class SSEProcessor {
     const channels = channelsParam ? channelsParam.split(",") : [];
     const scopesParam = url.searchParams.get("scopes");
     const scopes = scopesParam ? scopesParam.split(",") : [];
-    
+
     this.logger.info(`New SSE connection request received.`, {
       requested_channels: channels,
       requested_scopes: scopes,
@@ -317,7 +324,7 @@ export class SSEProcessor {
             if (!channels.includes(event.channel)) {
               return;
             }
-            
+
             // Check if controller is still active before enqueueing
             if (controller.desiredSize === null) {
               // This indicates the client has disconnected. The 'cancel' method will handle cleanup.
@@ -335,7 +342,7 @@ export class SSEProcessor {
                 return; // 🚫 Não envia se o client não está na lista
               }
             }
-            
+
             const message = this.encodeSSEMessage({
               id: event.id || crypto.randomUUID(),
               event: event.type || "message",
@@ -346,7 +353,7 @@ export class SSEProcessor {
                 timestamp: new Date().toISOString(),
               })
             });
-            
+
             this.logger.debug(`Sending event to connection '${connectionId}'.`, {
               channel: event.channel,
               event_type: event.type,
@@ -355,7 +362,7 @@ export class SSEProcessor {
             controller.enqueue(message);
           } catch (error) {
             this.logger.warn(`Failed to send event to client on connection '${connectionId}'. The connection may have been closed.`, { error });
-            
+
             // Don't rethrow the error - we'll handle cleanup elsewhere
             // This prevents the error from bubbling up
           }
@@ -385,7 +392,7 @@ export class SSEProcessor {
               clearInterval(keepAliveTimer);
               return;
             }
-            
+
             // Send comment as keep-alive to prevent connection timeout
             this.logger.debug(`Sending keep-alive ping to connection '${connectionId}'.`);
             controller.enqueue(encoder.encode(": keepalive\n\n"));
@@ -484,18 +491,18 @@ export class SSEProcessor {
 
     // Create a copy of the connections to avoid concurrent modification issues
     const connectionsToNotify = [...connections];
-    
+
     // Send to all connections subscribed to this channel
     let sentCount = 0;
     const deadConnections: SSEConnectionHandler[] = [];
-    
+
     for (const connection of connectionsToNotify) {
       try {
         connection.handler(event);
         sentCount++;
       } catch (error) {
         this.logger.warn(`Error sending event to a client, it might have disconnected.`, { error });
-        
+
         // Check if error is related to closed controller
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (errorMessage.includes("closed") || errorMessage.includes("Invalid state")) {
@@ -504,7 +511,7 @@ export class SSEProcessor {
         }
       }
     }
-    
+
     // Clean up dead connections
     if (deadConnections.length > 0) {
       for (const deadConnection of deadConnections) {
@@ -544,16 +551,16 @@ export class SSEProcessor {
    */
   static closeAllConnections(): void {
     this.logger.info(`Closing all SSE connections and streams.`);
-    
+
     // Get connection counts before cleanup
-    const channelCounts = Array.from(this.connections.entries()).map(([channel, conns]) => 
+    const channelCounts = Array.from(this.connections.entries()).map(([channel, conns]) =>
       `${channel}: ${conns.size}`
     );
     this.logger.info(`Current connections before cleanup: ${channelCounts.join(', ')}`);
-    
+
     // Clear all connection handlers
     this.connections.clear();
-    
+
     // Close all active streams
     let closedCount = 0;
     this.activeStreams.forEach(stream => {
@@ -567,22 +574,22 @@ export class SSEProcessor {
         this.logger.error(`Error while closing an active SSE stream:`, { error });
       }
     });
-    
+
     this.logger.info(`Closed ${closedCount} active streams.`);
     this.activeStreams.clear();
   }
-  
+
   /**
    * Cleanup dead connections for all channels
    * This method can be called periodically to remove closed connections
    */
   static cleanupDeadConnections(): number {
     let totalRemoved = 0;
-    
+
     this.logger.debug("Starting periodic cleanup of dead SSE connections...");
     for (const [channel, connections] of this.connections.entries()) {
       const beforeCount = connections.size;
-      
+
       // Test each connection with a harmless ping event
       const deadConnections: SSEConnectionHandler[] = [];
       connections.forEach(connection => {
@@ -593,26 +600,26 @@ export class SSEProcessor {
             type: 'ping',
             data: { timestamp: new Date().toISOString() }
           };
-          
+
           // Try to send it - this will throw if the connection is dead
           connection.handler(pingEvent);
         } catch (error) {
           deadConnections.push(connection);
         }
       });
-      
+
       // Remove dead connections
       deadConnections.forEach(connection => {
         connections.delete(connection);
       });
-      
+
       const removed = beforeCount - connections.size;
       if (removed > 0) {
         this.logger.info(`Cleaned up ${removed} dead connection(s) from channel '${channel}'.`);
         totalRemoved += removed;
       }
     }
-    
+
     this.logger.debug(`Dead connection cleanup finished. Total removed: ${totalRemoved}.`);
     return totalRemoved;
   }

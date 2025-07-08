@@ -81,7 +81,7 @@ export type QueryActionCaller<
 
 export type RefetchFn = () => void;
 
-export type StreamSubscriberFn = (data: any) => void;
+export type RealtimeSubscriberFn = (data: any) => void;
 
 export type MutationActionCallerResult<
   TAction extends IgniterAction<
@@ -159,7 +159,7 @@ export type ClientActionCaller<
 > = TAction extends { method: "GET" }
   ? {
       useQuery: QueryActionCaller<TAction>;
-      useStream: StreamActionCaller<TAction>;
+      useRealtime: RealtimeActionCaller<TAction>;
       query: TAction["$Infer"]["$Caller"];
     }
   : {
@@ -202,18 +202,18 @@ export type IgniterContextType<
       | InferCacheKeysFromRouter<TRouter>
       | InferCacheKeysFromRouter<TRouter>[],
   ) => void;
-  subscribeToStream: (
+  subscribeToRealtime: (
     channelId: string,
-    callback: StreamSubscriberFn,
+    callback: RealtimeSubscriberFn,
   ) => () => void;
   listeners: Map<string, Set<RefetchFn>>;
-  streamSubscribers?: Map<string, Set<StreamSubscriberFn>>;
+  realtimeSubscribers?: Map<string, Set<RealtimeSubscriberFn>>;
 };
 
 /**
- * Options for stream hooks
+ * Options for realtime hooks
  */
-export interface StreamActionCallerOptions<
+export interface RealtimeActionCallerOptions<
   TAction extends IgniterAction<
     any,
     any,
@@ -274,9 +274,9 @@ export interface StreamActionCallerOptions<
 }
 
 /**
- * Result type for stream hooks
+ * Result type for realtime hooks
  */
-export interface StreamActionCallerResult<
+export interface RealtimeActionCallerResult<
   TAction extends IgniterAction<
     any,
     any,
@@ -322,9 +322,9 @@ export interface StreamActionCallerResult<
 }
 
 /**
- * Stream action caller type
+ * Realtime action caller type
  */
-export type StreamActionCaller<
+export type RealtimeActionCaller<
   TAction extends IgniterAction<
     any,
     any,

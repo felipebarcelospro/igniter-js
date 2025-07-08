@@ -1,6 +1,6 @@
 import { IgniterConsoleLogger } from "../services/logger.service";
 import type { ProcessedContext } from "./context-builder.processor";
-import { IgniterLogLevel } from "../types";
+import { IgniterLogLevel, type IgniterLogger } from "../types";
 
 /**
  * Telemetry span with tracking information
@@ -16,18 +16,25 @@ export interface TelemetrySpan {
  * Handles span creation, management, and metrics recording.
  */
 export class TelemetryManagerProcessor {
-  static logger = IgniterConsoleLogger.create({
-    level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-    context: {
-      processor: 'RequestProcessor',
-      component: 'Telemetry'
-    },
-    showTimestamp: true,
-  })
+  private static _logger: IgniterLogger;
+
+  private static get logger(): IgniterLogger {
+    if (!this._logger) {
+      this._logger = IgniterConsoleLogger.create({
+        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
+        context: {
+          processor: 'RequestProcessor',
+          component: 'Telemetry'
+        },
+        showTimestamp: true,
+      });
+    }
+    return this._logger;
+  }
 
   /**
    * Creates and starts a telemetry span for HTTP request tracking.
-   * 
+   *
    * @param request - The incoming HTTP request
    * @param context - The processed context
    * @param startTime - Request start timestamp
@@ -83,7 +90,7 @@ export class TelemetryManagerProcessor {
 
   /**
    * Finishes a telemetry span with success metrics.
-   * 
+   *
    * @param telemetrySpan - The telemetry span to finish
    * @param statusCode - HTTP status code
    */
@@ -117,7 +124,7 @@ export class TelemetryManagerProcessor {
             endpoint: request.path,
           }
         );
-        
+
         telemetry.increment("http.requests.total", 1, {
           method: request.method,
           status: this.getStatusCategory(statusCode),
@@ -133,7 +140,7 @@ export class TelemetryManagerProcessor {
 
   /**
    * Finishes a telemetry span with error information.
-   * 
+   *
    * @param telemetrySpan - The telemetry span to finish
    * @param statusCode - HTTP error status code
    * @param error - The error that occurred
@@ -170,7 +177,7 @@ export class TelemetryManagerProcessor {
             endpoint: request.path,
           }
         );
-        
+
         telemetry.increment("http.requests.total", 1, {
           method: request.method,
           status: this.getStatusCategory(statusCode),
@@ -186,7 +193,7 @@ export class TelemetryManagerProcessor {
 
   /**
    * Safely cleans up a telemetry span in case of failures.
-   * 
+   *
    * @param telemetrySpan - The telemetry span to cleanup
    * @param statusCode - HTTP status code
    * @param error - Optional error that occurred
@@ -205,11 +212,11 @@ export class TelemetryManagerProcessor {
 
       span.setTag("http.status_code", statusCode);
       span.setTag("http.response_time_ms", duration);
-      
+
       if (error) {
         span.setError(error);
       }
-      
+
       span.finish();
       this.logger.debug("Orphaned span has been finished.");
     } catch (cleanupError) {
@@ -220,7 +227,7 @@ export class TelemetryManagerProcessor {
 
   /**
    * Gets the status category for metrics grouping.
-   * 
+   *
    * @param statusCode - HTTP status code
    * @returns Status category string (2xx, 4xx, 5xx)
    */
@@ -230,4 +237,4 @@ export class TelemetryManagerProcessor {
     if (statusCode >= 500) return "5xx";
     return "other";
   }
-} 
+}
