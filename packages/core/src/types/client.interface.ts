@@ -338,5 +338,5 @@ export type RealtimeActionCaller<
     any
   >,
 > = (
-  options?: StreamActionCallerOptions<TAction>,
-) => StreamActionCallerResult<TAction>;
+  options?: RealtimeActionCallerOptions<TAction>,
+) => RealtimeActionCallerResult<TAction>;

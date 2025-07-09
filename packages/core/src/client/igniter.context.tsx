@@ -5,7 +5,7 @@ import { IgniterLogLevel, type IgniterRouter } from "../types";
 import type {
   IgniterContextType,
   RefetchFn,
-  StreamSubscriberFn,
+  RealtimeSubscriberFn,
 } from "../types/client.interface";
 
 import {
@@ -29,16 +29,11 @@ const IgniterContext = createContext<IgniterContextType<any> | undefined>(
 /**
  * Options for the Igniter Provider
  */
-export interface IgniterProviderOptions {
+export interface IgniterProviderOptions<TContext extends () => Promise<any> | any> {
   /**
-   * Enable SSE connection for streams and revalidation
+   * Enable Realtime(SSE) connection for streams and revalidation
    */
-  enableSSE?: boolean;
-
-  /**
-   * URL for the central SSE endpoint
-   */
-  sseEndpoint?: string;
+  enableRealtime?: boolean;
 
   /**
    * Automatically reconnect on connection loss
@@ -66,9 +61,14 @@ export interface IgniterProviderOptions {
   debug?: boolean;
 
   /**
+   * Get the context for the IgniterProvider
+   */
+  getContext?: TContext;
+
+  /**
    * The context to be passed to the IgniterProvider
    */
-  getScopeIds?: () => Promise<string[]> | string[];
+  getScopes?: (ctx: Awaited<ReturnType<TContext>>) => Promise<string[]> | string[];
 }
 
 /**
@@ -108,36 +108,36 @@ export interface IgniterProviderOptions {
  *
  * @returns {JSX.Element} Provider component wrapping its children with Igniter context
  */
-export function IgniterProvider({
+export function IgniterProvider<TContext extends () => Promise<any> | any>({
   children,
-  options = {},
-}: PropsWithChildren<{ options?: IgniterProviderOptions }>) {
+  getContext,
+  getScopes,
+  debug,
+  enableRealtime = true,
+  autoReconnect = true,
+  maxReconnectAttempts = 5,
+  reconnectDelay = 1000,
+}: PropsWithChildren & IgniterProviderOptions<TContext>) {
   // Maps para armazenar os listeners de queries e streams
   const [listeners] = useState(() => new Map<string, Set<RefetchFn>>());
   const [streamSubscribers] = useState(
-    () => new Map<string, Set<StreamSubscriberFn>>(),
+    () => new Map<string, Set<RealtimeSubscriberFn>>(),
   );
   const sseConnectionRef = useRef<EventSource | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const sseEndpoint = '/api/v1/sse/events'
+
   const logger = useMemo(() => {
     return IgniterConsoleLogger.create({
-      level: options.debug ? IgniterLogLevel.DEBUG : IgniterLogLevel.INFO,
+      level: debug ? IgniterLogLevel.DEBUG : IgniterLogLevel.INFO,
       context: {
         provider: 'IgniterProvider',
         package: 'core'
       }
     });
   }, []);
-
-  const {
-    enableSSE = true,
-    sseEndpoint = "/api/v1/sse/events",
-    autoReconnect = true,
-    maxReconnectAttempts = 5,
-    reconnectDelay = 1000,
-  } = options;
 
   // Registra uma função de refetch para uma queryKey específica
   const register = useCallback(
@@ -259,8 +259,8 @@ export function IgniterProvider({
   }, []);
 
   // Subscribe to a specific stream channel
-  const subscribeToStream = useCallback(
-    (channelId: string, callback: StreamSubscriberFn) => {
+  const subscribeToRealtime = useCallback(
+    (channelId: string, callback: RealtimeSubscriberFn) => {
       logger.debug(`Subscribing to stream channel: ${channelId}`);
 
       // Add the subscriber to the channel
@@ -346,7 +346,7 @@ export function IgniterProvider({
 
   // Store current state of streamSubscribers for comparison
   const streamSubscribersRef = useRef(
-    new Map<string, Set<StreamSubscriberFn>>(),
+    new Map<string, Set<RealtimeSubscriberFn>>(),
   );
 
   // Function to get channels that need subscription
@@ -380,7 +380,7 @@ export function IgniterProvider({
       );
 
       // Clone the current subscribers map
-      const newMap = new Map<string, Set<StreamSubscriberFn>>();
+      const newMap = new Map<string, Set<RealtimeSubscriberFn>>();
       streamSubscribers.forEach((subscribers, channel) => {
         newMap.set(channel, new Set(subscribers));
       });
@@ -398,7 +398,7 @@ export function IgniterProvider({
 
   // Connect to SSE endpoint
   const connectSSE = useCallback(async () => {
-    if (!enableSSE) {
+    if (!enableRealtime) {
       logger.debug("SSE is disabled, skipping connection");
       return;
     }
@@ -410,7 +410,8 @@ export function IgniterProvider({
     }
 
     try {
-      const scopeIds = await options.getScopeIds?.();
+      const context = await getContext?.();
+      const scopeIds = await getScopes?.(context);
 
       // Get channels to subscribe to
       const channelsToSubscribe = getChannelsToSubscribe();
@@ -492,7 +493,7 @@ export function IgniterProvider({
       eventSource.onmessage = (event) => {
         try {
           logger.debug(`Received generic SSE event: ${event.data}`);
-          
+
           // ✅ ADICIONAR ESTA LÓGICA:
           const eventData = JSON.parse(event.data);
 
@@ -500,14 +501,14 @@ export function IgniterProvider({
             event,
             eventData,
           });
-          
+
           // Check if this is a channel-specific message
           if (eventData.channel && streamSubscribers.has(eventData.channel)) {
             const subscribers = streamSubscribers.get(eventData.channel)!;
             logger.debug(
               `Dispatching generic event to ${subscribers.size} subscribers for channel ${eventData.channel}`,
             );
-            
+
             subscribers.forEach((callback) => {
               try {
                 callback(eventData.data || eventData); // Pass the data payload
@@ -541,7 +542,7 @@ export function IgniterProvider({
       return () => {};
     }
   }, [
-    enableSSE,
+    enableRealtime,
     sseEndpoint,
     getChannelsToSubscribe,
     invalidate,
@@ -562,7 +563,7 @@ export function IgniterProvider({
 
     // Handle visibility change (reconnect when tab becomes visible)
     const handleVisibilityChange = () => {
-      if (!document.hidden && !sseConnectionRef.current && enableSSE) {
+      if (!document.hidden && !sseConnectionRef.current && enableRealtime) {
         logger.debug("Page became visible, reconnecting SSE");
 
         // Add small delay to prevent rapid reconnections
@@ -586,7 +587,7 @@ export function IgniterProvider({
         pendingChannelChangesRef.current.timeoutId = null;
       }
     };
-  }, [connectSSE, enableSSE]);
+  }, [connectSSE, enableRealtime]);
 
   // Memoizando o valor do contexto para evitar re-renders desnecessários
   const contextValue = useMemo(
@@ -594,11 +595,11 @@ export function IgniterProvider({
       register,
       unregister,
       invalidate,
-      subscribeToStream,
+      subscribeToRealtime,
       listeners,
       streamSubscribers,
     }),
-    [register, unregister, invalidate, subscribeToStream],
+    [register, unregister, invalidate, subscribeToRealtime],
   );
 
   useEffect(() => {

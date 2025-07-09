@@ -1,7 +1,7 @@
 {
   "extends": "@igniter-js/typescript-config/base.json",
   "compilerOptions": {
-    "baseUrl": ".",
+    "baseUrl": "",
     "outDir": "dist",
     "rootDir": "src",
     "module": "CommonJS",
@@ -11,7 +11,6 @@
     "types": ["node"],
     "paths": {
       "@/*": ["./src/*"],
-      "@igniter-js/core": ["../core/src"],
     }
   },
   "include": [
@@ -26,4 +25,4 @@
     "**/tests/**",
     "**/__tests__/**"
   ]
-} 
+}

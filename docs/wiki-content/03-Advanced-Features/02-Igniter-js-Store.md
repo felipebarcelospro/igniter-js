@@ -46,7 +46,7 @@ export const store = createRedisStoreAdapter({
   client: redis,
   // Optional: A global prefix for all keys stored by this adapter.
   // Useful for preventing key collisions in a shared Redis instance.
-  keyPrefix: 'igniter-app:', 
+  keyPrefix: 'igniter-app:',
 });
 ```
 
@@ -100,15 +100,15 @@ getProfile: igniter.query({
     const cacheKey = `user-profile:${id}`;
 
     // 1. First, try to get the user from the cache
-    const cachedUser = await context.store.get<User>(cacheKey);
+    const cachedUser = await igniter.store.get<User>(cacheKey);
 
     if (cachedUser) {
-      context.logger.info(`Cache HIT for key: ${cacheKey}`);
+      igniter.logger.info(`Cache HIT for key: ${cacheKey}`);
       return response.success(cachedUser);
     }
 
-    context.logger.info(`Cache MISS for key: ${cacheKey}`);
-    
+    igniter.logger.info(`Cache MISS for key: ${cacheKey}`);
+
     // 2. If not in cache, fetch from the database
     const user = await context.database.user.findUnique({ where: { id } });
 
@@ -118,7 +118,7 @@ getProfile: igniter.query({
 
     // 3. Store the result in the cache for next time.
     // Set a TTL of 1 hour (3600 seconds).
-    await context.store.set(cacheKey, user, { ttl: 3600 });
+    await igniter.store.set(cacheKey, user, { ttl: 3600 });
 
     return response.success(user);
   },
@@ -159,9 +159,9 @@ updateUserRole: igniter.mutation({
     const { role } = request.body;
 
     await context.database.user.update({ where: { id }, data: { role } });
-    
+
     // 1. Publish an event to the 'user-events' channel
-    await context.store.publish('user-events', {
+    await igniter.store.publish('user-events', {
       type: 'ROLE_UPDATED',
       payload: { userId: id },
     });
@@ -176,11 +176,11 @@ A listener, initialized when the application starts, subscribes to the `user-eve
 
 ```typescript
 // src/services/event-listeners.ts
-import { store } from './store';
+import { igniter } from '@/igniter';
 
 export function initializeEventListeners() {
   // 2. Subscribe to the channel
-  store.subscribe('user-events', (message) => {
+  igniter.store.subscribe('user-events', (message) => {
     // This handler will run for every message published to 'user-events'
     console.log('Received user event:', message);
 
@@ -188,11 +188,12 @@ export function initializeEventListeners() {
       const { userId } = message.payload;
       const cacheKey = `user-profile:${userId}`;
       console.log(`Role updated for user ${userId}, clearing cache key: ${cacheKey}`);
-      
+
       // 3. React to the event
       store.del(cacheKey);
     }
   });
+
   console.log("User event listeners initialized.");
 }
 

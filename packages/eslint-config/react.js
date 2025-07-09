@@ -50,7 +50,7 @@ module.exports = {
     'jsx-a11y/role-has-required-aria-props': 'warn',
     'jsx-a11y/role-supports-aria-props': 'warn',
     'react/no-unknown-property': 'error',
-    '@typescript-eslint/no-require-imports': 'warn'
+    '@typescript-eslint/no-require-imports': 'off'
   },
   settings: {
     react: {

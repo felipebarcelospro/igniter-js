@@ -33,6 +33,7 @@ export const api = createIgniterClient<AppRouter>({
       // Server-side: Use the full router for direct function calls.
       return require('./igniter.router').AppRouter;
     }
+
     // Client-side: Use the lightweight schema for fetching.
     return require('./igniter.schema').AppRouterSchema;
   },

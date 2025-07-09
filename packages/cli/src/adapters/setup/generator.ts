@@ -4,9 +4,9 @@ import { execa } from 'execa'
 import ora from 'ora'
 import chalk from 'chalk'
 import type { ProjectSetupConfig } from './types'
-import { 
-  getFeatureDependencies, 
-  DATABASE_CONFIGS 
+import {
+  getFeatureDependencies,
+  DATABASE_CONFIGS
 } from './features'
 import { generateAllTemplates } from './templates'
 import { createChildLogger } from '../logger'
@@ -19,11 +19,13 @@ const logger = createChildLogger({ component: 'project-generator' })
 export class ProjectGenerator {
   private config: ProjectSetupConfig
   private targetDir: string
+  private isExistingProject: boolean
   private spinner = ora()
 
-  constructor(config: ProjectSetupConfig, targetDir: string) {
+  constructor(config: ProjectSetupConfig, targetDir: string, isExistingProject: boolean) {
     this.config = config
     this.targetDir = path.resolve(targetDir)
+    this.isExistingProject = isExistingProject
   }
 
   /**
@@ -31,26 +33,32 @@ export class ProjectGenerator {
    */
   async generate(): Promise<void> {
     try {
-      logger.info('Starting project generation', { 
+      logger.info('Starting project generation', {
         project: this.config.projectName,
-        targetDir: this.targetDir 
+        targetDir: this.targetDir,
+        isExisting: this.isExistingProject,
       })
 
-      await this.createProjectStructure()
+      if (!this.isExistingProject) {
+        await this.createProjectStructure()
+      } else {
+        this.spinner.succeed(chalk.dim('✓ Existing project detected, skipping structure creation.'))
+      }
+
       await this.generateFiles()
-      
+
       if (this.config.installDependencies) {
         await this.installDependencies()
       }
-      
-      if (this.config.initGit) {
+
+      if (this.config.initGit && !this.isExistingProject) {
         await this.initializeGit()
       }
 
       await this.runPostSetupTasks()
-      
+
       this.showSuccessMessage()
-      
+
     } catch (error) {
       this.spinner.fail(chalk.red('Project generation failed'))
       logger.error('Project generation failed', { error })
@@ -58,16 +66,40 @@ export class ProjectGenerator {
     }
   }
 
+  private async downloadTemplate(): Promise<void> {
+    const { framework } = this.config
+    const templateUrl = `https://github.com/felipebarcelospro/igniter-js.git`
+    const templateDir = path.join(this.targetDir, 'apps')
+    const branch = 'release/0.2.0-alpha.0'
+
+    this.spinner.start(`Downloading template ${framework} from branch ${branch}...`)
+
+    try {
+      await fs.mkdir(templateDir, { recursive: true })
+      await execa('git', ['clone', '--branch', branch, '--single-branch', templateUrl, templateDir])
+    } catch (error) {
+      this.spinner.fail(chalk.red('Template download failed'))
+      logger.error('Template download failed', { error })
+      throw error
+    }
+
+    this.spinner.succeed(chalk.dim('✓ Template downloaded'))
+  }
+
   /**
    * Create project directory structure based on README.md structure
    */
   private async createProjectStructure(): Promise<void> {
     this.spinner.start('Creating project structure...')
-    
+
     try {
+      if (['nextjs', 'vite', 'tanstack-start', 'express', 'deno', 'bun', 'bun-react'].includes(this.config.framework)) {
+        await this.downloadTemplate()
+      }
+
       // Ensure target directory exists
       await fs.mkdir(this.targetDir, { recursive: true })
-      
+
       // Create subdirectories following the README.md structure
       const dirs = [
         'src',
@@ -99,7 +131,7 @@ export class ProjectGenerator {
 
       this.spinner.succeed(chalk.green('✓ Project structure created'))
       logger.info('Project structure created successfully')
-      
+
     } catch (error) {
       this.spinner.fail(chalk.red('✗ Failed to create project structure'))
       throw error
@@ -111,64 +143,129 @@ export class ProjectGenerator {
    */
   private async generateFiles(): Promise<void> {
     this.spinner.start('Generating project files...')
-    
+
     try {
-      // Get dependencies
       const featureDeps = getFeatureDependencies(
-        Object.entries(this.config.features).filter(([_, enabled]) => enabled).map(([key, _]) => key)
+        Object.entries(this.config.features)
+          .filter(([_, enabled]) => enabled)
+          .map(([key]) => key),
       )
-      
       const dbConfig = DATABASE_CONFIGS[this.config.database.provider]
-      const allDependencies = [
-        '@igniter-js/core@*',
-        'zod@3.25.48',
-        ...featureDeps.dependencies.map(dep => `${dep.name}@${dep.version}`),
-        ...dbConfig.dependencies.map(dep => `${dep.name}@${dep.version}`)
-      ]
-      
-      const allDevDependencies = [
-        'typescript@^5.6.3',
-        '@types/node@^22.9.0',
-        'tsx@^4.7.0',
-        ...featureDeps.devDependencies.map(dep => `${dep.name}@${dep.version}`),
-        ...(dbConfig.devDependencies || []).map(dep => `${dep.name}@${dep.version}`)
+
+      const coreDependencies = [
+        { name: '@igniter-js/core', version: '*' },
+        { name: 'zod', version: '3.25.48' },
       ]
 
-      // Generate templates
-      const templates = generateAllTemplates(this.config, allDependencies, allDevDependencies)
-      
-      // Write files
-      let writtenCount = 0
-      for (const template of templates) {
-        const filePath = path.join(this.targetDir, template.path)
-        const dir = path.dirname(filePath)
-        
-        // Ensure directory exists
-        await fs.mkdir(dir, { recursive: true })
-        
-        // Write file
-        await fs.writeFile(filePath, template.content, 'utf8')
-        
-        // Make executable if needed
-        if (template.executable) {
-          await fs.chmod(filePath, '755')
-        }
-        
-        writtenCount++
-        this.spinner.text = `Generating files... (${writtenCount}/${templates.length})`
+      const coreDevDependencies = [
+        { name: 'typescript', version: '^5.6.3' },
+        { name: '@types/node', version: '^22.9.0' },
+        { name: 'tsx', version: '^4.7.0' },
+      ]
+
+      // We only need the dependencies for updating an existing package.json
+      if (this.isExistingProject) {
+        const deps = [...coreDependencies, ...featureDeps.dependencies, ...dbConfig.dependencies]
+        const devDeps = [...coreDevDependencies, ...(featureDeps.devDependencies || []), ...(dbConfig.devDependencies || [])]
+        await this.updatePackageJson(deps, devDeps)
       }
 
-      // Generate Prisma schema if using Prisma
+      // For new projects, dependencies are included in the template
+      const allTemplates = generateAllTemplates(
+        this.config,
+        this.isExistingProject,
+        [...coreDependencies, ...featureDeps.dependencies, ...dbConfig.dependencies].map(
+          d => `${d.name}@${d.version}`,
+        ),
+        [
+          ...coreDevDependencies,
+          ...(featureDeps.devDependencies || []),
+          ...(dbConfig.devDependencies || []),
+        ].map(d => `${d.name}@${d.version}`),
+      )
+
+      let writtenCount = 0
+      for (const template of allTemplates) {
+        const filePath = path.join(this.targetDir, template.path)
+
+        // For existing projects, be careful about overwriting files
+        if (this.isExistingProject) {
+          if (template.path === 'package.json') continue // Handled by updatePackageJson
+
+          const fileExists = await fs.stat(filePath).catch(() => null)
+          if (fileExists && ['.gitignore', 'README.md', 'tsconfig.json'].includes(path.basename(filePath))) {
+            this.spinner.info(chalk.dim(`Skipping existing file: ${template.path}`))
+            continue
+          }
+        }
+
+        writtenCount++
+        this.spinner.text = `Generating files... (${writtenCount}/${allTemplates.length})`
+      }
+
       if (this.config.database.provider !== 'none') {
         await this.generatePrismaSchema()
       }
 
-      this.spinner.succeed(chalk.green(`✓ Generated ${templates.length} files`))
-      logger.info('Project files generated successfully', { fileCount: templates.length })
-      
+      this.spinner.succeed(chalk.green(`✓ Generated ${writtenCount} files`))
+      logger.info('Project files generated successfully', { fileCount: writtenCount })
     } catch (error) {
       this.spinner.fail(chalk.red('✗ Failed to generate files'))
       throw error
+    }
+  }
+
+  /**
+   * Updates an existing package.json file with new dependencies and scripts.
+   */
+  private async updatePackageJson(
+    dependencies: { name: string; version: string }[],
+    devDependencies: { name: string; version: string }[],
+  ): Promise<void> {
+    const pkgJsonPath = path.join(this.targetDir, 'package.json')
+    try {
+      const pkgJsonContent = await fs.readFile(pkgJsonPath, 'utf-8')
+      const pkgJson = JSON.parse(pkgJsonContent)
+
+      this.spinner.text = 'Updating package.json...'
+
+      // Add dependencies
+      pkgJson.dependencies = pkgJson.dependencies || {}
+      for (const dep of dependencies) {
+        if (!pkgJson.dependencies[dep.name]) {
+          pkgJson.dependencies[dep.name] = dep.version
+        }
+      }
+
+      // Add dev dependencies
+      pkgJson.devDependencies = pkgJson.devDependencies || {}
+      for (const dep of devDependencies) {
+        if (!pkgJson.devDependencies[dep.name]) {
+          pkgJson.devDependencies[dep.name] = dep.version
+        }
+      }
+
+      // Add database scripts if needed, without overwriting existing ones
+      if (this.config.database.provider !== 'none') {
+        pkgJson.scripts = pkgJson.scripts || {}
+        const newScripts = {
+          'db:generate': 'prisma generate',
+          'db:push': 'prisma db push',
+          'db:studio': 'prisma studio',
+          'db:migrate': 'prisma migrate dev',
+        }
+        for (const [name, command] of Object.entries(newScripts)) {
+          if (!pkgJson.scripts[name]) {
+            pkgJson.scripts[name] = command
+          }
+        }
+      }
+
+      await fs.writeFile(pkgJsonPath, JSON.stringify(pkgJson, null, 2))
+      this.spinner.succeed(chalk.green('✓ package.json updated'))
+    } catch (error) {
+      this.spinner.warn(chalk.yellow('Could not update package.json. Please add dependencies manually.'))
+      logger.warn('Failed to update package.json', { error })
     }
   }
 
@@ -177,10 +274,10 @@ export class ProjectGenerator {
    */
   private async generatePrismaSchema(): Promise<void> {
     const { provider } = this.config.database
-    
+
     let datasourceUrl = 'env("DATABASE_URL")'
     let providerName = provider === 'postgresql' ? 'postgresql' : provider === 'mysql' ? 'mysql' : 'sqlite'
-    
+
     const schema = `// This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
@@ -195,6 +292,7 @@ datasource db {
 `
 
     const schemaPath = path.join(this.targetDir, 'prisma', 'schema.prisma')
+    await fs.mkdir(path.dirname(schemaPath), { recursive: true })
     await fs.writeFile(schemaPath, schema, 'utf8')
   }
 
@@ -206,14 +304,14 @@ datasource db {
 
     try {
       const { command, args } = this.getInstallCommand()
-      
+
       await execa(command, args, {
         cwd: this.targetDir,
         stdio: 'pipe'
       })
 
       this.spinner.succeed(chalk.green('✓ Dependencies installed'))
-      
+
     } catch (error) {
       this.spinner.fail(chalk.red('✗ Failed to install dependencies'))
       throw error
@@ -259,7 +357,7 @@ datasource db {
       })
 
       this.spinner.succeed(chalk.green('✓ Git repository initialized'))
-      
+
     } catch (error) {
       this.spinner.fail(chalk.red('✗ Failed to initialize Git repository'))
       logger.warn('Git initialization failed', { error })
@@ -275,14 +373,14 @@ datasource db {
 
       try {
         const { command, args } = this.getRunCommand('db:generate')
-        
+
         await execa(command, args, {
           cwd: this.targetDir,
           stdio: 'pipe'
         })
 
         this.spinner.succeed(chalk.green('✓ Prisma client generated'))
-        
+
       } catch (error) {
         this.spinner.fail(chalk.red('✗ Failed to generate Prisma client'))
         logger.warn('Prisma client generation failed', { error })
@@ -311,35 +409,46 @@ datasource db {
    */
   private showSuccessMessage(): void {
     console.log()
-    console.log(chalk.green('✓ Success! Your Igniter.js project is ready!'))
+    if (this.isExistingProject) {
+      console.log(chalk.green('✓ Success! Igniter.js has been added to your project!'))
+    } else {
+      console.log(chalk.green('✓ Success! Your Igniter.js project is ready!'))
+    }
     console.log()
-    
+
     console.log(chalk.bold('Next steps:'))
-    console.log(`  ${chalk.cyan('cd')} ${this.config.projectName}`)
-    
+    if (!this.isExistingProject) {
+      console.log(`  ${chalk.cyan('cd')} ${this.config.projectName}`)
+    }
+
     if (!this.config.installDependencies) {
       console.log(`  ${chalk.cyan(this.config.packageManager)} install`)
     }
-    
+
     if (this.config.dockerCompose) {
       console.log(`  ${chalk.cyan('docker-compose')} up -d`)
     }
-    
+
     if (this.config.database.provider !== 'none') {
       console.log(`  ${chalk.cyan(this.config.packageManager)} run db:push`)
     }
-    
+
     console.log(`  ${chalk.cyan(this.config.packageManager)} run dev`)
     console.log()
-    
+
     console.log(chalk.bold('Helpful commands:'))
     console.log(`  ${chalk.dim('Start development:')} ${chalk.cyan(`${this.config.packageManager} run dev`)}`)
     console.log(`  ${chalk.dim('Build for production:')} ${chalk.cyan(`${this.config.packageManager} run build`)}`)
-    
+
     if (this.config.database.provider !== 'none') {
       console.log(`  ${chalk.dim('Database operations:')} ${chalk.cyan(`${this.config.packageManager} run db:studio`)}`)
     }
-    
+
+    if (this.isExistingProject) {
+      console.log()
+      console.log(chalk.yellow('Remember to integrate the Igniter router into your existing server setup!'))
+    }
+
     console.log()
     console.log(chalk.dim('Happy coding!'))
   }
@@ -348,7 +457,11 @@ datasource db {
 /**
  * Generate project with given configuration
  */
-export async function generateProject(config: ProjectSetupConfig, targetDir: string): Promise<void> {
-  const generator = new ProjectGenerator(config, targetDir)
+export async function generateProject(
+  config: ProjectSetupConfig,
+  targetDir: string,
+  isExistingProject: boolean,
+): Promise<void> {
+  const generator = new ProjectGenerator(config, targetDir, isExistingProject)
   await generator.generate()
-} 
+}

@@ -113,7 +113,6 @@ In your `IgniterProvider`, you must define the scopes for the current client usi
 
 ```tsx
 // app/providers.tsx
-'use client';
 import { IgniterProvider } from '@igniter-js/core/client';
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -121,13 +120,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <IgniterProvider
       // ... other props
       // Define the scopes for this connection
-      getScopes={(ctx) => {
+      getScopesIds={() => {
+        'use server'
         // ctx is the client context (e.g., from useSession())
-        if (!ctx.user) return [];
-        
+        const session = getSession()
+
         return [
-          `user:${ctx.user.id}`, // Scope for this specific user
-          ...ctx.user.roles.map(role => `role:${role}`) // Scopes for each of the user's roles
+          `user:${session.user.id}`, // Scope for this specific user
+          ...session.user.roles.map(role => `role:${role}`) // Scopes for each of the user's roles
         ];
       }}
     >

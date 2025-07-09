@@ -1,10 +1,10 @@
-import type { 
-  FeatureDefinition, 
-  PackageDependency, 
-  TemplateFile, 
-  DockerService, 
+import type {
+  FeatureDefinition,
+  PackageDependency,
+  TemplateFile,
+  DockerService,
   EnvVariable,
-  DatabaseProvider 
+  DatabaseProvider
 } from './types'
 
 /**
@@ -17,7 +17,7 @@ export const IGNITER_FEATURES: Record<string, FeatureDefinition> = {
     name: 'Redis Store',
     description: 'Caching, sessions, and pub/sub messaging',
     dependencies: [
-      { name: '@igniter-js/adapter-redis', version: '*' },
+      { name: '@igniter-js/adapter-redis', version: 'alpha' },
       { name: 'ioredis', version: '^5.6.1' }
     ],
     devDependencies: [
@@ -46,9 +46,9 @@ export const IGNITER_FEATURES: Record<string, FeatureDefinition> = {
     name: 'BullMQ Jobs',
     description: 'Background task processing and job queues',
     dependencies: [
-      { name: '@igniter-js/adapter-redis', version: '*' },
-      { name: '@igniter-js/adapter-bullmq', version: '*' },
-      { name: 'bullmq', version: '^5.0.0' },
+      { name: '@igniter-js/adapter-redis', version: 'alpha' },
+      { name: '@igniter-js/adapter-bullmq', version: 'alpha' },
+      { name: 'bullmq', version: '^4.0.0' },
       { name: 'ioredis', version: '^5.6.1' }
     ],
     devDependencies: [
@@ -76,7 +76,7 @@ export const IGNITER_FEATURES: Record<string, FeatureDefinition> = {
     name: 'MCP Server',
     description: 'Easy expose your API as a MCP server for AI assistants like Cursor, Claude, etc.',
     dependencies: [
-      { name: '@igniter-js/adapter-mcp', version: '*' },
+      { name: '@igniter-js/adapter-mcp', version: 'alpha' },
       { name: '@vercel/mcp-adapter', version: '^0.2.0' },
       { name: '@modelcontextprotocol/sdk', version: '^1.10.2' },
       { name: 'ioredis', version: '^5.6.1' }
@@ -109,7 +109,7 @@ export const IGNITER_FEATURES: Record<string, FeatureDefinition> = {
     name: 'Enhanced Logging',
     description: 'Advanced console logging with structured output',
     dependencies: [
-      { name: '@igniter-js/core', version: '*' }
+      { name: '@igniter-js/core', version: 'alpha' }
     ],
     envVars: [
       { key: 'IGNITER_LOG_LEVEL', value: 'info', description: 'Logging level (debug, info, warn, error)' },
@@ -121,7 +121,7 @@ export const IGNITER_FEATURES: Record<string, FeatureDefinition> = {
     name: 'Telemetry',
     description: 'Telemetry for tracking requests and errors',
     dependencies: [
-      { name: '@igniter-js/core', version: '*' }
+      { name: '@igniter-js/core', version: 'alpha' }
     ],
     envVars: [
       { key: 'IGNITER_TELEMETRY_ENABLE_TRACING', value: 'true', description: 'Enable telemetry tracing' },
@@ -250,7 +250,7 @@ export function getFeatureDependencies(enabledFeatures: string[]): {
  * Get Docker services for enabled features and database
  */
 export function getDockerServices(
-  enabledFeatures: string[], 
+  enabledFeatures: string[],
   databaseProvider: DatabaseProvider
 ): DockerService[] {
   const services: DockerService[] = []
@@ -281,7 +281,7 @@ export function getDockerServices(
  * Get environment variables for enabled features and database
  */
 export function getEnvironmentVariables(
-  enabledFeatures: string[], 
+  enabledFeatures: string[],
   databaseProvider: DatabaseProvider,
   projectName: string
 ): EnvVariable[] {
@@ -303,7 +303,7 @@ export function getEnvironmentVariables(
       ...envVar,
       value: envVar.value
     }))
-    
+
     envVars.push(...dbEnvVars)
   }
 
@@ -313,4 +313,4 @@ export function getEnvironmentVariables(
   )
 
   return uniqueEnvVars
-} 
+}

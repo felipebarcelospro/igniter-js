@@ -109,41 +109,26 @@ A function that receives the client context (from `getContext`) and returns an a
 
 ```tsx
 // app/providers.tsx
-'use client';
-
 import { IgniterProvider } from '@igniter-js/core/client';
-import { useUserSession } from '@/hooks/use-user-session'; // Your custom hook to get user data
-
-// Define the shape of our client context
-interface ClientContext {
-  user: {
-    id: string;
-    roles: string[];
-  } | null;
-}
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  // Assume this hook provides the current user's session data
-  const { user } = useUserSession();
-
   return (
     <IgniterProvider
-      // 1. Provide the current user's data to the client context.
-      getContext={(): ClientContext => ({
-        user,
-      })}
-      
       // 2. Use the context to determine which scopes to subscribe to.
-      getScopes={(ctx: ClientContext) => {
-        if (!ctx.user) {
+      getScopesIds={() => {
+        'use server
+        '
+        const session = await getSession()
+
+        if (!session) {
           // If no user is logged in, subscribe to no specific scopes.
           return [];
         }
-        
+
         // Subscribe the client to a scope for their user ID and for each of their roles.
         return [
-          `user:${ctx.user.id}`,
-          ...ctx.user.roles.map(role => `role:${role}`)
+          `user:${session.user.id}`,
+          ...session.user.roles.map(role => `role:${role}`)
         ];
       }}
     >

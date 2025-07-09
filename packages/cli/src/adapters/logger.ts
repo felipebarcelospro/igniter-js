@@ -1,5 +1,4 @@
-import { IgniterConsoleLogger, createConsoleLogger } from '@igniter-js/core';
-import { IgniterLogLevel } from '@igniter-js/core';
+import { IgniterLogLevel, createConsoleLogger } from '@igniter-js/core';
 
 /**
  * Get the log level from environment variables
@@ -9,12 +8,12 @@ function getLogLevel(): IgniterLogLevel {
   if (process.env.DEBUG === 'true') {
     return IgniterLogLevel.DEBUG;
   }
-  
+
   const envLevel = process.env.LOG_LEVEL?.toUpperCase();
   if (envLevel && envLevel in IgniterLogLevel) {
     return IgniterLogLevel[envLevel as keyof typeof IgniterLogLevel];
   }
-  
+
   return IgniterLogLevel.INFO;
 }
 
@@ -47,7 +46,7 @@ function isInteractiveMode(): boolean {
  * Uses the ConsoleLogger adapter with CLI-specific configuration
  * Automatically disables spinners in concurrent/interactive mode
  */
-import { SpinnerManager, createDetachedSpinner } from '../lib/spinner';
+import { SpinnerManager } from '../lib/spinner';
 
 export const logger = createConsoleLogger({
   level: getLogLevel(),
@@ -79,11 +78,14 @@ export function createChildLogger(
   options: { level?: IgniterLogLevel; colorize?: boolean } = {}
 ) {
   const childLogger = logger.child(context);
-  
+
+  // Ensure the child logger also has access to the spinner factory
+  (childLogger as any).spinner = (text: string, id?: string) => cliSpinnerManager.createSpinner(text, id);
+
   if (options.level) {
     childLogger?.setLevel?.(options.level);
   }
-  
+
   return childLogger;
 }
 
@@ -103,10 +105,10 @@ export function formatError(error: unknown): Record<string, unknown> {
       ...(error as any).syscall ? { syscall: (error as any).syscall } : {},
     };
   }
-  
+
   if (typeof error === 'string') {
     return { message: error };
   }
-  
+
   return { error };
-} 
+}

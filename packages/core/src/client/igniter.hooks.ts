@@ -127,7 +127,7 @@ export const createUseQuery = <
 
           const errorResponse = { data: null, error: error as TAction["$Infer"]["$Output"]["error"] };
           setResponse(errorResponse);
-          optionsRef.current?.onRequest?.(errorResponse);
+          optionsRef.current?.onRequest?.(errorResponse as TAction["$Infer"]["$Output"]);
 
         } finally {
           setLoading(false);
@@ -264,7 +264,7 @@ export const createUseMutation = <
       } catch (error) {
         const errorResponse = { data: null, error: error as TAction["$Infer"]["$Output"]["error"] };
         setResponse(errorResponse);
-        optionsRef.current?.onRequest?.(errorResponse);
+        optionsRef.current?.onRequest?.(errorResponse as TAction["$Infer"]["$Output"]);
         return errorResponse;
       } finally {
         setLoading(false);
@@ -347,7 +347,7 @@ export function useRealtime<T = any>(
       }
       unsubscribe();
     };
-  }, [channelId, subscribeToStream]);
+  }, [channelId, subscribeToRealtime]);
 
   return {
     data,

@@ -15,7 +15,7 @@ export function generateIgniterRouter(config: ProjectSetupConfig): TemplateFile 
   let serviceImports: string[] = []
 
   // Add context import
-  imports.push('import type { IgniterAppContext } from "./igniter.context"')
+  imports.push('import { createIgniterAppContext } from "./igniter.context"')
 
   // Add feature service imports based on enabled features
   if (features.store) {
@@ -23,16 +23,11 @@ export function generateIgniterRouter(config: ProjectSetupConfig): TemplateFile 
   }
 
   if (features.jobs) {
-    serviceImports.push('import { jobs } from "@/services/jobs"')
+    serviceImports.push('import { REGISTERED_JOBS } from "@/services/jobs"')
   }
 
   if (features.logging) {
     serviceImports.push('import { logger } from "@/services/logger"')
-  }
-
-  // Database service import
-  if (config.database.provider !== 'none') {
-    serviceImports.push('import { database } from "@/services/database"')
   }
 
   // Telemetry service import
@@ -43,10 +38,10 @@ export function generateIgniterRouter(config: ProjectSetupConfig): TemplateFile 
   const allImports = [...imports, ...serviceImports].join('\n')
 
   // Build configuration chain
-  let configChain = ['export const igniter = Igniter', '  .context<IgniterAppContext>()']
+  let configChain = ['export const igniter = Igniter', '  .context(createIgniterAppContext)']
 
   if (features.store) configChain.push('  .store(store)')
-  if (features.jobs) configChain.push('  .jobs(jobs)')
+  if (features.jobs) configChain.push('  .jobs(REGISTERED_JOBS)')
   if (features.logging) configChain.push('  .logger(logger)')
   if (features.telemetry) configChain.push('  .telemetry(telemetry)')
 
@@ -78,7 +73,7 @@ export function generateIgniterContext(config: ProjectSetupConfig): TemplateFile
 
   if (database.provider !== 'none') {
     serviceImports.push('import { database } from "@/services/database"')
-    contextProperties.push('    database,')
+    contextProperties.push('    // database,')
   }
 
   const allImports = serviceImports.join('\n')
@@ -119,6 +114,8 @@ import { z } from 'zod'`
 
   let exampleActions = `    // Health check action
     health: igniter.query({
+      name: 'health',
+      description: 'Health check',
       path: '/',
       handler: async ({ request, response, context }) => {
         ${features.logging ? 'context.logger.info(\'Health check requested\')' : ''}
@@ -141,10 +138,9 @@ import { z } from 'zod'`
 
     // Cache demonstration action
     cacheDemo: igniter.query({
-      path: '/cache/:key',
-      params: z.object({
-        key: z.string()
-      }),
+      name: 'cacheDemo',
+      description: 'Demonstrate caching',
+      path: '/cache/:key' as const,
       handler: async ({ request, response, context }) => {
         const { key } = request.params
         const cached = await context.store.get(key)
@@ -179,7 +175,10 @@ import { z } from 'zod'`
 
     // Background job scheduling action
     scheduleJob: igniter.mutation({
+      name: 'scheduleJob',
+      description: 'Schedule a background job',
       path: '/schedule-job',
+      method: 'POST',
       body: z.object({
         message: z.string(),
         delay: z.number().optional()
@@ -210,6 +209,7 @@ import { z } from 'zod'`
  * @see https://github.com/felipebarcelospro/igniter-js
  */
 export const exampleController = igniter.controller({
+  name: 'example',
   path: '/example',
   actions: {
 ${exampleActions}
@@ -240,7 +240,7 @@ export const AppRouter = igniter.router({
   }
 })
 
-export type AppRouter = typeof AppRouter
+export type AppRouterType = typeof AppRouter
 `
 
   return {
@@ -275,6 +275,15 @@ export function generateServiceFiles(config: ProjectSetupConfig): TemplateFile[]
   const { features, database } = config
   const files: TemplateFile[] = []
 
+  files.push({
+   path: 'src/app/api/v1/[[...all]]/route.ts',
+   content: `import { AppRouter } from '@/igniter.router'
+import { nextRouteHandlerAdapter } from '@igniter-js/core/adapters'
+
+export const { GET, POST, PUT, DELETE } = nextRouteHandlerAdapter(AppRouter)
+`
+  })
+
   // Initialize Redis service if store or jobs feature is enabled
   if (features.store || features.jobs) {
     files.push({
@@ -301,7 +310,7 @@ export const redis = new Redis(process.env.REDIS_URL!, {
     files.push({
       path: 'src/services/store.ts',
       content: `import { createRedisStoreAdapter } from '@igniter-js/adapter-redis'
-import { redis } from '@/services/redis'
+import { redis } from './redis'
 
 /**
   * Store adapter for data persistence.
@@ -320,7 +329,7 @@ export const store = createRedisStoreAdapter(redis)
   if (features.jobs) {
     files.push({
       path: 'src/services/jobs.ts',
-      content: `import { store } from '@/services/store'
+      content: `import { store } from './store'
 import { createBullMQAdapter } from '@igniter-js/adapter-bullmq'
 import { z } from 'zod'
 
@@ -435,14 +444,14 @@ export const database = new PrismaClient()
     files.push({
       path: 'src/app/api/mcp/[transport].ts',
       content: `import { createMcpAdapter } from '@igniter-js/adapter-mcp'
-import { appRouter } from '@/igniter.router'
+import { AppRouter } from '@/igniter.router'
 
 /**
  * MCP server instance for exposing API as a MCP server.
  *
  * @see https://github.com/felipebarcelospro/igniter-js/tree/main/packages/adapter-mcp
  */
-export default createMcpAdapter(appRouter, {
+export default createMcpAdapter(AppRouter, {
   serverInfo: {
     name: 'Igniter.js MCP Server',
     version: '1.0.0',
@@ -935,36 +944,38 @@ This project is licensed under the MIT License.
 /**
  * Generate all template files for the project
  */
-export function generateAllTemplates(config: ProjectSetupConfig, dependencies: string[], devDependencies: string[]): TemplateFile[] {
+export function generateAllTemplates(
+  config: ProjectSetupConfig,
+  isExistingProject: boolean
+): TemplateFile[] {
   const templates: TemplateFile[] = [
-    // Core Igniter files
+    // Core Igniter files - always generate
     generateIgniterRouter(config),
     generateIgniterContext(config),
     generateMainRouter(config),
     generateIgniterClient(config),
 
-    // Feature files
+    // Feature files - always generate
     generateExampleController(config),
     generateFeatureIndex(config),
     generateExampleInterfaces(),
 
-    // Configuration files
-    generatePackageJson(config, dependencies, devDependencies),
-    generateTsConfig(config.framework),
+    // .env.example is safe to generate as it won't overwrite a user's .env file
     generateEnvFile(config),
-    generateGitIgnore(),
-    generateReadme(config)
   ]
 
   // Add service files for enabled features
   const serviceFiles = generateServiceFiles(config)
   templates.push(...serviceFiles)
 
-  // Add Docker Compose if enabled
+  // Add Docker Compose if enabled. The generator logic handles confirmation for overwrites.
   const dockerCompose = generateDockerCompose(config)
   if (dockerCompose) {
     templates.push(dockerCompose)
   }
+
+  // Project-level boilerplate (like package.json, tsconfig.json, etc.) is now handled
+  // in the generator for new projects.
 
   return templates
 }

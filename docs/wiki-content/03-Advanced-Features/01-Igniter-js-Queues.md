@@ -127,7 +127,7 @@ export const emailJobRouter = jobs.router({
       handler: async ({ payload, context }) => {
         // `payload` is fully typed from the Zod schema.
         // `context` is the same global context available in your API actions.
-        context.logger.info(`Sending welcome email to ${payload.name}`);
+        igniter.logger.info(`Sending welcome email to ${payload.name}`);
         await sendEmail({ to: payload.email, subject: 'Welcome!' });
         return { sentAt: new Date() };
       },

@@ -2,11 +2,11 @@ import prompts from 'prompts'
 import chalk from 'chalk'
 import path from 'path'
 import { detectFramework, detectPackageManager, getFrameworkList, type SupportedFramework } from '../framework/framework-detector'
-import type { 
-  ProjectSetupConfig, 
-  IgniterFeatures, 
-  DatabaseProvider, 
-  PackageManager 
+import type {
+  ProjectSetupConfig,
+  IgniterFeatures,
+  DatabaseProvider,
+  PackageManager
 } from './types'
 
 /**
@@ -36,7 +36,10 @@ function showWelcome(): void {
 /**
  * Enhanced prompts with better UX and validation
  */
-export async function runSetupPrompts(targetDir?: string): Promise<ProjectSetupConfig> {
+export async function runSetupPrompts(
+  targetDir?: string,
+  isExistingProject = false,
+): Promise<ProjectSetupConfig> {
   showWelcome()
 
   // Auto-detect current environment
@@ -47,7 +50,7 @@ export async function runSetupPrompts(targetDir?: string): Promise<ProjectSetupC
   try {
     const answers = await prompts([
       {
-        type: 'text',
+        type: isExistingProject ? null : 'text',
         name: 'projectName',
         message: chalk.bold('• What will your project be called?'),
         initial: projectName,
@@ -63,43 +66,46 @@ export async function runSetupPrompts(targetDir?: string): Promise<ProjectSetupC
       {
         type: 'select',
         name: 'framework',
-        message: chalk.bold('• Which framework are you using?'),
+        message:
+          isExistingProject && detectedFramework !== 'generic'
+            ? `We detected ${chalk.cyan(detectedFramework)}. Please confirm or select another.`
+            : chalk.bold('• Which framework are you using?'),
         choices: [
-          { 
-            title: `${chalk.green('Next.js')} ${detectedFramework === 'nextjs' ? chalk.dim('(detected)'): ''}`, 
-            value: 'nextjs' 
+          {
+            title: `${chalk.green('Next.js')} ${detectedFramework === 'nextjs' ? chalk.dim('(detected)'): ''}`,
+            value: 'nextjs'
           },
-          { 
-            title: `${chalk.yellow('Vite')} ${detectedFramework === 'vite' ? chalk.dim('(detected)'): ''}`, 
-            value: 'vite' 
+          {
+            title: `${chalk.yellow('Vite')} ${detectedFramework === 'vite' ? chalk.dim('(detected)'): ''}`,
+            value: 'vite'
           },
-          { 
-            title: `${chalk.cyan('Nuxt')} ${detectedFramework === 'nuxt' ? chalk.dim('(detected)'): ''}`, 
-            value: 'nuxt' 
+          {
+            title: `${chalk.cyan('Nuxt')} ${detectedFramework === 'nuxt' ? chalk.dim('(detected)'): ''}`,
+            value: 'nuxt'
           },
-          { 
-            title: `${chalk.magenta('SvelteKit')} ${detectedFramework === 'sveltekit' ? chalk.dim('(detected)'): ''}`, 
-            value: 'sveltekit' 
+          {
+            title: `${chalk.magenta('SvelteKit')} ${detectedFramework === 'sveltekit' ? chalk.dim('(detected)'): ''}`,
+            value: 'sveltekit'
           },
-          { 
-            title: `${chalk.red('Remix')} ${detectedFramework === 'remix' ? chalk.dim('(detected)'): ''}`, 
-            value: 'remix' 
+          {
+            title: `${chalk.red('Remix')} ${detectedFramework === 'remix' ? chalk.dim('(detected)'): ''}`,
+            value: 'remix'
           },
-          { 
-            title: `${chalk.white('Astro')} ${detectedFramework === 'astro' ? chalk.dim('(detected)'): ''}`, 
-            value: 'astro' 
+          {
+            title: `${chalk.white('Astro')} ${detectedFramework === 'astro' ? chalk.dim('(detected)'): ''}`,
+            value: 'astro'
           },
-          { 
-            title: `${chalk.blue('Express')} ${detectedFramework === 'express' ? chalk.dim('(detected)'): ''}`, 
-            value: 'express' 
+          {
+            title: `${chalk.blue('Express')} ${detectedFramework === 'express' ? chalk.dim('(detected)'): ''}`,
+            value: 'express'
           },
-          { 
-            title: `${chalk.magenta('TanStack Start')} ${detectedFramework === 'tanstack-start' ? chalk.dim('(detected)'): ''}`, 
-            value: 'tanstack-start' 
+          {
+            title: `${chalk.magenta('TanStack Start')} ${detectedFramework === 'tanstack-start' ? chalk.dim('(detected)'): ''}`,
+            value: 'tanstack-start'
           },
-          { 
-            title: chalk.gray('Generic/Other'), 
-            value: 'generic' 
+          {
+            title: chalk.gray('Generic/Other'),
+            value: 'generic'
           }
         ],
         initial: getFrameworkChoiceIndex(detectedFramework)
@@ -144,21 +150,21 @@ export async function runSetupPrompts(targetDir?: string): Promise<ProjectSetupC
         name: 'database',
         message: chalk.bold('• Choose your database (optional):'),
         choices: [
-          { 
-            title: `${chalk.gray('None')} ${chalk.dim('- Start without database')}`, 
-            value: 'none' 
+          {
+            title: `${chalk.gray('None')} ${chalk.dim('- Start without database')}`,
+            value: 'none'
           },
-          { 
-            title: `${chalk.blue('PostgreSQL + Prisma')} ${chalk.dim('- Production-ready')}`, 
-            value: 'postgresql' 
+          {
+            title: `${chalk.blue('PostgreSQL + Prisma')} ${chalk.dim('- Production-ready')}`,
+            value: 'postgresql'
           },
-          { 
-            title: `${chalk.blue('MySQL + Prisma')} ${chalk.dim('- Wide compatibility')}`, 
-            value: 'mysql' 
+          {
+            title: `${chalk.blue('MySQL + Prisma')} ${chalk.dim('- Wide compatibility')}`,
+            value: 'mysql'
           },
-          { 
-            title: `${chalk.green('SQLite + Prisma')} ${chalk.dim('- Local development')}`, 
-            value: 'sqlite' 
+          {
+            title: `${chalk.green('SQLite + Prisma')} ${chalk.dim('- Local development')}`,
+            value: 'sqlite'
           },
         ],
         initial: 0
@@ -173,29 +179,31 @@ export async function runSetupPrompts(targetDir?: string): Promise<ProjectSetupC
       {
         type: 'select',
         name: 'packageManager',
-        message: chalk.bold('• Which package manager?'),
+        message: isExistingProject
+          ? `We detected ${chalk.cyan(detectedPackageManager)}. Please confirm or select another.`
+          : chalk.bold('• Which package manager?'),
         choices: [
-          { 
-            title: `${chalk.red('npm')} ${detectedPackageManager === 'npm' ? chalk.dim('(detected)'): ''}`, 
-            value: 'npm' 
+          {
+            title: `${chalk.red('npm')} ${detectedPackageManager === 'npm' ? chalk.dim('(detected)'): ''}`,
+            value: 'npm'
           },
-          { 
-            title: `${chalk.blue('yarn')} ${detectedPackageManager === 'yarn' ? chalk.dim('(detected)'): ''}`, 
-            value: 'yarn' 
+          {
+            title: `${chalk.blue('yarn')} ${detectedPackageManager === 'yarn' ? chalk.dim('(detected)'): ''}`,
+            value: 'yarn'
           },
-          { 
-            title: `${chalk.yellow('pnpm')} ${detectedPackageManager === 'pnpm' ? chalk.dim('(detected)'): ''}`, 
-            value: 'pnpm' 
+          {
+            title: `${chalk.yellow('pnpm')} ${detectedPackageManager === 'pnpm' ? chalk.dim('(detected)'): ''}`,
+            value: 'pnpm'
           },
-          { 
-            title: `${chalk.white('bun')} ${detectedPackageManager === 'bun' ? chalk.dim('(detected)'): ''}`, 
-            value: 'bun' 
+          {
+            title: `${chalk.white('bun')} ${detectedPackageManager === 'bun' ? chalk.dim('(detected)'): ''}`,
+            value: 'bun'
           }
         ],
         initial: getPackageManagerChoiceIndex(detectedPackageManager)
       },
       {
-        type: 'confirm',
+        type: isExistingProject ? null : 'confirm',
         name: 'initGit',
         message: chalk.bold('• Initialize Git repository?'),
         initial: true
@@ -223,14 +231,14 @@ export async function runSetupPrompts(targetDir?: string): Promise<ProjectSetupC
     }
 
     const config: ProjectSetupConfig = {
-      projectName: answers.projectName,
+      projectName: answers.projectName || projectName,
       framework: answers.framework,
       features: featuresObj,
       database: { provider: answers.database },
       packageManager: answers.packageManager,
-      initGit: answers.initGit,
+      initGit: answers.initGit === undefined ? false : answers.initGit,
       installDependencies: answers.installDependencies,
-      dockerCompose: answers.dockerCompose || false
+      dockerCompose: answers.dockerCompose || false,
     }
 
     // Show configuration summary
@@ -256,27 +264,27 @@ function showConfigSummary(config: ProjectSetupConfig): void {
   console.log(chalk.dim('─'.repeat(40)))
   console.log(`${chalk.cyan('Project:')} ${config.projectName}`)
   console.log(`${chalk.cyan('Framework:')} ${config.framework}`)
-  
+
   const enabledFeatures = Object.entries(config.features)
     .filter(([_, enabled]) => enabled)
     .map(([key, _]) => key)
-  
+
   if (enabledFeatures.length > 0) {
     console.log(`${chalk.cyan('Features:')} ${enabledFeatures.join(', ')}`)
   }
-  
+
   if (config.database.provider !== 'none') {
     console.log(`${chalk.cyan('Database:')} ${config.database.provider}`)
   }
-  
+
   console.log(`${chalk.cyan('Package Manager:')} ${config.packageManager}`)
   console.log(`${chalk.cyan('Git:')} ${config.initGit ? 'Yes' : 'No'}`)
   console.log(`${chalk.cyan('Install Dependencies:')} ${config.installDependencies ? 'Yes' : 'No'}`)
-  
+
   if (config.dockerCompose) {
     console.log(`${chalk.cyan('Docker Compose:')} Yes`)
   }
-  
+
   console.log()
 }
 
@@ -289,20 +297,45 @@ function getFrameworkChoiceIndex(detected: SupportedFramework): number {
 }
 
 /**
- * Helper to get package manager choice index  
+ * Helper to get package manager choice index
  */
 function getPackageManagerChoiceIndex(detected: PackageManager): number {
   const managers = ['npm', 'yarn', 'pnpm', 'bun']
   return Math.max(0, managers.indexOf(detected))
 }
 
-export async function confirmOverwrite(targetPath: string): Promise<boolean> {
+export async function selectStarterPrompt(starters: string[]): Promise<string | null> {
+  const { useStarter } = await prompts({
+    type: 'confirm',
+    name: 'useStarter',
+    message: 'The directory is empty. Would you like to use one of our official starters?',
+    initial: true,
+  })
+
+  if (!useStarter) {
+    return null
+  }
+
+  const { selectedStarter } = await prompts({
+    type: 'select',
+    name: 'selectedStarter',
+    message: 'Which starter would you like to use?',
+    choices: starters.map(starter => ({
+      title: starter.replace('starter-', '').replace(/-/g, ' '),
+      value: starter,
+    })),
+  })
+
+  return selectedStarter
+}
+
+export async function confirmOverwrite(message: string): Promise<boolean> {
   const { overwrite } = await prompts({
     type: 'confirm',
     name: 'overwrite',
-    message: `Directory ${chalk.cyan(targetPath)} already exists. Overwrite?`,
-    initial: false
+    message,
+    initial: false,
   })
-  
+
   return overwrite
-} 
+}

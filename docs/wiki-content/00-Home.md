@@ -62,6 +62,7 @@ Boost your productivity with our command-line tools.
 
 *   **[igniter init](./05-CLI-and-Tooling/01-igniter-init.md)**
 *   **[igniter dev](./05-CLI-and-Tooling/02-igniter-dev.md)**
+*   **[igniter generate](./05-CLI-and-Tooling/03-igniter-generate.md)**
 
 ### Ⅵ. Guides & Recipes
 
