@@ -1,5 +1,5 @@
 {
-  "name": "sample-express-rest-api",
+  "name": "starter-express-rest-api",
   "version": "1.0.0",
   "private": true,
   "type": "module",

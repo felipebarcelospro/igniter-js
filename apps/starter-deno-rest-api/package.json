@@ -1,5 +1,5 @@
 {
-  "name": "sample-bun-react-app",
+  "name": "starter-deno-rest-api",
   "version": "1.0.0",
   "private": true,
   "type": "module",
