@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/adapter-opentelemetry",
-  "version": "0.1.0-alpha.0",
+  "version": "0.2.1",
   "description": "OpenTelemetry adapter for Igniter.js telemetry system",
   "exports": {
     ".": {

@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/eslint",
-  "version": "0.2.0-alpha.0",
+  "version": "0.2.1",
   "private": false,
   "description": "ESLint configuration for Igniter.js projects.",
   "main": "index.js",
