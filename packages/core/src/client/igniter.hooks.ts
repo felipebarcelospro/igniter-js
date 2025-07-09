@@ -37,7 +37,9 @@ export const createUseQueryClient = <
 
 /**
  * Creates a useQuery hook for a specific action
- * @param serverCaller The server action caller function
+ * @param controller The name of the controller
+ * @param action The name of the action
+ * @param fetcher The function that calls the server action
  * @returns A React hook for querying data
  */
 export const createUseQuery = <
@@ -52,30 +54,21 @@ export const createUseQuery = <
   ): QueryActionCallerResult<TAction> => {
     const { register, unregister, invalidate } = useIgniterQueryClient();
 
-    const [loading, setLoading] = useState(false);
+    const [status, setStatus] = useState<'loading' | 'error' | 'success'>('loading');
+    const [isFetching, setIsFetching] = useState(false);
     const [response, setResponse] = useState<{
-      data: TAction["$Infer"]["$Output"]["data"] | null;
-      error: TAction["$Infer"]["$Output"]["error"] | null;
+      data: TAction["$Infer"]["$Response"]["data"] | null;
+      error: TAction["$Infer"]["$Response"]["error"] | null;
     }>({
-      data: null,
-      error: null,
+      data: options?.initialData?.data || null,
+      error: options?.initialData?.error || null,
     });
 
+    const isInitialLoadRef = useRef(true);
     const optionsRef = useRef(options);
     optionsRef.current = options;
 
-    const actionPath = useMemo(() => {
-      const path = `${controller}.${action}`;
-      if (!path) {
-        console.warn("[Igniter] Server caller missing __actionPath property");
-        // Generate a unique ID as a fallback
-        return `query-${Math.random().toString(36).substr(2, 9)}`;
-      }
-
-      console.log("[Igniter] Action path:", path);
-      return path;
-    }, []);
-
+    const actionPath = useMemo(() => `${controller}.${action}`, [controller, action]);
     const regKey = useMemo(() => actionPath, [actionPath]);
 
     const getCacheKey = useCallback(
@@ -85,144 +78,147 @@ export const createUseQuery = <
       [actionPath],
     );
 
+    const lastUsedParamsRef = useRef<TAction["$Infer"]["$Input"]>({
+      query: options?.query,
+      params: options?.params,
+    } as TAction["$Infer"]["$Input"]);
+
     const execute = useCallback(
       async (params?: TAction["$Infer"]["$Input"]) => {
+        if (optionsRef.current?.enabled === false) return;
+
+        const mergedParams = {
+            ...lastUsedParamsRef.current,
+            ...params,
+        };
+        lastUsedParamsRef.current = mergedParams;
+
+        setIsFetching(true);
+        if (isInitialLoadRef.current) {
+          setStatus('loading');
+        }
+        optionsRef.current?.onLoading?.(true);
+
+        const cacheKey = getCacheKey(mergedParams);
+        let settledData: Awaited<TAction["$Infer"]["$Output"]> | null = null;
+        let settledError: Awaited<TAction["$Infer"]["$Errors"]> | null = null;
+
         try {
-          console.log(`[Igniter] Executing query for key: ${regKey}`, {
-            params,
-          });
-
-          setLoading(true);
-          optionsRef.current?.onLoading?.(true);
-
-          const cacheKey = getCacheKey(params);
-
           if (optionsRef.current?.staleTime) {
-            const cachedData = ClientCache.get(
-              cacheKey,
-              optionsRef.current.staleTime,
-            );
-
+            const cachedData = ClientCache.get(cacheKey, optionsRef.current.staleTime);
             if (cachedData) {
-              console.log(`[Igniter] Using cached data for key: ${regKey}`);
               setResponse(cachedData);
-              optionsRef.current?.onRequest?.(cachedData);
+              setStatus('success');
+              optionsRef.current?.onSuccess?.(cachedData);
               return cachedData;
             }
           }
 
-          console.log(`[Igniter] Fetching fresh data for key: ${regKey}`);
-          const result = await fetcher(params || options?.initialParams);
+          const result = await fetcher(mergedParams);
+          settledData = result;
+
           setResponse(result);
+          setStatus('success');
+          optionsRef.current?.onRequest?.(result);
+          optionsRef.current?.onSuccess?.(result);
 
           if (optionsRef.current?.staleTime) {
             ClientCache.set(cacheKey, result);
-            console.log(`[Igniter] Cached data for key: ${regKey}`);
           }
-
-          optionsRef.current?.onRequest?.(result);
           return result;
         } catch (error) {
-          console.error(`[Igniter] Query error for key: ${regKey}:`, error);
-
           const errorResponse = { data: null, error: error as TAction["$Infer"]["$Output"]["error"] };
+          // @ts-expect-error - Ignore type error for now
+          settledError = errorResponse;
           setResponse(errorResponse);
-          optionsRef.current?.onRequest?.(errorResponse as TAction["$Infer"]["$Output"]);
-
+          setStatus('error');
+          optionsRef.current?.onError?.(errorResponse.error);
         } finally {
-          setLoading(false);
+          setIsFetching(false);
+          isInitialLoadRef.current = false;
           optionsRef.current?.onLoading?.(false);
+          optionsRef.current?.onSettled?.(settledData as any, settledError as any);
         }
       },
-      [getCacheKey, regKey],
+      [getCacheKey, regKey, fetcher],
     );
 
-    useEffect(() => {
-      console.log(`[Igniter] Registering query for key: ${regKey}`);
-      register(regKey, execute);
-      return () => {
-        console.log(`[Igniter] Unregistering query for key: ${regKey}`);
-        unregister(regKey, execute);
-      };
-    }, [regKey, register, unregister, execute]);
+    const refetch = useCallback(() => {
+      execute(lastUsedParamsRef.current);
+    }, [execute]);
 
-    // Set up automatic refetching
     useEffect(() => {
+      register(regKey, refetch);
+      return () => unregister(regKey, refetch);
+    }, [regKey, register, unregister, refetch]);
+
+    // Automatic refetching side effects
+    useEffect(() => {
+      if (options?.enabled === false) return;
+
       if (options?.refetchInterval) {
         const interval = setInterval(() => {
-          if (!options.refetchIntervalInBackground && document.hidden) {
-            return;
-          }
-          // Using empty params, assuming that GET requests can work without body
-          execute(
-            options?.initialParams as unknown as TAction["$Infer"]["$Input"],
-          );
+          if (!options.refetchIntervalInBackground && document.hidden) return;
+          execute();
         }, options.refetchInterval);
-
         return () => clearInterval(interval);
       }
-    }, [
-      execute,
-      options?.refetchInterval,
-      options?.refetchIntervalInBackground,
-    ]);
+    }, [execute, options?.refetchInterval, options?.refetchIntervalInBackground, options?.enabled]);
 
-    // Set up refetch on window focus
     useEffect(() => {
-      if (options?.refetchOnWindowFocus !== false) {
-        const handleFocus = () => {
-          execute(
-            options?.initialParams as unknown as TAction["$Infer"]["$Input"],
-          );
-        };
+        if (options?.enabled === false) return;
 
-        window.addEventListener("focus", handleFocus);
-        return () => window.removeEventListener("focus", handleFocus);
-      }
-    }, [execute, options?.refetchOnWindowFocus]);
+        if (options?.refetchOnWindowFocus !== false) {
+            const handleFocus = () => execute();
+            window.addEventListener("focus", handleFocus);
+            return () => window.removeEventListener("focus", handleFocus);
+        }
+    }, [execute, options?.refetchOnWindowFocus, options?.enabled]);
 
-    // Set up refetch on reconnect
     useEffect(() => {
-      if (options?.refetchOnReconnect !== false) {
-        const handleOnline = () => {
-          execute(
-            options?.initialParams as unknown as TAction["$Infer"]["$Input"],
-          );
-        };
+        if (options?.enabled === false) return;
 
-        window.addEventListener("online", handleOnline);
-        return () => window.removeEventListener("online", handleOnline);
-      }
-    }, [execute, options?.refetchOnReconnect]);
+        if (options?.refetchOnReconnect !== false) {
+            const handleOnline = () => execute();
+            window.addEventListener("online", handleOnline);
+            return () => window.removeEventListener("online", handleOnline);
+        }
+    }, [execute, options?.refetchOnReconnect, options?.enabled]);
 
     // Initial fetch
     useEffect(() => {
-      if (options?.refetchOnMount !== false) {
-        if (options?.initialParams) {
-          execute(
-            options.initialParams as unknown as TAction["$Infer"]["$Input"],
-          );
-        } else {
-          // Execute without params if initialParams is not provided
-          execute({} as any);
+        if (options?.enabled !== false && options?.refetchOnMount !== false) {
+            execute();
         }
-      }
-    }, [execute, options?.refetchOnMount]);
+    }, [execute, options?.refetchOnMount, options?.enabled]);
 
-    // @ts-ignore
+    const isLoading = status === 'loading';
+    const isSuccess = status === 'success';
+    const isError = status === 'error';
+
     return {
-      isLoading: loading,
-      loading,
-      execute,
-      invalidate: () => invalidate([`${controller}.${action}`]),
-      ...response,
+      data: response.data,
+      error: response.error,
+      isLoading,
+      isFetching,
+      isSuccess,
+      isError,
+      status,
+      refetch,
+      execute: execute as TAction["$Infer"]["$Caller"],
+      // Deprecated
+      loading: isLoading,
+      // @ts-expect-error - Ignore type error for now
+      invalidate: () => invalidate([actionPath]),
     };
   };
 };
 
 /**
  * Creates a useMutation hook for a specific action
- * @param serverCaller The server action caller function
+ * @param controller The name of the controller
+ * @param action The name of the action
+ * @param fetcher The function that calls the server action
  * @returns A React hook for mutating data
  */
 export const createUseMutation = <
@@ -235,57 +231,86 @@ export const createUseMutation = <
   return (
     options?: MutationActionCallerOptions<TAction>,
   ): MutationActionCallerResult<TAction> => {
-    const [loading, setLoading] = useState(false);
-    const [response, setResponse] = useState<TAction["$Infer"]["$Output"]>(() => {
-      return { data: null, error: null } as TAction["$Infer"]["$Output"];
+    const [status, setStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle');
+    const [response, setResponse] = useState<{
+      data: TAction["$Infer"]["$Response"]["data"] | null;
+      error: TAction["$Infer"]["$Response"]["error"] | null;
+    }>({
+      data: null,
+      error: null,
     });
 
-    // Keep track of the latest options for use in mutate
     const optionsRef = useRef(options);
     optionsRef.current = options;
+    // @ts-expect-error - Ignore type error for now
+    const lastUsedParamsRef = useRef<TAction["$Infer"]["$Input"]>();
 
     const mutate = useCallback(async (params: TAction["$Infer"]["$Input"]) => {
+      const mergedParams = {
+        query: { ...optionsRef.current?.query, ...params?.query },
+        params: { ...optionsRef.current?.params, ...params?.params },
+        body: { ...optionsRef.current?.body, ...params?.body },
+      } as TAction["$Infer"]["$Input"];
+
+      lastUsedParamsRef.current = mergedParams;
+
+      let settledData: Awaited<TAction["$Infer"]["$Output"]> | null = null;
+      let settledError: Awaited<TAction["$Infer"]["$Errors"]> | null = null;
+
+      setStatus('loading');
+      optionsRef.current?.onLoading?.(true);
+
       try {
-        setLoading(true);
-        optionsRef.current?.onLoading?.(true);
-
-        const mergedParams = optionsRef.current?.defaultValues
-          ? { ...optionsRef.current.defaultValues, ...params }
-          : params;
-
-        // No mutate:
         const result = await fetcher(mergedParams);
-
+        settledData = result;
         setResponse(result);
-
+        setStatus('success');
         optionsRef.current?.onRequest?.(result);
-
+        optionsRef.current?.onSuccess?.(result);
         return result;
       } catch (error) {
         const errorResponse = { data: null, error: error as TAction["$Infer"]["$Output"]["error"] };
+        // @ts-expect-error - Ignore type error for now
+        settledError = errorResponse;
         setResponse(errorResponse);
-        optionsRef.current?.onRequest?.(errorResponse as TAction["$Infer"]["$Output"]);
+        setStatus('error');
+        optionsRef.current?.onError?.(errorResponse as any);
         return errorResponse;
       } finally {
-        setLoading(false);
         optionsRef.current?.onLoading?.(false);
+        optionsRef.current?.onSettled?.(settledData as any, settledError as any);
       }
-    }, []);
+    }, [fetcher]);
+
+    const retry = useCallback(() => {
+      if (lastUsedParamsRef.current) {
+        mutate(lastUsedParamsRef.current);
+      } else {
+        console.error("[Igniter] Cannot retry mutation: no parameters were provided in the last call.");
+      }
+    }, [mutate]);
+
+    const isLoading = status === 'loading';
+    const isSuccess = status === 'success';
+    const isError = status === 'error';
 
     return {
-      isLoading: loading,
-      // [DEPRECATED] The 'loading' property is deprecated. Please use 'isLoading' instead.
-      loading,
       mutate,
       data: response.data,
       error: response.error,
+      isLoading,
+      isSuccess,
+      isError,
+      status: status === 'idle' ? 'loading' : status, // For backward compatibility
+      retry,
+      // Deprecated
+      loading: isLoading,
     } as unknown as MutationActionCallerResult<TAction>;
   };
 };
 
 /**
  * Generic hook for subscribing to SSE events from the central connection
- *
  * @param channelId - The channel ID to subscribe to
  * @param options - Configuration options for the subscription
  * @returns Stream data and connection status
@@ -306,14 +331,12 @@ export function useRealtime<T = any>(
   const [isConnected, setIsConnected] = useState(false);
   const { subscribeToRealtime } = useIgniterQueryClient();
 
-  // Store callback references that shouldn't trigger effect reruns
   const callbacksRef = useRef({
     onMessage: options.onMessage,
     onConnect: options.onConnect,
     onDisconnect: options.onDisconnect
   });
 
-  // Update refs when callbacks change
   useEffect(() => {
     callbacksRef.current = {
       onMessage: options.onMessage,
@@ -323,13 +346,10 @@ export function useRealtime<T = any>(
   }, [options.onMessage, options.onConnect, options.onDisconnect]);
 
   useEffect(() => {
-    setIsConnected(true);
-
     if (callbacksRef.current.onConnect) {
       callbacksRef.current.onConnect();
     }
 
-    // Callback for processing incoming messages
     const handleMessage = (message: any) => {
       setData(message);
       if (callbacksRef.current.onMessage) {
@@ -337,8 +357,8 @@ export function useRealtime<T = any>(
       }
     };
 
-    // Subscribe to the channel
     const unsubscribe = subscribeToRealtime(channelId, handleMessage);
+    setIsConnected(true);
 
     return () => {
       setIsConnected(false);
@@ -366,63 +386,40 @@ export const createUseRealtime = <TAction extends IgniterAction<any, any, any, a
   actionPath: string,
 ) => {
   return (options?: RealtimeActionCallerOptions<TAction>): RealtimeActionCallerResult<TAction> => {
-    const [isConnected, setIsConnected] = useState(false);
     const [isReconnecting, setIsReconnecting] = useState(false);
-    const [response, setResponse] = useState<InferIgniterResponse<Awaited<TAction["$Infer"]["$Output"]>>>(() => {
-      return {
-        data: null,
-        error: null,
-      } as InferIgniterResponse<Awaited<TAction["$Infer"]["$Output"]>>;
-    });
+    // @ts-expect-error - Ignore type error for now
+    const [response, setResponse] = useState<InferIgniterResponse<Awaited<TAction["$Infer"]["$Output"]>>>(() => ({
+      data: options?.initialData?.data || null,
+      error: options?.initialData?.error || null,
+    }));
 
-    // Get the channel ID from the action path
-    const channelId = useMemo(() => {
-      return `${actionPath}`;
-    }, [actionPath]);
+    const channelId = useMemo(() => actionPath, [actionPath]);
 
-    // Use the centralized realtime hook
     const streamResult = useRealtime(channelId, {
-      initialData: options?.initialParams,
+      initialData: response.data,
       onMessage: (newData) => {
-        setResponse(newData);
-        options?.onMessage?.(newData);
+        // @ts-expect-error - Ignore type error for now
+        setResponse({ data: newData, error: null });
+        // @ts-expect-error - Ignore type error for now
+        options?.onMessage?.({ data: newData, error: null });
       },
       onConnect: () => {
-        setIsConnected(true);
-        setIsReconnecting(false);
-
-        setResponse(options?.initialData || {
-          data: null,
-          error: null,
-        } as InferIgniterResponse<Awaited<TAction["$Infer"]["$Output"]>>);
-
         options?.onConnect?.();
       },
       onDisconnect: () => {
-        setIsConnected(false);
+        setIsReconnecting(options?.autoReconnect || false);
         options?.onDisconnect?.();
       }
     });
 
-    // Set data from the stream result
-    useEffect(() => {
-      if (streamResult.data) {
-        setResponse(streamResult.data);
-      }
-    }, [streamResult.data]);
-
-    // For backward compatibility, provide the same interface
     const disconnect = useCallback(() => {
-      setIsConnected(false);
-      console.log(`[Igniter] Manually disconnecting stream: ${actionPath}`);
-      options?.onDisconnect?.();
-    }, [actionPath, options]);
+        // This is handled by the central hook's cleanup
+    }, []);
 
     const reconnect = useCallback(() => {
-      console.log(`[Igniter] Manually reconnecting stream: ${actionPath}`);
+      // The actual reconnection is handled by the central SSE connection logic, not implemented here.
       setIsReconnecting(true);
-      // The actual reconnection is handled by the central SSE connection
-    }, [actionPath]);
+    }, []);
 
     return {
       data: response.data,

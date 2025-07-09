@@ -27,7 +27,8 @@ export type QueryActionCallerOptions<
 > = {
   enabled?: boolean;
   initialData?: Awaited<TAction["$Infer"]["$Output"]>;
-  initialParams?: TAction["$Infer"]["$Input"];
+  query?: TAction["$Infer"]["query"];
+  params?: TAction["$Infer"]["params"];
   staleTime?: number;
   refetchInterval?: number;
   refetchIntervalInBackground?: boolean;
@@ -35,7 +36,10 @@ export type QueryActionCallerOptions<
   refetchOnMount?: boolean;
   refetchOnReconnect?: boolean;
   onLoading?: (isLoading: boolean) => void;
-  onRequest?: (data: Awaited<TAction["$Infer"]["$Output"]>) => void;
+  onRequest?: (data: Awaited<TAction["$Infer"]["$Response"]>) => void;
+  onSuccess?: (data: Awaited<TAction["$Infer"]["$Output"]>) => void;
+  onError?: (error: Awaited<TAction["$Infer"]["$Errors"]>) => void;
+  onSettled?: (data: Awaited<TAction["$Infer"]["$Output"]>, error: Awaited<TAction["$Infer"]["$Errors"]>) => void;
 };
 
 export type QueryActionCallerResult<
@@ -53,12 +57,60 @@ export type QueryActionCallerResult<
   >,
 > = Prettify<
   {
-    loading: boolean;
-    isLoading: boolean;
-    execute: TAction["$Infer"]["$Caller"];
-    invalidate: () => void;
+    /**
+     * The data returned from a successful query. It will be `undefined` until the fetch succeeds.
+     */
     data: TAction["$Infer"]["$Response"]["data"];
+
+    /**
+     * A boolean that is `true` only during the very first fetch for a query.
+     */
+    isLoading: boolean;
+
+    /**
+     * A boolean that is `true` whenever a request is in-flight (including initial load and subsequent refetches).
+     */
+    isFetching: boolean;
+
+    /**
+     * A boolean that is `true` if the query has completed successfully.
+     */
+    isSuccess: boolean;
+
+    /**
+     * A boolean that is `true` if the query has failed.
+     */
+    isError: boolean;
+
+    /**
+     * If `isError` is true, this property will contain the error object.
+     */
     error: TAction["$Infer"]["$Response"]["error"];
+
+    /**
+     * A function you can call to manually trigger a refetch of the query.
+     */
+    refetch: () => void;
+
+    /**
+     * A string representing the query's state: `'loading'`, `'error'`, or `'success'`.
+     */
+    status: 'loading' | 'error' | 'success';
+
+    /**
+     * [DEPRECATED] Use `isLoading` instead.
+     */
+    loading: boolean;
+
+    /**
+     * [DEPRECATED] Use `refetch` instead.
+     */
+    invalidate: () => void;
+
+    /**
+     * The function to execute the query.
+     */
+    execute: TAction["$Infer"]["$Caller"];
   }
 >;
 
@@ -99,11 +151,47 @@ export type MutationActionCallerResult<
 > = Prettify<
   {
     // [DEPRECATED] The 'loading' property is deprecated. Please use 'isLoading' instead.
-    loading: boolean;
-    isLoading: boolean;
     mutate: TAction["$Infer"]["$Caller"];
+
+    /**
+     * The data returned from a successful query. It will be `undefined` until the fetch succeeds.
+     */
     data: TAction["$Infer"]["$Response"]["data"];
+
+    /**
+     * A boolean that is `true` only during the very first fetch for a query.
+     */
+    isLoading: boolean;
+
+    /**
+     * A boolean that is `true` if the query has completed successfully.
+     */
+    isSuccess: boolean;
+
+    /**
+     * A boolean that is `true` if the query has failed.
+     */
+    isError: boolean;
+
+    /**
+     * If `isError` is true, this property will contain the error object.
+     */
     error: TAction["$Infer"]["$Response"]["error"];
+
+    /**
+     * A function you can call to manually trigger a refetch of the query.
+     */
+    retry: () => void;
+
+    /**
+     * A string representing the query's state: `'loading'`, `'error'`, or `'success'`.
+     */
+    status: 'loading' | 'error' | 'success';
+
+    /**
+     * [DEPRECATED] Use `isLoading` instead.
+     */
+    loading: boolean;
   }
 >;
 
@@ -121,9 +209,17 @@ export type MutationActionCallerOptions<
     any
   >,
 > = {
-  defaultValues?: DeepPartial<TAction["$Infer"]["$Input"]>;
+  query?: DeepPartial<TAction["$Infer"]["query"]>;
+  params?: DeepPartial<TAction["$Infer"]["params"]>;
+  body?: DeepPartial<TAction["$Infer"]["body"]>;
   onLoading?: (isLoading: boolean) => void;
   onRequest?: (data: Awaited<TAction["$Infer"]["$Output"]>) => void;
+  onSuccess?: (data: Awaited<TAction["$Infer"]["$Output"]>) => void;
+  onError?: (error: Awaited<TAction["$Infer"]["$Errors"]>) => void;
+  onSettled?: (
+    data: Awaited<TAction["$Infer"]["$Output"]>,
+    error: Awaited<TAction["$Infer"]["$Errors"]>,
+  ) => void;
 };
 
 export type MutationActionCaller<
