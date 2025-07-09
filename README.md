@@ -282,7 +282,11 @@ export const userController = igniter.controller({
       use: [auth({ isAuthRequired: true })],
       // Define and validate query parameters using Zod.
       query: z.object({ page: z.number().optional().default(1) }),
-      handler: async ({ response, context, query }) => {
+      // Enable real-time updates for this query.
+      stream: true,
+      handler: async ({ request, response, context, query }) => {
+        const isStream = request.headers.get('Accept') === 'text/event-stream';
+
         // The `user` object is typed and available from the `auth` procedure.
         igniter.logger.info(`User ${context.auth.user?.id} is listing users.`);
 
@@ -290,6 +294,13 @@ export const userController = igniter.controller({
           take: 10,
           skip: (query.page - 1) * 10,
         });
+
+        if (isStream) {
+          return response.stream({
+            initialData: users,
+            transform: (data) => data.map((user) => ({ id: user.id, email: user.email })),
+          })
+        }
 
         return response.success({ users });
       },
@@ -888,8 +899,8 @@ const notificationsStream = igniter.query({
   handler: async (ctx) => ctx.response.success({ status: 'connected' }),
 });
 
-// 2. Frontend: Subscribe with useStream
-const { data } = api.notifications.stream.useStream({
+// 2. Frontend: Subscribe with useRealtime
+const { data } = api.notifications.stream.useRealtime({
   onMessage: (newMessage) => { console.log('New notification:', newMessage); }
 });
 

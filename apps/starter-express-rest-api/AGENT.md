@@ -102,7 +102,23 @@ Follow these workflows for common development tasks.
     ```
 5.  **Verification**: The endpoint `GET /api/v1/products` is now active. The `expressAdapter` will automatically route requests to this new action.
 
-### 3.2. How to Add a Background Job
+> **Pro-Tip: Use the CLI for Faster Scaffolding**
+>
+> Instead of creating these files manually, you can use the `igniter generate` command to build a complete feature slice from your Prisma schema in one step. This is the recommended approach.
+>
+> ```bash
+> # This single command creates the controller, Zod schemas, and procedures.
+> npx @igniter-js/cli generate feature products --schema prisma:Product
+> ```
+> This saves time and ensures consistency across your application. After running the command, you just need to register the new controller in `src/igniter.router.ts`.
+
+### 3.2. Generating the Type-Safe Client & Schema
+The type-safe client (`src/igniter.client.ts`) and schema (`src/igniter.schema.ts`) are crucial build artifacts for consumers of your API.
+
+-   **Manual Generation**: To run a one-time generation, use the `npm run build:client` command. This is ideal for CI/CD pipelines or when you need to update the client for an external application.
+-   **Automatic Generation**: The development server, started with `npm run dev`, automatically watches for changes in your controller files and regenerates these artifacts instantly.
+
+### 3.3. How to Add a Background Job
 
 **Objective**: Create a job to process a newly uploaded product image.
 
@@ -139,7 +155,7 @@ Follow these workflows for common development tasks.
     igniter.logger.info('Scheduled image processing job', { jobId: jobInfo.id });
     ```
 
-### 3.3. How to Modify the Database Schema
+### 3.4. How to Modify the Database Schema
 
 1.  **Edit Schema**: Modify the `prisma/schema.prisma` file.
 2.  **Generate Client**: After saving the schema, run the following command to update the Prisma client types:
