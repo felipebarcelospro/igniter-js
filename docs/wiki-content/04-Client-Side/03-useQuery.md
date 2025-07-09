@@ -94,6 +94,7 @@ The `useQuery` hook returns an object with a rich set of properties to manage th
 | Property      | Description                                                                                                     |
 | :------------ | :-------------------------------------------------------------------------------------------------------------- |
 | `data`        | The data returned from a successful query. It will be `undefined` until the fetch succeeds.                       |
+| `variables`   | The parameters (`query`, `params`) that were used for the most recent query execution.                            |
 | `isLoading`   | A boolean that is `true` only during the very first fetch for a query.                                          |
 | `isFetching`  | A boolean that is `true` whenever a request is in-flight (including initial load and subsequent refetches).     |
 | `isSuccess`   | A boolean that is `true` if the query has completed successfully.                                               |

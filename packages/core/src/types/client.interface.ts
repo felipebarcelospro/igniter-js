@@ -63,6 +63,11 @@ export type QueryActionCallerResult<
     data: TAction["$Infer"]["$Response"]["data"];
 
     /**
+     * The variables used for the QueryActionCaller. It will be `undefined` until the query is called.
+     */
+    variables?: TAction['$Infer']['$Input']
+
+    /**
      * A boolean that is `true` only during the very first fetch for a query.
      */
     isLoading: boolean;
@@ -157,6 +162,11 @@ export type MutationActionCallerResult<
      * The data returned from a successful query. It will be `undefined` until the fetch succeeds.
      */
     data: TAction["$Infer"]["$Response"]["data"];
+
+    /**
+     * The variables used for the mutation. It will be `undefined` until the mutation is called.
+     */
+    variables?: TAction['$Infer']['$Input']
 
     /**
      * A boolean that is `true` only during the very first fetch for a query.

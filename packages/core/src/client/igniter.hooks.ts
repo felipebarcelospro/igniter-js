@@ -64,6 +64,8 @@ export const createUseQuery = <
       error: options?.initialData?.error || null,
     });
 
+    const [variables, setVariables] = useState<TAction['$Infer']['$Input'] | undefined>();
+
     const isInitialLoadRef = useRef(true);
     const optionsRef = useRef(options);
     optionsRef.current = options;
@@ -92,6 +94,8 @@ export const createUseQuery = <
             ...params,
         };
         lastUsedParamsRef.current = mergedParams;
+
+        setVariables(mergedParams);
 
         setIsFetching(true);
         if (isInitialLoadRef.current) {
@@ -210,6 +214,7 @@ export const createUseQuery = <
       loading: isLoading,
       // @ts-expect-error - Ignore type error for now
       invalidate: () => invalidate([actionPath]),
+      variables
     };
   };
 };
@@ -240,6 +245,8 @@ export const createUseMutation = <
       error: null,
     });
 
+    const [variables, setVariables] = useState<TAction['$Infer']['$Input'] | undefined>();
+
     const optionsRef = useRef(options);
     optionsRef.current = options;
     // @ts-expect-error - Ignore type error for now
@@ -253,6 +260,8 @@ export const createUseMutation = <
       } as TAction["$Infer"]["$Input"];
 
       lastUsedParamsRef.current = mergedParams;
+
+      setVariables(mergedParams);
 
       let settledData: Awaited<TAction["$Infer"]["$Output"]> | null = null;
       let settledError: Awaited<TAction["$Infer"]["$Errors"]> | null = null;
@@ -298,6 +307,7 @@ export const createUseMutation = <
       mutate,
       data: response.data,
       error: response.error,
+      variables,
       isLoading,
       isSuccess,
       isError,

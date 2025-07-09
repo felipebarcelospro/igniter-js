@@ -57,16 +57,17 @@ function CreatePostForm() {
 
 The `useMutation` hook returns an object with properties to manage the mutation's state:
 
-| Property      | Description                                                                                              |
-| :------------ | :------------------------------------------------------------------------------------------------------- |
-| `mutate`      | A function to trigger the mutation. It takes one argument: an object with `body`, `query`, or `params`.    |
-| `mutateAsync` | A version of `mutate` that returns a `Promise`, which you can `await`.                                   |
-| `isLoading`   | A boolean that is `true` while the mutation is in flight.                                                |
-| `isSuccess`   | A boolean that is `true` if the mutation completed successfully.                                         |
-| `isError`     | A boolean that is `true` if the mutation failed.                                                         |
-| `error`       | If `isError` is true, this property will contain the error object.                                       |
-| `data`        | The data returned from your backend action handler upon a successful mutation.                           |
-| `reset`       | A function to reset the mutation's state back to its initial, idle state.                                |
+| Property    | Description                                                                                              |
+| :---------- | :------------------------------------------------------------------------------------------------------- |
+| `mutate`    | A function to trigger the mutation. It takes one argument: an object with `body`, `query`, or `params`.    |
+| `data`      | The data returned from your backend action handler upon a successful mutation. It is `undefined` until the mutation succeeds. |
+| `variables` | The variables (`body`, `query`, `params`) passed to the most recent `mutate` call. It is `undefined` until the mutation is called. |
+| `isLoading` | A boolean that is `true` while the mutation is in flight.                                                |
+| `isSuccess` | A boolean that is `true` if the mutation completed successfully.                                         |
+| `isError`   | A boolean that is `true` if the mutation failed.                                                         |
+| `error`     | If `isError` is true, this property will contain the error object.                                       |
+| `retry`     | A function to re-run the last mutation with the same variables.                                          |
+| `status`    | A string representing the mutation's state: `'loading'`, `'error'`, or `'success'`.                        |
 
 ---
 
@@ -74,11 +75,11 @@ The `useMutation` hook returns an object with properties to manage the mutation'
 
 To handle side effects like showing notifications or redirecting the user, `useMutation` accepts an options object with callback functions.
 
-| Callback                   | Description                                                                                             |
-| :------------------------- | :------------------------------------------------------------------------------------------------------ |
-| `onSuccess(data, vars)`    | Runs if the mutation is successful. Receives the `data` from the server and the `variables` sent to `mutate`. |
-| `onError(error, vars)`     | Runs if the mutation fails. Receives the `error` object and the `variables`.                            |
-| `onSettled(data, err, vars)` | Runs when the mutation finishes, regardless of whether it succeeded or failed.                           |
+| Callback             | Description                                                                                             |
+| :------------------- | :------------------------------------------------------------------------------------------------------ |
+| `onSuccess(data)`    | Runs if the mutation is successful. Receives the `data` from the server.                                  |
+| `onError(error)`     | Runs if the mutation fails. Receives the `error` object.                                                  |
+| `onSettled(data, error)` | Runs when the mutation finishes, regardless of whether it succeeded or failed. Receives data and error. |
 
 **Example: Showing Notifications on Success or Failure**
 
