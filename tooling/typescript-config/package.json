@@ -1,0 +1,14 @@
+{
+  "name": "@igniter-js/typescript-config",
+  "version": "0.2.0",
+  "private": true,
+  "description": "TypeScript configuration for Igniter.js monorepo",
+  "main": "index.json",
+  "license": "MIT",
+  "files": [
+    "base.json",
+    "nextjs.json",
+    "node.json",
+    "react.json"
+  ]
+} 

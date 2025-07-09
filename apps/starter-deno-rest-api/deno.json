@@ -1,0 +1,10 @@
+{
+  "tasks": {
+      "dev": "deno run --unstable-sloppy-imports --watch --import-map=import_map.json src/index.ts",
+      "start": "deno run --unstable-sloppy-imports --import-map=import_map.json src/index.ts"
+    },
+    "importMap": "./import_map.json",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1"
+  }
+}

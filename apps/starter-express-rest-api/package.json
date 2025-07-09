@@ -1,0 +1,30 @@
+{
+  "name": "starter-express-rest-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "NODE_ENV=production node dist/index.js",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@igniter-js/adapter-bullmq": "alpha",
+    "@igniter-js/adapter-mcp-server": "alpha",
+    "@igniter-js/adapter-redis": "alpha",
+    "@igniter-js/core": "^0.2.0-alpha.32",
+    "@igniter-js/eslint-config": "^0.1.0",
+    "@prisma/client": "^6.11.1",
+    "bullmq": "^4",
+    "express": "^5.1.0",
+    "zod": "3.25.67"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "latest",
+    "tsx": "^4.20.3",
+    "typescript": "^5.0.0"
+  }
+}

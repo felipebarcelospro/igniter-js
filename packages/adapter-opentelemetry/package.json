@@ -1,0 +1,83 @@
+{
+  "name": "@igniter-js/adapter-opentelemetry",
+  "version": "0.2.1",
+  "description": "OpenTelemetry adapter for Igniter.js telemetry system",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@igniter-js/core": "*"
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.7.0",
+    "@opentelemetry/sdk-node": "^0.202.0",
+    "@opentelemetry/exporter-jaeger": "^1.25.0",
+    "@opentelemetry/exporter-prometheus": "^0.202.0",
+    "@opentelemetry/exporter-otlp-http": "^0.202.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/exporter-jaeger": {
+      "optional": true
+    },
+    "@opentelemetry/exporter-prometheus": {
+      "optional": true
+    },
+    "@opentelemetry/exporter-otlp-http": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@opentelemetry/api": "^1.7.0",
+    "@opentelemetry/sdk-node": "^0.202.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.60.0",
+    "@opentelemetry/resources": "^1.25.0",
+    "@opentelemetry/semantic-conventions": "^1.25.0",
+    "@opentelemetry/sdk-trace-node": "^1.25.0",
+    "@opentelemetry/exporter-jaeger": "^1.25.0",
+    "@opentelemetry/exporter-otlp-http": "latest",
+    "@opentelemetry/sdk-metrics": "^1.25.0",
+    "@opentelemetry/exporter-prometheus": "^0.202.0",
+    "eslint": "^8.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "keywords": [
+    "igniter",
+    "opentelemetry",
+    "telemetry",
+    "observability",
+    "tracing",
+    "metrics"
+  ],
+  "author": "Felipe Barcelos",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/igniter-js/igniter-router.git",
+    "directory": "packages/adapter-opentelemetry"
+  },
+  "bugs": {
+    "url": "https://github.com/igniter-js/igniter-router/issues"
+  },
+  "homepage": "https://github.com/igniter-js/igniter-router#readme"
+}

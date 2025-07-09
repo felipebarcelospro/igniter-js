@@ -1,0 +1,26 @@
+{
+  "name": "starter-bun-rest-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.tsx",
+  "module": "src/index.tsx",
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "start": "NODE_ENV=production bun src/index.tsx",
+    "build": "bun run build.ts"
+  },
+  "dependencies": {
+    "@igniter-js/adapter-bullmq": "alpha",
+    "@igniter-js/adapter-mcp-server": "alpha",
+    "@igniter-js/adapter-redis": "alpha",
+    "@igniter-js/core": "alpha",
+    "@igniter-js/eslint-config": "^0.1.0",
+    "@prisma/client": "^6.11.1",
+    "bullmq": "^4",
+    "zod": "3.25.67"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
