@@ -46,7 +46,8 @@
     "typecheck": "turbo typecheck",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "turbo build && changeset publish"
+    "release": "turbo build && changeset publish",
+    "wiki:sync": "node ./scripts/sync-wiki.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.9",
