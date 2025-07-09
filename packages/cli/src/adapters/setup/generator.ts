@@ -69,7 +69,7 @@ export class ProjectGenerator {
   private async downloadTemplate(): Promise<void> {
     const { framework } = this.config
     const templateUrl = `https://github.com/felipebarcelospro/igniter-js.git`
-    const templateDir = path.join(this.targetDir, 'apps')
+    const templateDir = path.join(this.targetDir, '.')
     const branch = 'release/0.2.0-alpha.0'
 
     this.spinner.start(`Downloading template ${framework} from branch ${branch}...`)
