@@ -66,24 +66,71 @@ export class ProjectGenerator {
     }
   }
 
-  private async downloadTemplate(): Promise<void> {
+  private async downloadTemplate(): Promise<{ isStarter: boolean, success: boolean }> {
     const { framework } = this.config
     const templateUrl = `https://github.com/felipebarcelospro/igniter-js.git`
-    const templateDir = path.join(this.targetDir, '.')
     const branch = 'release/0.2.0-alpha.0'
+    const tempDir = path.join(this.targetDir, '__igniter_tmp__')
+    const starterDir = path.join(tempDir, 'apps', `starter-${framework}`)
+    const destDir = this.targetDir
 
-    this.spinner.start(`Downloading template ${framework} from branch ${branch}...`)
+    let isValidStarter = false
+
+    this.spinner.start(`Baixando apenas o conteúdo da pasta starter (${framework}) do branch ${branch}...`)
 
     try {
-      await fs.mkdir(templateDir, { recursive: true })
-      await execa('git', ['clone', '--branch', branch, '--single-branch', templateUrl, templateDir])
-    } catch (error) {
-      this.spinner.fail(chalk.red('Template download failed'))
-      logger.error('Template download failed', { error })
-      throw error
-    }
+      // Remove tempDir if exists
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+      // Clone repo to tempDir
+      await execa('git', [
+        'clone',
+        '--depth', '1',
+        '--branch', branch,
+        '--single-branch',
+        templateUrl,
+        tempDir
+      ])
+      // Verifica se starterDir existe
+      const stat = await fs.stat(starterDir).catch(() => null)
+      if (!stat || !stat.isDirectory()) {
+        throw new Error('Diretório starter não encontrado no template clonado.')
+      }
 
-    this.spinner.succeed(chalk.dim('✓ Template downloaded'))
+      isValidStarter = true
+
+      // Copia todo o conteúdo de starterDir para destDir
+      // Função recursiva para copiar arquivos e pastas
+      const copyRecursive = async (src: string, dest: string) => {
+        const entries = await fs.readdir(src, { withFileTypes: true })
+        for (const entry of entries) {
+          const srcPath = path.join(src, entry.name)
+          const destPath = path.join(dest, entry.name)
+          if (entry.isDirectory()) {
+            await fs.mkdir(destPath, { recursive: true })
+            await copyRecursive(srcPath, destPath)
+          } else if (entry.isFile()) {
+            await fs.copyFile(srcPath, destPath)
+          }
+        }
+      }
+
+      await copyRecursive(starterDir, destDir)
+
+      // Remove tempDir
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+
+      this.spinner.succeed(chalk.dim('✓ Conteúdo da pasta starter copiado com sucesso'))
+      return { isStarter: isValidStarter, success: true }
+    } catch (error) {
+      // try check from error if is valid
+
+      console.error('Template download/copy failed', error)
+      this.spinner.fail(chalk.red('Falha ao baixar/copiar o template starter'))
+      logger.error('Template download/copy failed', { error })
+      // Remove tempDir se deu erro
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+      return { isStarter: isValidStarter, success: false }
+    }
   }
 
   /**
@@ -93,8 +140,15 @@ export class ProjectGenerator {
     this.spinner.start('Creating project structure...')
 
     try {
-      if (['nextjs', 'vite', 'tanstack-start', 'express', 'deno', 'bun', 'bun-react'].includes(this.config.framework)) {
-        await this.downloadTemplate()
+      const result = await this.downloadTemplate()
+      if (result.isStarter) {
+        if(result.success !== true) {
+          throw new Error('Template download/copy failed')
+        }
+
+        if(result.success === true) {
+          return
+        }
       }
 
       // Ensure target directory exists
