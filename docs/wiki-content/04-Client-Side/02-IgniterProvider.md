@@ -4,7 +4,7 @@ The `<IgniterProvider>` is the root component that powers the entire Igniter.js 
 
 Its primary responsibilities are:
 
-1.  **Query Cache Management:** It initializes and provides the cache for all API queries, using [TanStack Query](https://tanstack.com/query/latest) under the hood. This enables automatic caching, re-fetching, and state management for hooks like `useQuery` and `useMutation`.
+1.  **Query Cache Management:** It initializes and provides the cache for all API queries. The client-side implementation is heavily inspired by modern data-fetching libraries like TanStack Query, but is a custom solution built specifically for Igniter.js. This enables automatic caching, re-fetching, and state management for hooks like `useQuery` and `useMutation`.
 2.  **Realtime Connection:** It manages the persistent Server-Sent Events (SSE) connection to your backend, which is essential for `Igniter.js Realtime` features like automatic revalidation and custom data streams.
 3.  **Client Context:** It holds the client-side context, such as the current user's session, making it available for features like scoped real-time updates.
 

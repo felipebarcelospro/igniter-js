@@ -124,7 +124,7 @@ export const createUseQuery = <
           setResponse(result);
           setStatus('success');
           optionsRef.current?.onRequest?.(result);
-          optionsRef.current?.onSuccess?.(result);
+          optionsRef.current?.onSuccess?.(result.data);
 
           if (optionsRef.current?.staleTime) {
             ClientCache.set(cacheKey, result);
@@ -134,14 +134,15 @@ export const createUseQuery = <
           const errorResponse = { data: null, error: error as TAction["$Infer"]["$Output"]["error"] };
           // @ts-expect-error - Ignore type error for now
           settledError = errorResponse;
-          setResponse(errorResponse);
+          setResponse(errorResponse.error);
           setStatus('error');
           optionsRef.current?.onError?.(errorResponse.error);
         } finally {
           setIsFetching(false);
           isInitialLoadRef.current = false;
           optionsRef.current?.onLoading?.(false);
-          optionsRef.current?.onSettled?.(settledData as any, settledError as any);
+          // @ts-expect-error - Ignore type error for now
+          optionsRef.current?.onSettled?.(settledData.data as any, settledError.error as any);
         }
       },
       [getCacheKey, regKey, fetcher],

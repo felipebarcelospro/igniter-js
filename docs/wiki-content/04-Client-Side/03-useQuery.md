@@ -1,6 +1,6 @@
 # Client-Side: Fetching Data with `useQuery`
 
-The `useQuery` hook is the primary tool for fetching data from your Igniter.js backend in a client-side React component. It's a powerful wrapper around the industry-standard [TanStack Query](https://tanstack.com/query/latest)'s `useQuery` hook, but with a crucial advantage: it's **end-to-end type-safe**.
+The `useQuery` hook is the primary tool for fetching data from your Igniter.js backend in a client-side React component. Its design is heavily inspired by modern data-fetching libraries like [TanStack Query](https://tanstack.com/query/latest), but it is a completely custom implementation built specifically for Igniter.js. This provides a familiar, powerful API with a crucial advantage: it's **end-to-end type-safe**.
 
 This means the parameters you pass to the hook and the data it returns are all automatically typed based on your backend's `AppRouter` definition.
 
