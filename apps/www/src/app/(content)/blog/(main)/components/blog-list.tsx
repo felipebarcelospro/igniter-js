@@ -185,9 +185,9 @@ function BlogNavbar({
       initial="hidden"
       animate="visible"
       variants={containerVariants}
-      className="flex items-center justify-between px-10 py-4 border-b border-border"
+      className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 lg:px-10 py-4 border-b border-border gap-4 sm:gap-0"
     >
-      <motion.div className="flex space-x-4" variants={containerVariants}>
+      <motion.div className="flex flex-wrap gap-2 sm:space-x-4 sm:gap-0" variants={containerVariants}>
         {categories.map((category) => (
           <motion.div key={category} variants={itemVariants}>
             <CategoryButton
@@ -197,6 +197,19 @@ function BlogNavbar({
             />
           </motion.div>
         ))}
+      </motion.div>
+      
+      {/* RSS Feed Link */}
+      <motion.div variants={itemVariants}>
+        <Link 
+          href="/feed.xml" 
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Rss className="h-4 w-4" />
+          <span className="hidden sm:inline">RSS Feed</span>
+        </Link>
       </motion.div>
     </motion.nav>
   );
@@ -239,16 +252,25 @@ export function BlogList({ posts }: { posts: ContentSection[] }) {
         onSearchChange={setSearchQuery}
       />
 
-      <motion.main className="p-10" variants={containerVariants}>
+      <motion.main className="p-4 lg:p-10" variants={containerVariants}>
         <ScrollArea>
-          <motion.div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-            variants={containerVariants}
-          >
-            {filteredPosts.map((post, index) => (
-              <BlogPostCard key={`${post.slug}-${index}`} post={post} />
-            ))}
-          </motion.div>
+          {filteredPosts.length === 0 ? (
+            <motion.div 
+              className="text-center py-16"
+              variants={itemVariants}
+            >
+              <p className="text-muted-foreground text-lg">No posts found matching your criteria.</p>
+            </motion.div>
+          ) : (
+            <motion.div
+              className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6"
+              variants={containerVariants}
+            >
+              {filteredPosts.map((post, index) => (
+                <BlogPostCard key={`${post.slug}-${index}`} post={post} />
+              ))}
+            </motion.div>
+          )}
         </ScrollArea>
       </motion.main>
     </motion.div>
