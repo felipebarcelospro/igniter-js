@@ -224,7 +224,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
   stream<TStreamData = ResponseData>(options: StreamOptions<TStreamData>) {
     // Derive channelId from controller and action if provided
     if (options.controllerKey && options.actionKey && !options.channelId) {
-      options.channelId = `action::${options.controllerKey}.${options.actionKey}`;
+      options.channelId = `${options.controllerKey}.${options.actionKey}`;
     }
 
     this.logger.info(`Configuring response as SSE stream.`, { channelId: options.channelId });

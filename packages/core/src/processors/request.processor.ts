@@ -205,7 +205,7 @@ export class RequestProcessor<
       for (const [actionKey, action] of Object.entries(controller.actions)) {
         // @ts-ignore
         if (action.stream) {
-          const channelId = `action::${controllerKey}.${actionKey}`;
+          const channelId = `${controllerKey}.${actionKey}`;
           this.logger.debug(`Registering stream channel for action: ${channelId}`);
           SSEProcessor.registerChannel({
             id: channelId,

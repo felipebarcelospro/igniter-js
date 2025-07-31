@@ -539,7 +539,7 @@ describe('Response Processor', () => {
         .toResponse();
 
       const body = await response.json();
-      expect(body.data.channelId).toBe('action::users.notifications');
+      expect(body.data.channelId).toBe('users.notifications');
     });
 
     it('should handle existing channels', async () => {
