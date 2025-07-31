@@ -5,9 +5,9 @@ import type { IgniterProcedure, InferActionProcedureContext } from "./procedure.
 import type { StandardSchemaV1 } from "./schema.interface";
 import type { InferParamPath, NonUnknownObject, Prettify } from "./utils.interface";
 import type { IgniterRealtimeService } from "./realtime.interface";
-import type { IgniterPlugin, InferIgniterPlugins, PluginSelfContext } from "./plugin.interface";
+import type { IgniterPlugin, InferIgniterPlugins } from "./plugin.interface";
 
-export type QueryMethod = "GET"; 
+export type QueryMethod = "GET";
 export type MutationMethod = "POST" | "PUT" | "DELETE" | "PATCH";
 export type HTTPMethod = QueryMethod | MutationMethod;
 export type IgniterCookies = IgniterCookie;
@@ -43,7 +43,7 @@ export type InferActionResponse<THandlerReturn> =
 type InferProcessorResponse<TData> = TData extends IgniterProcessorResponse<infer TSuccess, infer TError>
   ? {
       data: TSuccess;
-      error: TError extends IgniterErrorResponse<infer TCode, infer TErrorData> 
+      error: TError extends IgniterErrorResponse<infer TCode, infer TErrorData>
         ? IgniterErrorResponse<TCode, TErrorData>
         : null;
     }
@@ -86,14 +86,14 @@ type IgniterErrorResponse<TCode extends IgniterCommonErrorCode, TData = unknown>
 /**
  * Complete action context provided to action handlers.
  * Includes request data, application context, response utilities, realtime service, and type-safe plugin access.
- * 
+ *
  * @template TActionContext - Application context type with plugin registry
  * @template TActionPath - Action path for parameter inference
  * @template TActionMethod - HTTP method type
  * @template TActionBody - Request body schema type
  * @template TActionQuery - Query parameters schema type
  * @template TActionMiddlewares - Applied middleware procedures
- * 
+ *
  * @example
  * ```typescript
  * // In action handler
@@ -101,15 +101,15 @@ type IgniterErrorResponse<TCode extends IgniterCommonErrorCode, TData = unknown>
  *   // ✅ Request data (fully typed)
  *   const userId = ctx.request.params.id;  // string (inferred from path)
  *   const userData = ctx.request.body;     // UserSchema input type
- *   
+ *
  *   // ✅ Application context (enhanced with plugins)
  *   const db = ctx.context.db;            // Database instance
  *   const currentUser = ctx.context.auth?.currentUser; // From auth plugin
- *   
+ *
  *   // ✅ Plugin actions (type-safe)
  *   await ctx.plugins.audit.actions.create({ action: 'user:update', userId });
  *   await ctx.plugins.email.actions.sendNotification({ to: userData.email });
- *   
+ *
  *   // ✅ Response utilities
  *   return ctx.response.json({ success: true, user: updatedUser });
  * }
@@ -124,7 +124,7 @@ export type IgniterActionContext<
   TActionMiddlewares extends readonly IgniterProcedure<any, any, any>[],
   TActionPlugins extends Record<string, any>,
 > = {
-  /** 
+  /**
    * Request data with full type inference for params, body, and query.
    * Path parameters are inferred from the route path template.
    */
@@ -141,39 +141,39 @@ export type IgniterActionContext<
       ? StandardSchemaV1.InferInput<TActionQuery>
       : undefined;
   };
-  
-  /** 
+
+  /**
    * Enhanced application context merging base context, middleware context, and plugin extensions.
    * Provides access to all application services and plugin-provided context data.
    */
   context: TActionContext & InferActionProcedureContext<TActionMiddlewares>;
-  
-  /** 
+
+  /**
    * Response processor for creating typed HTTP responses.
    * Supports JSON, HTML, SSE, and custom response types.
    */
   response: IgniterResponseProcessor<TActionContext & InferActionProcedureContext<TActionMiddlewares>, IgniterProcessorResponse<unknown>>;
-  
-  /** 
+
+  /**
    * Realtime service for server-sent events and websocket communication.
    * Enables real-time updates to connected clients.
    */
   realtime: IgniterRealtimeService<TActionContext & InferActionProcedureContext<TActionMiddlewares>>;
-  
-  /** 
+
+  /**
    * Type-safe plugin access registry.
    * Provides IntelliSense and type checking for all registered plugin actions and events.
    * Only available plugins registered in the builder will be accessible.
-   * 
+   *
    * @example
    * ```typescript
    * // Plugin actions (fully typed based on registration)
    * await ctx.plugins.audit.actions.create({ action: 'login', userId: '123' });
    * await ctx.plugins.auth.actions.validateToken({ token: 'abc' });
-   * 
+   *
    * // Plugin events (type-safe)
    * await ctx.plugins.audit.emit('user:activity', { type: 'login', userId: '123' });
-   * 
+   *
    * // Plugin context (auto-completed)
    * console.log(ctx.context.audit.userId);      // From audit plugin context extension
    * console.log(ctx.context.auth.currentUser);  // From auth plugin context extension
@@ -241,12 +241,12 @@ export type IgniterMutationOptions<
   description?: string;
   path: TMutationPath;
   method: TMutationMethod;
-  
+
   use?: TMutationMiddlewares;
 
   body?: TMutationBody;
   query?: TMutationQuery;
-  
+
   handler: TMutationHandler;
 };
 

@@ -1,5 +1,5 @@
 import type { RequestProcessor } from "../processors";
-import type { ContextCallback, IgniterBaseConfig, IgniterControllerBaseAction, IgniterControllerConfig, IgniterRouter, IgniterRouterCaller, MutationActionCallerResult, QueryActionCallerResult } from "../types";
+import type { ContextCallback, IgniterBaseConfig, IgniterControllerBaseAction, IgniterControllerConfig, IgniterRouter, IgniterRouterCaller, MutationActionCallerResult, QueryActionCallerResult, RealtimeActionCallerResult } from "../types";
 
 /**
  * Creates a proxy-based caller for invoking actions via controller namespace (server-only).
@@ -29,6 +29,7 @@ export function createServerCaller<
 
           if(action.method === 'GET') {
             return {
+              useRealtime: (...args: any[]) => ({} as RealtimeActionCallerResult<typeof action>),
               useQuery: (...args: any[]) => ({} as QueryActionCallerResult<typeof action>),
               query: async (input: any) => {
                 if (!processor) {
