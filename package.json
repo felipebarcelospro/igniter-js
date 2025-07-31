@@ -56,6 +56,7 @@
     "@igniter-js/typescript-config": "*",
     "@types/ioredis": "^4.28.10",
     "@types/node": "^22.9.0",
+    "@types/rss": "^0.0.32",
     "eslint": "^8.57.0",
     "ioredis": "^5.6.1",
     "prettier": "^3.3.3",
@@ -66,5 +67,8 @@
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
+  },
+  "dependencies": {
+    "rss": "^1.2.2"
   }
 }
