@@ -18,16 +18,13 @@ export function ThemeToggle() {
   }
 
   return (
-    <div className="flex items-center w-40 bg-transparent border border-border rounded-md p-1 pr-2 shadow-sm space-x-1">
+    <div className="flex items-center w-40">
       {["light", "dark"].map((mode) => (
         <button
           key={mode}
           onClick={() => setTheme(mode)}
           className={cn(
-            "h-7 px-3 w-1/2 text-sm rounded-sm border border-border flex items-center justify-center transition-all duration-200",
-            theme === mode &&
-              "bg-secondary dark:bg-zinc-700 text-gray-900 dark:text-zinc-100 shadow-sm",
-            theme !== mode && "border-none",
+            "h-7 px-3 w-1/2 text-sm flex items-center justify-center transition-all duration-200",
           )}
         >
           {mode === "light" ? (

@@ -21,15 +21,15 @@ export function SidebarClient({ sidebarItems }: SidebarClientProps) {
     if (activeItemRef.current && sidebarRef.current) {
       const sidebar = sidebarRef.current;
       const activeItem = activeItemRef.current;
-      
+
       const sidebarRect = sidebar.getBoundingClientRect();
       const activeItemRect = activeItem.getBoundingClientRect();
-      
+
       const sidebarCenter = sidebarRect.height / 2;
       const activeItemCenter = activeItemRect.top - sidebarRect.top + activeItemRect.height / 2;
-      
+
       const scrollOffset = activeItemCenter - sidebarCenter;
-      
+
       sidebar.scrollTo({
         top: sidebar.scrollTop + scrollOffset,
         behavior: 'smooth'
@@ -38,9 +38,9 @@ export function SidebarClient({ sidebarItems }: SidebarClientProps) {
   }, [pathname]);
 
   return (
-    <div 
+    <div
       ref={sidebarRef}
-      className="space-y-4 sticky top-24 h-[calc(100vh-10rem)] overflow-y-auto [&::-webkit-scrollbar]:hidden"
+      className="space-y-10 sticky top-24 h-[calc(100vh-10rem)] overflow-y-auto [&::-webkit-scrollbar]:hidden"
     >
       {sidebarItems.map((section, index) => (
         <motion.div
@@ -48,23 +48,17 @@ export function SidebarClient({ sidebarItems }: SidebarClientProps) {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: index * 0.1 }}
-          className="px-3 py-2"
+          className=""
         >
           <h2
-            className="mb-2 px-4 text-lg font-semibold tracking-tight truncate"
+            className="mb-4 px-4 text-xs uppercase text-muted-foreground tracking-tight truncate"
             title={section.title}
           >
             {section.title}
           </h2>
           <div className="space-y-1">
             {section.items.map((item, itemIndex) => (
-              <motion.div
-                key={`${item.slug}-${item.title}`}
-                ref={pathname === item.slug ? activeItemRef : null}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 + itemIndex * 0.05 }}
-              >
+
                 <Button
                   asChild
                   variant={pathname === item.slug ? "secondary" : "ghost"}
@@ -75,13 +69,12 @@ export function SidebarClient({ sidebarItems }: SidebarClientProps) {
                 >
                   <Link
                     href={item.slug}
-                    className="truncate"
+                    className="flex w-full h-full"
                     title={item.title}
                   >
                     {item.title}
                   </Link>
                 </Button>
-              </motion.div>
             ))}
           </div>
         </motion.div>

@@ -136,9 +136,9 @@ function BlogPostCard({ post }: BlogPostCardProps) {
             >
               {getIcon(post.type)}
             </motion.div>
-            <span className="text-sm text-muted-foreground">
+            {/*<span className="text-sm text-muted-foreground">
               {formatDate(post.date)}
-            </span>
+            </span>*/}
           </div>
 
           <div className="flex-grow mt-20 flex flex-col justify-end">

@@ -95,69 +95,70 @@ const config = {
     hljs: {
       custom: {
         base: {
-          background: "transparent", 
+          background: "transparent",
           color: "hsl(var(--foreground))",
         },
         general: {
           keyword: {
-            color: "#57ffae",
+            color: "hsl(var(--secondary-foreground))",
             fontStyle: "italic",
           },
           built_in: {
-            color: "#57ffae", 
+            color: "hsl(var(--secondary-foreground))",
             fontStyle: "italic",
           },
           type: {
-            color: "#f6fe4b",
+            color: "hsl(var(--foreground))",
           },
           literal: {
-            color: "#ffca4a",
+            color: "hsl(var(--secondary-foreground))",
           },
           number: {
-            color: "#ff83d9",
+            color: "hsl(var(--accent-foreground))",
           },
           regexp: {
-            color: "#fcfdc0",
+            color: "hsl(var(--accent-foreground))",
           },
           string: {
-            color: "#fcfdc0",
+            color: "hsl(var(--accent-foreground))",
           },
           subst: {
-            color: "#fcfdc0",
+            color: "hsl(var(--accent-foreground))",
           },
           symbol: {
-            color: "#f6fe4b",
+            color: "hsl(var(--accent-foreground))",
           },
           class: {
-            color: "#f6fe4b",
+            color: "hsl(var(--foreground))",
           },
           function: {
-            color: "#f6fe4b",
+            color: "hsl(var(--foreground))",
           },
           title: {
-            color: "#ff8f65",
+            color: "hsl(var(--foreground))",
           },
           params: {
-            color: "#fcfdc0",
+            color: "hsl(var(--accent-foreground))",
           },
           comment: {
-            color: "hsla(60, 55%, 94%, 0.66)",
+            color: "hsl(var(--muted-foreground))",
+            fontStyle: "italic",
           },
         },
         meta: {
           keyword: {
-            color: "#57ffae",
+            color: "hsl(var(--secondary-foreground))",
           },
           string: {
-            color: "#fcfdc0",
+            color: "hsl(var(--accent-foreground))",
           },
         },
         tags: {
           name: {
-            color: "#f2fd13",
+            color: "hsl(var(--secondary-foreground))",
           },
           attr: {
-            color: "#f2fd13",
+            color: "hsl(var(--accent-foreground))",
           },
         },
         text: {

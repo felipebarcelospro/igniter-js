@@ -1,8 +1,8 @@
 "use client";
 
-import { CodeBlock, CodeBlockContent, CodeBlockHeader } from "@/components/ui/code-block";
+import { CodeBlock, CodeBlockContent, CodeBlockHeader, ConnectedCodeBlockContent } from "@/components/ui/code-block";
 import { motion } from "framer-motion";
-import { Code2, Database, Lock, Mail, Upload, Zap } from "lucide-react";
+import { ChevronRight, Code2, Database, Lock, Mail, Upload, Zap } from "lucide-react";
 import React from "react";
 
 const codeExamples = [
@@ -11,98 +11,114 @@ const codeExamples = [
     title: "Controllers",
     description: "Type-safe API endpoints with automatic validation",
     icon: Code2,
-    code: `// src/features/user/controllers/user.controller.ts
-import { action } from "@igniter-js/core";
-import { z } from "zod";
-import { UserInput } from "../user.types";
-import { auth } from "../procedures/auth.procedure";
+    code: `// features/users/controllers/users.controller.ts
+export const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    getUser: igniter.query({
+      path: '/:id' as const,
+      handler: async ({ request, response, context, query }) => {
+        const user = await context.db.user.findUnique({
+          where: { id: input.id }
+        });
 
-export const userController = {
-  // Query Action
-  getUserById: action()
-    .input(z.object({ id: z.string() }))
-    .handler(async ({ input, context }) => {
-      return await context.db.user.findUnique({ where: { id: input.id } });
-    }),
+        if (!user) {
+          throw new Error('User not found');
+        }
 
-  // Mutation Action with Middleware
-  updateProfile: auth("user:update")
-    .input(UserInput)
-    .handler(async ({ input, context }) => {
-      return await context.db.user.update({
-        where: { id: context.user.id },
-        data: input,
-      });
+        return user;
+      },
     }),
-};`
+    createUser: igniter.muate({
+      path: '/' as const,
+      body: z.object({
+        name: z.string(),
+        email: z.string().email()
+      })
+      handler: async ({ request, response, context, query }) => {
+        return await context.db.user.create({
+          data: input
+        });
+      },
+    }),
+  }
+})`
   },
   {
     id: "procedure",
     title: "Procedures (Middleware)",
     description: "Reusable middleware for authentication, validation, and more",
     icon: Zap,
-    code: `// src/features/user/procedures/auth.procedure.ts
-import { procedure } from "@igniter-js/core";
-import { getCurrentUser } from "./utils/get-current-user";
+    code: `// procedures/auth.procedure.ts
+export const auth = igniter.procedure({
+  handler: async (options: AuthOptions, { response }) => {
+    const user = await getCurrentUser();
 
-type AuthOptions = {
-  permissions: string[];
-};
+    // If auth is required but there's no user, return an unauthorized error.
+    // This stops the request from proceeding further.
+    if (options.isAuthRequired && !user) {
+      return response.unauthorized('Authentication required.');
+    }
 
-export const auth = (scope: string) =>
-  procedure<AuthOptions>()
-    .use(async ({ options, context, next }) => {
-      const user = await getCurrentUser(context.req.headers.authorization);
-
-      if (!user) {
-        throw new Error("UNAUTHORIZED");
-      }
-
-      const hasPermission = user.permissions.includes(scope);
-      if (!hasPermission) {
-        throw new Error("FORBIDDEN");
-      }
-
-      return next({
-        context: {
-          ...context,
-          user,
-        },
-      });
-    });`
+    // The returned object is merged into the context.
+    // Now, context.auth.user will be available in our controller.
+    return {
+      auth: {
+        user,
+      },
+    };
   },
+});
+
+// Usage in controller
+export const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    getCurrentUser: igniter.query({
+      path: '/',
+      // Use the procedure created in the previous step.
+      // TypeScript knows that context.auth.user is now available!
+      use: [auth({ isAuthRequired: true })],
+      handler: async ({ request, response, context, query }) => {
+        // You can get fully type-safety user object from Auth Procedure
+        const user = context.auth.user
+
+        // Return current session user
+        return response.success(user);
+      },
+    }),
+  }
+})
+` },
   {
     id: "client",
     title: "Frontend Client",
     description: "Fully typed client with React hooks for seamless integration",
     icon: Code2,
-    code: `// src/igniter.client.ts
-import { createIgniter } from "@igniter-js/react";
-import { type AppRouter } from "./igniter.router.ts";
+    code: `// Frontend usage with React
+import { api } from './igniter.client';
 
-export const {
-  IgniterProvider,
-  useQuery,
-  useMutation,
-  useSubscription,
-  useQueryClient,
-  api,
-} = createIgniter<AppRouter>({
-  url: "/api/igniter",
-});
+function UserProfile({ userId }: { userId: string }) {
+  const currentUser = api.user.getCurrentUser.useQuery({
+    enabled: !!userId,
+    staleTime: 5000,
+    refetchOnWindowFocus: false,
+    onSuccess: (data) => {
+      console.log('Successfully fetched current user:', data);
+    },
+    onError: (error) => {
+      console.error('Error fetching current user:', error);
+    },
+  });
 
-// app/components/UsersList.tsx
-function UsersList() {
-  const { data: users, isLoading } = useQuery("user", "getAll");
-
-  if (isLoading) return "Loading...";
+  if (currentUser.isLoading) return <div>Loading user...</div>;
+  if (currentUser.isError) return <div>Error to load user: {postsQuery.error.message}</div>;
 
   return (
-    <ul>
-      {users?.map((user) => (
-        <li key={user.id}>{user.name}</li>
-      ))}
-    </ul>
+    <div>
+      <h1>{currentUser?.name}</h1>
+      <p>{currentUser?.email}</p>
+    </div>
   );
 }`
   },
@@ -111,69 +127,89 @@ function UsersList() {
     title: "Background Jobs",
     description: "Reliable job processing with BullMQ integration",
     icon: Database,
-    code: `// src/jobs/index.ts
-import { EmailJob } from "./email.job";
+    code: `// src/services/jobs.ts
 
-export const jobs = {
-  email: EmailJob,
-};
+// Creates a set of registered jobs, using the merge method to add new jobs
+export const registeredJobs = jobs.merge({
+  // Defines a group of jobs related to emails
+  emails: jobs.router({
+    jobs: {
+      // Registers the 'sendWelcome' job
+      sendWelcome: jobs.register({
+        name: 'sendWelcome', // Job name
+        input: z.object({
+          message: z.string() // Defines the input format using Zod (type validation)
+        }),
+        handler: async ({ input }) => {
+          // Function to be executed when the job runs
+          console.log(input.message) // Displays the received message in the console
+        }
+      })
+    }
+  })
+})
 
-// src/jobs/email.job.ts
-import { job } from "@igniter-js/core";
-import { z } from "zod";
-
-export const EmailJob = job()
-  .input(z.object({ to: z.string().email(), name: z.string() }))
-  .handler(async ({ input, context }) => {
-    await context.mailer.send({
-      to: input.to,
-      subject: "Welcome!",
-      body: \`Hi \${input.name}, welcome to Igniter.js!\`,
-    });
-    context.logger.info(\`Welcome email sent to \${input.to}\`);
-  });
-
-// Enqueue from an action
-export const userController = {
-  createUser: action()
-    .input(UserInput)
-    .handler(async ({ input, context: { db, jobs } }) => {
-      const user = await db.user.create({ data: input });
-      await jobs.email.add({ to: user.email, name: user.name });
-      return user;
-    }),
-};`
+// Enqueues the 'sendWelcome' job for execution, ensuring type safety
+await igniter.jobs.emails.enqueue({
+  task: 'sendWelcome', // Name of the job to be executed
+  input: {
+    userId: '123' // Input passed to the job (note: schema expects 'message', not 'userId')
+  }
+});`
   },
   {
     id: "events",
-    title: "Real-time Events",
-    description: "Live data synchronization and event streaming",
+    title: "Pub/Sub Messaging",
+    description: "Backend Pub/Sub messaging for distributed services using Redis.",
     icon: Zap,
-    code: `// Automatic Revalidation
-export const postController = {
-  createPost: action()
-    .input(PostInput)
-    .revalidate("post", "getAll") // Automatically refetches 'getAll' query on the client
-    .handler(async ({ input, context }) => {
-      return await context.db.post.create({ data: input });
+    code: `// src/features/user/controllers/user.controller.ts
+export const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    createUser: igniter.mutate({
+      path: '/' as const,
+      body: z.object({
+        name: z.string(),
+        email: z.string().email(),
+      }),
+      handler: async ({ input, context }) => {
+        const user = await context.db.user.create({
+          data: input,
+        });
+
+        // Publish an event via Igniter Store (backed by Redis)
+        // This event can be consumed by other services or instances
+        // of your application for real-time updates or background processing.
+        await igniter.store.publish('user.created', {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          timestamp: new Date().toISOString(),
+        });
+
+        return user;
+      },
     }),
-};
+  }
+});
 
-// Custom Data Streams
-export const notificationStream = stream()
-  .input(z.object({ userId: z.string() }))
-  .handler(async function* ({ input, done }) {
-    for await (const notification of getNotifications(input.userId)) {
-      yield { data: notification };
-    }
-    done();
-  });
+// src/services/notifications.service.ts
+// Example: A separate service (or another instance) subscribing to user events.
+// This demonstrates inter-service communication in a distributed environment.
+igniter.store.subscribe('user.created', async (data) => {
+  // 'data' is fully typed based on the published event.
+  console.log(\`[Notification Service] New user created: \${data.name} (\${data.email})\`);
+  // Here, you could send a welcome email, update a CRM, etc.
+  // await emailService.sendWelcomeEmail(data.email, data.name);
+});
 
-// Subscribe on frontend
-const { data } = useSubscription(
-  "notificationsStream",
-  { userId: "123" }
-);`
+// src/services/analytics.service.ts
+// Another service subscribing to all user-related events.
+igniter.store.subscribe('user.*', (data, channel) => {
+  console.log(\`[Analytics Service] Received event on channel \${channel}: \`, data);
+  // Log event to analytics platform
+  // analyticsClient.track(channel, data);
+});`
   },
   {
     id: "caching",
@@ -181,73 +217,97 @@ const { data } = useSubscription(
     description: "Redis-powered caching for optimal performance",
     icon: Database,
     code: `// Caching with Redis Store
-export const usersController = {
-  getUser: action()
-    .input(z.object({ id: z.string() }))
-    .handler(async ({ input, context }) => {
-      const cacheKey = \`user:\${input.id}\`;
+export const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    getById: igniter.query({
+      path: '/:id' as const,
+      handler: async ({ request, response, context, query }) => {
+        const cacheKey = \`user:\${input.id}\`;
 
-      // Try to get from cache first
-      const cached = await context.store.get(cacheKey);
-      if (cached) {
-        return JSON.parse(cached);
-      }
+        // Try to get from cache first
+        const cached = await context.store.get(cacheKey);
+        if (cached) {
+          return JSON.parse(cached);
+        }
 
-      // Fetch from database
-      const user = await context.db.user.findUnique({
-        where: { id: input.id }
-      });
+        // Fetch from database
+        const user = await context.db.user.findUnique({
+          where: { id: input.id }
+        });
 
-      // Cache for 1 hour
-      await context.store.set(
-        cacheKey,
-        JSON.stringify(user),
-        { ttl: 3600 }
-      );
+        // Cache for 1 hour
+        await context.store.set(
+          cacheKey,
+          JSON.stringify(user),
+          { ttl: 3600 }
+        );
 
-      return user;
+        return user;
+      },
     }),
+    update: igniter.muate({
+      path: '/' as const,
+      body: z.object({
+        name: z.string(),
+        email: z.string().email()
+      })
+      handler: async ({ request, response, context, query }) => {
+        const user = await context.db.user.update({
+          where: { id: input.id },
+          data: input
+        });
 
-  updateUser: action()
-    .input(updateUserSchema)
-    .handler(async ({ input, context }) => {
-      const user = await context.db.user.update({
-        where: { id: input.id },
-        data: input
-      });
+        // Invalidate cache
+        await igniter.store.del(\`user:\${input.id}\`);
 
-      // Invalidate cache
-      await context.store.del(\`user:\${input.id}\`);
-
-      return user;
-    })
-};`
+        return user;
+      },
+    }),
+  }
+})`
   },
   {
     id: "context",
     title: "Context System",
     description: "Dependency injection and shared application state",
     icon: Code2,
-    code: `// src/igniter.context.ts
-import { PrismaClient } from "@prisma/client";
-import { createLogger, createMailer } from "./services";
-
-export async function createIgniterAppContext() {
+    code: `// igniter.context.ts
+export const createContext = async () => {
   const db = new PrismaClient();
-  const logger = createLogger();
-  const mailer = createMailer();
 
   return {
-    db,
-    logger,
-    mailer,
-    // Add any other global services or values here
-  };
-}
+    database,
 
-export type IgniterAppContext = Awaited<
-  ReturnType<typeof createIgniterAppContext>
->;`
+    // Environment variables
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      DATABASE_URL: process.env.DATABASE_URL,
+      SECRET: process.env.SECREt
+    }
+  };
+};
+
+// Available in all controllers and procedures
+export const auth = igniter.procedure({
+  handler: async (options: AuthOptions, { response, context }) => {
+    const user = await getCurrentUser(context.env.SECRET);
+
+    // If auth is required but there's no user, return an unauthorized error.
+    // This stops the request from proceeding further.
+    if (options.isAuthRequired && !user) {
+      return response.unauthorized('Authentication required.');
+    }
+
+    // The returned object is merged into the context.
+    // Now, context.auth.user will be available in our controller.
+    return {
+      auth: {
+        user,
+      },
+    };
+  },
+});`
   }
 ];
 
@@ -314,6 +374,7 @@ export function BackendSection() {
               <div className="mt-2">
                 <div className="space-y-2">
                   {comingSoonFeatures.map((feature) => {
+                    const Icon = feature.icon;
                     return (
                       <button
                         className="w-full text-left py-2 transition-opacity opacity-30 cursor-default"

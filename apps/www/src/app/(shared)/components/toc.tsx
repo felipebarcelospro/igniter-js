@@ -55,13 +55,13 @@ export function TableOfContents() {
   if (headings.length === 0) return null;
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 50 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
       className="space-y-10 sticky top-24"
     >
-      <motion.section 
+      <motion.section
         className="flex flex-col gap-2"
         initial={{ opacity: 0, x: -50 }}
         animate={{ opacity: 1, x: 0 }}
@@ -74,7 +74,7 @@ export function TableOfContents() {
         >
           <h3 className="text-sm font-semibold mb-2">Share this page</h3>
         </motion.header>
-        <motion.main 
+        <motion.main
           className="flex items-center space-x-2"
           variants={{
             hidden: { opacity: 0 },
@@ -137,7 +137,7 @@ export function TableOfContents() {
         transition={{ delay: 0.8, duration: 0.5 }}
         whileHover={{ scale: 1.02 }}
       >
-        <motion.h3 
+        <motion.h3
           className="text-lg font-semibold mb-2"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -183,7 +183,7 @@ export function InstallCommandCTA() {
             whileHover={{ scale: 1.02 }}
             transition={{ duration: 0.2 }}
           >
-            <motion.code 
+            <motion.code
               className="text-xs font-mono block hljs"
               layoutId="command-code"
               dangerouslySetInnerHTML={{
@@ -192,15 +192,15 @@ export function InstallCommandCTA() {
                 }).value
               }}
             />
-            
+
             <motion.div
               className="absolute top-2 right-1"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
-              <Button 
-                size="sm" 
-                variant="ghost" 
+              <Button
+                size="sm"
+                variant="ghost"
                 onClick={copyCommand}
                 className="h-6 px-2"
               >
@@ -257,7 +257,7 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
 
   useEffect(() => {
     if (activeId) {
-      const activeSection = Object.keys(sections).find(sectionId => 
+      const activeSection = Object.keys(sections).find(sectionId =>
         sections[sectionId].some(heading => heading.id === activeId)
       );
       if (activeSection) {
@@ -267,13 +267,13 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
   }, [activeId, sections]);
 
   return (
-    <motion.nav 
+    <motion.nav
       className="space-y-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
     >
-      <motion.div 
+      <motion.div
         className="flex items-center gap-2"
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -281,7 +281,7 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
       >
         <p className="font-semibold text-sm">On This Page</p>
       </motion.div>
-      <motion.ul 
+      <motion.ul
         className="space-y-3 text-sm"
         variants={{
           hidden: { opacity: 0 },
@@ -319,19 +319,11 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
                         document.getElementById(heading.id)?.scrollIntoView({ behavior: 'smooth' });
                       }}
                       className={cn(
-                        "group flex w-full items-center justify-between py-1 text-muted-foreground transition-colors hover:text-foreground",
+                        "group flex w-full text-sm items-center justify-between py-1 text-muted-foreground transition-colors hover:text-foreground",
                         isActive && "text-foreground font-medium"
                       )}
                     >
-                      <div className="flex items-center">
-                        <motion.span 
-                          className={cn(
-                            "mr-2 h-6 w-1 rounded-full bg-muted-foreground/40 transition-colors",
-                            isActive && "bg-foreground",
-                            "group-hover:bg-foreground/60"
-                          )}
-                          animate={{ scale: isActive ? 1.1 : 1 }}
-                        />
+                      <div className="text-xs text-left line-clamp-1">
                         {heading.textContent}
                       </div>
                       <motion.div
@@ -352,7 +344,7 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
                           className="pl-4 space-y-2"
                         >
                           {sections[heading.id].slice(1).map((subheading, subIndex) => (
-                            <motion.li 
+                            <motion.li
                               key={subheading.id}
                               initial={{ opacity: 0, x: -10 }}
                               animate={{ opacity: 1, x: 0 }}
@@ -366,13 +358,13 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
                                 )}
                                 whileHover={{ x: 4 }}
                               >
-                                <motion.span 
+                                <motion.span
                                   className={cn(
                                     "mr-2 h-1.5 w-1.5 rounded-full bg-muted-foreground/40 transition-colors",
                                     activeId === subheading.id && "bg-foreground",
                                     "group-hover:bg-foreground/60"
                                   )}
-                                  animate={{ 
+                                  animate={{
                                     scale: activeId === subheading.id ? 1.2 : 1
                                   }}
                                 />
@@ -388,19 +380,11 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
                   <motion.a
                     href={`#${heading.id}`}
                     className={cn(
-                      "group flex items-center py-1 text-muted-foreground transition-colors hover:text-foreground",
+                      "group flex items-center py-1 text-xs text-muted-foreground transition-colors hover:text-foreground",
                       isActive && "text-foreground font-medium"
                     )}
                     whileHover={{ x: 4 }}
                   >
-                    <motion.span 
-                      className={cn(
-                        "mr-2 h-6 w-2 rounded-full bg-muted-foreground/40 transition-colors",
-                        isActive && "bg-foreground",
-                        "group-hover:bg-foreground/60"
-                      )}
-                      animate={{ scale: isActive ? 1.1 : 1 }}
-                    />
                     {heading.textContent}
                   </motion.a>
                 )}

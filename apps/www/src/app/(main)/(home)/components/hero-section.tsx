@@ -25,7 +25,7 @@ export function HeroSection() {
 
           <div className="p-10">
             <motion.h1
-              className="tracking-tight text-2xl md:text-4xl max-w-lg"
+              className="tracking-tight text-2xl md:text-4xl max-w-xl"
               variants={{
                 hidden: { opacity: 0, y: 20 },
                 visible: { opacity: 1, y: 0 },

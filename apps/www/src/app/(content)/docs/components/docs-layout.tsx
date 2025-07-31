@@ -22,9 +22,9 @@ export function DocsLayout({ children, sections }: DocsLayoutProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <div className="grid grid-cols-1 md:grid-cols-12 divide-x divide-border gap-10 border-x px-10 border-border">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-10 border-x px-10 border-border">
         <motion.div
-          className="col-span-3 relative pt-10"
+          className="col-span-2 relative pt-10"
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2 }}
@@ -35,11 +35,11 @@ export function DocsLayout({ children, sections }: DocsLayoutProps) {
 
         <motion.main
           key={pathname}
-          className="col-span-6"
+          className="col-span-7 border-l border-border"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-        >          
+        >
           <div className="markdown-content pt-8 pl-10">{children}</div>
         </motion.main>
 
