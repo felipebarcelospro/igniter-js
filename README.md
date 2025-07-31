@@ -523,10 +523,10 @@ function CreateUserForm() {
   });
 
   const createUserMutation = api.users.create.useMutation({
-    onRequest: ({ data, error }) => {
+    onSuccess: (data) => {
       // This function is called when the mutation is successful.
-      // The `createdUser` is the typed output from your server action.
-      console.log('Successfully created user:', createdUser.name);
+      // The `data` is the typed output from your server action.
+      console.log('Successfully created user:', data.name);
       // Because our server action returns `.revalidate('users.list')`,
       // any component using `api.users.list.useQuery()` will automatically update.
     },
