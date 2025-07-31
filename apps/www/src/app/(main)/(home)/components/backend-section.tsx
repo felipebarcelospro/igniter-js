@@ -1,8 +1,8 @@
 "use client";
 
-import { CodeBlock, CodeBlockContent, CodeBlockHeader, ConnectedCodeBlockContent } from "@/components/ui/code-block";
+import { CodeBlock, CodeBlockContent, CodeBlockHeader } from "@/components/ui/code-block";
 import { motion } from "framer-motion";
-import { ChevronRight, Code2, Database, Lock, Mail, Upload, Zap } from "lucide-react";
+import { Code2, Database, Lock, Mail, Upload, Zap } from "lucide-react";
 import React from "react";
 
 const codeExamples = [
@@ -11,32 +11,29 @@ const codeExamples = [
     title: "Controllers",
     description: "Type-safe API endpoints with automatic validation",
     icon: Code2,
-    code: `// features/users/controllers/users.controller.ts
-export const usersController = {
-  getUser: action()
+    code: `// src/features/user/controllers/user.controller.ts
+import { action } from "@igniter-js/core";
+import { z } from "zod";
+import { UserInput } from "../user.types";
+import { auth } from "../procedures/auth.procedure";
+
+export const userController = {
+  // Query Action
+  getUserById: action()
     .input(z.object({ id: z.string() }))
     .handler(async ({ input, context }) => {
-      const user = await context.db.user.findUnique({
-        where: { id: input.id }
-      });
-      
-      if (!user) {
-        throw new Error('User not found');
-      }
-      
-      return user;
+      return await context.db.user.findUnique({ where: { id: input.id } });
     }),
-    
-  createUser: action()
-    .input(z.object({
-      name: z.string(),
-      email: z.string().email()
-    }))
+
+  // Mutation Action with Middleware
+  updateProfile: auth("user:update")
+    .input(UserInput)
     .handler(async ({ input, context }) => {
-      return await context.db.user.create({
-        data: input
+      return await context.db.user.update({
+        where: { id: context.user.id },
+        data: input,
       });
-    })
+    }),
 };`
   },
   {
@@ -44,65 +41,68 @@ export const usersController = {
     title: "Procedures (Middleware)",
     description: "Reusable middleware for authentication, validation, and more",
     icon: Zap,
-    code: `// procedures/auth.procedure.ts
-export const authProcedure = procedure()
-  .use(async ({ context, next }) => {
-    const token = context.req.headers.authorization;
-    
-    if (!token) {
-      throw new Error('Unauthorized');
-    }
-    
-    const user = await verifyToken(token);
-    
-    return next({
-      context: {
-        ...context,
-        user
-      }
-    });
-  });
+    code: `// src/features/user/procedures/auth.procedure.ts
+import { procedure } from "@igniter-js/core";
+import { getCurrentUser } from "./utils/get-current-user";
 
-// Usage in controller
-export const protectedController = {
-  getProfile: authProcedure
-    .handler(async ({ context }) => {
-      // context.user is now available and typed
-      return context.user;
-    })
-};`
+type AuthOptions = {
+  permissions: string[];
+};
+
+export const auth = (scope: string) =>
+  procedure<AuthOptions>()
+    .use(async ({ options, context, next }) => {
+      const user = await getCurrentUser(context.req.headers.authorization);
+
+      if (!user) {
+        throw new Error("UNAUTHORIZED");
+      }
+
+      const hasPermission = user.permissions.includes(scope);
+      if (!hasPermission) {
+        throw new Error("FORBIDDEN");
+      }
+
+      return next({
+        context: {
+          ...context,
+          user,
+        },
+      });
+    });`
   },
   {
     id: "client",
     title: "Frontend Client",
     description: "Fully typed client with React hooks for seamless integration",
     icon: Code2,
-    code: `// Frontend usage with React
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { api } from './igniter.client';
+    code: `// src/igniter.client.ts
+import { createIgniter } from "@igniter-js/react";
+import { type AppRouter } from "./igniter.router.ts";
 
-function UserProfile({ userId }: { userId: string }) {
-  // Fully typed query with auto-completion
-  const { data: user, isLoading } = useQuery({
-    queryKey: ['user', userId],
-    queryFn: () => api.users.getUser({ id: userId })
-  });
-  
-  const updateUser = useMutation({
-    mutationFn: api.users.updateUser,
-    onSuccess: () => {
-      // Invalidate and refetch user data
-      queryClient.invalidateQueries(['user', userId]);
-    }
-  });
-  
-  if (isLoading) return <div>Loading...</div>;
-  
+export const {
+  IgniterProvider,
+  useQuery,
+  useMutation,
+  useSubscription,
+  useQueryClient,
+  api,
+} = createIgniter<AppRouter>({
+  url: "/api/igniter",
+});
+
+// app/components/UsersList.tsx
+function UsersList() {
+  const { data: users, isLoading } = useQuery("user", "getAll");
+
+  if (isLoading) return "Loading...";
+
   return (
-    <div>
-      <h1>{user?.name}</h1>
-      <p>{user?.email}</p>
-    </div>
+    <ul>
+      {users?.map((user) => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
   );
 }`
   },
@@ -111,39 +111,37 @@ function UserProfile({ userId }: { userId: string }) {
     title: "Background Jobs",
     description: "Reliable job processing with BullMQ integration",
     icon: Database,
-    code: `// jobs/email.job.ts
-export const emailJob = job()
-  .input(z.object({
-    to: z.string().email(),
-    subject: z.string(),
-    body: z.string()
-  }))
+    code: `// src/jobs/index.ts
+import { EmailJob } from "./email.job";
+
+export const jobs = {
+  email: EmailJob,
+};
+
+// src/jobs/email.job.ts
+import { job } from "@igniter-js/core";
+import { z } from "zod";
+
+export const EmailJob = job()
+  .input(z.object({ to: z.string().email(), name: z.string() }))
   .handler(async ({ input, context }) => {
-    await context.emailService.send({
+    await context.mailer.send({
       to: input.to,
-      subject: input.subject,
-      html: input.body
+      subject: "Welcome!",
+      body: \`Hi \${input.name}, welcome to Igniter.js!\`,
     });
-    
-    console.log(\`Email sent to \${input.to}\`);
+    context.logger.info(\`Welcome email sent to \${input.to}\`);
   });
 
-// Dispatch job from controller
-export const notificationController = {
-  sendWelcomeEmail: action()
-    .input(z.object({ userId: z.string() }))
-    .handler(async ({ input, context }) => {
-      const user = await context.db.user.findUnique({
-        where: { id: input.userId }
-      });
-      
-      // Queue the email job
-      await context.jobs.emailJob.add({
-        to: user.email,
-        subject: 'Welcome!',
-        body: \`Hello \${user.name}, welcome to our platform!\`
-      });
-    })
+// Enqueue from an action
+export const userController = {
+  createUser: action()
+    .input(UserInput)
+    .handler(async ({ input, context: { db, jobs } }) => {
+      const user = await db.user.create({ data: input });
+      await jobs.email.add({ to: user.email, name: user.name });
+      return user;
+    }),
 };`
   },
   {
@@ -151,44 +149,31 @@ export const notificationController = {
     title: "Real-time Events",
     description: "Live data synchronization and event streaming",
     icon: Zap,
-    code: `// events/user.events.ts
-export const userEvents = {
-  userCreated: event()
-    .input(z.object({
-      userId: z.string(),
-      name: z.string()
-    })),
-    
-  userUpdated: event()
-    .input(z.object({
-      userId: z.string(),
-      changes: z.record(z.any())
-    }))
+    code: `// Automatic Revalidation
+export const postController = {
+  createPost: action()
+    .input(PostInput)
+    .revalidate("post", "getAll") // Automatically refetches 'getAll' query on the client
+    .handler(async ({ input, context }) => {
+      return await context.db.post.create({ data: input });
+    }),
 };
 
-// Emit events from controller
-export const usersController = {
-  createUser: action()
-    .input(userSchema)
-    .handler(async ({ input, context }) => {
-      const user = await context.db.user.create({
-        data: input
-      });
-      
-      // Emit real-time event
-      await context.events.userCreated.emit({
-        userId: user.id,
-        name: user.name
-      });
-      
-      return user;
-    })
-};
+// Custom Data Streams
+export const notificationStream = stream()
+  .input(z.object({ userId: z.string() }))
+  .handler(async function* ({ input, done }) {
+    for await (const notification of getNotifications(input.userId)) {
+      yield { data: notification };
+    }
+    done();
+  });
 
 // Subscribe on frontend
-api.events.userCreated.subscribe((data) => {
-  console.log('New user created:', data.name);
-});`
+const { data } = useSubscription(
+  "notificationsStream",
+  { userId: "123" }
+);`
   },
   {
     id: "caching",
@@ -201,28 +186,28 @@ export const usersController = {
     .input(z.object({ id: z.string() }))
     .handler(async ({ input, context }) => {
       const cacheKey = \`user:\${input.id}\`;
-      
+
       // Try to get from cache first
       const cached = await context.store.get(cacheKey);
       if (cached) {
         return JSON.parse(cached);
       }
-      
+
       // Fetch from database
       const user = await context.db.user.findUnique({
         where: { id: input.id }
       });
-      
+
       // Cache for 1 hour
       await context.store.set(
-        cacheKey, 
+        cacheKey,
         JSON.stringify(user),
         { ttl: 3600 }
       );
-      
+
       return user;
     }),
-    
+
   updateUser: action()
     .input(updateUserSchema)
     .handler(async ({ input, context }) => {
@@ -230,10 +215,10 @@ export const usersController = {
         where: { id: input.id },
         data: input
       });
-      
+
       // Invalidate cache
       await context.store.del(\`user:\${input.id}\`);
-      
+
       return user;
     })
 };`
@@ -243,43 +228,26 @@ export const usersController = {
     title: "Context System",
     description: "Dependency injection and shared application state",
     icon: Code2,
-    code: `// igniter.context.ts
-export const createContext = async () => {
+    code: `// src/igniter.context.ts
+import { PrismaClient } from "@prisma/client";
+import { createLogger, createMailer } from "./services";
+
+export async function createIgniterAppContext() {
   const db = new PrismaClient();
-  const redis = new Redis(process.env.REDIS_URL);
-  
+  const logger = createLogger();
+  const mailer = createMailer();
+
   return {
     db,
-    store: createRedisStore(redis),
-    emailService: new EmailService(),
-    logger: createLogger(),
-    
-    // Custom services
-    userService: new UserService(db),
-    paymentService: new PaymentService(),
-    
-    // Environment variables
-    env: {
-      NODE_ENV: process.env.NODE_ENV,
-      DATABASE_URL: process.env.DATABASE_URL
-    }
+    logger,
+    mailer,
+    // Add any other global services or values here
   };
-};
+}
 
-// Available in all controllers and procedures
-export const protectedAction = authProcedure
-  .handler(async ({ context }) => {
-    // All context properties are fully typed
-    const user = await context.userService.findById(
-      context.user.id
-    );
-    
-    context.logger.info('User accessed protected resource', {
-      userId: user.id
-    });
-    
-    return user;
-  });`
+export type IgniterAppContext = Awaited<
+  ReturnType<typeof createIgniterAppContext>
+>;`
   }
 ];
 
@@ -322,7 +290,7 @@ export function BackendSection() {
                   Code that speaks for itself. Simple, elegant, and expressive syntax that feels like first-class citizen.
                 </p>
               </div>
-              
+
               <div className="space-y-2">
                 {codeExamples.map((example) => {
                   return (
@@ -346,7 +314,6 @@ export function BackendSection() {
               <div className="mt-2">
                 <div className="space-y-2">
                   {comingSoonFeatures.map((feature) => {
-                    const Icon = feature.icon;
                     return (
                       <button
                         className="w-full text-left py-2 transition-opacity opacity-30 cursor-default"

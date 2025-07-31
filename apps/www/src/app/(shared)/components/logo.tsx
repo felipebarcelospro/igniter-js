@@ -88,7 +88,7 @@ export function Logo({
         whileTap="tap"
         variants={logoVariants}
       >
-        <img className="h-6 dark:invert-0 invert" src="/igniter-js/logo-light.svg" />
+        <img className="h-6 dark:invert-0 invert" src="/logo-light.svg" />
       </motion.div>
     </Link>
   );
