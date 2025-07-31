@@ -5,6 +5,22 @@ import type {
   DeepPartial,
 } from ".";
 
+/**
+ * Igniter.js Client Interface Definitions
+ * 
+ * This module contains all type definitions for the Igniter.js client-side implementation.
+ * The client is a completely custom implementation built from scratch specifically for Igniter.js,
+ * providing end-to-end type safety and seamless integration with the Igniter.js backend.
+ * 
+ * Key Features:
+ * - Custom query and mutation management (not dependent on external libraries)
+ * - Built-in caching with configurable stale time
+ * - Real-time subscriptions via Server-Sent Events (SSE)
+ * - Automatic refetching with configurable intervals and triggers
+ * - Complete TypeScript type safety from backend to frontend
+ * - Custom provider-based state management
+ */
+
 export type ClientConfig<TRouter extends IgniterRouter<any, any, any, any>> = {
   router: TRouter | (() => TRouter);
   baseURL: string;
@@ -36,10 +52,10 @@ export type QueryActionCallerOptions<
   refetchOnMount?: boolean;
   refetchOnReconnect?: boolean;
   onLoading?: (isLoading: boolean) => void;
-  onRequest?: (data: Awaited<TAction["$Infer"]["$Response"]>) => void;
+  onRequest?: (response: Awaited<TAction["$Infer"]["$Response"]>) => void;
   onSuccess?: (data: Awaited<TAction["$Infer"]["$Output"]>) => void;
   onError?: (error: Awaited<TAction["$Infer"]["$Errors"]>) => void;
-  onSettled?: (data: Awaited<TAction["$Infer"]["$Output"]>, error: Awaited<TAction["$Infer"]["$Errors"]>) => void;
+  onSettled?: (data: Awaited<TAction["$Infer"]["$Output"]> | null, error?: Awaited<TAction["$Infer"]["$Errors"]> | null) => void;
 };
 
 export type QueryActionCallerResult<
@@ -136,7 +152,7 @@ export type QueryActionCaller<
   options?: QueryActionCallerOptions<TAction>,
 ) => QueryActionCallerResult<TAction>;
 
-export type RefetchFn = () => void;
+export type RefetchFn = (invalidate?: boolean) => void;
 
 export type RealtimeSubscriberFn = (data: any) => void;
 
@@ -223,7 +239,7 @@ export type MutationActionCallerOptions<
   params?: DeepPartial<TAction["$Infer"]["params"]>;
   body?: DeepPartial<TAction["$Infer"]["body"]>;
   onLoading?: (isLoading: boolean) => void;
-  onRequest?: (data: Awaited<TAction["$Infer"]["$Output"]>) => void;
+  onRequest?: (data: Awaited<TAction["$Infer"]["$Response"]>) => void;
   onSuccess?: (data: Awaited<TAction["$Infer"]["$Output"]>) => void;
   onError?: (error: Awaited<TAction["$Infer"]["$Errors"]>) => void;
   onSettled?: (
@@ -273,17 +289,40 @@ export type ClientActionCaller<
       mutate: TAction["$Infer"]["$Caller"];
     };
 
-export type InferCacheKeysFromRouter<
+// 1. Gera uma união de todas as rotas de action como strings. Ex: "users.getById" | "users.getAll"
+export type InferAllActionPaths<TRouter extends IgniterRouter<any, any, any, any>> = {
+  [C in keyof TRouter['controllers']]: C extends string
+    ? {
+        [A in keyof TRouter['controllers'][C]['actions']]: A extends string
+          ? `${C}.${A}`
+          : never;
+      }[keyof TRouter['controllers'][C]['actions']]
+    : never;
+}[keyof TRouter['controllers']];
+
+// 2. Dado uma rota (ex: "users.getById"), infere o tipo do input esperado.
+export type InferInputFromPath<
   TRouter extends IgniterRouter<any, any, any, any>,
-> = {
-  [TControllerName in keyof TRouter["controllers"]]: {
-    [TActionName in keyof TRouter["controllers"][TControllerName]["actions"]]: TRouter["controllers"][TControllerName]["actions"][TActionName] extends {
-      method: "GET";
-    }
-      ? `${TControllerName & string}.${TActionName & string}`
-      : never;
-  }[keyof TRouter["controllers"][TControllerName]["actions"]];
-}[keyof TRouter["controllers"]];
+  TPath extends string,
+> = TPath extends `${infer TController}.${infer TAction}`
+  ? TController extends keyof TRouter['controllers']
+    ? TAction extends keyof TRouter['controllers'][TController]['actions']
+      ? TRouter['controllers'][TController]['actions'][TAction]['$Infer']['$Input']
+      : never
+    : never
+  : never;
+
+// 3. Define a função `invalidate` sobrecarregada
+export type InvalidateFunction<TRouter extends IgniterRouter<any, any, any, any>> = {
+  // Sobrecarga 1: `invalidate('path', input)`
+  <TPath extends InferAllActionPaths<TRouter>>(
+    path: TPath,
+    input: InferInputFromPath<TRouter, TPath>,
+  ): void;
+
+  // Sobrecarga 2: `invalidate(['path1', 'path2'])`
+  (paths: InferAllActionPaths<TRouter>[]): void;
+};
 
 export type InferRouterCaller<
   TRouter extends IgniterRouter<any, any, any, any>,
@@ -303,11 +342,7 @@ export type IgniterContextType<
 > = {
   register: (key: string, refetch: RefetchFn) => void;
   unregister: (key: string, refetch: RefetchFn) => void;
-  invalidate: (
-    keys:
-      | InferCacheKeysFromRouter<TRouter>
-      | InferCacheKeysFromRouter<TRouter>[],
-  ) => void;
+  invalidate: InvalidateFunction<TRouter>;
   subscribeToRealtime: (
     channelId: string,
     callback: RealtimeSubscriberFn,
@@ -334,9 +369,14 @@ export interface RealtimeActionCallerOptions<
   >,
 > {
   /**
-   * Initial parameters for the stream
+   * Initial query parameters for the stream
    */
-  initialParams?: TAction["$Infer"]["$Input"];
+  query?: TAction["$Infer"]["query"];
+
+  /**
+   * Initial path parameters for the stream
+   */
+  params?: TAction["$Infer"]["params"];
 
   /**
    * Initial data for the stream
