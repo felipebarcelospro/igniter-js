@@ -338,8 +338,89 @@ export function BackendSection() {
     <div className="border-t border-border">
       <div className="container max-w-screen-2xl">
         <div className="border-x border-border">
-          <div className="grid grid-cols-2">
-            {/* Sidebar */}
+          {/* Mobile Layout - Stacked */}
+          <div className="lg:hidden">
+            {/* Mobile Header */}
+            <div className="p-4 sm:p-6">
+              <div className="mb-8">
+                <h2 className="text-xl sm:text-2xl font-semibold text-foreground mb-2">
+                  <span className="text-2xl sm:text-3xl text-[#FF4931] pr-2">/</span>
+                  Backend
+                </h2>
+                <p className="text-sm sm:text-base text-muted-foreground">
+                  Code that speaks for itself. Simple, elegant, and expressive syntax that feels like first-class citizen.
+                </p>
+              </div>
+
+              {/* Mobile Navigation */}
+              <div className="grid grid-cols-2 gap-2 mb-6">
+                {codeExamples.map((example) => {
+                  return (
+                    <button
+                      key={example.id}
+                      onClick={() => setActiveExample(example.id)}
+                      className={`p-3 text-left rounded-lg border transition-all ${
+                        activeExample === example.id
+                          ? "bg-accent border-accent-foreground/20 opacity-100"
+                          : "border-border opacity-60 hover:opacity-80 hover:bg-accent/50"
+                      }`}
+                    >
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {example.title}
+                      </h3>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Mobile Coming Soon */}
+              <div className="grid grid-cols-1 gap-2 mb-6">
+                {comingSoonFeatures.map((feature) => {
+                  return (
+                    <div
+                      className="p-3 text-left rounded-lg border border-border opacity-30"
+                      key={feature.title}
+                    >
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {feature.title} (soon)
+                      </h3>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Mobile Code Display */}
+            <div className="border-t border-border p-4 sm:p-6">
+              {currentExample && (
+                <motion.div
+                  key={currentExample.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="mb-4">
+                    <h3 className="font-semibold text-foreground mb-1">
+                      {currentExample.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {currentExample.description}
+                    </p>
+                  </div>
+                  <div className="relative">
+                    <CodeBlock technologies={[]}>
+                      <CodeBlockHeader />
+                      <CodeBlockContent code={currentExample.code} language="typescript" />
+                    </CodeBlock>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          </div>
+
+          {/* Desktop Layout - Side by Side */}
+          <div className="hidden lg:grid lg:grid-cols-2">
+            {/* Desktop Sidebar */}
             <div className="p-10">
                <div className="mb-16">
                 <h2 className="text-2xl font-semibold text-foreground mb-2">
@@ -370,7 +451,7 @@ export function BackendSection() {
                 })}
               </div>
 
-              {/* Coming Soon Features */}
+              {/* Desktop Coming Soon Features */}
               <div className="mt-2">
                 <div className="space-y-2">
                   {comingSoonFeatures.map((feature) => {
@@ -390,7 +471,7 @@ export function BackendSection() {
               </div>
             </div>
 
-            {/* Code Display */}
+            {/* Desktop Code Display */}
             <div className="border-l border-border p-10">
               {currentExample && (
                 <motion.div
