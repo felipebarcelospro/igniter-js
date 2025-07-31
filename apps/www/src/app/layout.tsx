@@ -12,9 +12,12 @@ import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 
 export const metadata: Metadata = {
-  title: config.projectName,
-  description: config.projectDescription,
+  title: {
+    absolute: config.projectName,
+    template: `%s • ${config.projectName}`,
+  },
 };
+
 export default async function RootLayout({
   children,
 }: Readonly<{

@@ -2,6 +2,14 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { config } from "@/configs/application";
+import { generateMetadata } from "@/lib/metadata";
+
+export const metadata = generateMetadata({
+  title: "Privacy Policy",
+  description: "Privacy policy for Igniter.js framework. Learn about data handling, security practices, and privacy protection in our type-safe full-stack TypeScript framework.",
+  canonical: "/privacy-policy",
+  keywords: ["Privacy policy", "Igniter.js", "Data protection", "Security", "Open source"]
+});
 
 export default function PrivacyPolicy() {
   return (
@@ -35,7 +43,7 @@ export default function PrivacyPolicy() {
         </h1>
         <p className="text-lg sm:text-xl mb-8 sm:mb-10 md:mb-12 text-muted-foreground">
           This policy outlines our practices regarding the {config.projectName}{" "}
-          library, an ORM for Deno KV.
+          framework, a type-safe full-stack TypeScript framework for modern web development.
         </p>
       </section>
 
@@ -46,13 +54,13 @@ export default function PrivacyPolicy() {
               1. Library Usage and Data Handling
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
-              {config.projectName} is an open-source ORM library for Deno KV. As
-              a library, it does not collect, store, or transmit any data
+              {config.projectName} is an open-source full-stack TypeScript framework. As
+              a framework, it does not collect, store, or transmit any personal data
               itself. All data operations are performed within your
-              application's context using Deno KV as the storage backend. The
-              library provides the tools and interfaces for data manipulation,
+              application's context using your chosen database and storage solutions. The
+              framework provides the tools and interfaces for building type-safe applications,
               but the actual data handling is controlled entirely by your
-              application.
+              application and your chosen infrastructure.
             </p>
           </div>
 
@@ -62,8 +70,8 @@ export default function PrivacyPolicy() {
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
               When using {config.projectName}, all data storage and management
-              is handled by your application through Deno KV. We do not have
-              access to any data stored or managed using our library. It is your
+              is handled by your application through your chosen database and storage solutions. We do not have
+              access to any data stored or managed using our framework. It is your
               responsibility to ensure proper data handling and compliance with
               relevant privacy laws and regulations in your application.
             </p>
@@ -74,9 +82,9 @@ export default function PrivacyPolicy() {
               3. Open Source Nature
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
-              {config.projectName} is an open-source library, similar to Prisma,
-              Zod, or Next Auth. The source code is publicly available and can
-              be audited on GitHub. We maintain transparency about the library's
+              {config.projectName} is an open-source framework, similar to Next.js,
+              Remix, or T3 Stack. The source code is publicly available and can
+              be audited on GitHub. We maintain transparency about the framework's
               functionality and encourage community contributions while adhering
               to best practices in software development.
             </p>
@@ -87,10 +95,10 @@ export default function PrivacyPolicy() {
               4. Security Best Practices
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
-              While we strive to maintain secure coding practices in our library
+              While we strive to maintain secure coding practices in our framework
               implementation, the security of your data depends on how you
               implement and use {config.projectName} in your application. We
-              recommend following Deno security best practices and implementing
+              recommend following modern web security best practices and implementing
               appropriate access controls in your application.
             </p>
           </div>
@@ -101,10 +109,10 @@ export default function PrivacyPolicy() {
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
               We maintain version control and documentation of changes through
-              our GitHub repository. Any updates to the library will be
+              our GitHub repository. Any updates to the framework will be
               published with appropriate version numbers following semantic
               versioning principles. Users can choose when to upgrade to newer
-              versions of the library.
+              versions of the framework.
             </p>
           </div>
 
@@ -113,7 +121,7 @@ export default function PrivacyPolicy() {
               6. Contact Information
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground mb-4">
-              For questions about the library or to report issues:
+              For questions about the framework or to report issues:
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-gray-200 p-4 rounded-lg flex flex-col items-center">

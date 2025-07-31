@@ -1,5 +1,13 @@
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { generateMetadata } from "@/lib/metadata";
+
+export const metadata = generateMetadata({
+  title: "Terms of Use",
+  description: "Terms of use for Igniter.js, the type-safe full-stack TypeScript framework. Learn about licensing, usage rights, and legal terms.",
+  canonical: "/terms-of-use",
+  keywords: ["Terms of use", "Igniter.js", "MIT License", "Legal terms", "Open source"]
+});
 
 export default function TermsOfUse() {
   return (
@@ -29,10 +37,10 @@ export default function TermsOfUse() {
           </Button>
         </Link>
         <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 sm:mb-6 md:mb-8 leading-tight md:max-w-4xl">
-          Terms of Use for Drift KV Library
+          Terms of Use for Igniter.js Framework
         </h1>
         <p className="text-lg sm:text-xl mb-8 sm:mb-10 md:mb-12 text-muted-foreground">
-          By using the Drift KV library in your projects, you agree to comply
+          By using the Igniter.js framework in your projects, you agree to comply
           with and be bound by the following terms and conditions.
         </p>
       </section>
@@ -44,8 +52,8 @@ export default function TermsOfUse() {
               1. MIT License Terms
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
-              Drift KV is distributed under the MIT License. This means you are
-              free to use, modify, distribute, and sublicense the library,
+              Igniter.js is distributed under the MIT License. This means you are
+              free to use, modify, distribute, and sublicense the framework,
               provided you include the original copyright notice and permission
               notice in all copies or substantial portions of the software.
             </p>
@@ -56,10 +64,9 @@ export default function TermsOfUse() {
               2. Library Usage
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
-              Drift KV is an ORM library designed specifically for Deno KV. You
-              may use it for database operations, real-time subscriptions, job
-              queues, and type-safe queries in your Deno applications. The
-              library is provided as open-source software for the developer
+              Igniter.js is a type-safe full-stack TypeScript framework designed for modern web development. You
+              may use it for building APIs, web applications, real-time features, and type-safe client-server communication. The
+              framework is provided as open-source software for the developer
               community.
             </p>
           </div>
@@ -69,7 +76,7 @@ export default function TermsOfUse() {
               3. No Warranty
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
-              As stated in the MIT License, the library is provided "as is",
+              As stated in the MIT License, the framework is provided "as is",
               without warranty of any kind, express or implied. This includes
               but is not limited to the warranties of merchantability, fitness
               for a particular purpose, and noninfringement.
@@ -81,7 +88,7 @@ export default function TermsOfUse() {
               4. Contributions
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
-              Contributions to Drift KV are welcome. By submitting code changes
+              Contributions to Igniter.js are welcome. By submitting code changes
               through pull requests, you agree to license your contributions
               under the same MIT License terms. Please follow the contribution
               guidelines in our repository for code standards and submission
@@ -97,7 +104,7 @@ export default function TermsOfUse() {
               In no event shall the authors or copyright holders be liable for
               any claim, damages or other liability, whether in an action of
               contract, tort or otherwise, arising from, out of or in connection
-              with the library or the use or other dealings in the library.
+              with the framework or the use or other dealings in the framework.
             </p>
           </div>
 

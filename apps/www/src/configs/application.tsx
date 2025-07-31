@@ -7,7 +7,7 @@ export const config: Config = {
   projectDescription:
     "Igniter is a modern, type-safe HTTP framework designed to streamline the development of scalable TypeScript applications.",
   projectTagline:
-    'The Most Comprehensive End-to-End Typesafe Full-stack TypeScript Framework',
+    'Build powerful TypeScript applications with end-to-end type safety and developer-first experience',
 
   // Links
   githubUrl: "https://github.com/felipebarcelospro/igniter-js",
@@ -15,10 +15,9 @@ export const config: Config = {
   purchaseUrl: "",
 
   // Developer Info
-  developerName: "Felipe Barcelos",
-  developerEmail: "felipebarcelospro@gmail.com",
-  developerImage:
-    "https://media.licdn.com/dms/image/v2/D4D03AQHvSr_V9EAOjQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1728308774937?e=1734566400&v=beta&t=QAfLIR7Q60F1AEatAqPzGAXUjKTlhGvpFtexpyDki5U",
+  developerName: "Igniter.js Team",
+  developerEmail: "team@nubler.com.br",
+  developerImage: "https://pbs.twimg.com/profile_images/1950303869390770178/skjEZTye_400x400.jpg",
   developerBio:
     "I'm a passionate software engineer and entrepreneur from 🇧🇷, dedicated to creating powerful and developer-friendly tools for the modern web ecosystem.",
 

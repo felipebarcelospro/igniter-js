@@ -1,6 +1,14 @@
 import { CTASection } from "@/app/(shared)/components/cta";
 import { FileSystemContentManager } from "@/lib/docs";
+import { generateMetadata } from "@/lib/metadata";
 import { BlogList } from "./components/blog-list";
+
+export const metadata = generateMetadata({
+  title: "Blog",
+  description: "Stay updated with the latest news, tutorials, and insights about Igniter.js. Learn best practices, discover new features, and get tips from the community.",
+  canonical: "/blog",
+  keywords: ["Igniter.js blog", "TypeScript tutorials", "Framework updates", "Web development", "API development", "Best practices"]
+});
 
 export default async function Page() {
   const segments = await FileSystemContentManager.getNavigationItems("blog");
