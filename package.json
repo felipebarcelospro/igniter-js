@@ -35,6 +35,7 @@
   ],
   "scripts": {
     "build": "turbo build",
+    "build:www": "turbo build --filter=@igniter-js/www",
     "dev": "turbo dev",
     "test": "turbo test",
     "test:watch": "turbo test:watch",
