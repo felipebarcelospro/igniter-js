@@ -14,8 +14,28 @@ import type {
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useIgniterQueryClient } from "./igniter.context";
 import { ClientCache } from "../utils/cache";
+import { generateQueryKey } from "../utils/queryKey";
 
 type InferIgniterResponse<T> = T extends { data: infer TData, error: infer TError } ? { data: TData | null, error: TError | null } : { data: null, error: null };
+
+/**
+ * Normalizes response data to handle potential double-wrapping
+ * If the response has the structure { data: {...}, error: null }, extracts the inner data
+ * This fixes the issue where TypeScript expects data.url but receives data.data.url
+ */
+function normalizeResponseData<T>(response: any): { data: T | null; error: any | null } {
+  // Check if response has the double-wrapped structure
+  if (response && typeof response === 'object' && 'data' in response && 'error' in response) {
+    // If the inner data also has data/error structure, it's double-wrapped
+    if (response.data && typeof response.data === 'object' && 'data' in response.data && 'error' in response.data) {
+      return response.data;
+    }
+    // Return the response as is if it has the correct structure
+    return response;
+  }
+  // If response doesn't have the expected structure, wrap it
+  return { data: response, error: null };
+}
 
 /**
  * Creates a useQueryClient hook for a specific router
@@ -70,23 +90,27 @@ export const createUseQuery = <
     const optionsRef = useRef(options);
     optionsRef.current = options;
 
-    const actionPath = useMemo(() => `${controller}.${action}`, [controller, action]);
-    const regKey = useMemo(() => actionPath, [actionPath]);
-
-    const getCacheKey = useCallback(
+    const getQueryKey = useCallback(
       (params?: TAction["$Infer"]["$Input"]) => {
-        return `${actionPath}:${JSON.stringify(params || {})}`;
+        return generateQueryKey(controller, action, params);
       },
-      [actionPath],
+      [controller, action],
     );
-
-    const lastUsedParamsRef = useRef<TAction["$Infer"]["$Input"]>({
-      query: options?.query,
-      params: options?.params,
-    } as TAction["$Infer"]["$Input"]);
+1
+    const lastUsedParamsRef = useRef<TAction["$Infer"]["$Input"]>(undefined as TAction["$Infer"]["$Input"]);
+    
+    // Initialize lastUsedParamsRef only once
+    useEffect(() => {
+      if (!lastUsedParamsRef.current) {
+        lastUsedParamsRef.current = {
+          query: options?.query,
+          params: options?.params,
+        } as TAction["$Infer"]["$Input"];
+      }
+    }, [options?.query, options?.params]);
 
     const execute = useCallback(
-      async (params?: TAction["$Infer"]["$Input"]) => {
+      async (params?: TAction["$Infer"]["$Input"], force = false) => {
         if (optionsRef.current?.enabled === false) return;
 
         const mergedParams = {
@@ -103,13 +127,13 @@ export const createUseQuery = <
         }
         optionsRef.current?.onLoading?.(true);
 
-        const cacheKey = getCacheKey(mergedParams);
+        const queryKey = getQueryKey(mergedParams);
         let settledData: Awaited<TAction["$Infer"]["$Output"]> | null = null;
         let settledError: Awaited<TAction["$Infer"]["$Errors"]> | null = null;
 
         try {
           if (optionsRef.current?.staleTime) {
-            const cachedData = ClientCache.get(cacheKey, optionsRef.current.staleTime);
+            const cachedData = ClientCache.get(queryKey, optionsRef.current.staleTime);
             if (cachedData) {
               setResponse(cachedData);
               setStatus('success');
@@ -119,83 +143,83 @@ export const createUseQuery = <
           }
 
           const result = await fetcher(mergedParams);
-          settledData = result;
+          const normalizedResult = normalizeResponseData(result) as Awaited<TAction["$Infer"]["$Output"]>;
+          settledData = normalizedResult;
 
-          setResponse(result);
+          setResponse(normalizedResult);
           setStatus('success');
-          optionsRef.current?.onRequest?.(result);
-          optionsRef.current?.onSuccess?.(result.data);
+          optionsRef.current?.onRequest?.(normalizedResult);
+          optionsRef.current?.onSuccess?.(normalizedResult.data);
 
           if (optionsRef.current?.staleTime) {
-            ClientCache.set(cacheKey, result);
+            ClientCache.set(queryKey, result);
           }
           return result;
         } catch (error) {
-          const errorResponse = { data: null, error: error as TAction["$Infer"]["$Output"]["error"] };
-          // @ts-expect-error - Ignore type error for now
-          settledError = errorResponse;
-          setResponse(errorResponse.error);
+          const errorResponse = { data: null, error: error as TAction["$Infer"]["$Errors"] };
+          settledError = errorResponse.error;
+          setResponse(errorResponse);
           setStatus('error');
           optionsRef.current?.onError?.(errorResponse.error);
         } finally {
           setIsFetching(false);
           isInitialLoadRef.current = false;
           optionsRef.current?.onLoading?.(false);
-          // @ts-expect-error - Ignore type error for now
-          optionsRef.current?.onSettled?.(settledData.data as any, settledError.error as any);
+          optionsRef.current?.onSettled?.(settledData?.data ?? null, settledError);
         }
       },
-      [getCacheKey, regKey, fetcher],
+      [getQueryKey, fetcher],
     );
 
-    const refetch = useCallback(() => {
-      execute(lastUsedParamsRef.current);
+    const refetch = useCallback((invalidate = true) => {
+      execute(lastUsedParamsRef.current, invalidate);
     }, [execute]);
 
     useEffect(() => {
-      register(regKey, refetch);
-      return () => unregister(regKey, refetch);
-    }, [regKey, register, unregister, refetch]);
+      const currentQueryKey = getQueryKey(lastUsedParamsRef.current);
+      register(currentQueryKey, refetch);
+      return () => unregister(currentQueryKey, refetch);
+    }, [register, unregister, refetch, getQueryKey]);
 
     // Automatic refetching side effects
     useEffect(() => {
-      if (options?.enabled === false) return;
+      if (optionsRef.current?.enabled === false) return;
 
-      if (options?.refetchInterval) {
+      if (optionsRef.current?.refetchInterval) {
         const interval = setInterval(() => {
-          if (!options.refetchIntervalInBackground && document.hidden) return;
+          if (!optionsRef.current?.refetchIntervalInBackground && document.hidden) return;
           execute();
-        }, options.refetchInterval);
+        }, optionsRef.current.refetchInterval);
         return () => clearInterval(interval);
       }
-    }, [execute, options?.refetchInterval, options?.refetchIntervalInBackground, options?.enabled]);
+    }, [execute]);
 
     useEffect(() => {
-        if (options?.enabled === false) return;
+        if (optionsRef.current?.enabled === false) return;
 
-        if (options?.refetchOnWindowFocus !== false) {
+        if (optionsRef.current?.refetchOnWindowFocus !== false) {
             const handleFocus = () => execute();
             window.addEventListener("focus", handleFocus);
             return () => window.removeEventListener("focus", handleFocus);
         }
-    }, [execute, options?.refetchOnWindowFocus, options?.enabled]);
+    }, [execute]);
 
     useEffect(() => {
-        if (options?.enabled === false) return;
+        if (optionsRef.current?.enabled === false) return;
 
-        if (options?.refetchOnReconnect !== false) {
+        if (optionsRef.current?.refetchOnReconnect !== false) {
             const handleOnline = () => execute();
             window.addEventListener("online", handleOnline);
             return () => window.removeEventListener("online", handleOnline);
         }
-    }, [execute, options?.refetchOnReconnect, options?.enabled]);
+    }, [execute]);
 
     // Initial fetch
     useEffect(() => {
-        if (options?.enabled !== false && options?.refetchOnMount !== false) {
+        if (optionsRef.current?.enabled !== false && optionsRef.current?.refetchOnMount !== false) {
             execute();
         }
-    }, [execute, options?.refetchOnMount, options?.enabled]);
+    }, [execute]);
 
     const isLoading = status === 'loading';
     const isSuccess = status === 'success';
@@ -211,10 +235,8 @@ export const createUseQuery = <
       status,
       refetch,
       execute: execute as TAction["$Infer"]["$Caller"],
-      // Deprecated
       loading: isLoading,
-      // @ts-expect-error - Ignore type error for now
-      invalidate: () => invalidate([actionPath]),
+      invalidate: () => invalidate([getQueryKey(lastUsedParamsRef.current) as `${string}.${string}`]),
       variables
     };
   };
@@ -272,23 +294,27 @@ export const createUseMutation = <
 
       try {
         const result = await fetcher(mergedParams);
-        settledData = result;
-        setResponse(result);
+        const normalizedResult = normalizeResponseData(result) as Awaited<TAction["$Infer"]["$Output"]>;
+        settledData = normalizedResult;
+        setResponse(normalizedResult);
         setStatus('success');
-        optionsRef.current?.onRequest?.(result);
-        optionsRef.current?.onSuccess?.(result);
-        return result;
+        optionsRef.current?.onRequest?.(normalizedResult);
+         optionsRef.current?.onSuccess?.(normalizedResult.data);
+         return normalizedResult;
       } catch (error) {
-        const errorResponse = { data: null, error: error as TAction["$Infer"]["$Output"]["error"] };
-        // @ts-expect-error - Ignore type error for now
-        settledError = errorResponse;
+        const errorResponse = { data: null, error: error as TAction["$Infer"]["$Errors"] };
+        settledError = errorResponse.error;
         setResponse(errorResponse);
         setStatus('error');
-        optionsRef.current?.onError?.(errorResponse as any);
+        optionsRef.current?.onError?.(errorResponse.error);
         return errorResponse;
       } finally {
         optionsRef.current?.onLoading?.(false);
-        optionsRef.current?.onSettled?.(settledData as any, settledError as any);
+
+        optionsRef.current?.onSettled?.(
+          settledData as Awaited<TAction["$Infer"]["$Output"]>,
+          settledError as Awaited<TAction["$Infer"]["$Errors"]>
+        );
       }
     }, [fetcher]);
 
@@ -392,9 +418,8 @@ export function useRealtime<T = any>(
  * @returns A React hook for subscribing to real-time updates
  */
 export const createUseRealtime = <TAction extends IgniterAction<any, any, any, any, any, any, any, any, any, any>>(
-  baseURL: string,
-  basePATH: string,
-  actionPath: string,
+  controller: string,
+  action: string,
 ) => {
   return (options?: RealtimeActionCallerOptions<TAction>): RealtimeActionCallerResult<TAction> => {
     const [isReconnecting, setIsReconnecting] = useState(false);
@@ -404,23 +429,34 @@ export const createUseRealtime = <TAction extends IgniterAction<any, any, any, a
       error: options?.initialData?.error || null,
     }));
 
-    const channelId = useMemo(() => actionPath, [actionPath]);
+    const channelId = useMemo(() => {
+      return generateQueryKey(controller, action, {
+        query: options?.query,
+        params: options?.params,
+      });
+    }, [controller, action, JSON.stringify(options?.query), JSON.stringify(options?.params)]);
+
+    const onMessage = useCallback((newData: any) => {
+      // @ts-expect-error - Ignore type error for now
+      setResponse({ data: newData, error: null });
+      // @ts-expect-error - Ignore type error for now
+      options?.onMessage?.({ data: newData, error: null });
+    }, [options?.onMessage]);
+
+    const onConnect = useCallback(() => {
+      options?.onConnect?.();
+    }, [options?.onConnect]);
+
+    const onDisconnect = useCallback(() => {
+      setIsReconnecting(options?.autoReconnect || false);
+      options?.onDisconnect?.();
+    }, [options?.autoReconnect, options?.onDisconnect]);
 
     const streamResult = useRealtime(channelId, {
       initialData: response.data,
-      onMessage: (newData) => {
-        // @ts-expect-error - Ignore type error for now
-        setResponse({ data: newData, error: null });
-        // @ts-expect-error - Ignore type error for now
-        options?.onMessage?.({ data: newData, error: null });
-      },
-      onConnect: () => {
-        options?.onConnect?.();
-      },
-      onDisconnect: () => {
-        setIsReconnecting(options?.autoReconnect || false);
-        options?.onDisconnect?.();
-      }
+      onMessage,
+      onConnect,
+      onDisconnect
     });
 
     const disconnect = useCallback(() => {

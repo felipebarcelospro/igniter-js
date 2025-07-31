@@ -5,7 +5,7 @@
 
 import type { IgniterAction, IgniterControllerConfig, IgniterRouter, InferRouterCaller, ClientConfig } from '../types';
 import { parseURL } from '../utils/url';
-import { createUseQuery, createUseMutation } from './igniter.hooks';
+import { createUseQuery, createUseMutation, createUseRealtime } from './igniter.hooks';
 
 /**
  * Creates a browser-side client for Igniter Router
@@ -37,9 +37,9 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any,
 export function createBrowserClient<TRouter extends IgniterRouter<any, any, any, any>>(
   router: TRouter
 ): InferRouterCaller<TRouter> {
-  
+
   const client = {} as InferRouterCaller<TRouter>;
-  
+
   // Extract base configuration once
   const basePATH = router.config.basePATH || '/api/v1';
   const baseURL = router.config.baseURL || 'http://localhost:3000';
@@ -52,7 +52,7 @@ export function createBrowserClient<TRouter extends IgniterRouter<any, any, any,
 
     for (const actionName in controller.actions) {
       const action = controller.actions[actionName] as IgniterAction<any, any, any, any, any, any, any, any, any, any>;
-      
+
       // Create fetcher for this specific action
       const fetcher = createActionFetcher(action, parsedBaseURL);
 
@@ -61,6 +61,7 @@ export function createBrowserClient<TRouter extends IgniterRouter<any, any, any,
         (client[controllerName as keyof typeof client] as any)[actionName] = {
           useQuery: createUseQuery(controllerName, actionName, fetcher),
           query: fetcher,
+          useRealtime: createUseRealtime(controllerName, actionName),
         };
       } else {
         (client[controllerName as keyof typeof client] as any)[actionName] = {
@@ -132,7 +133,7 @@ function createActionFetcher<TAction extends IgniterAction<any, any, any, any, a
         } else {
           data = await response.text();
         }
-        
+
         // Throw the structured error data directly to be handled by the hooks
         throw data;
       }
@@ -155,4 +156,4 @@ function createActionFetcher<TAction extends IgniterAction<any, any, any, any, a
       throw error;
     }
   };
-} 
+}

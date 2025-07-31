@@ -1,8 +1,10 @@
 import { SSEProcessor, type SSEChannel } from "../processors/sse.processor";
+import { generateQueryKey } from "../utils/queryKey";
 import type {
   IgniterRealtimeService as IgniterRealtimeServiceType,
   RealtimeBuilder,
   RealtimeEventPayload,
+  RevalidationTarget,
 } from "../types";
 import type { IgniterStoreAdapter } from "../types/store.interface";
 import { IgniterError } from "../error";
@@ -276,66 +278,52 @@ export class IgniterRealtimeService<TContext = any>
   }
 
   /**
-   * Revalidate data for a specific query key.
+   * Triggers a refetch on the client for one or more queries.
+   * This is the primary mechanism for keeping client-side data in sync
+   * with server-side changes.
    *
-   * @param queryKeys - The query key to revalidate.
-   * @param scopes - The scopes to revalidate.
-   * @param data - The data to revalidate.
+   * @param targets - A single revalidation target or an array of them.
+   * @returns A promise that resolves when the revalidation event is published.
    */
-  async revalidate(params: {
-    queryKeys: string | string[],
-    scopes?: string[],
-    data?: unknown
-  }): Promise<void> {
-    // Use IgniterError for validation errors
-    if (!params || typeof params !== 'object') {
-      throw new IgniterError({
-        message: 'revalidate: params must be an object',
-        code: 'REVALIDATE_INVALID_PARAMS',
-      });
-    }
+  async revalidate(
+    targets: RevalidationTarget | RevalidationTarget[],
+  ): Promise<void> {
+    const targetsArray = Array.isArray(targets) ? targets : [targets];
 
-    if (
-      !('queryKeys' in params) ||
-      params.queryKeys === undefined ||
-      params.queryKeys === null ||
-      (typeof params.queryKeys !== 'string' && !Array.isArray(params.queryKeys))
-    ) {
-      throw new IgniterError({
-        message: 'revalidate: params.queryKeys must be a string or an array of strings',
-        code: 'REVALIDATE_INVALID_QUERYKEYS',
-        details: { queryKeys: params.queryKeys }
-      });
-    }
+    const eventsToPublish = new Map<string, { queryKeys: string[], data?: unknown }>();
 
-    if (Array.isArray(params.queryKeys)) {
-      if (!params.queryKeys.every(key => typeof key === 'string')) {
-        throw new IgniterError({
-          message: 'revalidate: all queryKeys must be strings',
-          code: 'REVALIDATE_INVALID_QUERYKEYS_TYPE',
-          details: { queryKeys: params.queryKeys }
-        });
+    for (const target of targetsArray) {
+      const { path, params, query, scopes, data } = target;
+      const [controller, action] = path.split('.');
+
+      if (!controller || !action) {
+        // Potentially log this error, but don't throw, to allow other valid targets to proceed
+        console.error(`[IgniterRealtimeService] Invalid path format in revalidate target: "${path}"`);
+        continue;
+      }
+
+      const input = {
+        ...(params && { params }),
+        ...(query && { query }),
+      };
+
+      const queryKey = generateQueryKey(controller, action, Object.keys(input).length > 0 ? input : undefined);
+
+      // Group by scopes to send minimal number of events
+      const scopeKey = (scopes || []).sort().join(',');
+
+      if (!eventsToPublish.has(scopeKey)) {
+        eventsToPublish.set(scopeKey, { queryKeys: [] });
+      }
+
+      const eventData = eventsToPublish.get(scopeKey)!;
+      eventData.queryKeys.push(queryKey);
+
+      // If data is provided, attach it. We'll use the data from the first target with data for a given scope group.
+      if (data !== undefined && eventData.data === undefined) {
+        eventData.data = data;
       }
     }
-
-    if (params.scopes !== undefined) {
-      if (!Array.isArray(params.scopes)) {
-        throw new IgniterError({
-          message: 'revalidate: params.scopes must be an array of strings if provided',
-          code: 'REVALIDATE_INVALID_SCOPES',
-          details: { scopes: params.scopes }
-        });
-      }
-      if (!params.scopes.every(scope => typeof scope === 'string')) {
-        throw new IgniterError({
-          message: 'revalidate: all scopes must be strings',
-          code: 'REVALIDATE_INVALID_SCOPES_TYPE',
-          details: { scopes: params.scopes }
-        });
-      }
-    }
-
-    const keysArray = Array.isArray(params.queryKeys) ? params.queryKeys : [params.queryKeys];
 
     // Register revalidation channel if it doesn't exist
     if (!SSEProcessor.channelExists('revalidation')) {
@@ -345,15 +333,20 @@ export class IgniterRealtimeService<TContext = any>
       });
     }
 
-    SSEProcessor.publishEvent({
-      channel: 'revalidation',
-      type: 'revalidate',
-      scopes: params.scopes, // Use subscribers for scoped revalidation
-      data: { 
-        queryKeys: keysArray, 
-        data: params.data, 
-        timestamp: new Date().toISOString() 
-      },
-    });
+    // Publish one event per scope group
+    for (const [scopeKey, eventPayload] of eventsToPublish.entries()) {
+      const scopes = scopeKey ? scopeKey.split(',') : undefined;
+
+      SSEProcessor.publishEvent({
+        channel: 'revalidation',
+        type: 'revalidate',
+        scopes: scopes,
+        data: {
+          queryKeys: eventPayload.queryKeys,
+          data: eventPayload.data,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
   }
 }

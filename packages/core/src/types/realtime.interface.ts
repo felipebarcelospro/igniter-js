@@ -73,6 +73,37 @@ export interface RealtimeEventPayload<TContext = any> {
 }
 
 /**
+ * Defines the target for a revalidation event, allowing for granular control
+ * over which queries to refetch on the client.
+ */
+export type RevalidationTarget = {
+  /**
+   * The action path to revalidate, in "controller.action" format.
+   * @example 'users.getById'
+   */
+  path: string;
+  /**
+   * Optional path parameters to target a specific query instance.
+   * @example { id: '123' }
+   */
+  params?: Record<string, any>;
+  /**
+   * Optional query parameters to target a specific query instance.
+   * @example { page: 2 }
+   */
+  query?: Record<string, any>;
+  /**
+   * Optional data payload to send along with the revalidation event.
+   * This can be used by clients to optimistically update their cache.
+   */
+  data?: unknown;
+  /**
+   * Optional scopes to restrict which clients receive this revalidation event.
+   */
+  scopes?: string[];
+};
+
+/**
  * Interface for the Igniter Realtime Service.
  * Provides methods for publishing events to channels, building realtime events,
  * and broadcasting data to all channels.
@@ -110,15 +141,14 @@ export interface IgniterRealtimeService<TContext = any> {
 
 
   /**
-   * Revalidate data for a specific query key.
+   * Triggers a refetch on the client for one or more queries.
+   * This is the primary mechanism for keeping client-side data in sync
+   * with server-side changes.
    *
-   * @param queryKeys - The query key to revalidate.
-   * @param scopes - The scopes to revalidate.
-   * @param data - The data to revalidate.
+   * @param targets - A single revalidation target or an array of them.
+   * @returns A promise that resolves when the revalidation event is published.
    */
-  revalidate(params: {
-    queryKeys: string | string[],
-    scopes?: string[],
-    data?: unknown
-  }): Promise<void>;
+  revalidate(
+    targets: RevalidationTarget | RevalidationTarget[],
+  ): Promise<void>;
 }
