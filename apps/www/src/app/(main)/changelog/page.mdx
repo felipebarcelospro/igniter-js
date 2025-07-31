@@ -1,0 +1,55 @@
+import { Update } from '@/components/mdx/Update';
+
+<Update
+  tag="Core"
+  version="v0.2.1"
+  title="Core Hook Improvements & Documentation"
+  description="This release focused on significantly enhancing the client-side hooks and providing comprehensive documentation for all starter kits."
+>
+  <ul className="list-disc pl-5 mt-4 space-y-2">
+    <li>
+      **`useQuery` & `useMutation` Overhaul:** The hooks were refactored for improved stability and developer experience. The `variables` property was added to both hooks, giving developers access to the parameters used in the most recent execution.
+    </li>
+    <li>
+      **New Documentation:** Added complete starter guides for Next.js, TanStack Start, Bun+React, and REST APIs to help users get started faster.
+    </li>
+    <li>
+      **Real-time Engine:** Introduced foundational support for real-time updates and data streams, paving the way for live features.
+    </li>
+  </ul>
+</Update>
+
+<Update
+  tag="Starters"
+  version="v0.2.0"
+  title="New Starters & Enhanced CLI"
+  description="A major feature release that introduced multiple new starter templates and improved the CLI's capabilities."
+>
+  <ul className="list-disc pl-5 mt-4 space-y-2">
+    <li>
+      **New Starters:** Added official, production-ready starters for **Next.js**, **TanStack Start**, and a pure **Bun+React** SPA.
+    </li>
+    <li>
+      **CLI Update:** The `igniter init` command was updated to download starter templates directly from the official GitHub repository, ensuring users always get the latest version.
+    </li>
+    <li>
+      **General Improvements:** Various enhancements to documentation, interfaces, and internal type safety.
+    </li>
+  </ul>
+</Update>
+
+<Update
+  tag="Adapters"
+  version="v0.1.0"
+  title="MCP Server Adapter & Initial Core Refinements"
+  description="This version focused on introducing the Model-Context-Protocol (MCP) Server adapter and making key improvements to the core package."
+>
+  <ul className="list-disc pl-5 mt-4 space-y-2">
+    <li>
+      **New: MCP Server Adapter:** Shipped the first version of `@igniter-js/adapter-mcp-server`, allowing AI agents to use Igniter.js APIs as a set of tools.
+    </li>
+    <li>
+      **Core Enhancements:** The core package received several new features and bug fixes, improving its robustness and capabilities.
+    </li>
+  </ul>
+</Update>

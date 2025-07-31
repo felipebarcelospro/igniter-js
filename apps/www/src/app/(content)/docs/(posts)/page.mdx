@@ -1,0 +1,228 @@
+import { Zap, Lightbulb, CheckCircle, FileText, AlertTriangle, Bot, Cloud, Wifi, Wrench, Puzzle, Terminal, Layers } from "lucide-react";
+
+# Welcome to Igniter.js
+
+The AI-Friendly, Typesafe Framework for Modern TypeScript Applications.
+
+<Callout type="tip" title="New to Igniter.js?">
+  Start with our [Quick Start Guide](/docs/getting-started/quick-start-guide) to build your first API in minutes.
+</Callout>
+
+Igniter.js is your comprehensive solution for building modern, type-safe applications with exceptional developer experience. Whether you're creating simple APIs or complex enterprise applications, Igniter.js provides the tools and patterns you need to succeed.
+
+## Why Choose Igniter.js?
+
+Igniter.js is built on three foundational principles that set it apart:
+
+<ul className="grid grid-cols-1 md:grid-cols-2 gap-6 my-8">
+  <li className="card-item">
+    <Card title="End-to-End Type Safety" icon={Wrench}>
+      Write your API once, get fully-typed clients for React and server communication. Pure TypeScript magic catches bugs early.
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Framework Agnostic" icon={Cloud}>
+      Works with any modern framework like Next.js, Express, Hono, and Bun. Built on standard Web APIs for maximum compatibility and flexibility.
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Real-Time & Jobs" icon={Wifi}>
+      Built-in real-time features with Server-Sent Events and job queues. Add live updates and async processing with minimal setup.
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Code Agents Ready" icon={Bot}>
+      Built-in training for seamless integration with Claude Code, Gemini CLI, OpenCode, Grok CLI, Cursor, Windsurft and VS Code Copilot.
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Powerful Plugin System" icon={Puzzle}>
+      Extend functionality with self-contained, reusable modules. Plugins can add routes, middleware, context, and more across projects.
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="CLI & Developer Tools" icon={Terminal}>
+      Interactive CLI with project scaffolding, live dashboard, and development tools. Get started instantly with 'igniter init'.
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Feature-Based" icon={Layers}>
+      Organize code by business features, not technical layers. High cohesion, low coupling design promotes scalability and maintainability.
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Dependency Injection" icon={Zap}>
+      Clean, type-safe dependency injection through the Context system. Inject services like databases and loggers in a testable way.
+    </Card>
+  </li>
+</ul>
+
+## Overview
+
+Explore our comprehensive documentation organized by your learning journey:
+
+### Getting Started
+
+Perfect for newcomers - from installation to your first running endpoint.
+
+<ul className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6">
+  <li className="card-item">
+    <Card title="Quick Start Guide" href="/docs/getting-started/quick-start-guide">
+      Build your first API in under 5 minutes
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Installation" href="/docs/getting-started/installation">
+      Setup instructions for all environments
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Project Structure" href="/docs/getting-started/project-structure">
+      Best practices for organizing your code
+    </Card>
+  </li>
+</ul>
+
+### Core Concepts
+
+Master the fundamental building blocks of every Igniter.js application.
+
+<ul className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6">
+  <li className="card-item">
+    <Card title="The Igniter Builder" href="/docs/core-concepts/the-igniter-builder">
+      The heart of every Igniter.js application
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Context" href="/docs/core-concepts/context">
+      Share data across your application layers
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Controllers & Actions" href="/docs/core-concepts/controllers-and-actions">
+      Organize your business logic effectively
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Procedures (Middleware)" href="/docs/core-concepts/procedures">
+      Reusable logic for common patterns
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Routing" href="/docs/core-concepts/routing">
+      Flexible and type-safe route definitions
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Validation" href="/docs/core-concepts/validation">
+      Runtime safety with Zod integration
+    </Card>
+  </li>
+</ul>
+
+### Advanced Features
+
+Unlock the full potential of Igniter.js with these powerful built-in features.
+
+<ul className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6">
+  <li className="card-item">
+    <Card title="Queues" href="/docs/advanced-features/queues">
+      Background job processing made simple
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Realtime" href="/docs/advanced-features/realtime">
+      Real-time features with Server-Sent Events
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Store" href="/docs/advanced-features/store">
+      Redis-based caching and storage
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Plugins" href="/docs/advanced-features/plugins">
+      Extend functionality with custom plugins
+    </Card>
+  </li>
+</ul>
+
+### Client-Side Integration
+
+Connect your frontend with full type safety and excellent developer experience.
+
+<ul className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6">
+  <li className="card-item">
+    <Card title="API Client" href="/docs/client-side/api-client">
+      Type-safe client for seamless integration
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="IgniterProvider" href="/docs/client-side/igniter-provider">
+      React context for global configuration
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="useQuery" href="/docs/client-side/use-query">
+      Fetch data with caching and error handling
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="useMutation" href="/docs/client-side/use-mutation">
+      Handle data mutations with optimistic updates
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="useRealtime" href="/docs/client-side/use-realtime">
+      Real-time subscriptions with useRealtime
+    </Card>
+  </li>
+</ul>
+
+### CLI & Tooling
+
+Boost your productivity with our powerful command-line tools.
+
+<ul className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
+  <li className="card-item">
+    <Card title="igniter init" href="/docs/cli-and-tooling/igniter-init">
+      Scaffold new projects instantly
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="igniter dev" href="/docs/cli-and-tooling/igniter-dev">
+      Development server with hot reload
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="igniter generate" href="/docs/cli-and-tooling/igniter-generate">
+      Code generation for common patterns
+    </Card>
+  </li>
+</ul>
+
+## Community & Support
+
+Join our growing community and get the help you need:
+
+<ul className="grid grid-cols-1 md:grid-cols-3 gap-4 my-8">
+  <li className="card-item">
+    <Card title="GitHub Discussions" href="https://github.com/felipebarcelospro/igniter-js/discussions" icon={FileText}>
+      Ask questions, share ideas, and connect with other developers
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Report Issues" href="https://github.com/felipebarcelospro/igniter-js/issues" icon={AlertTriangle}>
+      Found a bug or want to request a feature? Let us know
+    </Card>
+  </li>
+  <li className="card-item">
+    <Card title="Contributing" href="https://github.com/felipebarcelospro/igniter-js/blob/main/CONTRIBUTING.md" icon={CheckCircle}>
+      Join our open source community and help shape the future of Igniter.js
+    </Card>
+  </li>
+</ul>
+
+<Callout type="success" title="Ready to get started?">
+  Jump into our [Quick Start Guide](/docs/getting-started/quick-start-guide) and build your first Igniter.js application today!
+</Callout>
