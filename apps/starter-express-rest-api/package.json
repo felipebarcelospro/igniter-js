@@ -11,10 +11,10 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@igniter-js/adapter-bullmq": "alpha",
-    "@igniter-js/adapter-mcp-server": "alpha",
-    "@igniter-js/adapter-redis": "alpha",
-    "@igniter-js/core": "^0.2.0-alpha.32",
+    "@igniter-js/adapter-bullmq": "latest",
+    "@igniter-js/adapter-mcp-server": "latest",
+    "@igniter-js/adapter-redis": "latest",
+    "@igniter-js/core": "latest",
     "@igniter-js/eslint-config": "^0.1.0",
     "@prisma/client": "^6.11.1",
     "bullmq": "^4",
