@@ -14,26 +14,30 @@ export default async function Page() {
   const segments = await FileSystemContentManager.getNavigationItems("blog");
 
   return (
-    <div className="px-4 lg:px-8 py-8 lg:py-16">
-      <section>
+    <div className="relative isolate overflow-hidden">
+      {/* Header with background elements */}
+      <div className="border-b border-border">
         <div className="container mx-auto max-w-screen-2xl">
-          {/* Header Section */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl lg:text-5xl font-bold mb-4 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+          <div className='border-x border-border py-24 px-10'>
+            <h2 className="text-2xl font-semibold text-foreground mb-6">
+              <span className="text-3xl text-muted pr-2">/</span>
               Blog
-            </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            </h2>
+            <p className="text-muted-foreground max-w-md">
               Stay updated with the latest news, tutorials, and insights about Igniter.js. Learn best practices, discover new features, and get tips from the community.
             </p>
           </div>
-          
-          <div className="border border-border rounded-lg overflow-hidden">
-            <BlogList posts={segments} />
-          </div>
         </div>
-      </section>
-      
-      <div className="mt-16">
+      </div>
+
+      {/* Main content with sidebar */}
+      <div className="container mx-auto max-w-screen-2xl border-b border-border">
+        <div className='border-x border-border'>
+          <BlogList posts={segments} />
+        </div>
+      </div>
+
+      <div>
         <CTASection />
       </div>
     </div>

@@ -1,15 +1,8 @@
 # Introducing Igniter.js: The Type-Safe Full-Stack Framework for Modern Web Development
 
-<Mermaid chart={`
-graph TD;
-    A[Client] --> B{Igniter.js};
-    B --> C[Server];
-    C --> D[Database];
-`} />
+In the rapidly evolving landscape of web development, developers are constantly seeking tools that not only boost productivity but also ensure code reliability and maintainability. Today, we're excited to introduce **Igniter.js**, a groundbreaking TypeScript framework that redefines how we build full-stack applications with unprecedented type safety, seamless real-time capabilities, and an exceptional developer experience.
 
-In the rapidly evolving landscape of web development, developers are constantly seeking tools that not only boost productivity but also ensure code reliability and maintainability. Today, we're excited to introduce **Igniter.js**, a groundbreaking TypeScript framework that redefines how we build full-stack applications with unprecedented type safety, seamless AI integration, and an exceptional developer experience.
-
-Created by [Felipe Barcelos](https://github.com/felipebarcelospro), Igniter.js emerges from years of experience building scalable web applications and recognizing the gaps in existing solutions. This framework addresses the fundamental challenges developers face when building modern applications: maintaining type safety across the entire stack, managing complex state synchronization, and integrating AI capabilities without sacrificing performance or developer experience.
+Created by [Felipe Barcelos](https://github.com/felipebarcelospro), Igniter.js emerges from years of experience building scalable web applications and recognizing the gaps in existing solutions. This framework addresses the fundamental challenges developers face when building modern applications: maintaining type safety across the entire stack, managing complex state synchronization, and building robust backend services without sacrificing performance or developer experience.
 
 ## The Problem with Current Full-Stack Development
 
@@ -21,8 +14,8 @@ Traditional full-stack development creates artificial boundaries between fronten
 ### 2. **Complex State Management**
 Keeping client-side state synchronized with server-side data requires intricate solutions involving caching, invalidation strategies, and real-time updates. Most frameworks treat these as separate concerns, adding complexity to the development process.
 
-### 3. **AI Integration Complexity**
-As AI becomes integral to modern applications, developers struggle with type-safe AI integrations, prompt management, and maintaining consistency across different AI providers and models.
+### 3. **Backend Infrastructure Complexity**
+Building robust backend services requires integrating multiple systems: databases, caching, background jobs, pub/sub messaging, and real-time updates. Each system typically requires separate configuration and lacks unified type safety.
 
 ### 4. **Developer Experience Fragmentation**
 Developers often switch between different mental models, toolchains, and debugging approaches when working across the stack, reducing productivity and increasing cognitive load.
@@ -37,51 +30,52 @@ Igniter.js is built on three fundamental principles:
 
 1. **End-to-End Type Safety**: Every piece of data flowing through your application is type-safe, from database queries to UI components.
 2. **Developer Experience First**: The framework prioritizes intuitive APIs, excellent tooling, and minimal boilerplate.
-3. **AI-Native Architecture**: AI integration is a first-class citizen, not an afterthought.
+3. **Unified Backend Architecture**: All backend services (APIs, jobs, caching, real-time) work together seamlessly with shared type safety.
 
 ## Key Features That Set Igniter.js Apart
 
-### 1. **Type-Safe RPC with Builder Pattern**
+### 1. **Type-Safe Controllers and Actions**
 
-Igniter.js introduces a revolutionary approach to API development using a builder pattern that ensures complete type safety:
+Igniter.js introduces a revolutionary approach to API development using controllers and actions that ensure complete type safety:
 
 ```typescript
-// Define a controller with full type safety
+// features/users/controllers/users.controller.ts
 export const userController = igniter.controller({
   path: '/users',
   actions: {
     // Type-safe query with automatic validation
-    list: igniter.query({
-      path: '/',
-      params: z.object({
-        page: z.number().min(1).default(1),
-        limit: z.number().min(1).max(100).default(10)
+    getUser: igniter.query({
+      path: '/:id' as const,
+      query: z.object({
+        id: z.string()
       }),
-      handler: async ({ params, context, response }) => {
-        const users = await context.database.user.findMany({
-          skip: (params.page - 1) * params.limit,
-          take: params.limit
+      handler: async ({ request, response, context }) => {
+        const user = await context.db.user.findUnique({
+          where: { id: request.query.id }
         });
-        
-        return response.success({ users, total: users.length });
-      }
+
+        if (!user) {
+          return response.notFound('User not found');
+        }
+
+        return response.success(user);
+      },
     }),
     
-    // Type-safe mutation with automatic revalidation
-    create: igniter.mutation({
+    // Type-safe mutation with validation
+    createUser: igniter.mutate({
       path: '/',
       method: 'POST',
       body: z.object({
         name: z.string().min(1),
         email: z.string().email()
       }),
-      handler: async ({ request, context, response }) => {
-        const user = await context.database.user.create({
+      handler: async ({ request, response, context }) => {
+        const user = await context.db.user.create({
           data: request.body
         });
         
-        // Automatically trigger client-side revalidation
-        return response.created(user).revalidate(['users.list']);
+        return response.success({ user }, { status: 201 });
       }
     })
   }
@@ -95,174 +89,229 @@ On the client side, consuming this API is equally type-safe and intuitive:
 
 import { api } from '@/igniter.client';
 
-function UsersList() {
+function UserProfile({ userId }: { userId: string }) {
   // Fully typed query with automatic caching and revalidation
-  const usersQuery = api.users.list.useQuery({
-    page: 1,
-    limit: 10
+  const userQuery = api.users.getUser.useQuery({
+    query: { id: userId },
+    enabled: !!userId,
+    staleTime: 5000,
+    refetchOnWindowFocus: false,
+    onSuccess: (data) => {
+      console.log('Successfully fetched user:', data);
+    },
+    onError: (error) => {
+      console.error('Error fetching user:', error);
+    },
   });
   
-  const createUserMutation = api.users.create.useMutation({
-    onSuccess: () => {
-      // Automatic revalidation triggered by server response
-      console.log('User created and list updated!');
+  const createUserMutation = api.users.createUser.useMutation({
+    onSuccess: (data) => {
+      console.log('User created successfully:', data.user);
+      // Invalidate and refetch user queries
+      userQuery.refetch();
+    },
+    onError: (error) => {
+      console.error('Failed to create user:', error.message);
     }
   });
   
-  if (usersQuery.isLoading) {
-    return <div>Loading users...</div>;
+  if (userQuery.isLoading) {
+    return <div>Loading user...</div>;
+  }
+  
+  if (userQuery.isError) {
+    return <div>Error loading user: {userQuery.error.message}</div>;
   }
   
   return (
     <div>
-      {usersQuery.data?.users.map(user => (
-        <div key={user.id}>{user.name} - {user.email}</div>
-      ))}
+      <h1>{userQuery.data?.name}</h1>
+      <p>{userQuery.data?.email}</p>
       
       <button 
         onClick={() => createUserMutation.mutate({
-          name: 'John Doe',
-          email: 'john@example.com'
+          body: {
+            name: 'John Doe',
+            email: 'john@example.com'
+          }
         })}
-        disabled={createUserMutation.isPending}
+        disabled={createUserMutation.isLoading}
       >
-        {createUserMutation.isPending ? 'Creating...' : 'Create User'}
+        {createUserMutation.isLoading ? 'Creating...' : 'Create User'}
       </button>
     </div>
   );
 }
 ```
 
-### 2. **Integrated Queue System for Background Processing**
+### 2. **Procedures: Reusable Type-Safe Middleware**
 
-Igniter.js includes a first-class queue system built on [BullMQ](https://docs.bullmq.io/), enabling reliable background job processing with full type safety:
+Igniter.js provides a powerful procedure system for creating reusable, type-safe middleware that can extend your application context:
 
 ```typescript
-// Define type-safe background jobs
-export const emailJobRouter = jobs.router({
-  namespace: 'emails',
-  jobs: {
-    sendWelcomeEmail: jobs.job({
-      input: z.object({
-        userId: z.string(),
-        email: z.string().email()
-      }),
-      handler: async ({ input, context }) => {
-        const user = await context.database.user.findUnique({
-          where: { id: input.userId }
-        });
-        
-        if (!user) {
-          throw new Error('User not found');
-        }
-        
-        await context.email.send({
-          to: input.email,
-          template: 'welcome',
-          data: { userName: user.name }
-        });
-        
-        return { success: true, sentAt: new Date() };
-      }
-    })
-  }
+// procedures/auth.procedure.ts
+export const auth = igniter.procedure({
+  handler: async (options: { isAuthRequired: boolean }, { response, context }) => {
+    const user = await getCurrentUser(context.env.SECRET);
+
+    // If auth is required but there's no user, return an unauthorized error.
+    // This stops the request from proceeding further.
+    if (options.isAuthRequired && !user) {
+      return response.unauthorized('Authentication required.');
+    }
+
+    // The returned object is merged into the context.
+    // Now, context.auth.user will be available in our controller.
+    return {
+      auth: {
+        user,
+      },
+    };
+  },
 });
 
-// Dispatch jobs from anywhere in your application
-const result = await emailJobRouter.sendWelcomeEmail.dispatch({
-  userId: '123',
-  email: 'user@example.com'
-}, {
-  delay: 5000, // Send after 5 seconds
-  attempts: 3   // Retry up to 3 times on failure
+// Usage in controller
+export const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    getCurrentUser: igniter.query({
+      path: '/me',
+      // Use the procedure created in the previous step.
+      // TypeScript knows that context.auth.user is now available!
+      use: [auth({ isAuthRequired: true })],
+      handler: async ({ request, response, context }) => {
+        // You can get fully type-safe user object from Auth Procedure
+        const user = context.auth.user;
+
+        // Return current session user
+        return response.success(user);
+      },
+    }),
+  }
 });
 ```
 
-### 3. **Real-Time Updates with Server-Sent Events**
+### 3. **Real-Time Updates by Default**
 
-Igniter.js provides seamless real-time functionality using Server-Sent Events (SSE), offering better performance and simpler implementation compared to WebSockets for most use cases:
+Igniter.js automatically keeps your UI synchronized with server state through automatic revalidation. When a mutation occurs, the server can trigger client-side data refetches instantly:
 
 ```typescript
-// Server-side: Automatic revalidation triggers
-export const postController = igniter.controller({
+// Backend: Regular query and mutation with automatic revalidation
+export const postsController = igniter.controller({
   path: '/posts',
   actions: {
-    create: igniter.mutation({
+    // A regular query to list posts
+    list: igniter.query({
       path: '/',
-      method: 'POST',
-      body: z.object({
-        title: z.string(),
-        content: z.string()
-      }),
-      handler: async ({ request, context, response }) => {
-        const post = await context.database.post.create({
-          data: request.body
-        });
-        
-        // Automatically notify all connected clients
-        return response.created(post).revalidate(['posts.list']);
-      }
-    })
-  }
-});
-```
+      stream: true,
+      handler: async ({ context, response }) => {
+        const posts = await context.database.post.findMany();
+        return response.success({ posts });
+      },
+    }),
 
-```tsx
-// Client-side: Automatic real-time updates
+    // A mutation that triggers automatic revalidation
+    create: igniter.mutate({
+      path: '/',
+      body: z.object({ 
+        title: z.string(), 
+        content: z.string() 
+      }),
+      handler: async ({ body, context, response }) => {
+        const newPost = await context.database.post.create({ 
+          data: body 
+        });
+
+        // This automatically triggers revalidation for all clients
+        // using api.posts.list.useQuery() - no additional code needed!
+        return response.created(newPost).revalidate(['posts.list']);
+      },
+    }),
+  },
+});
+
+// Frontend: Standard useQuery - automatically updates in real-time
 function PostsList() {
-  // This query automatically updates when server triggers revalidation
   const postsQuery = api.posts.list.useQuery();
-  
-  // No additional code needed for real-time updates!
+
+  if (postsQuery.isLoading) {
+    return <div>Loading posts...</div>;
+  }
+
   return (
-    <div>
-      {postsQuery.data?.posts.map(post => (
-        <article key={post.id}>
-          <h2>{post.title}</h2>
-          <p>{post.content}</p>
-        </article>
+    <ul>
+      {postsQuery.data?.posts.map((post) => (
+        <li key={post.id}>{post.title}</li>
       ))}
-    </div>
+    </ul>
   );
 }
+
+// When ANY user creates a post, ALL users see the update instantly!
+// No WebSockets, no manual refetching, no additional complexity.
 ```
 
-### 4. **AI-Native Integration**
+### 4. **Background Jobs with Type Safety**
 
-Igniter.js treats AI as a first-class citizen with built-in support for multiple providers, type-safe prompt management, and seamless integration:
+Igniter.js includes a powerful job system for handling background processing with full type safety:
 
 ```typescript
-// Type-safe AI integration
-export const aiController = igniter.controller({
-  path: '/ai',
+// src/services/jobs.ts
+
+// Creates a set of registered jobs, using the merge method to add new jobs
+export const registeredJobs = jobs.merge({
+  // Defines a group of jobs related to emails
+  emails: jobs.router({
+    jobs: {
+      // Registers the 'sendWelcome' job
+      sendWelcome: jobs.register({
+        name: 'sendWelcome', // Job name
+        input: z.object({
+          message: z.string() // Defines the input format using Zod (type validation)
+        }),
+        handler: async ({ input }) => {
+          // Function to be executed when the job runs
+          console.log(input.message) // Displays the received message in the console
+        }
+      })
+    }
+  })
+})
+
+// Enqueue jobs from anywhere
+export const userController = igniter.controller({
+  path: '/users',
   actions: {
-    generateContent: igniter.mutation({
-      path: '/generate',
-      method: 'POST',
+    create: igniter.mutate({
+      path: '/',
       body: z.object({
-        prompt: z.string(),
-        model: z.enum(['gpt-4', 'claude-3', 'gemini-pro'])
+        name: z.string(),
+        email: z.string().email(),
       }),
-      handler: async ({ request, context, response }) => {
-        const result = await context.ai.generate({
-          model: request.body.model,
-          prompt: request.body.prompt,
-          maxTokens: 1000
+      handler: async ({ body, context }) => {
+        const user = await context.database.user.create({
+          data: body,
         });
-        
-        return response.success({ 
-          content: result.content,
-          usage: result.usage 
+
+        // Enqueue welcome email job
+        await igniter.jobs.emails.enqueue({
+          task: 'sendWelcome',
+          input: {
+            userId: user.id,
+            email: user.email,
+          },
         });
-      }
-    })
-  }
+
+        return response.success({ user });
+      },
+    }),
+  },
 });
 ```
 
 ## Framework-Agnostic Architecture
 
-One of Igniter.js's greatest strengths is its framework-agnostic approach. While it provides excellent integration with popular frameworks like [Next.js](https://nextjs.org/) and [TanStack Start](https://tanstack.com/start), it's designed to work with any frontend framework or even vanilla JavaScript:
+Igniter.js is designed to work seamlessly with any JavaScript runtime and framework. The core philosophy is "write once, deploy anywhere":
 
 <Callout type="info">
 **Framework Flexibility**: Igniter.js can be integrated with React, Vue, Svelte, Angular, or any other frontend framework. The type-safe client can even be used in mobile applications built with React Native or other cross-platform solutions.
@@ -275,7 +324,8 @@ One of Igniter.js's greatest strengths is its framework-agnostic approach. While
 // app/api/[...igniter]/route.ts
 import { igniter } from '@/igniter';
 
-export const { GET, POST, PUT, DELETE } = igniter.handler();
+// Igniter.js automatically handles all HTTP methods
+export const { GET, POST, PUT, DELETE, PATCH } = igniter.nextjs();
 ```
 
 **Express.js Integration:**
@@ -286,9 +336,12 @@ import { igniter } from './igniter';
 
 const app = express();
 
-app.use('/api', igniter.handler());
+// Mount Igniter.js on any path
+app.use('/api', igniter.express());
 
-app.listen(3000);
+app.listen(3000, () => {
+  console.log('Server running on http://localhost:3000');
+});
 ```
 
 **Bun Integration:**
@@ -296,31 +349,53 @@ app.listen(3000);
 // server.ts
 import { igniter } from './igniter';
 
-export default {
+// Direct integration with Bun's native server
+Bun.serve({
   port: 3000,
-  fetch: igniter.handler()
+  fetch: igniter.fetch,
+});
+
+console.log('Bun server running on http://localhost:3000');
+```
+
+**Cloudflare Workers:**
+```typescript
+// worker.ts
+import { igniter } from './igniter';
+
+// Deploy to the edge with zero configuration
+export default {
+  fetch: igniter.fetch,
 };
 ```
 
 ## Performance and Scalability
 
-Igniter.js is built with performance in mind, leveraging modern JavaScript runtime optimizations and efficient data flow patterns:
+Igniter.js is engineered for performance and scale from the ground up:
 
-### Benchmarks
+### Key Performance Features
 
-In our internal benchmarks, Igniter.js applications show:
-- **40% faster development time** compared to traditional full-stack setups
-- **25% fewer runtime errors** due to comprehensive type safety
-- **60% reduction in boilerplate code** through intelligent abstractions
-- **Native performance** with zero-overhead type safety at runtime
+- **Zero Runtime Overhead**: Client-side code is fully tree-shakeable
+- **Minimal Bundle Size**: Only ship what you use
+- **Fast Cold Starts**: Optimized for serverless environments
+- **Type Safety**: 100% end-to-end types with zero performance cost
+- **Efficient Serialization**: Optimized data transfer between client and server
 
-### Scalability Features
+### Scalability Architecture
 
-- **Horizontal scaling** through stateless design
-- **Efficient caching** with automatic invalidation
-- **Background job processing** for resource-intensive tasks
-- **Real-time updates** without WebSocket overhead
-- **Database agnostic** with support for PostgreSQL, MySQL, SQLite, and more
+- **Horizontal Scaling**: Stateless design enables easy scaling
+- **Edge Deployment**: Native support for edge runtimes (Cloudflare Workers, Vercel Edge)
+- **Background Processing**: Reliable job queues with Redis/BullMQ integration
+- **Real-time Streaming**: Efficient Server-Sent Events for live data
+- **Intelligent Caching**: Built-in query caching with smart invalidation
+- **Database Agnostic**: Works with any database or ORM (Prisma, Drizzle, etc.)
+
+### Production Ready
+
+- **Error Handling**: Comprehensive error boundaries and logging
+- **Monitoring**: Built-in observability hooks
+- **Security**: CORS, rate limiting, and input validation out of the box
+- **Testing**: First-class testing utilities for both client and server
 
 ## Getting Started with Igniter.js
 
