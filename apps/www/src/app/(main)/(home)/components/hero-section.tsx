@@ -28,7 +28,7 @@ export function HeroSection() {
 
           <div className="p-4 lg:p-10">
             <motion.h1
-              className="tracking-tight text-3xl sm:text-4xl lg:text-5xl xl:text-6xl max-w-4xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent"
+              className="tracking-tight text-4xl max-w-2xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent"
               variants={{
                 hidden: { opacity: 0, y: 20 },
                 visible: { opacity: 1, y: 0 },
@@ -38,7 +38,7 @@ export function HeroSection() {
             </motion.h1>
 
             <motion.p
-              className="text-base sm:text-lg lg:text-xl mt-4 lg:mt-6 mb-8 sm:mb-10 md:mb-12 text-muted-foreground max-w-3xl leading-relaxed"
+              className="text-base sm:text-lg lg:text-xl mt-4 mb-8 sm:mb-10 md:mb-12 text-muted-foreground max-w-3xl leading-relaxed"
               variants={{
                 hidden: { opacity: 0, y: 20 },
                 visible: { opacity: 1, y: 0 },

@@ -353,7 +353,7 @@ export function BackendSection() {
               </div>
 
               {/* Mobile Navigation */}
-              <div className="grid grid-cols-2 gap-2 mb-6">
+              <div className="grid gap-2 mb-2">
                 {codeExamples.map((example) => {
                   return (
                     <button
