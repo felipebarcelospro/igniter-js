@@ -16,6 +16,13 @@ export const metadata: Metadata = {
     absolute: config.projectName,
     template: `%s • ${config.projectName}`,
   },
+  openGraph: {
+    images: [
+      {
+        url: 'https://igniter.js.vercel.app/og-image',
+      }
+    ]
+  }
 };
 
 export default async function RootLayout({
