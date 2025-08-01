@@ -519,26 +519,58 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     Snippet,
 
     // Utility components
-    Steps: ({ children, ...props }: { children: ReactNode } & DivProps) => (
+    StepsContainer: ({ children, ...props }: { children: ReactNode } & DivProps) => (
       <div className="my-8" {...props}>
-        {React.Children.map(children, (child, index) => {
-          const isLast = index === React.Children.count(children) - 1;
-          return (
-            <div key={index} className="flex gap-4 relative">
-              <div className="flex flex-col items-center relative">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold z-10 relative">
-                  {index + 1}
-                </div>
-                {!isLast && (
-                  <div className="absolute top-8 left-1/2 transform -translate-x-1/2 w-0.5 bg-border" style={{height: 'calc(100% + 1.5rem)'}} />
-                )}
-              </div>
-              <div className="flex-1 pt-1 pb-6">{child}</div>
-            </div>
-          );
-        })}
+        {children}
       </div>
     ),
+
+    StepItem: ({ children, number, isLast = false, ...props }: { 
+      children: ReactNode; 
+      number: number; 
+      isLast?: boolean; 
+    } & DivProps) => (
+      <div className="flex gap-4 relative" {...props}>
+        <div className="flex flex-col items-center relative">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold z-10 relative">
+            {number}
+          </div>
+          {!isLast && (
+            <div className="absolute top-8 left-1/2 transform -translate-x-1/2 w-0.5 bg-border" style={{height: 'calc(100% + 1.5rem)'}} />
+          )}
+        </div>
+        <div className="flex-1 pt-1 pb-6">{children}</div>
+      </div>
+    ),
+
+    Steps: ({ children, ...props }: { children: ReactNode } & DivProps) => {
+      // Filter out text nodes and only keep valid React elements (like h3 headings)
+      const validChildren = React.Children.toArray(children).filter(child => 
+        React.isValidElement(child) && 
+        (child.type === 'h3' || (typeof child.type === 'string' && child.type === 'h3'))
+      );
+      
+      return (
+        <div className="my-8" {...props}>
+          {validChildren.map((child, index) => {
+            const isLast = index === validChildren.length - 1;
+            return (
+              <div key={index} className="flex gap-4 relative">
+                <div className="flex flex-col items-center relative">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold z-10 relative">
+                    {index + 1}
+                  </div>
+                  {!isLast && (
+                    <div className="absolute top-8 left-1/2 transform -translate-x-1/2 w-0.5 bg-border" style={{height: 'calc(100% + 1.5rem)'}} />
+                  )}
+                </div>
+                <div className="flex-1 pt-1 pb-6">{child}</div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    },
 
     Tabs: ({ children, ...props }: { children: ReactNode } & DivProps) => (
       <div className="my-6 rounded-lg border border-border overflow-hidden" {...props}>

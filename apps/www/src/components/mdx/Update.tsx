@@ -11,7 +11,7 @@ interface UpdateProps {
 
 export const Update: React.FC<UpdateProps> = ({ children, tag, version, title, description }) => {
   return (
-    <section className="grid grid-cols-12 gap-x-8 gap-y-4 my-16">
+    <section className="grid grid-cols-12 gap-x-8 gap-y-4 py-10 border-b border-border">
       {/* Left Column: Tag and Version */}
       <div className="col-span-12 md:col-span-3 text-left md:text-right">
         {tag && (

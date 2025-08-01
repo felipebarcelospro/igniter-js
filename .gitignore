@@ -175,3 +175,6 @@ Thumbs.db
 
 # Copilot
 .copilot/
+
+# Trae AI
+.trae/

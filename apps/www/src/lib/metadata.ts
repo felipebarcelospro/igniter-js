@@ -113,7 +113,7 @@ export function generateBlogMetadata({
   slug,
   publishedTime,
   modifiedTime,
-  author = config.developer.name,
+  author = 'Igniter.js Team',
   keywords = []
 }: {
   title: string;
@@ -168,7 +168,7 @@ export function generateArticleStructuredData({
   slug,
   publishedTime,
   modifiedTime,
-  author = config.developer.name
+  author = 'Igniter.js Team',
 }: {
   title: string;
   description: string;
@@ -177,7 +177,7 @@ export function generateArticleStructuredData({
   modifiedTime?: string;
   author?: string;
 }) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://igniterjs.dev';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://igniter-js.vercel.app';
   
   return {
     '@context': 'https://schema.org',
@@ -190,7 +190,7 @@ export function generateArticleStructuredData({
     author: {
       '@type': 'Person',
       name: author,
-      url: config.developer.url
+      url: baseUrl
     },
     publisher: {
       '@type': 'Organization',

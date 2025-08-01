@@ -36,7 +36,7 @@ export default function ChangelogLayout({
       {/* Header with background elements */}
       <div className="border-b border-border">
         <div className="container mx-auto max-w-screen-2xl">
-          <div className='border-x py-24 px-10'>
+          <div className='border-x border-border py-24 px-10'>
             <h2 className="text-2xl font-semibold text-foreground mb-6">
               <span className="text-3xl text-muted pr-2">/</span>
               Changelog
@@ -50,12 +50,12 @@ export default function ChangelogLayout({
 
       {/* Main content with sidebar */}
       <div className="container mx-auto max-w-screen-2xl">
-        <div className='border-x px-10'>
+        <div className='border-x border-border px-10'>
           <div className="lg:grid lg:grid-cols-12 lg:gap-8">
             <aside className="hidden lg:col-span-3 lg:block py-10">
               <ChangelogSidebar />
             </aside>
-            <main className="lg:col-span-9 py-10">
+            <main className="lg:col-span-9 border-l border-border">
               <div className="markdown-content">
                 {children}
               </div>
