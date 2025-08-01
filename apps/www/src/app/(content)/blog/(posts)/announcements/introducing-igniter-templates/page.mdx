@@ -1,0 +1,200 @@
+# Introducing Igniter.js Templates: Kickstart Your Next Project in Minutes
+
+We're excited to announce the launch of **Igniter.js Templates** – a curated collection of production-ready starter templates that help you build modern full-stack applications faster than ever before. Whether you're building a React SPA, a Next.js application, or a REST API, our templates provide the perfect foundation with best practices baked in.
+
+## Why Templates Matter
+
+Starting a new project often involves hours of setup: configuring build tools, setting up databases, implementing authentication, and establishing project structure. With Igniter.js Templates, we've eliminated this friction by providing battle-tested starter projects that follow industry best practices and leverage the full power of the Igniter.js ecosystem.
+
+## Available Templates
+
+Our initial collection includes six carefully crafted templates, each designed for specific use cases:
+
+| Template | Stack | Link |
+|----------|-------|------|
+| **Next.js Full-Stack App** | Next.js 15, Tailwind CSS, PostgreSQL, Prisma | [View Template](/templates/starter-nextjs) |
+| **Bun + React SPA** | Bun, React 18, Tailwind CSS, PostgreSQL | [View Template](/templates/starter-bun-react-app) |
+| **TanStack Start App** | TanStack Start, Tailwind CSS, PostgreSQL, Prisma | [View Template](/templates/starter-tanstack-start) |
+| **Express REST API** | Express.js, TypeScript, PostgreSQL, Prisma | [View Template](/templates/starter-express-rest-api) |
+| **Bun REST API** | Bun, TypeScript, PostgreSQL, Prisma | [View Template](/templates/starter-bun-rest-api) |
+| **Deno REST API** | Deno, TypeScript, PostgreSQL, Prisma | [View Template](/templates/starter-deno-rest-api) |
+
+## Getting Started
+
+Getting started with any template is incredibly simple:
+
+```bash
+# Install the Igniter.js CLI
+npm install -g @igniter-js/cli
+
+# Create a new project from a template
+igniter create my-app
+
+# Follow the interactive prompts to select your template
+# The CLI will guide you through the setup process
+```
+
+Alternatively, you can specify a template directly:
+
+```bash
+# Create a Next.js app
+igniter create my-nextjs-app --template nextjs
+
+# Create a Bun React SPA
+igniter create my-bun-app --template bun-react
+
+# Create an Express API
+igniter create my-api --template express-api
+```
+
+## Template Architecture
+
+Each template follows a consistent, scalable architecture:
+
+```
+my-app/
+├── src/
+│   ├── features/          # Feature-based organization
+│   ├── components/        # Reusable UI components
+│   ├── lib/              # Utility functions
+│   └── types/            # TypeScript definitions
+├── prisma/               # Database schema and migrations
+├── public/               # Static assets
+├── docker-compose.yml    # Local development services
+└── .env.example         # Environment configuration
+```
+
+### Feature-Based Organization
+All templates use a feature-based folder structure that scales with your application:
+
+```
+src/features/
+├── auth/
+│   ├── components/       # Auth-specific components
+│   ├── hooks/           # Custom React hooks
+│   ├── services/        # API calls and business logic
+│   └── types/           # Auth-related types
+└── dashboard/
+    ├── components/
+    ├── hooks/
+    ├── services/
+    └── types/
+```
+
+## Contributing Templates
+
+Want to help expand our template collection? We welcome contributions from the community! Here's how you can add your own template to the Igniter.js ecosystem:
+
+<StepsContainer>
+
+<StepItem number={1}>
+### Fork and Clone the Repository
+
+Start by forking the [Igniter.js repository](https://github.com/igniter-js/igniter-js) and cloning it to your local machine.
+
+```bash
+git clone https://github.com/your-username/igniter-js.git
+cd igniter-js
+```
+</StepItem>
+
+<StepItem number={2}>
+### Create Your Template
+
+Create a new directory in the `apps/` folder following our naming convention:
+
+```bash
+mkdir apps/starter-your-template-name
+cd apps/starter-your-template-name
+```
+
+Build your template with the following requirements:
+- Include a comprehensive `README.md` with setup instructions
+- Add an `AGENT.md` file describing the template's purpose and features
+- Ensure TypeScript support throughout
+- Include proper error handling and validation
+- Follow security best practices
+</StepItem>
+
+<StepItem number={3}>
+### Add Template Documentation
+
+Create documentation for your template in the `apps/www/src/app/(content)/templates/` directory:
+
+```bash
+mkdir apps/www/src/app/\(content\)/templates/starter-your-template-name
+```
+
+Include:
+- Template overview and features
+- Installation and setup guide
+- Code examples and usage patterns
+- Deployment instructions
+</StepItem>
+
+<StepItem number={4}>
+### Test Your Template
+
+Ensure your template works correctly:
+- Test the installation process
+- Verify all dependencies install properly
+- Check that the development server starts without errors
+- Test the build process
+- Validate TypeScript compilation
+</StepItem>
+
+<StepItem number={5} isLast={true}>
+### Submit Your Contribution
+
+Once your template is ready:
+1. Create a new branch for your template
+2. Commit your changes with descriptive messages
+3. Push to your fork and create a pull request
+4. Include a detailed description of your template's features and use cases
+</StepItem>
+
+</StepsContainer>
+
+We review all template submissions to ensure they meet our quality standards and provide value to the community. Thank you for helping make Igniter.js even better!
+
+## Community and Contributions
+
+Igniter.js Templates are open source and we welcome contributions from the community.
+
+<Accordion>
+  <Expandable title="Improve Existing Templates">
+    Help us enhance our current templates with bug fixes, performance optimizations, and new features. Every improvement makes the developer experience better for everyone.
+  </Expandable>
+  
+  <Expandable title="Create New Templates">
+    Share your expertise with the community by creating templates for new frameworks, use cases, or technology stacks. Your knowledge can help thousands of developers.
+  </Expandable>
+  
+  <Expandable title="Provide Feedback">
+    Help us understand what templates you need most. Your feedback drives our roadmap and ensures we're building what the community actually wants.
+  </Expandable>
+  
+  <Expandable title="Write Documentation">
+    Help other developers get started faster by improving our documentation, writing tutorials, or creating examples.
+  </Expandable>
+</Accordion>
+
+Visit our [GitHub repository](https://github.com/felipebarcelospro/igniter-js) to get involved!
+
+## Try It Today
+
+Igniter.js Templates are available now and completely free to use. Whether you're a solo developer working on a side project or part of a team building the next big thing, our templates provide the solid foundation you need to focus on what matters most: building amazing features for your users.
+
+```bash
+# Get started in under 2 minutes
+npm install -g @igniter-js/cli
+igniter create my-awesome-app
+cd my-awesome-app
+npm run dev
+```
+
+Join thousands of developers who are already building faster with Igniter.js Templates. Your next great project is just one command away!
+
+---
+
+*Have questions or feedback? Join our [Discord community](https://discord.gg/igniterjs) or follow us on [Twitter](https://twitter.com/igniterjs) for the latest updates and tips.*
