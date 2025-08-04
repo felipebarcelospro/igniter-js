@@ -191,7 +191,7 @@ This document is the root-level technical guide for Large Language Model (LLM) b
 
 ---
 
-## 1. Project Overview
+# 2. Project Overview
 
 **Name:** Igniter.js
 
