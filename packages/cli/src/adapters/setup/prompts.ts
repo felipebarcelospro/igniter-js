@@ -64,51 +64,35 @@ export async function runSetupPrompts(
         format: (value: string) => value.trim().toLowerCase().replace(/\s+/g, '-')
       },
       {
-        type: 'select',
+        type: !(isExistingProject && detectedFramework) ? 'select' : null, // Show if not existing project OR if existing but no framework detected
         name: 'framework',
-        message:
-          isExistingProject && detectedFramework !== 'generic'
-            ? `We detected ${chalk.cyan(detectedFramework)}. Please confirm or select another.`
-            : chalk.bold('• Which framework are you using?'),
+        message: '• Which starter would you like to use?',
         choices: [
           {
-            title: `${chalk.green('Next.js')} ${detectedFramework === 'nextjs' ? chalk.dim('(detected)'): ''}`,
-            value: 'nextjs'
+            title: `${chalk.green('Next.js')} ${chalk.dim('(Fullstack)')}`,
+            value: 'starter-nextjs'
           },
           {
-            title: `${chalk.yellow('Vite')} ${detectedFramework === 'vite' ? chalk.dim('(detected)'): ''}`,
-            value: 'vite'
+            title: `${chalk.yellow('Express.js')} ${chalk.dim('(REST API)')}`,
+            value: 'starter-express-rest-api'
           },
           {
-            title: `${chalk.cyan('Nuxt')} ${detectedFramework === 'nuxt' ? chalk.dim('(detected)'): ''}`,
-            value: 'nuxt'
+            title: `${chalk.cyan('Deno')} ${chalk.dim('(REST API)')}`,
+            value: 'starter-deno-rest-api'
           },
           {
-            title: `${chalk.magenta('SvelteKit')} ${detectedFramework === 'sveltekit' ? chalk.dim('(detected)'): ''}`,
-            value: 'sveltekit'
+            title: `${chalk.magenta('Bun')} ${chalk.dim('(REST API)')}`,
+            value: 'starter-bun-rest-api'
           },
           {
-            title: `${chalk.red('Remix')} ${detectedFramework === 'remix' ? chalk.dim('(detected)'): ''}`,
-            value: 'remix'
+            title: `${chalk.red('Bun + React (Vite)')} ${chalk.dim('(Fullstack)')}`,
+            value: 'starter-bun-react-app'
           },
           {
-            title: `${chalk.white('Astro')} ${detectedFramework === 'astro' ? chalk.dim('(detected)'): ''}`,
-            value: 'astro'
-          },
-          {
-            title: `${chalk.blue('Express')} ${detectedFramework === 'express' ? chalk.dim('(detected)'): ''}`,
-            value: 'express'
-          },
-          {
-            title: `${chalk.magenta('TanStack Start')} ${detectedFramework === 'tanstack-start' ? chalk.dim('(detected)'): ''}`,
-            value: 'tanstack-start'
-          },
-          {
-            title: chalk.gray('Generic/Other'),
-            value: 'generic'
+            title: `${chalk.magenta('TanStack Start')} ${chalk.dim('(Fullstack)')}`,
+            value: 'starter-tanstack-start'
           }
         ],
-        initial: getFrameworkChoiceIndex(detectedFramework)
       },
       {
         type: 'multiselect',

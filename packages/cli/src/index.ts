@@ -83,11 +83,13 @@ program
       }
 
       const config = await runSetupPrompts(targetDir, isExistingProject);
+
       const validation = validateConfig(config);
       if (!validation.isValid) {
         console.error(`✗ ${validation.message}`);
         process.exit(1);
       }
+      
       await generateProject(config, targetDir, isExistingProject);
     } catch (error) {
       initLogger.error('Init command failed', { error });

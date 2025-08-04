@@ -69,9 +69,9 @@ export class ProjectGenerator {
   private async downloadTemplate(): Promise<{ isStarter: boolean, success: boolean }> {
     const { framework } = this.config
     const templateUrl = `https://github.com/felipebarcelospro/igniter-js.git`
-    const branch = 'release/0.2.0-alpha.0'
+    const branch = 'main'
     const tempDir = path.join(this.targetDir, '__igniter_tmp__')
-    const starterDir = path.join(tempDir, 'apps', `starter-${framework}`)
+    const starterDir = path.join(tempDir, 'apps', framework)
     const destDir = this.targetDir
 
     let isValidStarter = false
