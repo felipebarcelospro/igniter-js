@@ -20,6 +20,23 @@ export interface Template {
 
 export const templates: Template[] = [
   {
+    id: "sample-realtime-chat",
+    title: "Real-Time Chat App",
+    description: "A full-featured real-time chat application built with Next.js and Prisma, showcasing Igniter.js's SSE-based real-time features for instant updates.",
+    image: "/templates/sample-realtime-chat.jpeg",
+    framework: "Next.js",
+    useCase: "Full-Stack",
+    css: "Tailwind CSS",
+    database: "PostgreSQL",
+    demoUrl: "https://igniter-js-sample-realtime-chat.vercel.app/",
+    repositoryUrl: "https://github.com/felipebarcelospro/igniter-js/tree/main/apps/sample-realtime-chat",
+    deployUrl: "https://vercel.com/new/clone?repository-url=https://github.com/felipebarcelospro/igniter-js&project-name=igniter-realtime-chat&repository-name=igniter-realtime-chat&root-directory=apps/sample-realtime-chat",
+    tags: ["Next.js", "TypeScript", "Prisma", "WebSocket", "Real-Time"],
+    creator: {
+      username: "felipebarcelospro"
+    }
+  },
+  {
     id: "starter-nextjs",
     title: "Next.js Full-Stack App",
     description: "A full-featured application built using the latest Next.js conventions with end-to-end type safety powered by Igniter.js.",
