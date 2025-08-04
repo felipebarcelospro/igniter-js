@@ -1,0 +1,512 @@
+# Build a Production-Ready, Real-Time Chat App with Igniter.js, Next.js, and Prisma
+
+<Callout type="info" title="What You'll Build">
+In this comprehensive, step-by-step guide, you will build a fully type-safe, production-ready, real-time chat application. We'll leverage the power of **Igniter.js** and its native Server-Sent Events (SSE) support for instant message delivery. The stack includes **Next.js (App Router)** for the frontend, **Prisma** as our ORM, and **PostgreSQL** for the database.
+
+You'll discover how Igniter.js accelerates development with its CLI, automatic code generation, and a beautifully simple set of hooks for data fetching and real-time communication.
+
+**Check out the live demo:** [**igniter-js-sample-realtime-chat.vercel.app**](https://igniter-js-sample-realtime-chat.vercel.app/)
+</Callout>
+
+---
+
+## The Magic of Real-Time: Why Igniter.js and SSE?
+
+In modern web applications, real-time features are no longer a luxury; they're an expectation. Whether it's live notifications, collaborative editing, or a simple chat room, users expect to see updates instantly without hitting a refresh button.
+
+While WebSockets have traditionally been the go-to solution for bi-directional communication, many "real-time" features are actually *server-to-client* dominant. A chat application is a perfect example: a user sends a message (one client-to-server request), and the server then pushes that message out to *all* connected clients.
+
+This is where **Server-Sent Events (SSE)** shine. SSE is a web standard that allows a server to push data to a client over a single, long-lived HTTP connection. It's simpler, lighter, and often more efficient than WebSockets for server-push use cases.
+
+**Igniter.js embraces SSE as a first-class citizen, offering:**
+
+-   **End-to-End Type Safety:** Write your backend logic in TypeScript, and get a fully-typed client with auto-completion for your API hooks, mutations, and real-time events. No more guesswork.
+-   **Simplified Real-Time Logic:** The `useRealtime` hook abstracts away all the complexity of managing an SSE connection. You simply subscribe to a named event and provide a callback.
+-   **Automatic UI Revalidation:** Igniter.js introduces a powerful `revalidate` mechanism. When a mutation happens on the backend (like sending a message), you can tell the server to notify all clients to refetch their data. This updates the UI automatically, often eliminating the need for manual client-side state management for real-time updates.
+-   **AI-Powered Productivity:** With the Igniter.js CLI, you can generate entire API features directly from your Prisma schema, creating controllers, validation, and types in seconds.
+
+<Card title="View the Final Source Code on GitHub" href="https://github.com/felipebarcelospro/igniter-js/tree/main/apps/sample-realtime-chat" />
+
+This tutorial follows the official `sample-realtime-chat` application. You can clone it to see the final result or follow along step-by-step to build it from scratch.
+
+---
+
+## Prerequisites
+
+Before we begin, ensure you have the following installed:
+
+-   Node.js v18 or higher.
+-   Bun (optional, but highly recommended for running local scripts). If you don't use Bun, you can use `npm` or `yarn`.
+-   Docker (for running a local PostgreSQL database).
+
+<Callout type="tip" title="Using Docker for Local Development">
+The easiest way to get a database running is with Docker. The sample repository includes a `docker-compose.yml` file for PostgreSQL. If you're starting from scratch, you can create a simple one to spin up a Postgres instance.
+</Callout>
+
+---
+
+## Step 1: Initialize Your Project with the Igniter CLI
+
+The fastest way to start a new Igniter.js project is with the official CLI. It scaffolds a new application based on a chosen template, setting up all the necessary boilerplate for you.
+
+Open your terminal and run the `igniter init` command:
+
+```bash
+npx @igniter-js/cli@latest init
+```
+
+The CLI will prompt you to choose a template. For this tutorial, select the **Next.js App Router** template. This will create a new directory with a fully configured Next.js project, including Igniter.js, TypeScript, and Tailwind CSS.
+
+Once the command finishes, navigate into your new project directory:
+
+```bash
+cd your-project-name
+npm run dev
+```
+
+This installs all the dependencies for your new monorepo-ready application.
+
+---
+
+## Step 2: Define Your Data Schema with Prisma
+
+A schema-first approach is a cornerstone of robust application development. By defining our data models first, we create a single source of truth that will drive our API generation and ensure type safety.
+
+Find the `prisma/schema.prisma` file in your project and replace its content with our chat application's models: `User` and `Message`.
+
+```prisma
+// ./prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Message {
+  id      String @id @default(uuid())
+  content String
+  sender  String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("messages") // Maps the model to the "messages" table in the database
+}
+```
+
+Next, create a `.env` file in the root of your project and add your PostgreSQL connection string.
+
+```env
+# ./.env
+DATABASE_URL="postgresql://user:password@localhost:5432/igniter_chat?schema=public"
+```
+
+With the schema and environment variable in place, run the Prisma `db push` command to sync your schema with your database. This will create the `User` and `Message` tables.
+
+```bash
+npx prisma migrate dev --name init
+```
+
+---
+
+## Step 3: Generate the Message API with a Single Command
+
+This is where the magic of Igniter.js's CLI tooling comes into play. Instead of manually writing controllers, validation logic, and type definitions for our `Message` model, we can use the `igniter generate` command to do it for us.
+
+The generator introspects your `schema.prisma` file and scaffolds a complete feature slice based on a model. Run the following command in your terminal:
+
+```bash
+npx @igniter-js/cli@latest generate --feature Message
+```
+
+<Callout type="success" title="Scaffold Code Generation">
+What just happened? The Igniter CLI read your `Message` model from `schema.prisma` and generated a complete set of CRUD (Create, Read, Update, Delete) operations for it. This includes:
+- A `message.controller.ts` file with query and mutation actions.
+- A `message.procedure.ts` file containing reusable business logic functions (similar to a service or repository layer). This helps keep your controller lean and promotes code reuse across your application.
+- Zod schemas for input validation, derived directly from your Prisma model.
+- All necessary TypeScript types.
+
+This command just saved you hours of boilerplate work and ensured your API is perfectly in sync with your database schema.
+</Callout>
+
+The generated files will be placed in `src/features/message/`. Take a moment to inspect `src/features/message/controllers/message.controller.ts`. You'll see that it has already created actions for listing, creating, and finding messages.
+
+For our chat application, we need to add one more action: a **real-time stream**. Open the generated controller and add the `stream` action to it.
+
+```ts
+// src/features/message/controllers/message.controller.ts
+import { igniter } from '@/igniter'
+import { z } from 'zod'
+import { messageCreateSchema, messageUpdateSchema } from '../schema/message.schema'
+
+export const messageController = igniter.controller({
+  path: '/messages',
+  actions: {
+    // ... existing generated actions (list, find, create, etc.)
+
+    // Update this new action for our real-time channel
+    list: igniter.query({
+      name: 'list',
+      description: 'List all Messages',
+      path: '/',
+      stream: true, // Add this flag tells Igniter this is an SSE endpoint
+      use: [messageProcedure()],
+      handler: async ({ context, response }) => {
+        const records = await context.messageRepository.findAll()
+        return response.success(records)
+      },
+    }),
+  },
+})
+```
+
+We also need to slightly modify the `create` action. After a new message is created, we need to do two things:
+1.  **Publish** the new message to our real-time stream so all connected clients receive it instantly.
+2.  **Revalidate** the `message.list` query to ensure that anyone who re-fetches the message history gets the new message.
+
+```ts
+// src/features/message/controllers/message.controller.ts
+// ... imports
+
+export const messageController = igniter.controller({
+  // ...
+  actions: {
+    list: igniter.query({
+      // ...
+    }),
+
+    create: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: z.object({ text: z.string().min(1) }), // Keep it simple for the chat
+      handler: async ({ request, context, response }) => {
+        // 1. Call create method
+        const newRecord = await context.messageRepository.create(request.body)
+
+        // 2. Invalidate the cache for the 'list' query and publish the new message to all clients listening to this stream
+        return response.created(created).revalidate(['message.list'])
+      },
+    }),
+  },
+})
+```
+
+---
+
+## Step 4: Connect the Controller to the API Router
+
+The generated controller is ready, but the application doesn't know about it yet. We need to register it in our main API router.
+
+Open `src/igniter.router.ts` and import the `messageController`. Then, add it to the `controllers` object.
+
+```ts
+// src/igniter.router.ts
+import { igniter } from '@/igniter'
+import { messageController } from '@/features/message/controllers/message.controller'
+
+export const AppRouter = igniter.router({
+  controllers: {
+    // Register our new controller under the 'message' key
+    message: messageController,
+  },
+})
+
+export type AppRouter = typeof AppRouter
+```
+
+**That's it! The entire backend API for our chat application is now complete and fully functional.**
+
+---
+
+## Step 5: Test the Backend (The AI-Friendly Way)
+
+Before building the frontend, it's a great practice to confirm the API is working as expected. You can do this easily with a tool like `cURL`.
+
+<Callout type="nerd" title="Ask Lia, our AI assistant, for help">
+If you're using tools like Cursor, Windsurf, GitHub Copilot, Claude Code, or similar, Igniter.js comes starter-ready with specific training for Lia. She deeply understands how to use Igniter.js: from operating the CLI, creating features, configuring framework processes, creating jobs, writing tests, and much more. This means you can simply ask Lia to test routes, generate cURL commands, create automated tests, or even scaffold entire features — all as part of the framework's AI-friendly workflow.
+</Callout>
+
+Here are the commands to test sending and listing messages:
+
+**1. Send a new message:**
+
+```bash
+curl -X POST http://localhost:3000/api/v1/messages \
+-H "Content-Type: application/json" \
+-d '{"text": "Hello from cURL!"}'
+```
+
+**2. List all messages:**
+
+```bash
+curl http://localhost:3000/api/v1/messages
+```
+
+You should see the message you just created in the response.
+
+---
+
+## Step 6: Build the Real-Time Frontend with React
+
+With a robust backend in place, it's time to build the user interface. We'll create a single React component, `Chat.tsx`, to handle everything.
+
+Create a new file at `src/features/message/presentation/chat.tsx`.
+
+```tsx
+// src/features/message/presentation/chat.tsx
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import { api } from '@/igniter.client'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Send } from 'lucide-react'
+
+export function Chat() {
+  const [sender, setSender] = useState('')
+  const [message, setMessage] = useState('')
+  const [isSenderSet, setIsSenderSet] = useState(false)
+
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
+
+  const { data } = api.message.list.useQuery({
+    refetchOnWindowFocus: false,
+  })
+
+  const messages = data || []
+
+  const createMessage = api.message.create.useMutation()
+
+  useEffect(() => {
+    const storedSender = localStorage.getItem('chat-sender')
+    if (storedSender) {
+      setSender(storedSender)
+      setIsSenderSet(true)
+    }
+  }, [])
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (message.trim() && sender.trim()) {
+      await createMessage.mutate({
+        body: {
+          content: message,
+          sender: sender,
+        },
+      })
+      setMessage('')
+    }
+  }
+
+  const handleSetSender = () => {
+    if (sender.trim()) {
+      localStorage.setItem('chat-sender', sender.trim())
+      setIsSenderSet(true)
+    }
+  }
+
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      const scrollElement = scrollAreaRef.current.querySelector('div > div')
+      if (scrollElement) {
+        scrollElement.scrollTo({
+          top: scrollElement.scrollHeight,
+          behavior: 'smooth',
+        })
+      }
+    }
+  }, [messages])
+
+  return (
+    <div className="relative  flex flex-col">
+      <Card className="w-full rounded-none pt-0 border-none flex-1 flex flex-col">
+        <CardHeader className="border-b !pt-4 !pb-2 px-4">
+          <CardTitle>Real-time Chat with Igniter.js</CardTitle>
+        </CardHeader>
+        <CardContent className='px-4 py-0'>
+          <ScrollArea className=" w-full h-[calc(100vh-16.5rem)] pb-10 relative" ref={scrollAreaRef}>
+            <div className="space-y-4">
+              {messages.map((msg: any) => (
+                <div
+                  key={msg.id}
+                  className={`flex ${
+                    msg.sender === sender ? 'justify-end' : 'justify-start'
+                  }`}
+                >
+                  <div
+                    className={`p-3 rounded-lg max-w-xs ${
+                      msg.sender === sender
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted'
+                    }`}
+                  >
+                    <p className="text-sm font-bold">{msg.sender}</p>
+                    <p>{msg.content}</p>
+                    <p className="text-xs text-right opacity-70 mt-1">
+                      {new Date(msg.createdAt).toLocaleTimeString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            
+          </ScrollArea>
+
+          <form
+            onSubmit={handleSendMessage}
+            className="flex w-full items-center space-x-2"
+          >
+            <Input
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Type a message..."
+              disabled={!isSenderSet}
+            />
+            <Button
+              type="submit"
+              disabled={createMessage.isLoading || !isSenderSet}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+      {!isSenderSet && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <Card className="w-full max-w-sm">
+            <CardHeader>
+              <CardTitle>Welcome!</CardTitle>
+              <CardDescription>
+                Please enter your name to join the chat.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex w-full items-center space-x-2">
+                <Input
+                  value={sender}
+                  onChange={(e) => setSender(e.target.value)}
+                  placeholder="Enter your name..."
+                  onKeyDown={(e) => e.key === 'Enter' && handleSetSender()}
+                />
+                <Button onClick={handleSetSender}>Join Chat</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  )
+}
+```
+
+### Deconstructing the `Chat.tsx` Component
+
+Let's break down the main hooks and logic that power this component:
+
+1.  **`api.message.list.useQuery()`**  
+  This hook fetches the initial list of messages from the `/api/v1/messages` endpoint. It handles loading, caching, and automatic revalidation. When a new message is sent and the backend triggers a revalidation (via `.revalidate(['message.list'])`), this hook will automatically refetch the latest messages, keeping the UI in sync.
+
+2.  **`api.message.create.useMutation()`**  
+  This hook provides the function to send new messages to the backend (`POST /api/v1/messages`). When the user submits the form, `createMessage.mutate()` is called with the message content and sender. After a successful mutation, the backend triggers a revalidation event, causing the message list to update in real time.
+
+3.  **Local State for Sender and Message**  
+  The component uses React state to manage the sender's name and the current message being typed. The sender is persisted in `localStorage` so users don't have to re-enter their name on refresh.
+
+4.  **Automatic Scrolling**  
+  After each message update, the component scrolls to the bottom of the chat window to show the latest messages.
+
+> **Note:**  
+> In this implementation, real-time updates rely on the automatic revalidation mechanism provided by Igniter.js. If you want to handle true push-based updates (e.g., instant message delivery without refetching the entire list), you can also use `api.message.stream.useRealtime()` to subscribe directly to SSE events from the backend.
+
+---
+
+## Step 7: Add the Chat Component to Your Page
+
+Now, let's display our `Chat` component. Open `src/app/page.tsx` and replace its content:
+
+```tsx
+// src/app/page.tsx
+import { Chat } from '@/features/message/presentation/chat'
+
+export default function HomePage() {
+  return (
+    <main className="container mx-auto py-8">
+      <h1 className="text-3xl font-bold text-center mb-8">
+        Igniter.js Real-Time Chat
+      </h1>
+      <Chat />
+    </main>
+  )
+}
+```
+
+Make sure to add `NEXT_PUBLIC_APP_URL` to your `.env` file for production builds.
+
+---
+
+## Step 8: Run the Application and See the Magic!
+
+Everything is now in place. Start the development server:
+
+```bash
+bun dev
+```
+
+Open your browser to `http://localhost:3000`. To see the real-time updates in action, open a second browser window (or a new tab) and place them side-by-side.
+
+Type a message in one window and hit send. You'll see it appear instantly in both windows. **Congratulations, you've just built a type-safe, real-time chat application!**
+
+---
+
+## Production Notes
+
+-   **SSE and Proxies:** Server-Sent Events work excellently behind modern proxies and load balancers (like Vercel, Nginx, etc.). Just ensure your proxy is configured to not buffer the response and has appropriate keep-alive timeouts.
+-   **Horizontal Scaling:** If you need to scale your application across multiple server instances, you'll need a shared message bus for real-time events. Igniter.js has an adapter for Redis (`@igniter-js/adapter-redis`) that handles this seamlessly. When you call `igniter.realtime.publish()`, the Redis adapter will publish the message to a Redis channel, and all your server instances subscribed to that channel will receive it and forward it to their connected clients.
+-   **Telemetry:** For production monitoring, consider using the `@igniter-js/adapter-opentelemetry` to trace requests and real-time flows, helping you diagnose issues and monitor performance.
+
+---
+
+## Troubleshooting
+
+<Accordion>
+  <Expandable title="I don't see new messages in real-time">
+    <ul>
+      <li>Verify the <code>stream: true</code> action exists in your controller and the client is calling <code>api.message.stream.useRealtime()</code>.</li>
+      <li>Check that <code>IgniterProvider</code> has <code>enableRealtime={true}</code> and the correct <code>baseURL</code> and <code>basePATH</code>.</li>
+      <li>Open your browser's Network tab. You should see a request to <code>/api/v1/messages/stream</code> with a status of 200 that stays open. Its content type should be <code>text/event-stream</code>.</li>
+    </ul>
+  </Expandable>
+  <Expandable title="Revalidation doesn't trigger a refetch">
+    <ul>
+      <li>Ensure your mutation on the backend returns <code>.revalidate(['message.list'])</code>.</li>
+      <li>Confirm your UI component uses the exact same query key via <code>api.message.list.useQuery()</code>.</li>
+    </ul>
+  </Expandable>
+</Accordion>
+
+---
+
+## Where to Go Next
+
+You've just scratched the surface of what's possible with Igniter.js. Here are some resources to continue your journey:
+
+-   [**Live Demo**](https://igniter-js-sample-realtime-chat.vercel.app/)
+-   [**Official Documentation: Realtime (SSE)**](/docs/advanced-features/realtime)
+-   [**Official Documentation: `useRealtime` Hook**](/docs/client-side/use-realtime)
+-   [**Templates & Samples**](/templates)
+
+<Card title="Source Code: Real-Time Chat Sample" href="https://github.com/felipebarcelospro/igniter-js/tree/main/apps/sample-realtime-chat" />
+
+Happy hacking!
