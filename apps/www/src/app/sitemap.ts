@@ -2,7 +2,7 @@ import { MetadataRoute } from 'next';
 import { FileSystemContentManager } from '@/lib/docs';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://igniterjs.dev';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://igniterjs.com';
   
   // Static pages
   const staticPages = [

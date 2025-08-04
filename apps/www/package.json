@@ -30,6 +30,7 @@
     "@types/rss": "^0.0.32",
     "@types/three": "^0.169.0",
     "@types/unist": "^3.0.2",
+    "@vercel/analytics": "^1.5.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^0.2.0",

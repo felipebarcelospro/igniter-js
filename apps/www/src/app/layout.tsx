@@ -10,6 +10,7 @@ import { GoogleAnalytics } from "@next/third-parties/google";
 import type { Metadata } from "next";
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
+import { Analytics } from "@vercel/analytics/next"
 
 export const metadata: Metadata = {
   title: {
@@ -45,6 +46,7 @@ export default async function RootLayout({
         >
           <Header repoInfo={repoInfo} />
           <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID ?? ""} />
+          <Analytics />
           <div>{children}</div>
           <Footer />
         </ThemeProvider>
