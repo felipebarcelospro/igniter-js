@@ -49,7 +49,7 @@ const CopyButton = ({ text }: { text: string }) => {
 // Callout component for special content blocks
 const Callout = ({ children, type = "info", title, icon: Icon, ...props }: {
   children: ReactNode;
-  type?: "info" | "warning" | "error" | "success" | "tip" | "note";
+  type?: "info" | "warning" | "error" | "success" | "tip" | "note" | "nerd";
   title?: string;
   icon?: React.ComponentType<{ className?: string }>;
 } & DivProps) => {
@@ -89,10 +89,16 @@ const Callout = ({ children, type = "info", title, icon: Icon, ...props }: {
       className: "border-border/40 bg-muted/30",
       iconClassName: "text-muted-foreground",
       titleClassName: "text-foreground"
+    },
+    nerd: {
+      icon: Icon || Terminal,
+      className: "border-border/50 bg-muted/40",
+      iconClassName: "text-muted-foreground",
+      titleClassName: "text-foreground"
     }
   };
 
-  const config = configs[type];
+  const config = configs[type] || configs.info;
   const IconComponent = config.icon;
 
   return (
