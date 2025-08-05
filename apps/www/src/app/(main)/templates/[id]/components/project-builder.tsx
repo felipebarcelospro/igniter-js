@@ -110,10 +110,6 @@ export function ProjectBuilder({ template }: ProjectBuilderProps) {
       'starter-tanstack-start': { name: 'TanStack Start', logo: 'https://svgl.app/library/tanstack.svg' }
     };
 
-    if (frameworks[config.framework as keyof typeof frameworks]) {
-      stack.push(frameworks[config.framework as keyof typeof frameworks]);
-    }
-
     // Package Manager
     const packageManagers = {
       npm: { name: 'npm', logo: 'https://svgl.app/library/npm.svg' },
