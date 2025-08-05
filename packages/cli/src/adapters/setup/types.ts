@@ -37,6 +37,7 @@ export interface ProjectSetupConfig {
   framework: SupportedFramework
   features: IgniterFeatures
   database: DatabaseConfig
+  orm: 'prisma' | 'drizzle'
   packageManager: PackageManager
   initGit: boolean
   installDependencies: boolean
@@ -108,4 +109,4 @@ export interface EnvVariable {
   value: string
   description?: string
   required?: boolean
-} 
+}

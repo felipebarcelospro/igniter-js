@@ -34,11 +34,28 @@ function showWelcome(): void {
 }
 
 /**
+ * CLI options that can be passed to skip prompts
+ */
+export interface CLIOptions {
+  template?: string
+  framework?: string
+  features?: string
+  database?: string
+  orm?: string
+  packageManager?: string
+  git?: boolean
+  install?: boolean
+  docker?: boolean
+  force?: boolean
+}
+
+/**
  * Enhanced prompts with better UX and validation
  */
 export async function runSetupPrompts(
   targetDir?: string,
   isExistingProject = false,
+  cliOptions: CLIOptions = {}
 ): Promise<ProjectSetupConfig> {
   showWelcome()
 
@@ -46,6 +63,9 @@ export async function runSetupPrompts(
   const detectedFramework = detectFramework()
   const detectedPackageManager = detectPackageManager()
   const projectName = targetDir ? path.basename(path.resolve(targetDir)) : 'my-igniter-app'
+
+  // Parse CLI features if provided
+  const cliFeatures = cliOptions.features ? cliOptions.features.split(',').map(f => f.trim()) : []
 
   try {
     const answers = await prompts([
@@ -64,7 +84,7 @@ export async function runSetupPrompts(
         format: (value: string) => value.trim().toLowerCase().replace(/\s+/g, '-')
       },
       {
-        type: !(isExistingProject && detectedFramework) ? 'select' : null, // Show if not existing project OR if existing but no framework detected
+        type: (cliOptions.template || (isExistingProject && detectedFramework)) ? null : 'select',
         name: 'framework',
         message: '• Which starter would you like to use?',
         choices: [
@@ -95,7 +115,7 @@ export async function runSetupPrompts(
         ],
       },
       {
-        type: 'multiselect',
+        type: cliOptions.features ? null : 'multiselect',
         name: 'features',
         message: chalk.bold('• Which Igniter.js features would you like to enable?'),
         choices: [
@@ -130,7 +150,7 @@ export async function runSetupPrompts(
         instructions: chalk.dim('Use ↑↓ to navigate, space to select, enter to confirm')
       },
       {
-        type: 'select',
+        type: cliOptions.database ? null : 'select',
         name: 'database',
         message: chalk.bold('• Choose your database (optional):'),
         choices: [
@@ -154,14 +174,23 @@ export async function runSetupPrompts(
         initial: 0
       },
       {
-        type: (prev: DatabaseProvider) => prev !== 'none' ? 'confirm' : null,
+        type: (prev: DatabaseProvider) => {
+          // Skip if docker explicitly disabled via CLI
+          if (cliOptions.docker === false) return null;
+
+          // Get database value from CLI or prompt answer
+          const dbValue = (cliOptions.database as DatabaseProvider) || prev;
+
+          // Only show docker prompt if database is not 'none'
+          return dbValue !== 'none' ? 'confirm' : null;
+        },
         name: 'dockerCompose',
         message: chalk.bold('• Setup Docker Compose for development?'),
         hint: chalk.dim('Includes Redis and your selected database'),
-        initial: true
+        initial: cliOptions.docker !== false
       },
       {
-        type: 'select',
+        type: cliOptions.packageManager ? null : 'select',
         name: 'packageManager',
         message: isExistingProject
           ? `We detected ${chalk.cyan(detectedPackageManager)}. Please confirm or select another.`
@@ -184,19 +213,19 @@ export async function runSetupPrompts(
             value: 'bun'
           }
         ],
-        initial: getPackageManagerChoiceIndex(detectedPackageManager)
+        initial: getPackageManagerChoiceIndex(cliOptions.packageManager || detectedPackageManager)
       },
       {
-        type: isExistingProject ? null : 'confirm',
+        type: (isExistingProject || cliOptions.git === false) ? null : 'confirm',
         name: 'initGit',
         message: chalk.bold('• Initialize Git repository?'),
-        initial: true
+        initial: cliOptions.git !== false
       },
       {
-        type: 'confirm',
+        type: cliOptions.install === false ? null : 'confirm',
         name: 'installDependencies',
         message: chalk.bold('• Install dependencies automatically?'),
-        initial: true
+        initial: cliOptions.install !== false
       }
     ], {
       onCancel: () => {
@@ -205,24 +234,29 @@ export async function runSetupPrompts(
       }
     })
 
-    // Convert features array to object
+    // Convert features array to object, prioritizing CLI options
+    const selectedFeatures = cliOptions.features ? cliFeatures : (answers.features || []);
+
+    // Set defaults for logging and telemetry if no features were explicitly chosen
+    const hasExplicitFeatures = cliOptions.features || (answers.features && answers.features.length > 0);
+
     const featuresObj: IgniterFeatures = {
-      store: answers.features.includes('store'),
-      jobs: answers.features.includes('jobs'),
-      mcp: answers.features.includes('mcp'),
-      logging: answers.features.includes('logging'),
-      telemetry: answers.features.includes('telemetry')
+      store: selectedFeatures.includes('store'),
+      jobs: selectedFeatures.includes('jobs'),
+      mcp: selectedFeatures.includes('mcp'),
+      logging: selectedFeatures.includes('logging') || !hasExplicitFeatures,
+      telemetry: selectedFeatures.includes('telemetry') || !hasExplicitFeatures
     }
 
     const config: ProjectSetupConfig = {
       projectName: answers.projectName || projectName,
-      framework: answers.framework,
+      framework: cliOptions.template || answers.framework,
       features: featuresObj,
-      database: { provider: answers.database },
-      packageManager: answers.packageManager,
-      initGit: answers.initGit === undefined ? false : answers.initGit,
-      installDependencies: answers.installDependencies,
-      dockerCompose: answers.dockerCompose || false,
+      database: { provider: (cliOptions.database as DatabaseProvider) || answers.database || 'none' },
+      packageManager: (cliOptions.packageManager as PackageManager) || answers.packageManager || detectedPackageManager,
+      initGit: cliOptions.git !== false && (answers.initGit !== undefined ? answers.initGit : !isExistingProject),
+      installDependencies: cliOptions.install !== false && (answers.installDependencies !== false),
+      dockerCompose: cliOptions.docker !== false && (answers.dockerCompose || false),
     }
 
     // Show configuration summary

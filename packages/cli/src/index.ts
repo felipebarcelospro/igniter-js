@@ -38,10 +38,14 @@ program
   .argument("[project-name]", "Name of the project directory")
   .option("--force", "Skip confirmation prompts and overwrite existing files")
   .option("--pm, --package-manager <manager>", "Package manager to use (npm, yarn, pnpm, bun)")
-  .option("--template <template>", "Use a specific template (coming soon)")
+  .option("--template <template>", "Use a specific template (e.g., starter-nextjs, starter-express-rest-api)")
   .option("-f, --framework <framework>", "Target framework (nextjs, vite, etc.)")
+  .option("--features <features>", "Comma-separated list of features (store,jobs,mcp,logging,telemetry)")
+  .option("--database <database>", "Database provider (none, postgresql, mysql, sqlite)")
+  .option("--orm <orm>", "ORM provider (prisma, drizzle)")
   .option("--no-git", "Skip git repository initialization")
   .option("--no-install", "Skip automatic dependency installation")
+  .option("--no-docker", "Skip Docker Compose setup")
   .action(async (projectName: string | undefined, options) => {
     const initLogger = createChildLogger({ component: 'init-command' });
     try {
@@ -82,14 +86,14 @@ program
         }
       }
 
-      const config = await runSetupPrompts(targetDir, isExistingProject);
+      const config = await runSetupPrompts(targetDir, isExistingProject, options);
 
       const validation = validateConfig(config);
       if (!validation.isValid) {
         console.error(`✗ ${validation.message}`);
         process.exit(1);
       }
-      
+
       await generateProject(config, targetDir, isExistingProject);
     } catch (error) {
       initLogger.error('Init command failed', { error });
