@@ -1,9 +1,10 @@
 import { MetadataRoute } from 'next';
 import { FileSystemContentManager } from '@/lib/docs';
+import { templates } from '@/app/(main)/templates/data/templates';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://igniterjs.com';
-  
+
   // Static pages
   const staticPages = [
     {
@@ -31,6 +32,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     },
     {
+      url: `${baseUrl}/changelog`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/templates`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/stats`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly' as const,
+      priority: 0.7,
+    },
+    {
       url: `${baseUrl}/privacy-policy`,
       lastModified: new Date(),
       changeFrequency: 'yearly' as const,
@@ -46,9 +65,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Get all content items (docs and blog)
   const allContent = await FileSystemContentManager.getAllNavigationItems();
-  
+
   // Generate URLs for all content pages
-  const contentPages = allContent.flatMap(section => 
+  const contentPages = allContent.flatMap(section =>
     section.items.map(item => ({
       url: `${baseUrl}/${item.type}/${item.slug}`,
       lastModified: new Date(item.date),
@@ -57,5 +76,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }))
   );
 
-  return [...staticPages, ...contentPages];
+  const templatePages = templates.map(template => ({
+    url: `${baseUrl}/templates/${template.id}`,
+    lastModified: new Date(),
+    changeFrequency: 'monthly' as const,
+    priority: 0.7,
+  }));
+
+  return [...staticPages, ...contentPages, ...templatePages];
 }
