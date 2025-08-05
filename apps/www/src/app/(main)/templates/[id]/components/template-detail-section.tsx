@@ -1,13 +1,16 @@
+"use client";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeftIcon, ExternalLink, Github, Rocket } from "lucide-react";
+import { ArrowLeftIcon, ExternalLink, Github } from "lucide-react";
 import Link from "next/link";
 import { Template } from "../../data/templates";
 import { TemplateReadme } from "./template-readme";
 import { TemplateCreator } from "./template-creator";
 import { RelatedTemplates } from "./related-templates";
+import { ProjectBuilder } from "./project-builder";
 import { Suspense } from "react";
 
 interface TemplateDetailSectionProps {
@@ -15,6 +18,7 @@ interface TemplateDetailSectionProps {
 }
 
 export function TemplateDetailSection({ template }: TemplateDetailSectionProps) {
+
   return (
     <div className="space-y-12">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 border-x border-border">
@@ -45,6 +49,8 @@ export function TemplateDetailSection({ template }: TemplateDetailSectionProps) 
 
           {/* Quick Actions */}
           <div className="space-y-3 px-10">
+            <ProjectBuilder template={template} />
+
             {template.repositoryUrl && (
               <Button variant="outline" asChild className="w-full bg-background">
                 <Link href={template.repositoryUrl} target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-between">

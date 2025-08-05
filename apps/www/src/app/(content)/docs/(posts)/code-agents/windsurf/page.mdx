@@ -1,0 +1,96 @@
+# Using Windsurf with Igniter.js for AI-Powered Development
+
+Windsurf, the AI-native code editor from Codeium, can dramatically accelerate your TypeScript and Node.js development. To unlock its full potential, you need to provide it with the right context. This guide shows you how to train Windsurf to be an Igniter.js expert, leading to more accurate code generation, better suggestions, and a streamlined AI-powered workflow.
+
+## Method 1: Train Windsurf on the Igniter.js Core
+
+This method gives Windsurf's AI a deep, foundational understanding of the entire Igniter.js ecosystem by pointing it to our official, comprehensive documentation file. This is the recommended approach for any existing project that was not created from an official template.
+
+### Step 1: Create a Workspace Rules Directory
+
+In the root of your project, create a new directory for Windsurf's rules. This specific folder is where Windsurf looks for context files.
+
+```bash
+mkdir -p .windsurf/rules
+```
+
+### Step 2: Create a Rule File
+
+Inside that directory, create a new Markdown file. You can name it `igniter-core.md`.
+
+### Step 3: Add the Rule Content
+
+Open `.windsurf/rules/igniter-core.md` and paste the following content. This rule instructs Windsurf's AI to use our `llms.txt`—a single file containing our entire documentation—as its primary source of knowledge.
+
+<div className="my-4">
+    <a href="https://igniterjs.com/llms.txt" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-md border border-border bg-transparent px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50">
+      Open llms.txt in New Tab
+    </a>
+</div>
+
+```markdown
+# Igniter.js Expert
+
+You are an expert developer specializing in Igniter.js. Your primary source of knowledge for all framework-related questions and code generation is the official documentation, which can be found in its entirety at: https://igniterjs.com/llms.txt.
+
+Always adhere to the patterns and best practices described in that document. Before answering any question, consult this source to ensure accuracy.
+```
+
+With this rule in place, every interaction you have with Windsurf's AI will be informed by the complete Igniter.js documentation, leading to highly accurate and relevant assistance.
+
+## Method 2: Use an Official Igniter.js Template (The Easy Way)
+
+The easiest way to work with Windsurf is by starting your project with one of our official templates. These starters are pre-configured to be "AI-Friendly" and work seamlessly with AI-native editors.
+
+When you create a project from a template, it automatically includes a detailed `AGENT.md` file in the root directory. Windsurf is designed to detect and use files like `AGENT.md` as a project-specific instruction set. This means that when you open an Igniter.js template project in Windsurf, the AI is **already trained** on your specific codebase's architecture and conventions with **no additional setup required**.
+
+### Recommended Project Templates
+
+Our templates come ready with everything you need to start building, including the AI instructions that Windsurf will automatically use.
+
+<div className="grid grid-cols-1 gap-4 my-8">
+    <a href="/templates/starter-nextjs" className="block p-4 rounded-lg border hover:bg-accent/50 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center space-x-4">
+        <span className="size-12 border bg-secondary dark:bg-transparent border-border rounded-md p-1 flex items-center justify-center">
+          <img src="https://svgl.app/library/nextjs_icon_dark.svg" alt="Next.js Logo" className="h-6 flex-shrink-0 grayscale invert-0 dark:invert" />
+        </span>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold">Next.js Full-Stack App</h3>
+          <p className="text-sm text-muted-foreground">A full-featured application with end-to-end type safety.</p>
+        </div>
+      </div>
+    </a>
+    <a href="/templates/starter-tanstack-start" className="block p-4 rounded-lg border hover:bg-accent/50 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center space-x-4">
+        <span className="size-12 border bg-secondary dark:bg-transparent border-border rounded-md p-1 flex items-center justify-center">
+          <img src="https://svgl.app/library/tanstack.svg" alt="TanStack Logo" className="h-6 flex-shrink-0 grayscale" />
+        </span>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold">TanStack Start App</h3>
+          <p className="text-sm text-muted-foreground">A modern full-stack application with type-safe routing.</p>
+        </div>
+      </div>
+    </a>
+    <a href="/templates/starter-bun-react-app" className="block p-4 rounded-lg border hover:bg-accent/50 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center space-x-4">
+        <span className="size-12 border bg-secondary dark:bg-transparent border-border rounded-md p-1 flex items-center justify-center">
+          <img src="https://svgl.app/library/bun.svg" alt="Bun Logo" className="h-6 flex-shrink-0 grayscale invert-0 dark:invert" />
+        </span>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold">Bun + React Full-Stack App</h3>
+          <p className="text-sm text-muted-foreground">A full-stack, type-safe application with Bun and React.</p>
+        </div>
+      </div>
+    </a>
+    <a href="/templates/starter-express-rest-api" className="block p-4 rounded-lg border hover:bg-accent/50 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center space-x-4">
+        <span className="size-12 border bg-secondary dark:bg-transparent border-border rounded-md p-1 flex items-center justify-center">
+          <img src="https://svgl.app/library/expressjs_dark.svg" alt="Express Logo" className="h-6 flex-shrink-0 grayscale invert-0 dark:invert" />
+        </span>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold">Express REST API</h3>
+          <p className="text-sm text-muted-foreground">A robust REST API built with Express.js.</p>
+        </div>
+      </div>
+    </a>
+</div>

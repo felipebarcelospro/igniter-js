@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { MDXComponents } from "mdx/types";
 import React, { DetailedHTMLProps, HTMLAttributes, ReactNode } from "react";
-import { Copy, ExternalLink, Info, AlertTriangle, CheckCircle, XCircle, Lightbulb, Zap, FileText, Terminal, ArrowRight } from "lucide-react";
+import { ExternalLink, Info, AlertTriangle, CheckCircle, XCircle, Lightbulb, Zap, FileText, Terminal, ArrowRight } from "lucide-react";
 import {
   Accordion,
   Expandable,
@@ -17,7 +17,8 @@ import {
   Columns,
   Column,
   Mermaid,
-  Snippet
+  Snippet,
+  CopyButton
 } from "@/components/mdx";
 
 // Type definitions
@@ -34,17 +35,7 @@ type AnchorProps = DetailedHTMLProps<HTMLAttributes<HTMLAnchorElement>, HTMLAnch
 type BlockquoteProps = DetailedHTMLProps<HTMLAttributes<HTMLQuoteElement>, HTMLQuoteElement>;
 type DivProps = DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>;
 
-// Copy button component
-const CopyButton = ({ text }: { text: string }) => {
-  return (
-    <button
-      className="absolute top-3 right-3 p-2 rounded-md bg-secondary/80 hover:bg-secondary transition-colors opacity-0 group-hover:opacity-100"
-      aria-label="Copy code"
-    >
-      <Copy className="h-4 w-4 text-secondary-foreground" />
-    </button>
-  );
-};
+
 
 // Callout component for special content blocks
 const Callout = ({ children, type = "info", title, icon: Icon, ...props }: {
@@ -180,6 +171,44 @@ const Card = ({ children, title, icon: Icon, href, ...props }: {
 
   return content;
 };
+
+const ButtonLink = ({ children, href, ...props }: {
+  children?: ReactNode;
+  href?: string;
+} & AnchorProps) => {
+  const content = (
+    <a
+      href={href}
+      className={cn(
+        "inline-flex items-center justify-center rounded-md border border-border bg-transparent px-4 py-2 text-sm font-medium text-foreground transition-colors",
+        "hover:bg-accent hover:text-accent-foreground",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "disabled:pointer-events-none disabled:opacity-50"
+      )}
+      {...props}
+    >
+      {children}
+    </a>
+  );
+
+  if (href?.startsWith("http")) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer">
+        {content}
+      </a>
+    );
+  }
+
+  if (href) {
+    return (
+      <Link href={href}>
+        {content}
+      </Link>
+    );
+  }
+
+  return content;
+}
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
   return {
@@ -531,10 +560,10 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
       </div>
     ),
 
-    StepItem: ({ children, number, isLast = false, ...props }: { 
-      children: ReactNode; 
-      number: number; 
-      isLast?: boolean; 
+    StepItem: ({ children, number, isLast = false, ...props }: {
+      children: ReactNode;
+      number: number;
+      isLast?: boolean;
     } & DivProps) => (
       <div className="flex gap-4 relative" {...props}>
         <div className="flex flex-col items-center relative">
@@ -551,11 +580,11 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
 
     Steps: ({ children, ...props }: { children: ReactNode } & DivProps) => {
       // Filter out text nodes and only keep valid React elements (like h3 headings)
-      const validChildren = React.Children.toArray(children).filter(child => 
-        React.isValidElement(child) && 
+      const validChildren = React.Children.toArray(children).filter(child =>
+        React.isValidElement(child) &&
         (child.type === 'h3' || (typeof child.type === 'string' && child.type === 'h3'))
       );
-      
+
       return (
         <div className="my-8" {...props}>
           {validChildren.map((child, index) => {

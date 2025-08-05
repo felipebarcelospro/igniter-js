@@ -1,0 +1,90 @@
+# Using Google's Gemini CLI with Igniter.js for AI-Powered Development
+
+Google's Gemini models can be powerful allies in your development workflow, especially when accessed through a command-line interface (CLI). By integrating a Gemini CLI with an AI-friendly framework like Igniter.js, you can automate tasks, generate code, and query your codebase directly from the terminal. This guide shows you how to provide the best context to the Gemini CLI for maximum accuracy and efficiency.
+
+## Training Gemini to be an Igniter.js Expert
+
+To get high-quality, accurate results from the Gemini CLI, you need to provide it with the right context. Igniter.js is designed to make this easy. The most effective way to do this is by "piping" your context directly into the CLI prompt.
+
+### Method 1: Use an Official Igniter.js Template (The Easy Way)
+
+The easiest and most effective way to use the Gemini CLI is with a project started from an official Igniter.js template. These templates are pre-configured with a detailed `AGENT.md` file that acts as a perfect, project-specific instruction manual for the AI.
+
+You can use a simple terminal command to feed this local context directly to Gemini.
+
+**Example Prompt for a Templated Project:**
+
+```bash
+# Use `cat` to pipe the project-specific AGENT.md file as context
+cat AGENT.md | gemini "Based on the provided project instructions, generate a new Vitest test file for the `igniter.router.ts` file, ensuring it covers the basic functionality."
+```
+
+### Recommended Project Templates
+
+Our templates come ready with everything you need to start building, including the `AGENT.md` file you can pipe into the Gemini CLI.
+
+<div className="grid grid-cols-1 gap-4 my-8">
+    <a href="/templates/starter-nextjs" className="block p-4 rounded-lg border hover:bg-accent/50 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center space-x-4">
+        <span className="size-12 border bg-secondary dark:bg-transparent border-border rounded-md p-1 flex items-center justify-center">
+          <img src="https://svgl.app/library/nextjs_icon_dark.svg" alt="Next.js Logo" className="h-6 flex-shrink-0 grayscale invert-0 dark:invert" />
+        </span>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold">Next.js Full-Stack App</h3>
+          <p className="text-sm text-muted-foreground">A full-featured application with end-to-end type safety.</p>
+        </div>
+      </div>
+    </a>
+    <a href="/templates/starter-tanstack-start" className="block p-4 rounded-lg border hover:bg-accent/50 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center space-x-4">
+        <span className="size-12 border bg-secondary dark:bg-transparent border-border rounded-md p-1 flex items-center justify-center">
+          <img src="https://svgl.app/library/tanstack.svg" alt="TanStack Logo" className="h-6 flex-shrink-0 grayscale" />
+        </span>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold">TanStack Start App</h3>
+          <p className="text-sm text-muted-foreground">A modern full-stack application with type-safe routing.</p>
+        </div>
+      </div>
+    </a>
+    <a href="/templates/starter-bun-react-app" className="block p-4 rounded-lg border hover:bg-accent/50 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center space-x-4">
+        <span className="size-12 border bg-secondary dark:bg-transparent border-border rounded-md p-1 flex items-center justify-center">
+          <img src="https://svgl.app/library/bun.svg" alt="Bun Logo" className="h-6 flex-shrink-0 grayscale invert-0 dark:invert" />
+        </span>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold">Bun + React Full-Stack App</h3>
+          <p className="text-sm text-muted-foreground">A full-stack, type-safe application with Bun and React.</p>
+        </div>
+      </div>
+    </a>
+    <a href="/templates/starter-express-rest-api" className="block p-4 rounded-lg border hover:bg-accent/50 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center space-x-4">
+        <span className="size-12 border bg-secondary dark:bg-transparent border-border rounded-md p-1 flex items-center justify-center">
+          <img src="https://svgl.app/library/expressjs_dark.svg" alt="Express Logo" className="h-6 flex-shrink-0 grayscale invert-0 dark:invert" />
+        </span>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold">Express REST API</h3>
+          <p className="text-sm text-muted-foreground">A robust REST API built with Express.js.</p>
+        </div>
+      </div>
+    </a>
+</div>
+
+### Method 2: Training on the Global Igniter.js Framework
+
+For existing projects that don't have an `AGENT.md` file, you can train the Gemini CLI on the entire Igniter.js framework by providing it with our official `llms.txt` file. This single file contains all our documentation and is the perfect source of truth.
+
+You can use `curl` to fetch the `llms.txt` content and pipe it directly to the Gemini CLI as context.
+
+<div className="my-4">
+    <a href="https://igniterjs.com/llms.txt" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-md border border-border bg-transparent px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50">
+      Open llms.txt in New Tab
+    </a>
+</div>
+
+**Example Initial Prompt:**
+
+```bash
+# Fetch the llms.txt content and pipe it to the Gemini CLI as context
+curl -s https://igniterjs.com/llms.txt | gemini "You are an expert developer specializing in Igniter.js. Use the text I've provided as your primary source of knowledge. All your future responses must be based on the best practices and patterns found in that document. Now, help me create a new feature."
+```

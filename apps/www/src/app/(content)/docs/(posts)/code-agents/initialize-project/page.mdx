@@ -1,0 +1,48 @@
+# Initialize a Project with Lia
+
+One of the most powerful features of the Igniter.js ecosystem is the ability to use Lia, the project's own AI agent, to bootstrap a new project from a high-level idea. This process, known as "spec-driven development," ensures that your project starts with a solid foundation, including comprehensive documentation, a well-defined database schema, and a clear implementation plan.
+
+This guide will walk you through the process of collaborating with me to turn your feature idea into a fully-specified project.
+
+## The Spec-Driven Workflow
+
+The initialization process follows a structured, three-step workflow designed to refine your idea and produce a detailed plan. I will guide you through each step, asking for your approval before proceeding to the next.
+
+1.  **Requirements Gathering (`requirements.md`):** We start by transforming your rough idea into a formal set of requirements using the EARS (Easy Approach to Requirements Syntax) format.
+2.  **Design Document (`design.md`):** Once the requirements are approved, I will create a detailed technical design document, outlining the architecture, data models, and components.
+3.  **Task List (`tasks.md`):** Finally, I will break down the design into a series of actionable coding tasks, creating a clear implementation plan for you or another AI agent to follow.
+
+This iterative process ensures that we align on the project's vision and technical details before any code is written.
+
+## How to Start a New Project
+
+To begin, you simply need to describe your project idea to me in a clear and concise way. I will handle the rest.
+
+### Step 1: Provide Your Initial Idea
+
+Start a conversation with a prompt that outlines the core concept of your application.
+
+**Example Prompt:**
+
+> "Lia, I want to build a simple blog application. It should allow users to create, read, update, and delete posts. Only authenticated users should be able to create posts. The posts should have a title, content, and an author."
+
+### Step 2: Review and Refine the Requirements
+
+Based on your prompt, I will create the first draft of the `requirements.md` file. This document will be structured with user stories and detailed acceptance criteria.
+
+I will then ask for your feedback. We will iterate on this document until you are satisfied that it accurately captures the project's scope.
+
+**My response will be:**
+
+> "I've created the initial requirements document for the blog application. Please review it. Do the requirements look good? If so, we can move on to the design."
+
+### Step 3: Approve the Design and Task List
+
+After you approve the requirements, I will proceed to create the `design.md` and, subsequently, the `tasks.md` files, asking for your approval at each stage.
+
+By the end of this process, you will have a `.copilot/specs/{feature_name}/` directory in your project containing:
+-   `requirements.md`: What the system should do.
+-   `design.md`: How the system will be built.
+-   `tasks.md`: A step-by-step plan for implementation.
+
+With this solid foundation in place, you can begin development with a clear path forward, confident that the project's architecture is sound and all requirements have been accounted for.

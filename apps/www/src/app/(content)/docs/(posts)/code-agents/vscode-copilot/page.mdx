@@ -1,0 +1,93 @@
+# Using VS Code Copilot with Igniter.js
+
+GitHub Copilot is one of the most popular AI code assistants, deeply integrated into Visual Studio Code. To make it an expert on your Igniter.js project, you can provide it with persistent context through custom instructions.
+
+## Method 1: Training Copilot on the Igniter.js Framework
+
+This method gives Copilot a deep, foundational understanding of the entire Igniter.js framework by pointing it to our official, comprehensive documentation file. This is the recommended approach for any Igniter.js project.
+
+### Step 1: Create a Copilot Directory
+In the root of your project, create a new directory for Copilot's instructions:
+
+```bash
+mkdir -p .github/copilot
+```
+
+### Step 2: Create the Instructions File
+Inside the new directory, create a Markdown file named `instructions.md`.
+
+### Step 3: Add the Instruction Content
+Open `.github/copilot/instructions.md` and paste the following content. This rule instructs Copilot to use our `llms.txt`—a single file containing our entire documentation—as its primary source of knowledge for all chat interactions.
+
+<div className="my-4">
+    <a href="https://igniterjs.com/llms.txt" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-md border border-border bg-transparent px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50">
+      Open llms.txt in New Tab
+    </a>
+</div>
+
+```markdown
+# Igniter.js Framework Expert
+
+You are an expert developer specializing in the Igniter.js framework. Your primary source of knowledge for all framework-related questions and code generation is the official documentation, which can be found in its entirety at: https://igniterjs.com/llms.txt.
+
+Always adhere to the patterns and best practices described in that document. Before answering any question, consult this source to ensure accuracy.
+```
+
+With this file in place, Copilot Chat will automatically use this context in every conversation, leading to highly accurate and relevant assistance.
+
+## Method 2: Use an Official Igniter.js Template (The Easy Way)
+
+The easiest way to work with Copilot is by starting your project with one of our official templates. These templates come pre-configured with detailed `AGENT.md` files that are compatible with Copilot's context mechanisms.
+
+When you open an Igniter.js template project in VS Code, Copilot can use the provided `AGENT.md` file as a project-specific instruction set with **no additional setup required**.
+
+### Recommended Project Templates
+
+Our templates come ready with everything you need to start building, including the AI instructions that Copilot will automatically use.
+
+<div className="grid grid-cols-1 gap-4 my-8">
+    <a href="/templates/starter-nextjs" className="block p-4 rounded-lg border hover:bg-accent/50 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center space-x-4">
+        <span className="size-12 border bg-secondary dark:bg-transparent border-border rounded-md p-1 flex items-center justify-center">
+          <img src="https://svgl.app/library/nextjs_icon_dark.svg" alt="Next.js Logo" className="h-6 flex-shrink-0 grayscale invert-0 dark:invert" />
+        </span>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold">Next.js Full-Stack App</h3>
+          <p className="text-sm text-muted-foreground">A full-featured application with end-to-end type safety.</p>
+        </div>
+      </div>
+    </a>
+    <a href="/templates/starter-tanstack-start" className="block p-4 rounded-lg border hover:bg-accent/50 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center space-x-4">
+        <span className="size-12 border bg-secondary dark:bg-transparent border-border rounded-md p-1 flex items-center justify-center">
+          <img src="https://svgl.app/library/tanstack.svg" alt="TanStack Logo" className="h-6 flex-shrink-0 grayscale" />
+        </span>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold">TanStack Start App</h3>
+          <p className="text-sm text-muted-foreground">A modern full-stack application with type-safe routing.</p>
+        </div>
+      </div>
+    </a>
+    <a href="/templates/starter-bun-react-app" className="block p-4 rounded-lg border hover:bg-accent/50 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center space-x-4">
+        <span className="size-12 border bg-secondary dark:bg-transparent border-border rounded-md p-1 flex items-center justify-center">
+          <img src="https://svgl.app/library/bun.svg" alt="Bun Logo" className="h-6 flex-shrink-0 grayscale invert-0 dark:invert" />
+        </span>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold">Bun + React Full-Stack App</h3>
+          <p className="text-sm text-muted-foreground">A full-stack, type-safe application with Bun and React.</p>
+        </div>
+      </div>
+    </a>
+    <a href="/templates/starter-express-rest-api" className="block p-4 rounded-lg border hover:bg-accent/50 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center space-x-4">
+        <span className="size-12 border bg-secondary dark:bg-transparent border-border rounded-md p-1 flex items-center justify-center">
+          <img src="https://svgl.app/library/expressjs_dark.svg" alt="Express Logo" className="h-6 flex-shrink-0 grayscale invert-0 dark:invert" />
+        </span>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold">Express REST API</h3>
+          <p className="text-sm text-muted-foreground">A robust REST API built with Express.js.</p>
+        </div>
+      </div>
+    </a>
+</div>

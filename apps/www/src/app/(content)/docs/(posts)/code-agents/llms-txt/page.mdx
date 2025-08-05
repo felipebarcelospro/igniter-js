@@ -1,0 +1,34 @@
+# Guiding LLMs with llms.txt
+
+The `llms.txt` file is an emerging industry standard designed to help Large Language Models (LLMs) and AI agents efficiently understand and index the content of a website. For Igniter.js, we provide a comprehensive, supercharged `llms.txt` file directly on our official documentation site.
+
+This file is a powerful training resource for any Code Agent, designed to give it a deep and immediate understanding of the entire Igniter.js framework. This is a cornerstone of our "AI-Friendly" philosophy.
+
+The file is available at: **https://igniterjs.com/llms.txt**
+
+## More Than Just a Sitemap
+
+Unlike a typical `llms.txt` which might only contain a list of links, the Igniter.js `llms.txt` is a **complete, single-file representation of our entire documentation**.
+
+It is structured in two main parts:
+
+1.  **Project Information & Navigation:** The top of the file provides a structured list of all documentation pages, organized by category, similar to a sitemap. This gives an AI a quick overview of the framework's structure and key concepts.
+2.  **Full Documentation Content:** Following the navigation section, the file contains the complete, raw Markdown content of every single documentation page, concatenated together.
+
+### Why is this so powerful?
+
+By providing the full content in one file, you can give an AI Agent a "brain dump" of everything there is to know about Igniter.js in a single pass. This allows the agent to:
+
+-   Gain deep contextual understanding without needing to crawl multiple pages.
+-   Answer questions about the framework with high accuracy by referencing the embedded content.
+-   Generate code that is consistent with the examples and best practices found in the documentation.
+
+## How to Use It
+
+To train your Code Agent, simply provide it with the URL `https://igniterjs.com/llms.txt` as a primary source of context. Whether you are using a tool like Claude, Cursor, or an API, this single URL can serve as the foundation for its knowledge about Igniter.js.
+
+**Example Prompt for an AI Chat:**
+
+> "Please act as an expert developer for the Igniter.js framework. Use this URL as your primary source of knowledge: https://igniterjs.com/llms.txt. Now, based on that context, explain the difference between a `Controller` and a `Procedure`."
+
+By leveraging this resource, you can ensure your Code Agent is a true Igniter.js expert, ready to assist you with high-quality, context-aware code and advice.

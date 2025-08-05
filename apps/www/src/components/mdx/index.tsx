@@ -10,3 +10,4 @@ export { Example } from './Example';
 export { Columns, Column } from './Columns';
 export { Snippet } from './Snippet';
 export { Mermaid } from './mermaid';
+export { CopyButton } from './copy-button';

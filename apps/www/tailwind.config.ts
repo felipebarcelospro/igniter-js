@@ -22,6 +22,9 @@ const config = {
       },
     },
     extend: {
+      borderColor: {
+        DEFAULT: "hsl(var(--border))",
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -172,7 +175,7 @@ const config = {
       },
     },
   },
-  plugins: [require("tailwind-highlightjs"), require("tailwindcss-animate")],
+  plugins: [require("tailwind-highlightjs"), require("tailwindcss-animate"), addVariablesForColors],
 } satisfies Config;
 
 export default config;
