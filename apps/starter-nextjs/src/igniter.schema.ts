@@ -17,8 +17,8 @@
 
 export const AppRouterSchema = {
   "config": {
-    "baseURL": "",
-    "basePATH": ""
+    baseURL: process.env.NEXT_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
+    basePath: process.env.NEXT_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
   },
   "controllers": {
     "example": {

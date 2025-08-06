@@ -5,11 +5,12 @@ import { AppRouter } from './igniter.router'
 
 const app = express();
 
-// Serve Igniter.js Router
-app.use('/api/v1', expressAdapter(AppRouter.handler));
-
+// Define the API base path from environment variable or default to '/api/v1'
+const IGNITER_API_BASE_PATH = process.env.IGNITER_API_BASE_PATH || '/api/v1';
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
-});
+// Serve Igniter.js Router
+app.use(IGNITER_API_BASE_PATH, expressAdapter(AppRouter.handler));
+
+// Start the server
+app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));

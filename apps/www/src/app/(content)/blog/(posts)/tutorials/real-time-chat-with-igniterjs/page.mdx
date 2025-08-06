@@ -119,7 +119,7 @@ This is where the magic of Igniter.js's CLI tooling comes into play. Instead of 
 The generator introspects your `schema.prisma` file and scaffolds a complete feature slice based on a model. Run the following command in your terminal:
 
 ```bash
-npx @igniter-js/cli@latest generate --feature Message
+npx @igniter-js/cli generate feature message --schema prisma:Message
 ```
 
 <Callout type="success" title="Scaffold Code Generation">
@@ -360,8 +360,8 @@ export function Chat() {
                 </div>
               ))}
             </div>
-            
-            
+
+
           </ScrollArea>
 
           <form
@@ -415,19 +415,19 @@ export function Chat() {
 
 Let's break down the main hooks and logic that power this component:
 
-1.  **`api.message.list.useQuery()`**  
+1.  **`api.message.list.useQuery()`**
   This hook fetches the initial list of messages from the `/api/v1/messages` endpoint. It handles loading, caching, and automatic revalidation. When a new message is sent and the backend triggers a revalidation (via `.revalidate(['message.list'])`), this hook will automatically refetch the latest messages, keeping the UI in sync.
 
-2.  **`api.message.create.useMutation()`**  
+2.  **`api.message.create.useMutation()`**
   This hook provides the function to send new messages to the backend (`POST /api/v1/messages`). When the user submits the form, `createMessage.mutate()` is called with the message content and sender. After a successful mutation, the backend triggers a revalidation event, causing the message list to update in real time.
 
-3.  **Local State for Sender and Message**  
+3.  **Local State for Sender and Message**
   The component uses React state to manage the sender's name and the current message being typed. The sender is persisted in `localStorage` so users don't have to re-enter their name on refresh.
 
-4.  **Automatic Scrolling**  
+4.  **Automatic Scrolling**
   After each message update, the component scrolls to the bottom of the chat window to show the latest messages.
 
-> **Note:**  
+> **Note:**
 > In this implementation, real-time updates rely on the automatic revalidation mechanism provided by Igniter.js. If you want to handle true push-based updates (e.g., instant message delivery without refetching the entire list), you can also use `api.message.stream.useRealtime()` to subscribe directly to SSE events from the backend.
 
 ---
