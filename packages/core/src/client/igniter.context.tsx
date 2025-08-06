@@ -188,28 +188,31 @@ export function IgniterProvider<TContext extends () => Promise<any> | any>({
     (keys: string | string[]) => {
       const keysArray = Array.isArray(keys) ? keys : [keys];
 
-      keysArray.forEach((key) => {
-        logger.debug(`Invalidating query for key: ${key}`);
-        const registered = listeners.get(key);
+      // Invalidate all queries that match the provided keys (prefix matching)
+      keysArray.forEach((invalidationKey) => {
+        logger.debug(`Invalidating queries matching key: ${invalidationKey}`);
 
-        if (registered) {
-          logger.debug(
-            `Found ${registered.size} listeners for key: ${key}`,
-          );
-          registered.forEach((refetch) => {
-            try {
-              logger.debug(`Executing refetch for key: ${key}`);
-              refetch();
-            } catch (err) {
-              logger.error(
-                `Error refetching query for key '${key}':`,
-                err,
-              );
-            }
-          });
-        } else {
-          logger.debug(`No listeners found for key: ${key}`);
-        }
+        // Iterate over all registered listeners
+        listeners.forEach((refetchFns, registeredKey) => {
+          // Check if the registered key starts with the invalidation key
+          if (registeredKey.startsWith(invalidationKey)) {
+            logger.debug(
+              `Found ${refetchFns.size} listeners for matching key: ${registeredKey}`,
+            );
+
+            refetchFns.forEach((refetch) => {
+              try {
+                logger.debug(`Executing refetch for key: ${registeredKey}`);
+                refetch();
+              } catch (err) {
+                logger.error(
+                  `Error refetching query for key '${registeredKey}':`,
+                  err,
+                );
+              }
+            });
+          }
+        });
       });
     },
     [listeners],
