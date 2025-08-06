@@ -1,4 +1,4 @@
-name: '🧐 Gemini Pull Request Review'
+name: '🧐 Lia Pull Request Review'
 
 on:
   pull_request:

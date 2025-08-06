@@ -1,4 +1,4 @@
-name: '🏷️ Gemini Automated Issue Triage'
+name: '🏷️ Lia Automated Issue Triage'
 
 on:
   issues:

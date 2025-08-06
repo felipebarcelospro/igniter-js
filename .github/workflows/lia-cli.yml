@@ -1,4 +1,4 @@
-name: '💬 Gemini CLI'
+name: '💬 Lia CLI'
 
 on:
   pull_request_review_comment:
