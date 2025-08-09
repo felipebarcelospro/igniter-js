@@ -7,11 +7,11 @@ import type {
 
 /**
  * Igniter.js Client Interface Definitions
- * 
+ *
  * This module contains all type definitions for the Igniter.js client-side implementation.
  * The client is a completely custom implementation built from scratch specifically for Igniter.js,
  * providing end-to-end type safety and seamless integration with the Igniter.js backend.
- * 
+ *
  * Key Features:
  * - Custom query and mutation management (not dependent on external libraries)
  * - Built-in caching with configurable stale time
@@ -24,7 +24,7 @@ import type {
 export type ClientConfig<TRouter extends IgniterRouter<any, any, any, any>> = {
   router: TRouter | (() => TRouter);
   baseURL: string;
-  basePath: string;
+  basePATH: string;
 }
 
 export type QueryActionCallerOptions<
