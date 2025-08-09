@@ -79,17 +79,9 @@ function extractRouterSchema(router: IgniterRouter): { schema: IgniterRouterSche
     };
   }
 
+  // @ts-expect-error - Expected
   const schema: IgniterRouterSchema = {
-    config: {
-      baseURL: router.config?.baseURL || '',
-      basePATH: router.config?.basePATH || '',
-    },
     controllers: controllersSchema,
-    processor: {} as any,
-    handler: {} as any,
-    $context: {} as any,
-    $plugins: {} as any,
-    $caller: {} as any,
   };
 
   return {
@@ -257,28 +249,40 @@ async function generateClientFile(
   outputDir: string,
   config: IgniterBuildConfig
 ): Promise<string> {
+  const filePath = path.join(outputDir, 'igniter.client.ts')
+
+  // Only generate the client file if it doesn't already exist
+  if (fs.existsSync(filePath)) {
+    const logger = createChildLogger({ component: 'generator' })
+    logger.info('Skipping client file generation, already exists', { path: filePath })
+    return filePath
+  }
+
   const content = `import { createIgniterClient, useIgniterQueryClient } from '@igniter-js/core/client'
 import type { AppRouterType } from './igniter.router'
 
 /**
-  * Type-safe API client generated from your Igniter router
-  *
-  * Usage in Server Components:
-  * const users = await api.users.list.query()
-  *
-  * Usage in Client Components:
-  * const { data } = api.users.list.useQuery()
-  */
+* Type-safe API client generated from your Igniter router
+*
+* Usage in Server Components:
+* const users = await api.users.list.query()
+*
+* Usage in Client Components:
+* const { data } = api.users.list.useQuery()
+*
+* Note: Adjust environment variable prefixes (e.g., NEXT_PUBLIC_, BUN_PUBLIC_, DENO_PUBLIC_, REACT_APP_)
+*       according to your project's framework/runtime (Next.js, Bun, Deno, React/Vite, etc.).
+*/
 export const api = createIgniterClient<AppRouterType>({
-  baseURL: 'http://localhost:3000',
-  basePath: '/api/v1/',
-  router: () => {
-    if (typeof window === 'undefined') {
-      return require('./igniter.router').AppRouter
-    }
+baseURL: process.env.NEXT_PUBLIC_IGNITER_API_URL, // Adapt for your needs
+basePath: process.env.NEXT_PUBLIC_IGNITER_API_BASE_PATH,
+router: () => {
+  if (typeof window === 'undefined') {
+    return require('./igniter.router').AppRouter
+  }
 
-    return require('./igniter.schema').AppRouterSchema
-  },
+  return require('./igniter.schema').AppRouterSchema
+},
 })
 
 /**
@@ -300,8 +304,6 @@ export type ApiClient = typeof api
   */
 export const useQueryClient = useIgniterQueryClient<AppRouterType>;
 `
-
-  const filePath = path.join(outputDir, 'igniter.client.ts')
   await writeFileWithHeader(filePath, content, config)
 
   return filePath
