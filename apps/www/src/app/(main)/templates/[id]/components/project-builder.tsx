@@ -191,11 +191,9 @@ Ready to build in public and share the journey! Who else is shipping something c
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-          <div className="w-full flex items-center justify-between">
-            Create Project
-            <Rocket className="mr-2 h-4 w-4" />
-          </div>
+        <Button variant="outline" className="w-full justify-start">
+          <Rocket className="mr-2 h-4 w-4" />
+          Create Project
         </Button>
       </DialogTrigger>
 
