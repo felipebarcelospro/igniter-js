@@ -17,7 +17,7 @@ export const IGNITER_FEATURES: Record<string, FeatureDefinition> = {
     name: 'Redis Store',
     description: 'Caching, sessions, and pub/sub messaging',
     dependencies: [
-      { name: '@igniter-js/adapter-redis', version: 'alpha' },
+      { name: '@igniter-js/adapter-redis', version: 'latest' },
       { name: 'ioredis', version: '^5.6.1' }
     ],
     devDependencies: [
@@ -46,8 +46,8 @@ export const IGNITER_FEATURES: Record<string, FeatureDefinition> = {
     name: 'BullMQ Jobs',
     description: 'Background task processing and job queues',
     dependencies: [
-      { name: '@igniter-js/adapter-redis', version: 'alpha' },
-      { name: '@igniter-js/adapter-bullmq', version: 'alpha' },
+      { name: '@igniter-js/adapter-redis', version: 'latest' },
+      { name: '@igniter-js/adapter-bullmq', version: 'latest' },
       { name: 'bullmq', version: '^4.0.0' },
       { name: 'ioredis', version: '^5.6.1' }
     ],
@@ -76,7 +76,7 @@ export const IGNITER_FEATURES: Record<string, FeatureDefinition> = {
     name: 'MCP Server',
     description: 'Easy expose your API as a MCP server for AI assistants like Cursor, Claude, etc.',
     dependencies: [
-      { name: '@igniter-js/adapter-mcp', version: 'alpha' },
+      { name: '@igniter-js/adapter-mcp', version: 'latest' },
       { name: '@vercel/mcp-adapter', version: '^0.2.0' },
       { name: '@modelcontextprotocol/sdk', version: '^1.10.2' },
       { name: 'ioredis', version: '^5.6.1' }
@@ -109,7 +109,7 @@ export const IGNITER_FEATURES: Record<string, FeatureDefinition> = {
     name: 'Enhanced Logging',
     description: 'Advanced console logging with structured output',
     dependencies: [
-      { name: '@igniter-js/core', version: 'alpha' }
+      { name: '@igniter-js/core', version: 'latest' }
     ],
     envVars: [
       { key: 'IGNITER_LOG_LEVEL', value: 'info', description: 'Logging level (debug, info, warn, error)' },
@@ -121,7 +121,7 @@ export const IGNITER_FEATURES: Record<string, FeatureDefinition> = {
     name: 'Telemetry',
     description: 'Telemetry for tracking requests and errors',
     dependencies: [
-      { name: '@igniter-js/core', version: 'alpha' }
+      { name: '@igniter-js/core', version: 'latest' }
     ],
     envVars: [
       { key: 'IGNITER_TELEMETRY_ENABLE_TRACING', value: 'true', description: 'Enable telemetry tracing' },

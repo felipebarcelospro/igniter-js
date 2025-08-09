@@ -65,9 +65,18 @@ export const expressAdapter = (
 
       // Translate the standard Response back to Express's response object
       res.status(response.status);
+      // Collect headers, preserving multiple Set-Cookie values
+      const setCookieValues: string[] = [];
       response.headers.forEach((value, key) => {
-        res.setHeader(key, value);
+        if (key.toLowerCase() === 'set-cookie') {
+          setCookieValues.push(value);
+        } else {
+          res.setHeader(key, value);
+        }
       });
+      if (setCookieValues.length > 0) {
+        res.setHeader('Set-Cookie', setCookieValues);
+      }
 
       if (response.body) {
         // @ts-expect-error - Stream the response body back to the Express response

@@ -15,6 +15,8 @@ import { createUseQuery, createUseMutation, createUseRealtime } from './igniter.
  */
 export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any, any>>(
   {
+    basePATH,
+    baseURL,
     router,
   }: ClientConfig<TRouter>
 ): InferRouterCaller<TRouter> => {
@@ -27,7 +29,7 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any,
   }
 
   // Browser-side: Use fetch-based client (zero server dependencies)
-  return createBrowserClient(router) as unknown as InferRouterCaller<TRouter>;
+  return createBrowserClient({ ...router, config: { basePATH, baseURL } }) as unknown as InferRouterCaller<TRouter>;
 };
 
 /**
