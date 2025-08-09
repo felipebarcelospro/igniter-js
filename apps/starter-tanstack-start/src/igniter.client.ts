@@ -10,7 +10,7 @@
  *
  * To modify the client API, update your controller files instead.
  *
- * Generated: 2025-07-09T12:54:47.417Z
+ * Generated: 2025-08-09T13:02:02.857Z
  * Framework: vite
  * Output: src/
  */
@@ -28,8 +28,8 @@ import type { AppRouterType } from './igniter.router'
   * const { data } = api.users.list.useQuery()
   */
 export const api = createIgniterClient<AppRouterType>({
-  baseURL: process.env.NEXT_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
-  basePath: process.env.NEXT_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
+  baseURL: 'http://localhost:3000',
+  basePath: '/api/v1/',
   router: () => {
     if (typeof window === 'undefined') {
       return require('./igniter.router').AppRouter

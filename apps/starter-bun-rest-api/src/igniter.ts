@@ -16,7 +16,7 @@ export const igniter = Igniter
   .logger(logger)
   .telemetry(telemetry)
   .config({
-    baseURL: process.env.IGNITER_API_URL || 'http://localhost:3000',
-    basePath: process.env.IGNITER_API_BASE_PATH || '/api/v1',
+    baseURL: process.env.NEXT_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
+    basePATH: process.env.NEXT_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
   })
   .create()
