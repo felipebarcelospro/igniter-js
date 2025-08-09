@@ -179,3 +179,9 @@ Thumbs.db
 # Trae AI
 .trae/
 .vercel
+
+# Cursor
+.cursor/
+
+# Gemini
+GEMINI.md
