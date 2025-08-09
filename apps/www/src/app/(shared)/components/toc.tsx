@@ -1,21 +1,49 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import hljs from "highlight.js";
-import { Check, ChevronDown, Clipboard, Copy, Facebook, Linkedin, Twitter } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  Clipboard,
+  Copy,
+  Download,
+  Facebook,
+  Github,
+  Linkedin,
+  Twitter,
+} from "lucide-react";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { INSTALL_COMMANDS } from "./install-command";
+
+const toSlug = (str: string) => {
+  return str
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
 
 export function TableOfContents() {
   const [headings, setHeadings] = useState<HTMLHeadingElement[]>([]);
   const [activeId, setActiveId] = useState("");
-  const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const currentUrl = typeof window !== "undefined" ? window.location.href : "";
 
   useEffect(() => {
-    const elements = Array.from(document.querySelector('.markdown-content')?.querySelectorAll("h2, h3") || []).filter(
+    const elements = Array.from(
+      document.querySelector(".markdown-content")?.querySelectorAll("h2, h3") ||
+        [],
+    ).filter(
       (element): element is HTMLHeadingElement =>
         element instanceof HTMLHeadingElement,
     );
@@ -38,14 +66,20 @@ export function TableOfContents() {
   }, []);
 
   const shareOnSocial = (platform: string) => {
-    const text = "Check out this Drift KV documentation!";
+    const text = "Check out this Igniter.js documentation!";
     const urls = {
-      twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(currentUrl)}`,
-      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(currentUrl)}`,
-      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(currentUrl)}`
+      twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+        text,
+      )}&url=${encodeURIComponent(currentUrl)}`,
+      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
+        currentUrl,
+      )}`,
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+        currentUrl,
+      )}`,
     };
 
-    window.open(urls[platform as keyof typeof urls], '_blank');
+    window.open(urls[platform as keyof typeof urls], "_blank");
   };
 
   const copyLink = () => {
@@ -61,6 +95,7 @@ export function TableOfContents() {
       transition={{ duration: 0.5 }}
       className="space-y-10 sticky top-24"
     >
+      <ShareSection />
       <motion.section
         className="flex flex-col gap-2"
         initial={{ opacity: 0, x: -50 }}
@@ -75,34 +110,46 @@ export function TableOfContents() {
           <h3 className="text-sm font-semibold mb-2">Share this page</h3>
         </motion.header>
         <motion.main
-          className="flex items-center space-x-2"
+          className="flex items-center divide-x border border-border w-fit"
           variants={{
             hidden: { opacity: 0 },
             show: {
               opacity: 1,
               transition: {
-                staggerChildren: 0.1
-              }
-            }
+                staggerChildren: 0.1,
+              },
+            },
           }}
           initial="hidden"
           animate="show"
         >
           {[
-            { platform: 'twitter', Icon: Twitter, label: 'Share on Twitter' },
-            { platform: 'linkedin', Icon: Linkedin, label: 'Share on LinkedIn' },
-            { platform: 'facebook', Icon: Facebook, label: 'Share on Facebook' }
+            { platform: "twitter", Icon: Twitter, label: "Share on Twitter" },
+            {
+              platform: "linkedin",
+              Icon: Linkedin,
+              label: "Share on LinkedIn",
+            },
+            {
+              platform: "facebook",
+              Icon: Facebook,
+              label: "Share on Facebook",
+            },
           ].map(({ platform, Icon, label }) => (
             <motion.div
               key={platform}
               variants={{
                 hidden: { opacity: 0, x: -20 },
-                show: { opacity: 1, x: 0 }
+                show: { opacity: 1, x: 0 },
               }}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              <Button variant="secondary" className="rounded-full" size="icon" onClick={() => shareOnSocial(platform)}>
+              <Button
+                variant="secondary"
+                size="icon"
+                onClick={() => shareOnSocial(platform)}
+              >
                 <Icon className="size-3" />
               </Button>
             </motion.div>
@@ -110,14 +157,17 @@ export function TableOfContents() {
           <motion.div
             variants={{
               hidden: { opacity: 0, x: -20 },
-              show: { opacity: 1, x: 0 }
+              show: { opacity: 1, x: 0 },
             }}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            <Button variant="ghost" className="w-full flex justify-start" onClick={copyLink}>
-              <Copy className="h-4 w-4" />
-              <span className="ml-2">Copy Link</span>
+            <Button
+              variant="secondary"
+              size="icon"
+              onClick={copyLink}
+            >
+              <Copy className="size-3" />
             </Button>
           </motion.div>
         </motion.main>
@@ -138,7 +188,7 @@ export function TableOfContents() {
         whileHover={{ scale: 1.02 }}
       >
         <motion.h3
-          className="text-lg font-semibold mb-2"
+          className="text-sm font-semibold mb-2"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1 }}
@@ -146,7 +196,8 @@ export function TableOfContents() {
           Try Igniter.js
         </motion.h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Get started with Igniter.js by installing it using your preferred package manager
+          Get started with Igniter.js by installing it using your preferred
+          package manager
         </p>
         <InstallCommandCTA />
       </motion.div>
@@ -157,7 +208,6 @@ export function TableOfContents() {
 export function InstallCommandCTA() {
   const [isCopied, setIsCopied] = useState(false);
   const [selectedCommand, setSelectedCommand] = useState(INSTALL_COMMANDS[0]);
-  const [isOpen, setIsOpen] = useState(false);
 
   const copyCommand = () => {
     navigator.clipboard.writeText(selectedCommand.code);
@@ -188,8 +238,8 @@ export function InstallCommandCTA() {
               layoutId="command-code"
               dangerouslySetInnerHTML={{
                 __html: hljs.highlight(selectedCommand.code, {
-                  language: 'bash'
-                }).value
+                  language: "bash",
+                }).value,
               }}
             />
 
@@ -236,18 +286,24 @@ export function InstallCommandCTA() {
   );
 }
 
-export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[], activeId: string }) {
+export function TOCMenu({
+  headings,
+  activeId,
+}: {
+  headings: HTMLHeadingElement[];
+  activeId: string;
+}) {
   const [openSection, setOpenSection] = useState<string | null>(null);
 
   const sections = useMemo(() => {
     const grouped: Record<string, HTMLHeadingElement[]> = {};
     let currentH2: string | null = null;
 
-    headings.forEach(heading => {
-      if (heading.tagName === 'H2') {
+    headings.forEach((heading) => {
+      if (heading.tagName === "H2") {
         currentH2 = heading.id;
         grouped[currentH2] = [heading];
-      } else if (currentH2 && heading.tagName === 'H3') {
+      } else if (currentH2 && heading.tagName === "H3") {
         grouped[currentH2].push(heading);
       }
     });
@@ -257,8 +313,8 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
 
   useEffect(() => {
     if (activeId) {
-      const activeSection = Object.keys(sections).find(sectionId =>
-        sections[sectionId].some(heading => heading.id === activeId)
+      const activeSection = Object.keys(sections).find((sectionId) =>
+        sections[sectionId].some((heading) => heading.id === activeId),
       );
       if (activeSection) {
         setOpenSection(activeSection);
@@ -279,7 +335,7 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <p className="font-semibold text-sm">On This Page</p>
+        <p className="text-sm font-semibold">On This Page</p>
       </motion.div>
       <motion.ul
         className="space-y-3 text-sm"
@@ -288,17 +344,19 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
           show: {
             opacity: 1,
             transition: {
-              staggerChildren: 0.1
-            }
-          }
+              staggerChildren: 0.1,
+            },
+          },
         }}
         initial="hidden"
         animate="show"
       >
-        {headings.map((heading, index) => {
-          if (heading.tagName === 'H2') {
+        {headings.map((heading) => {
+          if (heading.tagName === "H2") {
             const hasSubheadings = sections[heading.id]?.length > 1;
-            const isActive = heading.id === activeId || sections[heading.id]?.some(h => h.id === activeId);
+            const isActive =
+              heading.id === activeId ||
+              sections[heading.id]?.some((h) => h.id === activeId);
             const isOpen = openSection === heading.id;
 
             return (
@@ -306,7 +364,7 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
                 key={heading.id}
                 variants={{
                   hidden: { opacity: 0, x: -20 },
-                  show: { opacity: 1, x: 0 }
+                  show: { opacity: 1, x: 0 },
                 }}
               >
                 {hasSubheadings ? (
@@ -316,11 +374,13 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
                       whileTap={{ scale: 0.99 }}
                       onClick={() => {
                         setOpenSection(isOpen ? null : heading.id);
-                        document.getElementById(heading.id)?.scrollIntoView({ behavior: 'smooth' });
+                        document
+                          .getElementById(heading.id)
+                          ?.scrollIntoView({ behavior: "smooth" });
                       }}
                       className={cn(
                         "group flex w-full text-sm items-center justify-between py-1 text-muted-foreground transition-colors hover:text-foreground",
-                        isActive && "text-foreground font-medium"
+                        isActive && "text-foreground font-medium",
                       )}
                     >
                       <div className="text-xs text-left line-clamp-1">
@@ -330,7 +390,7 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
                         animate={{ rotate: isOpen ? 180 : 0 }}
                         transition={{ duration: 0.2 }}
                       >
-                        <ChevronDown className="h-4 w-4" />
+                        <ChevronDown className="size-3" />
                       </motion.div>
                     </motion.button>
 
@@ -343,35 +403,40 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
                           transition={{ duration: 0.2 }}
                           className="pl-4 space-y-2"
                         >
-                          {sections[heading.id].slice(1).map((subheading, subIndex) => (
-                            <motion.li
-                              key={subheading.id}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: subIndex * 0.1 }}
-                            >
-                              <motion.a
-                                href={`#${subheading.id}`}
-                                className={cn(
-                                  "group flex items-center py-1 text-muted-foreground transition-colors hover:text-foreground",
-                                  activeId === subheading.id && "text-foreground font-medium"
-                                )}
-                                whileHover={{ x: 4 }}
+                          {sections[heading.id]
+                            .slice(1)
+                            .map((subheading, subIndex) => (
+                              <motion.li
+                                key={subheading.id}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: subIndex * 0.1 }}
                               >
-                                <motion.span
+                                <motion.a
+                                  href={`#${subheading.id}`}
                                   className={cn(
-                                    "mr-2 h-1.5 w-1.5 rounded-full bg-muted-foreground/40 transition-colors",
-                                    activeId === subheading.id && "bg-foreground",
-                                    "group-hover:bg-foreground/60"
+                                    "group flex items-center py-1 text-muted-foreground transition-colors hover:text-foreground",
+                                    activeId === subheading.id &&
+                                      "text-foreground font-medium",
                                   )}
-                                  animate={{
-                                    scale: activeId === subheading.id ? 1.2 : 1
-                                  }}
-                                />
-                                {subheading.textContent}
-                              </motion.a>
-                            </motion.li>
-                          ))}
+                                  whileHover={{ x: 4 }}
+                                >
+                                  <motion.span
+                                    className={cn(
+                                      "mr-2 h-1.5 w-1.5 rounded-full bg-muted-foreground/40 transition-colors",
+                                      activeId === subheading.id &&
+                                        "bg-foreground",
+                                      "group-hover:bg-foreground/60",
+                                    )}
+                                    animate={{
+                                      scale:
+                                        activeId === subheading.id ? 1.2 : 1,
+                                    }}
+                                  />
+                                  {subheading.textContent}
+                                </motion.a>
+                              </motion.li>
+                            ))}
                         </motion.ul>
                       )}
                     </AnimatePresence>
@@ -381,7 +446,7 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
                     href={`#${heading.id}`}
                     className={cn(
                       "group flex items-center py-1 text-xs text-muted-foreground transition-colors hover:text-foreground",
-                      isActive && "text-foreground font-medium"
+                      isActive && "text-foreground font-medium",
                     )}
                     whileHover={{ x: 4 }}
                   >
@@ -395,5 +460,167 @@ export function TOCMenu({ headings, activeId }: { headings: HTMLHeadingElement[]
         })}
       </motion.ul>
     </motion.nav>
+  );
+}
+
+export function ShareSection() {
+  const [markdown, setMarkdown] = useState("");
+  const [articleTitle, setArticleTitle] = useState("content");
+  const currentUrl = typeof window !== "undefined" ? window.location.href : "";
+
+  useEffect(() => {
+    const contentElement = document.querySelector(".markdown-content");
+    const titleElement = contentElement?.querySelector("h1");
+
+    setMarkdown(contentElement?.textContent || "");
+    if (titleElement?.textContent) {
+      setArticleTitle(toSlug(titleElement.textContent));
+    }
+  }, []);
+
+  const copyMarkdown = () => {
+    navigator.clipboard.writeText(markdown);
+  };
+
+  const downloadMarkdown = () => {
+    const blob = new Blob([markdown], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${articleTitle}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const openInPlayground = (playground: "github" | "chatgpt" | "claude" | "grok" | "gemini") => {
+    const prompt = `Can you help me with this topic? Here is the documentation page I'm looking at: ${currentUrl}`;
+    const encodedPrompt = encodeURIComponent(prompt);
+
+    const urls = {
+      github: "https://github.dev", // This requires a more specific implementation
+      chatgpt: `https://chat.openai.com/?q=${encodedPrompt}`,
+      claude: `https://claude.ai/?q=${encodedPrompt}`,
+      grok: `https://grok.x.ai/search?q=${encodedPrompt}`, // Assuming a search endpoint, actual may vary
+      gemini: `https://gemini.google.com/search?q=${encodedPrompt}`, // Assuming a search endpoint, actual may vary
+    };
+
+    window.open(urls[playground], "_blank");
+  };
+
+  const openInOptions = [
+    {
+      label: "Download Markdown",
+      icon: <Download className="size-3" />,
+      action: downloadMarkdown,
+    },
+    {
+      label: "Open in GitHub",
+      icon: <Github className="size-3" />,
+      action: () => openInPlayground("github"),
+    },
+    {
+      label: "Open in ChatGPT",
+      icon: (
+        <Image
+          src="https://svgl.app/library/openai.svg"
+          alt="OpenAI Logo"
+          width={16}
+          height={16}
+        />
+      ),
+      action: () => openInPlayground("chatgpt"),
+    },
+    {
+      label: "Open in Claude",
+      icon: (
+        <Image
+          src="https://svgl.app/library/anthropic_black.svg"
+          alt="Anthropic Logo"
+          width={16}
+          height={16}
+          className="dark:invert"
+        />
+      ),
+      action: () => openInPlayground("claude"),
+    },
+    {
+      label: "Open in Grok (X.ai)",
+      icon: (
+        <Image
+          src="https://svgl.app/library/x.svg"
+          alt="X.ai (Grok) Logo"
+          width={16}
+          height={16}
+          className="dark:invert"
+        />
+      ),
+      action: () => openInPlayground("grok"),
+    },
+    {
+      label: "Open in Gemini",
+      icon: (
+        <Image
+          src="https://svgl.app/library/gemini.svg"
+          alt="Gemini Logo"
+          width={16}
+          height={16}
+        />
+      ),
+      action: () => openInPlayground("gemini"),
+    },
+  ];
+
+  return (
+    <motion.section
+      className="flex flex-col gap-2"
+      initial={{ opacity: 0, x: -50 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: 0.2, duration: 0.5 }}
+    >
+      <motion.header
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4 }}
+      >
+        <h3 className="text-sm font-semibold mb-2">Read on</h3>
+      </motion.header>
+      <motion.main
+        className="flex items-center space-x-2"
+        variants={{
+          hidden: { opacity: 0 },
+          show: {
+            opacity: 1,
+            transition: {
+              staggerChildren: 0.1,
+            },
+          },
+        }}
+        initial="hidden"
+        animate="show"
+      >
+        <Button variant="outline" onClick={copyMarkdown}>
+          <Copy className="size-3 mr-2" />
+          Copy Markdown
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="link" className="mx-0 px-0">
+              Open
+              <ChevronDown className="size-3 ml-2" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            {openInOptions.map((option, index) => (
+              <DropdownMenuItem key={index} onClick={option.action}>
+                {option.icon}
+                <span className="ml-2">{option.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </motion.main>
+    </motion.section>
   );
 }

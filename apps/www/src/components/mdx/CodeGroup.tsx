@@ -21,7 +21,7 @@ export const Code: React.FC<CodeProps> = ({ title, children }) => {
 
 export const CodeGroup: React.FC<CodeGroupProps> = ({ children }) => {
   const [activeTab, setActiveTab] = useState(0);
-  
+
   const childrenArray = Children.toArray(children);
   const tabs = childrenArray.map((child, index) => {
     if (isValidElement(child) && child.props.title) {
@@ -53,7 +53,7 @@ export const CodeGroup: React.FC<CodeGroupProps> = ({ children }) => {
           </button>
         ))}
       </div>
-      <div className="relative">
+      <div className="relative p-1.5 bg-accent">
         {tabs[activeTab]?.content}
       </div>
     </div>

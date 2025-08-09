@@ -16,9 +16,10 @@ import {
   Example,
   Columns,
   Column,
-  Mermaid,
   Snippet,
-  CopyButton
+  Mermaid,
+  CopyButton,
+  TemplateShowcase
 } from "@/components/mdx";
 
 // Type definitions
@@ -216,7 +217,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     h1: ({ children, ...props }: HeadingProps) => (
       <h1
         className={cn(
-          "scroll-m-20 text-4xl font-bold tracking-tight mb-8 mt-2",
+          "scroll-m-20 text-2xl font-bold tracking-tight mb-8 mt-2",
           "bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent"
         )}
         {...props}
@@ -228,7 +229,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     h2: ({ children, ...props }: HeadingProps) => (
       <h2
         className={cn(
-          "scroll-m-20 border-b border-border/40 pb-3 text-3xl font-semibold tracking-tight",
+          "scroll-m-20 text-xl font-semibold tracking-tight",
           "mt-16 mb-6 first:mt-0"
         )}
         {...props}
@@ -239,7 +240,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
 
     h3: ({ children, ...props }: HeadingProps) => (
       <h3
-        className="scroll-m-20 text-2xl font-semibold tracking-tight mt-12 mb-4 first:mt-0"
+        className="scroll-m-20 text-lg font-semibold tracking-tight mt-12 mb-2 first:mt-0"
         {...props}
       >
         {children}
@@ -248,7 +249,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
 
     h4: ({ children, ...props }: HeadingProps) => (
       <h4
-        className="scroll-m-20 text-xl font-semibold tracking-tight mt-8 mb-3"
+        className="scroll-m-20 text-md font-semibold tracking-tight mt-8 mb-3"
         {...props}
       >
         {children}
@@ -318,7 +319,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
       }
 
       return (
-        <ul className="my-6 ml-6 list-disc space-y-2 [&>li]:mt-2" {...props}>
+        <ul className="my-6 list-disc space-y-2 [&>li]:mt-2" {...props}>
           {children}
         </ul>
       );
@@ -364,8 +365,8 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
 
         return (
           <li className="list-none ml-0 mb-4" {...props}>
-            <div className="rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent/50">
-              <div className="font-semibold text-foreground mb-1">
+            <div className="rounded-md flex items-center border border-border text-sm p-4 space-x-2 transition-colors">
+              <div className="font-semibold text-foreground">
                 {strongElement}
               </div>
               <div className="text-sm text-muted-foreground leading-relaxed">
@@ -422,7 +423,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
         : String(children);
 
       return (
-        <div className="group relative my-6">
+        <div className="group relative">
           <div className="overflow-hidden rounded-lg border border-border bg-muted/30">
             {/* Header with copy button */}
             <div className="flex items-center justify-between border-b border-border bg-muted/50 px-4 py-3">
@@ -465,7 +466,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
       return (
         <code
           className={cn(
-            "relative rounded-md bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-medium",
+            "relative rounded-md bg-muted px-[0.3rem] py-[0.2rem] font-mono font-medium",
             "border border-border/50",
             className
           )}
@@ -552,6 +553,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     Columns,
     Column,
     Snippet,
+    TemplateShowcase,
 
     // Utility components
     StepsContainer: ({ children, ...props }: { children: ReactNode } & DivProps) => (

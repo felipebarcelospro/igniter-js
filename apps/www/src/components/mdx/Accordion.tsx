@@ -13,16 +13,16 @@ export const Accordion: React.FC<AccordionProps> = ({ title, children, defaultOp
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="border border-border rounded-lg my-4 overflow-hidden">
+    <div className="my-4">
       <button
-        className="w-full px-4 py-3 text-left bg-muted/30 hover:bg-muted/50 transition-colors flex items-center justify-between font-medium"
+        className="w-full py-2 text-left transition-colors flex items-center justify-between font-medium text-foreground hover:text-muted-foreground"
         onClick={() => setIsOpen(!isOpen)}
       >
         {title}
         <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
       {isOpen && (
-        <div className="px-4 py-3 border-t border-border">
+        <div className="py-3">
           {children}
         </div>
       )}
