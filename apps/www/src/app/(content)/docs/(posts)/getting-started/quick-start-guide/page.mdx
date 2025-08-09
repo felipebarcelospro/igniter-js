@@ -1,48 +1,61 @@
 # Quick Start Guide
 
-Welcome to Igniter.js! This guide will walk you through creating your first fully type-safe API endpoint in just a few minutes. By the end, you will have a running Igniter.js application and a basic understanding of its core components.
+Welcome to the Igniter.js Quick Start Guide! This tutorial provides a detailed, step-by-step walkthrough to build your first fully type-safe API endpoint. We'll go from an empty directory to a running server, explaining each concept along the way.
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
+Before we begin, please ensure you have the following installed on your system:
 
 *   **Node.js**: Version 18.x or higher.
-*   **A Package Manager**: `npm`, `yarn`, `pnpm`, or `bun`.
+*   **A Package Manager**: This guide provides commands for `npm`, `pnpm`, and `bun`.
 
-## Step 1: Create a New Project
+## Step 1: Create Your Igniter.js Project
 
-The fastest way to start with Igniter.js is by using the official CLI. The `igniter init` command scaffolds a new project with all the necessary files and configurations.
+We'll start by using the official `igniter init` command, which scaffolds a new, production-ready project with a logical folder structure and all necessary configurations.
 
-Open your terminal and run:
+Open your terminal and run the command below using your preferred package manager:
 
-```bash
-npx @igniter-js/cli init my-first-api
-```
+<CodeGroup>
+  <Code title="npm">
+  ```bash
+  npx @igniter-js/cli init my-first-api
+  ```
+  </Code>
+  <Code title="pnpm">
+  ```bash
+  pnpm dlx @igniter-js/cli init my-first-api
+  ```
+  </Code>
+  <Code title="bun">
+  ```bash
+  bunx @igniter-js/cli init my-first-api
+  ```
+  </Code>
+</CodeGroup>
 
-This will create a new directory named `my-first-api` and install the required dependencies. Navigate into your new project directory:
+This command creates a new directory called `my-first-api`, installs dependencies, and sets up your project.
+
+<Callout type="info" title="What did the CLI just do?">
+  The `igniter init` command created a starter project that includes the Igniter.js core, essential configuration files (`igniter.ts`, `igniter.router.ts`), and a logical, feature-based directory structure under `src/`. This setup is designed for scalability and maintainability.
+</Callout>
+
+Once the process is complete, navigate into your new project directory:
 
 ```bash
 cd my-first-api
 ```
 
-## Step 2: Explore the Project Structure
+## Step 2: Create Your First Controller
 
-The `init` command generates a logical, feature-based project structure. Here are the key files to know:
+In Igniter.js, a `Controller` is a file that groups related API endpoints. These endpoints are called `Actions` (either a `Query` for GET requests or a `Mutation` for POST, PUT, DELETE, etc.).
 
-```
-src/
-├── features/               # Where your business logic lives
-├── services/               # Services like database connections
-├── igniter.ts              # Core Igniter.js instance initialization
-├── igniter.context.ts      # Application context definition
-└── igniter.router.ts       # Your application's main router
+Let's create a "hello world" controller. First, create the necessary folders:
+
+```bash
+mkdir -p src/features/greeting/controllers
 ```
 
-## Step 3: Create Your First Controller
-
-A `Controller` groups related API endpoints, which are defined as `Actions` (Queries or Mutations). Let's create a simple "hello world" controller.
-
-Create a new file at `src/features/greeting/controllers/greeting.controller.ts`:
+Now, create a new file at `src/features/greeting/controllers/greeting.controller.ts` and add the following code:
 
 ```typescript
 // src/features/greeting/controllers/greeting.controller.ts
@@ -50,23 +63,13 @@ import { igniter } from '@/igniter';
 import { z } from 'zod';
 
 export const greetingController = igniter.controller({
-  /**
-   * Base path for all actions in this controller.
-   * Final URL will be /greetings/...
-   */
+  name: 'GreetingController',
   path: '/greetings',
   actions: {
-    /**
-     * A simple GET request handler (a "Query").
-     * Final URL will be /greetings/hello
-     */
     hello: igniter.query({
-      path: '/hello',
-      // Define and validate query parameters with Zod
       query: z.object({
         name: z.string().optional().default('World'),
       }),
-      // The main logic for the action
       handler: ({ request, response }) => {
         const { name } = request.query;
         return response.success({ message: `Hello, ${name}!` });
@@ -76,11 +79,82 @@ export const greetingController = igniter.controller({
 });
 ```
 
-## Step 4: Add the Controller to the Router
+### Understanding the Code: A Properties Breakdown
 
-Now, you need to register your new `greetingController` with the main application router.
+To understand what we just wrote, you can expand the sections below to see a detailed breakdown of the properties for both the `controller` and the `actions` within it.
 
-Open `src/igniter.router.ts` and add your controller to the `controllers` object:
+<Accordion title="igniter.controller Properties">
+  <Field name="name" type="string" required>
+    A descriptive name for the controller, recommended for clarity and debugging.
+  </Field>
+  <Field name="path" type="string" required>
+    The base URL segment for all actions within this controller. For example, `/greetings`.
+  </Field>
+  <Field name="description" type="string">
+    A high-level summary of the controller's purpose, useful for documentation.
+  </Field>
+  <Field name="actions" type="object" required>
+    An object containing all the API endpoints (`Actions`) for this controller.
+  </Field>
+</Accordion>
+
+<Accordion title="Action Properties (Query vs. Mutation)">
+  <p className="text-sm text-muted-foreground mb-4">
+    Igniter.js has two types of actions: `igniter.query()` for data fetching (GET) and `igniter.mutation()` for data modification (POST, PUT, DELETE). They share some properties but have key differences.
+  </p>
+
+  **Query Action (`igniter.query`)**
+  <Field name="name" type="string">
+    A descriptive name for the action, useful for DevTools and documentation.
+  </Field>
+  <Field name="description" type="string">
+    A summary of what the action does.
+  </Field>
+  <Field name="path" type="string" required>
+    The URL segment for this action, appended to the controller's path. Final URL: `/greetings/hello`.
+  </Field>
+  <Field name="query" type="object">
+    A Zod schema to validate URL query parameters. For more information on Zod, see the <a href="https://zod.dev/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">official Zod documentation</a>.
+  </Field>
+  <Field name="use" type="array">
+    An array of middleware to run before the handler.
+  </Field>
+  <Field name="handler" type="object" required>
+    The function containing your business logic, receiving `request` and `response` in its context.
+  </Field>
+
+  **Mutation Action (`igniter.mutation`)**
+  <Field name="name" type="string">
+    A descriptive name for the action.
+  </Field>
+  <Field name="description" type="string">
+    A summary of what the action does.
+  </Field>
+  <Field name="path" type="string" required>
+    The URL segment for this action.
+  </Field>
+  <Field name="method" type="string" required>
+    The HTTP method to use, e.g., `'POST'`, `'PUT'`, `'DELETE'`.
+  </Field>
+  <Field name="body" type="object">
+    A Zod schema to validate the incoming request body (JSON).
+  </Field>
+  <Field name="query" type="object">
+    A Zod schema to validate URL query parameters. Yes, mutations can have them too!
+  </Field>
+  <Field name="use" type="array">
+    An array of middleware to run before the handler.
+  </Field>
+  <Field name="handler" type="object" required>
+    The function containing your logic.
+  </Field>
+</Accordion>
+
+## Step 3: Register the Controller with the Router
+
+Your controller is ready, but the application doesn't know about it yet. We need to register it in the main router.
+
+Open `src/igniter.router.ts` and modify it to include your new controller:
 
 ```typescript
 // src/igniter.router.ts
@@ -89,66 +163,75 @@ import { igniter } from '@/igniter';
 import { greetingController } from '@/features/greeting/controllers/greeting.controller';
 
 export const AppRouter = igniter.router({
-  // Base URL for the entire application
-  baseURL: process.env.NEXT_PUBLIC_IGNITER_APP_URL,
-  basePATH: process.env.NEXT_PUBLIC_IGNITER_APP_BASE_PATH,
   controllers: {
-    // 2. Register the controller
+    // 2. Register the controller under a key.
+    // This key is used for client-side type inference.
     greetings: greetingController,
-    // ...other controllers may be here
   },
 });
 
-export type AppRouter = typeof AppRouter;
+// This export is crucial for client-side type safety!
+export type AppRouterType = typeof AppRouter;
 ```
 
-## Step 5: Run the Development Server
+<Callout type="info" title="What is the AppRouter?">
+  The `AppRouter` is the heart of your application's API. It aggregates all your controllers and defines the overall shape of your API. By exporting its *type*, you enable the Igniter.js client to have fully type-safe access to your backend.
+</Callout>
 
-Igniter.js comes with a powerful interactive development server that provides real-time feedback on your API.
+## Step 4: Run the Development Server
 
-Run the following command in your terminal:
+Igniter.js includes an interactive development server that provides real-time feedback and a dashboard for your API.
+
+Start the server by running the following command in your terminal:
 
 ```bash
 npm run dev
 ```
 
-This will start the `igniter dev --interactive` command, and you should see the dashboard, indicating that the server is running.
+This command executes `igniter dev --interactive`. You should see a dashboard in your terminal, confirming that the server is running successfully on `http://localhost:3000`.
 
-## Step 6: Test Your Endpoint
+## Step 5: Test Your API Endpoint
 
-Your API is now live! You can test it using a tool like `curl` or by simply opening the URL in your browser.
+Your API is now live and ready to be tested! You can use a tool like `cURL` or simply open the URL in your web browser.
 
-Open a new terminal window and run:
+Open a new terminal window and run this command:
 
 ```bash
-# Test with the default name
+# Test with the default name ('World')
 curl http://localhost:3000/api/v1/greetings/hello
-
-# Expected response: {"message":"Hello, World!"}
 ```
-
-Now try providing a name in the query string:
-
+You should see the following JSON response:
+```json
+{"message":"Hello, World!"}
+```
+Now, let's provide a custom name via the query string:
 ```bash
 # Test with a custom name
-curl http://localhost:3000/api/v1/greetings/hello?name=Igniter
-
-# Expected response: {"message":"Hello, Igniter!"}
+curl "http://localhost:3000/api/v1/greetings/hello?name=Igniter"
 ```
-
+And the response will be:
+```json
+{"message":"Hello, Igniter!"}
+```
 ## Congratulations!
 
-You have successfully built and tested your first API endpoint with Igniter.js. You've learned how to:
+You have successfully built and tested your first fully type-safe API endpoint with Igniter.js!
 
-*   Scaffold a new project with `igniter init`.
-*   Create a `Controller` with a `Query Action`.
-*   Register the controller with the `Router`.
-*   Run the interactive development server.
+In this guide, you have learned how to:
+-   **Scaffold a project** using `igniter init`.
+-   **Create a `Controller`** to group related API actions.
+-   **Define a `Query Action`** with input validation using Zod.
+-   **Register the controller** with the main application `Router`.
+-   **Run the interactive development server** and test your endpoint.
+
+## Ready for a Real Project?
+
+You've learned the basics, now it's time to build something more substantial. Our official starter templates are the perfect way to kickstart your next project with a production-ready foundation.
+
+<TemplateShowcase />
 
 ### Next Steps
 
-Now that you have a feel for the basics, dive deeper into the framework's architecture:
-
-*   **[Core Concepts](/docs/core-concepts/the-igniter-builder)**: Learn about the fundamental building blocks of Igniter.js in detail.
-*   **[Installation](/docs/getting-started/installation)**: Detailed installation instructions and options.
-*   **[Project Structure](/docs/getting-started/project-structure)**: Best practices for organizing your Igniter.js projects.
+*   **[Core Concepts](/docs/core-concepts/the-igniter-builder)**: Take a deep dive into the fundamental building blocks of the framework.
+*   **[Routing in Depth](/docs/core-concepts/routing)**: Learn more about file-based routing, parameters, and advanced routing techniques.
+*   **[Project Structure](/docs/getting-started/project-structure)**: Understand our best practices for organizing large and scalable applications.

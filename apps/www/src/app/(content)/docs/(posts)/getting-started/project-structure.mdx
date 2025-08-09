@@ -1,0 +1,70 @@
+# Project Structure
+
+Welcome to the Igniter.js project structure guide! A well-organized project is key to a scalable and maintainable application. The Igniter.js structure is designed with first-class support for **Domain-Driven Design (DDD)** principles, promoting a clear separation of concerns and making your codebase a joy to work with, both for you and for AI agents.
+
+This guide will walk you through the standard layout of an Igniter.js application, explaining the purpose of each directory and why it exists.
+
+<Callout type="info" title="AI-Friendly by Design">
+  The structure isn't arbitrary. It's crafted to be easily parsable by AI code generation tools. By following these conventions, you make it easier for agents like Lia to understand your codebase, assist with boilerplate, and perform maintenance tasks.
+</Callout>
+
+---
+
+## Root Directory
+
+When you initialize a new project with `igniter init`, you'll find a clean and simple root directory.
+
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 my-6">
+  <Card title="src/" description="The heart of your application. All your business logic, controllers, and type definitions live here." />
+  <Card title="package.json" description="The standard manifest for any Node.js project. It manages your dependencies and defines your project scripts." />
+  <Card title="tsconfig.json" description="The configuration file for the TypeScript compiler. It ensures strict type-safety across your entire project." />
+</div>
+
+---
+
+## The `src` Directory
+
+This is where you'll spend most of your time. The `src` directory is organized to cleanly separate the different layers of your application, from request handling down to your core business logic.
+
+### `app/` - Your Application's Core
+
+The `app` directory contains all the core logic that defines what your application can do.
+
+<div className="space-y-4 my-6">
+  <Card title="controllers/" description="Controllers are the entry point for all incoming requests. They are responsible for receiving a request, calling the appropriate procedure, and returning a response. Think of them as the traffic cops of your application.">
+    **Why it exists:** To decouple the HTTP layer from your business logic. A controller's only job is to understand HTTP requests and delegate work. Your procedures shouldn't know or care that they were triggered by an HTTP request.
+  </Card>
+  <Card title="procedures/" description="Procedures (or use cases) contain your application's business logic. This is where you define the steps to accomplish a specific task, like creating a user, processing a payment, or fetching a report.">
+    **Why it exists:** To encapsulate business rules in a single place. This makes your logic reusable, testable, and independent of any delivery mechanism (like HTTP or WebSockets).
+  </Card>
+</div>
+
+### `lib/` - Shared Utilities
+
+The `lib` directory is a place for shared, reusable code that doesn't belong to a specific feature domain.
+
+<div className="space-y-4 my-6">
+  <Card title="lib/" description="This directory is perfect for utility functions, custom constants, or third-party client initializations (like a database connector or an SDK client).">
+    **Why it exists:** To avoid code duplication. Any piece of code that you find yourself needing in multiple parts of your application is a good candidate for the `lib` directory.
+  </Card>
+</div>
+
+### `index.ts` - The Entry Point
+
+This is the file that starts your entire application.
+
+<div className="space-y-4 my-6">
+  <Card title="index.ts" description="The `index.ts` file is responsible for creating an instance of the Igniter application using the builder, registering your controllers, and starting the server.">
+    **Why it exists:** To provide a single, clear entry point for your application. When someone (or an AI) needs to understand how your application starts, this is the first and only place they need to look.
+  </Card>
+</div>
+
+---
+
+## What's Next?
+
+Now that you have a solid understanding of the project structure, you're ready to dive into the core concepts that make Igniter.js powerful.
+
+<div className="mt-6">
+  <ButtonLink title="Next: Core Concepts" description="Learn about the Igniter Builder, Context, and Procedures." href="/docs/core-concepts" />
+</div>

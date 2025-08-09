@@ -2,7 +2,7 @@ import { ContentSection } from "@/lib/docs";
 
 export const menu: ContentSection[] = [
   {
-    title: "Introduction",
+    title: "Getting Started",
     items: [
       {
         title: "Introduction",
@@ -11,19 +11,6 @@ export const menu: ContentSection[] = [
         date: new Date().toISOString(),
         description: "Introduction to Igniter.js",
         slug: "/docs/",
-      },
-    ],
-  },
-  {
-    title: "Getting Started",
-    items: [
-      {
-        title: "Getting Started",
-        type: "docs",
-        category: "getting-started",
-        date: new Date().toISOString(),
-        description: "Getting Started with Igniter.js",
-        slug: "/docs/getting-started",
       },
       {
         title: "Quick Start Guide",
@@ -341,7 +328,7 @@ export const menu: ContentSection[] = [
         category: "zed-editor",
         date: new Date().toISOString(),
         description: "Using Zed Editor for AI-powered development",
-        slug: "/docs/code-agents/zed-editor",
+        slug: "/docs/code-gpts/zed-editor",
       },
       {
         title: "Gemini CLI",

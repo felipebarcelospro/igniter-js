@@ -1,54 +1,96 @@
 # Getting Started with Igniter.js
 
-Welcome to Igniter.js! This comprehensive guide will take you from zero to building your first type-safe API in just a few minutes.
+Welcome to Igniter.js! This is your central hub for mastering our framework. We've designed this guide to take you from initial setup to building robust, type-safe APIs, all while highlighting the best practices that define the Igniter.js developer experience.
 
-<Callout type="tip" title="New to Igniter.js?">
-  Follow our step-by-step journey below to get the most out of this framework. Each step builds upon the previous one, ensuring you understand the core concepts as you progress.
+<Callout type="tip" title="Our Philosophy">
+  Igniter.js is built on three core principles: **End-to-End Typesafety**, a superior **Developer Experience (DX)**, and an **AI-Friendly Architecture**. You'll see these principles in action as you move through our documentation.
 </Callout>
 
-## Your Learning Journey
+---
+
+## Your Learning Roadmap
+
+This roadmap is designed to be followed sequentially. Each step builds on the last, ensuring you gain a solid understanding of both the "how" and the "why" behind the framework.
 
 <Steps>
   <div>
-    **Start Here: Quick Setup** 
+    **1. Quick Setup & First Endpoint** 
     
-    Get your first Igniter.js application running in under 5 minutes. Perfect for getting a feel for the framework.
+    Get your first Igniter.js application running in under 5 minutes. This is the perfect starting point to get a feel for the framework's core functionality.
     
     <Card title="Quick Start Guide" href="/docs/getting-started/quick-start-guide">
-      Build your first API endpoint with step-by-step instructions. Includes creating controllers, actions, and testing your endpoint.
+      A step-by-step tutorial to build and test your first API endpoint. You'll learn about the CLI, controllers, and actions.
     </Card>
   </div>
   
   <div>
-    **Choose Your Installation Method**
+    **2. Installation & Project Structure**
     
-    Whether you're starting fresh or adding to an existing project, we've got you covered.
+    Learn how to set up Igniter.js for any scenario and how to organize your project for scalability and long-term maintainability.
     
-    <Card title="Installation Options" href="/docs/getting-started/installation">
-      Detailed installation instructions for new projects and existing codebases. Includes optional dependencies and peer requirements.
-    </Card>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+      <Card title="Installation Options" href="/docs/getting-started/installation">
+        Choose your path: official templates, CLI, or manual setup for existing projects.
+      </Card>
+      <Card title="Project Structure" href="/docs/getting-started/project-structure">
+        Understand our recommended best practices for organizing your files and folders.
+      </Card>
+    </div>
   </div>
   
   <div>
-    **Organize Your Project**
+    **3. Understand the Core Concepts**
     
-    Learn the recommended project structure and best practices for scalable applications.
+    Go beyond the basics and dive deep into the fundamental building blocks that make Igniter.js powerful and flexible.
     
-    <Card title="Project Structure" href="/docs/getting-started/project-structure">
-      Understand how to organize your controllers, services, and features for maximum maintainability.
-    </Card>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+       <Card title="The Igniter Builder" href="/docs/core-concepts/the-igniter-builder">
+        Learn how the builder works and how to configure your application.
+      </Card>
+      <Card title="Routing in Depth" href="/docs/core-concepts/routing">
+        Master file-based routing, parameters, and programmatic routes.
+      </Card>
+    </div>
   </div>
 </Steps>
 
-## What You'll Master
+---
 
-By the end of this section, you'll be comfortable with:
+## Explore the Igniter.js Ecosystem
 
-- **Quick Project Setup**: Using the CLI to scaffold new applications
-- **Core Architecture**: Understanding controllers, actions, and routers
-- **Type Safety**: Leveraging TypeScript and Zod for bulletproof APIs
-- **Best Practices**: Organizing code for scalability and maintainability
+Igniter.js is more than just a router; it's a modular ecosystem. Our adapter-based architecture allows you to plug in powerful features as you need them, keeping your application lightweight and focused.
 
-<Callout type="success" title="Ready to Build?">
-  Start with the **[Quick Start Guide](/docs/getting-started/quick-start-guide)** to create your first Igniter.js application and see the framework in action!
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 my-8">
+  <Panel title="Store Adapter" href="/docs/getting-started/installation#store-adapter-caching--pubsub">
+    Add high-performance caching and Pub/Sub messaging with Redis.
+  </Panel>
+  <Panel title="Queues Adapter" href="/docs/getting-started/installation#queues-adapter-background-jobs">
+    Enable robust background job processing powered by BullMQ.
+  </Panel>
+  <Panel title="Telemetry Adapter" href="/docs/getting-started/installation#telemetry-adapter-opentelemetry">
+    Integrate distributed tracing and metrics with OpenTelemetry.
+  </Panel>
+  <Panel title="AI Code Agents" href="/docs/code-agents/claude-code">
+    Turn your API into a set of tools for AI agents like Claude.
+  </Panel>
+   <Panel title="CLI Tooling" href="/docs/getting-started/installation#2-use-the-igniter-init-cli">
+    Scaffold projects and run a dev server with `igniter init` and `igniter dev`.
+  </Panel>
+   <Panel title="Validation" href="/docs/getting-started/installation#validation-with-zod">
+    Use Zod for schema validation that integrates with our type system.
+  </Panel>
+</div>
+
+---
+
+## Next Steps
+
+You've completed the initial setup and have a good grasp of the fundamentals. Where to next?
+
+<Callout type="success" title="Ready for a challenge?">
+  Try building a complete feature, like user authentication or a blog API, using the concepts you've learned. Or, explore our official templates to see how we build full-stack applications.
 </Callout>
+
+- **Explore Advanced Topics**: Dive into [Middleware](/docs/core-concepts/middleware), [Error Handling](/docs/core-concepts/error-handling), or learn how to use [AI Code Agents](/docs/code-agents/claude-code).
+- **Contribute to the Project**: We welcome contributions! Check out our [GitHub repository](https://github.com/felipebarcelospro/igniter-js) to find open issues.
+- **Join the Community**: Have questions? Want to share what you've built? Join our community (link to be added).
