@@ -31,7 +31,7 @@ The `init` command scaffolds a new, production-ready Igniter.js project from scr
 npx @igniter-js/cli init my-api
 ```
 
-For more details, see the **[igniter init documentation](https://github.com/felipebarcelospro/igniter-js/wiki/05-CLI-and-Tooling/01-igniter-init.md)**.
+For more details, see the **[igniter init documentation](https://igniterjs.com/docs/cli-and-tooling/igniter-init)**.
 
 ### `igniter dev`
 
@@ -46,7 +46,7 @@ igniter dev --interactive
 igniter dev --interactive --framework nextjs
 ```
 
-For more details, see the **[igniter dev documentation](https://github.com/felipebarcelospro/igniter-js/wiki/05-CLI-and-Tooling/02-igniter-dev.md)**.
+For more details, see the **[igniter dev documentation](https://igniterjs.com/docs/cli-and-tooling/igniter-dev)**.
 
 ## Contributing
 

@@ -104,9 +104,9 @@ MIT License - see the [LICENSE](LICENSE) file for details
 
 ## Support
 
-- 📝 [Documentation](https://github.com/felipebarcelospro/igniter-eslint-config)
-- 🐛 [Issue Tracker](https://github.com/felipebarcelospro/igniter-eslint-config/issues)
-- 💬 [Discussions](https://github.com/felipebarcelospro/igniter-eslint-config/discussions)
+- 📝 [Documentation](https://igniterjs.com/docs)
+- 🐛 [Issue Tracker](https://github.com/felipebarcelospro/igniter-js/issues)
+- 💬 [Discussions](https://github.com/felipebarcelospro/igniter-js/discussions)
 
 ---
 

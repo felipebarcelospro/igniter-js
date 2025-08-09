@@ -184,7 +184,6 @@ The type-safe client (`src/igniter.client.ts`) and schema (`src/igniter.schema.t
 
 For more detailed information on Igniter.js concepts, refer to the official documentation wiki.
 
--   **[Core Concepts](https://github.com/felipebarcelospro/igniter-js/wiki/Core-Concepts)**: Understand Actions, Controllers, Context, and the builder pattern.
--   **[Adapters](https://github.com/felipebarcelospro/igniter-js/wiki/Adapters)**: Learn more about integrating with frameworks like Express.
--   **[Store Adapter (Redis)](https://github.com/felipebarcelospro/igniter-js/wiki/Store-Adapter)**: Learn about caching and Pub/Sub.
--   **[Job Queue Adapter (BullMQ)](https://github.com/felipebarcelospro/igniter-js/wiki/Job-Queue-Adapter)**: Learn how to define and manage background jobs.
+-   **[Core Concepts](https://igniterjs.com/docs/core-concepts)**: Understand Actions, Controllers, Context, and the builder pattern.
+-   **[Store (Redis)](https://igniterjs.com/docs/advanced-features/store)**: Learn about caching and Pub/Sub.
+-   **[Queues (BullMQ)](https://igniterjs.com/docs/advanced-features/queues)**: Learn how to define and manage background jobs.

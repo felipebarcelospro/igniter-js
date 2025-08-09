@@ -321,22 +321,19 @@ The `igniter dev --interactive` command (aliased to `npm run dev`) is your prima
 
 For more detailed information on Igniter.js concepts, refer to the official documentation wiki.
 
--   **[Core Concepts](https://github.com/felipebarcelospro/igniter-js/wiki/Core-Concepts)**: The starting point for understanding the framework's architecture.
+-   **[Core Concepts](https://igniterjs.com/docs/core-concepts)**: The starting point for understanding the framework's architecture.
     -   **The Igniter Builder**: Explains how `src/igniter.ts` uses a fluent API (`.context()`, `.logger()`, `.create()`) to build the application instance. **Consult when adding global services or plugins.**
     -   **Context**: Details the dependency injection system. The `context` object starts with a base shape and is dynamically extended by `Procedures`, making services available to `actions`.
     -   **Controllers & Actions**: The core of the API. `Controllers` group related `Actions`. `Actions` are the individual endpoints (`igniter.query` for GET, `igniter.mutation` for CUD). **Consult when creating new endpoints.**
     -   **Procedures (Middleware)**: Reusable functions (e.g., for auth, logging) that run before an `action`. They can halt execution or extend the `context`. **Consult when implementing cross-cutting concerns like auth.**
 
--   **[React Client Integration](https://github.com/felipebarcelospro/igniter-js/wiki/React-Client-Integration)**: Essential reading for frontend work.
+-   **[Client-Side Integration](https://igniterjs.com/docs/client-side)**: Essential reading for frontend work.
     -   **API Client**: Explains `src/igniter.client.ts`. This file creates the type-safe `api` object used to call the backend from both Server and Client Components.
     -   **IgniterProvider**: A mandatory React provider that wraps the entire application. It manages the client-side cache and real-time connection. All client-side hooks depend on it.
     -   **useQuery, useMutation, useRealtime**: The hooks for interacting with the API from Client Components. The documentation details their parameters, return values, and usage patterns.
 
--   **[Adapters (Next.js)](https://github.com/felipebarcelospro/igniter-js/wiki/Adapters)**
-    -   Describes how Igniter.js connects to the web framework. For this project, `nextRouteHandlerAdapter` in `src/app/api/[[...all]]/route.ts` is the key piece.
-
--   **[Store Adapter (Redis)](https://github.com/felipebarcelospro/igniter-js/wiki/Store-Adapter)**
+-   **[Store (Redis)](https://igniterjs.com/docs/advanced-features/store)**
     -   Details the key-value storage, caching, and pub/sub system. This project uses Redis via `@igniter-js/adapter-redis`.
 
--   **[Job Queue Adapter (BullMQ)](https://github.com/felipebarcelospro/igniter-js/wiki/Job-Queue-Adapter)**
+-   **[Queues (BullMQ)](https://igniterjs.com/docs/advanced-features/queues)**
     -   Explains the background job processing system. This project uses BullMQ via `@igniter-js/adapter-bullmq`.

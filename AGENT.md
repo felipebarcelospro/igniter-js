@@ -206,11 +206,8 @@ The project is organized as a monorepo using `npm` workspaces.
 -   **`packages/`**: **This is the most important directory.** It contains all the individual, publishable NPM packages that make up the Igniter.js ecosystem.
     -   Each subdirectory is a self-contained package with its own `package.json`, `tsconfig.json`, and `AGENT.md`.
 
--   **`docs/`**: Contains all developer-facing documentation intended for human consumption.
-    -   `wiki-content/`: This subdirectory holds the markdown files that are automatically synced to the project's GitHub Wiki via a GitHub Action.
-
 -   **`.github/`**: Contains GitHub-specific configuration files.
-    -   `workflows/`: Holds all GitHub Actions workflows, such as the CI pipeline and the Wiki synchronization script (`sync-wiki.yml`).
+    -   `workflows/`: Holds all GitHub Actions workflows, such as the CI pipeline.
     -   `ISSUE_TEMPLATE/`: Contains templates for creating new GitHub Issues.
     -   `PULL_REQUEST_TEMPLATE.md`: The template for submitting pull requests.
 

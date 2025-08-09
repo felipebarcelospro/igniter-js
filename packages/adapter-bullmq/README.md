@@ -92,7 +92,7 @@ export const igniter = Igniter
 
 Your background job queue is now configured and ready to use. You can invoke jobs from your actions using `igniter.jobs.emails.schedule({ task: 'sendWelcome', ... })`.
 
-For more detailed guides, please refer to the **[Official Igniter.js Wiki](https://github.com/felipebarcelospro/igniter-js/wiki)**.
+For more detailed guides, please refer to the **[Official Igniter.js Wiki](https://igniterjs.com/docs)**.
 
 ## Contributing
 

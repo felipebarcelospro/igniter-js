@@ -292,8 +292,7 @@ This pattern is powerful for specific real-time features but should be considere
 
 For more detailed information on Igniter.js concepts, refer to the official documentation wiki.
 
--   **[Core Concepts](https://github.com/felipebarcelospro/igniter-js/wiki/Core-Concepts)**
--   **[React Client Integration](https://github.com/felipebarcelospro/igniter-js/wiki/React-Client-Integration)**
--   **[Adapters (Next.js)](https://github.com/felipebarcelospro/igniter-js/wiki/Adapters)**
--   **[Store Adapter (Redis)](https://github.com/felipebarcelospro/igniter-js/wiki/Store-Adapter)**
--   **[Job Queue Adapter (BullMQ)](https://github.com/felipebarcelospro/igniter-js/wiki/Job-Queue-Adapter)**
+-   **[Core Concepts](https://igniterjs.com/docs/core-concepts)**
+-   **[Client-Side Integration](https://igniterjs.com/docs/client-side)**
+-   **[Store (Redis)](https://igniterjs.com/docs/advanced-features/store)**
+-   **[Queues (BullMQ)](https://igniterjs.com/docs/advanced-features/queues)**

@@ -88,7 +88,7 @@ handler: async ({ context, response }) => {
 }
 ```
 
-For more detailed guides, please refer to the **[Official Igniter.js Wiki](https://github.com/felipebarcelospro/igniter-js/wiki)**.
+For more detailed guides, please refer to the **[Official Igniter.js Wiki](https://igniterjs.com/docs)**.
 
 ## Contributing
 

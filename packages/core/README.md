@@ -139,7 +139,7 @@ createServer(async (req, res) => {
 });
 ```
 
-For more detailed guides and advanced concepts, please refer to the **[Official Igniter.js Wiki](https://github.com/felipebarcelospro/igniter-js/wiki)**.
+For more detailed guides and advanced concepts, please refer to the **[Official Igniter.js Wiki](https://igniterjs.com/docs)**.
 
 ## Contributing
 

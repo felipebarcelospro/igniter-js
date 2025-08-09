@@ -146,10 +146,10 @@ Tasks are defined in `deno.json`.
 To learn more about Igniter.js and its powerful features, check out the official documentation:
 
 -   **[Igniter.js GitHub Repository](https://github.com/felipebarcelospro/igniter-js)**
--   **[Official Documentation Wiki](https://github.com/felipebarcelospro/igniter-js/wiki)**
--   **[Core Concepts](https://github.com/felipebarcelospro/igniter-js/wiki/Core-Concepts)**
--   **[Store Adapter (Redis)](https://github.com/felipebarcelospro/igniter-js/wiki/Store-Adapter)**
--   **[Job Queue Adapter (BullMQ)](https://github.com/felipebarcelospro/igniter-js/wiki/Job-Queue-Adapter)**
+-   **[Official Documentation](https://igniterjs.com/docs)**
+-   **[Core Concepts](https://igniterjs.com/docs/core-concepts)**
+-   **[Store (Redis)](https://igniterjs.com/docs/advanced-features/store)**
+-   **[Queues (BullMQ)](https://igniterjs.com/docs/advanced-features/queues)**
 
 ## License
 

@@ -142,7 +142,7 @@ src/
 ## Further Learning
 
 -   **[Igniter.js GitHub Repository](https://github.com/felipebarcelospro/igniter-js)**
--   **[Igniter.js Documentation Wiki](https://github.com/felipebarcelospro/igniter-js/wiki)**
+-   **[Igniter.js Documentation Wiki](https://igniterjs.com/docs)**
 -   **[TanStack Start Documentation](https://tanstack.com/start/latest/docs/overview)**
 -   **[TanStack Router Documentation](https://tanstack.com/router/latest/docs/overview)**
 

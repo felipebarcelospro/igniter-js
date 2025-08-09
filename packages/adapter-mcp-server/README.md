@@ -47,7 +47,7 @@ import { AppRouter } from '@/igniter.router'; // Import your main Igniter.js rou
 const mcpHandler = createMcpAdapter(AppRouter, {
   // Optional: Provide custom instructions for the AI agent.
   instructions: "This is the API for the Acme Corporation. Use the available tools to manage users and products.",
-  
+
   // Optional: Define custom context for the MCP server.
   // This can be used to pass user-specific authentication data.
   context: async (req) => {
@@ -82,7 +82,7 @@ The AI can now discover and call your API actions:
 
 The MCP adapter will translate this into a call to `api.users.list.query()` on your backend, execute it, and return the result to the AI.
 
-For more detailed guides, please refer to the **[Official Igniter.js Wiki](https://github.com/felipebarcelospro/igniter-js/wiki)**.
+For more detailed guides, please refer to the **[Official Igniter.js Wiki](https://igniterjs.com/docs)**.
 
 ## Contributing
 

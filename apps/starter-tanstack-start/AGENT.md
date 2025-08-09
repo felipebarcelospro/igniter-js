@@ -245,7 +245,7 @@ function ProductsComponent() {
 
 For more detailed information on the concepts used in this starter, refer to the official documentation.
 
--   **[Igniter.js Core Concepts](https://github.com/felipebarcelospro/igniter-js/wiki/Core-Concepts)**
--   **[Igniter.js React Client Integration](https://github.com/felipebarcelospro/igniter-js/wiki/React-Client-Integration)**
+-   **[Igniter.js Core Concepts](https://igniterjs.com/docs/core-concepts)**
+-   **[Igniter.js React Client Integration](https://igniterjs.com/docs/client-side)**
 -   **[TanStack Start Documentation](https://tanstack.com/start/latest/docs/overview)**
 -   **[TanStack Router Documentation](https://tanstack.com/router/latest/docs/overview)**

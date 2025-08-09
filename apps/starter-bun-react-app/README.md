@@ -125,9 +125,9 @@ src/
 To learn more about Igniter.js and its powerful features, check out the official documentation:
 
 -   **[Igniter.js GitHub Repository](https://github.com/felipebarcelospro/igniter-js)**
--   **[Official Documentation Wiki](https://github.com/felipebarcelospro/igniter-js/wiki)**
--   **[Core Concepts](https://github.com/felipebarcelospro/igniter-js/wiki/Core-Concepts)**
--   **[Client Integration](https://github.com/felipebarcelospro/igniter-js/wiki/React-Client-Integration)**
+-   **[Official Documentation](https://igniterjs.com/docs)**
+-   **[Core Concepts](https://igniterjs.com/docs/core-concepts)**
+-   **[Client-Side Integration](https://igniterjs.com/docs/client-side)**
 
 ## License
 

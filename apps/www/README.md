@@ -1,6 +1,6 @@
 # Igniter.js Website (`@igniter-js/www`)
 
-This repository contains the source code for the official Igniter.js website and documentation platform, available at [igniterjs.dev](https://igniterjs.dev) (or your framework's domain).
+This repository contains the source code for the official Igniter.js website and documentation platform, available at [https://igniterjs.com](https://igniterjs.com).
 
 Built with Next.js and Tailwind CSS, this project serves as the central hub for our community, providing marketing information, comprehensive documentation, and guides to help developers get the most out of Igniter.js.
 
@@ -61,7 +61,7 @@ Our documentation is written in MDX (`.mdx`).
 
 ### Reporting Issues
 
-If you encounter a bug or have a feature request, please [open an issue](https://github.com/your-org/igniter-js/issues) on our GitHub repository. Provide as much detail as possible, including steps to reproduce the issue.
+If you encounter a bug or have a feature request, please [open an issue](https://github.com/felipebarcelospro/igniter-js/issues) on our GitHub repository. Provide as much detail as possible, including steps to reproduce the issue.
 
 ## 📜 License
 
