@@ -335,6 +335,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
     instance._response = {} as IgniterProcessorResponse<null, null>;
     instance._response.data = null;
     instance._response.error = null;
+    // Keep JSON shape consistent unless explicitly overridden
     if (!this._statusExplicitlySet) {
       instance._status = 204;
       this.logger.debug("Setting response status to 204 No Content.");
@@ -396,49 +397,53 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * @private
    */
   private buildCookieString(name: string, value: string, options?: CookieOptions): string {
+    // Normalize options and cookie name respecting prefix invariants
+    const opts: CookieOptions = { ...(options || {}) } as CookieOptions;
     let cookieName = name;
+
+    // Respect explicit prefix option first
+    if (opts.prefix === "secure") {
+      cookieName = `__Secure-${name}`;
+      // __Secure- MUST be Secure
+      opts.secure = true;
+    } else if (opts.prefix === "host") {
+      cookieName = `__Host-${name}`;
+      // __Host- MUST be Secure and Path=/ and cannot have Domain
+      opts.secure = true;
+      opts.path = "/";
+      if (opts.domain) delete (opts as any).domain;
+    }
+
+    // Also handle when the provided name already contains a prefix
+    if (cookieName.startsWith("__Secure-")) {
+      opts.secure = true;
+    }
+    if (cookieName.startsWith("__Host-")) {
+      opts.secure = true;
+      opts.path = "/";
+      if (opts.domain) delete (opts as any).domain;
+    }
+
+    // Partitioned cookies MUST be Secure
+    if (opts.partitioned) {
+      opts.secure = true;
+    }
+
+    // Begin serialization
     let cookie = `${cookieName}=${encodeURIComponent(value)}`;
 
-    if (options) {
-      if (options.maxAge !== undefined) cookie += `; Max-Age=${Math.floor(options.maxAge)}`;
-      if (options.domain) cookie += `; Domain=${options.domain}`;
-      if (options.path) cookie += `; Path=${options.path}`;
-      if (options.expires) cookie += `; Expires=${options.expires.toUTCString()}`;
-      if (options.httpOnly) cookie += `; HttpOnly`;
-      if (options.secure) cookie += `; Secure`;
-      if (options.sameSite) cookie += `; SameSite=${options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1)}`;
-      if (options.partitioned) {
-        cookie += `; Partitioned`;
-        // Partitioned cookies must be Secure
-        if (!options.secure) {
-          cookie += `; Secure`;
-        }
-      }
-      if (options.prefix) {
-        if (options.prefix === "secure") {
-          cookieName = `__Secure-${name}`;
-        } else if (options.prefix === "host") {
-          cookieName = `__Host-${name}`;
-          // __Host- cookies must be Secure and have Path=/
-          if (!options.secure) {
-            cookie += `; Secure`;
-          }
-          if (!options.path) {
-            cookie += `; Path=/`;
-          }
-        }
-        // Rebuild cookie string with correct prefix
-        cookie = `${cookieName}=${encodeURIComponent(value)}`;
-        if (options.maxAge !== undefined) cookie += `; Max-Age=${Math.floor(options.maxAge)}`;
-        if (options.domain && options.prefix !== "host") cookie += `; Domain=${options.domain}`; // __Host- cannot have Domain
-        if (options.path || options.prefix === "host") cookie += `; Path=${options.path || '/'}`;
-        if (options.expires) cookie += `; Expires=${options.expires.toUTCString()}`;
-        if (options.httpOnly) cookie += `; HttpOnly`;
-        if (options.secure || options.prefix === "host") cookie += `; Secure`;
-        if (options.sameSite) cookie += `; SameSite=${options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1)}`;
-        if (options.partitioned) cookie += `; Partitioned`;
-      }
-    }
+    if (opts.maxAge !== undefined) cookie += `; Max-Age=${Math.floor(opts.maxAge)}`;
+
+    const isHostPref = cookieName.startsWith("__Host-") || opts.prefix === "host";
+    if (opts.domain && !isHostPref) cookie += `; Domain=${opts.domain}`;
+
+    if (opts.path || isHostPref) cookie += `; Path=${opts.path || '/'}`;
+    if (opts.expires) cookie += `; Expires=${opts.expires.toUTCString()}`;
+    if (opts.httpOnly) cookie += `; HttpOnly`;
+    if (opts.secure) cookie += `; Secure`;
+    if (opts.sameSite) cookie += `; SameSite=${opts.sameSite.charAt(0).toUpperCase() + opts.sameSite.slice(1)}`;
+    if (opts.partitioned) cookie += `; Partitioned`;
+
     return cookie;
   }
 
