@@ -142,6 +142,50 @@ Templates (Starters and Samples) displayed on the website are managed via a data
     *   Add a new `Template` object to the `templates` array.
     *   Fill in all required fields: `id` (matching the folder name), `title`, `description`, `image` (add the image to `apps/www/public/templates/`), framework details, and repository/deployment URLs.
 
+### 8.5. Social Media Content Strategy
+This section outlines the strategy and workflows for creating content across different social media platforms. The goal is to build an engaged community, share progress, and drive adoption. All published content must be logged in `.copilot/content/published-posts.md`.
+
+#### **Content Categories**
+
+1.  **Build in Public (Your Personal Voice):**
+    *   **Goal:** Share the development journey, including challenges, learnings, and upcoming features. This builds authenticity and a personal connection with the community.
+    *   **Platform:** Primarily your personal X account (in English).
+    *   **Tone:** Authentic, transparent, and personal.
+
+2.  **#IgniterJsTips (Institutional or Personal Voice):**
+    *   **Goal:** Provide high-value, concise tips and showcase "magic" features of the framework.
+    *   **Platform:** X, Threads (English); Telegram (Portuguese).
+    *   **Tone:** Informative, direct, and helpful.
+
+3.  **Announcements (Institutional Voice):**
+    *   **Goal:** Officially announce new releases, major features, or partnerships.
+    *   **Workflow:**
+        1.  **Verify Version:** Before posting, I **must** read the relevant `package.json` (e.g., `packages/core/package.json`) to get the exact version number.
+        2.  **Draft:** Create a clear, professional announcement.
+    *   **Platform:** Telegram (Portuguese), Igniter.js X account (English).
+    *   **Tone:** Professional, exciting, and clear.
+
+4.  **Community Questions (Institutional or Personal Voice):**
+    *   **Goal:** Engage the community, gather feedback, and spark conversations to guide the project roadmap.
+    *   **Platform:** X, Threads, Telegram.
+    *   **Tone:** Inquisitive, open, and community-focused.
+
+#### **General Guidelines**
+
+*   **Language:** Posts on **X and Threads must be in English**. Posts on Telegram and other community channels can be in Portuguese.
+*   **CTAs (Call to Action):** All posts should have a clear CTA. The official domain is **`https://igniterjs.com`**.
+*   **Logging:** Every published post must be logged in `.copilot/content/published-posts.md`.
+
+### 8.6. How to Suggest Comments on Existing Posts
+When you provide me with a link to a post from the community or a third party, I will follow this workflow to suggest a comment for your personal profile.
+
+1.  **Analyze Context:** I will analyze the post's content, author, and tone.
+2.  **Define Goal:** My primary goal is to provide a response that is authentic, adds value, and strengthens the project's image.
+3.  **Draft Suggestion:** I will propose a comment that is:
+    *   **Personal:** Avoids corporate or generic language.
+    *   **Engaging:** Asks a question or opens a door for further conversation.
+    *   **Appreciative:** Acknowledges the author's effort or feedback.
+
 ## 9. Autonomous Workflow Automation & Self-Improvement
 This section outlines the methodology for creating, using, and refining automated workflows through a prompt-based system. My goal is to continuously learn from my interactions and improve the efficiency of development tasks within the Igniter.js monorepo.
 

@@ -68,7 +68,5 @@
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
   },
-  "dependencies": {
-    "rss": "^1.2.2"
-  }
+  "dependencies": {}
 }
