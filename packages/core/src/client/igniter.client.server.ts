@@ -6,7 +6,7 @@ import type { IgniterRouter, ClientConfig, InferRouterCaller } from '../types';
  * @param config Client configuration
  * @returns A typed client for calling server actions
  */
-export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any, any>>(
+export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any, any, any>>(
   {
     router,
   }: ClientConfig<TRouter>

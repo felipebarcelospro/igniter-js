@@ -59,7 +59,7 @@ export class ContextBuilderProcessor {
    * @param url - Parsed URL object
    * @returns Promise resolving to the processed context
    */
-  static async build<TRouter extends IgniterRouter<any, any, any, any>>(
+  static async build<TRouter extends IgniterRouter<any, any, any, any, any>>(
     config: RequestProcessorConfig<TRouter>,
     request: Request,
     routeParams: Record<string, any>,

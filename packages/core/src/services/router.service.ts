@@ -1,7 +1,10 @@
-import type { ContextCallback, IgniterBaseConfig, IgniterControllerConfig, IgniterRouter } from "../types";
+import type { ContextCallback, DocsConfig, IgniterBaseConfig, IgniterControllerConfig, IgniterRouter } from "../types";
 import type { IgniterPlugin } from "../types/plugin.interface";
 import { RequestProcessor } from "../processors";
 import { createServerCaller } from "./caller.server.service";
+import { parseURL } from "@/utils";
+import { initializeIgniterPlayground } from "./playground.service";
+
 
 /**
  * Creates a fully-typed, production-ready router instance for the Igniter Framework.
@@ -120,14 +123,16 @@ export const createIgniterRouter = <
   TContext extends object | ContextCallback,
   TControllers extends Record<string, IgniterControllerConfig<any>>,
   TConfig extends IgniterBaseConfig,
-  TPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>> = {}
+  TPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>> = {},
+  TDocs extends DocsConfig = { openapi: undefined }
 >(params: {
   context: TContext;
   controllers: TControllers;
   config: TConfig;
   plugins?: TPlugins;
-}): IgniterRouter<TContext, TControllers, TConfig, TPlugins> => {
-  type TRouter = IgniterRouter<TContext, TControllers, TConfig, TPlugins>;
+  docs?: TDocs;
+}): IgniterRouter<TContext, TControllers, TConfig, TPlugins, TDocs> => {
+  type TRouter = IgniterRouter<TContext, TControllers, TConfig, TPlugins, TDocs>;
 
   const processor = new RequestProcessor<TRouter>({
     baseURL: params.config.baseURL,
@@ -135,6 +140,7 @@ export const createIgniterRouter = <
     controllers: params.controllers,
     plugins: params.plugins,
     context: params.context,
+    docs: params.docs,
   });
 
   return {
@@ -188,7 +194,55 @@ export const createIgniterRouter = <
      * }
      */
     handler: async (request: Request) => {
-      return processor.process(request) as Promise<Response>;
+      console.log('[Igniter Router] Incoming request:', {
+        url: request.url,
+        method: request.method,
+        headers: Object.fromEntries(request.headers)
+      });
+
+      const url = new URL(request.url);
+      const path = url.pathname;
+      const basePath = params.config.basePATH ?? '/api/v1';
+      const playgroundPath = params.docs?.playground?.route ?? '/docs'
+
+      console.log('[Igniter Router] Parsed request:', {
+        path,
+        basePath,
+        playgroundPath,
+        fullPath: parseURL(basePath, playgroundPath)
+      });
+
+      // Check if is playground
+      if(path.startsWith(parseURL(basePath, playgroundPath))) {
+        console.log('[Igniter Router] Routing to playground');
+        const playground = initializeIgniterPlayground(params.docs, basePath);
+        try {
+          const response = await playground.process(request);
+          console.log('[Igniter Router] Playground response:', {
+            status: response.status,
+            headers: Object.fromEntries(response.headers)
+          });
+          return response;
+        } catch (error) {
+          console.error('[Igniter Router] Playground error:', error);
+          throw error;
+        }
+      };
+
+      console.log('[Igniter Router] Routing to processor');
+      try {
+        const response = await processor.process(request);
+        
+        console.log('[Igniter Router] Processor response:', {
+          status: response.status,
+          headers: Object.fromEntries(response.headers)
+        });
+
+        return response;
+      } catch (error) {
+        console.error('[Igniter Router] Processor error:', error);
+        throw error;
+      }
     },
   };
 };

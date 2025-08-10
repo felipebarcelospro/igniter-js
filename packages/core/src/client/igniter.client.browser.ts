@@ -13,7 +13,7 @@ import { createUseQuery, createUseMutation, createUseRealtime } from './igniter.
  * @param config Client configuration
  * @returns A typed client for calling server actions
  */
-export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any, any>>(
+export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any, any, any>>(
   {
     basePATH,
     baseURL,
@@ -36,7 +36,7 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any,
  * Browser-side client implementation
  * Uses fetch-based approach with hooks
  */
-export function createBrowserClient<TRouter extends IgniterRouter<any, any, any, any>>(
+export function createBrowserClient<TRouter extends IgniterRouter<any, any, any, any, any>>(
   router: TRouter
 ): InferRouterCaller<TRouter> {
 

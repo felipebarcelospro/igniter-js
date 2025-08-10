@@ -1,5 +1,5 @@
 import type { IgniterControllerConfig } from "./controller.interface";
-import type { IgniterBaseConfig } from "./builder.interface";
+import type { DocsConfig, IgniterBaseConfig } from "./builder.interface";
 import type { ContextCallback } from "./context.interface";
 import type { MutationActionCallerResult, QueryActionCallerResult } from "./client.interface";
 
@@ -24,21 +24,24 @@ export type IgniterRouterConfig<
   TContext extends object | ContextCallback,
   TControllers extends Record<string, IgniterControllerConfig<any>>, // ✅ Simplificado
   TConfig extends IgniterBaseConfig,
-  TPlugins extends Record<string, any>
+  TPlugins extends Record<string, any>,
+  TDocs extends DocsConfig
 > = {
   config: TConfig;
   controllers: TControllers;
   context: TContext;  
   plugins: TPlugins;
+  docs: TDocs;
 }
 
 export type IgniterRouter<
   TContext extends object | ContextCallback,
   TControllers extends Record<string, IgniterControllerConfig<any>>, // ✅ Simplificado
   TConfig extends IgniterBaseConfig,
-  TPlugins extends Record<string, any>
+  TPlugins extends Record<string, any>,
+  TDocs extends DocsConfig
 > = {
-  config: TConfig,
+  config: TConfig & { docs?: TDocs };
   controllers: TControllers;
   handler: (request: Request) => Promise<Response>;
   $context: TContext;

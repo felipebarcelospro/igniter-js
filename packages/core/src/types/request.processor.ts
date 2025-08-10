@@ -2,16 +2,18 @@
 import type { RouterContext } from 'rou3'
 import type { IgniterAction } from './action.interface'
 import type { IgniterRouter } from './router.interface'
+import { DocsConfig } from './builder.interface'
 
-export interface RequestProcessorConfig<TConfig extends IgniterRouter<any, any, any, any>> {
+export interface RequestProcessorConfig<TConfig extends IgniterRouter<any, any, any, any, any>> {
   baseURL?: TConfig['config']['baseURL'];
   basePATH?: TConfig['config']['basePATH'];  
   controllers: TConfig['controllers'];
   context: TConfig['$context'];
   plugins?: Record<string, any>;
+  docs?: DocsConfig;
 }
 
-export interface RequestProcessorInterface<TRouter extends IgniterRouter<any, any, any, any>, TConfig extends RequestProcessorConfig<TRouter>> {
+export interface RequestProcessorInterface<TRouter extends IgniterRouter<any, any, any, any, any>, TConfig extends RequestProcessorConfig<TRouter>> {
   router: RouterContext<IgniterAction<any, any, any, any, any, any, any, any, any, any>>
 
   /**

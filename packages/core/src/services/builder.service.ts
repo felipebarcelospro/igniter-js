@@ -13,8 +13,6 @@ import type {
   MutationMethod,
   IgniterMutationOptions,
   IgniterControllerConfig,
-  IgniterAction,
-  InferProcedureContext,
   ContextCallback,
   Unwrap,
   IgniterBaseConfig,
@@ -23,6 +21,7 @@ import type {
   InferIgniterContext,
   IgniterControllerBaseAction,
   IgniterRealtimeService as IgniterRealtimeServiceType,
+  DocsConfig,
 } from "../types";
 import type { IgniterStoreAdapter } from "../types/store.interface";
 import type { IgniterLogger } from "../types/logger.interface";
@@ -70,6 +69,7 @@ export class IgniterBuilder<
   TTelemetry extends IgniterTelemetryProvider,
   TRealtime extends IgniterRealtimeServiceType<any>,
   TPlugins extends Record<string, any>,
+  TDocs extends DocsConfig,
 > {
   private _config: IgniterBuilderConfig<
     TContext,
@@ -78,7 +78,8 @@ export class IgniterBuilder<
     TLogger,
     TJobs,
     TTelemetry,
-    TPlugins
+    TPlugins,
+    TDocs
   > = {} as any;
   private _middlewares: TMiddlewares = [] as any;
   private _store: TStore;
@@ -87,8 +88,10 @@ export class IgniterBuilder<
   private _telemetry: TTelemetry;
   private _realtime: TRealtime;
   private _plugins: TPlugins = {} as TPlugins;
+  private _docs: TDocs = {} as TDocs;
 
   constructor(
+    
     config: IgniterBuilderConfig<
       TContext,
       TConfig,
@@ -96,7 +99,8 @@ export class IgniterBuilder<
       TLogger,
       TJobs,
       TTelemetry,
-      TPlugins
+      TPlugins,
+      TDocs
     > = {} as any,
     middlewares: TMiddlewares = [] as any,
     store?: TStore,
@@ -105,6 +109,7 @@ export class IgniterBuilder<
     telemetry?: TTelemetry,
     realtime?: TRealtime,
     plugins?: TPlugins,
+    docs?: TDocs,
   ) {
     this._config = config;
     this._middlewares = middlewares;
@@ -114,6 +119,7 @@ export class IgniterBuilder<
     this._telemetry = telemetry || ({} as TTelemetry);
     this._realtime = realtime || ({} as TRealtime);
     this._plugins = plugins || ({} as TPlugins);
+    this._docs = docs || ({} as TDocs);
   }
 
   /**
@@ -130,7 +136,8 @@ export class IgniterBuilder<
     TJobs,
     TTelemetry,
     TRealtime,
-    TPlugins
+    TPlugins,
+    TDocs
   > {
     return new IgniterBuilder(
       { ...this._config, context: contextFn },
@@ -141,6 +148,7 @@ export class IgniterBuilder<
       this._telemetry,
       this._realtime,
       this._plugins,
+      this._docs,
     );
   }
 
@@ -160,7 +168,8 @@ export class IgniterBuilder<
     TJobs,
     TTelemetry,
     TRealtime,
-    TPlugins
+    TPlugins,
+    TDocs
   > {
     return new IgniterBuilder(
       { ...this._config, middleware: middlewares },
@@ -171,6 +180,7 @@ export class IgniterBuilder<
       this._telemetry,
       this._realtime,
       this._plugins,
+      this._docs,
     );
   }
 
@@ -188,7 +198,8 @@ export class IgniterBuilder<
     TJobs,
     TTelemetry,
     TRealtime,
-    TPlugins
+    TPlugins,
+    TDocs
   > {
     return new IgniterBuilder(
       { ...this._config, config: routerConfig },
@@ -199,6 +210,7 @@ export class IgniterBuilder<
       this._telemetry,
       this._realtime,
       this._plugins,
+      this._docs,
     );
   }
 
@@ -216,7 +228,8 @@ export class IgniterBuilder<
     TJobs,
     TTelemetry,
     IgniterRealtimeServiceType,
-    TPlugins
+    TPlugins,
+    TDocs
   > {
     const realtime = new IgniterRealtimeService(storeAdapter);
 
@@ -229,7 +242,8 @@ export class IgniterBuilder<
       TJobs,
       TTelemetry,
       IgniterRealtimeServiceType,
-      TPlugins
+      TPlugins,
+      TDocs
     >(
       { ...this._config, store: storeAdapter, realtime },
       this._middlewares,
@@ -239,6 +253,7 @@ export class IgniterBuilder<
       this._telemetry,
       realtime,
       this._plugins,
+      this._docs,
     );
   }
 
@@ -256,7 +271,8 @@ export class IgniterBuilder<
     TJobs,
     TTelemetry,
     TRealtime,
-    TPlugins
+    TPlugins,
+    TDocs
   > {
     return new IgniterBuilder<
       TContext,
@@ -267,7 +283,8 @@ export class IgniterBuilder<
       TJobs,
       TTelemetry,
       TRealtime,
-      TPlugins
+      TPlugins,
+      TDocs
     >(
       { ...this._config, logger: loggerAdapter },
       this._middlewares,
@@ -277,6 +294,7 @@ export class IgniterBuilder<
       this._telemetry,
       this._realtime,
       this._plugins,
+      this._docs,
     );
   }
 
@@ -298,9 +316,10 @@ export class IgniterBuilder<
       TJobsProxy,
       TTelemetry,
       TRealtime,
-      TPlugins
+      TPlugins,
+      TDocs
     >(
-      // @ts-expect-error - TJobsProxy is not used [DO NOT REMOVE THIS - ITS WORKING]
+      // @ts-expect-error - Expected
       { ...this._config, jobs: jobsProxy },
       this._middlewares,
       this._store,
@@ -309,6 +328,7 @@ export class IgniterBuilder<
       this._telemetry,
       this._realtime,
       this._plugins,
+      this._docs,
     );
   }
 
@@ -327,7 +347,8 @@ export class IgniterBuilder<
     TJobs,
     TTelemetryProvider,
     TRealtime,
-    TPlugins
+    TPlugins,
+    TDocs
   > {
     return new IgniterBuilder<
       TContext,
@@ -338,9 +359,10 @@ export class IgniterBuilder<
       TJobs,
       TTelemetryProvider,
       TRealtime,
-      TPlugins
+      TPlugins,
+      TDocs
     >(
-      // @ts-expect-error - TTelemetryProvider is not used
+      // @ts-expect-error - Expected
       { ...this._config, telemetry: telemetryProvider },
       this._middlewares,
       this._store,
@@ -349,6 +371,7 @@ export class IgniterBuilder<
       telemetryProvider,
       this._realtime,
       this._plugins,
+      this._docs,
     );
   }
 
@@ -396,7 +419,8 @@ export class IgniterBuilder<
     TJobs,
     TTelemetry,
     TRealtime,
-    TNewPlugins
+    TNewPlugins,
+    TDocs
   > {
     return new IgniterBuilder<
       TContext,
@@ -407,7 +431,8 @@ export class IgniterBuilder<
       TJobs,
       TTelemetry,
       TRealtime,
-      TNewPlugins
+      TNewPlugins,
+      TDocs
     >(
       // Store plugins in config for RequestProcessor access
       { ...this._config, plugins: pluginsRecord },
@@ -418,6 +443,34 @@ export class IgniterBuilder<
       this._telemetry,
       this._realtime,
       pluginsRecord,
+      this._docs,
+    );
+  }
+
+  docs<TNewDocs extends DocsConfig>(
+    docsConfig: TNewDocs,
+  ): IgniterBuilder<
+    TContext,
+    TConfig,
+    TMiddlewares,
+    TStore,
+    TLogger,
+    TJobs,
+    TTelemetry,
+    TRealtime,
+    TPlugins,
+    TNewDocs
+  > {
+    return new IgniterBuilder(
+      { ...this._config, docs: docsConfig },
+      this._middlewares,
+      this._store,
+      this._logger,
+      this._jobs,
+      this._telemetry,
+      this._realtime,
+      this._plugins,
+      docsConfig,
     );
   }
 
@@ -582,6 +635,7 @@ export class IgniterBuilder<
           context: (config.context || this._config.context) as TRouterContext,
           config: this._config.config || ({} as TConfig),
           plugins: this._plugins,
+          docs: this._docs,
         });
       },
 
@@ -610,7 +664,8 @@ export class IgniterBuilder<
               TJobs,
               TTelemetry,
               TRealtime,
-              TPlugins
+              TPlugins,
+              TDocs
             >,
           ) =>
             builder.context(contextFn),
@@ -632,7 +687,8 @@ export class IgniterBuilder<
               TJobs,
               TTelemetry,
               TRealtime,
-              TPlugins
+              TPlugins,
+              TDocs
             >,
           ) =>
             builder.middleware([authMiddleware] as const),
@@ -657,7 +713,8 @@ export class IgniterBuilder<
               TJobs,
               TTelemetry,
               TRealtime,
-              TPlugins
+              TPlugins,
+              TDocs
             >,
           ) =>
             builder.middleware(middlewares),
@@ -679,7 +736,8 @@ export class IgniterBuilder<
               TJobs,
               TTelemetry,
               TRealtime,
-              TPlugins
+              TPlugins,
+              TDocs
             >,
           ) =>
             builder.config(config as TConfig),
@@ -700,7 +758,8 @@ export class IgniterBuilder<
                   TJobs,
                   TTelemetry,
                   TRealtime,
-                  TPlugins
+                  TPlugins,
+                  TDocs
                 >,
               ) => IgniterBuilder<
                 TContext,
@@ -711,7 +770,8 @@ export class IgniterBuilder<
                 TJobs,
                 TTelemetry,
                 TRealtime,
-                TPlugins
+                TPlugins,
+                TDocs
               >
             >
           ) =>
@@ -725,7 +785,8 @@ export class IgniterBuilder<
               TJobs,
               TTelemetry,
               TRealtime,
-              TPlugins
+              TPlugins,
+              TDocs
             >,
           ) =>
             configs.reduce((acc, config) => config(acc), builder),

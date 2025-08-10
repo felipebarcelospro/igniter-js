@@ -42,7 +42,7 @@ function normalizeResponseData<T>(response: any): { data: T | null; error: any |
  * @returns A React hook for querying data
  */
 export const createUseQueryClient = <
-  TRouter extends IgniterRouter<any, any, any, any>,
+  TRouter extends IgniterRouter<any, any, any, any, any>,
 >() => {
   return () => {
     const { register, unregister, invalidate } = useIgniterQueryClient();

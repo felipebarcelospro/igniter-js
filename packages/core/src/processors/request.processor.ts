@@ -55,7 +55,7 @@ import { IgniterPluginManager } from "../services/plugin.service";
  * ```
  */
 export class RequestProcessor<
-  TRouter extends IgniterRouter<any, any, any, any>,
+  TRouter extends IgniterRouter<any, any, any, any, any>,
   TConfig extends
     RequestProcessorConfig<TRouter> = RequestProcessorConfig<TRouter>,
 > implements RequestProcessorInterface<TRouter, TConfig>
@@ -101,6 +101,8 @@ export class RequestProcessor<
     this.logger.info("RequestProcessor instantiated. Initializing asynchronously...");
     this.initializeAsync();
   }
+
+  
 
   /**
    * Async initialization for plugins and routes
