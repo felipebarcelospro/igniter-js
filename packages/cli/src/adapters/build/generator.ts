@@ -46,52 +46,7 @@ function getFileSize(filePath: string): string {
   }
 }
 
-/**
- * Extracts a clean schema from router for client-side usage.
- * Removes all server-side logic (handlers, middleware, adapters).
- */
-function extractRouterSchema(router: IgniterRouter): { schema: IgniterRouterSchema, stats: { controllers: number, actions: number } } {
-  const controllersSchema: Record<string, any> = {};
-  let totalActions = 0;
-
-  for (const [controllerName, controller] of Object.entries(router.controllers)) {
-    const actionsSchema: Record<string, any> = {};
-
-    // Correctly access actions from controller
-    if (controller && controller.actions) {
-      for (const [actionName, action] of Object.entries(controller.actions)) {
-        // Extract only safe properties
-        actionsSchema[actionName] = {
-          name: (action as any)?.name || actionName,
-          description: (action as any)?.description || '',
-          path: (action as any)?.path || '',
-          method: (action as any)?.method || 'GET',
-        };
-        totalActions++;
-      }
-    }
-
-    controllersSchema[controllerName] = {
-      name: (controller as any)?.name || controllerName,
-      description: (controller as any)?.description || '',
-      path: (controller as any)?.path || '',
-      actions: actionsSchema,
-    };
-  }
-
-  // @ts-expect-error - Expected
-  const schema: IgniterRouterSchema = {
-    controllers: controllersSchema,
-  };
-
-  return {
-    schema,
-    stats: {
-      controllers: Object.keys(controllersSchema).length,
-      actions: totalActions
-    }
-  };
-}
+import { IntrospectedRouter, introspectRouter } from './introspector';
 
 /**
  * Generate client files from Igniter router
@@ -121,7 +76,7 @@ export async function generateSchemaFromRouter(
     }
 
     // Extract schema (always needed)
-    const { schema, stats } = extractRouterSchema(router)
+    const { schema, stats } = introspectRouter(router)
 
     if (isInteractiveMode) {
       logger.success(`Schema extracted - ${stats.controllers} controllers, ${stats.actions} actions`)
@@ -224,7 +179,7 @@ export async function generateSchemaFromRouter(
  * Generate schema TypeScript file
  */
 async function generateSchemaFile(
-  schema: IgniterRouterSchema,
+  schema: IntrospectedRouter,
   outputDir: string,
   config: IgniterBuildConfig
 ): Promise<string> {
@@ -245,7 +200,7 @@ export type AppRouterSchemaType = typeof AppRouterSchema
  * Generate client TypeScript file
  */
 async function generateClientFile(
-  schema: IgniterRouterSchema,
+  schema: IntrospectedRouter,
   outputDir: string,
   config: IgniterBuildConfig
 ): Promise<string> {

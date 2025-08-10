@@ -23,6 +23,7 @@ import {
   handleGenerateController,
   handleGenerateProcedure
 } from './adapters/scaffold';
+import { IgniterRouter } from "@igniter-js/core";
 
 const program = new Command();
 
@@ -113,6 +114,8 @@ program
   .option("--cmd <command>", "Custom command to start dev server")
   .option("--no-framework", "Disable framework dev server (Igniter only)")
   .option("--no-interactive", "Disable interactive mode (use regular concurrent mode)")
+  .option("--docs", "Enable automatic OpenAPI documentation generation")
+  .option("--docs-output <dir>", "Output directory for OpenAPI docs", "./src/docs")
   .action(async (options) => {
     const detectedFramework = detectFramework();
     const framework = options.framework ? (isFrameworkSupported(options.framework) ? options.framework : "generic") : detectedFramework;
@@ -142,9 +145,10 @@ program
         });
       }
     }
+    const docsFlags = options.docs ? ` --docs --docs-output ${options.docsOutput}` : '';
     processes.push({
       name: "Igniter",
-      command: `igniter generate schema --watch --framework ${framework} --output ${options.output}${options.debug ? ' --debug' : ''}`,
+      command: `igniter generate schema --watch --framework ${framework} --output ${options.output}${options.debug ? ' --debug' : ''}${docsFlags}`,
       color: "blue",
       cwd: process.cwd()
     });
@@ -168,6 +172,8 @@ generate
   .option("--output <dir>", "Output directory", "src/")
   .option("--debug", "Enable debug mode")
   .option("--watch", "Watch for changes and regenerate automatically")
+  .option("--docs", "Enable automatic OpenAPI documentation generation")
+  .option("--docs-output <dir>", "Output directory for OpenAPI docs", "./src/docs")
   .action(async (options) => {
     const startTime = performance.now();
     const detectedFramework = detectFramework();
@@ -182,6 +188,8 @@ generate
       outputDir: options.output,
       debug: options.debug,
       controllerPatterns: ["**/*.controller.{ts,js}"],
+      generateDocs: options.docs,
+      docsOutputDir: options.docsOutput,
     });
     watcherSpinner.success("Generator loaded");
     if (options.watch) {
@@ -192,6 +200,84 @@ generate
       logger.success(`Generation complete in ${duration}s`);
       logger.groupEnd();
       process.exit(0);
+    }
+  });
+
+generate
+  .command("docs")
+  .description("Generate OpenAPI specification and/or interactive playground")
+  .option("--output <dir>", "Output directory for the OpenAPI spec", "./src")
+  .option("--ui", "Generate a self-contained HTML file with Scalar UI")
+  .action(async (options) => {
+    const docsLogger = createChildLogger({ component: 'generate-docs-command' });
+    try {
+      docsLogger.info('Starting OpenAPI documentation generation...');
+      const { loadRouter, introspectRouter } = await import("./adapters/build/introspector");
+      const { OpenAPIGenerator } = await import("./adapters/docs/openapi-generator");
+
+      const possibleRouterPaths = [
+        'src/igniter.router.ts',
+        'src/igniter.router.js',
+        'src/router.ts',
+        'src/router.js',
+        'igniter.router.ts',
+        'igniter.router.js',
+        'router.ts',
+        'router.js'
+      ];
+
+      let router: IgniterRouter<any, any, any, any, any> | null = null;
+      for (const routerPath of possibleRouterPaths) {
+        if (fs.existsSync(routerPath)) {
+          router = await loadRouter(routerPath);
+          if (router) {
+            docsLogger.info(`Found router at: ${routerPath}`);
+            break;
+          }
+        }
+      }
+
+      if (!router) {
+        docsLogger.error('No Igniter router found in your project. Please ensure you have a router file (e.g., src/igniter.router.ts).');
+        process.exit(1);
+      }
+
+      const introspected = introspectRouter(router);
+      const generator = new OpenAPIGenerator(introspected.schema.docs || {});
+
+      const openApiSpec = generator.generate(introspected.schema);
+
+      const outputDir = path.resolve(options.output, 'docs');
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+      const outputPath = path.join(outputDir, 'openapi.json');
+
+      fs.writeFileSync(outputPath, JSON.stringify(openApiSpec, null, 2), 'utf8');
+      docsLogger.success(`OpenAPI specification generated at ${outputPath}`);
+
+      if (options.ui) {
+        const scalarHtml = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>API Reference</title>
+  </head>
+  <body>
+    <script id="api-reference" data-url="./openapi.json"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  </body>
+</html>`;
+        const uiOutputPath = path.join(outputDir, 'index.html');
+        fs.writeFileSync(uiOutputPath, scalarHtml, 'utf8');
+        docsLogger.success(`Scalar UI generated at ${uiOutputPath}`);
+      }
+
+    } catch (error) {
+      docsLogger.error('Failed to generate OpenAPI documentation:');
+      console.error(error)
+      process.exit(1);
     }
   });
 

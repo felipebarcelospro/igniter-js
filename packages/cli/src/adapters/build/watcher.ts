@@ -1,10 +1,11 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import { pathToFileURL } from 'url'
+import { loadRouter, introspectRouter } from './introspector';
 import { generateSchemaFromRouter } from './generator'
 import { createChildLogger } from '../logger'
 import { createDetachedSpinner } from '@/lib/spinner'
 import chokidar from 'chokidar';
+import { OpenAPIGenerator } from '../docs/openapi-generator';
 
 export type IgniterBuildConfig = {
   framework?: 'nextjs' | 'vite' | 'webpack' | 'generic'
@@ -14,6 +15,8 @@ export type IgniterBuildConfig = {
   optimizeClientBundle?: boolean
   hotReload?: boolean
   debug?: boolean
+  generateDocs?: boolean
+  docsOutputDir?: string
 }
 
 /**
@@ -38,6 +41,8 @@ export class IgniterWatcher {
       hotReload: true,
       controllerPatterns: ['**/*.controller.{ts,js}'],
       debug: false,
+      generateDocs: false,
+      docsOutputDir: './src/docs',
       ...config
     }
 
@@ -121,479 +126,7 @@ export class IgniterWatcher {
     }
   }
 
-  /**
-   * Load router from file with simplified approach
-   */
-  private async loadRouter(routerPath: string): Promise<any> {
-    const logger = createChildLogger({ component: 'router-loader' })
-    const fullPath = path.resolve(process.cwd(), routerPath)
-
-    logger.debug('Loading router', { path: routerPath })
-
-    try {
-      // const spinner = logger.spinner('Loading router with TypeScript support...')
-      // spinner.start()
-
-      // Try using tsx or ts-node if available
-      const module = await this.loadWithTypeScriptSupport(fullPath)
-
-      if (module) {
-        // Check if it's already a router object (TSX returns direct router data)
-        if (module?.config && module?.controllers) {
-          const controllerCount = Object.keys(module.controllers || {}).length
-          // spinner.success(`Router loaded successfully - ${controllerCount} controllers`)
-          return module
-        }
-
-                        // Otherwise look for exported router
-                const router = module?.AppRouter || module?.default?.AppRouter || module?.default || module?.router
-
-        if (router && typeof router === 'object') {
-          const controllerCount = Object.keys(router.controllers || {}).length
-          // spinner.success(`Router loaded successfully - ${controllerCount} controllers`)
-          return router
-        } else {
-          // spinner.warn('Module loaded but no router found')
-          logger.debug('Available exports', {
-            exports: Object.keys(module || {})
-          })
-        }
-      } else {
-        // spinner.warn('TypeScript loading failed, trying fallback...')
-      }
-
-      // Fallback: Try with import resolution
-      const fallbackSpinner = createDetachedSpinner('Trying fallback loading method...')
-      fallbackSpinner.start()
-
-      const fallbackModule = await this.loadRouterWithIndexResolution(fullPath)
-
-      if (fallbackModule) {
-        // Check if it's already a router object (TSX returns direct router data)
-        if (fallbackModule?.config && fallbackModule?.controllers) {
-          const controllerCount = Object.keys(fallbackModule.controllers || {}).length
-          fallbackSpinner.success(`Router loaded successfully - ${controllerCount} controllers`)
-          return fallbackModule
-        }
-
-        // Otherwise look for exported router
-        const router = fallbackModule?.AppRouter || fallbackModule?.default?.AppRouter || fallbackModule?.default || fallbackModule?.router
-
-        if (router && typeof router === 'object') {
-          const controllerCount = Object.keys(router.controllers || {}).length
-          fallbackSpinner.success(`Router loaded successfully - ${controllerCount} controllers`)
-          return router
-        }
-      }
-
-      fallbackSpinner.error('Could not load router')
-
-    } catch (error) {
-      logger.error('Failed to load router', { path: routerPath }, error)
-    }
-
-    return null
-  }
-
-  /**
-   * Load TypeScript files using TSX runtime loader
-   * This is the NEW robust approach that replaces the problematic transpilation
-   */
-  private async loadWithTypeScriptSupport(filePath: string): Promise<any> {
-    const logger = createChildLogger({ component: 'tsx-loader' })
-
-    // Method 1: Try to find and use compiled JS version first (faster)
-    const jsPath = filePath.replace(/\.ts$/, '.js')
-    if (fs.existsSync(jsPath)) {
-      try {
-        logger.debug('Using compiled JS version')
-
-        delete require.cache[jsPath]
-        const module = require(jsPath)
-
-        return module
-      } catch (error) {
-        logger.debug('Compiled JS loading failed, trying TypeScript...')
-      }
-    }
-
-    // Method 2: Use TSX runtime loader (MAIN STRATEGY)
-    if (filePath.endsWith('.ts')) {
-      try {
-        logger.debug('Using TSX runtime loader')
-
-        const { spawn } = require('child_process')
-
-        // First, check if TSX is available
-        const tsxCheckResult = await new Promise<boolean>((resolve) => {
-          const checkChild = spawn('npx', ['tsx', '--version'], {
-            stdio: 'pipe',
-            cwd: process.cwd()
-          })
-
-          checkChild.on('close', (code: number | null) => {
-            resolve(code === 0)
-          })
-
-          checkChild.on('error', () => {
-            resolve(false)
-          })
-
-          setTimeout(() => {
-            checkChild.kill()
-            resolve(false)
-          }, 5000)
-        })
-
-        if (!tsxCheckResult) {
-          throw new Error('TSX not available')
-        }
-
-        const result = await new Promise<any>((resolve, reject) => {
-          // Create a TSX script that loads the module and extracts router info
-          const tsxScript = `
-            async function loadRouter() {
-              try {
-                const module = await import('${pathToFileURL(filePath).href}');
-                const router = module?.AppRouter || module?.default?.AppRouter || module?.default || module?.router;
-
-                if (router && typeof router === 'object') {
-                  // Extract safe metadata for CLI use
-                  const safeRouter = {
-                    config: {
-                      baseURL: router.config?.baseURL || '',
-                      basePATH: router.config?.basePATH || ''
-                    },
-                    controllers: {}
-                  };
-
-                  // Extract controller metadata (no handlers/functions)
-                  if (router.controllers && typeof router.controllers === 'object') {
-                    for (const [controllerName, controller] of Object.entries(router.controllers)) {
-                      if (controller && typeof controller === 'object' && (controller as any).actions) {
-                        const safeActions: Record<string, any> = {};
-
-                        for (const [actionName, action] of Object.entries((controller as any).actions)) {
-                          if (action && typeof action === 'object') {
-                            // Extract only metadata, no functions
-                            safeActions[actionName] = {
-                              path: (action as any).path || '',
-                              method: (action as any).method || 'GET',
-                              description: (action as any).description,
-                              // Keep type inference data if available
-                              $Infer: (action as any).$Infer
-                            };
-                          }
-                        }
-
-                        safeRouter.controllers[controllerName] = {
-                          name: (controller as any).name || controllerName,
-                          path: (controller as any).path || '',
-                          actions: safeActions
-                        };
-                      }
-                    }
-                  }
-
-                  console.log('__ROUTER_SUCCESS__' + JSON.stringify(safeRouter));
-                  process.exit(0); // Force exit after success
-                } else {
-                  console.log('__ROUTER_ERROR__No router found in module');
-                  process.exit(1); // Force exit after error
-                }
-              } catch (error) {
-                console.log('__ROUTER_ERROR__' + error.message);
-                process.exit(1); // Force exit after error
-              }
-            }
-
-            loadRouter();
-          `;
-
-          const child = spawn('npx', ['tsx', '-e', tsxScript], {
-            stdio: 'pipe',
-            cwd: process.cwd(),
-            env: { ...process.env, NODE_NO_WARNINGS: '1' }
-          })
-
-          let output = ''
-          let errorOutput = ''
-
-          child.stdout?.on('data', (data: Buffer) => {
-            output += data.toString()
-          })
-
-          child.stderr?.on('data', (data: Buffer) => {
-            errorOutput += data.toString()
-          })
-
-          child.on('close', (code: number | null) => {
-            if (output.includes('__ROUTER_SUCCESS__')) {
-              const resultLine = output.split('\n').find(line => line.includes('__ROUTER_SUCCESS__'))
-              if (resultLine) {
-                try {
-                  const routerData = JSON.parse(resultLine.replace('__ROUTER_SUCCESS__', ''))
-                  resolve(routerData)
-                } catch (e: any) {
-                  reject(new Error('Failed to parse router data: ' + e.message))
-                }
-              } else {
-                reject(new Error('Router success marker found but no data'))
-              }
-            } else if (output.includes('__ROUTER_ERROR__')) {
-              const errorLine = output.split('\n').find(line => line.includes('__ROUTER_ERROR__'))
-              const errorMsg = errorLine ? errorLine.replace('__ROUTER_ERROR__', '') : 'Unknown error'
-              reject(new Error('Router loading failed: ' + errorMsg))
-            } else {
-              reject(new Error(`TSX execution failed with code ${code}: ${errorOutput || 'No output'}`))
-            }
-          })
-
-          child.on('error', (error: any) => {
-            reject(new Error('Failed to spawn TSX process: ' + error.message))
-          })
-
-          setTimeout(() => {
-            child.kill()
-            reject(new Error('Timeout loading TypeScript file with TSX'))
-          }, 30000) // Increased timeout for TSX
-        })
-
-        return result
-
-      } catch (error) {
-        logger.debug('TSX runtime loader failed', {}, error)
-        // Don't throw, let it fall back to the old method
-      }
-    }
-
-    return null
-  }
-
-  /**
-   * Load router by resolving directory imports to index files
-   */
-  private async loadRouterWithIndexResolution(routerPath: string): Promise<any> {
-    const logger = createChildLogger({ component: 'index-resolver' })
-
-    try {
-      // Read the router file content
-      const routerContent = fs.readFileSync(routerPath, 'utf8')
-
-      // Find all imports that might need resolution
-      const importRegex = /from\s+['\"]([^'\"]+)['\"]/g
-      let resolvedContent = routerContent
-
-      const matches = Array.from(routerContent.matchAll(importRegex))
-
-      for (const [fullMatch, importPath] of matches) {
-        // Skip external packages (but allow relative paths and @scoped packages within project)
-        if (!importPath.startsWith('.') && !importPath.startsWith('@')) {
-          continue
-        }
-
-        const basePath = path.dirname(routerPath)
-        let resolvedPath: string
-
-        // Handle @scoped paths by resolving from project root
-        if (importPath.startsWith('@/')) {
-          // @/something maps to src/something
-          resolvedPath = path.resolve(process.cwd(), 'src', importPath.substring(2))
-        } else if (importPath.startsWith('./')) {
-          // Relative import from current directory
-          resolvedPath = path.resolve(basePath, importPath)
-        } else {
-          // Direct path relative to current directory
-          resolvedPath = path.resolve(basePath, importPath)
-        }
-
-        // Check if it's a directory import or needs extension
-        let finalPath = importPath
-
-        // If path doesn't have extension, try to find the actual file
-        if (!importPath.match(/\\.(js|ts|tsx|jsx)$/)) {
-          // Try as file with extensions
-          const possibleFiles = [
-            resolvedPath + '.ts',
-            resolvedPath + '.tsx',
-            resolvedPath + '.js',
-            resolvedPath + '.jsx'
-          ]
-
-          let fileFound = false
-          for (const filePath of possibleFiles) {
-            if (fs.existsSync(filePath)) {
-              const ext = path.extname(filePath)
-              finalPath = importPath + ext
-              fileFound = true
-              break
-            }
-          }
-
-          // If no file found, try as directory with index
-          if (!fileFound) {
-            const possibleIndexFiles = [
-              path.join(resolvedPath, 'index.ts'),
-              path.join(resolvedPath, 'index.tsx'),
-              path.join(resolvedPath, 'index.js'),
-              path.join(resolvedPath, 'index.jsx')
-            ]
-
-            for (const indexFile of possibleIndexFiles) {
-              if (fs.existsSync(indexFile)) {
-                const ext = path.extname(indexFile)
-                finalPath = importPath + '/index' + ext
-                break
-              }
-            }
-          }
-        }
-
-        // Replace the import in the content - use absolute path for safety
-        const absolutePath = path.resolve(basePath, finalPath)
-        if (fs.existsSync(absolutePath)) {
-          // Use file URL for absolute imports
-          const fileUrl = pathToFileURL(absolutePath).href
-          resolvedContent = resolvedContent.replace(fullMatch, `from '${fileUrl}'`)
-        } else {
-          // Fallback to relative path
-          resolvedContent = resolvedContent.replace(fullMatch, `from '${finalPath}'`)
-        }
-      }
-
-      // Save resolved content to temporary file and load with TSX
-      const tempFileName = `igniter-temp-${Date.now()}.ts`
-      const tempFilePath = path.join(process.cwd(), tempFileName)
-
-      try {
-        // Write the resolved TypeScript content (no conversion needed!)
-        fs.writeFileSync(tempFilePath, resolvedContent)
-
-        logger.debug('Loading resolved module via TSX')
-
-        // Use TSX to load the resolved TypeScript file
-        const { spawn } = require('child_process')
-
-        const result = await new Promise<any>((resolve, reject) => {
-          const tsxScript = `
-            async function loadResolvedRouter() {
-              try {
-                const module = await import('${pathToFileURL(tempFilePath).href}');
-                const router = module?.AppRouter || module?.default?.AppRouter || module?.default || module?.router;
-
-                if (router && typeof router === 'object') {
-                  // Extract safe metadata
-                  const safeRouter = {
-                    config: {
-                      baseURL: router.config?.baseURL || '',
-                      basePATH: router.config?.basePATH || ''
-                    },
-                    controllers: {}
-                  };
-
-                  if (router.controllers && typeof router.controllers === 'object') {
-                    for (const [controllerName, controller] of Object.entries(router.controllers)) {
-                      if (controller && typeof controller === 'object' && (controller as any).actions) {
-                        const safeActions: Record<string, any> = {};
-
-                        for (const [actionName, action] of Object.entries((controller as any).actions)) {
-                          if (action && typeof action === 'object') {
-                            safeActions[actionName] = {
-                              path: (action as any).path || '',
-                              method: (action as any).method || 'GET',
-                              description: (action as any).description,
-                              $Infer: (action as any).$Infer
-                            };
-                          }
-                        }
-
-                        safeRouter.controllers[controllerName] = {
-                          name: (controller as any).name || controllerName,
-                          path: (controller as any).path || '',
-                          actions: safeActions
-                        };
-                      }
-                    }
-                  }
-
-                  console.log('__ROUTER_SUCCESS__' + JSON.stringify(safeRouter));
-                  process.exit(0); // Force exit after success
-                } else {
-                  console.log('__ROUTER_ERROR__No router found in resolved module');
-                  process.exit(1); // Force exit after error
-                }
-              } catch (error) {
-                console.log('__ROUTER_ERROR__' + error.message);
-                process.exit(1); // Force exit after error
-              }
-            }
-
-            loadResolvedRouter();
-          `;
-
-          const child = spawn('npx', ['tsx', '-e', tsxScript], {
-            stdio: 'pipe',
-            cwd: process.cwd(),
-            env: { ...process.env, NODE_NO_WARNINGS: '1' }
-          })
-
-          let output = ''
-          let errorOutput = ''
-
-          child.stdout?.on('data', (data: Buffer) => {
-            output += data.toString()
-          })
-
-          child.stderr?.on('data', (data: Buffer) => {
-            errorOutput += data.toString()
-          })
-
-          child.on('close', (code: number | null) => {
-            if (output.includes('__ROUTER_SUCCESS__')) {
-              const resultLine = output.split('\n').find(line => line.includes('__ROUTER_SUCCESS__'))
-              if (resultLine) {
-                try {
-                  const routerData = JSON.parse(resultLine.replace('__ROUTER_SUCCESS__', ''))
-                  resolve(routerData)
-                } catch (e: any) {
-                  reject(new Error('Failed to parse resolved router data: ' + e.message))
-                }
-              } else {
-                reject(new Error('Router success marker found but no data'))
-              }
-            } else if (output.includes('__ROUTER_ERROR__')) {
-              const errorLine = output.split('\n').find(line => line.includes('__ROUTER_ERROR__'))
-              const errorMsg = errorLine ? errorLine.replace('__ROUTER_ERROR__', '') : 'Unknown error'
-              reject(new Error('Router loading failed: ' + errorMsg))
-            } else {
-              reject(new Error(`TSX execution failed with code ${code}: ${errorOutput || 'No output'}`))
-            }
-          })
-
-          child.on('error', (error: any) => {
-            reject(new Error('Failed to spawn TSX process for resolved module: ' + error.message))
-          })
-
-          setTimeout(() => {
-            child.kill()
-            reject(new Error('Timeout loading resolved TypeScript file with TSX'))
-          }, 30000)
-        })
-
-        return result
-
-      } finally {
-        // Clean up temporary file
-        if (fs.existsSync(tempFilePath)) {
-          fs.unlinkSync(tempFilePath)
-        }
-      }
-
-    } catch (error) {
-      logger.error('Index resolution failed', { path: routerPath }, error)
-      throw error
-    }
-  }
+  
 
   /**
    * Start watching controller files
@@ -731,7 +264,7 @@ export class IgniterWatcher {
 
       for (const routerPath of possibleRouterPaths) {
         if (fs.existsSync(routerPath)) {
-          router = await this.loadRouter(routerPath)
+          router = await loadRouter(routerPath)
           if (router) {
             break
           } else {
@@ -750,11 +283,41 @@ export class IgniterWatcher {
       // Generate client files (the generator will handle its own logging)
       await generateSchemaFromRouter(router, this.config)
 
+      // Generate OpenAPI docs if enabled
+      if (this.config.generateDocs) {
+        await this.generateOpenAPISpec(router)
+      }
+
     } catch (error) {
       this.logger.error('Schema generation failed', {}, error)
     } finally {
       this.isGenerating = false
       // Don't resume spinner here - let handleFileChange or start() handle it
+    }
+  }
+
+  /**
+   * Generate OpenAPI specification from router
+   */
+  private async generateOpenAPISpec(router: any) {
+    try {
+      this.logger.info('Generating OpenAPI specification...')
+      
+      const introspected = introspectRouter(router)
+      const generator = new OpenAPIGenerator(introspected.schema.docs || {})
+      const openApiSpec = generator.generate(introspected.schema)
+
+      const outputDir = path.resolve(this.config.docsOutputDir!)
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true })
+      }
+      
+      const outputPath = path.join(outputDir, 'openapi.json')
+      fs.writeFileSync(outputPath, JSON.stringify(openApiSpec, null, 2), 'utf8')
+      
+      this.logger.success(`OpenAPI specification updated at ${outputPath}`)
+    } catch (error) {
+      this.logger.error('Error generating OpenAPI specification:', error)
     }
   }
 }
