@@ -2,7 +2,6 @@ import * as React from "react"
 
 import { ArrowRight, Code2, Github, Twitter, Youtube } from "lucide-react"
 import { FileText } from "lucide-react"
-import { Badge } from "../components/ui/badge"
 import { Button } from "../components/ui/button"
 import { Card, CardContent } from "../components/ui/card"
 
@@ -10,55 +9,38 @@ export function App() {
   return (
     <div className="min-h-screen flex flex-col pt-12 space-y-12">
       <header className="max-w-2xl w-full space-y-8 mx-auto my-auto">
-        <div className="space-y-6 text-center">
-          <Badge variant="outline" className="mx-auto rounded-full px-3 py-1 text-sm font-medium bg-cyan-500/10 text-cyan-500 border-cyan-300/10/20" aria-label="Beta version">
-            BETA
-          </Badge>
+        <div className="">
+          <img src="https://igniterjs.com/logo-light.svg" className="h-8 mb-8" alt="" />
 
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-            Welcome to <br />Igniter.js
-          </h1>
-          <p className="text-base sm:text-lg text-muted-foreground max-w-md mx-auto leading-relaxed">
-            Igniter is a modern, type-safe HTTP framework designed to streamline the development of scalable TypeScript applications.
-          </p>
+          <div className="font-mono space-y-1">
+            <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
+              1. Get started by editing the `app/Home.tsx` file.
+            </p>
 
-          <div className="flex items-center justify-center gap-4">
-            <Button variant="outline" size="icon" asChild>
-              <a href="https://github.com/felipebarcelospro/igniter-js" target="_blank" rel="noopener noreferrer">
-                <Github className="h-4 w-4" />
-                <span className="sr-only">GitHub Repository</span>
-              </a>
-            </Button>
-            <Button variant="outline" size="icon" asChild>
-              <a href="https://twitter.com/feldbarcelospro" target="_blank" rel="noopener noreferrer">
-                <Twitter className="h-4 w-4" />
-                <span className="sr-only">X (Twitter) Profile</span>
-              </a>
-            </Button>
-            <Button variant="outline" size="icon" asChild>
-              <a href="https://youtube.com/@vibedev.official" target="_blank" rel="noopener noreferrer">
-                <Youtube className="h-4 w-4" />
-                <span className="sr-only">YouTube Channel</span>
-              </a>
-            </Button>
+            <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
+              2. Save and see your changes on realtime.
+            </p>
+
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              3. Open the browser and navigate to `http://localhost:3000/api/v1/docs`.
+            </p>
           </div>
         </div>
-
         <section className="grid gap-4 sm:grid-cols-2" aria-label="Resources">
           <article>
-            <Card className="rounded-2xl shadow-sm hover:shadow-md transition-shadow bg-card">
+            <Card className="shadow-sm hover:shadow-md transition-shadow bg-transparent">
               <CardContent className="space-y-2">
-                <span className="h-10 w-10 rounded-lg border border-cyan-300/10 bg-cyan-500/10 flex items-center justify-center mb-4">
-                  <FileText className="w-5 h-5 text-cyan-500" aria-hidden="true" />
+                <span className="h-10 w-10 border flex items-center justify-center mb-4 rounded-md">
+                  <FileText className="size-3 text-muted-foreground" aria-hidden="true" />
                 </span>
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold">Documentation</h3>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Learn more about Igniter Framework features and API.
+                  Explore our documentation covering Igniter.js features, API references, and tutorials.
                 </p>
-                <Button variant="outline" className="w-full !mt-8 rounded-xl" asChild>
-                  <a href="https://github.com/felipebarcelospro/igniter-js">
+                <Button variant="outline" className="w-full !mt-8" asChild>
+                  <a href="https://igniterjs.com">
                     Read Docs
                     <ArrowRight className="w-4 h-4 ml-auto" aria-hidden="true" />
                   </a>
@@ -68,19 +50,19 @@ export function App() {
           </article>
 
           <article>
-            <Card className="rounded-2xl shadow-sm hover:shadow-md transition-shadow bg-card">
+            <Card className="shadow-sm hover:shadow-md transition-shadow bg-transparent">
               <CardContent className="space-y-2">
-                <span className="h-10 w-10 rounded-lg border border-cyan-300/10 bg-cyan-500/10 flex items-center justify-center mb-4">
-                  <Code2 className="w-5 h-5 text-cyan-500" aria-hidden="true" />
+                <span className="h-10 w-10 border flex items-center justify-center mb-4 rounded-md">
+                  <Code2 className="size-3 text-muted-foreground" aria-hidden="true" />
                 </span>
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold">Igniter CLI</h3>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Generate code and manage your Igniter projects.
+                  Enhance your development workflow with our CLI tool. Quickly scaffold projects and automate common tasks with commands.
                 </p>
-                <Button variant="outline" className="w-full !mt-8 rounded-xl" asChild>
-                  <a href="https://github.com/felipebarcelospro/igniter-cli">
+                <Button variant="outline" className="w-full !mt-8" asChild>
+                  <a href="https://igniterjs.com/docs/cli-and-tooling">
                     Get Started
                     <ArrowRight className="w-4 h-4 ml-auto" aria-hidden="true" />
                   </a>
@@ -89,26 +71,39 @@ export function App() {
             </Card>
           </article>
         </section>
-
-
       </header>
 
-      <footer className="border-t py-6 text-center w-full text-sm text-muted-foreground">
+      <footer className="border-t py-2 bg-black/5 text-center w-full text-sm text-muted-foreground">
         <div className="container max-w-2xl mx-auto flex items-center justify-between">
           <nav aria-label="Footer Links">
-            <p>
-              Built by{" "}
+            <p className="text-xs">
+              Powered by
               <a
-                href="https://x.com/feldbarcelospro"
+                href="https://igniterjs.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-medium underline underline-offset-4 hover:text-primary transition-colors"
-                aria-label="Visit shadcn/ui website"
+                className="font-medium underline underline-offset-4 hover:text-primary transition-colors ml-1"
+                aria-label="Visit Igniter.js website"
               >
-                @felipebarcelospro
+                Igniter.js
               </a>
             </p>
           </nav>
+
+          <div className="flex items-center justify-start gap-2">
+            <Button variant="ghost" size="icon" className="rounded-full size-7" asChild>
+              <a href="https://github.com/felipebarcelospro/igniter-js" target="_blank" rel="noopener noreferrer">
+                <Github className="size-3" />
+                <span className="sr-only">GitHub Repository</span>
+              </a>
+            </Button>
+            <Button variant="ghost" size="icon" className="rounded-full size-7" asChild>
+              <a href="https://twitter.com/igniterjs" target="_blank" rel="noopener noreferrer">
+                <Twitter className="size-3" />
+                <span className="sr-only">X (Twitter) Profile</span>
+              </a>
+            </Button>
+          </div>
         </div>
       </footer>
     </div>
