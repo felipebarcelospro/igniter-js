@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/monorepo",
-  "version": "0.2.0",
+  "version": "0.2.6",
   "private": true,
   "description": "Igniter.js - A modern, type-safe HTTP framework for TypeScript",
   "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",

@@ -353,11 +353,6 @@ import { igniter } from '@/igniter';
 import { userController } from '@/features/user/controllers/user.controller';
 
 export const AppRouter = igniter.router({
-  // (Optional) Define the base URL and path for your API.
-  // These are used for generating absolute URLs and for client-side fetching.
-  baseURL: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-  basePath: '/api/v1',
-
   // Register your feature controllers here.
   // The key ('users') becomes the first segment of the client-side path.
   // e.g., `api.users.list.useQuery()`

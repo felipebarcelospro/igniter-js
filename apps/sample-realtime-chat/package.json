@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "prisma migrate deploy",
+    "postbuild": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:migrate:dev": "prisma migrate dev",
@@ -16,7 +16,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",
     "@igniter-js/adapter-redis": "latest",
-    "@igniter-js/core": "0.2.53",
+    "@igniter-js/core": "^0.2.6",
     "@igniter-js/eslint-config": "^0.1.0",
     "@prisma/client": "^6.11.1",
     "@radix-ui/react-accordion": "^1.2.11",

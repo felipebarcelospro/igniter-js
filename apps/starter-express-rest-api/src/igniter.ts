@@ -16,7 +16,15 @@ export const igniter = Igniter
   .logger(logger)
   .telemetry(telemetry)
   .config({
-    baseURL: process.env.NEXT_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
-    basePATH: process.env.NEXT_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
+    baseURL: process.env.IGNITER_API_URL || 'http://localhost:3000',
+    basePATH: process.env.IGNITER_API_BASE_PATH || '/api/v1',
+  })
+  .docs({
+    openapi: require('./docs/openapi.json'),
+    info: {
+      title: 'Igniter.js Starter (Express REST API)',
+      version: '1.0.0',
+      description: 'A sample Express REST API built with Igniter.js',
+    }
   })
   .create()

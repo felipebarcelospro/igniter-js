@@ -11,7 +11,7 @@
  *
  * To modify the client API, update your controller files instead.
  *
- * Generated: 2025-08-09T14:47:28.423Z
+ * Generated: 2025-08-11T15:16:33.856Z
  * Framework: nextjs
  * Output: src/
  */
@@ -22,38 +22,71 @@ export const AppRouterSchema = {
   "controllers": {
     "message": {
       "name": "Message",
-      "description": "",
+      "description": "Endpoints for Messages",
       "path": "/messages",
       "actions": {
         "list": {
           "name": "list",
           "description": "List all Messages",
           "path": "/",
-          "method": "GET"
+          "method": "GET",
+          "isStream": true
         },
         "getById": {
           "name": "getById",
           "description": "Get a Message by ID",
           "path": "/:id",
-          "method": "GET"
+          "method": "GET",
+          "isStream": false
         },
         "create": {
           "name": "create",
           "description": "Create a new Message",
           "path": "/",
-          "method": "POST"
+          "method": "POST",
+          "isStream": false,
+          "bodySchema": {
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "sender": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "content",
+              "sender"
+            ],
+            "additionalProperties": false
+          }
         },
         "update": {
           "name": "update",
           "description": "Update a Message by ID",
           "path": "/:id",
-          "method": "PUT"
+          "method": "PUT",
+          "isStream": false,
+          "bodySchema": {
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "sender": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
         },
         "delete": {
           "name": "delete",
           "description": "Delete a Message by ID",
           "path": "/:id",
-          "method": "DELETE"
+          "method": "DELETE",
+          "isStream": false
         }
       }
     }

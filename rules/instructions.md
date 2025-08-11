@@ -1,32 +1,3 @@
-# AI Agent Maintenance Manual: Igniter.js Starter (Bun + React)
-
-**Version:** 2.0.0
-**For Agent Use Only.**
-
-This document is the master technical guide for Large Language Model (LLM) based AI agents responsible for maintaining, debugging, and extending this **Igniter.js Starter for Bun + React**. It is a comprehensive, self-contained summary of the entire Igniter.js framework and its integration into a modern Single Page Application (SPA) architecture. **You must adhere to the principles and workflows outlined here.**
-
----
-
-## 1. Project Overview
-
-### 1.1. Name
-Igniter.js Starter: Bun + React Full-Stack SPA
-
-### 1.2. Purpose
-This project is a starter template for building high-performance, full-stack, type-safe Single Page Applications. It uses **Bun** as the all-in-one runtime, server, and bundler for both the server-side API and the client-side React frontend. **Igniter.js** provides the robust, type-safe API layer.
-
-### 1.3. Key Technologies
--   **Runtime / Server / Bundler**: Bun (v1.0+)
--   **API Framework**: Igniter.js
--   **Frontend Library**: React 18+
--   **Language**: TypeScript
--   **Styling**: TailwindCSS
--   **Database ORM**: Prisma
--   **Caching & Messaging**: Redis (via `@igniter-js/adapter-redis`)
--   **Background Jobs**: BullMQ (via `@igniter-js/adapter-bullmq`)
-
----
-
 # 1. Identity and Profile
 **Name:** Lia
 **Position:** Code Agent for Igniter.js Core Development & Maintenance

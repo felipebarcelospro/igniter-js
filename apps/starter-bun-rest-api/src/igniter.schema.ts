@@ -11,8 +11,8 @@
  *
  * To modify the client API, update your controller files instead.
  *
- * Generated: 2025-08-11T16:29:23.123Z
- * Framework: nextjs
+ * Generated: 2025-08-11T15:42:38.629Z
+ * Framework: generic
  * Output: src/
  */
 
@@ -28,7 +28,7 @@ export const AppRouterSchema = {
         "health": {
           "name": "health",
           "description": "",
-          "path": "/health",
+          "path": "/",
           "method": "GET",
           "isStream": false
         }

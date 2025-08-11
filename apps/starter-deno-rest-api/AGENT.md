@@ -1,9 +1,6 @@
-# AI Agent Maintenance Manual: Igniter.js Starter (Deno REST API)
+# Code Agent Instructions: Igniter.js Starter (Deno REST API)
 
-**Version:** 1.0.0
-**For Agent Use Only.**
-
-This document provides a technical guide for Large Language Model (LLM) based AI agents responsible for maintaining, debugging, and extending the **Igniter.js Starter for Deno REST API**.
+This document provides a technical guide for Large Language Model (LLM) based Code Agents responsible for maintaining, debugging, and extending the current Igniter.js project.
 
 ---
 

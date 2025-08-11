@@ -1,0 +1,200 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Sample Realtime Chat API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000/api/v1",
+      "description": "Development"
+    },
+    {
+      "url": "https://igniter-js-sample-realtime-chat.vercel.app/api/v1",
+      "description": "Production"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Message",
+      "description": "Endpoints for Messages"
+    }
+  ],
+  "paths": {
+    "/messages": {
+      "get": {
+        "summary": "List all Messages",
+        "operationId": "list",
+        "tags": [
+          "Message"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "description": "This endpoint supports Server-Sent Events (SSE) for real-time updates. It functions as a standard GET request initially, then maintains an open connection for streaming data."
+      },
+      "post": {
+        "summary": "Create a new Message",
+        "operationId": "create",
+        "tags": [
+          "Message"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageCreateBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/:id": {
+      "get": {
+        "summary": "Get a Message by ID",
+        "operationId": "getById",
+        "tags": [
+          "Message"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a Message by ID",
+        "operationId": "update",
+        "tags": [
+          "Message"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageUpdateBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a Message by ID",
+        "operationId": "delete",
+        "tags": [
+          "Message"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "MessageCreateBody": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "sender": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "sender"
+        ],
+        "additionalProperties": false
+      },
+      "MessageUpdateBody": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "sender": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {}
+  }
+}
