@@ -1,9 +1,6 @@
 # AI Agent Maintenance Manual: Igniter.js Starter (Next.js)
 
-**Version:** 1.0.0
-**For Agent Use Only.**
-
-This document is the master technical guide for Large Language Model (LLM) based AI agents responsible for maintaining, debugging, and extending this **Igniter.js Starter for Next.js** application. It is a comprehensive, self-contained summary of the entire Igniter.js framework and its integration with Next.js. **You must adhere to the principles and workflows outlined here.**
+This document provides a technical guide for Large Language Model (LLM) based AI agents responsible for maintaining, debugging, and extending the **Igniter.js Starter for Next.js**.
 
 ---
 

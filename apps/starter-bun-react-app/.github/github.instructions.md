@@ -1,27 +1,30 @@
-# AI Agent Maintenance Manual: Igniter.js Starter (TanStack Start)
+---
+applyTo: '**'
+---
 
-This document provides a technical guide for Large Language Model (LLM) based AI agents responsible for maintaining, debugging, and extending the **Igniter.js Starter for TanStack Start**.
+# Code Agent Instructions: Igniter.js Starter (Bun REST API)
+
+This document provides a technical guide for Large Language Model (LLM) based Code Agents responsible for maintaining, debugging, and extending the current Igniter.js project.
 
 ---
 
 ## 1. Project Overview
 
 ### 1.1. Name
-Igniter.js Starter: TanStack Start Full-Stack App
+Igniter.js Starter: Bun + React Full-Stack SPA
 
 ### 1.2. Purpose
-This project is a modern, full-stack application template built on **TanStack Start**. It integrates an **Igniter.js** API backend, providing a seamless, end-to-end type-safe development experience powered by Vite and file-based routing.
+This project is a starter template for building high-performance, full-stack, type-safe Single Page Applications. It uses **Bun** as the all-in-one runtime, server, and bundler for both the server-side API and the client-side React frontend. **Igniter.js** provides the robust, type-safe API layer.
 
 ### 1.3. Key Technologies
--   **Full-Stack Framework**: TanStack Start
--   **Build Tool**: Vite
--   **Routing**: TanStack Router (File-Based)
--   **UI Library**: React
+-   **Runtime / Server / Bundler**: Bun (v1.0+)
 -   **API Framework**: Igniter.js
+-   **Frontend Library**: React 18+
 -   **Language**: TypeScript
--   **Caching**: Redis (via `@igniter-js/adapter-redis`)
--   **Background Jobs**: BullMQ (via `@igniter-js/adapter-bullmq`)
+-   **Styling**: TailwindCSS
 -   **Database ORM**: Prisma
+-   **Caching & Messaging**: Redis (via `@igniter-js/adapter-redis`)
+-   **Background Jobs**: BullMQ (via `@igniter-js/adapter-bullmq`)
 
 ---
 

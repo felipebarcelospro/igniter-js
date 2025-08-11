@@ -1,6 +1,10 @@
-# AI Agent Maintenance Manual: Igniter.js Starter (TanStack Start)
+---
+applyTo: '**'
+---
 
-This document provides a technical guide for Large Language Model (LLM) based AI agents responsible for maintaining, debugging, and extending the **Igniter.js Starter for TanStack Start**.
+# Code Agent Instructions: Igniter.js Starter (Express.js REST API)
+
+This document provides a technical guide for Large Language Model (LLM) based AI agents responsible for maintaining, debugging, and extending the **Igniter.js Starter for Express.js REST API**.
 
 ---
 

@@ -1,9 +1,6 @@
-# AI Agent Maintenance Manual: Igniter.js Starter (Bun + React)
+# Code Agent Instructions: Igniter.js Starter (Bun REST API)
 
-**Version:** 2.0.0
-**For Agent Use Only.**
-
-This document is the master technical guide for Large Language Model (LLM) based AI agents responsible for maintaining, debugging, and extending this **Igniter.js Starter for Bun + React**. It is a comprehensive, self-contained summary of the entire Igniter.js framework and its integration into a modern Single Page Application (SPA) architecture. **You must adhere to the principles and workflows outlined here.**
+This document provides a technical guide for Large Language Model (LLM) based Code Agents responsible for maintaining, debugging, and extending the current Igniter.js project.
 
 ---
 

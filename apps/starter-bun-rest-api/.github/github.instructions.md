@@ -1,27 +1,28 @@
-# AI Agent Maintenance Manual: Igniter.js Starter (TanStack Start)
+---
+applyTo: '**'
+---
 
-This document provides a technical guide for Large Language Model (LLM) based AI agents responsible for maintaining, debugging, and extending the **Igniter.js Starter for TanStack Start**.
+# Code Agent Instructions: Igniter.js Starter (Bun REST API)
+
+This document provides a technical guide for Large Language Model (LLM) based Code Agents responsible for maintaining, debugging, and extending the current Igniter.js project.
 
 ---
 
 ## 1. Project Overview
 
 ### 1.1. Name
-Igniter.js Starter: TanStack Start Full-Stack App
+Igniter.js Starter: Bun REST API
 
 ### 1.2. Purpose
-This project is a modern, full-stack application template built on **TanStack Start**. It integrates an **Igniter.js** API backend, providing a seamless, end-to-end type-safe development experience powered by Vite and file-based routing.
+This project is a high-performance, starter template for building **type-safe REST APIs**. It uses **Bun** as the runtime and **Igniter.js** as the core framework. It is designed for back-end services that require scalability, maintainability, and strong type guarantees.
 
 ### 1.3. Key Technologies
--   **Full-Stack Framework**: TanStack Start
--   **Build Tool**: Vite
--   **Routing**: TanStack Router (File-Based)
--   **UI Library**: React
+-   **Runtime**: Bun (v1.0+)
 -   **API Framework**: Igniter.js
 -   **Language**: TypeScript
 -   **Caching**: Redis (via `@igniter-js/adapter-redis`)
 -   **Background Jobs**: BullMQ (via `@igniter-js/adapter-bullmq`)
--   **Database ORM**: Prisma
+-   **Database ORM**: Prisma (pre-configured, requires a database connection)
 
 ---
 
@@ -408,10 +409,10 @@ For subscribing to custom, continuous data streams from the backend (e.g., for a
       price Float
     }
     ```
-2.  **Apply to DB**: Run `npx prisma db push`.
+2.  **Apply to DB**: Run `bunx prisma db push`.
 3.  **Scaffold Feature**: Use `igniter generate feature`.
     ```bash
-    npx @igniter-js/cli generate feature products --schema prisma:Product
+    bunx @igniter-js/cli generate feature products --schema prisma:Product
     ```
     This command generates a complete, production-ready CRUD API feature slice in `src/features/products/`, including controllers, Zod schemas, and a repository procedure.
 4.  **Register Controller**: Open `src/igniter.router.ts` and register the new `productsController`.
