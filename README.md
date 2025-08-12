@@ -20,7 +20,7 @@ Our philosophy is built on three pillars that guide every design decision within
 *   #### Typesafety First: Write Code That Just Works
     We believe your compiler should be your first line of defense. Every feature in Igniter.js, from API routes and background jobs to real-time events and plugins, is designed to maximize TypeScript's static analysis and inference. The goal is simple: **if it compiles, it should work as expected.** This approach drastically reduces runtime errors, simplifies debugging, and makes refactoring a safe and predictable process. You're not just writing code; you're building a resilient, self-documenting system.
 
-*   #### AI Friendly: Supercharge Your Workflow
+*   #### Code Agent Optimized: Supercharge Your Workflow
     Igniter.js is built for the future of development, where humans and AI collaborate. Its predictable structure, clear conventions, and comprehensive type system create a "low-entropy" environment that AI agents can easily understand, navigate, and modify. This allows you to delegate tasks like creating new endpoints, writing tests, or generating client components, knowing the AI will adhere to the framework's patterns and produce type-safe, high-quality code.
 
 *   #### Developer Experience (DX): Power and Simplicity
