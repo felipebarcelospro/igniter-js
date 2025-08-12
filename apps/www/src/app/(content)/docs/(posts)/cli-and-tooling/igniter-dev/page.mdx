@@ -62,7 +62,60 @@ Status: Running | PID: 12345 | Last: 14:30:25
 
 Using the `igniter dev` interactive mode streamlines the development workflow by consolidating all necessary information into a single, easy-to-read terminal window.
 
----
+## Automatic OpenAPI Generation
+
+The `igniter dev` command can automatically generate OpenAPI documentation for your API while you develop. This feature analyzes your controllers and creates comprehensive API documentation in real-time.
+
+### Basic OpenAPI Generation (`--docs`)
+
+To enable automatic OpenAPI generation during development:
+
+```bash
+igniter dev --docs
+```
+
+This command will:
+- Analyze your API routes and generate OpenAPI 3.0 specification
+- Serve the documentation UI at `http://localhost:3000/docs` (if your core server is running)
+- Automatically update the documentation when you modify your controllers
+
+### Custom Output Location (`--docs-output`)
+
+You can specify where to save the generated OpenAPI specification file:
+
+```bash
+igniter dev --docs --docs-output ./api-docs/openapi.json
+```
+
+This is useful for:
+- Integrating with external documentation tools
+- Version controlling your API specification
+- Sharing documentation with frontend teams
+
+### Standalone Documentation UI (`--ui`)
+
+If you want to serve the documentation UI separately from your main application:
+
+```bash
+igniter dev --docs --ui
+```
+
+This starts a dedicated documentation server, typically at `http://localhost:3001/docs`, allowing you to:
+- Keep documentation separate from your main application
+- Share documentation without exposing your development server
+- Customize the documentation server port and configuration
+
+### Combined with Interactive Mode
+
+You can combine OpenAPI generation with the interactive dashboard:
+
+```bash
+igniter dev --interactive --docs --framework nextjs
+```
+
+This provides the full development experience with real-time API documentation generation alongside your application processes.
+
+**Note:** For detailed configuration options and advanced OpenAPI customization, see [igniter generate docs](/docs/cli-and-tooling/igniter-generate-docs).
 
 ## Next Steps
 
