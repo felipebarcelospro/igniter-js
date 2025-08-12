@@ -92,7 +92,27 @@ The project follows the standard Next.js App Router structure within the `src/` 
 
 ---
 
-## 5. Deployment
+## 5. Content Creation Workflow
+
+This section outlines the standard procedures for creating new content to ensure SEO optimization and prevent build errors.
+
+### How to Create a New Blog Post
+
+1.  **Create Content File:** Create the `page.mdx` file inside a new directory under `apps/www/src/app/(content)/blog/(posts)/(announcements|tutorials)/`.
+
+2.  **Create Layout File:** In the same directory, create a `layout.tsx` file.
+
+3.  **Implement Metadata (Crucial):**
+    *   Copy the `generateMetadata` function from a **recent, existing blog post's `layout.tsx`**.
+    *   Update the `title`, `description`, and `url` fields with the new post's information. Use a full, static URL for `openGraph.url` (e.g., `https://igniter.js.org/...`). Do not use a configuration object.
+
+4.  **Implement Layout Component:**
+    *   The `layout.tsx` file must perform a **default import** of the parent layout: `import BlogPostLayout from '@/app/(content)/blog/(posts)/layout';`
+    *   It must then export this component as its own default: `export default BlogPostLayout;`
+
+---
+
+## 6. Deployment
 
 The website is automatically deployed via a GitHub Action whenever changes are pushed to the `main` branch. The workflow is defined in `.github/workflows/`. It performs the following steps:
 
