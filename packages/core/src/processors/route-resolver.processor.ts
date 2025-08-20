@@ -1,6 +1,7 @@
 import { findRoute, type RouterContext } from "rou3";
 import { IgniterLogLevel, type IgniterAction, type IgniterLogger } from "../types";
 import { IgniterConsoleLogger } from "../services/logger.service";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
  * Handles route resolution for HTTP requests.
@@ -26,11 +27,8 @@ export class RouteResolverProcessor {
   private static get logger(): IgniterLogger {
     if (!this._logger) {
       this._logger = IgniterConsoleLogger.create({
-        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-        context: {
-          processor: 'RequestProcessor',
-          component: 'RouteResolver'
-        },
+        level: resolveLogLevel(),
+        context: createLoggerContext('RouteResolver'),
         showTimestamp: true,
       });
     }
@@ -49,10 +47,10 @@ export class RouteResolverProcessor {
     method: string,
     path: string
   ): RouteResult {
-    this.logger.debug(`Attempting to resolve route: ${method} ${path}`);
+    this.logger.debug("Route resolution started", { method, path });
     // Validate path
     if (!path?.length) {
-      this.logger.warn(`Route resolution failed: empty or invalid path provided for method '${method}'.`);
+      this.logger.warn("Route resolution failed", { method, reason: "invalid path" });
       return {
         success: false,
         error: {
@@ -66,7 +64,7 @@ export class RouteResolverProcessor {
     const route = findRoute(router, method, path);
 
     if (!route?.data) {
-      this.logger.warn(`Route resolution failed: no matching route found for ${method} ${path}.`);
+      this.logger.warn("Route not found", { method, path });
       return {
         success: false,
         error: {
@@ -78,7 +76,9 @@ export class RouteResolverProcessor {
 
     const finalParams = route.params ? JSON.parse(JSON.stringify(route.params)) : {};
 
-    this.logger.debug(`Route resolved successfully: ${method} ${path}`, {
+    this.logger.debug("Route resolved", {
+      method,
+      path,
       params: finalParams
     });
 

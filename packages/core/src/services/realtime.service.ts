@@ -8,6 +8,8 @@ import type {
 } from "../types";
 import type { IgniterStoreAdapter } from "../types/store.interface";
 import { IgniterError } from "../error";
+import { IgniterConsoleLogger } from "./logger.service";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
  * Type-safe, fluent RealtimeBuilder implementation for Igniter.js.
@@ -298,7 +300,11 @@ export class IgniterRealtimeService<TContext = any>
 
       if (!controller || !action) {
         // Potentially log this error, but don't throw, to allow other valid targets to proceed
-        console.error(`[IgniterRealtimeService] Invalid path format in revalidate target: "${path}"`);
+        const logger = IgniterConsoleLogger.create({
+          level: resolveLogLevel(),
+          context: createLoggerContext('Realtime')
+        });
+        logger.error('Invalid path format in revalidate target:', { path });
         continue;
       }
 

@@ -1,6 +1,7 @@
 import { IgniterLogLevel, type IgniterLogger } from "../types";
 import { IgniterError } from "../error";
 import { IgniterConsoleLogger } from "../services/logger.service";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
  * Body parser processor for the Igniter Framework.
@@ -12,11 +13,8 @@ export class BodyParserProcessor {
   private static get logger(): IgniterLogger {
     if (!this._logger) {
       this._logger = IgniterConsoleLogger.create({
-        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-        context: {
-          processor: 'RequestProcessor',
-          component: 'BodyParser'
-        },
+        level: resolveLogLevel(),
+        context: createLoggerContext('BodyParser'),
         showTimestamp: true,
       });
     }
@@ -43,21 +41,21 @@ export class BodyParserProcessor {
   static async parse(request: Request): Promise<any> {
     try {
       const contentType = request.headers.get("content-type") || "";
-      this.logger.debug(`Attempting to parse body with Content-Type: '${contentType || 'none'}'`);
+      this.logger.debug("Parsing request body", { contentType: contentType || 'none' });
 
       if (!request.body) {
-        this.logger.debug("No request body detected.");
+        this.logger.debug("No request body");
         return undefined;
       }
 
       // JSON content
       if (contentType.includes("application/json")) {
-        this.logger.debug("Parsing request body as JSON.");
+        this.logger.debug("Parsing as JSON");
         try {
           // Tentar obter o texto primeiro para verificar se está vazio
           const text = await request.text();
           if (!text || text.trim() === "") {
-            this.logger.debug("Empty JSON body, returning empty object.");
+            this.logger.debug("Empty JSON body");
             return {}; // Retornar objeto vazio para JSON vazio
           }
           // Fazer o parse manual do texto para JSON
@@ -76,7 +74,7 @@ export class BodyParserProcessor {
 
       // URL encoded form data
       if (contentType.includes("application/x-www-form-urlencoded")) {
-        this.logger.debug("Parsing request body as URL encoded form.");
+        this.logger.debug("Parsing as URL encoded form");
         const formData = await request.formData();
         const result: Record<string, string> = {};
         formData.forEach((value, key) => {
@@ -87,7 +85,7 @@ export class BodyParserProcessor {
 
       // Multipart form data (file uploads)
       if (contentType.includes("multipart/form-data")) {
-        this.logger.debug("Parsing request body as multipart form data.");
+        this.logger.debug("Parsing as multipart form data");
         const formData = await request.formData();
         const result: Record<string, any> = {};
         formData.forEach((value, key) => {
@@ -98,13 +96,13 @@ export class BodyParserProcessor {
 
       // Plain text
       if (contentType.includes("text/plain")) {
-        this.logger.debug("Parsing request body as plain text.");
+        this.logger.debug("Parsing as plain text");
         return await request.text();
       }
 
       // Binary data
       if (contentType.includes("application/octet-stream")) {
-        this.logger.debug("Parsing request body as binary (octet-stream).");
+        this.logger.debug("Parsing as binary");
         return await request.arrayBuffer();
       }
 
@@ -114,7 +112,7 @@ export class BodyParserProcessor {
         contentType.includes("image/") ||
         contentType.includes("video/")
       ) {
-        this.logger.debug(`Parsing request body as blob (${contentType}).`);
+        this.logger.debug("Parsing as blob", { contentType });
         const blob = await request.blob();
         return blob;
       }
@@ -124,12 +122,12 @@ export class BodyParserProcessor {
         contentType.includes("application/stream") ||
         request.body instanceof ReadableStream
       ) {
-        this.logger.debug("Passing request body as a ReadableStream.");
+        this.logger.debug("Parsing as stream");
         return request.body;
       }
 
       // Default fallback to text
-      this.logger.debug("No specific parser found, falling back to text.");
+      this.logger.debug("Parsing as text");
       return await request.text();
     } catch (error) {
       const igniterError = new IgniterError({
@@ -141,7 +139,7 @@ export class BodyParserProcessor {
             : "Invalid request body format",
       });
       // Throw structured error instead of returning undefined
-      this.logger.error("Error during body parsing.", igniterError);
+      this.logger.error("Body parsing failed", { error: igniterError });
       throw igniterError;
     }
   }

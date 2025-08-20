@@ -4,6 +4,7 @@ import type { ProcessedContext } from "./context-builder.processor";
 import { IgniterConsoleLogger } from "../services/logger.service";
 import type { IgniterProcedureContext } from "../types/procedure.interface";
 import { IgniterCookie } from "../services/cookie.service";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
  * Result of middleware execution pipeline
@@ -24,11 +25,8 @@ export class MiddlewareExecutorProcessor {
   private static get logger(): IgniterLogger {
     if (!this._logger) {
       this._logger = IgniterConsoleLogger.create({
-        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-        context: {
-          processor: 'RequestProcessor',
-          component: 'MiddlewareExecutor'
-        },
+        level: resolveLogLevel(),
+        context: createLoggerContext('MiddlewareExecutor'),
         showTimestamp: true,
       });
     }
@@ -50,22 +48,24 @@ export class MiddlewareExecutorProcessor {
     let updatedContext = { ...context };
 
     if (middlewares.length === 0) {
-      this.logger.debug("No global middlewares to execute.");
+      this.logger.debug("Global middleware skipped", { reason: "no middlewares" });
       return { success: true, updatedContext };
     }
 
-    this.logger.debug(`Executing ${middlewares.length} global middleware(s)...`);
+    this.logger.debug("Global middleware started", { count: middlewares.length });
 
     for (const middleware of middlewares) {
       const middlewareName = middleware.name || 'anonymous';
       this.logger.debug(
-        `Executing global middleware: '${middlewareName}'`
+        "Middleware executing",
+        { middlewareName }
       );
 
       // Validate middleware has handler
       if (!middleware.handler || typeof middleware.handler !== "function") {
         this.logger.warn(
-          `Global middleware '${middlewareName}' is missing a valid handler. Skipping.`
+          "Middleware handler invalid",
+          { middlewareName, reason: "missing or not a function" }
         );
         continue;
       }
@@ -79,8 +79,9 @@ export class MiddlewareExecutorProcessor {
 
         // Check for early return (Response)
         if (result instanceof Response) {
-          this.logger.info(
-            `Global middleware '${middlewareName}' returned an early response.`
+          this.logger.debug(
+            "Middleware early return",
+            { middlewareName, type: "Response" }
           );
           return {
             success: false,
@@ -91,8 +92,9 @@ export class MiddlewareExecutorProcessor {
 
         // Check for early return (ResponseProcessor)
         if (result instanceof IgniterResponseProcessor) {
-          this.logger.info(
-            `Global middleware '${middlewareName}' returned an early response processor.`
+          this.logger.debug(
+            "Middleware early return",
+            { middlewareName, type: "ResponseProcessor" }
           );
           return {
             success: false,
@@ -107,18 +109,19 @@ export class MiddlewareExecutorProcessor {
           updatedContext = this.mergeContextSafely(updatedContext, result, middlewareName);
           const newKeys = Object.keys(updatedContext.$context).filter(k => !previousKeys.includes(k));
           if (newKeys.length > 0) {
-            this.logger.debug(`Context updated by '${middlewareName}' with new keys: [${newKeys.join(', ')}]`);
+            this.logger.debug("Context updated", { middlewareName, newKeys });
           }
         }
       } catch (error) {
         this.logger.error(
-          `Error executing global middleware '${middlewareName}'.`, { error }
+          "Middleware execution failed",
+          { middlewareName, error }
         );
         throw error; // Re-throw to be caught by the main processor
       }
     }
 
-    this.logger.debug("All global middlewares executed successfully.");
+    this.logger.debug("Global middleware completed", { count: middlewares.length });
     return {
       success: true,
       updatedContext
@@ -140,22 +143,24 @@ export class MiddlewareExecutorProcessor {
     let updatedContext = { ...context };
 
     if (middlewares.length === 0) {
-      this.logger.debug("No action-specific middlewares to execute.");
+      this.logger.debug("Action middleware skipped", { reason: "no middlewares" });
       return { success: true, updatedContext };
     }
 
-    this.logger.debug(`Executing ${middlewares.length} action middleware(s)...`);
+    this.logger.debug("Action middleware started", { count: middlewares.length });
 
     for (const middleware of middlewares) {
       const middlewareName = middleware.name || 'anonymous';
       this.logger.debug(
-        `Executing action middleware: '${middlewareName}'`
+        "Middleware executing",
+        { middlewareName }
       );
 
       // Validate middleware has handler
       if (!middleware.handler || typeof middleware.handler !== "function") {
         this.logger.warn(
-          `Action middleware '${middlewareName}' is missing a valid handler. Skipping.`
+          "Middleware handler invalid",
+          { middlewareName, reason: "missing or not a function" }
         );
         continue;
       }
@@ -169,8 +174,9 @@ export class MiddlewareExecutorProcessor {
 
         // Check for early return (Response)
         if (result instanceof Response) {
-          this.logger.info(
-            `Action middleware '${middlewareName}' returned an early response.`
+          this.logger.debug(
+            "Middleware early return",
+            { middlewareName, type: "Response" }
           );
           return {
             success: false,
@@ -181,8 +187,9 @@ export class MiddlewareExecutorProcessor {
 
         // Check for early return (ResponseProcessor)
         if (result instanceof IgniterResponseProcessor) {
-          this.logger.info(
-            `Action middleware '${middlewareName}' returned an early response processor.`
+          this.logger.debug(
+            "Middleware early return",
+            { middlewareName, type: "ResponseProcessor" }
           );
           return {
             success: false,
@@ -197,18 +204,19 @@ export class MiddlewareExecutorProcessor {
           updatedContext = this.mergeContextSafely(updatedContext, result, middlewareName);
           const newKeys = Object.keys(updatedContext.$context).filter(k => !previousKeys.includes(k));
           if (newKeys.length > 0) {
-            this.logger.debug(`Context updated by '${middlewareName}' with new keys: [${newKeys.join(', ')}]`);
+            this.logger.debug("Context updated", { middlewareName, newKeys });
           }
         }
       } catch (error) {
         this.logger.error(
-          `Error executing action middleware '${middlewareName}'.`, { error }
+          "Middleware execution failed",
+          { middlewareName, error }
         );
         throw error; // Re-throw to be caught by the main processor
       }
     }
 
-    this.logger.debug("All action middlewares executed successfully.");
+    this.logger.debug("Action middleware completed", { count: middlewares.length });
     return {
       success: true,
       updatedContext
@@ -243,7 +251,7 @@ export class MiddlewareExecutorProcessor {
 
     // Validate cookies specifically (this was the source of the bug)
     if (!procedureRequest.cookies) {
-      this.logger.warn("Cookies object was missing in procedure context. Creating a fallback instance. This might indicate an issue in the context building process.");
+      this.logger.warn("Cookies missing", { action: "creating fallback instance" });
       // Create a fallback cookies instance if missing
       procedureRequest.cookies = new IgniterCookie(procedureRequest.headers);
     }
@@ -286,7 +294,7 @@ export class MiddlewareExecutorProcessor {
       if (!protectedKeys.includes(key)) {
         safeResult[key] = value;
       } else {
-        this.logger.warn(`Middleware '${middlewareName}' attempted to overwrite protected context key: '${key}'. This was prevented.`);
+        this.logger.warn("Protected key overwrite prevented", { middlewareName, key });
       }
     }
 

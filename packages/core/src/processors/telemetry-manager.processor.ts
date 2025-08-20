@@ -1,6 +1,7 @@
 import { IgniterConsoleLogger } from "../services/logger.service";
 import type { ProcessedContext } from "./context-builder.processor";
 import { IgniterLogLevel, type IgniterLogger } from "../types";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
  * Telemetry span with tracking information
@@ -21,11 +22,8 @@ export class TelemetryManagerProcessor {
   private static get logger(): IgniterLogger {
     if (!this._logger) {
       this._logger = IgniterConsoleLogger.create({
-        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-        context: {
-          processor: 'RequestProcessor',
-          component: 'Telemetry'
-        },
+        level: resolveLogLevel(),
+        context: createLoggerContext('Telemetry'),
         showTimestamp: true,
       });
     }
@@ -46,12 +44,12 @@ export class TelemetryManagerProcessor {
     startTime: number
   ): TelemetrySpan | null {
     if (!context.$plugins.telemetry) {
-      this.logger.debug("Telemetry plugin not available, skipping HTTP span creation.");
+      this.logger.debug("Telemetry unavailable");
       return null;
     }
 
     try {
-      this.logger.debug("Creating HTTP telemetry span...");
+      this.logger.debug("HTTP span creating");
       const url = new URL(request.url);
       const span = context.$plugins.telemetry.startSpan(
         `HTTP ${request.method} ${url.pathname}`,
@@ -73,7 +71,7 @@ export class TelemetryManagerProcessor {
         traceContext: span.getContext(),
       };
 
-      this.logger.info(`HTTP span created successfully.`, { traceId: span.getContext()?.traceId });
+      this.logger.debug("HTTP span created", { traceId: span.getContext()?.traceId });
 
       return {
         span,
@@ -81,9 +79,7 @@ export class TelemetryManagerProcessor {
         context
       };
     } catch (error) {
-      this.logger.error(
-        `Failed to create HTTP telemetry span.`, { error }
-      );
+      this.logger.error("HTTP span creation failed", { error });
       return null;
     }
   }
@@ -101,7 +97,7 @@ export class TelemetryManagerProcessor {
     if (!telemetrySpan) return;
 
     try {
-      this.logger.debug("Finishing telemetry span with success status.");
+      this.logger.debug("Span finishing with success");
       const duration = Date.now() - telemetrySpan.startTime;
       const { span, context } = telemetrySpan;
 
@@ -114,7 +110,7 @@ export class TelemetryManagerProcessor {
         const telemetry = context.$plugins.telemetry;
         const request = context.request;
 
-        this.logger.debug("Recording successful request metrics.", { duration, statusCode });
+        this.logger.debug("Success metrics recorded", { duration, statusCode });
         telemetry.timing(
           "http.request.duration",
           duration,
@@ -132,9 +128,7 @@ export class TelemetryManagerProcessor {
         });
       }
     } catch (error) {
-      this.logger.error(
-        `Failed to finish success telemetry span.`, { error }
-      );
+      this.logger.error("Success span finish failed", { error });
     }
   }
 
@@ -153,7 +147,7 @@ export class TelemetryManagerProcessor {
     if (!telemetrySpan) return;
 
     try {
-      this.logger.warn("Finishing telemetry span with error status.", { statusCode });
+      this.logger.warn("Span finishing with error", { statusCode });
       const duration = Date.now() - telemetrySpan.startTime;
       const { span, context } = telemetrySpan;
 
@@ -167,7 +161,7 @@ export class TelemetryManagerProcessor {
         const telemetry = context.$plugins.telemetry;
         const request = context.request;
 
-        this.logger.debug("Recording failed request metrics.", { duration, statusCode });
+        this.logger.debug("Error metrics recorded", { duration, statusCode });
         telemetry.timing(
           "http.request.duration",
           duration,
@@ -185,9 +179,7 @@ export class TelemetryManagerProcessor {
         });
       }
     } catch (telemetryError) {
-      this.logger.error(
-        `Failed to finish error telemetry span.`, { error: telemetryError }
-      );
+      this.logger.error("Error span finish failed", { error: telemetryError });
     }
   }
 
@@ -205,7 +197,7 @@ export class TelemetryManagerProcessor {
   ): void {
     if (!telemetrySpan) return;
 
-    this.logger.warn("Cleaning up a potentially orphaned telemetry span.", { statusCode });
+    this.logger.warn("Orphaned span cleanup", { statusCode });
     try {
       const duration = Date.now() - telemetrySpan.startTime;
       const { span } = telemetrySpan;
@@ -218,10 +210,10 @@ export class TelemetryManagerProcessor {
       }
 
       span.finish();
-      this.logger.debug("Orphaned span has been finished.");
+      this.logger.debug("Orphaned span finished");
     } catch (cleanupError) {
       // Final fallback - log but don't throw
-      this.logger.error(`A critical error occurred during telemetry span cleanup. The span may not be properly recorded.`, { error: cleanupError });
+      this.logger.error("Span cleanup failed", { error: cleanupError });
     }
   }
 

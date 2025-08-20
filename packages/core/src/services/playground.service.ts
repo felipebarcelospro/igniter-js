@@ -1,5 +1,7 @@
 import { parseURL } from "@/utils";
 import type { DocsConfig } from "../types";
+import { IgniterConsoleLogger } from "./logger.service";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 
 // Interfaces for better SOLID principles
@@ -257,7 +259,11 @@ class PlaygroundRequestHandler {
         headers: { 'Content-Type': 'text/html' },
       });
     } catch (error) {
-      console.error('Error generating Igniter Studio:', error);
+      const logger = IgniterConsoleLogger.create({
+        level: resolveLogLevel(),
+        context: createLoggerContext('Playground')
+      });
+      logger.error('Error generating Igniter Studio:', { error });
       return new Response('Internal Server Error', { status: 500 });
     }
   }

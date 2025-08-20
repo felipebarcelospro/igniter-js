@@ -15,6 +15,9 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useIgniterQueryClient } from "./igniter.context";
 import { ClientCache } from "../utils/cache";
 import { generateQueryKey } from "../utils/queryKey";
+import { IgniterConsoleLogger } from "../services/logger.service";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
+import { mergeQueryParams } from "../utils/deepMerge";
 
 type InferIgniterResponse<T> = T extends { data: infer TData, error: infer TError } ? { data: TData | null, error: TError | null } : { data: null, error: null };
 
@@ -62,6 +65,27 @@ export const createUseQueryClient = <
  * @param fetcher The function that calls the server action
  * @returns A React hook for querying data
  */
+
+
+/**
+ * Normalizes input parameters to ensure consistent query key generation
+ * Converts undefined query/params to empty objects to avoid inconsistencies
+ */
+function normalizeInputParams<T extends { query?: any, params?: any, body?: any }>(
+  input: T | undefined
+): T {
+  if (!input) {
+    return { query: {}, params: {}, body: {} } as T;
+  }
+  
+  return {
+    ...input,
+    query: input.query || {},
+    params: input.params || {},
+    body: input.body || {}
+  } as T;
+}
+
 export const createUseQuery = <
   TAction extends IgniterAction<any, any, any, any, any, any, any, any, any, any>,
 >(
@@ -92,31 +116,38 @@ export const createUseQuery = <
 
     const getQueryKey = useCallback(
       (params?: TAction["$Infer"]["$Input"]) => {
-        return generateQueryKey(controller, action, params);
+        // Normalize params before generating query key to ensure consistency
+        const normalizedParams = normalizeInputParams(params);
+        return generateQueryKey(controller, action, normalizedParams);
       },
       [controller, action],
     );
-1
-    const lastUsedParamsRef = useRef<TAction["$Infer"]["$Input"]>(undefined as TAction["$Infer"]["$Input"]);
+
+    // Initialize lastUsedParamsRef synchronously with initial parameters
+    const initialParams = useMemo(() => {
+      return normalizeInputParams({
+        query: options?.query,
+        params: options?.params,
+      } as TAction["$Infer"]["$Input"]);
+    }, [options?.query, options?.params]);
     
-    // Initialize lastUsedParamsRef only once
+    const lastUsedParamsRef = useRef<TAction["$Infer"]["$Input"]>(initialParams);
+    
+    // Update lastUsedParamsRef reactively when options change
     useEffect(() => {
-      if (!lastUsedParamsRef.current) {
-        lastUsedParamsRef.current = {
-          query: options?.query,
-          params: options?.params,
-        } as TAction["$Infer"]["$Input"];
-      }
+      const newParams = normalizeInputParams({
+        query: options?.query,
+        params: options?.params,
+      } as TAction["$Infer"]["$Input"]);
+      lastUsedParamsRef.current = newParams;
     }, [options?.query, options?.params]);
 
     const execute = useCallback(
       async (params?: TAction["$Infer"]["$Input"], force = false) => {
         if (optionsRef.current?.enabled === false) return;
 
-        const mergedParams = {
-            ...lastUsedParamsRef.current,
-            ...params,
-        };
+        // Use deep merge for proper parameter combination
+        const mergedParams = mergeQueryParams(lastUsedParamsRef.current, params);
         lastUsedParamsRef.current = mergedParams;
 
         setVariables(mergedParams);
@@ -175,11 +206,12 @@ export const createUseQuery = <
       execute(lastUsedParamsRef.current, invalidate);
     }, [execute]);
 
+    // Register query with reactive query key that updates when parameters change
     useEffect(() => {
       const currentQueryKey = getQueryKey(lastUsedParamsRef.current);
       register(currentQueryKey, refetch);
       return () => unregister(currentQueryKey, refetch);
-    }, [register, unregister, refetch, getQueryKey]);
+    }, [register, unregister, refetch, getQueryKey, options?.query, options?.params]);
 
     // Automatic refetching side effects
     useEffect(() => {
@@ -214,12 +246,12 @@ export const createUseQuery = <
         }
     }, [execute]);
 
-    // Initial fetch
+    // Initial fetch - now includes reactive dependencies for query and params
     useEffect(() => {
         if (optionsRef.current?.enabled !== false && optionsRef.current?.refetchOnMount !== false) {
             execute();
         }
-    }, [execute]);
+    }, [execute, options?.query, options?.params]);
 
     const isLoading = status === 'loading';
     const isSuccess = status === 'success';
@@ -276,12 +308,13 @@ export const createUseMutation = <
     const lastUsedParamsRef = useRef<TAction["$Infer"]["$Input"]>();
 
     const mutate = useCallback(async (params: TAction["$Infer"]["$Input"]) => {
-      const mergedParams = {
-        query: { ...optionsRef.current?.query, ...params?.query },
-        params: { ...optionsRef.current?.params, ...params?.params },
-        body: { ...optionsRef.current?.body, ...params?.body },
-      } as TAction["$Infer"]["$Input"];
-
+      // Use deep merge for mutation parameters as well
+       const baseParams = {
+         query: optionsRef.current?.query || {},
+         params: optionsRef.current?.params || {},
+       } as TAction["$Infer"]["$Input"];
+       
+       const mergedParams = mergeQueryParams(baseParams, params);
       lastUsedParamsRef.current = mergedParams;
 
       setVariables(mergedParams);
@@ -322,7 +355,11 @@ export const createUseMutation = <
       if (lastUsedParamsRef.current) {
         mutate(lastUsedParamsRef.current);
       } else {
-        console.error("[Igniter] Cannot retry mutation: no parameters were provided in the last call.");
+        const logger = IgniterConsoleLogger.create({
+          level: resolveLogLevel(),
+          context: createLoggerContext('IgniterHooks')
+        });
+        logger.error("Cannot retry mutation: no parameters were provided in the last call.");
       }
     }, [mutate]);
 

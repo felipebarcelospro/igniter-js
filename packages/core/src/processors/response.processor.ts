@@ -4,6 +4,7 @@ import { IgniterConsoleLogger } from "../services/logger.service"
 import type { CookieOptions } from "../types/cookie.interface"
 import type { IgniterProcessorResponse, IgniterErrorResponse, IgniterCommonErrorCode } from "../types/response.interface"
 import type { IgniterStoreAdapter } from "../types/store.interface"
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
  * Generic data type for better type safety
@@ -123,11 +124,8 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
   private get logger(): IgniterLogger {
     if (!this._logger) {
       this._logger = IgniterConsoleLogger.create({
-        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-        context: {
-          processor: 'RequestProcessor',
-          component: 'Response'
-        },
+        level: resolveLogLevel(),
+        context: createLoggerContext('Response'),
         showTimestamp: true,
       })
     }
@@ -155,7 +153,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
     instance._store = store;
     instance._context = context;
 
-    instance.logger.debug("ResponseProcessor initialized.", {
+    instance.logger.debug("Response processor initialized", {
       has_store: !!store,
       has_context: !!context
     });
@@ -197,7 +195,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   status(code: number): this {
-    this.logger.debug(`Setting response status to ${code}.`);
+    this.logger.debug("Status set", { status: code });
     this._status = code
     this._statusExplicitlySet = true
     return this
@@ -227,7 +225,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
       options.channelId = `${options.controllerKey}.${options.actionKey}`;
     }
 
-    this.logger.info(`Configuring response as SSE stream.`, { channelId: options.channelId });
+    this.logger.debug("SSE stream configured", { channelId: options.channelId });
     const newInstance = this.withData<IgniterProcessorResponse<TStreamData, null>>();
     newInstance._isStream = true;
     newInstance._streamOptions = options as StreamOptions<ResponseData>;
@@ -265,7 +263,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
       };
     }
 
-    this.logger.info("Configuring client cache revalidation.", {
+    this.logger.debug("Cache revalidation configured", {
       keys: this._revalidateOptions.queryKeys,
       has_scopes: !!this._revalidateOptions.scopes
     });
@@ -338,7 +336,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
     // Keep JSON shape consistent unless explicitly overridden
     if (!this._statusExplicitlySet) {
       instance._status = 204;
-      this.logger.debug("Setting response status to 204 No Content.");
+      this.logger.debug("Status set", { status: 204 });
     }
     return instance;
   }
@@ -356,7 +354,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   setHeader(name: string, value: string): this {
-    this.logger.debug(`Setting header: '${name}' to '${value}'`);
+    this.logger.debug("Response header set", { name, value });
     this._headers.set(name, value)
     return this;
   }
@@ -380,7 +378,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    */
   setCookie(name: string, value: string, options?: CookieOptions): this {
     const cookie = this.buildCookieString(name, value, options)
-    this.logger.debug(`Setting cookie: '${name}'`);
+    this.logger.debug("Response cookie set", { name });
     this._cookies.push(cookie)
     return this
   }
@@ -623,11 +621,11 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
     let scopeIds: string[] | undefined;
     if (scopes && this._context) {
       try {
-        this.logger.debug("Resolving scopes for revalidation...");
+        this.logger.debug("Revalidation scopes resolving");
         scopeIds = await scopes(this._context);
-        this.logger.debug(`Scopes resolved: [${scopeIds.join(', ')}]`);
+        this.logger.debug("Scopes resolved", { scopes: scopeIds });
       } catch (error) {
-        this.logger.error('Error resolving revalidation scopes. Revalidation will be broadcasted globally.', { error });
+        this.logger.error("Scope resolution failed", { error });
         // Continue without scopes if resolution fails
       }
     }
@@ -643,9 +641,10 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
       },
     });
 
-    this.logger.info(`Revalidation event published for keys [${keysArray.join(', ')}].`, {
-      notified_clients: clientCount,
-      scopes: scopeIds || 'global'
+    this.logger.debug("Revalidation published", {
+      keys: keysArray,
+      resolved_scopes: scopeIds || 'global',
+      notified_clients: clientCount
     });
   }
 
@@ -660,7 +659,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
   private createStream(): Response {
     if (!this._streamOptions) {
       const err = new Error('Stream options are required for streaming responses but were not provided.');
-      this.logger.error("Stream creation failed.", { error: err });
+      this.logger.error("Stream creation failed", { reason: "options_required" });
       throw err;
     }
 
@@ -669,17 +668,17 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
 
     // For backward compatibility, we'll redirect the client to the central SSE endpoint
     // This allows us to keep the API surface the same while migrating to the new architecture
-    this.logger.info(`Creating stream response for channel: '${channelId}'`);
+    this.logger.debug("Stream created", { channelId });
 
     if (!channelId) {
       const err = new Error('Channel ID is required for streaming responses but was not provided.');
-      this.logger.error("Stream creation failed due to missing channel ID.", { error: err });
+      this.logger.error("Stream creation failed", { reason: "channel_id_required" });
       throw err;
     }
 
     // Check if the channel exists, register it if not
     if (!SSEProcessor.channelExists(channelId)) {
-      this.logger.warn(`Dynamically registering non-pre-registered SSE channel: '${channelId}'. It's recommended to pre-register channels.`);
+      this.logger.warn("Dynamic SSE channel registered", { channelId });
       SSEProcessor.registerChannel({
         id: channelId,
         description: `Dynamic channel created by IgniterResponseProcessor`
@@ -688,7 +687,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
 
     // If initial data is provided, publish it to the channel
     if (initialData) {
-      this.logger.debug(`Publishing initial data to channel '${channelId}'.`);
+      this.logger.debug("Initial data published", { channelId, has_data: !!initialData });
       SSEProcessor.publishEvent({
         channel: channelId,
         type: 'data',
@@ -710,7 +709,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
       timestamp: new Date().toISOString()
     };
 
-    this.logger.debug("Returning stream connection info to client.", { channelId });
+    this.logger.debug("Stream connection info returned", { channelId });
     // Return a regular JSON response with connection information
     return new Response(JSON.stringify({
       error: null,
@@ -746,7 +745,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
         return value;
       });
     } catch (error) {
-      this.logger.error('Failed to stringify response data due to an unhandled error. Returning a generic error response.', { error });
+      this.logger.error("Response data serialization failed", { error });
       return JSON.stringify({
         data: null,
         error: {
@@ -772,16 +771,16 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   async toResponse(): Promise<Response> {
-    this.logger.debug("Building final response...");
+    this.logger.debug("Building final response");
     // Handle revalidation first
     if(this._revalidateOptions) {
-      this.logger.debug("Handling revalidation before building response.");
+      this.logger.debug("Handling revalidation");
       await this.handleRevalidation();
     }
 
     // If this is a streaming response, handle it with the new SSE system
     if (this._isStream) {
-      this.logger.debug("Response is a stream, creating SSE stream response.");
+      this.logger.debug("Response is a stream, creating SSE stream response");
       return this.createStream();
     }
 
@@ -794,13 +793,13 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
 
     if(!headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
-      this.logger.debug("Defaulted Content-Type header to 'application/json'.");
+      this.logger.debug("Defaulted Content-Type header to 'application/json'");
     }
 
     const response = this._response;
     const body = this.safeStringify(response);
 
-    this.logger.debug("Final response built.", {
+    this.logger.debug("Final response built", {
       status: this._status,
       header_keys: Array.from(headers.keys())
     });

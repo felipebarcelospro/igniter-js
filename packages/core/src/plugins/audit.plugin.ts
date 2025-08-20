@@ -1,5 +1,7 @@
 import { createIgniterPlugin, createIgniterPluginAction } from "../types/plugin.interface";
 import { z } from "zod";
+import { IgniterConsoleLogger } from '../services/logger.service';
+import { resolveLogLevel, createLoggerContext } from '../utils/logger';
 
 /**
  * Audit Plugin - Example plugin for testing the plugin system
@@ -46,7 +48,15 @@ export const audit = createIgniterPlugin<AuditContext>({
           metadata: input.metadata,
         };
 
-        console.log(`[AuditPlugin] Logging event:`, event);
+        try {
+          const logger = new IgniterConsoleLogger({ 
+            level: resolveLogLevel(), 
+            context: createLoggerContext('AuditPlugin') 
+          });
+          logger.debug(`Logging event: ${JSON.stringify(event)}`);
+        } catch {
+          console.log(`[AuditPlugin] Logging event:`, event);
+        }
         
         return {
           success: true,
@@ -68,7 +78,15 @@ export const audit = createIgniterPlugin<AuditContext>({
         }),
       }),
       handler: async ({ context, input }) => {
-        console.log(`[AuditPlugin] Storing event:`, input.event);
+        try {
+          const logger = new IgniterConsoleLogger({ 
+            level: resolveLogLevel(), 
+            context: createLoggerContext('AuditPlugin') 
+          });
+          logger.debug(`Storing event: ${JSON.stringify(input.event)}`);
+        } catch {
+          console.log(`[AuditPlugin] Storing event:`, input.event);
+        }
         
         return {
           stored: true,
@@ -222,10 +240,21 @@ export const audit = createIgniterPlugin<AuditContext>({
      * To ensure compatibility, cast `self` to the correct type inside the function body.
      */
     init: async (context, self) => {
-      console.log(`[AuditPlugin] Initialized with context:`, {
-        userId: self.context.userId,
-        sessionId: self.context.sessionId,
-      });
+      try {
+        const logger = new IgniterConsoleLogger({ 
+          level: resolveLogLevel(), 
+          context: createLoggerContext('AuditPlugin') 
+        });
+        logger.debug(`Initialized with context: ${JSON.stringify({
+          userId: self.context.userId,
+          sessionId: self.context.sessionId,
+        })}`);
+      } catch {
+        console.log(`[AuditPlugin] Initialized with context:`, {
+          userId: self.context.userId,
+          sessionId: self.context.sessionId,
+        });
+      }
 
       // Self-referential: Log plugin initialization
       await self.actions.create({
@@ -296,7 +325,15 @@ export const audit = createIgniterPlugin<AuditContext>({
   resources: {
     resources: [],
     cleanup: async (context) => {
-      console.log("[AuditPlugin] Cleaning up resources");
+      try {
+        const logger = new IgniterConsoleLogger({ 
+          level: resolveLogLevel(), 
+          context: createLoggerContext('AuditPlugin') 
+        });
+        logger.debug('Cleaning up resources');
+      } catch {
+        console.log("[AuditPlugin] Cleaning up resources");
+      }
     },
   },
 });

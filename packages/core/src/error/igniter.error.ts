@@ -1,4 +1,6 @@
 import chalk from 'chalk';
+import { IgniterConsoleLogger } from '../services/logger.service';
+import { resolveLogLevel, createLoggerContext } from '../utils/logger';
 
 /**
  * Custom error class for Igniter Framework
@@ -42,38 +44,67 @@ export class IgniterError extends Error {
    * Formats and logs the error with styled console output similar to NestJS
    */
   private async logError(): Promise<void> {
-    // Business Rule: Create a visually distinct error boundary
-    const separator = chalk.red('━'.repeat(50));
-    console.log('\n' + separator);
+    try {
+      const logger = new IgniterConsoleLogger({ 
+        level: resolveLogLevel(),
+        context: createLoggerContext('IgniterError')
+      });
+      
+      // Business Rule: Create a visually distinct error boundary
+      const separator = chalk.red('━'.repeat(50));
+      logger.error('\n' + separator);
 
-    // Business Rule: Display main error information in a structured format
-    console.log(
-      chalk.red.bold('⚠ IGNITER ERROR\n')
-    );
+      // Business Rule: Display main error information in a structured format
+      logger.error(
+        chalk.red.bold('⚠ IGNITER ERROR\n')
+      );
 
-    // Business Rule: Show error code and message in separate lines for better readability
-    console.log(
-      chalk.red('Code:    ') + chalk.yellow(`${this.code}`),
-      '\n' + chalk.red('Message: ') + chalk.yellow(`${this.message}`)
-    );
+      // Business Rule: Show error code and message in separate lines for better readability
+      logger.error(
+        chalk.red('Code:    ') + chalk.yellow(`${this.code}`) +
+        '\n' + chalk.red('Message: ') + chalk.yellow(`${this.message}`)
+      );
 
-    // Business Rule: Log additional information in a structured format if available
-    if (this.details) {
-      console.log('\n' + chalk.red('Details: '));
-      console.log(chalk.gray(JSON.stringify(this.details, null, 2)));
+      // Business Rule: Log additional information in a structured format if available
+      if (this.details) {
+        logger.error('\n' + chalk.red('Details: '));
+        logger.error(chalk.gray(JSON.stringify(this.details, null, 2)));
+      }
+
+      if (this.metadata) {
+        logger.error('\n' + chalk.red('Metadata: '));
+        logger.error(chalk.gray(JSON.stringify(this.metadata, null, 2)));
+      }
+
+      if (this.stackTrace) {
+        logger.error('\n' + chalk.red('Stack Trace: '));
+        logger.error(chalk.gray(this.stackTrace));
+      }
+
+      logger.error(separator + '\n');
+    } catch (loggerError) {
+      // Fallback to console if logger fails
+      const separator = chalk.red('━'.repeat(50));
+      console.log('\n' + separator);
+      console.log(chalk.red.bold('⚠ IGNITER ERROR\n'));
+      console.log(
+        chalk.red('Code:    ') + chalk.yellow(`${this.code}`),
+        '\n' + chalk.red('Message: ') + chalk.yellow(`${this.message}`)
+      );
+      if (this.details) {
+        console.log('\n' + chalk.red('Details: '));
+        console.log(chalk.gray(JSON.stringify(this.details, null, 2)));
+      }
+      if (this.metadata) {
+        console.log('\n' + chalk.red('Metadata: '));
+        console.log(chalk.gray(JSON.stringify(this.metadata, null, 2)));
+      }
+      if (this.stackTrace) {
+        console.log('\n' + chalk.red('Stack Trace: '));
+        console.log(chalk.gray(this.stackTrace));
+      }
+      console.log(separator + '\n');
     }
-
-    if (this.metadata) {
-      console.log('\n' + chalk.red('Metadata: '));
-      console.log(chalk.gray(JSON.stringify(this.metadata, null, 2)));
-    }
-
-    if (this.stackTrace) {
-      console.log('\n' + chalk.red('Stack Trace: '));
-      console.log(chalk.gray(this.stackTrace));
-    }
-
-    console.log(separator + '\n');
   }
 
   /**

@@ -1,5 +1,7 @@
 import type { IgniterRouter } from "../types";
 import type { NextConfig } from "next";
+import { IgniterConsoleLogger } from "../services/logger.service";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
  * Lista CONSERVADORA de módulos Node.js nativos que causam problemas no client bundle
@@ -78,26 +80,51 @@ const PACKAGE_CONFIG = {
 /**
  * Utilitário para logging seguro (não quebra se console não estiver disponível)
  */
-const safeLog = {
-  warn: (...args: any[]) => {
-    try {
-      if (typeof console !== "undefined" && console.warn) {
-        console.warn("[withIgniter]", ...args);
+const safeLog = (() => {
+  let logger: ReturnType<typeof IgniterConsoleLogger.create> | null = null;
+  
+  const getLogger = () => {
+    if (!logger) {
+      try {
+        logger = IgniterConsoleLogger.create({
+          level: resolveLogLevel(),
+          context: createLoggerContext('NextJS')
+        });
+      } catch {
+        // Fallback to null if logger creation fails
+        return null;
       }
-    } catch {
-      // Silently fail if console is not available
     }
-  },
-  info: (...args: any[]) => {
-    try {
-      if (typeof console !== "undefined" && console.info) {
-        console.info("[withIgniter]", ...args);
+    return logger;
+  };
+  
+  return {
+    warn: (...args: any[]) => {
+      try {
+        const log = getLogger();
+        if (log) {
+          log.warn(args.join(' '));
+        } else if (typeof console !== "undefined" && console.warn) {
+          console.warn("[withIgniter]", ...args);
+        }
+      } catch {
+        // Silently fail if logging is not available
       }
-    } catch {
-      // Silently fail if console is not available
-    }
-  },
-};
+    },
+    info: (...args: any[]) => {
+      try {
+        const log = getLogger();
+        if (log) {
+          log.info(args.join(' '));
+        } else if (typeof console !== "undefined" && console.info) {
+          console.info("[withIgniter]", ...args);
+        }
+      } catch {
+        // Silently fail if logging is not available
+      }
+    },
+  };
+})();
 
 /**
  * Detecta se um módulo é um módulo Node.js built-in (abordagem conservadora)
@@ -561,10 +588,21 @@ export const getHeadersSafe = async (): Promise<Headers> => {
       const { headers } = await import("next/headers");
       return headers();
     } catch (error) {
-      console.warn(
-        "Failed to import next/headers, falling back to empty headers",
-        error,
-      );
+      try {
+        const logger = IgniterConsoleLogger.create({
+          level: resolveLogLevel(),
+          context: createLoggerContext('NextJS-Headers')
+        });
+        logger.warn("Failed to import next/headers, falling back to empty headers", { error });
+      } catch {
+        // Fallback to console if logger fails
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn(
+            "Failed to import next/headers, falling back to empty headers",
+            error,
+          );
+        }
+      }
       return new Headers();
     }
   } else {
