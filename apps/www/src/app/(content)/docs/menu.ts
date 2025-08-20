@@ -58,14 +58,6 @@ export const menu: ContentSection[] = [
         slug: "/docs/core-concepts/igniter-builder",
       },
       {
-        title: "The Igniter Builder",
-        type: "docs",
-        category: "the-igniter-builder",
-        date: new Date().toISOString(),
-        description: "Deep dive into the Igniter builder",
-        slug: "/docs/core-concepts/the-igniter-builder",
-      },
-      {
         title: "Context",
         type: "docs",
         category: "context",

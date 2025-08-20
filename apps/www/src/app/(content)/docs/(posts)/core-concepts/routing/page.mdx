@@ -24,19 +24,6 @@ import { postController } from '@/features/post/controllers/post.controller';
  */
 export const AppRouter = igniter.router({
   /**
-   * The base URL of your application. This is used for generating
-   * absolute URLs and is important for server-side clients.
-   * Recommended: Use an environment variable.
-   */
-  baseURL: process.env.APP_URL || 'http://localhost:3000',
-
-  /**
-   * A global path prefix for all API routes.
-   * This is useful for versioning your API (e.g., /api/v1).
-   */
-  basePATH: '/api/v1',
-
-  /**
    * The collection of all controllers registered with this router.
    */
   controllers: {
@@ -64,21 +51,6 @@ This is the most important property. It's an object where you register all the f
 
 - **The `key` is important:** The key you assign to each controller (e.g., `users`, `posts`) directly maps to the namespace used on the type-safe client. Registering `users: userController` is what enables you to later call `api.users.list.useQuery()` on the frontend.
 - **The `value` is the controller instance** created with `igniter.controller()`.
-
-### `basePATH`
-
-This is a string that will be prepended to all routes in your application. It's the standard way to handle API versioning.
-
-- **Controller Path:** `/users`
-- **Action Path:** `/:id`
-- **`basePATH`:** `/api/v1`
-- **Final URL Path:** `/api/v1/users/:id`
-
-### `baseURL`
-
-This is the full root URL of your server. While not always used for routing incoming requests, it's essential for a few key scenarios:
-- **Server-Side Rendering (SSR):** When fetching data on the server, the client needs to know the full URL to call.
-- **Generating Absolute URLs:** If you need to generate a full link to an API resource (e.g., in an email), the router can use the `baseURL` to construct it.
 
 ## 3. Integrating the Router with a Web Framework
 
