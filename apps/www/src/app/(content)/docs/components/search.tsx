@@ -36,8 +36,7 @@ export function Search({ className, sections }: SearchProps) {
   }, []);
 
   const navigateToContent = (item: ContentMetadata) => {
-    const baseRoute = `/${item.type}`;
-    router.push(`${baseRoute}/${item.slug}`);
+    router.push(item.slug);
     setOpen(false);
   };
 

@@ -1,10 +1,9 @@
 import { Metadata } from "next";
-import BlogPostLayout from "@/app/(content)/blog/(posts)/layout";
 
 export async function generateMetadata(): Promise<Metadata> {
   const title = "Introducing Igniter Studio: The Interactive API Playground";
   const description = "Announcing Igniter Studio, an interactive API playground to streamline your development workflow, with a future powered by AI assistance.";
-  
+
   return {
     title,
     description,
@@ -22,4 +21,6 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default BlogPostLayout;
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return children;
+}

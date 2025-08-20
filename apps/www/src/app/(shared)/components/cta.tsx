@@ -76,8 +76,8 @@ export function CTASection() {
                 </svg>
                 Built for Developers
               </span>
-              <h2 className="text-6xl text-foreground leading-tight">
-                Build faster with a modern tech stack
+              <h2 className="text-4xl text-foreground leading-tight">
+                Build faster with a modern tech stack for <b>Developers</b> and <br /><b>Code Agents</b>
               </h2>
               <p className="text-base text-muted-foreground">
                 Igniter.js provides everything you need to create production-ready applications. Start building your next project in minutes.
@@ -148,7 +148,7 @@ export function CTASection() {
 
               <div className="flex justify-center gap-4 mt-8">
                 <Button className="rounded-full" asChild>
-                  <Link href="/docs/getting-started-with-igniter-js" className="flex items-center gap-2">
+                  <Link href="/docs/getting-started/quick-start-guide" className="flex items-center gap-2">
                     Read the docs
                   </Link>
                 </Button>
