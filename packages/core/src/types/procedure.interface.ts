@@ -2,6 +2,7 @@ import type { IgniterResponseProcessor } from "../processors/response.processor"
 import type { HTTPMethod, IgniterCookies, IgniterHeaders } from "./action.interface";
 import type { UnionToIntersection } from "./utils.interface";
 import type { StandardSchemaV1 } from "./schema.interface";
+import type { NextFunction } from "./next.interface";
 
 /**
  * Represents the context for an Igniter procedure.
@@ -33,6 +34,11 @@ export type IgniterProcedureContext<TActionContext> = {
   }
   context: TActionContext;
   response: IgniterResponseProcessor<TActionContext, unknown>;
+  /**
+   * Next function for continuing to the next middleware/procedure
+   * or handling errors and custom results
+   */
+  next: NextFunction;
 }
 
 /**
@@ -107,6 +113,11 @@ export type EnhancedProcedureContext<
   response: IgniterResponseProcessor<TActionContext, unknown>;
   /** Validated options (if schema provided) */
   options: TOptions;
+  /**
+   * Next function for continuing to the next middleware/procedure
+   * or handling errors and custom results
+   */
+  next: NextFunction;
 }
 
 /**
