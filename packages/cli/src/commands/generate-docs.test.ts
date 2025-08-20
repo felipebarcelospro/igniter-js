@@ -76,6 +76,7 @@ describe('igniter generate docs', () => {
     }
     fs.mkdirSync(TEMP_DIR, { recursive: true });
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+    fs.mkdirSync(path.join(TEMP_DIR, 'src'), { recursive: true });
 
     // Create a mock router file in the temporary directory
     fs.writeFileSync(path.join(TEMP_DIR, 'src', 'igniter.router.ts'), MOCK_ROUTER_CONTENT);
