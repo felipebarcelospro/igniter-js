@@ -167,10 +167,13 @@ async function loadWithTypeScriptSupport(filePath: string): Promise<any> {
       logger.debug('Using TSX runtime loader');
       const { spawn } = require('child_process');
 
+      const isWindows = process.platform === 'win32';
+
       const tsxCheckResult = await new Promise<boolean>((resolve) => {
         const checkChild = spawn('npx', ['tsx', '--version'], {
           stdio: 'pipe',
           cwd: process.cwd(),
+          shell: isWindows,
         });
         checkChild.on('close', (code: number | null) => resolve(code === 0));
         checkChild.on('error', () => resolve(false));
@@ -185,12 +188,15 @@ async function loadWithTypeScriptSupport(filePath: string): Promise<any> {
       }
 
       return await new Promise<any>((resolve, reject) => {
+        const normalizedPath = path.resolve(filePath);
+        const fileUrl = pathToFileURL(normalizedPath).href;
+
         const tsxScript = `
-          import { zodToJsonSchema } from 'zod-to-json-schema'; // Precisamos importar isso no script filho
+          import { zodToJsonSchema } from 'zod-to-json-schema'; /* Precisamos importar isso no script filho */
 
           async function loadRouter() {
             try {
-              const module = await import('${pathToFileURL(filePath).href}');
+              const module = await import('${fileUrl}');
               const router = module?.AppRouter || module?.default?.AppRouter || module?.default || module?.router;
 
               if (router && typeof router === 'object') {
@@ -209,13 +215,13 @@ async function loadWithTypeScriptSupport(filePath: string): Promise<any> {
                       const safeActions = {};
                       for (const [actionName, action] of Object.entries((controller as any).actions)) {
                         if (action && typeof action === 'object') {
-                          // MODIFICAÇÃO PRINCIPAL AQUI
+                          /* MODIFICAÇÃO PRINCIPAL AQUI */
                           safeActions[actionName] = {
                             name: (action as any).name,
                             path: (action as any).path,
                             method: (action as any).method,
                             description: (action as any).description,
-                            // Convertemos o schema Zod para JSON Schema AQUI, antes do JSON.stringify
+                            /* Convertemos o schema Zod para JSON Schema AQUI, antes do JSON.stringify */
                             bodySchema: (action as any).body ? zodToJsonSchema((action as any).body, { target: 'openApi3' }) : undefined,
                             querySchema: (action as any).query ? zodToJsonSchema((action as any).query, { target: 'openApi3' }) : undefined,
                             use: (action as any).use,
@@ -244,11 +250,12 @@ async function loadWithTypeScriptSupport(filePath: string): Promise<any> {
             }
           }
           loadRouter();
-        `;
+        `.replace(/(\t| {2})/g, "").replace(/\r?\n/g, " ").trim();
 
-        const child = spawn('npx', ['tsx', '-e', tsxScript], {
+        const child = spawn('npx', ['tsx', '-e', `"${tsxScript}"`], {
           stdio: 'pipe',
           cwd: process.cwd(),
+          shell: isWindows,
           env: { ...process.env, NODE_NO_WARNINGS: '1' },
         });
 
