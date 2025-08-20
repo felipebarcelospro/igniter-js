@@ -633,7 +633,7 @@ export class IgniterBuilder<
         >({
           controllers: config.controllers,
           context: (config.context || this._config.context) as TRouterContext,
-          config: this._config.config || ({} as TConfig),
+          config: { ...(this._config.config || ({} as TConfig)), docs: this._docs },
           plugins: this._plugins,
           docs: this._docs,
         });

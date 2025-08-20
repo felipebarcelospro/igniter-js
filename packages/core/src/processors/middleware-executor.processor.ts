@@ -5,6 +5,7 @@ import { IgniterConsoleLogger } from "../services/logger.service";
 import type { IgniterProcedureContext } from "../types/procedure.interface";
 import { IgniterCookie } from "../services/cookie.service";
 import { resolveLogLevel, createLoggerContext } from "../utils/logger";
+import type { NextFunction, NextState } from "../types/next.interface";
 
 /**
  * Result of middleware execution pipeline
@@ -13,6 +14,8 @@ export interface MiddlewareExecutionResult {
   success: boolean;
   earlyReturn?: Response;
   updatedContext: ProcessedContext;
+  error?: Error;
+  customResult?: any;
 }
 
 /**
@@ -54,7 +57,8 @@ export class MiddlewareExecutorProcessor {
 
     this.logger.debug("Global middleware started", { count: middlewares.length });
 
-    for (const middleware of middlewares) {
+    for (let i = 0; i < middlewares.length; i++) {
+      const middleware = middlewares[i];
       const middlewareName = middleware.name || 'anonymous';
       this.logger.debug(
         "Middleware executing",
@@ -71,11 +75,68 @@ export class MiddlewareExecutorProcessor {
       }
 
       try {
-        // Build proper procedure context
-        const procedureContext = this.buildProcedureContext(updatedContext);
+        // Create next state for this middleware
+        const nextState: NextState = {
+          called: false,
+          error: undefined,
+          result: null,
+          skipRemaining: false,
+          metadata: {},
+          skip: false,
+          stop: false
+        };
+
+        // Build proper procedure context with next function
+        const procedureContext = this.buildProcedureContext(updatedContext, nextState);
 
         // @ts-expect-error - Its correct
         const result = await middleware.handler(procedureContext);
+
+        // Handle next() function calls
+        if (nextState.called) {
+          if (nextState.error) {
+            this.logger.error(
+              "Middleware next() called with error",
+              { middlewareName, error: nextState.error }
+            );
+            return {
+              success: false,
+              error: nextState.error,
+              updatedContext
+            };
+          }
+
+          if (nextState.result !== null) {
+            this.logger.debug(
+              "Middleware next() called with custom result",
+              { middlewareName }
+            );
+            return {
+              success: false,
+              customResult: nextState.result,
+              updatedContext
+            };
+          }
+
+          if (nextState.stop) {
+            this.logger.debug(
+              "Middleware next() called with stop",
+              { middlewareName }
+            );
+            return {
+              success: true,
+              updatedContext
+            };
+          }
+
+          if (nextState.skip) {
+            this.logger.debug(
+              "Middleware next() called with skip",
+              { middlewareName }
+            );
+            continue;
+          }
+        }
 
         // Check for early return (Response)
         if (result instanceof Response) {
@@ -228,9 +289,13 @@ export class MiddlewareExecutorProcessor {
    * Maps ProcessedRequest to the format expected by IgniterProcedureContext.
    *
    * @param context - The processed context
+   * @param nextState - Optional next state for middleware control flow
    * @returns Properly structured procedure context
    */
-  private static buildProcedureContext(context: ProcessedContext): IgniterProcedureContext<any> {
+  private static buildProcedureContext(
+    context: ProcessedContext, 
+    nextState?: NextState
+  ): IgniterProcedureContext<any> {
     // Extract and validate required components
     const processedRequest = context.request;
 
@@ -256,11 +321,23 @@ export class MiddlewareExecutorProcessor {
       procedureRequest.cookies = new IgniterCookie(procedureRequest.headers);
     }
 
+    // Create next function
+    const next: NextFunction = (error?: Error, result?: any, options?: any) => {
+      if (nextState) {
+        nextState.called = true;
+        nextState.error = error;
+        nextState.result = result || null;
+        nextState.skip = options?.skip || false;
+        nextState.stop = options?.stop || false;
+      }
+    };
+
     // Build the complete procedure context
     const procedureContext: IgniterProcedureContext<any> = {
       request: procedureRequest,
       context: context.$context || {}, // Use $context, not the full context
-      response: context.response || new IgniterResponseProcessor()
+      response: context.response || new IgniterResponseProcessor(),
+      next
     };
 
     return procedureContext;

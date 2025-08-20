@@ -84,7 +84,8 @@ const createMockProcedureContext = (
 ): IgniterProcedureContext<TestContext> => ({
   request: createMockRequest(requestOverrides),
   context: { ...createMockContext(), ...contextOverrides },
-  response: new IgniterResponseProcessor<any, any>()
+  response: new IgniterResponseProcessor<any, any>(),
+  next: vi.fn()
 });
 
 // ============================================================================
@@ -318,7 +319,8 @@ describe('Procedure Service - Enhanced Builder API', () => {
           options: { multiplier: 2, prefix: 'calculated' },
           context: mockContext.context,
           request: mockContext.request,
-          response: mockContext.response
+          response: mockContext.response,
+          next: mockContext.next
         })
       );
       expect(result).toEqual({ 
@@ -359,7 +361,7 @@ describe('Procedure Service - Enhanced Builder API', () => {
     it('should provide enhanced context with destructured properties', async () => {
       const builder = createEnhancedProcedureBuilder<TestContext>();
       
-      const mockHandler = vi.fn().mockImplementation(async ({ request, context, response, options }) => {
+      const mockHandler = vi.fn().mockImplementation(async ({ request, context, response, next, options }) => {
         return {
           hasRequest: !!request,
           hasContext: !!context,
@@ -377,6 +379,7 @@ describe('Procedure Service - Enhanced Builder API', () => {
         request: mockContext.request,
         context: mockContext.context,
         response: mockContext.response,
+        next: mockContext.next,
         options: undefined
       });
       expect(result).toEqual({
@@ -425,6 +428,7 @@ describe('Procedure Service - Enhanced Factory Functions', () => {
         request: mockContext.request,
         context: mockContext.context,
         response: mockContext.response,
+        next: mockContext.next,
         options: undefined
       });
       expect(mockContext.context.logger.info).toHaveBeenCalledWith(
