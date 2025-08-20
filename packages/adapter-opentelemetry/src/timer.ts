@@ -1,4 +1,11 @@
 import type { IgniterTimer } from '@igniter-js/core';
+import { IgniterConsoleLogger, resolveLogLevel } from '@igniter-js/core';
+
+// Centralized logger for timer module
+const logger = IgniterConsoleLogger.create({
+  level: resolveLogLevel(),
+  context: { component: 'OpenTelemetryTimer' },
+});
 
 /**
  * OpenTelemetry Timer wrapper that implements IgniterTimer interface
@@ -27,7 +34,7 @@ export class OpenTelemetryTimer implements IgniterTimer {
         unit: 'ms',
       });
     } catch (error) {
-      console.warn(`[OpenTelemetry] Failed to create histogram for ${metricName}:`, error);
+      logger.warn('Failed to create histogram', { metricName, error });
     }
   }
 
@@ -53,7 +60,7 @@ export class OpenTelemetryTimer implements IgniterTimer {
       }
     } catch (error) {
       // Graceful fallback
-      console.warn(`[OpenTelemetry] Failed to record timer ${this._metricName}:`, error);
+      logger.warn('Failed to record timer', { metricName: this._metricName, error });
     }
   }
 
@@ -103,4 +110,4 @@ export class NoOpTimer implements IgniterTimer {
   getDuration(): number {
     return 0;
   }
-} 
+}

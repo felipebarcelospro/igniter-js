@@ -1,4 +1,11 @@
 import type { IgniterTelemetrySpan, IgniterSpanOptions, IgniterSpanContext } from '@igniter-js/core';
+import { IgniterConsoleLogger, resolveLogLevel } from '@igniter-js/core';
+
+// Centralized logger for span module
+const logger = IgniterConsoleLogger.create({
+  level: resolveLogLevel(),
+  context: { component: 'OpenTelemetrySpan' },
+});
 
 /**
  * OpenTelemetry Span wrapper that implements IgniterTelemetrySpan interface
@@ -44,7 +51,7 @@ export class OpenTelemetrySpanWrapper implements IgniterTelemetrySpan {
       this._span.setAttribute(key, value);
     } catch (error) {
       // Graceful fallback - don't break execution
-      console.warn(`[OpenTelemetry] Failed to set tag ${key}:`, error);
+      logger.warn('Failed to set tag', { key, error });
     }
   }
 
@@ -53,7 +60,7 @@ export class OpenTelemetrySpanWrapper implements IgniterTelemetrySpan {
       this._span.setAttributes(tags);
     } catch (error) {
       // Graceful fallback
-      console.warn('[OpenTelemetry] Failed to set tags:', error);
+      logger.warn('Failed to set tags', { error });
     }
   }
 
@@ -67,7 +74,7 @@ export class OpenTelemetrySpanWrapper implements IgniterTelemetrySpan {
       this._status = 'error';
     } catch (err) {
       // Graceful fallback
-      console.warn('[OpenTelemetry] Failed to set error:', err);
+      logger.warn('Failed to set error', { error: err });
     }
   }
 
@@ -75,7 +82,7 @@ export class OpenTelemetrySpanWrapper implements IgniterTelemetrySpan {
     try {
       this._span.addEvent(name, data);
     } catch (error) {
-      console.warn(`[OpenTelemetry] Failed to add event ${name}:`, error);
+      logger.warn('Failed to add event', { name, error });
     }
   }
 
@@ -85,7 +92,7 @@ export class OpenTelemetrySpanWrapper implements IgniterTelemetrySpan {
       this._status = 'completed';
     } catch (error) {
       // Graceful fallback
-      console.warn('[OpenTelemetry] Failed to finish span:', error);
+      logger.warn('Failed to finish span', { error });
     }
   }
 
@@ -100,7 +107,7 @@ export class OpenTelemetrySpanWrapper implements IgniterTelemetrySpan {
       return new OpenTelemetrySpanWrapper(childSpan, this._tracer);
     } catch (error) {
       // Graceful fallback - return no-op span
-      console.warn('[OpenTelemetry] Failed to create child span:', error);
+      logger.warn('Failed to create child span', { error });
       return new NoOpSpan(name);
     }
   }
@@ -114,7 +121,7 @@ export class OpenTelemetrySpanWrapper implements IgniterTelemetrySpan {
         traceFlags: spanContext.traceFlags,
       };
     } catch (error) {
-      console.warn('[OpenTelemetry] Failed to get span context:', error);
+      logger.warn('Failed to get span context', { error });
       return {
         traceId: 'unknown',
         spanId: 'unknown',
@@ -194,4 +201,4 @@ class NoOpSpan implements IgniterTelemetrySpan {
       traceFlags: 0,
     };
   }
-} 
+}
