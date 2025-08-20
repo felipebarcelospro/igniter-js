@@ -176,7 +176,7 @@ const DesktopNav = ({
       }
       label="GitHub"
     />
-    
+
     <div className="flex items-center px-4 h-12">
       <ThemeToggle />
     </div>
@@ -193,7 +193,7 @@ const MobileNav = ({ lastUpdateDate }: { lastUpdateDate: string }) => (
     <ThemeToggle />
     <Drawer>
       <DrawerTrigger asChild>
-        <Button variant="outline" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className="relative">
           <Menu className="h-6 w-6" />
           <span className="sr-only">Open menu</span>
         </Button>
@@ -457,7 +457,7 @@ export function Header({ repoInfo }: { repoInfo: RepositoryInfo }) {
         }}
       >
         <div className="container mx-auto max-w-screen-2xl">
-          <nav className="flex justify-between items-center px-10 border-x border-border">
+          <nav className="flex justify-between items-center px-4 border-x border-border">
             <Logo />
             <DesktopNav
               lastUpdateDate={repoInfo.updatedAt}
@@ -476,7 +476,7 @@ export function Header({ repoInfo }: { repoInfo: RepositoryInfo }) {
         }}
       >
         <div className="container mx-auto max-w-screen-2xl">
-          <nav className="flex justify-between items-center px-10 border-x border-border">
+          <nav className="flex justify-between items-center px-4 border-x border-border">
             <Logo />
             <DesktopNav
               lastUpdateDate={repoInfo.updatedAt}

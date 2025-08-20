@@ -5,18 +5,16 @@ import * as fs from "fs";
 import * as path from "path";
 import {
   detectFramework,
-  startDevServer,
   getFrameworkList,
   isFrameworkSupported,
-  type SupportedFramework,
 } from "./adapters/framework";
-import { logger, createChildLogger } from "./adapters/logger";
+import { logger, createChildLogger, setupCliLogger, formatError } from "./adapters/logger";
 import {
   validateProjectName,
   showInitHelp
 } from "./adapters/setup";
 import { runSetupPrompts, confirmOverwrite } from './adapters/setup/prompts'
-import { generateProject, ProjectGenerator } from './adapters/setup/generator'
+import { generateProject } from './adapters/setup/generator'
 import { createDetachedSpinner } from "./lib/spinner";
 import {
   handleGenerateFeature,
@@ -30,7 +28,13 @@ const program = new Command();
 program
   .name("igniter")
   .description("CLI for Igniter.js type-safe client generation")
-  .version("1.0.0");
+  .version("1.0.0")
+  .option('--debug', 'Enable debug mode for detailed logging', false)
+  .hook('preAction', (thisCommand) => {
+    // This hook executes after options are parsed, but before the action handler.
+    // It's the perfect place to set up global configurations like logging.
+    setupCliLogger(thisCommand.optsWithGlobals());
+  });
 
 // Init command
 program
@@ -97,8 +101,10 @@ program
 
       await generateProject(config, targetDir, isExistingProject);
     } catch (error) {
-      initLogger.error('Init command failed', { error });
-      console.error('✗ Failed to initialize project:', error instanceof Error ? error.message : String(error));
+      initLogger.error('Init command failed unexpectedly', {
+        error: error instanceof Error ? formatError(error) : error,
+      });
+      console.error(`✗ Failed to initialize project. Run with --debug for more details.`);
       process.exit(1);
     }
   });
@@ -106,15 +112,13 @@ program
 // Dev command
 program
   .command("dev")
-  .description("Start development mode with framework and Igniter (interactive dashboard by default)")
+  .description("Start development mode with framework and Igniter (interactive dashboard and OpenAPI docs by default)")
   .option("--framework <type>", `Framework type (${getFrameworkList()}, generic)`)
   .option("--output <dir>", "Output directory for generated client files", "src/")
-  .option("--debug", "Enable debug mode")
   .option("--port <number>", "Port for the dev server", "3000")
   .option("--cmd <command>", "Custom command to start dev server")
   .option("--no-framework", "Disable framework dev server (Igniter only)")
   .option("--no-interactive", "Disable interactive mode (use regular concurrent mode)")
-  .option("--docs", "Enable automatic OpenAPI documentation generation")
   .option("--docs-output <dir>", "Output directory for OpenAPI docs", "./src/docs")
   .action(async (options) => {
     const detectedFramework = detectFramework();
@@ -145,10 +149,10 @@ program
         });
       }
     }
-    const docsFlags = options.docs ? ` --docs --docs-output ${options.docsOutput}` : '';
+    const docsFlags = ` --docs --docs-output ${options.docsOutput}`;
     processes.push({
       name: "Igniter",
-      command: `igniter generate schema --watch --framework ${framework} --output ${options.output}${options.debug ? ' --debug' : ''}${docsFlags}`,
+      command: `igniter generate schema --watch --framework ${framework} --output ${options.output}${docsFlags}`,
       color: "blue",
       cwd: process.cwd()
     });
@@ -170,7 +174,6 @@ generate
   .description("Generate client schema from your Igniter router (for CI/CD or manual builds)")
   .option("--framework <type>", `Framework type (${getFrameworkList()}, generic)`)
   .option("--output <dir>", "Output directory", "src/")
-  .option("--debug", "Enable debug mode")
   .option("--watch", "Watch for changes and regenerate automatically")
   .option("--docs", "Enable automatic OpenAPI documentation generation")
   .option("--docs-output <dir>", "Output directory for OpenAPI docs", "./src/docs")
@@ -186,7 +189,7 @@ generate
     const watcher = new IgniterWatcher({
       framework,
       outputDir: options.output,
-      debug: options.debug,
+      debug: program.opts().debug, // Pass global debug flag to watcher
       controllerPatterns: ["**/*.controller.{ts,js}"],
       generateDocs: options.docs,
       docsOutputDir: options.docsOutput,

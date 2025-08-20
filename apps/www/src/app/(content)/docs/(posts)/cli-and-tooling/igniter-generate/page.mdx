@@ -1,9 +1,10 @@
 # `igniter generate`: Scaffolding & Schema Generation
 
-The `igniter generate` command is a powerful, multi-purpose tool designed to accelerate your development workflow. It serves two primary functions:
+The `igniter generate` command is a powerful, multi-purpose tool designed to accelerate your development workflow. It serves three primary functions:
 
 1.  **Scaffolding**: Automatically create boilerplate files for new features, either from a database schema or from scratch. This ensures consistency and lets you focus on business logic.
 2.  **Schema Generation**: Analyze your `AppRouter` to generate a type-safe client, keeping your frontend and backend perfectly in sync.
+3.  **Documentation Generation**: Create comprehensive OpenAPI documentation from your API routes and controllers.
 
 ---
 
@@ -93,8 +94,47 @@ This is used internally by the main `igniter dev` command to provide a seamless,
 
 ---
 
+## 4. OpenAPI Documentation Generation
+
+The `igniter generate docs` command creates comprehensive OpenAPI 3.0 documentation from your existing API controllers and routes. This ensures your documentation stays in sync with your actual implementation.
+
+### `igniter generate docs`
+
+Generate OpenAPI documentation for your entire API:
+
+```bash
+# Generate OpenAPI spec to default location (./openapi.json)
+npx @igniter-js/cli generate docs
+
+# Generate to custom location
+npx @igniter-js/cli generate docs --output ./docs/api-spec.json
+```
+
+### `igniter generate docs --serve`
+
+Generate documentation and immediately serve it with a web UI:
+
+```bash
+# Generate and serve documentation at http://localhost:3001
+npx @igniter-js/cli generate docs --serve
+
+# Serve on custom port
+npx @igniter-js/cli generate docs --serve --port 8080
+```
+
+**Key Features:**
+- **Automatic Route Discovery**: Scans your controllers and automatically detects all API endpoints
+- **Type-Safe Schemas**: Generates accurate request/response schemas from your Zod validators
+- **Rich Metadata**: Includes descriptions, examples, and parameter details from your controller implementations
+- **Multiple Output Formats**: Supports JSON and YAML OpenAPI specifications
+
+For detailed configuration options, advanced customization, and integration examples, see [igniter generate docs](/docs/cli-and-tooling/igniter-generate-docs).
+
+---
+
 ## Next Steps
 
+- [igniter generate docs](/docs/cli-and-tooling/igniter-generate-docs) - Deep dive into OpenAPI documentation generation
 - [igniter init](/docs/cli-and-tooling/igniter-init) - Learn about project scaffolding
 - [igniter dev](/docs/cli-and-tooling/igniter-dev) - Discover the interactive development server
 - [Feature-Based Architecture](/docs/backend/feature-based-architecture) - Understand the project structure

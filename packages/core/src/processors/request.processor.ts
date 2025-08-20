@@ -33,6 +33,7 @@ import { ErrorHandlerProcessor } from "./error-handler.processor";
 import { IgniterRealtimeService } from "../services/realtime.service";
 import { IgniterConsoleLogger } from "../services/logger.service";
 import { IgniterPluginManager } from "../services/plugin.service";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
  * Handles HTTP request processing for the Igniter Framework.
@@ -98,7 +99,11 @@ export class RequestProcessor<
 
     // Initialize router with async plugin registration
     this.router = createRouter<IgniterAction<any, any, any, any, any, any, any, any, any, any>>();
-    this.logger.info("RequestProcessor instantiated. Initializing asynchronously...");
+    this.logger.debug('Request processor instantiated', {
+      controllersCount: Object.keys(this.config.controllers).length,
+      basePATH: this.config.basePATH,
+      baseURL: this.config.baseURL
+    });
     this.initializeAsync();
   }
 
@@ -118,9 +123,15 @@ export class RequestProcessor<
       // Initialize SSE channels
       this.initializeSSEChannels();
 
-      this.logger.info('RequestProcessor initialized successfully.');
+      this.logger.debug('Request processor initialized', {
+        hasPluginManager: !!this.pluginManager,
+        pluginsCount: this.plugins.size
+      });
     } catch (error) {
-      this.logger.error('FATAL: RequestProcessor initialization failed.', { error });
+      this.logger.error('Request processor initialization failed', {
+        error,
+        stage: 'async_initialization'
+      });
       throw error;
     }
   }
@@ -137,7 +148,9 @@ export class RequestProcessor<
         const logger = contextPlugins.logger || this.logger;
 
         if (!store) {
-          this.logger.warn('No store adapter found for PluginManager. Plugin events will be local only.');
+          this.logger.warn('Plugin manager storage adapter missing', {
+            recommendation: 'Consider adding a storage adapter for plugin persistence'
+          });
           return;
         }
 
@@ -152,9 +165,14 @@ export class RequestProcessor<
           }
         });
 
-        this.logger.info(`PluginManager initialized with ${Object.keys(this.config.plugins).length} plugins`);
+        this.logger.debug('Plugin manager initialized', {
+          pluginsCount: Object.keys(this.config.plugins).length
+        });
       } catch (error) {
-        this.logger.error('Failed to initialize PluginManager:', { error });
+        this.logger.error('Plugin manager initialization failed', {
+          error,
+          pluginsCount: Object.keys(this.config.plugins).length
+        });
       }
     }
   }
@@ -171,15 +189,15 @@ export class RequestProcessor<
       // Register each plugin
       for (const [pluginName, plugin] of Object.entries(this.config.plugins)) {
         await this.pluginManager.register(plugin);
-        this.logger.info(`Registered plugin: ${pluginName}`);
+        this.logger.debug('Plugin registered', { pluginName });
       }
 
       // Load all plugins (execute init hooks)
       await this.pluginManager.loadAll();
-      this.logger.info('All plugins loaded successfully.');
+      this.logger.debug('All plugins loaded successfully');
 
     } catch (error) {
-      this.logger.error('Failed to register and load plugins:', { error });
+      this.logger.error('Failed to register and load plugins', { error });
       throw error;
     }
   }
@@ -208,7 +226,7 @@ export class RequestProcessor<
         // @ts-ignore
         if (action.stream) {
           const channelId = `${controllerKey}.${actionKey}`;
-          this.logger.debug(`Registering stream channel for action: ${channelId}`);
+          this.logger.debug('Stream channel registered', { channelId });
           SSEProcessor.registerChannel({
             id: channelId,
             description: `Stream events for ${controllerKey}.${actionKey} action`,
@@ -217,11 +235,9 @@ export class RequestProcessor<
       }
     }
 
-    this.logger.info(
-      `SSE initialization complete. Registered channels: [${SSEProcessor.getRegisteredChannels()
-        .map((c) => c.id)
-        .join(", ")}]`,
-    );
+    this.logger.debug('SSE initialization completed', {
+      channels: SSEProcessor.getRegisteredChannels().map((c) => c.id)
+    });
   }
 
   /**
@@ -230,7 +246,7 @@ export class RequestProcessor<
    */
   private registerRoutes(): void {
     const basePATH = this.config.basePATH || process.env.IGNITER_APP_BASE_PATH || "/api/v1";
-    this.logger.info(`Registering routes with base path: '${basePATH}'`);
+    this.logger.debug('Registering routes', { basePATH });
     let routeCount = 0;
 
     // Register application controllers and actions
@@ -252,7 +268,10 @@ export class RequestProcessor<
         const path = parseURL(basePATH, controller.path, endpoint.path);
         addRoute(this.router, endpoint.method, path, endpoint);
         routeCount++;
-        this.logger.debug(`[CONTROLLER] Registered route: ${endpoint.method} ${path}`);
+        this.logger.debug('[CONTROLLER] Route registered', {
+          method: endpoint.method,
+          path
+        });
       }
     }
 
@@ -276,8 +295,10 @@ export class RequestProcessor<
     };
     addRoute(this.router, "GET", sseEndpoint, sseAction);
 
-    this.logger.info(`Registered central SSE endpoint at '${sseEndpoint}'`);
-    this.logger.info(`Route registration completed. Total routes: ${routeCount + (this.pluginManager ? this.pluginManager.getPluginNames().length : 0)}`);
+    this.logger.debug('Registered central SSE endpoint', { sseEndpoint });
+    this.logger.debug('Route registration completed', {
+      totalRoutes: routeCount + (this.pluginManager ? this.pluginManager.getPluginNames().length : 0)
+    });
   }
 
   /**
@@ -293,7 +314,7 @@ export class RequestProcessor<
       const plugin = this.pluginManager.getPlugin(pluginName);
       if (!plugin || !plugin.$controllers) continue;
 
-      this.logger.debug(`Registering routes for plugin: '${pluginName}'`);
+      this.logger.debug('Plugin routes registering', { pluginName });
       for (const [controllerName, controllerActions] of Object.entries(plugin.$controllers)) {
         for (const [actionName, actionConfig] of Object.entries(controllerActions as any) as [string, IgniterAction<any, any, any, any, any, any, any, any, any, any>][]) {
           try {
@@ -327,16 +348,30 @@ export class RequestProcessor<
             addRoute(this.router, actionConfig.method, pluginPath, wrappedAction);
             pluginRouteCount++;
 
-            this.logger.debug(`[PLUGIN] Registered route: ${actionConfig.method} ${pluginPath} (${pluginName}.${controllerName}.${actionName})`);
+            this.logger.debug('[PLUGIN] Registered route', {
+              method: actionConfig.method,
+              path: pluginPath,
+              plugin: pluginName,
+              controller: controllerName,
+              action: actionName
+            });
 
           } catch (error) {
-            this.logger.error(`Failed to register plugin route ${pluginName}.${controllerName}.${actionName}:`, { error });
+            this.logger.error('Plugin route registration failed', {
+              plugin: pluginName,
+              controller: controllerName,
+              action: actionName,
+              error
+            });
           }
         }
       }
     }
 
-    this.logger.info(`Registered ${pluginRouteCount} plugin routes from ${pluginNames.length} plugins`);
+    this.logger.debug('Registered plugin routes', {
+      routeCount: pluginRouteCount,
+      pluginCount: pluginNames.length
+    });
   }
 
   /**
@@ -360,7 +395,9 @@ export class RequestProcessor<
     const method = request.method;
     const startTime = Date.now();
 
-    this.logger.info(`Request received: ${method} ${path}`, {
+    this.logger.debug('Request received', {
+      method,
+      path,
       url: request.url,
       ip: request.headers.get('x-forwarded-for') || 'unknown'
     });
@@ -375,7 +412,7 @@ export class RequestProcessor<
       const sseEndpoint = parseURL(basePATH, "/sse/events");
 
       if (path === sseEndpoint && method === "GET") {
-        this.logger.info(`Handling new SSE connection request to central endpoint...`, { url: request.url });
+        this.logger.debug('SSE connection received', { url: request.url });
         return await SSEProcessor.handleConnection(request);
       }
 
@@ -386,7 +423,11 @@ export class RequestProcessor<
         path,
       );
       if (!routeResult.success) {
-        this.logger.warn(`Route not found: ${method} ${path}. Responding with 404.`);
+        this.logger.warn('Route not found', {
+          method,
+          path,
+          availableRoutes: Object.keys(this.config.controllers)
+        });
         return new Response(null, {
           status: routeResult.error!.status,
           statusText: routeResult.error!.statusText,
@@ -395,7 +436,7 @@ export class RequestProcessor<
 
       const { action, params } = routeResult;
       const handler = action!;
-      this.logger.debug(`Route found: ${method} ${path}`, { params });
+      this.logger.debug('Route resolved', { method, path, params });
 
       // Step 2: Build context
       context = await ContextBuilderProcessor.build(
@@ -415,7 +456,7 @@ export class RequestProcessor<
         startTime,
       );
       if (telemetrySpan) {
-        this.logger.debug("Telemetry HTTP span created.");
+        this.logger.debug('HTTP span created');
       }
 
       // Step 5: Execute global middlewares
@@ -426,7 +467,7 @@ export class RequestProcessor<
         );
 
         if (!globalResult.success) {
-          this.logger.info("Global middleware triggered an early response. Bypassing action handler.");
+          this.logger.debug('Global middleware early return');
           return globalResult.earlyReturn!;
         }
 
@@ -441,7 +482,10 @@ export class RequestProcessor<
         );
 
         if (!actionResult.success) {
-          this.logger.info("Action middleware triggered an early response. Bypassing action handler.");
+          this.logger.debug('Action middleware early return', {
+            responseType: typeof actionResult.earlyReturn,
+            skipActionExecution: true
+          });
           return actionResult.earlyReturn!;
         }
 
@@ -460,7 +504,11 @@ export class RequestProcessor<
         request,
       );
     } catch (error) {
-      this.logger.error("An unhandled error reached the main request processor.", { error });
+      this.logger.error('Request processing failed', {
+        error,
+        path,
+        method
+      });
       // Step 9: Handle errors
       if (context!) {
         const errorResult = await ErrorHandlerProcessor.handleError(
@@ -495,27 +543,31 @@ export class RequestProcessor<
     handler: IgniterAction<any, any, any, any, any, any, any, any, any, any>,
     context: ProcessedContext,
   ): Promise<any> {
-    this.logger.debug(`Executing action handler...`);
+    this.logger.debug('Action handler executing');
 
     // Validate body and query
     try {
       if (handler.body) {
-        this.logger.debug("Validating request body against schema.");
+        this.logger.debug('Validating request body');
         handler.body.parse(context.request.body);
       }
       if (handler.query) {
-        this.logger.debug("Validating request query against schema.");
+        this.logger.debug('Validating request query');
         handler.query.parse(context.request.query);
       }
     } catch(validationError) {
-      this.logger.warn("Request validation failed for body or query.", { error: validationError });
+      this.logger.warn('Request validation failed', {
+        validationErrors: validationError,
+        path: context.request.path,
+        method: context.request.method
+      });
       throw validationError; // Re-throw to be handled by the main error handler
     }
 
-    this.logger.debug(`Executing final action handler function.`);
+    this.logger.debug('Executing action handler function');
 
     // Execute handler with proper context structure
-    this.logger.debug(`Initializing response processor and services for handler.`);
+    this.logger.debug('Initializing response processor');
 
     const responseProcessor = IgniterResponseProcessor.init(
       context.$plugins?.store || context.$context?.store,
@@ -542,7 +594,7 @@ export class RequestProcessor<
       realtime: realtimeService,
     });
 
-    this.logger.debug(`Action handler executed.`);
+    this.logger.debug('Action handler completed');
 
     return response;
   }
@@ -566,7 +618,7 @@ export class RequestProcessor<
   ): Promise<Response> {
     // Handle direct Response objects
     if (actionResponse instanceof Response) {
-      this.logger.debug(`Action handler returned a raw Response object. Finalizing...`);
+      this.logger.debug('Raw response returned', { type: 'Response' });
       // It's already a response, we don't need to do much.
       // We could add headers or cookies here if needed in the future.
       return actionResponse;
@@ -574,7 +626,9 @@ export class RequestProcessor<
 
     // Handle ResponseProcessor objects
     if (actionResponse instanceof IgniterResponseProcessor) {
-      this.logger.debug(`Action handler returned an IgniterResponseProcessor instance. Converting to Response...`);
+      this.logger.debug('Response processor returned', {
+        type: 'IgniterResponseProcessor'
+      });
       const finalResponse = await actionResponse.toResponse();
 
       // Track successful request
@@ -592,9 +646,10 @@ export class RequestProcessor<
         );
       }
 
-      this.logger.info(`Request processed successfully.`, {
+      this.logger.debug('Request processed', {
         status: finalResponse.status,
-        duration_ms: Date.now() - startTime
+        duration_ms: Date.now() - startTime,
+        responseType: 'processor'
       });
 
       return finalResponse;
@@ -603,9 +658,10 @@ export class RequestProcessor<
     // Handle JSON response
     await this.trackInstanceRequest(request, startTime, 200);
 
-    this.logger.info(`Request processed successfully (JSON response).`, {
+    this.logger.debug('Request processed', {
       status: 200,
-      duration_ms: Date.now() - startTime
+      duration_ms: Date.now() - startTime,
+      responseType: 'json'
     });
 
     // Finish telemetry
@@ -779,7 +835,10 @@ export class RequestProcessor<
 
       // Publish to SSE for real-time dashboard updates
       this.publishSystemEvent("request-metrics", requestData);
-      this.logger.debug("Published request metrics to SSE 'system' channel.");
+      this.logger.debug('Metrics published via SSE', {
+        channel: 'system',
+        eventType: 'request-metrics'
+      });
 
       // If we have a store plugin, also publish there for persistence
       if (
@@ -795,15 +854,18 @@ export class RequestProcessor<
             }),
           );
         } catch (storeError) {
-          this.logger.error(
-            "Failed to publish request metrics to store:",
-            storeError,
-          );
+          this.logger.error('Failed to publish metrics to storage plugin', {
+            error: storeError,
+            channel: 'igniter:api-requests'
+          });
         }
       }
     } catch (trackingError) {
       // Fail silently - don't break the request if tracking fails
-      this.logger.warn("Failed to track instance request for CLI dashboard.", { error: trackingError });
+      this.logger.warn('Request tracking failed', {
+        error: trackingError,
+        target: 'CLI dashboard'
+      });
     }
   }
 
@@ -875,9 +937,9 @@ export class RequestProcessor<
     const channelId = `action:${controllerKey}.${actionKey}`;
 
     if (!SSEProcessor.channelExists(channelId)) {
-      this.logger.warn(
-        `Attempting to publish to a non-existent or non-stream action channel: '${channelId}'`,
-      );
+      this.logger.warn('Action channel not found', {
+        action: `${controllerKey}.${actionKey}`
+      });
       return 0;
     }
 
@@ -935,7 +997,11 @@ export class RequestProcessor<
       statusCode = context.response?.status || 200;
 
       // This method is deprecated, so a warning is appropriate.
-      console.warn("RequestProcessor.process() is deprecated and should not be used. Please use an instance of RequestProcessor.");
+      const deprecationLogger = IgniterConsoleLogger.create({
+        level: resolveLogLevel(),
+        context: createLoggerContext('RequestProcessor')
+      });
+      deprecationLogger.warn('The static \'RequestProcessor.process()\' method is deprecated. Please use an instance method instead.');
 
       return {
         data: finalResponse,

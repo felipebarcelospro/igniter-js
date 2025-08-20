@@ -4,6 +4,7 @@ import type { ProcessedContext } from "./context-builder.processor";
 import type { TelemetrySpan } from "./telemetry-manager.processor";
 import { TelemetryManagerProcessor } from "./telemetry-manager.processor";
 import { IgniterConsoleLogger } from "../services/logger.service";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
  * Error handling result
@@ -23,11 +24,8 @@ export class ErrorHandlerProcessor {
   private static get logger(): IgniterLogger {
     if (!this._logger) {
       this._logger = IgniterConsoleLogger.create({
-        level: process.env.IGNITER_LOG_LEVEL as IgniterLogLevel || IgniterLogLevel.INFO,
-        context: {
-          processor: 'RequestProcessor',
-          component: 'ErrorHandler'
-        },
+        level: resolveLogLevel(),
+        context: createLoggerContext('ErrorHandler'),
       });
     }
     return this._logger;
@@ -51,7 +49,7 @@ export class ErrorHandlerProcessor {
     const statusCode = 400;
     const normalizedError = this.normalizeError(error);
 
-    this.logger.warn(`Request validation failed.`, {
+    this.logger.warn("Request validation failed", {
       error: {
         code: normalizedError.code,
         message: normalizedError.message,
@@ -108,7 +106,7 @@ export class ErrorHandlerProcessor {
     const statusCode = 500;
     const normalizedError = this.normalizeError(error);
 
-    this.logger.error(`An IgniterError occurred.`, {
+    this.logger.error("Igniter framework error", {
       error: {
         code: normalizedError.code,
         message: normalizedError.message,
@@ -166,7 +164,7 @@ export class ErrorHandlerProcessor {
     const normalizedError = this.normalizeError(error);
     const errorMessage = normalizedError.message || "Internal Server Error";
 
-    this.logger.error(`A generic error occurred.`, {
+    this.logger.error("Generic error occurred", {
       error: {
         code: normalizedError.code,
         message: errorMessage,
@@ -223,19 +221,17 @@ export class ErrorHandlerProcessor {
     const statusCode = 500;
     const normalizedError = this.normalizeError(error);
 
-    this.logger.error(
-      `Context initialization failed. This is a critical error.`, {
-        error: {
-          code: normalizedError.code,
-          message: normalizedError.message,
-          stack: normalizedError.stack?.substring(0, 300)
-        },
-        request: {
-          path: context?.request?.path,
-          method: context?.request?.method
-        }
+    this.logger.error("Context initialization failed", {
+      error: {
+        code: normalizedError.code,
+        message: normalizedError.message,
+        stack: normalizedError.stack?.substring(0, 300)
+      },
+      request: {
+        path: context?.request?.path,
+        method: context?.request?.method
       }
-    );
+    });
 
     // Clean up telemetry span if it exists
     if (telemetrySpan) {
@@ -391,13 +387,17 @@ export class ErrorHandlerProcessor {
     try {
       // Skip if context is not available
       if (!context?.request) {
-        this.logger.warn('Cannot track error: request context is missing.');
+        this.logger.warn("Error tracking skipped", {
+          reason: "request context missing"
+        });
         return;
       }
 
       // Skip if tracking is disabled
       if (process.env.DISABLE_ERROR_TRACKING === 'true') {
-        this.logger.debug("Error tracking is disabled via environment variable.");
+        this.logger.debug("Error tracking disabled", {
+          reason: "DISABLE_ERROR_TRACKING=true"
+        });
         return;
       }
 
@@ -413,7 +413,7 @@ export class ErrorHandlerProcessor {
       const normalizedError = this.normalizeError(error);
 
       // Log the error with context
-      this.logger.info('Error has been tracked for monitoring.', {
+      this.logger.debug("Error tracking completed", {
         error: {
           code: normalizedError.code,
           message: normalizedError.message,
@@ -435,8 +435,13 @@ export class ErrorHandlerProcessor {
       //   });
       // }
     } catch (trackingError) {
-      // Use console.error to avoid circular logging
-      console.error('CRITICAL: Failed to track an error. This may indicate a problem with the tracking system itself.', trackingError);
+      // Use a fallback logger to avoid circular logging
+      // This creates a minimal logger that bypasses telemetry to prevent infinite loops
+      const fallbackLogger = IgniterConsoleLogger.create({
+        level: IgniterLogLevel.ERROR,
+        context: { component: 'ErrorHandler-Fallback' }
+      });
+      fallbackLogger.error('Error tracking system failure', { error: trackingError });
     }
   }
 }

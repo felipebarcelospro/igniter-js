@@ -58,14 +58,6 @@ export const menu: ContentSection[] = [
         slug: "/docs/core-concepts/igniter-builder",
       },
       {
-        title: "The Igniter Builder",
-        type: "docs",
-        category: "the-igniter-builder",
-        date: new Date().toISOString(),
-        description: "Deep dive into the Igniter builder",
-        slug: "/docs/core-concepts/the-igniter-builder",
-      },
-      {
         title: "Context",
         type: "docs",
         category: "context",
@@ -195,6 +187,22 @@ export const menu: ContentSection[] = [
         description: "Real-time features with Server-Sent Events",
         slug: "/docs/advanced-features/realtime",
       },
+      {
+        title: "OpenAPI Documentation",
+        type: "docs",
+        category: "openapi-documentation",
+        date: new Date().toISOString(),
+        description: "Generate OpenAPI specs and HTML docs with the CLI",
+        slug: "/docs/advanced-features/openapi-documentation",
+      },
+      {
+        title: "Igniter Studio",
+        type: "docs",
+        category: "igniter-studio",
+        date: new Date().toISOString(),
+        description: "Igniter Studio is a API playground",
+        slug: "/docs/advanced-features/igniter-studio",
+      }
     ],
   },
   {
@@ -232,6 +240,7 @@ export const menu: ContentSection[] = [
         description: "Code generation utilities",
         slug: "/docs/cli-and-tooling/igniter-generate",
       },
+      
     ],
   },
   {

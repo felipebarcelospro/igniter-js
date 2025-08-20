@@ -1,211 +1,319 @@
-# Procedures: Reusable, Type-Safe Middleware
+# Procedures in Igniter.js
 
-In Igniter.js, a **Procedure** is a powerful, reusable function that runs before your action's handler. It is the framework's implementation of the middleware pattern, but with a type-safe twist: procedures can dynamically extend the `context` object, providing new, fully-typed data to subsequent procedures or the final action handler.
+Procedures are one of the most powerful and flexible features in Igniter.js, providing a sophisticated middleware system that enables you to create reusable, composable, and type-safe request processing logic. This comprehensive guide will take you through everything you need to know about procedures, from basic concepts to advanced patterns.
 
-Procedures are the ideal place to handle cross-cutting concerns, such as:
+## What Are Procedures?
 
-- **Authentication & Authorization**: Checking if a user is logged in and has the necessary permissions.
-- **Logging**: Recording information about incoming requests.
-- **Rate Limiting**: Protecting your API from abuse.
-- **Data Transformation**: Pre-processing incoming data before it reaches your business logic.
+In Igniter.js, a **procedure** is a reusable piece of middleware that can be applied to actions or at the builder level. Think of procedures as building blocks that encapsulate common functionality like authentication, logging, rate limiting, input validation, or any custom business logic you need to run before your main handler executes.
 
-By abstracting this logic into procedures, you keep your action handlers clean, focused on their core business logic, and highly reusable.
+<Accordion title="Procedures vs Traditional Middleware">
+  <Field name="Type Safety" type="advantage">
+    Unlike traditional middleware that often lacks type safety and composability, Igniter.js procedures are fully type-safe, composable, and provide rich context manipulation capabilities.
+  </Field>
+  <Field name="Context Manipulation" type="advantage">
+    They can modify the request context, perform early returns, and maintain complete type inference throughout the chain.
+  </Field>
+</Accordion>
 
-## 1. Creating a Basic Procedure
+Procedures operate within the **request lifecycle**, executing before your action handlers and having the ability to:
 
-You create a procedure using the `igniter.procedure()` factory function. The core of a procedure is its `handler` function.
+- **Validate and transform input data**
+- **Authenticate and authorize requests**
+- **Log request information**
+- **Implement rate limiting**
+- **Add custom context data**
+- **Perform early returns** (like redirects or error responses)
+- **Access the global application context** (database connections, services, etc.)
+- **Chain with other procedures** for complex workflows
 
-**Example: A Simple Logging Procedure**
+## Core Concepts
 
-This procedure logs the path of every request that uses it.
+### Procedure Context
+
+Every procedure receives an `IgniterProcedureContext` object that contains all the information about the current request:
+
+### Understanding the Procedure Context: A Properties Breakdown
+
+To understand the `IgniterProcedureContext` object that every procedure receives, you can expand the section below to see a detailed breakdown of its properties.
+
+<Accordion title="IgniterProcedureContext Properties">
+  <Field name="request" type="object" required>
+    The incoming request object containing headers, query parameters, body, cookies, and more.
+  </Field>
+  <Field name="context" type="object" required>
+    The global application context containing database connections, services, configuration, and other shared resources.
+  </Field>
+  <Field name="response" type="object" required>
+    The response builder object with methods to create successful or error responses.
+  </Field>
+  <Field name="next" type="function" required>
+    Function to continue to the next middleware or call the final handler.
+  </Field>
+</Accordion>
+
+The context is the primary way procedures interact with the request lifecycle, providing a clean and type-safe interface for middleware operations.
+
+## Creating Your First Procedure
+
+Let's start with a simple example using the `igniter.procedure` function. We'll create a request logging procedure:
 
 ```typescript
-// src/features/logging/procedures/request-logger.procedure.ts
 import { igniter } from '@/igniter';
 
+// Create a simple logging procedure
 export const requestLogger = igniter.procedure({
-  /**
-   * The handler function is the heart of the procedure.
-   * It receives the same context object as an action.
-   */
-  handler: async ({ request, context }) => {
-    context.logger.info(`Incoming request to: ${request.path}`);
-
-    // This procedure doesn't return anything, so it doesn't modify the context.
-    // The request will simply proceed to the next function in the chain.
+  name: 'RequestLogger',
+  handler: async ({ request, context, response, next }) => {
+    const startTime = Date.now();
+    
+    // Use logger from global context if available
+    const logger = context.logger || console;
+    logger.log(`[${new Date().toISOString()}] ${request.method} ${request.url}`);
+    
+    // Continue to the next middleware or handler
+    const result = await next();
+    
+    const duration = Date.now() - startTime;
+    logger.log(`Request completed in ${duration}ms`);
+    
+    return result;
   },
 });
 ```
 
-To use it, you add it to the `use` array in any action:
+This procedure:
+1. **Logs the incoming request** with timestamp, method, and URL
+2. **Calls `next()`** to continue the middleware chain
+3. **Logs the completion time** after the request is processed
+4. **Returns the result** from the next middleware or handler
+
+### Using the Procedure
+
+Once created, you can use this procedure in your controllers:
+
+### Action-Level Procedures
 
 ```typescript
-import { requestLogger } from '@/features/logging/procedures/request-logger.procedure';
-
-// ... inside a controller
-myAction: igniter.query({
-  path: '/some-data',
-  use: [requestLogger], // Apply the logger procedure
-  handler: async ({ response }) => {
-    return response.success({ data: '...' });
-  },
-}),
-```
-
-## 2. The Core Concept: Extending the Context
-
-The most powerful feature of Igniter.js procedures is their ability to dynamically and safely add properties to the `context` object.
-
-**How it works:** If a procedure's `handler` returns an object, that object is **deeply merged** into the context that is passed to the next procedure or the final action handler. Igniter.js infers these changes at compile time, providing full TypeScript autocompletion and type safety.
-
-**Use Case: An Authentication Procedure**
-
-Let's create a procedure that validates a session token and adds the authenticated `user` to the context.
-
-```typescript
-// src/features/auth/procedures/auth.procedure.ts
-import { igniter } from '@/igniter';
-import { findUserById } from '@/services/user'; // Your user service logic
-
-export const auth = igniter.procedure({
-  handler: async ({ request, response }) => {
-    const userId = request.headers.get('x-user-id');
-
-    if (!userId) {
-      // Returning a response here will halt the request chain
-      // and send the response to the client immediately.
-      return response.unauthorized({ message: 'User ID is missing' });
-    }
-
-    const user = await findUserById(userId);
-    if (!user) {
-      return response.unauthorized({ message: 'Invalid user' });
-    }
-
-    // This is the key part!
-    // We return an object that will be merged into the context.
-    return {
-      // The key 'auth' will be added to the final context object.
-      auth: {
-        user: {
-          id: user.id,
-          email: user.email,
-          roles: user.roles,
-        },
+export const userController = igniter.controller({
+  name: 'UserController',
+  path: '/users',
+  actions: {
+    getUser: igniter.query({
+      path: '/:id',
+      // Apply the procedure only to this action
+      use: [requestLogger],
+      handler: ({ request, response }) => {
+        return response.success({ user: { id: request.params.id } });
       },
-    };
+    }),
   },
 });
 ```
 
-Now, when we use this `auth` procedure, the action's handler will have access to `context.auth.user`:
+<Accordion title="Future Enhancements">
+  <Field name="Router and Controller Level Procedures" type="roadmap">
+    Currently, procedures can only be used at the action level or builder level. Support for router and controller level procedures is planned for future releases. You can track this feature request and vote for it on [GitHub Issue #13](https://github.com/felipebarcelospro/igniter-js/issues/13).
+  </Field>
+</Accordion>
 
-```typescript
-// in a controller
-getProfile: igniter.query({
-  path: '/me',
-  use: [auth], // Apply the auth procedure
-  handler: async ({ context, response }) => {
-    // TypeScript knows `context.auth.user` exists and what its type is!
-    // It also still knows about `context.database` from the base context.
-    const currentUser = context.auth.user;
 
-    return response.success({ profile: currentUser });
-  },
-}),
-```
 
-Igniter.js automatically infers that the context for `getProfile`'s handler is `IgniterAppContext & { auth: { user: ... } }`.
+## Best Practices
 
-## 3. Parameterized Procedures for Maximum Flexibility
+Following established best practices when creating procedures ensures your code remains maintainable, reusable, and type-safe. These guidelines will help you build robust middleware that integrates seamlessly with the Igniter.js ecosystem.
 
-You can make your procedures even more powerful by designing them to accept an `options` object. This allows you to modify the procedure's behavior at the point of use.
+Proper procedure design not only improves code quality but also enhances developer experience by making your APIs more predictable and easier to debug. Each practice below addresses common challenges developers face when building production applications.
 
-**Use Case: Optional Authentication**
+<Accordion title="Keep Procedures Focused">
+  Each procedure should have a single, well-defined responsibility. This follows the Single Responsibility Principle and makes your code more maintainable and testable.
 
-Let's refactor our `auth` procedure to handle cases where authentication is required versus optional.
+  ```typescript
+  // Good: Focused on authentication only
+  export const authProcedure = igniter.procedure({
+    name: 'Authentication',
+    handler: async ({ request, response, next }) => {
+      // Only handle authentication logic
+    },
+  });
 
-```typescript
-// src/features/auth/procedures/auth.procedure.ts
-import { igniter } from '@/igniter';
-import { findUserById } from '@/services/user';
+  // Good: Focused on logging only
+  export const loggingProcedure = igniter.procedure({
+    name: 'Logging',
+    handler: async ({ request, response, next }) => {
+      // Only handle logging logic
+    },
+  });
 
-// 1. Define the shape of the options object.
-type AuthOptions = {
-  isAuthRequired?: boolean;
-};
+  // Avoid: Mixing multiple concerns
+  export const authAndLoggingProcedure = igniter.procedure({
+    name: 'AuthAndLogging',
+    handler: async ({ request, response, next }) => {
+      // Don't mix authentication and logging in one procedure
+    },
+  });
+  ```
+</Accordion>
 
-export const auth = igniter.procedure({
+<Accordion title="Use Descriptive Names">
+  Give your procedures clear, descriptive names that indicate their purpose. This makes your code self-documenting and easier to understand.
+
+  ```typescript
+  // Good - Clear and descriptive
+  export const jwtAuthenticationProcedure = igniter.procedure({
+    name: 'JWTAuthentication',
+    handler: async ({ next }) => next(),
+  });
+  
+  export const requestRateLimitProcedure = igniter.procedure({
+    name: 'RequestRateLimit',
+    handler: async ({ next }) => next(),
+  });
+  
+  export const inputValidationProcedure = igniter.procedure({
+    name: 'InputValidation',
+    handler: async ({ next }) => next(),
+  });
+
+  // Avoid - Vague and unclear
+  export const authProc = igniter.procedure({
+    name: 'Auth',
+    handler: async ({ next }) => next(),
+  });
+  
+  export const middleware1 = igniter.procedure({
+    name: 'Middleware1',
+    handler: async ({ next }) => next(),
+  });
+  ```
+</Accordion>
+
+<Accordion title="Handle Errors Gracefully">
+  Always handle potential errors in your procedures to prevent unhandled exceptions from crashing your application.
+
+  ```typescript
+  export const safeProcedure = igniter.procedure({
+    name: 'SafeProcedure',
+    handler: async ({ request, response, next }) => {
+      try {
+        // Your procedure logic
+        const result = await someAsyncOperation();
+        return next();
+      } catch (error) {
+        console.error('Procedure error:', error);
+        return response.error({
+          message: 'Procedure failed',
+          statusCode: 500,
+        });
+      }
+    },
+  });
+  ```
+</Accordion>
+
+<Accordion title="Use Schema Validation for Configuration">
+  When creating configurable procedures, always use schema validation to ensure type safety and runtime validation.
+
+  ```typescript
+  const optionsSchema = z.object({
+    timeout: z.number().min(1000).max(30000).default(5000),
+    retries: z.number().min(0).max(5).default(3),
+  });
+
+  export const configurableProcedure = igniter.procedure({
+    name: 'ConfigurableProcedure',
+    schema: optionsSchema,
+    handler: async ({ options, next }) => {
+      // options are now type-safe and validated
+    },
+  });
+  ```
+
+  <Field name="Schema Type Safety" type="feature">
+    Schema validation ensures type safety for all configuration options.
+  </Field>
+  <Field name="Runtime Validation" type="feature">
+    Invalid configurations are caught at runtime with clear error messages.
+  </Field>
+  <Field name="Configuration Default Values" type="feature">
+    Schema provides sensible defaults for optional configuration parameters.
+  </Field>
+</Accordion>
+
+<Accordion title="Document Your Procedures">
+  Provide clear documentation for your procedures, especially their configuration options, to help other developers understand and use them effectively.
+
+  ```typescript
   /**
-   * The handler for a parameterized procedure receives `options` as its first argument.
+   * Rate limiting procedure that restricts the number of requests per time window.
+   * 
+   * @example
+   * ```typescript
+   * use: [
+   *   rateLimitProcedure({
+   *     maxRequests: 100,
+   *     windowMs: 60000, // 1 minute
+   *     message: 'Too many requests'
+   *   })
+   * ]
+   * ```
    */
-  handler: async (options: AuthOptions, { request, response }) => {
-    const userId = request.headers.get('x-user-id');
+  export const rateLimitProcedure = igniter.procedure({
+    name: 'RateLimit',
+    schema: z.object({
+      /** Maximum number of requests allowed in the time window */
+      maxRequests: z.number().min(1).default(100),
+      /** Time window in milliseconds */
+      windowMs: z.number().min(1000).default(60000),
+      /** Error message to return when rate limit is exceeded */
+      message: z.string().default('Too many requests'),
+    }),
+    handler: async ({ options, request, response, next }) => {
+      // Implementation
+    },
+  });
+  ```
 
-    // If there's no user ID...
-    if (!userId) {
-      // ...and authentication is required, halt the request.
-      if (options.isAuthRequired) {
-        return response.unauthorized({ message: 'Authentication is required' });
-      }
-      // ...otherwise, do nothing and let the request continue without an authenticated user.
-      return;
-    }
+  <Field name="JSDoc Comments" type="practice">
+    Use JSDoc comments to describe the procedure's purpose and usage.
+  </Field>
+  <Field name="Usage Examples" type="practice">
+    Provide clear examples showing how to configure and use the procedure.
+  </Field>
+  <Field name="Parameter Documentation" type="practice">
+    Document each configuration parameter with inline comments.
+  </Field>
+</Accordion>
 
-    const user = await findUserById(userId);
-    if (!user) {
-      if (options.isAuthRequired) {
-        return response.unauthorized({ message: 'Invalid user' });
-      }
-      return;
-    }
 
-    // If the user is valid, add them to the context as before.
-    return {
-      auth: { user },
-    };
-  },
-});
-```
 
-Now you can use the same procedure for both public and protected routes:
 
-```typescript
-// A protected route that requires a user
-createPost: igniter.mutation({
-  path: '/',
-  method: 'POST',
-  use: [auth({ isAuthRequired: true })], // Authentication is mandatory
-  handler: async ({ context, response }) => {
-    // Here, `context.auth.user` is guaranteed to exist and is not nullable.
-    const post = await context.database.post.create({ authorId: context.auth.user.id });
-    return response.created(post);
-  },
-}),
 
-// A public route that shows more info if the user is logged in
-getPublicPost: igniter.query({
-  path: '/:id',
-  use: [auth({ isAuthRequired: false })], // Authentication is optional
-  handler: async ({ context, response }) => {
-    // Here, `context.auth.user` might be undefined.
-    // TypeScript will correctly type it as `User | undefined`.
-    if (context.auth?.user) {
-      // show extra data for logged-in users
-    }
-    // ... logic to fetch post
-  },
-}),
-```
+## Conclusion
 
-This pattern of creating parameterized procedures is extremely powerful and is a cornerstone of writing clean, DRY, and highly reusable code in Igniter.js.
+Procedures are a fundamental building block of Igniter.js applications, providing a powerful and flexible way to implement cross-cutting concerns in your API using the `igniter.procedure` function. By understanding how to create, compose, and use procedures effectively, you can build more maintainable, reusable, and type-safe applications.
 
----
+### Key Takeaways
 
-**Next Steps**
+<Accordion title="Essential Procedure Concepts">
+  <Field name="Cross-Cutting Concerns" type="concept">
+    Use procedures for authentication, logging, validation, and other shared functionality across your application.
+  </Field>
+  <Field name="Type-Safe Context" type="concept">
+    Leverage the type-safe context system for secure data sharing between procedures and handlers.
+  </Field>
+  <Field name="Composition" type="concept">
+    Compose procedures to build complex middleware chains with predictable execution order.
+  </Field>
+  <Field name="Single Responsibility" type="concept">
+    Follow the single responsibility principle to create maintainable and testable code.
+  </Field>
+  <Field name="Best Practices" type="concept">
+    Keep procedures focused, use descriptive names, and implement proper error handling.
+  </Field>
+</Accordion>
 
-Now that you've mastered the building blocks of business logic, it's time to assemble them into a cohesive API:
-
-- **[Routing](/docs/core-concepts/routing)** - Learn about URL routing
-- **[Validation](/docs/core-concepts/validation)** - Type-safe input validation
-- **[Advanced Features](/docs/advanced-features)** - Explore queues, store, and more
+<Accordion title="Next Steps">
+  <Field name="Ready to Build" type="next-step">
+    With this comprehensive understanding of procedures, you're ready to build sophisticated, production-ready APIs with Igniter.js. Explore [Controllers and Actions](/docs/core-concepts/controllers) and [Request and Response Handling](/docs/core-concepts/request-response) to complete your knowledge.
+  </Field>
+</Accordion>

@@ -16,6 +16,7 @@ import type {
 import type { IgniterStoreAdapter } from "../types/store.interface";
 import { IgniterConsoleLogger } from "../services";
 import { IgniterLogLevel, type IgniterLogger } from "../types";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
  * Options for creating console telemetry adapter
@@ -59,7 +60,15 @@ class ConsoleTelemetrySpan implements IgniterTelemetrySpan {
       this.tags = { ...options.tags };
     }
 
-    console.log(`🔍 [SPAN START] ${this.name} (${this.id})`);
+    try {
+      const logger = new IgniterConsoleLogger({ 
+        level: resolveLogLevel(), 
+        context: createLoggerContext('TelemetrySpan') 
+      });
+      logger.debug(`🔍 [SPAN START] ${this.name} (${this.id})`);
+    } catch {
+      console.log(`🔍 [SPAN START] ${this.name} (${this.id})`);
+    }
     
     // Publish to CLI if enabled
     this.provider.publishTelemetryEvent({
@@ -92,7 +101,15 @@ class ConsoleTelemetrySpan implements IgniterTelemetrySpan {
     this.status = 'error';
     this.tags['error'] = true;
     this.tags['error.message'] = error.message;
-    console.error(`❌ [SPAN ERROR] ${this.name}: ${error.message}`);
+    try {
+      const logger = new IgniterConsoleLogger({ 
+        level: resolveLogLevel(), 
+        context: createLoggerContext('TelemetrySpan') 
+      });
+      logger.error(`❌ [SPAN ERROR] ${this.name}: ${error.message}`);
+    } catch {
+      console.error(`❌ [SPAN ERROR] ${this.name}: ${error.message}`);
+    }
   }
 
   addEvent(name: string, data?: Record<string, any>): void {
@@ -101,7 +118,15 @@ class ConsoleTelemetrySpan implements IgniterTelemetrySpan {
       data,
       timestamp: Date.now()
     });
-    console.log(`📝 [SPAN EVENT] ${this.name}: ${name}`, data);
+    try {
+      const logger = new IgniterConsoleLogger({ 
+        level: resolveLogLevel(), 
+        context: createLoggerContext('TelemetrySpan') 
+      });
+      logger.debug(`📝 [SPAN EVENT] ${this.name}: ${name}`, { data });
+    } catch {
+      console.log(`📝 [SPAN EVENT] ${this.name}: ${name}`, data);
+    }
   }
 
   finish(): void {
@@ -109,15 +134,31 @@ class ConsoleTelemetrySpan implements IgniterTelemetrySpan {
     const duration = Date.now() - this.startTime;
     
     const statusIcon = this.status === 'completed' ? '✅' : '❌';
-    console.log(`${statusIcon} [SPAN END] ${this.name} (${duration}ms)`, {
-      id: this.id,
-      traceId: this.traceId,
-      parentId: this.parentId,
-      duration,
-      tags: this.tags,
-      events: this.events.length,
-      error: this.error?.message
-    });
+    try {
+      const logger = new IgniterConsoleLogger({ 
+        level: resolveLogLevel(), 
+        context: createLoggerContext('TelemetrySpan') 
+      });
+      logger.debug(`${statusIcon} [SPAN END] ${this.name} (${duration}ms)`, {
+        id: this.id,
+        traceId: this.traceId,
+        parentId: this.parentId,
+        duration,
+        tags: this.tags,
+        events: this.events.length,
+        error: this.error?.message
+      });
+    } catch {
+      console.log(`${statusIcon} [SPAN END] ${this.name} (${duration}ms)`, {
+        id: this.id,
+        traceId: this.traceId,
+        parentId: this.parentId,
+        duration,
+        tags: this.tags,
+        events: this.events.length,
+        error: this.error?.message
+      });
+    }
 
     // Publish completion to CLI if enabled
     this.provider.publishTelemetryEvent({
@@ -169,7 +210,15 @@ class ConsoleTelemetryTimer implements IgniterTimer {
   finish(additionalTags?: Record<string, string>): void {
     const duration = this.getDuration();
     const allTags = { ...this.tags, ...additionalTags };
-    console.log(`⏱️ [TIMER] ${this.name}: ${duration}ms`, allTags);
+    try {
+      const logger = new IgniterConsoleLogger({ 
+        level: resolveLogLevel(), 
+        context: createLoggerContext('TelemetryTimer') 
+      });
+      logger.debug(`⏱️ [TIMER] ${this.name}: ${duration}ms`, { tags: allTags });
+    } catch {
+      console.log(`⏱️ [TIMER] ${this.name}: ${duration}ms`, allTags);
+    }
   }
 
   getDuration(): number {
@@ -190,12 +239,9 @@ class ConsoleTelemetryProvider implements IgniterTelemetryProvider {
   private store?: IgniterStoreAdapter;
   private enableCliIntegration: boolean;
   private channel: string;
-  private logger: IgniterLogger = IgniterConsoleLogger.create({
-    level: process.env.NODE_ENV === 'production' ? IgniterLogLevel.INFO : IgniterLogLevel.DEBUG,
-    context: {
-      provider: 'ConsoleTelemetryProvider',
-      package: 'core'
-    }
+  private logger: IgniterLogger = new IgniterConsoleLogger({
+    level: resolveLogLevel(),
+    context: createLoggerContext('ConsoleTelemetryProvider')
   })
 
   constructor(
@@ -265,7 +311,7 @@ class ConsoleTelemetryProvider implements IgniterTelemetryProvider {
 
   increment(metric: string, value: number = 1, tags?: Record<string, string>): void {
     if (!this.config.enableMetrics) return;
-    this.logger.info(`[COUNTER] ${metric}: +${value}`, tags);
+    this.logger.debug(`[COUNTER] ${metric}: +${value}`, tags);
     
     this.publishTelemetryMetric({
       name: metric,
@@ -278,17 +324,17 @@ class ConsoleTelemetryProvider implements IgniterTelemetryProvider {
 
   decrement(metric: string, value: number = 1, tags?: Record<string, string>): void {
     if (!this.config.enableMetrics) return;
-    this.logger.info(`[COUNTER] ${metric}: -${value}`, tags);
+    this.logger.debug(`[COUNTER] ${metric}: -${value}`, tags);
   }
 
   histogram(metric: string, value: number, tags?: Record<string, string>): void {
     if (!this.config.enableMetrics) return;
-    this.logger.info(`[HISTOGRAM] ${metric}: ${value}`, tags);
+    this.logger.debug(`[HISTOGRAM] ${metric}: ${value}`, tags);
   }
 
   gauge(metric: string, value: number, tags?: Record<string, string>): void {
     if (!this.config.enableMetrics) return;
-    this.logger.info(`[GAUGE] ${metric}: ${value}`, tags);
+    this.logger.debug(`[GAUGE] ${metric}: ${value}`, tags);
   }
 
   timer(metric: string, tags?: Record<string, string>): IgniterTimer {
@@ -297,7 +343,7 @@ class ConsoleTelemetryProvider implements IgniterTelemetryProvider {
 
   timing(metric: string, duration: number, tags?: Record<string, string>): void {
     if (!this.config.enableMetrics) return;
-    this.logger.info(`[TIMING] ${metric}: ${duration}ms`, tags);
+    this.logger.debug(`[TIMING] ${metric}: ${duration}ms`, tags);
   }
 
   // ==========================================
@@ -307,7 +353,7 @@ class ConsoleTelemetryProvider implements IgniterTelemetryProvider {
   event(name: string, data: Record<string, any>, level: 'debug' | 'info' | 'warn' | 'error' = 'info'): void {
     if (!this.config.enableEvents) return;
     const icon = level === 'error' ? '🚨' : level === 'warn' ? '⚠️' : '📝';
-    this.logger.info(`[EVENT] ${name}`, data);
+    this.logger.debug(`[EVENT] ${name}`, data);
     
     this.publishTelemetryEvent({
       id: Math.random().toString(36).substring(2, 15),
@@ -341,12 +387,12 @@ class ConsoleTelemetryProvider implements IgniterTelemetryProvider {
   // ==========================================
 
   async flush(): Promise<void> {
-    this.logger.info('Flushing data...');
+    this.logger.debug('Flushing data...');
     // In console provider, nothing to flush
   }
 
   async shutdown(): Promise<void> {
-    this.logger.info('Shutting down...');
+    this.logger.debug('Shutting down...');
     this.activeSpan = null;
     this.spanStack = [];
   }
@@ -427,4 +473,4 @@ export function createConsoleTelemetryAdapter(
   options?: ConsoleTelemetryOptions
 ): IgniterTelemetryProvider {
   return new ConsoleTelemetryProvider(config, options);
-} 
+}

@@ -4,182 +4,312 @@ Every Igniter.js application begins with the **Igniter Builder**. It is a fluent
 
 Think of the builder as the master blueprint for your entire backend. It's where you define the application's context, integrate services like logging and caching, enable advanced features like background jobs, and extend functionality with plugins.
 
-## The "Why": Philosophy of the Builder
+## Philosophy
 
-Using a builder pattern isn't just for convenience; it's a core part of the Igniter.js philosophy for several key reasons:
+The Igniter Builder is designed around five core principles:
 
-*   **Guided Setup**: The builder's chainable methods provide a clear, step-by-step process for configuration, reducing the chances of misconfiguration.
-*   **Compile-Time Safety**: The builder leverages TypeScript generics to ensure that if your application is configured correctly, it will compile. You cannot, for instance, access the job queue system if you haven't explicitly enabled it with the `.jobs()` method. This catches errors before your code ever runs.
-*   **Explicit is Better**: Your `igniter.ts` file becomes a single source of truth that explicitly declares all the major components and capabilities of your application.
-*   **Modularity and Testability**: By composing the application from modular pieces (plugins, services), you create a system that is easier to manage, test, and reason about.
+1. **Guided Configuration**: Each method guides you through the setup process with clear, type-safe APIs.
+2. **Compile-time Safety**: All configurations are validated at compile time, catching errors before they reach production.
+3. **Explicitness**: Every configuration is explicit and intentional, making your application's behavior predictable.
+4. **Modularity**: Each adapter and service can be configured independently, allowing for flexible architectures.
+5. **Testability**: The builder pattern makes it easy to create different configurations for testing, development, and production.
 
----
+## How It Works
 
-## How it Works: A Method-by-Method Breakdown
-
-You start by importing the `Igniter` object and then chain methods to build up your application's configuration. The order is flexible, but it always starts with `.context()` and ends with `.create()`.
-
-```typescript
-// src/igniter.ts
-import { Igniter } from '@igniter-js/core';
-```
-
-### 1. `.context<T>()` - The First and Most Crucial Step
-
-This method **must** be the first one you call. It establishes the base "shape" of your application's `Context`. The context is the primary mechanism for dependency injection in Igniter.js, making services like your database client available throughout your application.
-
-**Usage:**
-First, you define a type for your application context, often in a separate `igniter.context.ts` file. Then, you pass this type as a generic argument to `.context()`.
+The Igniter Builder uses a fluent interface pattern where each method returns a new builder instance with updated type information. This ensures that TypeScript can provide accurate autocompletion and type checking throughout your configuration process.
 
 ```typescript
-// src/igniter.context.ts
-import { PrismaClient } from '@prisma/client';
-
-export const database = new PrismaClient();
-
-export type AppContext = {
-  database: PrismaClient;
-};
-
-export const context: AppContext = {
-  database,
-};
-```
-
-```typescript
-// src/igniter.ts
-import type { AppContext } from './igniter.context';
-
-const builder = Igniter.context<AppContext>();
-```
-
-### 2. `.logger(logger)` - Structured Logging
-
-This method attaches a structured logger to your application. The logger becomes available throughout your application via the context and can be used for debugging, monitoring, and observability.
-
-**Usage:**
-
-```typescript
-import { createConsoleLogger } from '@igniter-js/core/loggers';
-
-const logger = createConsoleLogger({ level: 'info' });
-
-const builder = Igniter
+const igniter = Igniter
   .context<AppContext>()
-  .logger(logger); // Attach the logger
-```
-
-### 3. `.store(storeAdapter)` - Enabling Igniter.js Store
-
-This enables **Igniter.js Store**, the caching and pub/sub system. It requires a driver (like Redis) and provides powerful features for session management, caching, and real-time messaging.
-
-**Usage:**
-
-```typescript
-import { createRedisStoreAdapter } from '@igniter-js/core/adapters';
-import { redis } from '@/services/redis';
-
-const store = createRedisStoreAdapter({ client: redis });
-
-const builder = Igniter
-  .context<AppContext>()
-  .store(store); // Enable the Store feature
-```
-
-### 4. `.jobs(jobRouter)` - Enabling Igniter.js Queues
-
-This enables **Igniter.js Queues**, the first-class system for background job processing. It also requires a driver (like BullMQ) and a "job router" where you define and register all your background jobs.
-
-**Usage:**
-
-```typescript
-import { createBullMQAdapter } from '@igniter-js/core/adapters';
-import { REGISTERED_JOBS } from '@/jobs'; // Your job definitions
-
-const jobs = createBullMQAdapter({ ...config });
-const jobRouter = jobs.merge(REGISTERED_JOBS);
-
-const builder = Igniter
-  .context<AppContext>()
-  .jobs(jobRouter); // Enable the Queues feature
-```
-
-### 5. `.plugin(plugins)` - Extending Core Functionality
-
-This is the primary way to add reusable, modular functionality. Plugins can add their own context, actions, procedures, and even lifecycle hooks.
-
-**Usage:**
-
-```typescript
-import { authPlugin } from '@/plugins/auth';
-
-const builder = Igniter
-  .context<AppContext>()
-  .plugins({
-    auth: authPlugin, // Register the auth plugin under the 'auth' key
-  });
-```
-
-### 6. `.create()` - The Final Step
-
-This method must be called last. It consumes all the previous configurations and returns the final, fully-configured `igniter` instance. This instance holds all the tools you'll need to define your application's logic.
-
----
-
-## Putting It All Together: A Complete Example
-
-Here is what a typical `igniter.ts` file looks like when fully configured.
-
-```typescript
-// src/igniter.ts
-import type { IgniterAppContext } from "./igniter.context";
-import { Igniter } from "@igniter-js/core";
-import { logger } from "@/services/logger";
-import { store } from "@/services/store";
-import { jobs } from "@/services/jobs";
-import { authPlugin } from "@/plugins/auth";
-
-/**
- * The core Igniter.js instance.
- * This is the single, immutable object that provides all the tools
- * for building controllers, actions, and procedures.
- */
-export const igniter = Igniter
-  // 1. Define the base context shape
-  .context<IgniterAppContext>()
-  // 2. Attach a structured logger
-  .logger(logger)
-  // 3. Enable the Redis-based Store
-  .store(store)
-  // 4. Enable the BullMQ-based background jobs system
-  .jobs(jobs)
-  // 5. Register custom plugins
-  .plugins({
-    auth: authPlugin,
-  })
-  // 6. Finalize the configuration and create the instance
+  .middleware([authMiddleware, loggingMiddleware])
+  .store(redisAdapter)
+  .logger(consoleLogger)
+  .telemetry(openTelemetryProvider)
   .create();
 ```
 
-The resulting `igniter` object is then exported and used across your application to ensure consistency and type safety. It contains:
+## Configuration Methods
 
-*   `igniter.controller()`: A factory function to create new controllers.
-*   `igniter.query()`: A factory function to create `GET` actions.
-*   `igniter.mutation()`: A factory function to create `POST`, `PUT`, `PATCH`, `DELETE` actions.
-*   `igniter.procedure()`: A factory function to create reusable middleware.
-*   `igniter.router()`: The final builder to assemble all controllers.
-*   `igniter.logger`: Direct access to the logger instance.
-*   `igniter.store`: Direct access to the store adapter.
-*   `igniter.jobs`: Direct access to the job queue system.
+<Accordion title=".context<T>() - Define application context type">
+  <Field name="contextFn" type="TContext extends object | ContextCallback" required description="The context type or callback function that defines the application context." />
 
-By using the builder, you've created a powerful, type-safe foundation for your entire application.
+  ```typescript
+  type AppContext = {
+    user: User | null;
+    db: Database;
+    config: AppConfig;
+  };
 
----
+  const igniter = Igniter.context<AppContext>();
+  ```
 
-## Next Steps
+  **Key Points:**
+  - The context type is used for type inference across all actions and procedures
+  - Context can be populated by middleware or provided directly in actions
+  - Must be defined before other configuration methods for proper type inference
+  - Supports both static types and dynamic context callbacks
+</Accordion>
 
-Now that you understand how the application is initialized with the builder, the next logical step is to dive deeper into the first piece of that puzzle:
+<Accordion title=".middleware(middlewares) - Configure global middleware">
+  <Field name="middlewares" type="readonly IgniterProcedure<any, any, any>[]" required description="An array of middleware procedures to apply globally." />
 
-*   **[Context](docs/core-concepts/context)** - Learn about dependency injection and shared state
-*   **[Controllers & Actions](docs/core-concepts/controllers-and-actions)** - Build your API endpoints
-*   **[Procedures](docs/core-concepts/procedures)** - Create reusable middleware
+  ```typescript
+  import { authMiddleware, loggingMiddleware } from './middleware';
+
+  const igniter = Igniter
+    .context<AppContext>()
+    .middleware([authMiddleware, loggingMiddleware]);
+  ```
+
+  **Key Points:**
+  - Middleware is executed in the order specified in the array
+  - Global middleware applies to all controllers and actions
+  - Each middleware can modify the context or handle errors
+  - Type-safe middleware composition with full TypeScript inference
+</Accordion>
+
+<Accordion title=".config(routerConfig) - Set base URL and path">
+  <Field name="routerConfig" type="TConfig extends IgniterBaseConfig" required description="Configuration object containing base URL and path settings." />
+
+  ```typescript
+  const igniter = Igniter
+    .context<AppContext>()
+    .config({
+      baseURL: 'https://api.example.com',
+      basePATH: '/v1'
+    });
+  ```
+
+  **Available Options:**
+  - `baseURL` - The base URL for your API
+  - `basePATH` - The base path prefix for all routes
+</Accordion>
+
+<Accordion title=".store(storeAdapter) - Configure caching and storage">
+  <Field name="storeAdapter" type="IgniterStoreAdapter" required description="A store adapter implementing the IgniterStoreAdapter interface." />
+
+  ```typescript
+  import { RedisAdapter } from '@igniter-js/adapter-redis';
+
+  const store = new RedisAdapter({
+    host: 'localhost',
+    port: 6379,
+    db: 0
+  });
+
+  const igniter = Igniter
+    .context<AppContext>()
+    .store(store);
+  ```
+
+  **Supported Adapters:**
+  - `@igniter-js/adapter-redis` - Redis-based storage with pub/sub support
+  - Custom adapters implementing `IgniterStoreAdapter` interface
+
+  **Store Features:**
+  - Key-value storage with TTL support
+  - Pub/Sub messaging for real-time features
+  - Automatic serialization/deserialization
+  - Type-safe operations
+</Accordion>
+
+<Accordion title=".logger(loggerAdapter) - Set up application logging">
+  <Field name="loggerAdapter" type="IgniterLogger" required description="A logger adapter implementing the IgniterLogger interface." />
+
+  ```typescript
+  import { ConsoleLogger } from '@igniter-js/logger-console';
+
+  const logger = new ConsoleLogger({
+    level: 'info',
+    format: 'json'
+  });
+
+  const igniter = Igniter
+    .context<AppContext>()
+    .logger(logger);
+  ```
+
+  **Logger Interface:**
+  - `info(message, meta?)` - Log informational messages
+  - `warn(message, meta?)` - Log warning messages
+  - `error(message, meta?)` - Log error messages
+  - `debug(message, meta?)` - Log debug messages
+
+  **Custom Loggers:**
+  Implement the `IgniterLogger` interface to create custom logging solutions.
+</Accordion>
+
+<Accordion title=".jobs(jobsAdapter) - Enable background job processing">
+  <Field name="jobsAdapter" type="MergedJobsExecutor<any>" required description="A jobs adapter that provides background job processing capabilities." />
+
+  ```typescript
+  import { BullMQAdapter } from '@igniter-js/adapter-bullmq';
+
+  const jobs = new BullMQAdapter({
+    connection: {
+      host: 'localhost',
+      port: 6379
+    },
+    defaultJobOptions: {
+      removeOnComplete: 10,
+      removeOnFail: 5
+    }
+  });
+
+  const igniter = Igniter
+    .context<AppContext>()
+    .jobs(jobs);
+  ```
+
+  **Supported Adapters:**
+  - `@igniter-js/adapter-bullmq` - BullMQ integration with Redis
+
+  **Job Features:**
+  - Type-safe job definitions and handlers
+  - Delayed and scheduled job execution
+  - Job retry mechanisms and error handling
+  - Queue monitoring and management
+</Accordion>
+
+<Accordion title=".telemetry(telemetryProvider) - Add observability and monitoring">
+  <Field name="telemetryProvider" type="IgniterTelemetryProvider" required description="A telemetry provider implementing distributed tracing and metrics collection." />
+
+  ```typescript
+  import { OpenTelemetryProvider } from '@igniter-js/adapter-opentelemetry';
+
+  const telemetry = new OpenTelemetryProvider({
+    serviceName: 'my-api',
+    serviceVersion: '1.0.0',
+    exporters: {
+      traces: 'jaeger',
+      metrics: 'prometheus'
+    }
+  });
+
+  const igniter = Igniter
+    .context<AppContext>()
+    .telemetry(telemetry);
+  ```
+
+  **Supported Providers:**
+  - `@igniter-js/adapter-opentelemetry` - OpenTelemetry integration
+
+  **Telemetry Features:**
+  - Distributed tracing across requests
+  - Custom metrics and counters
+  - Performance monitoring
+  - Error tracking and alerting
+  - Integration with popular observability platforms
+</Accordion>
+
+<Accordion title=".plugins(pluginsRecord) - Extend framework functionality">
+  <Field name="pluginsRecord" type="Record<string, IgniterPlugin>" required description="An object containing plugin instances keyed by their names." />
+
+  ```typescript
+  import { AuthPlugin } from '@igniter-js/plugin-auth';
+  import { CachePlugin } from '@igniter-js/plugin-cache';
+
+  const igniter = Igniter
+    .context<AppContext>()
+    .plugins({
+      auth: new AuthPlugin({
+        secret: process.env.JWT_SECRET,
+        expiresIn: '7d'
+      }),
+      cache: new CachePlugin({
+        ttl: 3600
+      })
+    });
+  ```
+
+  **Plugin System:**
+  - Plugins can extend context, add middleware, and provide utilities
+  - Type-safe plugin configuration and usage
+  - Plugins are accessible throughout your application via the context
+  - Support for plugin lifecycle hooks and resource management
+</Accordion>
+
+<Accordion title=".docs(docsConfig) - Generate API documentation">
+  <Field name="docsConfig" type="DocsConfig" required description="Configuration object for OpenAPI documentation and interactive playground." />
+
+  ```typescript
+  const igniter = Igniter
+    .context<AppContext>()
+    .docs({
+      openapi: '3.0.0',
+      info: {
+        title: 'My API',
+        version: '1.0.0',
+        description: 'A comprehensive API built with Igniter.js'
+      },
+      servers: [
+        {
+          url: 'https://api.example.com/v1',
+          description: 'Production server'
+        },
+        {
+          url: 'http://localhost:3000/v1',
+          description: 'Development server'
+        }
+      ],
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT'
+        }
+      },
+      playground: {
+        enabled: true,
+        route: '/docs',
+        security: (request) => {
+          // Custom security check for playground access
+          return process.env.NODE_ENV === 'development';
+        }
+      }
+    });
+  ```
+
+  **Documentation Features:**
+  - Automatic OpenAPI specification generation
+  - Interactive API playground (Scalar)
+  - Multiple server configurations
+  - Security scheme definitions
+  - Custom playground access control
+</Accordion>
+
+<Accordion title=".create() - Build the final Igniter instance">
+  Creates the final Igniter instance with all configured adapters and services.
+
+  ```typescript
+  const igniter = Igniter
+    .context<AppContext>()
+    .middleware([authMiddleware])
+    .store(redisAdapter)
+    .logger(consoleLogger)
+    .jobs(bullmqAdapter)
+    .telemetry(openTelemetryProvider)
+    .create();
+  ```
+
+  **Returns an object with:**
+  - `controller` - Function to create controllers
+  - `query` - Function to create query actions (GET requests)
+  - `mutation` - Function to create mutation actions (POST, PUT, DELETE, PATCH)
+  - `procedure` - Function to create reusable procedures and middleware
+  - `router` - Function to create nested routers
+  - `logger` - Configured logger instance
+  - `store` - Configured store instance
+  - `jobs` - Configured jobs instance
+
+  **Type Safety:**
+  All returned functions are fully typed based on your configuration, providing complete TypeScript inference throughout your application.
+</Accordion>
+
+## What's Next?
+
+Now that you have your Igniter instance configured, you can start building your application:
+
+- **[Context](/docs/core-concepts/context)** - Learn how to work with application context
+- **[Controllers & Actions](/docs/core-concepts/controllers-and-actions)** - Create your API endpoints
+- **[Procedures](/docs/core-concepts/procedures)** - Build reusable middleware and logic

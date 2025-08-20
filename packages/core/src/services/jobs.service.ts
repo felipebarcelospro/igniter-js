@@ -15,6 +15,8 @@ import type {
   JobsCacheEntry,
   JobPathResolutionResult
 } from "../types/jobs.interface";
+import { IgniterConsoleLogger } from "./logger.service";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
  * Configuration for creating a jobs service instance.
@@ -497,12 +499,17 @@ export function createJobsRouter<TJobs extends Record<string, JobDefinition<any,
       if (!routerHook && !jobHook) return undefined;
       
       return async (context: THookContext) => {
+        const logger = IgniterConsoleLogger.create({
+          level: resolveLogLevel(),
+          context: createLoggerContext('Jobs')
+        });
+
         // Execute router global hook first
         if (routerHook) {
           try {
             await routerHook(context);
           } catch (error) {
-            console.error(`Router hook failed:`, error);
+            logger.error('Router hook failed:', { error });
           }
         }
         
@@ -511,7 +518,7 @@ export function createJobsRouter<TJobs extends Record<string, JobDefinition<any,
           try {
             await jobHook(context);
           } catch (error) {
-            console.error(`Job hook failed:`, error);
+            logger.error('Job hook failed:', { error });
           }
         }
       };
@@ -1073,4 +1080,4 @@ export function createJobsProxy<T extends Record<string, Record<string, JobDefin
       return undefined;
     }
   });
-} 
+}

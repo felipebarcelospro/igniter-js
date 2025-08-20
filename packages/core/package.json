@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/core",
-  "version": "0.2.6",
+  "version": "0.2.65",
   "description": "A modern, type-safe, and flexible HTTP framework for building scalable APIs with TypeScript",
   "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
   "license": "MIT",
@@ -110,7 +110,7 @@
   },
   "dependencies": {
     "@scalar/core": "^0.3.11",
-    "chalk": "^5.4.1",
+    "chalk": "4.1.2",
     "glob": "^11.0.0",
     "lodash": "^4.17.21",
     "rou3": "^0.5.1",

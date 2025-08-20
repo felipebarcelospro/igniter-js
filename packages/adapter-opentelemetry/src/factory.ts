@@ -4,6 +4,13 @@ import type {
   OpenTelemetryAdapter,
   CreateOpenTelemetryAdapterOptions,
 } from './types';
+import { IgniterConsoleLogger, resolveLogLevel } from '@igniter-js/core';
+
+// Centralized logger for this module
+const logger = IgniterConsoleLogger.create({
+  level: resolveLogLevel(),
+  context: { component: 'OpenTelemetryAdapter' },
+});
 
 /**
  * Creates an OpenTelemetry adapter for Igniter.js telemetry system
@@ -65,12 +72,12 @@ export async function createOpenTelemetryAdapter(
 
     // Setup graceful shutdown
     const shutdownHandler = async () => {
-      console.log('[OpenTelemetry] Graceful shutdown initiated...');
+      logger.info('Graceful shutdown initiated...');
       
       const shutdownPromise = adapter.shutdown();
       const timeoutPromise = new Promise<void>((resolve) => {
         setTimeout(() => {
-          console.warn(`[OpenTelemetry] Shutdown timeout after ${shutdownTimeout}ms`);
+          logger.warn('Shutdown timeout', { timeoutMs: shutdownTimeout });
           resolve();
         }, shutdownTimeout);
       });
@@ -186,4 +193,4 @@ export async function createProductionOpenTelemetryAdapter(config: {
   return createOpenTelemetryAdapter({
     config: telemetryConfig,
   });
-} 
+}

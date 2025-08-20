@@ -89,6 +89,17 @@ export function createChildLogger(
   return childLogger;
 }
 
+/**
+ * Reconfigures the CLI logger based on command-line options
+ * @param options CLI options, e.g., { debug: true }
+ */
+export function setupCliLogger(options: { debug?: boolean }) {
+  if (options.debug) {
+    logger.setLevel(IgniterLogLevel.DEBUG);
+    logger.debug('Debug mode enabled.');
+  }
+}
+
 
 
 /**

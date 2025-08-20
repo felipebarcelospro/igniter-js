@@ -1,11 +1,12 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import { loadRouter, introspectRouter } from './introspector';
+import { loadRouter, introspectRouter, RouterLoadError } from './introspector';
 import { generateSchemaFromRouter } from './generator'
-import { createChildLogger } from '../logger'
+import { createChildLogger, formatError } from '../logger'
 import { createDetachedSpinner } from '@/lib/spinner'
 import chokidar from 'chokidar';
 import { OpenAPIGenerator } from '../docs/openapi-generator';
+import chalk from 'chalk';
 
 export type IgniterBuildConfig = {
   framework?: 'nextjs' | 'vite' | 'webpack' | 'generic'
@@ -28,9 +29,9 @@ export class IgniterWatcher {
   private config: IgniterBuildConfig
   private isGenerating = false
   private logger = createChildLogger({ component: 'watcher' })
-  private watchingSpinner: any = null // Spinner permanente para "watching"
-  private watchingSpinnerActive = false // Track spinner state
-  private isInteractiveMode = false // Detect interactive mode
+  private watchingSpinner: any = null
+  private watchingSpinnerActive = false
+  private isInteractiveMode = false
 
   constructor(config: IgniterBuildConfig) {
     this.config = {
@@ -46,7 +47,6 @@ export class IgniterWatcher {
       ...config
     }
 
-    // Detect if we're in interactive mode
     this.isInteractiveMode = !!(
       process.env.IGNITER_INTERACTIVE_MODE === 'true' ||
       process.argv.includes('--interactive')
@@ -57,11 +57,7 @@ export class IgniterWatcher {
     }
   }
 
-  /**
-   * Start the permanent "watching" spinner with proper management
-   */
   private startWatchingSpinner() {
-    // Skip spinners in interactive mode
     if (this.isInteractiveMode) {
       this.logger.info('Watching for changes...')
       return
@@ -74,87 +70,55 @@ export class IgniterWatcher {
     }
   }
 
-  /**
-   * Pause the watching spinner to allow other messages
-   */
   private pauseWatchingSpinner() {
-    // Skip spinners in interactive mode
-    if (this.isInteractiveMode) {
-      return
-    }
+    if (this.isInteractiveMode) return
 
     if (this.watchingSpinner && this.watchingSpinnerActive) {
       this.watchingSpinner.stop()
       this.watchingSpinnerActive = false
-      // Add a small delay to ensure terminal is clear
       process.stdout.write('\n')
     }
   }
 
-  /**
-   * Resume the watching spinner after other messages
-   */
   private resumeWatchingSpinner() {
-    // Skip spinners in interactive mode
-    if (this.isInteractiveMode) {
-      return
-    }
+    if (this.isInteractiveMode) return
 
     if (!this.watchingSpinnerActive && !this.isGenerating) {
-      // Create a new spinner instance for clean resume
       this.watchingSpinner = createDetachedSpinner('Watching for changes...')
       this.watchingSpinner.start()
       this.watchingSpinnerActive = true
     }
   }
 
-  /**
-   * Stop the permanent "watching" spinner completely
-   */
   private stopWatchingSpinner() {
-    // Skip spinners in interactive mode
-    if (this.isInteractiveMode) {
-      return
-    }
+    if (this.isInteractiveMode) return
 
     if (this.watchingSpinner) {
       this.watchingSpinner.stop()
       this.watchingSpinner = null
       this.watchingSpinnerActive = false
-      // Clear the line and add spacing
       process.stdout.write('\n')
     }
   }
 
-  
-
-  /**
-   * Start watching controller files
-   */
   async start() {
     try {
-
-
       this.logger.info('Starting file watcher', {
         output: this.config.outputDir,
         patterns: this.config.controllerPatterns?.join(', ')
       })
 
-      // Setup file watcher
       this.watcher = chokidar.watch(this.config.controllerPatterns!, {
         ignored: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**'],
         persistent: true,
         ignoreInitial: false
       })
 
-      // Wait for watcher to be ready
       await new Promise<void>((resolve, reject) => {
-        // Handle file changes
         this.watcher.on('add', this.handleFileChange.bind(this))
         this.watcher.on('change', this.handleFileChange.bind(this))
         this.watcher.on('unlink', this.handleFileChange.bind(this))
 
-        // Handle watcher ready
         this.watcher.on('ready', () => {
           this.logger.success('File watcher is ready', {
             watching: this.config.controllerPatterns?.join(', ')
@@ -162,17 +126,13 @@ export class IgniterWatcher {
           resolve()
         })
 
-        // Handle errors
         this.watcher.on('error', (error: Error) => {
           this.logger.error('File watcher error', {}, error)
           reject(error)
         })
       })
 
-      // Initial generation after watcher is ready
       await this.regenerateSchema()
-
-      // Start the permanent watching spinner after initial generation
       this.startWatchingSpinner()
 
     } catch (error) {
@@ -181,143 +141,136 @@ export class IgniterWatcher {
     }
   }
 
-  /**
-   * Stop watching files
-   */
   async stop() {
     if (this.watcher) {
-      // Stop the watching spinner first
       this.stopWatchingSpinner()
-
       const spinner = createDetachedSpinner('Stopping file watcher...')
       spinner.start()
-
       await this.watcher.close()
       this.watcher = null
-
       spinner.success('File watcher stopped')
       this.logger.groupEnd()
     }
   }
 
-  /**
-   * Handle file change events
-   */
   private async handleFileChange(filePath: string) {
-    if (!filePath.includes('.controller.')) {
-      return
-    }
+    if (!filePath.includes('.controller.')) return
 
-    // Pause the watching spinner to allow clean message display
     this.pauseWatchingSpinner()
 
-    // Debounce rapid changes
     if (this.isGenerating) {
       this.logger.debug('Generation already in progress, skipping...')
-      // Resume watching spinner after a brief delay
       setTimeout(() => this.resumeWatchingSpinner(), 100)
       return
     }
 
     await this.regenerateSchema()
-
-    // Resume the watching spinner after regeneration with a small delay
     setTimeout(() => this.resumeWatchingSpinner(), 500)
   }
 
-  /**
-   * Generate client schema once (useful for CI/CD)
-   */
   async generate() {
     return await this.regenerateSchema()
   }
 
-  /**
-   * Regenerate client schema from current controllers
-   */
   private async regenerateSchema() {
-    if (this.isGenerating) {
-      return
-    }
+    if (this.isGenerating) return
 
     this.isGenerating = true
+    let router: any = null;
 
     try {
-      // Ensure spinner is paused during generation
       this.pauseWatchingSpinner()
-
       this.logger.separator()
 
-      // Find router file automatically
       const possibleRouterPaths = [
-        'src/igniter.router.ts',
-        'src/igniter.router.js',
-        'src/router.ts',
-        'src/router.js',
-        'igniter.router.ts',
-        'igniter.router.js',
-        'router.ts',
-        'router.js'
+        'src/igniter.router.ts', 'src/igniter.router.js',
+        'src/router.ts', 'src/router.js',
+        'igniter.router.ts', 'igniter.router.js',
+        'router.ts', 'router.js'
       ]
 
-      let router: any = null
-
+      let foundPath: string | null = null;
       for (const routerPath of possibleRouterPaths) {
         if (fs.existsSync(routerPath)) {
-          router = await loadRouter(routerPath)
-          if (router) {
-            break
-          } else {
-            this.logger.debug('Router loading returned null', { path: routerPath })
-          }
+          foundPath = routerPath;
+          break;
         }
       }
 
-      if (!router) {
-        this.logger.warn('No router found', {
-          searched: possibleRouterPaths
+      if (!foundPath) {
+        this.logger.warn('No router file found.', {
+          searched: possibleRouterPaths.join(', ')
         })
-        return
+        this.isGenerating = false;
+        return;
       }
 
-      // Generate client files (the generator will handle its own logging)
+      this.logger.info(`Found router at ${chalk.cyan(foundPath)}. Loading...`);
+      router = await loadRouter(foundPath);
+
+      if (!router) {
+        // This case should ideally not be hit anymore due to error propagation
+        this.logger.warn('Router file was loaded, but it appears to be empty or invalid.');
+        this.isGenerating = false;
+        return;
+      }
+
       await generateSchemaFromRouter(router, this.config)
 
-      // Generate OpenAPI docs if enabled
       if (this.config.generateDocs) {
         await this.generateOpenAPISpec(router)
       }
 
     } catch (error) {
-      this.logger.error('Schema generation failed', {}, error)
+      this.logger.error('Schema generation failed', { error: formatError(error) });
+
+      if (error instanceof RouterLoadError) {
+        console.error(chalk.red.bold('\n✗ Error loading your Igniter router:'));
+        console.error(chalk.gray('  The router file contains an error and could not be compiled.'));
+        console.error(chalk.gray(`  File: ${error.message.split(' ').pop()}`));
+
+        // The original error from TSX is what's valuable here.
+        const originalError = error.originalError;
+        if (originalError) {
+          console.error(chalk.yellow.bold('\n  Original Error:'));
+          console.error(chalk.white(`    ${originalError.name}: ${originalError.message}`));
+          if (originalError.stack) {
+            // Indent and clean up the stack trace for readability
+            const indentedStack = originalError.stack.split('\n').slice(1).map((line: string) => `    ${line}`).join('\n');
+            console.error(chalk.gray(indentedStack));
+          }
+        }
+        console.error(chalk.red.bold('\nPlease fix the error in your router file and save it to regenerate.'));
+      } else {
+        // Generic error handling
+        console.error(chalk.red.bold('\n✗ An unexpected error occurred during schema generation.'));
+        console.error(chalk.gray('  Run with --debug for more details.'));
+      }
+
     } finally {
       this.isGenerating = false
-      // Don't resume spinner here - let handleFileChange or start() handle it
     }
   }
 
-  /**
-   * Generate OpenAPI specification from router
-   */
   private async generateOpenAPISpec(router: any) {
     try {
       this.logger.info('Generating OpenAPI specification...')
-      
-      const introspected = introspectRouter(router)
-      const generator = new OpenAPIGenerator(introspected.schema.docs || {})
-      const openApiSpec = generator.generate(introspected.schema)
+
+      const introspectedSchema = introspectRouter(router).schema;
+      const generator = new OpenAPIGenerator(introspectedSchema.docs || {})
+      const openApiSpec = generator.generate(introspectedSchema)
 
       const outputDir = path.resolve(this.config.docsOutputDir!)
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true })
       }
-      
+
       const outputPath = path.join(outputDir, 'openapi.json')
       fs.writeFileSync(outputPath, JSON.stringify(openApiSpec, null, 2), 'utf8')
-      
+
       this.logger.success(`OpenAPI specification updated at ${outputPath}`)
     } catch (error) {
-      this.logger.error('Error generating OpenAPI specification:', error)
+      this.logger.error('Error generating OpenAPI specification:', { error: formatError(error) })
     }
   }
 }

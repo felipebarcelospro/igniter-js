@@ -36,7 +36,7 @@ export function FeaturesSection() {
               }}
               transition={{ type: "spring", stiffness: 300 }}
             >
-              <div className="p-10 border-r border-border">
+              <div className="px-4 py-6 lg:px-10 border-r border-border">
                 <div className="flex items-center mb-4 sm:mb-6">
                   <span className="mr-2">
                     {feature.icon}
@@ -51,7 +51,7 @@ export function FeaturesSection() {
               </div>
             </motion.div>
           ))}
-        </div>        
+        </div>
       </motion.div>
     </motion.section>
   );

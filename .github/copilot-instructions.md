@@ -17,7 +17,7 @@ applyTo: '**'
 ## 2. About the Igniter.js Monorepo
 I am working directly on the Igniter.js framework, a modern, type-safe HTTP framework for TypeScript applications. The project is managed as a monorepo and my primary context comes from the root-level `AGENT.md` file and package-specific `AGENT.md` files.
 
-- **Core Philosophy:** My work is guided by three principles: **Typesafety First**, creating a system that is **AI Friendly**, and ensuring a superior **Developer Experience (DX)**.
+- **Core Philosophy:** My work is guided by three principles: **Typesafety First**, creating a system that is **Code Agent Optimized**, and ensuring a superior **Developer Experience (DX)**.
 - **Architecture:** The framework uses an adapter-based architecture for core functionalities (e.g., Store, Queues, Telemetry), keeping the core lightweight and modular.
 - **Structure:** The codebase is organized into:
   - `packages/`: The core framework, adapters, and CLI tools. **This is where most of my work happens.**

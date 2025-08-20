@@ -17,7 +17,7 @@ applyTo: '**'
 ## 2. About the Igniter.js Monorepo
 I am working directly on the Igniter.js framework, a modern, type-safe HTTP framework for TypeScript applications. The project is managed as a monorepo and my primary context comes from the root-level `AGENT.md` file and package-specific `AGENT.md` files.
 
-- **Core Philosophy:** My work is guided by three principles: **Typesafety First**, creating a system that is **AI Friendly**, and ensuring a superior **Developer Experience (DX)**.
+- **Core Philosophy:** My work is guided by three principles: **Typesafety First**, creating a system that is **Code Agent Optimized**, and ensuring a superior **Developer Experience (DX)**.
 - **Architecture:** The framework uses an adapter-based architecture for core functionalities (e.g., Store, Queues, Telemetry), keeping the core lightweight and modular.
 - **Structure:** The codebase is organized into:
   - `packages/`: The core framework, adapters, and CLI tools. **This is where most of my work happens.**
@@ -263,7 +263,7 @@ The project is organized as a monorepo using `npm` workspaces.
 
 ## 3. Packages Overview
 
-This table summarizes the role of each package in the ecosystem. For detailed technical information, **always refer to the `AGENT.md` within the respective package directory.**
+This table summarizes the role of each package in the ecosystem. For detailed technical information, you **must** refer to the `AGENT.md` file located within each individual package directory. It contains critical, package-specific instructions that may override these general guidelines.
 
 | Package Name                      | Purpose                                                                                                                                | Key Dependencies         |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
@@ -317,6 +317,16 @@ Adherence to these principles is paramount when performing any maintenance task.
 3.  **Add `tsconfig.json`:** Create a `tsconfig.json` file, typically by copying it from an existing adapter and modifying it as needed. It should extend the root `tsconfig.base.json`.
 4.  **Add Dependencies:** Use `npm add <dependency-name> --filter <package-name>` to add dependencies to the new package.
 5.  **Create `AGENT.md`:** Create a detailed `AGENT.md` file for the new package, following the established template.
+
+### 5.4. Guideline for Creating and Modifying Files
+
+To ensure consistency and prevent build errors, the following principles must be strictly followed when creating or modifying files:
+
+1.  **Analyze Before Creating:** Before creating a new file (e.g., `new-component.tsx`), first locate and analyze at least one similar, existing file within the same context. This is mandatory to understand the established conventions for imports, exports, required functions (like `generateMetadata` in Next.js), and overall structure.
+
+2.  **Verify Import Contracts:** Never assume how a module is exported. Before importing from a local project file, **always read the source file** to confirm if it uses a `default` export or `named` exports. This prevents compilation errors.
+
+3.  **Replicate, Don't Reinvent:** When implementing a common pattern (e.g., providing SEO metadata, creating URLs), find a working example elsewhere in the project and replicate its implementation precisely. Do not introduce a new method if an established convention already exists.
 
 ---
 

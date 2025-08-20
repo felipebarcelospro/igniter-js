@@ -12,7 +12,7 @@ interface BlogLayoutProps {
 export function BlogLayout({ children }: BlogLayoutProps) {
   return (
     <motion.div
-      className="container max-w-screen-xl py-8 lg:py-16 px-4 lg:px-8"
+      className="container max-w-screen-xl lg:py-16 lg:px-8"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
@@ -21,11 +21,9 @@ export function BlogLayout({ children }: BlogLayoutProps) {
         <section className="space-y-4 w-auto overflow-hidden border border-border rounded-lg p-6 lg:p-16 bg-gradient-to-br from-background to-muted/20">
           <BackButton />
           <div className="max-w-full markdown-content">{children}</div>
-          <div className="pt-8">
-            <CTASection />
-          </div>
+
         </section>
-        
+
         {/* Table of Contents - Hidden on mobile, shown on desktop */}
         <aside className="hidden xl:block relative">
           <div className="sticky top-24">
@@ -33,6 +31,8 @@ export function BlogLayout({ children }: BlogLayoutProps) {
           </div>
         </aside>
       </div>
+
+      <CTASection />
     </motion.div>
   );
 }

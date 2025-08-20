@@ -4,6 +4,8 @@ import { RequestProcessor } from "../processors";
 import { createServerCaller } from "./caller.server.service";
 import { parseURL } from "@/utils";
 import { initializeIgniterPlayground } from "./playground.service";
+import { IgniterConsoleLogger } from "./logger.service";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 
 /**
@@ -194,7 +196,12 @@ export const createIgniterRouter = <
      * }
      */
     handler: async (request: Request) => {
-      console.log('[Igniter Router] Incoming request:', {
+      const logger = IgniterConsoleLogger.create({
+        level: resolveLogLevel(),
+        context: createLoggerContext('Router')
+      });
+
+      logger.debug('Incoming request:', {
         url: request.url,
         method: request.method,
         headers: Object.fromEntries(request.headers)
@@ -205,7 +212,7 @@ export const createIgniterRouter = <
       const basePath = params.config.basePATH ?? '/api/v1';
       const playgroundPath = params.docs?.playground?.route ?? '/docs'
 
-      console.log('[Igniter Router] Parsed request:', {
+      logger.debug('Parsed request:', {
         path,
         basePath,
         playgroundPath,
@@ -214,33 +221,33 @@ export const createIgniterRouter = <
 
       // Check if is playground
       if(path.startsWith(parseURL(basePath, playgroundPath))) {
-        console.log('[Igniter Router] Routing to playground');
+        logger.debug('Routing to playground');
         const playground = initializeIgniterPlayground(params.docs, basePath);
         try {
           const response = await playground.process(request);
-          console.log('[Igniter Router] Playground response:', {
+          logger.debug('Playground response:', {
             status: response.status,
             headers: Object.fromEntries(response.headers)
           });
           return response;
         } catch (error) {
-          console.error('[Igniter Router] Playground error:', error);
+          logger.error('Playground error:', { error });
           throw error;
         }
       };
 
-      console.log('[Igniter Router] Routing to processor');
+      logger.debug('Routing to processor');
       try {
         const response = await processor.process(request);
         
-        console.log('[Igniter Router] Processor response:', {
+        logger.debug('Processor response:', {
           status: response.status,
           headers: Object.fromEntries(response.headers)
         });
 
         return response;
       } catch (error) {
-        console.error('[Igniter Router] Processor error:', error);
+        logger.error('Processor error:', { error });
         throw error;
       }
     },

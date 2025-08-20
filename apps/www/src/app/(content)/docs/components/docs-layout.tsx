@@ -22,7 +22,7 @@ export function DocsLayout({ children, sections }: DocsLayoutProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-10 border-x px-4 lg:px-10 border-border">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:px-10  lg:gap-10 border-x border-border">
         {/* Sidebar - Hidden on mobile, shown on large screens */}
         <motion.div
           className="hidden lg:block lg:col-span-3 xl:col-span-2 relative pt-10"
@@ -43,11 +43,11 @@ export function DocsLayout({ children, sections }: DocsLayoutProps) {
           transition={{ delay: 0.3 }}
         >
           {/* Mobile search - only shown on mobile */}
-          <div className="lg:hidden pt-6 pb-4">
-            <Search sections={sections} className="mb-4" />
+          <div className="lg:hidden border-b">
+            <Search sections={sections} className="" />
           </div>
-          
-          <div className="markdown-content pt-4 lg:pt-8 lg:pl-10">{children}</div>
+
+          <div className="markdown-content p-4 lg:pt-8 lg:pl-10">{children}</div>
         </motion.main>
 
         {/* Table of Contents - Hidden on mobile and tablet, shown on large screens */}
@@ -61,7 +61,7 @@ export function DocsLayout({ children, sections }: DocsLayoutProps) {
           <TableOfContents />
         </motion.div>
       </div>
-      
+
       {/* Mobile sidebar - Add a floating action button for mobile navigation */}
       <div className="lg:hidden fixed bottom-6 right-6 z-50">
         {/* This could be expanded to show a mobile sidebar drawer */}
