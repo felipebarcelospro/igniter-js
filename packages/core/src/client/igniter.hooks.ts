@@ -142,9 +142,17 @@ export const createUseQuery = <
       lastUsedParamsRef.current = newParams;
     }, [options?.query, options?.params]);
 
+    // Estabilizar parâmetros para evitar recriação desnecessária da função execute
+    const stableOptions = useMemo(() => ({
+      enabled: options?.enabled,
+      staleTime: options?.staleTime,
+      query: options?.query,
+      params: options?.params
+    }), [options?.enabled, options?.staleTime, JSON.stringify(options?.query), JSON.stringify(options?.params)]);
+
     const execute = useCallback(
       async (params?: TAction["$Infer"]["$Input"], force = false) => {
-        if (optionsRef.current?.enabled === false) return;
+        if (stableOptions.enabled === false) return;
 
         // Use deep merge for proper parameter combination
         const mergedParams = mergeQueryParams(lastUsedParamsRef.current, params);
@@ -163,8 +171,8 @@ export const createUseQuery = <
         let settledError: Awaited<TAction["$Infer"]["$Errors"]> | null = null;
 
         try {
-          if (optionsRef.current?.staleTime) {
-            const cachedData = ClientCache.get(queryKey, optionsRef.current.staleTime);
+          if (stableOptions.staleTime) {
+            const cachedData = ClientCache.get(queryKey, stableOptions.staleTime);
             if (cachedData) {
               setResponse(cachedData);
               setStatus('success');
@@ -182,7 +190,7 @@ export const createUseQuery = <
           optionsRef.current?.onRequest?.(normalizedResult);
           optionsRef.current?.onSuccess?.(normalizedResult.data);
 
-          if (optionsRef.current?.staleTime) {
+          if (stableOptions.staleTime) {
             ClientCache.set(queryKey, result);
           }
           return result;
@@ -199,23 +207,24 @@ export const createUseQuery = <
           optionsRef.current?.onSettled?.(settledData?.data ?? null, settledError);
         }
       },
-      [getQueryKey, fetcher],
+      [getQueryKey, fetcher, stableOptions],
     );
 
     const refetch = useCallback((invalidate = true) => {
       execute(lastUsedParamsRef.current, invalidate);
     }, [execute]);
 
-    // Register query with reactive query key that updates when parameters change
+    // Register query with reactive query key that updates when parameters change - usar queryKey estável
+    const currentQueryKey = useMemo(() => getQueryKey(lastUsedParamsRef.current), [getQueryKey, stableOptions.query, stableOptions.params]);
+    
     useEffect(() => {
-      const currentQueryKey = getQueryKey(lastUsedParamsRef.current);
       register(currentQueryKey, refetch);
       return () => unregister(currentQueryKey, refetch);
-    }, [register, unregister, refetch, getQueryKey, options?.query, options?.params]);
+    }, [register, unregister, refetch, currentQueryKey]);
 
-    // Automatic refetching side effects
+    // Automatic refetching side effects - separar lógica de intervalo
     useEffect(() => {
-      if (optionsRef.current?.enabled === false) return;
+      if (stableOptions.enabled === false) return;
 
       if (optionsRef.current?.refetchInterval) {
         const interval = setInterval(() => {
@@ -224,34 +233,42 @@ export const createUseQuery = <
         }, optionsRef.current.refetchInterval);
         return () => clearInterval(interval);
       }
-    }, [execute]);
+    }, [execute, stableOptions.enabled]);
 
     useEffect(() => {
-        if (optionsRef.current?.enabled === false) return;
+        if (stableOptions.enabled === false) return;
 
         if (optionsRef.current?.refetchOnWindowFocus !== false) {
             const handleFocus = () => execute();
             window.addEventListener("focus", handleFocus);
             return () => window.removeEventListener("focus", handleFocus);
         }
-    }, [execute]);
+    }, [execute, stableOptions.enabled]);
 
     useEffect(() => {
-        if (optionsRef.current?.enabled === false) return;
+        if (stableOptions.enabled === false) return;
 
         if (optionsRef.current?.refetchOnReconnect !== false) {
             const handleOnline = () => execute();
             window.addEventListener("online", handleOnline);
             return () => window.removeEventListener("online", handleOnline);
         }
-    }, [execute]);
+    }, [execute, stableOptions.enabled]);
 
-    // Initial fetch - now includes reactive dependencies for query and params
+    // Initial fetch - usar ref para evitar loop infinito
+    const hasExecutedRef = useRef(false);
+    
     useEffect(() => {
-        if (optionsRef.current?.enabled !== false && optionsRef.current?.refetchOnMount !== false) {
+        if (stableOptions.enabled !== false && optionsRef.current?.refetchOnMount !== false && !hasExecutedRef.current) {
+            hasExecutedRef.current = true;
             execute();
         }
-    }, [execute, options?.query, options?.params]);
+    }, [execute, stableOptions.enabled]);
+
+    // Reset execution flag when params change significantly
+    useEffect(() => {
+        hasExecutedRef.current = false;
+    }, [currentQueryKey]);
 
     const isLoading = status === 'loading';
     const isSuccess = status === 'success';
