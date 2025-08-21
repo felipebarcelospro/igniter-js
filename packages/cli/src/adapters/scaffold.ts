@@ -9,6 +9,40 @@ const logger = createChildLogger({ component: 'scaffold' })
 
 // --- Helper Functions ---
 
+/**
+ * Check if a Prisma schema file exists in the current project
+ */
+async function hasPrismaSchema(): Promise<boolean> {
+  const possiblePaths = [
+    path.join(process.cwd(), 'prisma', 'schema.prisma'),
+    path.join(process.cwd(), 'schema.prisma')
+  ]
+  
+  for (const schemaPath of possiblePaths) {
+    try {
+      await fs.access(schemaPath)
+      return true
+    } catch {
+      // Continue checking other paths
+    }
+  }
+  
+  return false
+}
+
+/**
+ * Get available Prisma models from the schema
+ */
+async function getPrismaModels(): Promise<string[]> {
+  try {
+    const provider = new PrismaProvider()
+    return await provider.listModels()
+  } catch (error) {
+    logger.debug('Failed to get Prisma models', { error })
+    return []
+  }
+}
+
 function toPascalCase(str: string): string {
   return str.replace(/(^\w|-\w)/g, g => g.replace(/-/, '').toUpperCase())
 }
@@ -261,8 +295,7 @@ function generateEmptyIndexTemplate(featureName: string): string {
 // --- Main Scaffolding Logic ---
 
 async function scaffoldEmptyFeature(featureName: string, featureDir: string) {
-    const spinner = logger.spinner(`Creating empty feature '${featureName}'...`)
-    spinner.start()
+    logger.info(`Creating empty feature '${featureName}'...`)
 
     try {
         await fs.mkdir(path.join(featureDir, 'controllers'), { recursive: true })
@@ -280,17 +313,16 @@ async function scaffoldEmptyFeature(featureName: string, featureDir: string) {
             path.join(featureDir, 'index.ts'),
             generateEmptyIndexTemplate(featureName)
         )
-        spinner.success(`Scaffolded empty feature '${featureName}'`)
+        logger.success(`Scaffolded empty feature '${featureName}'`)
     } catch(error) {
-        spinner.error(`Failed to create empty feature '${featureName}'`)
+        logger.error(`Failed to create empty feature '${featureName}'`)
         throw error
     }
 }
 
 
 async function scaffoldFeatureFromSchema(featureName: string, schemaString: string, featureDir: string) {
-    const spinner = logger.spinner(`Scaffolding feature '${featureName}' from schema...`)
-    spinner.start()
+    logger.info(`Scaffolding feature '${featureName}' from schema...`)
 
     try {
         const [providerName, modelName] = schemaString.split(':')
@@ -305,7 +337,7 @@ async function scaffoldFeatureFromSchema(featureName: string, schemaString: stri
             throw new Error(`Model '${modelName}' not found using provider '${providerName}'.`)
         }
 
-        spinner.update('Generating files from model schema...')
+        logger.info('Generating files from model schema...')
 
         await fs.mkdir(path.join(featureDir, 'controllers'), { recursive: true })
         await fs.mkdir(path.join(featureDir, 'procedures'), { recursive: true })
@@ -327,18 +359,85 @@ async function scaffoldFeatureFromSchema(featureName: string, schemaString: stri
             generateCrudIndexTemplate(featureName)
         )
 
-        spinner.success(`Successfully scaffolded feature '${featureName}' from '${modelName}' model.`)
+        logger.success(`Successfully scaffolded feature '${featureName}' from '${modelName}' model.`)
         console.log(chalk.cyan(`\n✅ Next step: Register the '${toCamelCase(featureName)}Controller' in 'src/igniter.router.ts'`))
 
     } catch (error) {
-        spinner.error(`Failed to scaffold feature from schema`)
+        logger.error(`Failed to scaffold feature from schema`)
         throw error
     }
 }
 
 
-export async function handleGenerateFeature(featureName: string, options: { schema?: string }): Promise<void> {
-  const normalizedName = featureName.toLowerCase()
+export async function handleGenerateFeature(
+  name: string | undefined,
+  options: { schema?: string } = {}
+): Promise<void> {
+  let featureName = name
+  
+  // Interactive wizard when no name is provided
+  if (!featureName) {
+    const prompts = await import('prompts')
+    
+    // Check if Prisma schema is available
+    const hasPrisma = await hasPrismaSchema()
+    const prismaModels = hasPrisma ? await getPrismaModels() : []
+    
+    const questions: any[] = [
+      {
+        type: 'text',
+        name: 'featureName',
+        message: 'What is the name of your feature?',
+        validate: (input: string) => {
+          if (!input.trim()) {
+            return 'Feature name is required'
+          }
+          if (!/^[a-zA-Z][a-zA-Z0-9-_]*$/.test(input)) {
+            return 'Feature name must start with a letter and contain only letters, numbers, hyphens, and underscores'
+          }
+          return true
+        }
+      }
+    ]
+    
+    // Add Prisma model selection if available
+    if (hasPrisma && prismaModels.length > 0) {
+      questions.push({
+        type: 'select',
+        name: 'useModel',
+        message: 'Would you like to generate CRUD operations from a Prisma model?',
+        choices: [
+          { title: 'No, create an empty feature', value: 'none' },
+          { title: 'Yes, select a Prisma model', value: 'select' }
+        ],
+        initial: 0
+      })
+      
+      questions.push({
+        type: (prev: string) => prev === 'select' ? 'select' : null,
+        name: 'selectedModel',
+        message: 'Which Prisma model would you like to use?',
+        choices: prismaModels.map(model => ({ title: model, value: model }))
+      })
+    }
+    
+    const response = await prompts.default(questions)
+    
+    if (!response.featureName) {
+      logger.error('Feature name is required')
+      process.exit(1)
+    }
+    
+    featureName = response.featureName
+    
+    // If user selected a Prisma model, set it as the schema option with proper format
+     if (response.useModel === 'select' && response.selectedModel) {
+       options.schema = `prisma:${response.selectedModel}`
+     }
+   }
+   
+   // At this point, featureName is guaranteed to be defined
+   const normalizedName = featureName!.toLowerCase()
   const featureDir = path.join(process.cwd(), 'src', 'features', normalizedName)
 
   logger.info(`Scaffolding feature: ${chalk.cyan(normalizedName)}`)
