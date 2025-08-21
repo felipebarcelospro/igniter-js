@@ -1,7 +1,7 @@
 <div align="center">
   <h1>🔥 Igniter.js</h1>
   <p><strong>The End-to-End Typesafe Full-stack TypeScript Framework</strong></p>
-  <p><em>Built for Humans and AI</em></p>
+  <p><em>Built for Humans and Code Agents</em></p>
 
   [![npm version](https://img.shields.io/npm/v/@igniter-js/core.svg?style=flat)](https://www.npmjs.com/package/@igniter-js/core)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
@@ -35,7 +35,7 @@ npm install @igniter-js/core zod
 - **⚡ Zero Code Generation** - No build steps, no schemas to sync
 - **🔌 Framework Agnostic** - Works with Next.js, Express, Bun, and more
 - **🎛️ Built-in Features** - Queues, Real-time, Caching, and Telemetry
-- **🤖 AI-Friendly** - Optimized for code agents and AI assistance
+- **🤖 Code Agent Optimized** - Optimized for code agents and AI assistance
 - **📦 Plugin System** - Extensible and modular architecture
 
 ## 📖 Documentation & Resources
@@ -50,7 +50,7 @@ npm install @igniter-js/core zod
 
 ```bash
 # Interactive development dashboard
-npx @igniter-js/cli dev --interactive
+npx @igniter-js/cli@latest dev
 
 # Build your project
 npm run build
@@ -63,26 +63,68 @@ npm test
 
 ```typescript
 // Define your API
+// features/users/controllers/users.controller.ts
 export const userController = igniter.controller({
   path: '/users',
   actions: {
-    list: igniter.query({
-      handler: async ({ context }) => {
-        return await context.database.user.findMany();
-      }
+    getUser: igniter.query({
+      path: '/:id' as const,
+      handler: async ({ request, response, context, query }) => {
+        const user = await context.db.user.findUnique({
+          where: { id: input.id }
+        });
+
+        if (!user) {
+          throw new Error('User not found');
+        }
+
+        return user;
+      },
     }),
-    create: igniter.mutation({
-      input: z.object({ name: z.string(), email: z.string().email() }),
-      handler: async ({ input, context }) => {
-        return await context.database.user.create({ data: input });
-      }
-    })
+    createUser: igniter.muate({
+      path: '/' as const,
+      body: z.object({
+        name: z.string(),
+        email: z.string().email()
+      })
+      handler: async ({ request, response, context, query }) => {
+        return await context.db.user.create({
+          data: input
+        });
+      },
+    }),
   }
-});
+})
 
 // Use in your React app with full type safety
-const { data: users } = useQuery(client.users.list);
-const createUser = useMutation(client.users.create);
+import { api } from './igniter.client';
+
+function UserProfile({ userId }: { userId: string }) {
+  const currentUser = api.user.getUser.useQuery({
+    enabled: !!userId,
+    staleTime: 5000,
+    refetchOnWindowFocus: false,
+    params: {
+      id: userId
+    },
+    onSuccess: (data) => {
+      console.log('Successfully fetched current user:', data);
+    },
+    onError: (error) => {
+      console.error('Error fetching current user:', error);
+    },
+  });
+
+  if (currentUser.isLoading) return <div>Loading user...</div>;
+  if (currentUser.isError) return <div>Error to load user: {postsQuery.error.message}</div>;
+
+  return (
+    <div>
+      <h1>{currentUser?.name}</h1>
+      <p>{currentUser?.email}</p>
+    </div>
+  );
+}
 ```
 
 ## 🤝 Community & Support
