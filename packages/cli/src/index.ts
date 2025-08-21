@@ -16,6 +16,7 @@ import {
 import { runSetupPrompts, confirmOverwrite } from './adapters/setup/prompts'
 import { generateProject } from './adapters/setup/generator'
 import { createDetachedSpinner } from "./lib/spinner";
+import { createTimelineManager } from "./lib/timeline-manager";
 import {
   handleGenerateFeature,
   handleGenerateController,
@@ -212,9 +213,15 @@ generate
   .option("--output <dir>", "Output directory for the OpenAPI spec", "./src")
   .option("--ui", "Generate a self-contained HTML file with Scalar UI")
   .action(async (options) => {
+    const startTime = performance.now();
     const docsLogger = createChildLogger({ component: 'generate-docs-command' });
+    const timeline = createTimelineManager(docsLogger);
+    
     try {
-      docsLogger.info('Starting OpenAPI documentation generation...');
+      timeline.start('Generating OpenAPI Documentation', 4);
+      
+      // Step 1: Load dependencies and locate router
+      timeline.step('Loading dependencies and locating router');
       const { loadRouter, introspectRouter } = await import("./adapters/build/introspector");
       const { OpenAPIGenerator } = await import("./adapters/docs/openapi-generator");
 
@@ -230,36 +237,56 @@ generate
       ];
 
       let router: IgniterRouter<any, any, any, any, any> | null = null;
+      let foundRouterPath = '';
       for (const routerPath of possibleRouterPaths) {
         if (fs.existsSync(routerPath)) {
           router = await loadRouter(routerPath);
           if (router) {
-            docsLogger.info(`Found router at: ${routerPath}`);
+            foundRouterPath = routerPath;
             break;
           }
         }
       }
 
       if (!router) {
-        docsLogger.error('No Igniter router found in your project. Please ensure you have a router file (e.g., src/igniter.router.ts).');
+        timeline.fail('No Igniter router found in your project. Please ensure you have a router file (e.g., src/igniter.router.ts).');
         process.exit(1);
       }
+      
+      timeline.substep(`Found router at: ${foundRouterPath}`);
+      timeline.stepSuccess('Router loaded successfully');
 
+      // Step 2: Introspect router and analyze API structure
+      timeline.step('Analyzing API structure');
       const introspected = introspectRouter(router);
+      const controllersCount = Object.keys(introspected.schema.controllers || {}).length;
+      const endpointsCount = Object.values(introspected.schema.controllers || {})
+        .reduce((total, controller: any) => total + Object.keys(controller.actions || {}).length, 0);
+      
+      timeline.substep(`Found ${controllersCount} controllers, ${endpointsCount} endpoints`);
+      timeline.stepSuccess('API structure analyzed');
+
+      // Step 3: Generate OpenAPI specification
+      timeline.step('Generating OpenAPI specification');
       const generator = new OpenAPIGenerator(introspected.schema.docs || {});
-
       const openApiSpec = generator.generate(introspected.schema);
-
+      
       const outputDir = path.resolve(options.output, 'docs');
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
+        timeline.substep(`Created output directory: ${outputDir}`);
       }
+      
       const outputPath = path.join(outputDir, 'openapi.json');
-
       fs.writeFileSync(outputPath, JSON.stringify(openApiSpec, null, 2), 'utf8');
-      docsLogger.success(`OpenAPI specification generated at ${outputPath}`);
+      
+      const specSize = (fs.statSync(outputPath).size / 1024).toFixed(1);
+      timeline.substep(`OpenAPI spec: ${outputPath} (${specSize} KB)`);
+      timeline.stepSuccess('OpenAPI specification generated');
 
+      // Step 4: Generate Scalar UI (if requested)
       if (options.ui) {
+        timeline.step('Generating Scalar UI');
         const scalarHtml = `<!doctype html>
 <html lang="en">
   <head>
@@ -274,12 +301,21 @@ generate
 </html>`;
         const uiOutputPath = path.join(outputDir, 'index.html');
         fs.writeFileSync(uiOutputPath, scalarHtml, 'utf8');
-        docsLogger.success(`Scalar UI generated at ${uiOutputPath}`);
+        
+        const uiSize = (fs.statSync(uiOutputPath).size / 1024).toFixed(1);
+        timeline.substep(`Scalar UI: ${uiOutputPath} (${uiSize} KB)`);
+        timeline.stepSuccess('Interactive UI generated');
       }
 
+      const duration = ((performance.now() - startTime) / 1000).toFixed(2);
+      const totalFiles = options.ui ? 2 : 1;
+      timeline.complete(`Documentation generated successfully! ${totalFiles} files created in ${duration}s`);
+      
+      // Force exit to prevent hanging processes (esbuild cleanup)
+      process.exit(0);
+
     } catch (error) {
-      docsLogger.error('Failed to generate OpenAPI documentation:');
-      console.error(error)
+      timeline.fail('Failed to generate OpenAPI documentation', error instanceof Error ? error : new Error(String(error)));
       process.exit(1);
     }
   });
@@ -288,9 +324,9 @@ generate
 generate
   .command("feature")
   .description("Scaffold a new feature module")
-  .argument("<name>", "The name of the feature (e.g., 'user', 'products')")
+  .argument("[name]", "The name of the feature (e.g., 'user', 'products')")
   .option("--schema <value>", "Generate from a schema provider (e.g., 'prisma:User')")
-  .action(async (name: string, options: { schema?: string }) => {
+  .action(async (name: string | undefined, options: { schema?: string }) => {
     await handleGenerateFeature(name, options);
   });
 

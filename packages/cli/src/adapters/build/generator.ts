@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import type { IgniterBuildConfig } from './watcher'
 import { createChildLogger } from '../logger'
-import { createDetachedSpinner } from '@/lib/spinner'
+import { createTimelineManager } from '@/lib/timeline-manager'
 
 type IgniterRouterSchema = {
   config: {
@@ -56,121 +56,54 @@ export async function generateSchemaFromRouter(
   config: IgniterBuildConfig
 ) {
   const logger = createChildLogger({ component: 'generator' })
-  const startTime = performance.now()
-
-  // Detect if we're in interactive mode
-  const isInteractiveMode = !!(
-    process.env.IGNITER_INTERACTIVE_MODE === 'true' ||
-    process.argv.includes('--interactive')
-  )
+  const timeline = createTimelineManager(logger)
 
   try {
+    // Start timeline process
+    timeline.start('Generating Igniter.js Schema', 4)
+
     // Step 1: Extract router schema
-    let extractSpinner: any = null
-
-    if (isInteractiveMode) {
-      logger.info('Extracting router schema...')
-    } else {
-      extractSpinner = createDetachedSpinner('Extracting router schema...')
-      extractSpinner.start()
-    }
-
-    // Extract schema (always needed)
+    timeline.step('Extracting router schema')
     const { schema, stats } = introspectRouter(router)
-
-    if (isInteractiveMode) {
-      logger.success(`Schema extracted - ${stats.controllers} controllers, ${stats.actions} actions`)
-    } else if (extractSpinner) {
-      extractSpinner.success(`Schema extracted - ${stats.controllers} controllers, ${stats.actions} actions`)
-    }
+    timeline.stepSuccess('Schema extracted', {
+      controllers: stats.controllers,
+      actions: stats.actions
+    })
 
     // Step 2: Prepare output directory
-    let dirSpinner: any = null
-
-    if (isInteractiveMode) {
-      logger.info('Preparing output directory...')
-    } else {
-      dirSpinner = createDetachedSpinner('Preparing output directory...')
-      dirSpinner.start()
-    }
-
-    // Prepare directory (always needed)
+    timeline.step('Preparing output directory')
     const outputDir = config.outputDir || 'generated'
     await ensureDirectoryExists(outputDir)
     const outputPath = path.resolve(outputDir)
+    timeline.stepSuccess('Output directory ready', {
+      path: path.relative(process.cwd(), outputPath)
+    })
 
-    if (isInteractiveMode) {
-      logger.success(`Output directory ready ${outputPath}`)
-    } else if (dirSpinner) {
-      dirSpinner.success(`Output directory ready ${outputPath}`)
-    }
+    // Step 3: Generate schema file
+    timeline.step('Generating schema file')
+    const schemaFilePath = await generateSchemaFile(schema, outputDir, config)
+    const schemaSize = getFileSize(schemaFilePath)
+    timeline.substep(`igniter.schema.ts (${schemaSize})`)
+    timeline.stepSuccess('Schema file generated')
 
-    // Step 3: Generate all files
-    let filesSpinner: any = null
+    // Step 4: Generate client file
+    timeline.step('Generating client file')
+    const clientFilePath = await generateClientFile(schema, outputDir, config)
+    const clientSize = getFileSize(clientFilePath)
+    timeline.substep(`igniter.client.ts (${clientSize})`)
+    timeline.stepSuccess('Client file generated')
 
-    if (isInteractiveMode) {
-      logger.info('Generating client files...')
-    } else {
-      filesSpinner = createDetachedSpinner('Generating client files...')
-      filesSpinner.start()
-    }
+    // Complete timeline
+    timeline.complete('Schema generation completed')
 
-    // Generate files (always needed)
-    const filePaths = await Promise.all([
-      generateSchemaFile(schema, outputDir, config),
-      generateClientFile(schema, outputDir, config),
-    ])
-
-    if (isInteractiveMode) {
-      logger.success('Files generated successfully')
-    } else if (filesSpinner) {
-      filesSpinner.success('Files generated successfully')
-    }
-
-    // Step 4: Show file details (only in non-interactive mode to avoid clutter)
-    if (!isInteractiveMode) {
-      const files = [
-        { name: 'igniter.schema.ts', path: filePaths[0] },
-        { name: 'igniter.client.ts', path: filePaths[1] },
-      ]
-
-      let totalSize = 0
-      files.forEach(file => {
-        const size = getFileSize(file.path)
-        totalSize += fs.statSync(file.path).size
-        logger.info(`Generated ${file.name}`, { size, path: path.relative(process.cwd(), file.path) })
-      })
-
-      // Final summary (only in non-interactive mode)
-      const duration = ((performance.now() - startTime) / 1000).toFixed(2)
-      const totalSizeFormatted = totalSize < 1024
-        ? `${totalSize}b`
-        : totalSize < 1024 * 1024
-          ? `${(totalSize / 1024).toFixed(1)}kb`
-          : `${(totalSize / (1024 * 1024)).toFixed(1)}mb`
-
-      logger.separator()
-      logger.success('Igniter.js development server is up and running')
-      logger.info('Press Ctrl+C to stop')
-      logger.info('Summary', {
-        output: outputPath,
-        files: files.length,
-        totalSize: totalSizeFormatted,
-        controllers: stats.controllers,
-        actions: stats.actions,
-        duration: `${duration}s`,
-        timestamp: new Date().toISOString()
-      })
-
-      logger.groupEnd()
-    } else {
-      // Simplified summary for interactive mode
-      const duration = ((performance.now() - startTime) / 1000).toFixed(2)
-      logger.success(`Client generated successfully - ${stats.controllers} controllers, ${stats.actions} actions (${duration}s)`)
+    return {
+      schemaPath: schemaFilePath,
+      clientPath: clientFilePath,
+      stats
     }
 
   } catch (error) {
-    logger.error('Client generation failed', {}, error)
+    timeline.fail('Schema generation failed', error as Error)
     throw error
   }
 }

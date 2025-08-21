@@ -3,6 +3,7 @@ import * as path from 'path'
 import { loadRouter, introspectRouter, RouterLoadError } from './introspector';
 import { generateSchemaFromRouter } from './generator'
 import { createChildLogger, formatError } from '../logger'
+import { createTimelineManager } from '@/lib/timeline-manager'
 import { createDetachedSpinner } from '@/lib/spinner'
 import chokidar from 'chokidar';
 import { OpenAPIGenerator } from '../docs/openapi-generator';
@@ -176,12 +177,18 @@ export class IgniterWatcher {
     if (this.isGenerating) return
 
     this.isGenerating = true
+    const timeline = createTimelineManager(this.logger)
     let router: any = null;
 
     try {
       this.pauseWatchingSpinner()
-      this.logger.separator()
+      
+      // Determine total steps based on configuration
+      const totalSteps = this.config.generateDocs ? 3 : 2
+      timeline.start('Regenerating Schema', totalSteps)
 
+      // Step 1: Find and load router
+      timeline.step('Loading router file')
       const possibleRouterPaths = [
         'src/igniter.router.ts', 'src/igniter.router.js',
         'src/router.ts', 'src/router.js',
@@ -198,31 +205,41 @@ export class IgniterWatcher {
       }
 
       if (!foundPath) {
-        this.logger.warn('No router file found.', {
-          searched: possibleRouterPaths.join(', ')
-        })
+        timeline.stepError('No router file found', new Error(`Searched paths: ${possibleRouterPaths.join(', ')}`))
         this.isGenerating = false;
         return;
       }
 
-      this.logger.info(`Found router at ${chalk.cyan(foundPath)}. Loading...`);
+      timeline.substep(`Found: ${foundPath}`)
       router = await loadRouter(foundPath);
 
       if (!router) {
-        // This case should ideally not be hit anymore due to error propagation
-        this.logger.warn('Router file was loaded, but it appears to be empty or invalid.');
+        timeline.stepError('Router file is empty or invalid')
         this.isGenerating = false;
         return;
       }
 
-      await generateSchemaFromRouter(router, this.config)
+      timeline.stepSuccess('Router loaded successfully')
 
+      // Step 2: Generate schema
+      timeline.step('Generating schema files')
+      const result = await generateSchemaFromRouter(router, this.config)
+      timeline.stepSuccess('Schema files generated', {
+        controllers: result.stats.controllers,
+        actions: result.stats.actions
+      })
+
+      // Step 3: Generate OpenAPI docs (if enabled)
       if (this.config.generateDocs) {
+        timeline.step('Generating OpenAPI documentation')
         await this.generateOpenAPISpec(router)
+        timeline.stepSuccess('OpenAPI documentation generated')
       }
 
+      timeline.complete('Schema regeneration completed')
+
     } catch (error) {
-      this.logger.error('Schema generation failed', { error: formatError(error) });
+      timeline.fail('Schema regeneration failed', error as Error)
 
       if (error instanceof RouterLoadError) {
         console.error(chalk.red.bold('\n✗ Error loading your Igniter router:'));
