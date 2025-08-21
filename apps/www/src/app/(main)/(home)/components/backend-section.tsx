@@ -29,7 +29,7 @@ export const userController = igniter.controller({
         return user;
       },
     }),
-    createUser: igniter.muate({
+    createUser: igniter.mutate({
       path: '/' as const,
       body: z.object({
         name: z.string(),
@@ -246,7 +246,7 @@ export const userController = igniter.controller({
         return user;
       },
     }),
-    update: igniter.muate({
+    update: igniter.mutate({
       path: '/' as const,
       body: z.object({
         name: z.string(),
