@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'A step-by-step guide to integrating Google\'s Gemini CLI as an expert code agent for Igniter.js development, enhancing your workflow with AI-powered assistance.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/code-agents/gemini-cli',
+    url: 'https://igniterjs.com/docs/code-agents/gemini-cli',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-gemini-cli.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-gemini-cli.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Using Gemini CLI with Igniter.js',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Using Gemini CLI as a Code Agent with Igniter.js',
     description:
       'A step-by-step guide to integrating Google\'s Gemini CLI as an expert code agent for Igniter.js development, enhancing your workflow with AI-powered assistance.',
-    images: ['https://igniter.js.org/og/docs-gemini-cli.png'],
+    images: ['https://igniterjs.com/og/docs-gemini-cli.png'],
   },
 };
 

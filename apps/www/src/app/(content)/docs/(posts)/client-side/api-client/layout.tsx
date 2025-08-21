@@ -21,10 +21,10 @@ export const metadata: Metadata = {
     description:
       'Discover how to create and use the automatically generated, type-safe API client in Igniter.js for a seamless full-stack development experience.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/client-side/api-client',
+    url: 'https://igniterjs.com/docs/client-side/api-client',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-api-client.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-api-client.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Type-Safe API Client',
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     title: 'The Type-Safe API Client | Igniter.js',
     description:
       'Discover how to create and use the automatically generated, type-safe API client in Igniter.js for a seamless full-stack development experience.',
-    images: ['https://igniter.js.org/og/docs-api-client.png'],
+    images: ['https://igniterjs.com/og/docs-api-client.png'],
   },
 };
 

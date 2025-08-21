@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'A step-by-step guide to integrating Claude as an expert code agent for Igniter.js development, enhancing your workflow with AI-powered assistance.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/code-agents/claude-code',
+    url: 'https://igniterjs.com/docs/code-agents/claude-code',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-claude-code.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-claude-code.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Using Claude with Igniter.js',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Using Claude as a Code Agent with Igniter.js',
     description:
       'A step-by-step guide to integrating Claude as an expert code agent for Igniter.js development, enhancing your workflow with AI-powered assistance.',
-    images: ['https://igniter.js.org/og/docs-claude-code.png'],
+    images: ['https://igniterjs.com/og/docs-claude-code.png'],
   },
 };
 

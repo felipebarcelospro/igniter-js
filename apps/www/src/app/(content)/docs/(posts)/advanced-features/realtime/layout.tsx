@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Discover how to push live data from your server to clients using Igniter.js. Implement automatic UI updates and custom data streams with our integrated SSE solution.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/advanced-features/realtime',
+    url: 'https://igniterjs.com/docs/advanced-features/realtime',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-realtime.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-realtime.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Realtime Features',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Igniter.js Realtime: Live Data, Effortlessly',
     description:
       'Discover how to push live data from your server to clients using Igniter.js. Implement automatic UI updates and custom data streams with our integrated SSE solution.',
-    images: ['https://igniter.js.org/og/docs-realtime.png'],
+    images: ['https://igniterjs.com/og/docs-realtime.png'],
   },
 };
 

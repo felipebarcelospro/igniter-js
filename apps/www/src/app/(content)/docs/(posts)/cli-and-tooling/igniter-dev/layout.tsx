@@ -21,10 +21,10 @@ export const metadata: Metadata = {
     description:
       'Master the `igniter dev` command and its interactive dashboard to streamline your full-stack development workflow, manage multiple processes, and monitor API requests in real-time.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/cli-and-tooling/igniter-dev',
+    url: 'https://igniterjs.com/docs/cli-and-tooling/igniter-dev',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-igniter-dev.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-igniter-dev.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Interactive Dev Server',
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     title: 'CLI: The `igniter dev` Interactive Server | Igniter.js',
     description:
       'Master the `igniter dev` command and its interactive dashboard to streamline your full-stack development workflow, manage multiple processes, and monitor API requests in real-time.',
-    images: ['https://igniter.js.org/og/docs-igniter-dev.png'],
+    images: ['https://igniterjs.com/og/docs-igniter-dev.png'],
   },
 };
 

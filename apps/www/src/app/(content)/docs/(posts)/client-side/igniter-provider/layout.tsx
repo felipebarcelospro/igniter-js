@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Master the setup and configuration of the <IgniterProvider>, the essential wrapper for all client-side features in your Igniter.js application.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/client-side/igniter-provider',
+    url: 'https://igniterjs.com/docs/client-side/igniter-provider',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-igniter-provider.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-igniter-provider.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Provider Setup',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: '<IgniterProvider>: The Root of the Client-Side | Igniter.js',
     description:
       'Master the setup and configuration of the <IgniterProvider>, the essential wrapper for all client-side features in your Igniter.js application.',
-    images: ['https://igniter.js.org/og/docs-igniter-provider.png'],
+    images: ['https://igniterjs.com/og/docs-igniter-provider.png'],
   },
 };
 

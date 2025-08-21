@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Learn to build an ultra-fast, type-safe Single Page Application using the combined power of Bun, React, and Igniter.js.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/starter-guides/bun-react-starter-guide',
+    url: 'https://igniterjs.com/docs/starter-guides/bun-react-starter-guide',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-bun-react-starter.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-bun-react-starter.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Building a SPA with Bun, React, and Igniter.js',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Full-Stack Guide: Building a High-Performance SPA with Bun, React, and Igniter.js',
     description:
       'Learn to build an ultra-fast, type-safe Single Page Application using the combined power of Bun, React, and Igniter.js.',
-    images: ['https://igniter.js.org/og/docs-bun-react-starter.png'],
+    images: ['https://igniterjs.com/og/docs-bun-react-starter.png'],
   },
 };
 

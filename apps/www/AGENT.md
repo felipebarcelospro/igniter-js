@@ -104,7 +104,7 @@ This section outlines the standard procedures for creating new content to ensure
 
 3.  **Implement Metadata (Crucial):**
     *   Copy the `generateMetadata` function from a **recent, existing blog post's `layout.tsx`**.
-    *   Update the `title`, `description`, and `url` fields with the new post's information. Use a full, static URL for `openGraph.url` (e.g., `https://igniter.js.org/...`). Do not use a configuration object.
+    *   Update the `title`, `description`, and `url` fields with the new post's information. Use a full, static URL for `openGraph.url` (e.g., `https://igniterjs.com/...`). Do not use a configuration object.
 
 4.  **Implement Layout Component:**
     *   The `layout.tsx` file must perform a **default import** of the parent layout: `import BlogPostLayout from '@/app/(content)/blog/(posts)/layout';`

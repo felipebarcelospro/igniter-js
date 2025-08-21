@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Explore the powerful command-line tools that come with Igniter.js to boost your productivity from project creation to deployment.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/cli-and-tooling',
+    url: 'https://igniterjs.com/docs/cli-and-tooling',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-cli-and-tooling.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-cli-and-tooling.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js CLI and Tooling',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'CLI & Tooling | Igniter.js',
     description:
       'Explore the powerful command-line tools that come with Igniter.js to boost your productivity from project creation to deployment.',
-    images: ['https://igniter.js.org/og/docs-cli-and-tooling.png'],
+    images: ['https://igniterjs.com/og/docs-cli-and-tooling.png'],
   },
 };
 

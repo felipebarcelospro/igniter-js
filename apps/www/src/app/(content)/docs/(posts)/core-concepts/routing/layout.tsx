@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'A guide to the final step of building your backend: assembling all your controllers into a single, routable API with the Igniter.js Router.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/core-concepts/routing',
+    url: 'https://igniterjs.com/docs/core-concepts/routing',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-routing.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-routing.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Assembling an API with the Igniter.js Router',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Routing: Assembling Your API | Igniter.js',
     description:
       'A guide to the final step of building your backend: assembling all your controllers into a single, routable API with the Igniter.js Router.',
-    images: ['https://igniter.js.org/og/docs-routing.png'],
+    images: ['https://igniterjs.com/og/docs-routing.png'],
   },
 };
 

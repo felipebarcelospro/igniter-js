@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Your first step to mastering Igniter.js. This guide walks you through creating a new project and building your first API endpoint from scratch.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/getting-started/quick-start-guide',
+    url: 'https://igniterjs.com/docs/getting-started/quick-start-guide',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-quick-start.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-quick-start.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Quick Start Guide',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Quick Start Guide | Igniter.js',
     description:
       'Your first step to mastering Igniter.js. This guide walks you through creating a new project and building your first API endpoint from scratch.',
-    images: ['https://igniter.js.org/og/docs-quick-start.png'],
+    images: ['https://igniterjs.com/og/docs-quick-start.png'],
   },
 };
 

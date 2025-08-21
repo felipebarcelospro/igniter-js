@@ -21,10 +21,10 @@ export const metadata: Metadata = {
     description:
       'Discover how the Igniter.js llms.txt file serves as a complete knowledge base for training AI Code Agents, enabling deep contextual understanding of the framework.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/code-agents/llms-txt',
+    url: 'https://igniterjs.com/docs/code-agents/llms-txt',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-llms-txt.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-llms-txt.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Using llms.txt to guide AI agents',
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     title: 'Guiding LLMs with llms.txt | Igniter.js',
     description:
       'Discover how the Igniter.js llms.txt file serves as a complete knowledge base for training AI Code Agents, enabling deep contextual understanding of the framework.',
-    images: ['https://igniter.js.org/og/docs-llms-txt.png'],
+    images: ['https://igniterjs.com/og/docs-llms-txt.png'],
   },
 };
 

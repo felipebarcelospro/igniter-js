@@ -23,10 +23,10 @@ export const metadata: Metadata = {
     description:
       'Follow this comprehensive guide to build a fully functional, real-time chat application from scratch with Igniter.js.',
     type: 'article',
-    url: 'https://igniter.js.org/blog/tutorials/real-time-chat-with-igniterjs',
+    url: 'https://igniterjs.com/blog/tutorials/real-time-chat-with-igniterjs',
     images: [
       {
-        url: 'https://igniter.js.org/og/real-time-chat-tutorial.png', // Assuming an OG image exists at this path
+        url: 'https://igniterjs.com/og/real-time-chat-tutorial.png', // Assuming an OG image exists at this path
         width: 1200,
         height: 630,
         alt: 'Real-Time Chat App Tutorial with Igniter.js',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     title: 'Build a Real-Time Chat App with Igniter.js, Next.js & Prisma',
     description:
       'Follow this comprehensive guide to build a fully functional, real-time chat application from scratch with Igniter.js.',
-    images: ['https://igniter.js.org/og/real-time-chat-tutorial.png'],
+    images: ['https://igniterjs.com/og/real-time-chat-tutorial.png'],
   },
 };
 

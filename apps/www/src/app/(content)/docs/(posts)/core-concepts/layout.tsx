@@ -24,10 +24,10 @@ export const metadata: Metadata = {
     description:
       'Master the essential building blocks of every Igniter.js application, from the builder pattern and dependency injection to type-safe routing and validation.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/core-concepts',
+    url: 'https://igniterjs.com/docs/core-concepts',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-core-concepts.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-core-concepts.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Core Concepts',
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     title: 'Core Concepts | Igniter.js',
     description:
       'Master the essential building blocks of every Igniter.js application, from the builder pattern and dependency injection to type-safe routing and validation.',
-    images: ['https://igniter.js.org/og/docs-core-concepts.png'],
+    images: ['https://igniterjs.com/og/docs-core-concepts.png'],
   },
 };
 

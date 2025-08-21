@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'A comprehensive guide to building your API endpoints using Igniter.js. Understand the role of Controllers for organization and Actions for implementing your business logic.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/core-concepts/controllers-and-actions',
+    url: 'https://igniterjs.com/docs/core-concepts/controllers-and-actions',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-controllers-actions.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-controllers-actions.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Building APIs with Controllers and Actions in Igniter.js',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Controllers & Actions: Building API Logic | Igniter.js',
     description:
       'A comprehensive guide to building your API endpoints using Igniter.js. Understand the role of Controllers for organization and Actions for implementing your business logic.',
-    images: ['https://igniter.js.org/og/docs-controllers-actions.png'],
+    images: ['https://igniterjs.com/og/docs-controllers-actions.png'],
   },
 };
 

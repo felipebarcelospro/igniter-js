@@ -21,10 +21,10 @@ export const metadata: Metadata = {
     description:
       'Master background job processing in Igniter.js. Our guide shows you how to use the BullMQ driver to manage long-running tasks and improve API performance.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/advanced-features/queues',
+    url: 'https://igniterjs.com/docs/advanced-features/queues',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-queues.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-queues.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Queues for Background Processing',
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     title: 'Igniter.js Queues: Reliable Background Processing',
     description:
       'Master background job processing in Igniter.js. Our guide shows you how to use the BullMQ driver to manage long-running tasks and improve API performance.',
-    images: ['https://igniter.js.org/og/docs-queues.png'],
+    images: ['https://igniterjs.com/og/docs-queues.png'],
   },
 };
 

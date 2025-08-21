@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Master Procedures, the Igniter.js implementation of middleware. Learn how to create reusable logic and dynamically extend the request context with full type safety.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/core-concepts/procedures',
+    url: 'https://igniterjs.com/docs/core-concepts/procedures',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-procedures.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-procedures.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Creating Middleware with Procedures in Igniter.js',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Procedures: Reusable, Type-Safe Middleware | Igniter.js',
     description:
       'Master Procedures, the Igniter.js implementation of middleware. Learn how to create reusable logic and dynamically extend the request context with full type safety.',
-    images: ['https://igniter.js.org/og/docs-procedures.png'],
+    images: ['https://igniterjs.com/og/docs-procedures.png'],
   },
 };
 

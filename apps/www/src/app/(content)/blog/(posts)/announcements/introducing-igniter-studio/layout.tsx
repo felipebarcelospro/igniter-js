@@ -10,7 +10,7 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title,
       description,
-      url: "https://igniter.js.org/blog/announcements/introducing-igniter-studio",
+      url: "https://igniterjs.com/blog/announcements/introducing-igniter-studio",
       type: "article",
     },
     twitter: {

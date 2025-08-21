@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Test and explore your APIs interactively with Igniter Studio. Enable the beautiful Scalar-powered playground in development and production with secure authentication controls.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/advanced-features/igniter-studio',
+    url: 'https://igniterjs.com/docs/advanced-features/igniter-studio',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-igniter-studio.png',
+        url: 'https://igniterjs.com/og/docs-igniter-studio.png',
         width: 1200,
         height: 630,
         alt: 'Igniter.js Studio API Playground',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Igniter Studio (API Playground) | Igniter.js',
     description:
       'Test and explore your APIs interactively with Igniter Studio. Enable the beautiful Scalar-powered playground in development and production with secure authentication controls.',
-    images: ['https://igniter.js.org/og/docs-igniter-studio.png'],
+    images: ['https://igniterjs.com/og/docs-igniter-studio.png'],
   },
 };
 

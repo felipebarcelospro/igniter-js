@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Explore how the AI-Friendly design of Igniter.js enhances your development workflow when paired with modern Code Agents and LLMs.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/code-agents/introduction',
+    url: 'https://igniterjs.com/docs/code-agents/introduction',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-code-agents-intro.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-code-agents-intro.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js and AI Code Agents',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Introduction to Code Agents | Igniter.js',
     description:
       'Explore how the AI-Friendly design of Igniter.js enhances your development workflow when paired with modern Code Agents and LLMs.',
-    images: ['https://igniter.js.org/og/docs-code-agents-intro.png'],
+    images: ['https://igniterjs.com/og/docs-code-agents-intro.png'],
   },
 };
 

@@ -21,10 +21,10 @@ export const metadata: Metadata = {
     description:
       'A guide to making Cursor an expert on your Igniter.js project using custom rules and official templates for a seamless AI-assisted development experience.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/code-agents/cursor',
+    url: 'https://igniterjs.com/docs/code-agents/cursor',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-cursor.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-cursor.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Using Cursor with Igniter.js',
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     title: 'Using Cursor as a Code Agent with Igniter.js',
     description:
       'A guide to making Cursor an expert on your Igniter.js project using custom rules and official templates for a seamless AI-assisted development experience.',
-    images: ['https://igniter.js.org/og/docs-cursor.png'],
+    images: ['https://igniterjs.com/og/docs-cursor.png'],
   },
 };
 

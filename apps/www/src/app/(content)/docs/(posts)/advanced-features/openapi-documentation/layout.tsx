@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Generate comprehensive OpenAPI specifications and serve beautiful interactive API documentation with Igniter.js. Configure security, metadata, and customize the developer experience.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/advanced-features/openapi-documentation',
+    url: 'https://igniterjs.com/docs/advanced-features/openapi-documentation',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-openapi-documentation.png',
+        url: 'https://igniterjs.com/og/docs-openapi-documentation.png',
         width: 1200,
         height: 630,
         alt: 'Igniter.js OpenAPI Documentation',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'OpenAPI Documentation | Igniter.js',
     description:
       'Generate comprehensive OpenAPI specifications and serve beautiful interactive API documentation with Igniter.js. Configure security, metadata, and customize the developer experience.',
-    images: ['https://igniter.js.org/og/docs-openapi-documentation.png'],
+    images: ['https://igniterjs.com/og/docs-openapi-documentation.png'],
   },
 };
 

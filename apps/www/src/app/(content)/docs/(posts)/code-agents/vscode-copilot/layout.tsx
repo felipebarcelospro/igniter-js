@@ -21,10 +21,10 @@ export const metadata: Metadata = {
     description:
       'A guide to making GitHub Copilot an expert on your Igniter.js project using custom instructions and official templates for a seamless AI-assisted development experience.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/code-agents/vscode-copilot',
+    url: 'https://igniterjs.com/docs/code-agents/vscode-copilot',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-vscode-copilot.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-vscode-copilot.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Using VS Code Copilot with Igniter.js',
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     title: 'Using VS Code Copilot as a Code Agent with Igniter.js',
     description:
       'A guide to making GitHub Copilot an expert on your Igniter.js project using custom instructions and official templates for a seamless AI-assisted development experience.',
-    images: ['https://igniter.js.org/og/docs-vscode-copilot.png'],
+    images: ['https://igniterjs.com/og/docs-vscode-copilot.png'],
   },
 };
 

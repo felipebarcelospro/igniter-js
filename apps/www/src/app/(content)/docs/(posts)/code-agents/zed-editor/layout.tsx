@@ -21,10 +21,10 @@ export const metadata: Metadata = {
     description:
       'A guide to making the Zed editor an expert on your Igniter.js project by using its automatic context detection with our official templates.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/code-agents/zed-editor',
+    url: 'https://igniterjs.com/docs/code-agents/zed-editor',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-zed-editor.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-zed-editor.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Using Zed Editor with Igniter.js',
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     title: 'Using Zed Editor as a Code Agent with Igniter.js',
     description:
       'A guide to making the Zed editor an expert on your Igniter.js project by using its automatic context detection with our official templates.',
-    images: ['https://igniter.js.org/og/docs-zed-editor.png'],
+    images: ['https://igniterjs.com/og/docs-zed-editor.png'],
   },
 };
 

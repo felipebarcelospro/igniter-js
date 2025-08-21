@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Master the Igniter.js Context, the powerful, type-safe dependency injection system that allows you to compose application state and services with ease.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/core-concepts/context',
+    url: 'https://igniterjs.com/docs/core-concepts/context',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-context.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-context.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Understanding Context in Igniter.js',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Context: The Heart of Your Application\'s State | Igniter.js',
     description:
       'Master the Igniter.js Context, the powerful, type-safe dependency injection system that allows you to compose application state and services with ease.',
-    images: ['https://igniter.js.org/og/docs-context.png'],
+    images: ['https://igniterjs.com/og/docs-context.png'],
   },
 };
 

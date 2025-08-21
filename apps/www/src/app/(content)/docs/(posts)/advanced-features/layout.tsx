@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Dive deeper into the powerful, built-in features that make Igniter.js a complete ecosystem for modern TypeScript applications.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/advanced-features',
+    url: 'https://igniterjs.com/docs/advanced-features',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-advanced-features.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-advanced-features.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Advanced Features',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Advanced Features | Igniter.js',
     description:
       'Dive deeper into the powerful, built-in features that make Igniter.js a complete ecosystem for modern TypeScript applications.',
-    images: ['https://igniter.js.org/og/docs-advanced-features.png'],
+    images: ['https://igniterjs.com/og/docs-advanced-features.png'],
   },
 };
 

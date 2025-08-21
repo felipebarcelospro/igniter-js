@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Master the `igniter generate` command to automatically create feature boilerplate from your database schema and generate a fully type-safe client for your frontend.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/cli-and-tooling/igniter-generate',
+    url: 'https://igniterjs.com/docs/cli-and-tooling/igniter-generate',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-igniter-generate.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-igniter-generate.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Code and Schema Generation',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'CLI: `igniter generate` for Scaffolding & Schemas | Igniter.js',
     description:
       'Master the `igniter generate` command to automatically create feature boilerplate from your database schema and generate a fully type-safe client for your frontend.',
-    images: ['https://igniter.js.org/og/docs-igniter-generate.png'],
+    images: ['https://igniterjs.com/og/docs-igniter-generate.png'],
   },
 };
 

@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'A guide on collaborating with the Igniter.js AI agent (Lia) to transform a high-level idea into a fully specified project with a clear implementation plan.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/code-agents/initialize-project',
+    url: 'https://igniterjs.com/docs/code-agents/initialize-project',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-initialize-project.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-initialize-project.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Initializing a Project with the Igniter.js AI Agent',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Initialize a Project with Lia, the Igniter.js AI Agent',
     description:
       'A guide on collaborating with the Igniter.js AI agent (Lia) to transform a high-level idea into a fully specified project with a clear implementation plan.',
-    images: ['https://igniter.js.org/og/docs-initialize-project.png'],
+    images: ['https://igniterjs.com/og/docs-initialize-project.png'],
   },
 };
 

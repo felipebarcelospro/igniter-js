@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Master data fetching in Igniter.js with the `useQuery` hook. Explore its powerful, type-safe API for handling loading states, errors, caching, and more.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/client-side/use-query',
+    url: 'https://igniterjs.com/docs/client-side/use-query',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-use-query.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-use-query.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Using the `useQuery` hook in Igniter.js',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Data Fetching with `useQuery` | Igniter.js',
     description:
       'Master data fetching in Igniter.js with the `useQuery` hook. Explore its powerful, type-safe API for handling loading states, errors, caching, and more.',
-    images: ['https://igniter.js.org/og/docs-use-query.png'],
+    images: ['https://igniterjs.com/og/docs-use-query.png'],
   },
 };
 

@@ -23,10 +23,10 @@ export const metadata: Metadata = {
     description:
       'Master the Igniter Builder, the core of every Igniter.js application. This guide covers the chainable API for a guided, type-safe configuration experience.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/core-concepts/igniter-builder',
+    url: 'https://igniterjs.com/docs/core-concepts/igniter-builder',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-igniter-builder.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-igniter-builder.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'The Igniter.js Builder Pattern',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     title: 'The Igniter Builder: Your Application\'s Foundation | Igniter.js',
     description:
       'Master the Igniter Builder, the core of every Igniter.js application. This guide covers the chainable API for a guided, type-safe configuration experience.',
-    images: ['https://igniter.js.org/og/docs-igniter-builder.png'],
+    images: ['https://igniterjs.com/og/docs-igniter-builder.png'],
   },
 };
 

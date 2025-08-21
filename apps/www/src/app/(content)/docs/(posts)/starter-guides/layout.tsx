@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Explore our comprehensive starter guides for setting up Igniter.js with your favorite frameworks and tools, including Next.js, TanStack Start, and Bun.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/starter-guides',
+    url: 'https://igniterjs.com/docs/starter-guides',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-starter-guides.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-starter-guides.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Starter Guides',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Starter Guides | Igniter.js',
     description:
       'Explore our comprehensive starter guides for setting up Igniter.js with your favorite frameworks and tools, including Next.js, TanStack Start, and Bun.',
-    images: ['https://igniter.js.org/og/docs-starter-guides.png'],
+    images: ['https://igniterjs.com/og/docs-starter-guides.png'],
   },
 };
 

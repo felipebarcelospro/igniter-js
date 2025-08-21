@@ -23,10 +23,10 @@ export const metadata: Metadata = {
     description:
       'Kickstart your next project in minutes. Discover our production-ready starters for Next.js, React, Bun, and more.',
     type: 'article',
-    url: 'https://igniter.js.org/blog/announcements/introducing-igniter-templates',
+    url: 'https://igniterjs.com/blog/announcements/introducing-igniter-templates',
     images: [
       {
-        url: 'https://igniter.js.org/og/introducing-templates.png', // Assuming an OG image exists at this path
+        url: 'https://igniterjs.com/og/introducing-templates.png', // Assuming an OG image exists at this path
         width: 1200,
         height: 630,
         alt: 'Igniter.js Templates Announcement',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     title: 'Introducing Igniter.js Templates: Build Full-Stack Apps Faster',
     description:
       'Kickstart your next project in minutes. Discover our production-ready starters for Next.js, React, Bun, and more.',
-    images: ['https://igniter.js.org/og/introducing-templates.png'], // Assuming a Twitter card image exists at this path
+    images: ['https://igniterjs.com/og/introducing-templates.png'], // Assuming a Twitter card image exists at this path
   },
 };
 

@@ -27,10 +27,10 @@ export const metadata: Metadata = {
     description:
       'Step-by-step guide to installing Igniter.js. Covers official templates, automated scaffolding with `igniter init`, and manual setup for existing projects.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/getting-started/installation',
+    url: 'https://igniterjs.com/docs/getting-started/installation',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-installation.png',
+        url: 'https://igniterjs.com/og/docs-installation.png',
         width: 1200,
         height: 630,
         alt: 'Installing Igniter.js using templates or CLI',
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     title: 'Installation - Getting Started with Igniter.js',
     description:
       'Step-by-step guide to installing Igniter.js. Covers official templates, automated scaffolding with `igniter init`, and manual setup for existing projects.',
-    images: ['https://igniter.js.org/og/docs-installation.png'],
+    images: ['https://igniterjs.com/og/docs-installation.png'],
   },
 };
 

@@ -23,10 +23,10 @@ export const metadata: Metadata = {
     description:
       'Seamlessly connect your frontend with Igniter.js. This guide covers the type-safe client, React hooks for data fetching and mutations, and real-time updates.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/client-side',
+    url: 'https://igniterjs.com/docs/client-side',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-client-side.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-client-side.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Client-Side Integration',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     title: 'Client-Side Integration | Igniter.js',
     description:
       'Seamlessly connect your frontend with Igniter.js. This guide covers the type-safe client, React hooks for data fetching and mutations, and real-time updates.',
-    images: ['https://igniter.js.org/og/docs-client-side.png'],
+    images: ['https://igniterjs.com/og/docs-client-side.png'],
   },
 };
 

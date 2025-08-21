@@ -23,10 +23,10 @@ export const metadata: Metadata = {
     description:
       'Get your project started in minutes. This guide covers how `igniter init` scaffolds your application with a feature-based architecture, interactive setup, and optional Docker integration.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/cli-and-tooling/igniter-init',
+    url: 'https://igniterjs.com/docs/cli-and-tooling/igniter-init',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-igniter-init.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-igniter-init.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Project Scaffolding with `igniter init`',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     title: 'CLI: Scaffolding with `igniter init` | Igniter.js',
     description:
       'Get your project started in minutes. This guide covers how `igniter init` scaffolds your application with a feature-based architecture, interactive setup, and optional Docker integration.',
-    images: ['https://igniter.js.org/og/docs-igniter-init.png'],
+    images: ['https://igniterjs.com/og/docs-igniter-init.png'],
   },
 };
 

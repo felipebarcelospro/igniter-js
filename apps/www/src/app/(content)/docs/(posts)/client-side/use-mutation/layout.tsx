@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Master the `useMutation` hook to safely modify server data. This guide covers the entire mutation lifecycle, from state management to automatic cache updates.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/client-side/use-mutation',
+    url: 'https://igniterjs.com/docs/client-side/use-mutation',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-use-mutation.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-use-mutation.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Using the `useMutation` hook in Igniter.js',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Data Modification with `useMutation` | Igniter.js',
     description:
       'Master the `useMutation` hook to safely modify server data. This guide covers the entire mutation lifecycle, from state management to automatic cache updates.',
-    images: ['https://igniter.js.org/og/docs-use-mutation.png'],
+    images: ['https://igniterjs.com/og/docs-use-mutation.png'],
   },
 };
 

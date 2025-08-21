@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Master high-performance caching and decoupled messaging with the Igniter.js Store. This guide covers setup, caching patterns, and pub/sub for event-driven architecture.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/advanced-features/store',
+    url: 'https://igniterjs.com/docs/advanced-features/store',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-store.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-store.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Store for Caching and Messaging',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Igniter.js Store: High-Performance Caching & Messaging',
     description:
       'Master high-performance caching and decoupled messaging with the Igniter.js Store. This guide covers setup, caching patterns, and pub/sub for event-driven architecture.',
-    images: ['https://igniter.js.org/og/docs-store.png'],
+    images: ['https://igniterjs.com/og/docs-store.png'],
   },
 };
 

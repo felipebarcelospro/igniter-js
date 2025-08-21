@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'A guide to the scalable, feature-based project structure used in Igniter.js applications to ensure high cohesion and low coupling.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/getting-started/project-structure',
+    url: 'https://igniterjs.com/docs/getting-started/project-structure',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-project-structure.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-project-structure.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Igniter.js Project Structure',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Recommended Project Structure | Igniter.js',
     description:
       'A guide to the scalable, feature-based project structure used in Igniter.js applications to ensure high cohesion and low coupling.',
-    images: ['https://igniter.js.org/og/docs-project-structure.png'],
+    images: ['https://igniterjs.com/og/docs-project-structure.png'],
   },
 };
 

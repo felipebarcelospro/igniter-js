@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Master real-time data streaming with the `useRealtime` hook. This guide covers subscribing to server-pushed events and managing the connection lifecycle.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/client-side/use-realtime',
+    url: 'https://igniterjs.com/docs/client-side/use-realtime',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-use-realtime.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-use-realtime.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Using the `useRealtime` hook in Igniter.js',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Real-time Subscriptions with `useRealtime` | Igniter.js',
     description:
       'Master real-time data streaming with the `useRealtime` hook. This guide covers subscribing to server-pushed events and managing the connection lifecycle.',
-    images: ['https://igniter.js.org/og/docs-use-realtime.png'],
+    images: ['https://igniterjs.com/og/docs-use-realtime.png'],
   },
 };
 

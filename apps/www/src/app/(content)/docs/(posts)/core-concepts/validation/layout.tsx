@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'A guide to building robust APIs with Igniter.js using Zod for schema validation and the Ensure utility for declarative business rule assertions.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/core-concepts/validation',
+    url: 'https://igniterjs.com/docs/core-concepts/validation',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-validation.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-validation.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Data Validation in Igniter.js with Zod and Ensure',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Validation: Ensuring Data Integrity and Business Rules | Igniter.js',
     description:
       'A guide to building robust APIs with Igniter.js using Zod for schema validation and the Ensure utility for declarative business rule assertions.',
-    images: ['https://igniter.js.org/og/docs-validation.png'],
+    images: ['https://igniterjs.com/og/docs-validation.png'],
   },
 };
 

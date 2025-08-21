@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     description:
       'Learn to build modern, full-stack applications with Igniter.js and Next.js, leveraging the best of both frameworks for unparalleled type safety and developer experience.',
     type: 'article',
-    url: 'https://igniter.js.org/docs/starter-guides/nextjs-starter-guide',
+    url: 'https://igniterjs.com/docs/starter-guides/nextjs-starter-guide',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-nextjs-starter.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-nextjs-starter.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Building a Full-Stack App with Next.js and Igniter.js',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: 'Full-Stack Guide: Building with the Igniter.js Next.js Starter',
     description:
       'Learn to build modern, full-stack applications with Igniter.js and Next.js, leveraging the best of both frameworks for unparalleled type safety and developer experience.',
-    images: ['https://igniter.js.org/og/docs-nextjs-starter.png'],
+    images: ['https://igniterjs.com/og/docs-nextjs-starter.png'],
   },
 };
 

@@ -23,10 +23,10 @@ export const metadata: Metadata = {
     description:
       'The official documentation for Igniter.js. Learn to build modern, type-safe applications with features like real-time updates, background jobs, and a powerful plugin system.',
     type: 'website',
-    url: 'https://igniter.js.org/docs',
+    url: 'https://igniterjs.com/docs',
     images: [
       {
-        url: 'https://igniter.js.org/og/docs-home.png', // Assuming an OG image exists
+        url: 'https://igniterjs.com/og/docs-home.png', // Assuming an OG image exists
         width: 1200,
         height: 630,
         alt: 'Official Documentation for Igniter.js',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     title: 'Igniter.js Docs: The AI-Friendly, Typesafe Framework',
     description:
       'The official documentation for Igniter.js. Learn to build modern, type-safe applications with features like real-time updates, background jobs, and a powerful plugin system.',
-    images: ['https://igniter.js.org/og/docs-home.png'],
+    images: ['https://igniterjs.com/og/docs-home.png'],
   },
 };
 
