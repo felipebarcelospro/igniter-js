@@ -88,4 +88,11 @@ export interface SchemaProvider {
    * @returns A promise that resolves to the standardized `ModelSchema`, or `null` if the model cannot be found.
    */
   getModel(modelName: string): Promise<ModelSchema | null>;
+
+  /**
+   * Lists all available model names in the schema.
+   *
+   * @returns A promise that resolves to an array of model names.
+   */
+  listModels(): Promise<string[]>;
 }

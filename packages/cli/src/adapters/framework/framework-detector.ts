@@ -1,6 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import { spawn, ChildProcess } from 'child_process'
+import { ChildProcess } from 'child_process'
+import spawn from 'cross-spawn'
 import { createChildLogger, formatError } from '../logger'
 import { startIgniterWithFramework } from './concurrent-processes'
 
@@ -314,17 +315,16 @@ export async function startDevServer(options: DevServerOptions = {}): Promise<Ch
     port
   });
   
-  // Parse command to handle complex commands
-  const [cmd, ...args] = command.split(' ');
-  
-  const serverProcess = spawn(cmd, args, {
+  // Use cross-spawn for cross-platform compatibility
+  const serverProcess = spawn(command, [], {
     stdio: ['inherit', 'pipe', 'pipe'],
     cwd,
     env: {
       ...process.env,
       PORT: port.toString(),
       NODE_ENV: 'development'
-    }
+    },
+    shell: true
   });
   
   const logPrefix = createServerLogPrefix();
@@ -349,11 +349,11 @@ export async function startDevServer(options: DevServerOptions = {}): Promise<Ch
     });
   });
   
-  serverProcess.on('error', (error) => {
+  serverProcess.on('error', (error: Error) => {
     logger.error('Dev server error', { error: formatError(error) });
   });
-  
-  serverProcess.on('exit', (code) => {
+
+  serverProcess.on('exit', (code: number | null) => {
     // Close the server log section visually
     console.log(`\n└${'─'.repeat(60)}┘\n`);
     
@@ -426,4 +426,4 @@ export async function startIgniterDev(options: {
     logger.error('Failed to start Igniter development', { error: formatError(error) });
     throw error;
   }
-} 
+}

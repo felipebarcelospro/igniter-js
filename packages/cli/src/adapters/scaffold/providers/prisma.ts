@@ -85,13 +85,21 @@ export class PrismaProvider implements SchemaProvider {
       const fields: SchemaProviderField[] = model.properties
         .filter((prop): prop is Property => prop.type === 'field')
         .map((prop) => {
-          const isRelation = !/^[A-Z]/.test(prop.fieldType.toString()) && typeof prop.fieldType !== 'string';
+          // Type guard to ensure we have a field property with the expected structure
+          if (prop.type !== 'field' || !('fieldType' in prop) || !('name' in prop)) {
+            throw new Error(`Invalid field property structure for ${prop}`);
+          }
+
+          const fieldType = prop.fieldType as any;
+          const fieldTypeStr = typeof fieldType === 'string' ? fieldType : fieldType?.toString() || 'string';
+          const isOptional = 'optional' in prop ? (prop as any).optional : false;
+          const isRelation = !/^[A-Z]/.test(fieldTypeStr) && typeof fieldType !== 'string';
 
           return {
             name: prop.name,
-            type: mapPrismaTypeToTsType(prop.fieldType as string),
+            type: mapPrismaTypeToTsType(fieldTypeStr),
             isId: hasAttribute(prop, 'id'),
-            isRequired: !(prop.optional || hasAttribute(prop, 'default')),
+            isRequired: !(isOptional || hasAttribute(prop, 'default')),
             isUnique: hasAttribute(prop, 'unique'),
             isRelation: isRelation,
             hasDefault: hasAttribute(prop, 'default'),
@@ -111,6 +119,34 @@ export class PrismaProvider implements SchemaProvider {
         logger.error('Failed to parse Prisma schema', { error });
       }
       throw new Error(`Could not process Prisma schema. Make sure '${this.schemaPath}' exists and is valid.`);
+    }
+  }
+
+  /**
+   * Lists all available model names in the Prisma schema.
+   *
+   * @returns A promise that resolves to an array of model names.
+   */
+  public async listModels(): Promise<string[]> {
+    try {
+      const schemaContent = await fs.readFile(this.schemaPath, 'utf-8');
+      const ast = getSchema(schemaContent);
+
+      const models = ast.list
+        .filter((node): node is Model => node.type === 'model')
+        .map(model => model.name);
+
+      logger.debug(`Found ${models.length} models in schema: ${models.join(', ')}`);
+      return models;
+
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        logger.error(`Prisma schema file not found at: ${this.schemaPath}`);
+        return [];
+      } else {
+        logger.error('Failed to parse Prisma schema for model listing', { error });
+        throw new Error(`Could not process Prisma schema. Make sure '${this.schemaPath}' exists and is valid.`);
+      }
     }
   }
 

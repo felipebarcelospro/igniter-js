@@ -2,7 +2,9 @@ import concurrently, { ConcurrentlyResult } from 'concurrently';
 import { createChildLogger, formatError } from '../logger';
 import { SupportedFramework } from './framework-detector';
 import readline from 'readline';
-import { spawn, ChildProcess } from 'child_process';
+import { ChildProcess } from 'child_process';
+import spawn from 'cross-spawn';
+import kill from 'tree-kill';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -1065,7 +1067,7 @@ class InteractiveProcessManager {
     const visibleRequests = this.apiRequests.slice(-15); // Show last 15 requests
     
     if (visibleRequests.length === 0) {
-      console.log(`${ANSI_COLORS.dim}No API requests yet. See docs at https://igniter.js.org/docs/api${ANSI_COLORS.reset}\n`);
+      console.log(`${ANSI_COLORS.dim}No API requests yet. See docs at https://igniterjs.com/docs/api${ANSI_COLORS.reset}\n`);
       return;
     }
 
@@ -1630,14 +1632,15 @@ class InteractiveProcessManager {
 
     // Start all processes
     this.processes = this.processConfigs.map((config, index) => {
-      const proc = spawn('sh', ['-c', config.command], {
+      const proc = spawn(config.command, [], {
         cwd: config.cwd || process.cwd(),
         env: { 
           ...process.env, 
           ...config.env,
           IGNITER_INTERACTIVE_MODE: 'true'
         },
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: true
       });
 
       // Update status with PID
@@ -1648,21 +1651,21 @@ class InteractiveProcessManager {
       }
 
       // Handle process output - buffer instead of direct output
-      proc.stdout?.on('data', (data) => {
+      proc.stdout?.on('data', (data: Buffer) => {
         const lines = data.toString().split('\n').filter((line: string) => line.trim());
         lines.forEach((line: string) => {
           this.addLogEntry(index, 'stdout', line);
         });
       });
 
-      proc.stderr?.on('data', (data) => {
+      proc.stderr?.on('data', (data: Buffer) => {
         const lines = data.toString().split('\n').filter((line: string) => line.trim());
         lines.forEach((line: string) => {
           this.addLogEntry(index, 'stderr', line);
         });
       });
 
-      proc.on('exit', (code) => {
+      proc.on('exit', (code: number | null) => {
         const status = this.processStatus.get(index);
         if (status) {
           status.status = code === 0 ? 'stopped' : 'error';
@@ -1670,7 +1673,7 @@ class InteractiveProcessManager {
         this.addLogEntry(index, code === 0 ? 'info' : 'error', `Process exited with code ${code}`);
       });
 
-      proc.on('error', (error) => {
+      proc.on('error', (error: Error) => {
         const status = this.processStatus.get(index);
         if (status) {
           status.status = 'error';
@@ -1717,13 +1720,17 @@ class InteractiveProcessManager {
     
     // Kill all processes
     this.processes.forEach(proc => {
-      if (!proc.killed) {
-        proc.kill('SIGTERM');
-        setTimeout(() => {
-          if (!proc.killed) {
-            proc.kill('SIGKILL');
-          }
-        }, 5000);
+      if (!proc.killed && proc.pid) {
+        kill(proc.pid, 'SIGTERM', (err?: Error) => {
+           if (err) {
+             // Fallback to force kill if graceful termination fails
+             setTimeout(() => {
+               if (proc.pid && !proc.killed) {
+                 kill(proc.pid, 'SIGKILL');
+               }
+             }, 5000);
+           }
+         });
       }
     });
   }
@@ -1885,4 +1892,4 @@ export async function startIgniterWithFramework(options: {
     prefixColors: true,
     prefixLength: 8
   });
-} 
+}

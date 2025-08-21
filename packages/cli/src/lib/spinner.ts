@@ -10,7 +10,6 @@ if (!isBrowser) {
     yoctoSpinner = require('yocto-spinner');
   } catch (error) {
     // Fallback if yocto-spinner is not available
-    console.warn('yocto-spinner not available, using static spinner');
   }
 }
 
