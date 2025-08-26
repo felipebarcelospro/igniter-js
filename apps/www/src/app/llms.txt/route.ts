@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { config } from '@/configs/application';
 import { FileSystemContentManager } from '@/lib/docs';
 import fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import path from 'path';
 
 export async function GET() {
@@ -82,6 +83,10 @@ export async function GET() {
     // Add full content of each documentation page
     content += `## Full Documentation Content\n\n`;
     content += `Below is the complete content of all documentation pages for comprehensive LLM understanding:\n\n`;
+
+    const baseDir = path.join(process.cwd(), 'src/app/(content)');
+    const postsDir = path.join(baseDir, 'docs', '(posts)');
+    const postsDirResolved = path.resolve(postsDir);
     
     for (const doc of sortedDocs) {
       content += `### ${doc.title}\n\n`;
@@ -94,16 +99,23 @@ export async function GET() {
       
       // Read the actual MDX file content
       try {
-        const contentDir = path.join(process.cwd(), 'src/app/(content)');
-        const filePath = path.join(contentDir, 'docs', '(posts)', doc.slug, 'page.mdx');
-        
-        if (fs.existsSync(filePath)) {
-          const fileContent = fs.readFileSync(filePath, 'utf8');
-          // Remove frontmatter if present
-          const contentWithoutFrontmatter = fileContent.replace(/^---[\s\S]*?---\n/, '');
-          content += contentWithoutFrontmatter;
+        // Guard against path traversal in slug
+        if (doc.slug && doc.slug.includes('..')) {
+          content += `Content path rejected due to invalid slug.`;
         } else {
-          content += `Content not found for ${doc.title}`;
+          const candidatePath = doc.slug
+            ? path.join(postsDir, doc.slug, 'page.mdx')
+            : path.join(postsDir, 'page.mdx');
+          const resolvedPath = path.resolve(candidatePath);
+          
+          if (!resolvedPath.startsWith(postsDirResolved)) {
+            content += `Content path rejected due to invalid resolution.`;
+          } else {
+            const fileContent = await fsPromises.readFile(resolvedPath, 'utf8');
+            // Remove frontmatter if present
+            const contentWithoutFrontmatter = fileContent.replace(/^---[\s\S]*?---\n/, '');
+            content += contentWithoutFrontmatter;
+          }
         }
       } catch (error) {
         content += `Error reading content for ${doc.title}: ${error}`;

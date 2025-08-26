@@ -23,7 +23,7 @@ export class FileSystemContentManager {
     contentDir: path.join(process.cwd(), "src/app/(content)"),
     extensions: [".mdx"],
     pageFile: "page.mdx",
-    appRouterGroupRegex: /^[(\[].+[\])]$/,
+    appRouterGroupRegex: /^[\(\[].+[\)\]]$/,
   };
 
   static async getNavigationItems(
@@ -156,8 +156,8 @@ export class FileSystemContentManager {
           title: metadata.title || "Introduction",
           date: metadata.date,
           description: metadata.description,
-          slug: `/${contentType}`, // Ensure root pages have proper slug
-          order: -1, // Ensure it appears first
+          slug: "",
+          order: -1,
           type: contentType,
           category: "root",
         });
@@ -251,7 +251,7 @@ export class FileSystemContentManager {
         category,
         date: stats.birthtime.toISOString(),
         description: "",
-        slug: `/${type}/${category}/${title.toLowerCase().replace(/\s+/g, "-")}`,
+        slug: `${category}/${title.toLowerCase().replace(/\s+/g, "-")}`,
         order: 0,
       };
     }
@@ -267,7 +267,7 @@ export class FileSystemContentManager {
         category,
         date: stats.birthtime.toISOString(),
         description: "",
-        slug: `/${type}/${category}`,
+        slug: `${category}`,
         order: 0,
       };
     }
@@ -282,7 +282,7 @@ export class FileSystemContentManager {
           metadata[key.trim()] = values
             .join(":")
             .trim()
-            .replace(/^['"](.*)['"]$/, "$1");
+            .replace(/^["'](.*)["']$/, "$1");
         }
       });
 
@@ -295,7 +295,7 @@ export class FileSystemContentManager {
         category,
         date: metadata.date || stats.birthtime.toISOString(),
         description: metadata.description || "",
-        slug: `/${type}/${category}/${slug}`,
+        slug: `${category}/${slug}`,
         order: Number(metadata.order) || 0,
       };
     } catch (error) {
@@ -306,7 +306,7 @@ export class FileSystemContentManager {
         category,
         date: stats.birthtime.toISOString(),
         description: "",
-        slug: `/${type}/${category}`,
+        slug: `${category}`,
         order: 0,
       };
     }

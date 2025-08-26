@@ -316,7 +316,8 @@ export async function startDevServer(options: DevServerOptions = {}): Promise<Ch
   });
   
   // Use cross-spawn for cross-platform compatibility
-  const serverProcess = spawn(command, [], {
+  const [cmdFile, ...cmdArgs] = command.split(' ').filter(Boolean);
+  const serverProcess = spawn(cmdFile, cmdArgs, {
     stdio: ['inherit', 'pipe', 'pipe'],
     cwd,
     env: {
@@ -324,7 +325,7 @@ export async function startDevServer(options: DevServerOptions = {}): Promise<Ch
       PORT: port.toString(),
       NODE_ENV: 'development'
     },
-    shell: true
+    shell: false
   });
   
   const logPrefix = createServerLogPrefix();

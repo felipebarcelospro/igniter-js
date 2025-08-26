@@ -1632,7 +1632,8 @@ class InteractiveProcessManager {
 
     // Start all processes
     this.processes = this.processConfigs.map((config, index) => {
-      const proc = spawn(config.command, [], {
+      const [file, ...args] = config.command.split(' ').filter(Boolean);
+      const proc = spawn(file, args, {
         cwd: config.cwd || process.cwd(),
         env: { 
           ...process.env, 
@@ -1640,7 +1641,7 @@ class InteractiveProcessManager {
           IGNITER_INTERACTIVE_MODE: 'true'
         },
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: true
+        shell: false
       });
 
       // Update status with PID
