@@ -1,8 +1,9 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "Igniter API",
-    "version": "1.0.0"
+    "title": "Igniter.js Starter (Bun REST API)",
+    "version": "1.0.0",
+    "description": "A sample Bun REST API built with Igniter.js"
   },
   "servers": [
     {
@@ -12,8 +13,7 @@
   ],
   "tags": [
     {
-      "name": "Example",
-      "description": ""
+      "name": "Example"
     }
   ],
   "paths": {

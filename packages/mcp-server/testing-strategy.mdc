@@ -1,0 +1,142 @@
+---
+description: |
+  Testing strategy focusing on API validation over automated tests. Use analyze_feature after 
+  implementation, fix errors, then test via API requests. Apply when: feature complete, 
+  post-implementation validation, API testing, avoiding unnecessary test file creation.
+globs: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"]
+alwaysApply: true
+---
+
+# Testing Strategy & Validation Protocol
+
+## Core Testing Philosophy
+
+**PREFERRED APPROACH**: API Testing over Automated Tests
+- ✅ **DO**: Use `analyze_feature` + `make_api_request` for validation
+- ❌ **DON'T**: Create automated tests unless explicitly requested by user
+- 🎯 **GOAL**: Validate functionality through real API calls, not test files
+
+## Post-Implementation Workflow
+
+### 1. Feature Analysis (MANDATORY)
+After implementing any feature, ALWAYS run:
+
+```typescript
+analyze_feature({
+  featurePath: "src/features/user-management", // or single file
+  projectRoot: "auto-detect",
+  includeStats: true
+})
+```
+
+**This provides**:
+- 📁 Complete file structure and organization
+- 🔍 TypeScript error detection and counts
+- 📊 File statistics (size, lines, types)
+- 🌐 API endpoint discovery
+- 💡 Specific recommendations for next steps
+
+### 2. Error Resolution (IF NEEDED)
+If `analyze_feature` shows errors (`needs_attention` status):
+
+1. **Fix TypeScript errors** using code investigation tools
+2. **Re-run analysis** to verify fixes
+3. **Store insights** as memories for future reference
+
+### 3. API Validation Testing
+Once feature is healthy, test via API calls:
+
+```typescript
+// For each endpoint discovered by analyze_feature
+make_api_request({
+  method: "POST",
+  url: "/api/users",
+  body: { name: "Test User", email: "test@example.com" },
+  headers: { "Content-Type": "application/json" }
+})
+```
+
+### 4. Results Documentation
+Store successful patterns:
+
+```typescript
+store_memory({
+  type: "api_mapping",
+  title: "User Management API Testing Results",
+  content: "Endpoints tested, successful requests, validation patterns",
+  tags: ["api", "testing", "user-management"],
+  confidence: 0.9
+})
+```
+
+## When to Create Automated Tests
+
+**ONLY create automated tests when**:
+- ✅ User explicitly requests test files
+- ✅ User mentions "vitest", "jest", "test files"
+- ✅ User says "write tests for this"
+- ✅ Complex business logic needs unit testing
+- ✅ Library/utility functions need testing
+
+**DO NOT create tests for**:
+- ❌ Basic CRUD operations (test via API)
+- ❌ Simple React components (validate via UI)
+- ❌ Straightforward API endpoints (test via requests)
+- ❌ Database operations (validate via API calls)
+
+## Feature Analysis Protocol
+
+### Understanding the Output
+
+**File Structure Analysis**:
+```json
+{
+  "structure": {
+    "total_files": 5,
+    "by_extension": { ".ts": 3, ".tsx": 2 },
+    "by_type": { "router": 1, "controller": 2, "component": 2 }
+  }
+}
+```
+
+**Health Summary**:
+```json
+{
+  "health_summary": {
+    "total_errors": 2,
+    "total_warnings": 1,
+    "overall_status": "needs_attention",
+    "problematic_files": [...]
+  }
+}
+```
+
+**API Endpoints**:
+```json
+{
+  "api_endpoints": [
+    {
+      "type": "igniter",
+      "method": "POST",
+      "path": "/users",
+      "file": "src/router.ts"
+    }
+  ]
+}
+```
+
+### Acting on Recommendations
+
+**Error Resolution**:
+- 🔴 "Fix X TypeScript errors" → Use code investigation tools
+- 📁 "Focus on problematic files" → `analyze_file` on specific files
+
+**API Testing**:
+- 🧪 "Test X endpoints" → Use `make_api_request` for each
+- 📋 "Methods to test: POST, GET" → Test each method
+
+**Structure Optimization**:
+- 📂 "Large feature" → Consider refactoring
+- 🔍 "No endpoints detected" → Verify implementation
+
+Remember: **Real API testing validates functionality better than isolated unit tests for most features.**

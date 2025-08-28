@@ -19,6 +19,7 @@ export interface Config {
   purchaseUrl: string;
   githubUrl: string;
   twitterUrl: string;
+  discordUrl: string;
 
   // Developer Info
   developerName: string;

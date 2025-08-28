@@ -11,10 +11,10 @@ import { store } from './store'
  */
 export const telemetry = createConsoleTelemetryAdapter({
   serviceName: 'sample-react-app',
-  enableEvents: process.env.IGNITER_TELEMETRY_ENABLE_EVENTS === 'true',
-  enableMetrics: process.env.IGNITER_TELEMETRY_ENABLE_METRICS === 'true',
-  enableTracing: process.env.IGNITER_TELEMETRY_ENABLE_TRACING === 'true',
+  enableEvents: Bun.env.IGNITER_TELEMETRY_ENABLE_EVENTS === 'true',
+  enableMetrics: Bun.env.IGNITER_TELEMETRY_ENABLE_METRICS === 'true',
+  enableTracing: Bun.env.IGNITER_TELEMETRY_ENABLE_TRACING === 'true',
 }, {
-  enableCliIntegration: process.env.IGNITER_TELEMETRY_ENABLE_CLI_INTEGRATION === 'true',
+  enableCliIntegration: Bun.env.IGNITER_TELEMETRY_ENABLE_CLI_INTEGRATION === 'true',
   store: store
 })

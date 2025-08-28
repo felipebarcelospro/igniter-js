@@ -1,13 +1,17 @@
-import * as React from "react"
-
-import { ArrowRight, ArrowUpRight, Code2, Github, Twitter } from "lucide-react"
+import { ArrowRight, ArrowUpRight, Code2 } from "lucide-react"
 import { FileText } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Card, CardContent } from "../components/ui/card"
+import { api } from "@/igniter.client"
 
 export function App() {
+  const hello = api.example.health.useQuery()
+
   return (
     <div className="h-screen grid grid-rows-[auto_1fr_auto] gap-4">
+      <pre>
+        {JSON.stringify(hello.data, null, 2)}
+      </pre>
       <header className="border-b bg-black/5 w-full border-x px-3 flex items-center justify-between space-x-4">
         <div className="border-x w-full py-[0.5rem] px-[1rem] flex items-center justify-between space-x-4">
           <div className="flex items-center space-x-2">

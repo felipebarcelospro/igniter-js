@@ -12,7 +12,7 @@ const server = serve({
     "/api/v1/*": AppRouter.handler,
   },
 
-  development: process.env.NODE_ENV !== "production" && {
+  development: Bun.env.NODE_ENV !== "production" && {
     // Enable browser hot reloading in development
     hmr: true,
 

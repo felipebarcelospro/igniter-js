@@ -26,13 +26,9 @@ import type { AppRouterType } from './igniter.router'
   * const { data } = api.users.list.useQuery()
   */
 export const api = createIgniterClient<AppRouterType>({
-  baseURL: process.env.BUN_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
-  basePATH: process.env.BUN_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
+  baseURL: Bun.env.BUN_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
+  basePATH: Bun.env.BUN_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
   router: () => {
-    if (typeof window === 'undefined') {
-      return require('./igniter.router').AppRouter
-    }
-
     return require('./igniter.schema').AppRouterSchema
   },
 })

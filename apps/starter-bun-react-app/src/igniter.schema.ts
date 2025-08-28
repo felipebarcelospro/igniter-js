@@ -11,7 +11,7 @@
  *
  * To modify the client API, update your controller files instead.
  *
- * Generated: 2025-08-11T16:15:35.940Z
+ * Generated: 2025-08-21T15:28:33.095Z
  * Framework: generic
  * Output: src/
  */
@@ -22,17 +22,65 @@ export const AppRouterSchema = {
   "controllers": {
     "example": {
       "name": "Example",
-      "description": "",
       "path": "/example",
       "actions": {
         "health": {
-          "name": "health",
-          "description": "",
           "path": "/",
           "method": "GET",
-          "isStream": false
+          "$Infer": {}
         }
       }
+    }
+  },
+  "docs": {
+    "openapi": {
+      "openapi": "3.0.0",
+      "info": {
+        "title": "Igniter API",
+        "version": "1.0.0"
+      },
+      "servers": [
+        {
+          "url": "http://localhost:3000/api/v1",
+          "description": "Default server"
+        }
+      ],
+      "tags": [
+        {
+          "name": "Example"
+        }
+      ],
+      "paths": {
+        "/example": {
+          "get": {
+            "summary": "health",
+            "operationId": "health",
+            "tags": [
+              "Example"
+            ],
+            "parameters": [],
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "components": {
+        "schemas": {},
+        "securitySchemes": {}
+      }
+    },
+    "info": {
+      "title": "Igniter.js Starter (Bun REST API)",
+      "version": "1.0.0",
+      "description": "A sample Bun REST API built with Igniter.js"
     }
   }
 } as const

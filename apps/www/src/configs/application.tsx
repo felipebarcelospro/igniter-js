@@ -12,6 +12,7 @@ export const config: Config = {
   // Links
   githubUrl: "https://github.com/felipebarcelospro/igniter-js",
   twitterUrl: "https://x.com/feldbarcelospro",
+  discordUrl: "https://discord.com/invite/JKGEQpjvJ6",
   purchaseUrl: "",
 
   // Developer Info
@@ -96,7 +97,7 @@ export const config: Config = {
         "Absolutely! Igniter.js is built with production workloads in mind, offering features like dependency injection, middleware support, real-time capabilities, background job processing, and comprehensive error handling. The framework is designed to scale with your application needs.",
     },
     {
-      question: "What about AI friendliness and developer experience?",
+      question: "What about Code Agents and developer experience?",
       answer:
         "Igniter.js is designed for the future of development where humans and AI collaborate. The predictable structure, clear conventions, feature-sliced architecture, and comprehensive type system create a low-entropy environment that both developers and AI agents can easily understand and modify.",
     },

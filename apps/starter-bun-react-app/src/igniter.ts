@@ -13,13 +13,9 @@ import openapi from './docs/openapi.json'
  */
 export const igniter = Igniter
   .context(createIgniterAppContext())
-  .store(store)
-  .jobs(REGISTERED_JOBS)
-  .logger(logger)
-  .telemetry(telemetry)
   .config({
-    baseURL: process.env.BUN_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
-    basePATH: process.env.BUN_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
+    baseURL: Bun.env.BUN_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
+    basePATH: Bun.env.BUN_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
   })
   .docs({
     openapi,

@@ -1,0 +1,53 @@
+{
+  "name": "@igniter-js/mcp-server",
+  "version": "0.0.36",
+  "private": false,
+  "description": "MCP Server for Igniter.js ecosystem interaction via STDIO.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "igniter-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "AGENT.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest -c vitest.config.ts",
+    "test:watch": "vitest -c vitest.config.ts --watch",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "igniter-js",
+    "mcp",
+    "ai",
+    "agent"
+  ],
+  "author": "Igniter.js Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/axios": "^0.9.36",
+    "@types/node": "^22.16.2",
+    "@types/turndown": "^5.0.5",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^1.6.1"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.4",
+    "@octokit/rest": "^22.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "axios": "^1.7.7",
+    "fast-xml-parser": "^5.2.5",
+    "gray-matter": "^4.0.3",
+    "turndown": "^7.2.1",
+    "zod": "^3.25.76"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
