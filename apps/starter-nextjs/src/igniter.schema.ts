@@ -11,7 +11,7 @@
  *
  * To modify the client API, update your controller files instead.
  *
- * Generated: 2025-08-21T12:15:06.500Z
+ * Generated: 2025-08-26T21:26:17.653Z
  * Framework: nextjs
  * Output: src/
  */
@@ -21,15 +21,311 @@
 export const AppRouterSchema = {
   "controllers": {
     "example": {
-      "name": "Example",
+      "name": "example",
       "path": "/example",
       "actions": {
-        "health": {
-          "path": "/health",
+        "hello": {
+          "path": "/hello",
           "method": "GET",
           "$Infer": {}
         }
       }
+    },
+    "users": {
+      "name": "Users",
+      "path": "/users",
+      "actions": {
+        "list": {
+          "name": "List Users",
+          "method": "GET",
+          "$Infer": {}
+        },
+        "getById": {
+          "name": "Get User by ID",
+          "path": "/:id",
+          "method": "GET",
+          "$Infer": {}
+        },
+        "create": {
+          "name": "Create User",
+          "type": "mutation",
+          "method": "POST",
+          "$Infer": {},
+          "bodySchema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              }
+            },
+            "required": [
+              "name",
+              "email"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "update": {
+          "name": "Update User",
+          "type": "mutation",
+          "path": "/:id",
+          "method": "PUT",
+          "$Infer": {},
+          "bodySchema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "delete": {
+          "name": "Delete User",
+          "type": "mutation",
+          "path": "/:id",
+          "method": "DELETE",
+          "$Infer": {}
+        }
+      }
+    }
+  },
+  "docs": {
+    "openapi": {
+      "openapi": "3.0.0",
+      "info": {
+        "title": "Igniter.js Starter (Next.js)",
+        "version": "1.0.0",
+        "description": "A sample Next.js App built with Igniter.js"
+      },
+      "servers": [
+        {
+          "url": "http://localhost:3000/api/v1",
+          "description": "Default server"
+        }
+      ],
+      "tags": [
+        {
+          "name": "Example"
+        },
+        {
+          "name": "Users"
+        }
+      ],
+      "paths": {
+        "/example/health": {
+          "get": {
+            "summary": "health",
+            "operationId": "health",
+            "tags": [
+              "Example"
+            ],
+            "parameters": [],
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/users": {
+          "get": {
+            "summary": "Retrieve a list of all registered users",
+            "operationId": "List Users",
+            "tags": [
+              "Users"
+            ],
+            "parameters": [],
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {}
+                  }
+                }
+              }
+            }
+          },
+          "post": {
+            "summary": "Create a new user account",
+            "operationId": "Create User",
+            "tags": [
+              "Users"
+            ],
+            "parameters": [],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UsersCreate UserBody"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/users/:id": {
+          "get": {
+            "summary": "Retrieve a specific user by their ID",
+            "operationId": "Get User by ID",
+            "tags": [
+              "Users"
+            ],
+            "parameters": [
+              {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {}
+                  }
+                }
+              }
+            }
+          },
+          "put": {
+            "summary": "Update an existing user account",
+            "operationId": "Update User",
+            "tags": [
+              "Users"
+            ],
+            "parameters": [
+              {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UsersUpdate UserBody"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {}
+                  }
+                }
+              }
+            }
+          },
+          "delete": {
+            "summary": "Delete an existing user account",
+            "operationId": "Delete User",
+            "tags": [
+              "Users"
+            ],
+            "parameters": [
+              {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "UsersCreate UserBody": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              }
+            },
+            "required": [
+              "name",
+              "email"
+            ],
+            "additionalProperties": false
+          },
+          "UsersUpdate UserBody": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "securitySchemes": {}
+      }
+    },
+    "info": {
+      "title": "Igniter.js Starter (Next.js)",
+      "version": "1.0.0",
+      "description": "A sample Next.js App built with Igniter.js"
     }
   }
 } as const

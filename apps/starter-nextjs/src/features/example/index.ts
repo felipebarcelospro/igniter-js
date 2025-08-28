@@ -1,2 +1,1 @@
-export { exampleController } from './controllers/example.controller'
-export * from './example.interfaces'
+export * from './controllers/example.controller'

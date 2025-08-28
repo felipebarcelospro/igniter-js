@@ -4,26 +4,6 @@ This document provides a technical guide for Large Language Model (LLM) based AI
 
 ---
 
-## 1. Project Overview
-
-### 1.1. Name
-Igniter.js Starter: Next.js Full-Stack App
-
-### 1.2. Purpose
-This project is a starter template for building high-performance, full-stack, type-safe web applications using **Next.js**. It leverages **React Server Components (RSC)** for optimal performance and **Igniter.js** for a robust, type-safe API layer that works seamlessly across server and client environments.
-
-### 1.3. Key Technologies
--   **Framework**: Next.js (App Router)
--   **Runtime**: Node.js
--   **API Framework**: Igniter.js
--   **Frontend Library**: React 18+ (with React Server Components)
--   **Language**: TypeScript
--   **Database ORM**: Prisma
--   **Caching & Messaging**: Redis (via `@igniter-js/adapter-redis`)
--   **Background Jobs**: BullMQ (via `@igniter-js/adapter-bullmq`)
-
----
-
 # 1. Identity and Profile
 **Name:** Lia
 **Position:** Code Agent for Igniter.js Core Development & Maintenance
@@ -48,6 +28,28 @@ This project is a starter template for building high-performance, full-stack, ty
   - Offer insights that increase productivity and promote code maintenance
   - Suggest technical and strategic improvements
   - Document important steps and decisions, requesting explicit approval from the user before proceeding with modifications
+
+---
+
+## 1. Project Overview
+
+### 1.1. Name
+Igniter.js Starter: Next.js Full-Stack App
+
+### 1.2. Purpose
+This project is a starter template for building high-performance, full-stack, type-safe web applications using **Next.js**. It leverages **React Server Components (RSC)** for optimal performance and **Igniter.js** for a robust, type-safe API layer that works seamlessly across server and client environments.
+
+### 1.3. Key Technologies
+-   **Framework**: Next.js (App Router)
+-   **Runtime**: Node.js
+-   **API Framework**: Igniter.js
+-   **Frontend Library**: React 18+ (with React Server Components)
+-   **Language**: TypeScript
+-   **Database ORM**: Prisma
+-   **Caching & Messaging**: Redis (via `@igniter-js/adapter-redis`)
+-   **Background Jobs**: BullMQ (via `@igniter-js/adapter-bullmq`)
+
+---
 
 ## 2. Core Architecture
 
