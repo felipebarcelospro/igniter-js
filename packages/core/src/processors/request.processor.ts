@@ -107,7 +107,7 @@ export class RequestProcessor<
     this.initializeAsync();
   }
 
-  
+
 
   /**
    * Async initialization for plugins and routes
@@ -545,17 +545,17 @@ export class RequestProcessor<
   ): Promise<any> {
     this.logger.debug('Action handler executing');
 
-    // Validate body and query
+    // Validate and parse body and query to ensure correct types
     try {
       if (handler.body) {
-        this.logger.debug('Validating request body');
-        handler.body.parse(context.request.body);
+        this.logger.debug('Validating and parsing request body');
+        context.request.body = handler.body.parse(context.request.body);
       }
       if (handler.query) {
-        this.logger.debug('Validating request query');
-        handler.query.parse(context.request.query);
+        this.logger.debug('Validating and parsing request query');
+        context.request.query = handler.query.parse(context.request.query);
       }
-    } catch(validationError) {
+    } catch (validationError) {
       this.logger.warn('Request validation failed', {
         validationErrors: validationError,
         path: context.request.path,
