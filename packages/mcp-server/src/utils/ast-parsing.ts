@@ -1,6 +1,7 @@
 import * as ts from "typescript";
 import { parse } from "@typescript-eslint/parser";
 import { promises as fs } from 'fs';
+import * as path from 'path';
 import { pathExists } from './file-analysis';
 
 /**
@@ -207,16 +208,16 @@ function extractFromESLintAST(ast: any, result: any): void {
 }
 
 /**
- * Analyzes TypeScript errors in a file.
+ * Analyzes TypeScript errors in a file using the project's tsconfig.json.
  * @param filePath - Path to the file
- * @param fileContent - Content of the file
+ * @param fileContent - Content of the file (can be unsaved)
  * @param projectRoot - Project root for tsconfig resolution
  * @returns Promise that resolves to diagnostics object
  */
 export async function analyzeTypeScriptErrors(filePath: string, fileContent: string, projectRoot?: string): Promise<any> {
   const diagnostics = {
     typescript_errors: [] as any[],
-    eslint_errors: [] as any[],
+    eslint_errors: [] as any[], // Placeholder for future ESLint integration
     health_summary: {
       error_count: 0,
       warning_count: 0,
@@ -226,66 +227,64 @@ export async function analyzeTypeScriptErrors(filePath: string, fileContent: str
   };
 
   try {
-    // TypeScript analysis
-    const compilerOptions: ts.CompilerOptions = {
-      target: ts.ScriptTarget.ES2020,
+    const absoluteFilePath = path.resolve(filePath);
+    const effectiveProjectRoot = projectRoot || path.dirname(absoluteFilePath);
+
+    // 1. Find and parse the correct tsconfig.json
+    const tsconfigPath = ts.findConfigFile(effectiveProjectRoot, ts.sys.fileExists, 'tsconfig.json');
+
+    let compilerOptions: ts.CompilerOptions = {
+      // Fallback options if tsconfig.json is not found
+      target: ts.ScriptTarget.ESNext,
       module: ts.ModuleKind.ESNext,
+      lib: ["lib.es2020.d.ts", "lib.dom.d.ts"],
       strict: true,
       esModuleInterop: true,
       skipLibCheck: true,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-      allowSyntheticDefaultImports: true,
-      jsx: ts.JsxEmit.ReactJSX
     };
+    let rootFileNames: string[] = [absoluteFilePath];
 
-    // Try to find and parse tsconfig if it exists
-    if (projectRoot) {
-      const tsconfigPath = require('path').join(projectRoot, 'tsconfig.json');
-      if (await pathExists(tsconfigPath)) {
-        try {
-          const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
-          if (!configFile.error) {
-            const parsedConfig = ts.parseJsonConfigFileContent(
-              configFile.config,
-              ts.sys,
-              projectRoot,
-              undefined,
-              tsconfigPath
-            );
-            if (!parsedConfig.errors.length) {
-              Object.assign(compilerOptions, parsedConfig.options);
-            }
+    if (tsconfigPath) {
+      const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+      if (!configFile.error) {
+        const parsedConfig = ts.parseJsonConfigFileContent(
+          configFile.config,
+          ts.sys,
+          path.dirname(tsconfigPath)
+        );
+        if (parsedConfig.errors.length === 0) {
+          compilerOptions = parsedConfig.options;
+          rootFileNames = parsedConfig.fileNames;
+          // Ensure the file being analyzed is part of the compilation
+          if (!rootFileNames.map(p => path.resolve(p)).includes(absoluteFilePath)) {
+            rootFileNames.push(absoluteFilePath);
           }
-        } catch (configError) {
-          // Use default options if tsconfig parsing fails
         }
       }
     }
 
-    const sourceFile = ts.createSourceFile(
-      filePath,
-      fileContent,
-      ts.ScriptTarget.ES2020,
-      true
-    );
+    // 2. Create a custom CompilerHost that uses in-memory content for the target file
+    const host = ts.createCompilerHost(compilerOptions);
+    const originalGetSourceFile = host.getSourceFile;
 
-    const program = ts.createProgram([filePath], compilerOptions, {
-      getSourceFile: (fileName) => fileName === filePath ? sourceFile : undefined,
-      writeFile: () => {},
-      getCurrentDirectory: () => projectRoot || process.cwd(),
-      getDirectories: () => [],
-      fileExists: () => true,
-      readFile: () => fileContent,
-      getCanonicalFileName: (fileName) => fileName,
-      useCaseSensitiveFileNames: () => true,
-      getNewLine: () => '\n',
-      getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options)
-    });
+    host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
+      if (path.resolve(fileName) === absoluteFilePath) {
+        return ts.createSourceFile(fileName, fileContent, compilerOptions.target ?? ts.ScriptTarget.Latest, true);
+      }
+      return originalGetSourceFile.call(host, fileName, languageVersion, onError, shouldCreateNewSourceFile);
+    };
 
-    const tsDiagnostics = ts.getPreEmitDiagnostics(program, sourceFile);
+    // 3. Create the program with the full project context
+    const program = ts.createProgram(rootFileNames, compilerOptions, host);
+    const sourceFileToDiagnose = program.getSourceFile(absoluteFilePath);
+
+    // Get diagnostics for the specific file
+    const tsDiagnostics = sourceFileToDiagnose
+      ? ts.getPreEmitDiagnostics(program, sourceFileToDiagnose)
+      : [];
 
     tsDiagnostics.forEach(diagnostic => {
-      if (diagnostic.file && diagnostic.start) {
+      if (diagnostic.file && typeof diagnostic.start === 'number') {
         const { line, character } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
         diagnostics.typescript_errors.push({
           severity: ts.DiagnosticCategory[diagnostic.category].toLowerCase(),
@@ -294,17 +293,20 @@ export async function analyzeTypeScriptErrors(filePath: string, fileContent: str
           column: character + 1,
           code: `TS${diagnostic.code}`
         });
+      } else {
+        diagnostics.typescript_errors.push({
+          severity: ts.DiagnosticCategory[diagnostic.category].toLowerCase(),
+          message: ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
+          line: 0,
+          column: 0,
+          code: `TS${diagnostic.code}`
+        });
       }
     });
 
-    // ESLint analysis disabled for now due to type compatibility issues
-    // TODO: Re-enable ESLint analysis with proper configuration
-
     // Calculate health summary
-    const errors = diagnostics.typescript_errors.filter(d => d.severity === 'error').length +
-                   diagnostics.eslint_errors.filter(d => d.severity === 'error').length;
-    const warnings = diagnostics.typescript_errors.filter(d => d.severity === 'warning').length +
-                     diagnostics.eslint_errors.filter(d => d.severity === 'warning').length;
+    const errors = diagnostics.typescript_errors.filter(d => d.severity === 'error').length;
+    const warnings = diagnostics.typescript_errors.filter(d => d.severity === 'warning').length;
 
     diagnostics.health_summary = {
       error_count: errors,

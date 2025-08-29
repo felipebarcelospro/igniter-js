@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/mcp-server",
-  "version": "0.0.36",
+  "version": "0.0.40",
   "private": false,
   "description": "MCP Server for Igniter.js ecosystem interaction via STDIO.",
   "main": "dist/index.js",
