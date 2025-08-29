@@ -20,8 +20,8 @@ export function HeroSection() {
         <div className="border-x border-border">
           {/* Announcement Banner */}
           <div className="border-b border-border text-sm px-4 lg:px-10 py-5 bg-secondary/20 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-0">
-            <span className="text-xs sm:text-sm">Introducing Igniter Studio: Our new interactive API Playground.</span>
-            <a href="/blog/announcements/introducing-igniter-studio" className="sm:ml-auto flex items-center text-primary hover:text-primary/80 transition-colors text-xs sm:text-sm">
+            <span className="text-xs sm:text-sm">Announcing Igniter.js MCP Server: Native AI Integration for Modern Development.</span>
+            <a href="/blog/announcements/announcing-igniter-mcp-server" className="sm:ml-auto flex items-center text-primary hover:text-primary/80 transition-colors text-xs sm:text-sm">
               Read the announcement <ArrowUpRight className="size-3 sm:size-4 ml-1 sm:ml-2" />
             </a>
           </div>

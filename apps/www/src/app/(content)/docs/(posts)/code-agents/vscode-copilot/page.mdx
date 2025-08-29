@@ -45,9 +45,31 @@ When you open an Igniter.js template project in VS Code, Copilot can use the pro
 
 Our official templates now include a **MCP Server** that provides Copilot with direct access to your project through standardized tools. This means Copilot can:
 
-- **Analyze code** using built-in analysis tools
-- **Manage tasks** through integrated task management
-- **Execute commands** directly in your project
+- **Analyze your codebase** with deep understanding of your project structure
+- **Execute development commands** like starting the dev server or running tests
+- **Generate code scaffolding** for features, controllers, and procedures
+- **Manage tasks and projects** with built-in project management tools
+- **Access your project's memory** to remember architectural decisions and patterns
+- **Delegate work** to specialized AI agents for complex tasks
+
+### Adding MCP Server to VS Code
+
+To enable the MCP Server integration with VS Code:
+
+Create `.vscode/mcp.json` in your workspace:
+
+```json
+{
+  "servers": {
+    "Igniter": {
+      "command": "npx",
+      "args": ["@igniter-js/mcp-server"]
+    }
+  }
+}
+```
+
+This gives VS Code Copilot direct access to powerful development tools that understand your Igniter.js project deeply.
 - **Access project memory** for context-aware development
 - **Delegate work** to specialized AI agents
 

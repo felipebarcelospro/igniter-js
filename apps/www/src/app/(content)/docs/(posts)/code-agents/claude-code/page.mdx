@@ -47,7 +47,25 @@ The easiest way to work with Claude is by starting your project with one of our 
 
 Our official templates now include a **MCP Server** that provides Claude with direct access to your project through standardized tools. This means Claude can:
 
-- **Analyze code** using built-in analysis tools
+- **Analyze your codebase** with deep understanding of your project structure
+- **Execute development commands** like starting the dev server or running tests
+- **Generate code scaffolding** for features, controllers, and procedures
+- **Manage tasks and projects** with built-in project management tools
+- **Access your project's memory** to remember architectural decisions and patterns
+
+### Adding MCP Server to Claude Code
+
+To enable the MCP Server integration with Claude Code:
+
+```bash
+# Add the Igniter.js MCP Server to Claude Code
+claude mcp add igniter npx @igniter-js/mcp-server
+
+# Verify it's installed
+claude mcp list
+```
+
+This gives Claude direct access to powerful development tools that understand your Igniter.js project deeply.
 - **Manage tasks** through integrated task management
 - **Execute commands** directly in your project
 - **Access project memory** for context-aware development

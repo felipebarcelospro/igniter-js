@@ -17,11 +17,11 @@ This isn't just about code completion—it's about having an intelligent convers
 The Igniter.js MCP Server exposes a comprehensive set of tools that give AI agents deep insight into your project:
 
 ### Development Lifecycle
-- `dev`: Start the development server with live reloading and client generation
-- `build`: Compile your project for production deployment  
-- `test`: Execute your test suite with filtering and watch options
-- `generateSchema`: Generate type-safe client from your API router
-- `generateDocs`: Create OpenAPI documentation with interactive UI
+- `start_dev_server`: Start the development server with live reloading and client generation
+- `build_project`: Compile your project for production deployment  
+- `run_tests`: Execute your test suite with filtering and watch options
+- `generate_schema`: Generate type-safe client from your API router
+- `generate_docs`: Create OpenAPI documentation with interactive UI
 
 ### Code Intelligence
 - `analyze_file`: Deep analysis of file structure, imports, exports, and TypeScript errors
@@ -29,6 +29,11 @@ The Igniter.js MCP Server exposes a comprehensive set of tools that give AI agen
 - `find_implementation`: Locate where symbols, functions, and classes are implemented
 - `explore_source`: Detailed exploration of code with context and dependencies
 - `trace_dependency_chain`: Map complete dependency chains from usage to implementation
+
+### Scaffolding Tools
+- `generate_feature`: Scaffold complete feature modules with controllers and procedures
+- `generate_controller`: Create new controllers within existing features
+- `generate_procedure`: Generate middleware procedures for reusable logic
 
 ### Project Management
 - `create_task`: Create development tasks with priorities and assignments
@@ -54,29 +59,7 @@ The Igniter.js MCP Server exposes a comprehensive set of tools that give AI agen
 - `get_pull_request`: Analyze PR details, changes, and status
 - `search_code`: Search code across GitHub repositories
 
-## Usage
 
-The Igniter.js MCP Server comes pre-configured in all official starters. For existing projects:
-
-```bash
-npm install @igniter-js/mcp-server
-```
-
-Then configure it in your main Igniter.js file:
-
-```typescript
-// src/igniter.ts
-import { createMcpServer } from '@igniter-js/mcp-server';
-
-export const igniter = Igniter
-  .context<IgniterAppContext>()
-  .mcp(createMcpServer({
-    enableMemoryManager: true,
-    enableTaskManager: true,  
-    enableAgentDelegation: true
-  }))
-  .build();
-```
 
 ## Sample Prompts
 
@@ -88,9 +71,9 @@ Once connected to your MCP-compatible AI agent, you can have natural conversatio
 - "Show me the dependency chain for the user management system"
 
 ### Development Tasks
-- "Create tasks for implementing email verification with proper validation"
-- "What tasks are currently in progress and who's working on them?"
-- "Find tasks that would be good candidates for AI agent delegation"
+- "Generate a new user management feature with authentication"
+- "Create a controller for handling payment processing in the billing feature"
+- "Build the project for production and show me any errors"
 
 ### Code Understanding
 - "Explain how the payment processing flow works in this codebase"

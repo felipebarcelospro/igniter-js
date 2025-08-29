@@ -10,7 +10,7 @@ import { ToolsetContext } from "./types";
 export function registerCliTools({ server, execAsync }: ToolsetContext) {
   // --- Lifecycle Tools ---
 
-  server.registerTool("dev", {
+  server.registerTool("start_dev_server", {
     title: "Start Dev Server",
     description: `**What it does:** Starts the Igniter.js development server, enabling live reloading, client generation, and interactive debugging.
 **When to use:** At the beginning of a development session to run the project locally. This is the primary way to test changes in real-time.
@@ -39,7 +39,7 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
     }
   });
 
-  server.registerTool("build", {
+  server.registerTool("build_project", {
     title: "Build Project",
     description: `**What it does:** Compiles the project for production. This includes building the web framework and generating the final Igniter.js client.
 **When to use:** Before deploying the application or when you need to test the production build locally.
@@ -64,7 +64,7 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
     }
   });
 
-  server.registerTool("test", {
+  server.registerTool("run_tests", {
     title: "Run Tests",
     description: `**What it does:** Executes the project's test suite using the configured test runner (e.g., Vitest).
 **When to use:** After making changes to ensure that functionality is correct and no regressions were introduced. Essential for maintaining code quality.
@@ -95,7 +95,7 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
 
   // --- Scaffolding Tools ---
 
-  server.registerTool("generateFeature", {
+  server.registerTool("generate_feature", {
     title: "Generate Feature",
     description: `**What it does:** Scaffolds a complete, new feature module according to Igniter.js conventions.
 **When to use:** When starting a new, distinct area of functionality in the application (e.g., 'users', 'products', 'billing').
@@ -123,7 +123,7 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
     }
   });
 
-  server.registerTool("generateController", {
+  server.registerTool("generate_controller", {
     title: "Generate Controller",
     description: `**What it does:** Scaffolds a new controller file within an existing feature.
 **When to use:** To group a set of related API actions (queries and mutations) under a common path. For example, within a 'user' feature, you might have a 'profile' controller.
@@ -148,7 +148,7 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
     }
   });
 
-  server.registerTool("generateProcedure", {
+  server.registerTool("generate_procedure", {
     title: "Generate Procedure",
     description: `**What it does:** Scaffolds a new procedure (middleware) file within an existing feature.
 **When to use:** To create reusable logic that runs before your action handlers, such as authentication checks, logging, or role validation.
@@ -175,7 +175,7 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
 
   // --- Generation & Docs Tools ---
 
-  server.registerTool("generateSchema", {
+  server.registerTool("generate_schema", {
     title: "Generate Schema",
     description: `**What it does:** Manually triggers the generation of the type-safe client schema from your API router.
 **When to use:** Primarily in CI/CD environments or when you need to force a regeneration without running the dev server. The 'dev' command typically handles this automatically.
@@ -208,7 +208,7 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
     }
   });
 
-  server.registerTool("generateDocs", {
+  server.registerTool("generate_docs", {
     title: "Generate API Docs",
     description: `**What it does:** Generates an OpenAPI specification file from your API router. Can also create a self-contained HTML UI for browsing the API.
 **When to use:** To create or update your API documentation for internal teams or external consumers.

@@ -40,11 +40,52 @@ The easiest way to work with Cursor is by starting your project with one of our 
 
 Our official templates now include a **MCP Server** that provides Cursor with direct access to your project through standardized tools. This means Cursor can:
 
-- **Analyze code** using built-in analysis tools
-- **Manage tasks** through integrated task management
-- **Execute commands** directly in your project
-- **Access project memory** for context-aware development
-- **Delegate work** to specialized AI agents
+- **Analyze your codebase** with deep understanding of your project structure
+- **Execute development commands** like starting the dev server or running tests
+- **Generate code scaffolding** for features, controllers, and procedures
+- **Manage tasks and projects** with built-in project management tools
+- **Access your project's memory** to remember architectural decisions and patterns
+- **Delegate work** to specialized AI agents for complex tasks
+
+### Adding MCP Server to Cursor
+
+To enable the MCP Server integration with Cursor:
+
+#### Option 1: Global Configuration
+- Open **Cursor Settings**
+- Select **MCP** in the settings sidenav  
+- Click **+ Add new global MCP server**
+- Add the Igniter.js configuration:
+
+```json
+{
+  "mcpServers": {
+    "Igniter": {
+      "command": "npx",
+      "args": ["@igniter-js/mcp-server"]
+    }
+  }
+}
+```
+
+#### Option 2: Project-Specific Configuration
+Create `.cursor/mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "Igniter": {
+      "command": "npx", 
+      "args": ["@igniter-js/mcp-server"],
+      "env": {
+        "IGNITER_PROJECT_ROOT": "."
+      }
+    }
+  }
+}
+```
+
+This gives Cursor direct access to powerful development tools that understand your Igniter.js project deeply.
 
 Learn more about our [MCP Server](/docs/code-agents/mcp-server) and [Next.js Starter Rules](/docs/code-agents/nextjs-starter-rules).
 
