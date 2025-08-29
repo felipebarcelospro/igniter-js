@@ -739,10 +739,23 @@ export class RequestProcessor<
       input: Record<string, any>,
     ) {
       let url = parseURL(baseURL, basePATH, controllerPath, actionPath);
-      if (!input || !input.params) return url;
+      
+      // Replace path parameters in the URL
+      if (input?.params) {
+        for (const [key, value] of Object.entries(input.params)) {
+          url = url.replace(`:${key}`, String(value));
+        }
+      }
 
-      for (const [key, value] of Object.entries(input.params)) {
-        url = url.replace(`:${key}`, String(value));
+      // Add query parameters for GET requests
+      if (action.method === 'GET' && input?.query) {
+        const queryParams = new URLSearchParams();
+        for (const key in input.query) {
+          queryParams.append(key, String(input.query[key]));
+        }
+        if (queryParams.toString()) {
+          url += `?${queryParams.toString()}`;
+        }
       }
 
       return url;
