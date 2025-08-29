@@ -1,0 +1,953 @@
+---
+description: |
+  Comprehensive guide to using the Igniter.js Client, covering server-side and client-side usage patterns,
+  React hooks (useQuery, useMutation, useRealtime), context management, realtime features, and best practices.
+  This rule explains the universal client architecture and how it works seamlessly across different Next.js environments.
+alwaysApply: true
+priority: 2
+---
+
+# Igniter.js Client Usage Guide
+
+This rule provides comprehensive guidance on using the Igniter.js Client, which offers universal type-safe API communication across server and client environments with advanced features like real-time updates, caching, and React hooks integration.
+
+## 1. Universal Client Architecture
+
+### 1.1 Environment-Aware Client
+
+The Igniter.js client automatically adapts to different execution environments:
+
+```typescript
+// Generated client file: src/igniter.client.ts
+export const api = createIgniterClient<AppRouterType>({
+  baseURL: process.env.NEXT_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
+  basePATH: process.env.NEXT_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
+  router: () => {
+    if (typeof window === 'undefined') {
+      // Server-side: Direct router access (zero HTTP overhead)
+      return require('./igniter.router').AppRouter
+    }
+    // Client-side: HTTP-based client with hooks
+    return require('./igniter.schema').AppRouterSchema
+  },
+})
+```
+
+### 1.2 Execution Environments
+
+**Server-Side Execution (RSC, API Routes, Middleware):**
+- Direct function calls via `router.$caller`
+- Zero HTTP overhead
+- Full access to server context
+- Synchronous execution model
+
+**Client-Side Execution (Browser, Client Components):**
+- HTTP requests via fetch API
+- React hooks for state management
+- Built-in caching and revalidation
+- Real-time subscriptions via SSE
+
+## 2. Server-Side Usage Patterns
+
+### 2.1 React Server Components (RSC)
+
+```typescript
+// app/users/page.tsx
+import { api } from '@/igniter.client'
+
+export default async function UsersPage() {
+  // Direct function call - no HTTP request
+  const users = await api.users.list.query()
+
+  return (
+    <div>
+      <h1>Users</h1>
+      {users.data.map(user => (
+        <div key={user.id}>{user.name}</div>
+      ))}
+    </div>
+  )
+}
+```
+
+### 2.2 API Routes
+
+```typescript
+// app/api/sync/route.ts
+import { api } from '@/igniter.client'
+
+export async function POST() {
+  try {
+    // Direct server-to-server calls
+    const users = await api.users.list.query()
+    const posts = await api.posts.list.query()
+
+    // Perform sync logic
+    return Response.json({ success: true })
+  } catch (error) {
+    return Response.json({ error: error.message }, { status: 500 })
+  }
+}
+```
+
+### 2.3 Server Actions
+
+```typescript
+// app/actions.ts
+'use server'
+
+import { api } from '@/igniter.client'
+import { revalidatePath } from 'next/cache'
+
+export async function createUserAction(formData: FormData) {
+  const userData = {
+    name: formData.get('name') as string,
+    email: formData.get('email') as string,
+  }
+
+  try {
+    const result = await api.users.create.mutate({ body: userData })
+    revalidatePath('/users')
+    return { success: true, user: result.data }
+  } catch (error) {
+    return { success: false, error: error.message }
+  }
+}
+```
+
+## 3. Client-Side Usage Patterns
+
+### 3.1 Provider Setup
+
+```typescript
+// app/layout.tsx
+import { IgniterProvider } from '@igniter-js/core/client'
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html>
+      <body>
+        <IgniterProvider
+           enableRealtime={true}
+           autoReconnect={true}
+           maxReconnectAttempts={5}
+           reconnectDelay={1000}
+           debug={process.env.NODE_ENV === 'development'}
+        >
+          {children}
+        </IgniterProvider>
+      </body>
+    </html>
+  )
+}
+```
+
+### 3.2 Query Hooks (GET Requests)
+
+```typescript
+// components/UserList.tsx
+'use client'
+
+import { api } from '@/igniter.client'
+
+export function UserList() {
+  const { data, isLoading, error, refetch } = api.users.list.useQuery({
+    enabled: true,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: true,
+    refetchInterval: 30000, // 30 seconds
+    onSuccess: (data) => {
+      console.log('Users loaded:', data.length)
+    },
+    onError: (error) => {
+      console.error('Failed to load users:', error)
+    }
+  })
+
+  if (isLoading) return <div>Loading users...</div>
+  if (error) return <div>Error: {error.message}</div>
+  if (!data) return <div>No users found</div>
+
+  return (
+    <div>
+      <button onClick={() => refetch()}>Refresh</button>
+      {data.map(user => (
+        <div key={user.id}>
+          <h3>{user.name}</h3>
+          <p>{user.email}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+```
+
+### 3.3 Query with Parameters
+
+```typescript
+// components/UserProfile.tsx
+'use client'
+
+import { api } from '@/igniter.client'
+
+interface UserProfileProps {
+  userId: string
+}
+
+export function UserProfile({ userId }: UserProfileProps) {
+  const { data: user, isLoading } = api.users.getById.useQuery({
+    params: { id: userId },
+    enabled: !!userId, // Only run when userId is available
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  })
+
+  if (isLoading) return <div>Loading user...</div>
+  if (!user) return <div>User not found</div>
+
+  return (
+    <div>
+      <h1>{user.name}</h1>
+      <p>{user.email}</p>
+      <p>Created: {user.createdAt}</p>
+    </div>
+  )
+}
+```
+
+### 3.4 Mutation Hooks (POST/PUT/DELETE Requests)
+
+```typescript
+// components/CreateUserForm.tsx
+'use client'
+
+import { api, useQueryClient } from '@/igniter.client'
+import { useState } from 'react'
+
+export function CreateUserForm() {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const { invalidate } = useQueryClient()
+
+  const { mutate: createUser, isLoading } = api.users.create.useMutation({
+    onSuccess: (data) => {
+      console.log('User created:', data)
+      // Invalidate users list to trigger refetch
+      invalidate(['users.list'])
+      // Reset form
+      setName('')
+      setEmail('')
+    },
+    onError: (error) => {
+      console.error('Failed to create user:', error)
+      alert('Failed to create user: ' + error.message)
+    }
+  })
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    createUser({
+      body: { name, email }
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div>
+        <input
+          type="text"
+          placeholder="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+      </div>
+      <div>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+      </div>
+      <button type="submit" disabled={isLoading}>
+        {isLoading ? 'Creating...' : 'Create User'}
+      </button>
+    </form>
+  )
+}
+```
+
+## 4. Real-time Features
+
+### 4.1 Automatic Revalidation
+
+```typescript
+// Server-side: Trigger revalidation from mutations
+export const postsController = igniter.controller({
+  path: '/posts',
+  actions: {
+    list: igniter.query({
+      path: '/',
+      stream: true, // Enable real-time updates
+      handler: ({ context }) => {
+        return context.database.post.findMany()
+      }
+    }),
+    create: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: z.object({ title: z.string() }),
+      handler: async ({ request, context, response }) => {
+        const newPost = await context.database.post.create({ data: request.body })
+        // Trigger automatic revalidation for all connected clients
+        return response.created(newPost).revalidate('posts.list')
+      }
+    })
+  }
+})
+```
+
+### 4.2 Custom Real-time Streams
+
+```typescript
+// Server-side: Custom real-time endpoint
+notifications: igniter.query({
+  path: '/notifications/stream',
+  stream: true,
+  handler: async ({ context, realtime }) => {
+    const userId = context.auth.user.id
+
+    // Subscribe to user-specific notifications
+    const subscription = igniter.store.subscribe(`user:${userId}:notifications`, (message) => {
+      realtime.send({
+        type: 'notification',
+        data: message
+      })
+    })
+
+    // Cleanup on disconnect
+    realtime.onDisconnect(() => {
+      subscription.unsubscribe()
+    })
+  }
+})
+```
+
+```typescript
+// Client-side: Subscribe to real-time stream
+'use client'
+
+import { api } from '@/igniter.client'
+
+export function NotificationBell() {
+  const [notifications, setNotifications] = useState<any[]>([])
+
+  // Subscribe to real-time notifications
+  api.users.notifications.useRealtime({
+    onMessage: (data) => {
+      if (data.type === 'notification') {
+        setNotifications(prev => [data.data, ...prev])
+      }
+    },
+    onError: (error) => {
+      console.error('Notification stream error:', error)
+    },
+    onReconnect: () => {
+      console.log('Notification stream reconnected')
+    }
+  })
+
+  return (
+    <div>
+      <span>🔔 ({notifications.length})</span>
+      {notifications.map(notification => (
+        <div key={notification.id}>{notification.message}</div>
+      ))}
+    </div>
+  )
+}
+```
+
+### 4.3 Real-time Chat Implementation
+
+```typescript
+// Client-side: Real-time chat component
+'use client'
+
+import { api } from '@/igniter.client'
+import { useState, useEffect } from 'react'
+
+export function ChatRoom({ roomId }: { roomId: string }) {
+  const [messages, setMessages] = useState<any[]>([])
+  const [newMessage, setNewMessage] = useState('')
+
+  // Load initial messages
+  const { data: initialMessages } = api.chat.messages.useQuery({
+    params: { roomId }
+  })
+
+  // Subscribe to new messages
+  api.chat.stream.useRealtime({
+    params: { roomId },
+    onMessage: (message) => {
+      setMessages(prev => [...prev, message])
+    }
+  })
+
+  // Send message mutation
+  const { mutate: sendMessage } = api.chat.send.useMutation({
+    onSuccess: () => {
+      setNewMessage('')
+    }
+  })
+
+  useEffect(() => {
+    if (initialMessages) {
+      setMessages(initialMessages)
+    }
+  }, [initialMessages])
+
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newMessage.trim()) return
+
+    sendMessage({
+      params: { roomId },
+      body: { message: newMessage }
+    })
+  }
+
+  return (
+    <div className="chat-room">
+      <div className="messages">
+        {messages.map(message => (
+          <div key={message.id} className="message">
+            <strong>{message.author}:</strong> {message.text}
+          </div>
+        ))}
+      </div>
+      <form onSubmit={handleSend}>
+        <input
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          placeholder="Type a message..."
+        />
+        <button type="submit">Send</button>
+      </form>
+    </div>
+  )
+}
+```
+
+## 5. Advanced Patterns
+
+### 5.1 Conditional Queries
+
+```typescript
+'use client'
+
+import { api } from '@/igniter.client'
+
+export function UserPosts({ userId }: { userId?: string }) {
+  const { data: posts } = api.posts.list.useQuery({
+    query: { authorId: userId },
+    enabled: !!userId, // Only run when userId is provided
+  })
+
+  const { data: user } = api.users.getById.useQuery({
+    params: { id: userId! },
+    enabled: !!userId,
+  })
+
+  if (!userId) return <div>Please select a user</div>
+
+  return (
+    <div>
+      <h2>{user?.name}'s Posts</h2>
+      {posts?.map(post => (
+        <article key={post.id}>
+          <h3>{post.title}</h3>
+          <p>{post.excerpt}</p>
+        </article>
+      ))}
+    </div>
+  )
+}
+```
+
+### 5.2 Parallel Queries
+
+```typescript
+'use client'
+
+import { api } from '@/igniter.client'
+
+export function UserDashboard({ userId }: { userId: string }) {
+  // Run multiple queries in parallel
+  const { data: user, isLoading: userLoading } = api.users.getById.useQuery({
+    params: { id: userId }
+  })
+
+  const { data: posts, isLoading: postsLoading } = api.posts.list.useQuery({
+    query: { authorId: userId }
+  })
+
+  const { data: comments, isLoading: commentsLoading } = api.comments.list.useQuery({
+    query: { authorId: userId }
+  })
+
+  const isLoading = userLoading || postsLoading || commentsLoading
+
+  if (isLoading) return <div>Loading dashboard...</div>
+
+  return (
+    <div>
+      <h1>{user?.name}'s Dashboard</h1>
+      <div className="stats">
+        <div>Posts: {posts?.length || 0}</div>
+        <div>Comments: {comments?.length || 0}</div>
+      </div>
+    </div>
+  )
+}
+```
+
+### 5.3 Query Invalidation Patterns
+
+```typescript
+'use client'
+
+import { api, useQueryClient } from '@/igniter.client'
+
+export function PostManager() {
+  const { invalidate } = useQueryClient()
+
+  const { mutate: createPost } = api.posts.create.useMutation({
+    onSuccess: () => {
+      // Invalidate specific queries
+      invalidate(['posts.list'])
+      invalidate(['posts.featured'])
+    }
+  })
+
+  const { mutate: deletePost } = api.posts.delete.useMutation({
+    onSuccess: (data, variables) => {
+      // Invalidate list queries
+      invalidate(['posts.list'])
+      // Remove specific post from cache
+      queryClient.removeQueries(['posts.getById', variables.params.id])
+    }
+  })
+
+  const handleRefreshAll = () => {
+    // Invalidate all posts-related queries
+    invalidate(['posts'])
+  }
+
+  return (
+    <div>
+      <button onClick={handleRefreshAll}>Refresh All</button>
+      {/* Post management UI */}
+    </div>
+  )
+}
+```
+
+## 6. Error Handling
+
+### 6.1 Global Error Handling
+
+```typescript
+// app/providers.tsx
+'use client'
+
+import { IgniterProvider } from '@igniter-js/core/client'
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <IgniterProvider
+      options={{
+        enableRealtime: true,
+        debug: process.env.NODE_ENV === 'development',
+        defaultOptions: {
+          queries: {
+            onError: (error: any) => {
+              // Global error handling for queries
+              console.error('Query error:', error)
+              if (error.status === 401) {
+                // Redirect to login
+                window.location.href = '/login'
+              }
+            }
+          },
+          mutations: {
+            onError: (error: any) => {
+              // Global error handling for mutations
+              console.error('Mutation error:', error)
+              // Show toast notification
+              toast.error(error.message || 'Something went wrong')
+            }
+          }
+        }
+      }}
+    >
+      {children}
+    </IgniterProvider>
+  )
+}
+```
+
+### 6.2 Component-Level Error Handling
+
+```typescript
+'use client'
+
+import { api } from '@/igniter.client'
+
+export function UserProfile({ userId }: { userId: string }) {
+  const {
+    data: user,
+    error,
+    isLoading,
+    refetch
+  } = api.users.getById.useQuery({
+    params: { id: userId },
+    onError: (error) => {
+      // Component-specific error handling
+      if (error.status === 404) {
+        // Handle user not found
+        console.log('User not found')
+      } else {
+        // Handle other errors
+        console.error('Failed to load user:', error)
+      }
+    }
+  })
+
+  if (isLoading) return <div>Loading...</div>
+
+  if (error) {
+    return (
+      <div className="error-state">
+        <h2>Something went wrong</h2>
+        <p>{error.message}</p>
+        <button onClick={() => refetch()}>Try Again</button>
+      </div>
+    )
+  }
+
+  if (!user) return <div>User not found</div>
+
+  return (
+    <div>
+      <h1>{user.name}</h1>
+      <p>{user.email}</p>
+    </div>
+  )
+}
+```
+
+## 7. Performance Optimization
+
+### 7.1 Query Configuration
+
+```typescript
+'use client'
+
+import { api } from '@/igniter.client'
+
+export function OptimizedUserList() {
+  const { data: users } = api.users.list.useQuery({
+    // Cache for 5 minutes
+    staleTime: 5 * 60 * 1000,
+
+    // Don't refetch on window focus for this data
+    refetchOnWindowFocus: false,
+
+    // Refetch every 10 minutes in background
+    refetchInterval: 10 * 60 * 1000,
+    refetchIntervalInBackground: true,
+
+    // Use initial data to prevent loading states
+    initialData: [],
+
+    // Only enable if we need the data
+    enabled: true,
+  })
+
+  return (
+    <div>
+      {users?.map(user => (
+        <div key={user.id}>{user.name}</div>
+      ))}
+    </div>
+  )
+}
+```
+
+### 7.2 Selective Query Invalidation
+
+```typescript
+'use client'
+
+import { api, useQueryClient } from '@/igniter.client'
+
+export function SmartInvalidation() {
+  const { invalidate } = useQueryClient()
+
+  const { mutate: updateUser } = api.users.update.useMutation({
+    onSuccess: (updatedUser, variables) => {
+      // Only invalidate affected queries
+      invalidate(['users.getById', variables.params.id])
+      invalidate(['users.list'])
+
+      // Don't invalidate unrelated data
+      // invalidate(['posts']) // ❌ Don't do this
+    }
+  })
+
+  return <div>Smart invalidation example</div>
+}
+```
+
+## 8. Testing Patterns
+
+### 8.1 Mocking API Calls
+
+```typescript
+// __tests__/UserList.test.tsx
+import { render, screen } from '@testing-library/react'
+import { UserList } from '../components/UserList'
+import { api } from '@/igniter.client'
+
+// Mock the API
+jest.mock('@/igniter.client', () => ({
+  api: {
+    users: {
+      list: {
+        useQuery: jest.fn(),
+      }
+    }
+  }
+}))
+
+const mockApi = api as jest.Mocked<typeof api>
+
+describe('UserList', () => {
+  it('shows loading state', () => {
+    mockApi.users.list.useQuery.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+      refetch: jest.fn(),
+    })
+
+    render(<UserList />)
+    expect(screen.getByText('Loading users...')).toBeInTheDocument()
+  })
+
+  it('shows users when loaded', () => {
+    mockApi.users.list.useQuery.mockReturnValue({
+      data: [
+        { id: '1', name: 'John Doe', email: 'john@example.com' },
+        { id: '2', name: 'Jane Smith', email: 'jane@example.com' },
+      ],
+      isLoading: false,
+      error: null,
+      refetch: jest.fn(),
+    })
+
+    render(<UserList />)
+    expect(screen.getByText('John Doe')).toBeInTheDocument()
+    expect(screen.getByText('Jane Smith')).toBeInTheDocument()
+  })
+})
+```
+
+### 8.2 Integration Testing
+
+```typescript
+// __tests__/integration/UserFlow.test.tsx
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { IgniterProvider } from '@igniter-js/core/client'
+import { UserManagement } from '../components/UserManagement'
+
+const TestProvider = ({ children }: { children: React.ReactNode }) => (
+  <IgniterProvider options={{ enableRealtime: false, debug: false }}>
+    {children}
+  </IgniterProvider>
+)
+
+describe('User Management Flow', () => {
+  it('creates and displays new user', async () => {
+    render(
+      <TestProvider>
+        <UserManagement />
+      </TestProvider>
+    )
+
+    // Fill form
+    fireEvent.change(screen.getByPlaceholderText('Name'), {
+      target: { value: 'Test User' }
+    })
+    fireEvent.change(screen.getByPlaceholderText('Email'), {
+      target: { value: 'test@example.com' }
+    })
+
+    // Submit form
+    fireEvent.click(screen.getByText('Create User'))
+
+    // Wait for user to appear in list
+    await waitFor(() => {
+      expect(screen.getByText('Test User')).toBeInTheDocument()
+    })
+  })
+})
+```
+
+## 9. Best Practices
+
+### 9.1 Query Key Conventions
+
+```typescript
+// Use consistent query key patterns
+api.users.list.useQuery() // Key: ['users.list']
+api.users.getById.useQuery({ params: { id: '123' }}) // Key: ['users.getById', '123']
+api.posts.list.useQuery({ query: { category: 'tech' }}) // Key: ['posts.list', { category: 'tech' }]
+```
+
+### 9.2 Loading States
+
+```typescript
+// Create reusable loading components
+export function QueryWrapper({
+  query,
+  children,
+  fallback = <div>Loading...</div>
+}: {
+  query: { isLoading: boolean; error?: any; data?: any }
+  children: (data: any) => React.ReactNode
+  fallback?: React.ReactNode
+}) {
+  if (query.isLoading) return fallback
+  if (query.error) return <div>Error: {query.error.message}</div>
+  if (!query.data) return <div>No data</div>
+
+  return <>{children(query.data)}</>
+}
+
+// Usage
+export function UserProfile({ userId }: { userId: string }) {
+  const userQuery = api.users.getById.useQuery({ params: { id: userId }})
+
+  return (
+    <QueryWrapper query={userQuery} fallback={<UserSkeleton />}>
+      {(user) => (
+        <div>
+          <h1>{user.name}</h1>
+          <p>{user.email}</p>
+        </div>
+      )}
+    </QueryWrapper>
+  )
+}
+```
+
+### 9.3 Error Boundaries
+
+```typescript
+// Create error boundary for API errors
+import { ErrorBoundary } from 'react-error-boundary'
+
+function ApiErrorFallback({ error, resetErrorBoundary }: any) {
+  return (
+    <div role="alert">
+      <h2>Something went wrong:</h2>
+      <pre>{error.message}</pre>
+      <button onClick={resetErrorBoundary}>Try again</button>
+    </div>
+  )
+}
+
+export function SafeComponent({ children }: { children: React.ReactNode }) {
+  return (
+    <ErrorBoundary
+      FallbackComponent={ApiErrorFallback}
+      onReset={() => window.location.reload()}
+    >
+      {children}
+    </ErrorBoundary>
+  )
+}
+```
+
+## 10. Troubleshooting Common Issues
+
+### 10.1 Hydration Mismatches
+
+```typescript
+// Use proper environment detection
+'use client'
+
+import { api } from '@/igniter.client'
+import { useEffect, useState } from 'react'
+
+export function HydrationSafeComponent() {
+  const [mounted, setMounted] = useState(false)
+  const { data } = api.users.list.useQuery({
+    enabled: mounted, // Only run after hydration
+  })
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) return <div>Loading...</div>
+
+  return <div>{/* Your component */}</div>
+}
+```
+
+### 10.2 Type Issues
+
+```typescript
+// Ensure proper typing for API responses
+type User = {
+  id: string
+  name: string
+  email: string
+}
+
+// Use proper type assertions when needed
+const { data: users } = api.users.list.useQuery() as {
+  data: User[] | undefined
+}
+```
+
+### 10.3 Real-time Connection Issues
+
+```typescript
+// Handle real-time connection states
+export function RealtimeStatus() {
+  const [connectionStatus, setConnectionStatus] = useState<string>('connecting')
+
+  api.users.notifications.useRealtime({
+    onConnect: () => setConnectionStatus('connected'),
+    onDisconnect: () => setConnectionStatus('disconnected'),
+    onReconnect: () => setConnectionStatus('reconnecting'),
+    onError: (error) => {
+      console.error('Real-time error:', error)
+      setConnectionStatus('error')
+    }
+  })
+
+  return (
+    <div className={`status status-${connectionStatus}`}>
+      Real-time: {connectionStatus}
+    </div>
+  )
+}
+```
+
+This comprehensive guide covers all aspects of using the Igniter.js Client effectively across different environments while maintaining type safety and optimal performance.

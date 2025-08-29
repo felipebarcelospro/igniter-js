@@ -1,0 +1,280 @@
+---
+description: |
+  Advanced agent delegation strategies for optimal workload distribution and specialized task execution. 
+  Defines when and how to delegate tasks to specialized coding agents, monitoring strategies, and integration 
+  patterns. Apply when: planning complex features, managing high workloads, requiring specialized expertise, 
+  optimizing parallel execution.
+alwaysApply: true
+priority: 2
+---
+
+# Agent Delegation Strategy & Best Practices
+
+## 1. Delegation Decision Framework
+
+### 1.1 When to Delegate (DELEGATE)
+**Primary Criteria:**
+- **Complexity + Independence**: Task is complex but doesn't require deep system integration
+- **Specialized Expertise**: Task benefits from focused domain expertise (testing, documentation, research)
+- **Parallel Execution**: Task can run alongside other work without conflicts
+- **Clear Scope**: Task has well-defined boundaries and acceptance criteria
+- **Time Intensive**: Task is time-consuming but routine (documentation, code review)
+
+**Examples of Delegation Candidates:**
+- API documentation generation
+- Unit test implementation for specific components
+- Code review and refactoring of isolated modules
+- Research tasks (technology evaluation, pattern analysis)
+- Migration scripts for data transformations
+- Performance optimization for specific algorithms
+- Integration testing for external services
+
+### 1.2 When to Execute Directly (EXECUTE)
+**Primary Criteria:**
+- **Strategic Decisions**: Architectural choices, design patterns, technology selection
+- **Deep Integration**: Requires understanding of entire system context
+- **User Interaction**: Tasks requiring user feedback or iterative refinement
+- **Security Sensitive**: Authentication, authorization, data protection implementations
+- **System Critical**: Core framework functionality, essential business logic
+
+**Examples of Direct Execution:**
+- Architecture design and planning
+- Core feature implementations requiring system-wide changes
+- Database schema design and migrations
+- Security implementations
+- User interface design and user experience decisions
+- Integration of delegated work into main system
+
+### 1.3 Hybrid Approach (DELEGATE + SUPERVISE)
+**Suitable for:**
+- Large features that can be broken into independent components
+- Research tasks that inform direct execution decisions
+- Code generation tasks that require review and integration
+- Testing tasks that validate direct implementations
+
+## 2. Agent Selection Strategy
+
+### 2.1 Agent Specialization Matrix
+
+| Task Type | Primary Agent | Secondary Agent | Rationale |
+|-----------|---------------|-----------------|-----------|
+| **Code Review & Refactoring** | Claude | Gemini | Strong analytical and code quality focus |
+| **Documentation & API Docs** | Claude | GPT | Excellent technical writing and clarity |
+| **Research & Analysis** | Perplexity | Gemini | Access to current information and analysis |
+| **Testing & QA** | Gemini | Claude | Systematic testing approach and edge case identification |
+| **Performance Optimization** | Claude | Gemini | Deep technical analysis and optimization patterns |
+| **Data Processing & Scripts** | GPT | Claude | Good at procedural and data manipulation tasks |
+| **Integration & Configuration** | Gemini | Claude | Strong at system integration patterns |
+| **UI/UX Implementation** | GPT | Claude | Good at user-facing implementations |
+
+### 2.2 Model Selection Guidelines
+**For Complex Tasks:**
+- Claude: Use `claude-3-5-sonnet` for complex reasoning and code analysis
+- Gemini: Use `gemini-pro` for systematic analysis and testing
+- GPT: Use `gpt-4` for creative problem-solving and implementation
+- Perplexity: Use latest model for research tasks requiring current information
+
+**For Routine Tasks:**
+- Use faster models (e.g., `claude-3-haiku`) for documentation and simple refactoring
+- Use standard models for well-defined implementation tasks
+
+## 3. Delegation Execution Protocol
+
+### 3.1 Pre-Delegation Checklist
+```mermaid
+flowchart TD
+    A[Task Creation] --> B{Environment Ready?}
+    B -->|No| C[Setup Agent Environment]
+    B -->|Yes| D{Task Independent?}
+    D -->|No| E[Execute Directly]
+    D -->|Yes| F{Clear Scope?}
+    F -->|No| G[Refine Task Scope]
+    F -->|Yes| H[Select Agent Type]
+    H --> I[Configure Execution Context]
+    I --> J[Delegate Task]
+    C --> B
+    G --> F
+```
+
+**Environment Validation:**
+1. Run `check_agent_environment` to verify setup
+2. Ensure Docker is running for sandbox execution
+3. Validate API keys for selected agent type
+4. Confirm network access requirements
+
+**Context Preparation:**
+1. Gather relevant files and documentation
+2. Prepare clear instructions and constraints
+3. Define success criteria and validation methods
+4. Set appropriate timeouts and resource limits
+
+### 3.2 Delegation Configuration Best Practices
+
+**Sandbox Configuration:**
+- **Always enable sandbox** for unknown or complex tasks
+- **Disable network access** unless specifically required (research tasks)
+- **Use fresh environment** for independent tasks to avoid state conflicts
+- **Set reasonable timeouts** (30-60 minutes for most tasks)
+
+**Context Optimization:**
+- Include only relevant files to reduce context size
+- Provide specific instructions focusing on task objectives
+- Define clear constraints (coding standards, patterns to follow)
+- Specify working directory if task affects specific modules
+
+**Example Delegation Configuration:**
+```json
+{
+  "execution_config": {
+    "model": "claude-3-5-sonnet",
+    "sandbox_enabled": true,
+    "network_access": false,
+    "fresh_environment": true,
+    "timeout_minutes": 45
+  },
+  "context": {
+    "files": ["src/features/auth/", "docs/api/auth.md"],
+    "instructions": "Implement comprehensive unit tests following existing patterns",
+    "constraints": ["Use Vitest framework", "Maintain 90%+ coverage", "Follow existing test structure"],
+    "working_directory": "src/features/auth/"
+  }
+}
+```
+
+## 4. Monitoring & Integration Strategy
+
+### 4.1 Active Monitoring Protocol
+**Regular Check-ins:**
+1. **Monitor every 15-30 minutes** during active delegation
+2. **Check logs for progress indicators** and potential issues
+3. **Validate intermediate outputs** if task produces artifacts
+4. **Assess completion likelihood** and adjust timeouts if needed
+
+**Monitoring Commands:**
+```bash
+# Quick status check
+monitor_agent_tasks({ agent_type: "claude", task_filter: "current-feature" })
+
+# Detailed progress with logs
+monitor_agent_tasks({ 
+  agent_type: "claude", 
+  include_logs: true, 
+  include_analytics: true,
+  log_lines: 100 
+})
+```
+
+### 4.2 Integration Workflow
+**Post-Delegation Integration:**
+1. **Review delegated output** thoroughly before integration
+2. **Run comprehensive tests** to validate functionality
+3. **Check for conflicts** with concurrent work
+4. **Update task status** with detailed completion notes
+5. **Store lessons learned** for future delegation improvements
+
+**Quality Gates:**
+- All tests must pass before considering delegation complete
+- Code must follow project standards and conventions
+- Documentation must be updated if public APIs changed
+- Integration must not break existing functionality
+
+## 5. Advanced Delegation Patterns
+
+### 5.1 Parallel Task Execution
+**Pattern: Feature Decomposition**
+```mermaid
+graph TB
+    A[Feature Planning] --> B[Create Independent Tasks]
+    B --> C[Task 1: API Implementation]
+    B --> D[Task 2: Unit Tests]
+    B --> E[Task 3: Documentation]
+    B --> F[Task 4: Integration Tests]
+    
+    C --> G[Delegate to Claude]
+    D --> H[Delegate to Gemini]
+    E --> I[Delegate to Claude]
+    F --> J[Execute Directly]
+    
+    G --> K[Integration Phase]
+    H --> K
+    I --> K
+    J --> K
+```
+
+**Implementation:**
+1. Break feature into independent, parallel-executable tasks
+2. Delegate tasks to appropriate agents based on specialization
+3. Monitor all delegated tasks concurrently
+4. Execute integration tasks directly to maintain system coherence
+
+### 5.2 Research-Informed Development
+**Pattern: Research → Decision → Implementation**
+1. **Delegate research tasks** to gather information and options
+2. **Review research results** and make strategic decisions
+3. **Delegate implementation tasks** based on research findings
+4. **Integrate and validate** final implementations
+
+### 5.3 Iterative Delegation
+**Pattern: Delegate → Review → Refine → Delegate**
+1. **Initial delegation** with broad requirements
+2. **Review and provide feedback** on initial results
+3. **Refine task scope** based on learnings
+4. **Re-delegate or continue** with improved context
+
+## 6. Performance Optimization
+
+### 6.1 Delegation Efficiency Metrics
+**Track and Optimize:**
+- **Task completion rate** by agent type and task category
+- **Time to completion** vs estimated time
+- **Quality scores** based on review requirements
+- **Integration success rate** and rework frequency
+
+**Performance Tuning:**
+- Adjust agent selection based on historical performance
+- Optimize context size and configuration based on task type
+- Refine task decomposition strategies based on success patterns
+- Update delegation thresholds based on workload capacity
+
+### 6.2 Workload Balancing
+**Strategic Distribution:**
+1. **Assess current capacity** using `list_tasks` with workload analysis
+2. **Identify delegation opportunities** in current task backlog
+3. **Balance delegation vs direct execution** based on strategic importance
+4. **Monitor system-wide progress** and adjust delegation strategy
+
+**Capacity Management:**
+- Maintain optimal ratio of delegated vs direct tasks
+- Ensure strategic tasks remain under direct control
+- Use delegation to increase overall throughput without sacrificing quality
+- Monitor agent availability and performance to inform selection
+
+## 7. Failure Handling & Recovery
+
+### 7.1 Delegation Failure Scenarios
+**Common Failure Modes:**
+- Agent timeout or resource limits exceeded
+- Context confusion leading to incorrect implementation
+- Integration conflicts with concurrent work
+- Quality issues requiring significant rework
+
+**Recovery Strategies:**
+1. **Timeout failures**: Increase timeout or break task into smaller parts
+2. **Context issues**: Refine instructions and provide better examples
+3. **Integration conflicts**: Switch to direct execution for better coordination
+4. **Quality issues**: Add more specific constraints and validation criteria
+
+### 7.2 Fallback Protocols
+**When Delegation Fails:**
+1. **Update task status** to reflect delegation failure
+2. **Store failure analysis** in memory for future prevention
+3. **Switch to direct execution** with lessons learned from delegation attempt
+4. **Adjust delegation strategy** for similar future tasks
+
+**Learning Integration:**
+- Store successful delegation patterns for reuse
+- Document failure modes and prevention strategies
+- Update agent selection criteria based on performance data
+- Refine task decomposition strategies based on delegation outcomes
+
+This delegation strategy ensures optimal use of agent capabilities while maintaining system integrity and strategic control over critical development decisions.

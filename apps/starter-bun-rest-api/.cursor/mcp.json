@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "igniter-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@igniter-js/mcp-server@latest"
+      ],
+      "env": {
+        "GOOGLE_API_KEY": "",
+        "GITHUB_TOKEN": ""
+      }
+    }
+  }
+}

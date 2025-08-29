@@ -1,0 +1,66 @@
+---
+description: |
+  Defines the standard development workflow, including the mandatory file analysis protocol, smart development patterns, and the prioritization of specialized MCP tools to ensure code quality, consistency, and efficiency.
+alwaysApply: true
+priority: 2
+---
+
+# Development Workflow
+
+This document outlines the mandatory workflow for all development tasks. It ensures that every action is preceded by proper analysis, follows established patterns, and utilizes the most effective tools available.
+
+## 1. Mandatory Protocol: Analyze Before Action
+
+**This is the most critical rule in the workflow. It is not optional.**
+
+**NEVER** read, modify, or work with any file without **FIRST** running `analyze_file`. This is a non-negotiable safety and quality protocol.
+
+### 1.1. The Analysis Workflow
+1.  **Analyze the File:** Before any operation, run `analyze_file` to get a comprehensive overview.
+    ```json
+    {
+      "tool": "analyze_file",
+      "args": { "filePath": "/path/to/your/file.ts", "includeErrors": true }
+    }
+    ```
+2.  **Assess Health:** Check the `health_summary.overall_status`.
+    *   `"healthy"`: ✅ Safe to proceed.
+    *   `"has_warnings"`: ⚠️ Proceed with caution.
+    *   `"needs_attention"`: ❌ **STOP.** You MUST fix the TypeScript errors before making any other changes.
+3.  **Understand Context:** Review the file's structure, imports, and exports to understand its role in the system.
+4.  **Store Insights:** After analysis, store key findings in the memory system to accelerate future work.
+
+### 1.2. Post-Modification Verification
+After every modification, you **MUST** re-run `analyze_file` to verify that no new errors have been introduced and that the file's health has been maintained or improved.
+
+## 2. Tool Prioritization: Use Specialized Tools
+
+To ensure accuracy, context-awareness, and knowledge retention, you **MUST** prioritize specialized MCP Server tools over generic alternatives.
+
+### Tool Selection Hierarchy
+| Task | ✅ ALWAYS USE (Primary MCP Tools) | ❌ NEVER USE (Generic Alternatives) |
+| :--- | :--- | :--- |
+| **File Analysis** | `analyze_file`, `analyze_feature` | `read_file` (for initial analysis) |
+| **Code Investigation** | `find_implementation`, `explore_source`, `trace_dependency_chain` | `grep_search`, `codebase_search` |
+| **API Development** | `get_openapi_spec`, `make_api_request` | `curl` (unless `make_api_request` fails) |
+| **Knowledge Storage** | `store_memory`, `relate_memories` | Storing info only in conversation history |
+| **Research** | `get_documentation`, `search_github_issues` | Relying on outdated training data |
+| **Task Management** | `create_task`, `list_tasks`, `update_task_status` | Manual, ad-hoc tracking |
+| **Agent Delegation** | `delegate_to_agent`, `monitor_agent_tasks` | Performing all tasks manually |
+
+## 3. Smart Development Patterns
+
+### 3.1. Consistency through Scaffolding
+- **ALWAYS** use scaffolding tools to create new project structures. This ensures consistency and adherence to architectural patterns.
+- **To create a new feature:** Use the `generateFeature` tool. This establishes the correct directory structure automatically.
+- **To add endpoints to a feature:** Use the `generateController` tool.
+- **To add middleware to a feature:** Use the `generateProcedure` tool.
+- **Manual creation is discouraged** as it can lead to inconsistencies. Analyze existing features only when scaffolding tools are insufficient or need to be extended.
+
+### 3.2. Strategic Planning and Delegation
+- For complex features, **MANDATORY** evaluate opportunities for delegation.
+- Use `list_tasks` to understand the current workload and identify tasks that are independent and well-scoped.
+- Decompose complex problems into:
+    - **Strategic Tasks (Direct Execution):** Core architecture, security, and system-wide integrations that require my direct oversight.
+    - **Specialized Tasks (Agent Delegation):** Documentation, unit testing, and refactoring of isolated components that can be parallelized for efficiency.
+- Always use `monitor_agent_tasks` to coordinate and integrate delegated work.

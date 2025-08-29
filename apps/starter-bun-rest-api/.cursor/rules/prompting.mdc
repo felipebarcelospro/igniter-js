@@ -1,0 +1,357 @@
+---
+description: |
+  // This rule defines advanced prompt engineering strategies to enhance the effectiveness and efficiency of large language model (LLM) interactions. 
+  // It leverages techniques such as strategic delegation to specialized agents, context window optimization, chain-of-thought reasoning, and multi-agent collaboration patterns.
+  // When to use: Apply these strategies when planning or implementing complex features, designing workflows involving multiple agents, optimizing system performance, or managing cognitive load in LLM-based systems.
+  // Why use: These approaches improve reasoning quality, scalability, and maintainability of LLM solutions by distributing tasks intelligently, reducing unnecessary context, and enabling more robust problem-solving.
+  // Example use cases: 
+  // - Coordinating multiple agents to solve a complex problem
+  // - Designing an LLM-powered assistant that must manage and prioritize information
+  // - Optimizing prompt structure for large or evolving codebases
+  // - Reducing token usage while maintaining relevant context for decision-making
+  // - Implementing step-by-step reasoning with delegated sub-tasks
+alwaysApply: true
+priority: 1
+---
+
+# Prompt Engineering Excellence 2025
+
+## 1. Advanced Cognitive Architecture
+
+### 1.1 Multi-Agent Reasoning Framework
+**Distributed Cognitive Load Pattern:**
+```mermaid
+graph TB
+    A[Complex Problem] --> B[Strategic Analysis - Lia]
+    B --> C{Decomposition Decision}
+    C --> D[Independent Tasks → Agents]
+    C --> E[Integrated Tasks → Direct]
+    D --> F[Parallel Agent Execution]
+    E --> G[Lia Direct Execution]
+    F --> H[Integration & Synthesis - Lia]
+    G --> H
+    H --> I[Coherent Solution]
+```
+
+**Cognitive Load Distribution Strategy:**
+- **System 1 Tasks** (Fast, Routine) → Delegate to specialized agents
+- **System 2 Tasks** (Slow, Strategic) → Lia direct execution
+- **Hybrid Tasks** → Strategic oversight with delegated components
+
+### 1.2 Context Window Optimization
+**Dynamic Context Management:**
+- **Just-in-Time Loading**: Load context only when needed for specific tasks
+- **Context Compression**: Summarize and store long-term knowledge in memory system
+- **Progressive Refinement**: Start broad, narrow focus based on task requirements
+- **Context Sharing**: Efficient context transfer between Lia and delegated agents
+
+**Example Context Optimization:**
+```markdown
+# Instead of loading entire codebase
+analyze_file("specific-component.ts") → focused analysis
+search_memories(tags=["pattern", "specific-domain"]) → relevant context
+delegate_to_agent(context={ files: ["focused-set"], constraints: ["specific"] })
+```
+
+## 2. Advanced Reasoning Patterns
+
+### 2.1 Chain-of-Thought with Delegation
+**Enhanced CoT Pattern:**
+```
+1. Problem Analysis (Lia)
+   ├── Identify core complexity
+   ├── Map dependencies  
+   └── Assess delegation potential
+
+2. Strategic Decomposition (Lia)
+   ├── Create independent work streams
+   ├── Define integration points
+   └── Set validation criteria
+
+3. Parallel Execution
+   ├── Lia: Strategic/architectural tasks
+   ├── Agent A: Specialized component 1
+   ├── Agent B: Specialized component 2  
+   └── Agent C: Research/documentation
+
+4. Integration & Synthesis (Lia)
+   ├── Validate component integration
+   ├── Ensure coherent solution
+   └── Store lessons learned
+```
+
+### 2.2 Tree of Thoughts with Multi-Agent
+**Branching Decision Trees:**
+```mermaid
+graph TD
+    A[Decision Point] --> B[Option 1: Research Approach]
+    A --> C[Option 2: Implementation Approach]
+    A --> D[Option 3: Hybrid Approach]
+    
+    B --> E[Delegate: Research Agent]
+    C --> F[Direct: Implementation]
+    D --> G[Parallel: Research + Implementation]
+    
+    E --> H[Evaluate Results]
+    F --> H
+    G --> H
+    
+    H --> I[Select Best Path]
+```
+
+## 3. Specialized Prompt Templates
+
+### 3.1 Task Creation with Delegation Intelligence
+**Template: Strategic Task Creation**
+```markdown
+# Task: {task_title}
+
+## Context Analysis
+- System Impact: [high/medium/low]
+- Integration Complexity: [complex/moderate/simple]
+- Domain Expertise Required: [specialized/general]
+- Independence Level: [independent/partially_dependent/highly_dependent]
+
+## Delegation Assessment
+Based on characteristics above:
+- **Recommended Execution**: [direct/delegate/hybrid]
+- **Agent Type**: [claude/gemini/gpt/perplexity] (if delegation)
+- **Context Requirements**: [files, constraints, validation criteria]
+
+## Success Criteria
+- Technical acceptance criteria
+- Integration requirements
+- Quality standards
+- Knowledge capture requirements
+```
+
+### 3.2 Agent Specialization Prompts
+**Claude (Analytical/Architectural):**
+```markdown
+You are analyzing {component} for {purpose}.
+
+ANALYTICAL FRAMEWORK:
+1. Structure Analysis: Examine current architecture
+2. Pattern Recognition: Identify existing patterns
+3. Gap Analysis: Compare current vs ideal state
+4. Recommendation: Provide specific, actionable improvements
+
+CONSTRAINTS:
+- Follow existing project patterns
+- Maintain type safety
+- Consider performance implications
+- Document reasoning for decisions
+
+OUTPUT FORMAT:
+- Executive Summary
+- Detailed Analysis
+- Specific Recommendations
+- Implementation Steps
+```
+
+**Gemini (Systematic/Testing):**
+```markdown
+You are implementing {feature} with comprehensive testing.
+
+SYSTEMATIC APPROACH:
+1. Requirements Analysis: Break down acceptance criteria
+2. Implementation Strategy: Step-by-step execution plan
+3. Testing Strategy: Unit, integration, edge case coverage
+4. Validation: Verify against requirements
+
+QUALITY GATES:
+- 90%+ test coverage
+- Handle all edge cases
+- Follow TDD principles
+- Maintain existing patterns
+
+OUTPUT FORMAT:
+- Implementation code
+- Comprehensive test suite
+- Edge case documentation
+- Validation report
+```
+
+### 3.3 Integration & Synthesis Prompts
+**Template: Post-Delegation Integration**
+```markdown
+INTEGRATION TASK: Combining results from {agents} for {feature}
+
+PRE-INTEGRATION CHECKLIST:
+□ All delegated tasks completed successfully
+□ Individual components tested
+□ Integration points identified
+□ Conflict resolution strategy ready
+
+INTEGRATION STRATEGY:
+1. Component Validation: Verify each piece meets requirements
+2. Interface Compatibility: Ensure components work together  
+3. System Integration: Connect to existing architecture
+4. End-to-End Testing: Validate complete functionality
+5. Documentation Update: Record integration decisions
+
+VALIDATION CRITERIA:
+- All original requirements met
+- No breaking changes introduced
+- Performance maintained or improved
+- Code quality standards upheld
+
+POST-INTEGRATION:
+- Update task status with integration notes
+- Store integration patterns for future reference
+- Reflect on delegation effectiveness
+- Update delegation strategies based on outcomes
+```
+
+## 4. Performance Optimization Strategies
+
+### 4.1 Parallel Processing Patterns
+**Optimal Parallelization:**
+```markdown
+FEATURE: {feature_name}
+
+PARALLEL WORK STREAMS:
+Stream 1 (Lia): Architecture & core integration
+├── Database schema design
+├── Core business logic
+└── Integration coordination
+
+Stream 2 (Agent): Documentation & Testing  
+├── API documentation generation
+├── Unit test implementation
+└── Integration test scenarios
+
+Stream 3 (Agent): Supporting Components
+├── Utility functions
+├── Helper components
+└── Configuration files
+
+SYNCHRONIZATION POINTS:
+- Daily integration reviews
+- Milestone validation gates
+- Final integration & testing
+
+EFFICIENCY METRICS:
+- Time to completion vs single-threaded
+- Quality scores (test coverage, documentation)
+- Integration complexity (conflicts, rework)
+```
+
+### 4.2 Cognitive Load Balancing
+**Load Distribution Matrix:**
+```markdown
+COGNITIVE LOAD ASSESSMENT:
+
+HIGH LOAD (Lia Focus):
+- Architectural decisions
+- Complex problem solving
+- User interaction & feedback
+- System-wide integration
+- Strategic planning
+
+MEDIUM LOAD (Supervised Delegation):
+- Feature implementation with review
+- Research with strategic implications
+- Complex testing scenarios
+- Documentation requiring domain knowledge
+
+LOW LOAD (Autonomous Delegation):
+- Routine documentation
+- Unit test implementation
+- Code formatting & linting
+- Performance benchmarking
+- Reference implementation updates
+```
+
+## 5. Quality Assurance & Validation
+
+### 5.1 Delegation Quality Gates
+**Pre-Delegation Validation:**
+```markdown
+DELEGATION READINESS CHECKLIST:
+□ Task scope clearly defined
+□ Success criteria established
+□ Context requirements identified
+□ Agent environment validated
+□ Integration strategy planned
+□ Rollback plan prepared
+
+QUALITY METRICS:
+- Task completion rate: >90%
+- First-time success rate: >80%
+- Integration rework: <20%
+- Agent utilization efficiency: >70%
+```
+
+### 5.2 Continuous Improvement Framework
+**Learning Loop Pattern:**
+```markdown
+DELEGATION CYCLE:
+1. Plan → Strategic task decomposition
+2. Execute → Parallel work streams
+3. Monitor → Progress tracking & adjustment
+4. Integrate → Synthesis & validation  
+5. Reflect → Capture lessons learned
+6. Improve → Update strategies & patterns
+
+IMPROVEMENT METRICS:
+- Delegation decision accuracy over time
+- Agent selection optimization
+- Context preparation efficiency
+- Integration success rate trends
+- Overall feature delivery velocity
+```
+
+## 6. Advanced Context Strategies
+
+### 6.1 Semantic Context Compression
+**Smart Context Loading:**
+```markdown
+CONTEXT OPTIMIZATION STRATEGY:
+
+LEVEL 1 - Essential Context (Always Load):
+- Current task requirements
+- Immediate dependencies
+- Core architectural patterns
+
+LEVEL 2 - Relevant Context (Load if Needed):
+- Related historical decisions
+- Similar pattern implementations
+- Domain-specific knowledge
+
+LEVEL 3 - Background Context (Summary Only):
+- Broader system context
+- Historical development patterns
+- Organizational knowledge
+
+DYNAMIC LOADING:
+- Start with Level 1
+- Expand to Level 2 based on complexity
+- Summarize Level 3 through memory system
+```
+
+### 6.2 Cross-Agent Context Sharing
+**Efficient Knowledge Transfer:**
+```markdown
+CONTEXT SHARING PROTOCOL:
+
+SHARED CONTEXT (All Agents):
+- Project coding standards
+- Architecture patterns
+- Core business domain knowledge
+- Quality requirements
+
+AGENT-SPECIFIC CONTEXT:
+- Task-specific requirements
+- Specialized domain knowledge
+- Custom constraints & preferences
+- Integration requirements
+
+CONTEXT HANDOFF:
+- Minimal viable context for task execution
+- Progressive context expansion if needed
+- Results context for integration
+- Lessons learned for future tasks
+```
+
+This framework ensures optimal prompt engineering for 2025, leveraging multi-agent capabilities while maintaining strategic coherence and quality standards.

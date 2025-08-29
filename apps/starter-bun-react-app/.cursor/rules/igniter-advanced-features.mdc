@@ -1,0 +1,191 @@
+---
+description: |
+  A guide to the advanced features of Igniter.js, including the background jobs system (BullMQ), the caching and pub/sub store (Redis), and the real-time system for live UI updates.
+alwaysApply: false
+---
+
+# Igniter.js: Advanced Features
+
+This guide covers the advanced, production-grade features of Igniter.js that enable complex, scalable application development.
+
+## 1. Background Jobs (BullMQ)
+
+The jobs system allows you to offload long-running or resource-intensive tasks to a separate background worker process, preventing API requests from timing out and improving user experience.
+
+### 1.1. Defining a Job
+Jobs are defined in a dedicated job router file. Each job has a unique name, a Zod schema for its input, and a handler function.
+
+-   **File Location:** `src/providers/jobs.ts` (or a similar central location)
+
+```typescript
+// src/providers/jobs.ts
+import { jobs } from '@/igniter';
+import { z } from 'zod';
+
+export const emailJobs = jobs.router({
+  sendWelcomeEmail: jobs.register({
+    // Zod schema for type-safe job inputs
+    input: z.object({
+      userId: z.string(),
+    }),
+    // The handler that performs the background work
+    handler: async ({ input, context }) => {
+      const user = await context.database.user.findUnique({ where: { id: input.userId } });
+      if (user) {
+        await context.mail.send({
+          to: user.email,
+          template: 'welcome',
+          data: { name: user.name },
+        });
+      }
+    },
+  }),
+});
+
+export const REGISTERED_JOBS = {
+  emails: emailJobs,
+};
+```
+
+### 1.2. Enqueuing a Job
+Jobs are typically enqueued from within a mutation handler. The API call returns immediately to the user while the job is processed in the background.
+
+```typescript
+// In a controller
+createUser: igniter.mutation({
+  // ...
+  handler: async ({ request, context, response }) => {
+    const newUser = await context.database.user.create({ data: request.body });
+
+    // Schedule the job to run in the background
+    await igniter.jobs.emails.schedule({
+      task: 'sendWelcomeEmail',
+      input: { userId: newUser.id }, // Type-checked against the job's Zod schema
+    });
+
+    return response.created(newUser);
+  }
+})
+```
+
+## 2. Store (Redis)
+
+The store provides a high-performance, Redis-backed key-value store for caching and pub/sub messaging.
+
+### 2.1. Caching
+Use the store to cache frequently accessed or computationally expensive data, reducing database load.
+
+```typescript
+// In a query handler
+getPost: igniter.query({
+  path: '/:id',
+  handler: async ({ request, context, response }) => {
+    const postId = request.params.id;
+    const cacheKey = `post:${postId}`;
+
+    // 1. Try to get the post from the cache
+    const cachedPost = await igniter.store.get(cacheKey);
+    if (cachedPost) {
+      return response.success(JSON.parse(cachedPost));
+    }
+
+    // 2. If not in cache, fetch from DB
+    const post = await context.database.post.findUnique({ where: { id: postId } });
+    if (!post) {
+      return response.notFound();
+    }
+
+    // 3. Store the result in the cache for 1 hour
+    await igniter.store.set(cacheKey, JSON.stringify(post), {
+      ttl: 3600, // Time-to-live in seconds
+    });
+
+    return response.success(post);
+  }
+})
+```
+
+### 2.2. Pub/Sub
+Use publish/subscribe for event-driven communication between different parts of your application or even different services.
+
+```typescript
+// Service A publishes an event
+await igniter.store.publish('user:created', { userId: '123' });
+
+// Service B subscribes to the event
+igniter.store.subscribe('user:created', (message) => {
+  console.log('New user created:', message.userId);
+});
+```
+
+## 3. Realtime (Server-Sent Events)
+
+The realtime system enables you to push live updates from the server to connected clients, creating dynamic and interactive user experiences.
+
+### 3.1. Automatic Revalidation (The "Magic")
+This is the simplest and most powerful realtime pattern. It automatically updates data on the client when it changes on the server.
+
+1.  **Enable Streaming on a Query:** Add `stream: true` to any `igniter.query` action that you want to be "live".
+2.  **Revalidate from a Mutation:** In any `igniter.mutation` that modifies the data for that query, chain `.revalidate('<query_key>')` to the response. The query key is typically in the format `'controllerName.actionName'`.
+
+**Result:** Any client component currently using the corresponding `useQuery` hook will **automatically** refetch its data and re-render. No extra client-side code is needed.
+
+```typescript
+// In a controller
+export const postsController = igniter.controller({
+  path: '/posts',
+  actions: {
+    list: igniter.query({
+      path: '/',
+      stream: true, // 1. Enable streaming for this query
+      handler: ({ context }) => {
+        return context.database.post.findMany();
+      }
+    }),
+    create: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: z.object({ title: z.string() }),
+      handler: async ({ request, context, response }) => {
+        const newPost = await context.database.post.create({ data: request.body });
+        // 2. Revalidate the 'posts.list' query. All connected clients will update.
+        return response.created(newPost).revalidate('posts.list');
+      }
+    })
+  }
+});
+```
+
+### 3.2. Custom Data Streams (`useRealtime`)
+For more advanced use cases, like a live notification feed, you can create custom data streams.
+
+```typescript
+// In a controller
+notifications: igniter.query({
+  path: '/notifications',
+  stream: true,
+  handler: async ({ context, realtime }) => {
+    // This handler is called once when the client connects.
+    // It sets up the subscription.
+    const userId = context.auth.user.id;
+
+    // Subscribe this connection to a specific channel
+    const subscription = igniter.store.subscribe(`user:${userId}:notifications`, (message) => {
+      // When a message is published to this channel, send it to the client
+      realtime.send(message);
+    });
+
+    // Clean up the subscription when the client disconnects
+    realtime.onDisconnect(() => {
+      subscription.unsubscribe();
+    });
+  }
+})
+
+// To send a notification from another part of the app
+await igniter.store.publish(`user:123:notifications`, {
+  type: 'new_message',
+  text: 'You have a new message!',
+});
+```
+On the client, you would use the `api.notifications.useRealtime()` hook to subscribe to this stream.
