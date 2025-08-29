@@ -300,6 +300,22 @@ export const menu: ContentSection[] = [
         slug: "/docs/code-agents/introduction",
       },
       {
+        title: "MCP Server",
+        type: "docs",
+        category: "mcp-server",
+        date: new Date().toISOString(),
+        description: "Model Context Protocol server for AI-native development",
+        slug: "/docs/code-agents/mcp-server",
+      },
+      {
+        title: "Next.js Starter Rules",
+        type: "docs",
+        category: "nextjs-starter-rules",
+        date: new Date().toISOString(),
+        description: "Download rules for Next.js starter with MCP Server",
+        slug: "/docs/code-agents/nextjs-starter-rules",
+      },
+      {
         title: "llms.txt",
         type: "docs",
         category: "llms-txt",

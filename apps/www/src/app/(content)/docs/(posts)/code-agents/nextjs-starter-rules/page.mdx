@@ -1,0 +1,488 @@
+# Next.js Starter Rules for Code Agents
+
+The **Igniter.js Starter for Next.js** comes pre-configured with specific rules for each Code Agent, allowing them to fully understand your project and utilize the integrated MCP Server. This page provides the necessary configurations for each agent.
+
+## Download Rules
+
+### Complete Next.js Starter
+
+<div className="my-6">
+  <a href="/templates/starter-nextjs" className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50">
+    Create Next.js Project with MCP Server
+  </a>
+</div>
+
+The starter automatically includes:
+- MCP Server configured
+- Rules for all Code Agents
+- Integrated memory system
+- Task management
+- Agent delegation
+
+## Rules for Each Code Agent
+
+### Cursor
+
+**File**: `.cursor/rules/igniter-nextjs.mdc`
+
+```markdown
+---
+alwaysApply: true
+---
+# Igniter.js Next.js Expert
+
+You are an expert in development with Igniter.js and Next.js. This project uses the Igniter.js MCP Server to provide complete access to code and functionalities.
+
+## Project Architecture
+
+- **Framework**: Next.js 15+ with App Router
+- **API Layer**: Igniter.js with end-to-end type-safety
+- **Database**: Prisma ORM with PostgreSQL
+- **Caching**: Redis via @igniter-js/adapter-redis
+- **Background Jobs**: BullMQ via @igniter-js/adapter-bullmq
+- **AI Integration**: Complete MCP Server
+
+## Directory Structure
+
+```
+src/
+├── features/           # Feature-based architecture
+│   ├── [feature]/
+│   │   ├── controllers/  # API actions (query, mutation, stream)
+│   │   ├── components/   # React components
+│   │   └── types.ts      # TypeScript types
+├── igniter.ts          # Main Igniter.js configuration
+├── igniter.router.ts   # API router assembly
+├── igniter.client.ts   # Auto-generated type-safe client
+└── app/                # Next.js App Router
+    ├── api/            # API routes (handled by Igniter.js)
+    └── [routes]/       # Page routes
+```
+
+## Available MCP Tools
+
+Use these tools to interact with the project:
+
+### Development
+- `dev` - Start development server
+- `build` - Compile the project
+- `test` - Run tests
+
+### Code Analysis
+- `analyze_file` - Analyze specific file
+- `analyze_feature` - Complete feature analysis
+- `find_implementation` - Find implementations
+- `explore_source` - Explore source code
+
+### Task Management
+- `create_task` - Create new task
+- `list_tasks` - List existing tasks
+- `update_task_status` - Update status
+- `delegate_to_agent` - Delegate to specialized agent
+
+### Memory and Knowledge
+- `store_memory` - Store knowledge
+- `search_memories` - Search memories
+- `relate_memories` - Relate memories
+
+## Development Patterns
+
+1. **Feature-First**: Always organize code by features
+2. **Type Safety**: Use TypeScript strict mode
+3. **API Actions**: Use query/mutation/stream from Igniter.js
+4. **Server Components**: Prefer RSC over client components
+5. **Validation**: Use Zod for input validation
+
+## Usage Examples
+
+### Create New Feature
+```typescript
+// 1. Create directory structure
+// 2. Implement controller with actions
+// 3. Register in main router
+// 4. Use type-safe client
+```
+
+### Code Analysis
+```typescript
+// Use analyze_feature to understand structure
+analyze_feature({
+  featurePath: "src/features/user-management",
+  includeStats: true
+})
+```
+
+### Task Management
+```typescript
+// Create tasks for development
+create_task({
+  title: "Implement user validation",
+  content: "Add Zod validation for required fields",
+  priority: "high",
+  assignee: "agent"
+})
+```
+
+## Additional Resources
+
+- **Documentation**: https://igniterjs.com/docs
+- **MCP Server**: Use integrated tools
+- **Type Safety**: Auto-generated client in igniter.client.ts
+- **Hot Reload**: Development server with turbopack
+
+Always use the available MCP tools to interact with the project intelligently and efficiently.
+```
+
+### Claude Code
+
+**File**: `.cursorrules`
+
+```markdown
+# Igniter.js Next.js Expert
+
+You are an expert in development with Igniter.js and Next.js. This project uses the Igniter.js MCP Server to provide complete access to code and functionalities.
+
+## Project Architecture
+
+- **Framework**: Next.js 15+ with App Router
+- **API Layer**: Igniter.js with end-to-end type-safety
+- **Database**: Prisma ORM with PostgreSQL
+- **Caching**: Redis via @igniter-js/adapter-redis
+- **Background Jobs**: BullMQ via @igniter-js/adapter-bullmq
+- **AI Integration**: Complete MCP Server
+
+## Directory Structure
+
+```
+src/
+├── features/           # Feature-based architecture
+│   ├── [feature]/
+│   │   ├── controllers/  # API actions (query, mutation, stream)
+│   │   ├── components/   # React components
+│   │   └── types.ts      # TypeScript types
+├── igniter.ts          # Main Igniter.js configuration
+├── igniter.router.ts   # API router assembly
+├── igniter.client.ts   # Auto-generated type-safe client
+└── app/                # Next.js App Router
+    ├── api/            # API routes (handled by Igniter.js)
+    └── [routes]/       # Page routes
+```
+
+## Available MCP Tools
+
+Use these tools to interact with the project:
+
+### Development
+- `dev` - Start development server
+- `build` - Compile the project
+- `test` - Run tests
+
+### Code Analysis
+- `analyze_file` - Analyze specific file
+- `analyze_feature` - Complete feature analysis
+- `find_implementation` - Find implementations
+- `explore_source` - Explore source code
+
+### Task Management
+- `create_task` - Create new task
+- `list_tasks` - List existing tasks
+- `update_task_status` - Update status
+- `delegate_to_agent` - Delegate to specialized agent
+
+### Memory and Knowledge
+- `store_memory` - Store knowledge
+- `search_memories` - Search memories
+- `relate_memories` - Relate memories
+
+## Development Patterns
+
+1. **Feature-First**: Always organize code by features
+2. **Type Safety**: Use TypeScript strict mode
+3. **API Actions**: Use query/mutation/stream from Igniter.js
+4. **Server Components**: Prefer RSC over client components
+5. **Validation**: Use Zod for input validation
+
+## Usage Examples
+
+### Create New Feature
+```typescript
+// 1. Create directory structure
+// 2. Implement controller with actions
+// 3. Register in main router
+// 4. Use type-safe client
+```
+
+### Code Analysis
+```typescript
+// Use analyze_feature to understand structure
+analyze_feature({
+  featurePath: "src/features/user-management",
+  includeStats: true
+})
+```
+
+### Task Management
+```typescript
+// Create tasks for development
+create_task({
+  title: "Implement user validation",
+  content: "Add Zod validation for required fields",
+  priority: "high",
+  assignee: "agent"
+})
+```
+
+## Additional Resources
+
+- **Documentation**: https://igniterjs.com/docs
+- **MCP Server**: Use integrated tools
+- **Type Safety**: Auto-generated client in igniter.client.ts
+- **Hot Reload**: Development server with turbopack
+
+Always use the available MCP tools to interact with the project intelligently and efficiently.
+```
+
+### VS Code Copilot
+
+**File**: `.github/copilot/README.md`
+
+```markdown
+# Igniter.js Next.js Project
+
+This project uses the Igniter.js framework with Next.js and includes a complete MCP Server for AI Agent integration.
+
+## Architecture
+
+- **Frontend**: Next.js 15+ with App Router
+- **Backend**: Igniter.js with type-safe API
+- **Database**: Prisma + PostgreSQL
+- **Caching**: Redis
+- **Background Jobs**: BullMQ
+- **AI Integration**: MCP Server
+
+## Structure
+
+```
+src/
+├── features/           # Feature-based architecture
+├── igniter.ts          # Igniter.js configuration
+├── igniter.router.ts   # API router
+└── igniter.client.ts   # Auto-generated client
+```
+
+## MCP Tools
+
+The project includes an MCP Server with tools for:
+- Code analysis
+- Task management
+- CLI command execution
+- Dependency investigation
+- Memory system
+
+## Patterns
+
+1. **Feature-First**: Organize by features
+2. **Type Safety**: Use TypeScript strict
+3. **API Actions**: query/mutation/stream
+4. **Server Components**: Prefer RSC
+5. **Validation**: Zod for input
+
+## Resources
+
+- Documentation: https://igniterjs.com/docs
+- MCP Server: Integrated tools
+- Type Safety: Auto-generated client
+- Hot Reload: Turbopack
+```
+
+### Windsurf
+
+**File**: `.windsurf/README.md`
+
+```markdown
+# Igniter.js Next.js Project
+
+This project uses the Igniter.js framework with Next.js and includes a complete MCP Server for AI Agent integration.
+
+## Architecture
+
+- **Frontend**: Next.js 15+ with App Router
+- **Backend**: Igniter.js with type-safe API
+- **Database**: Prisma + PostgreSQL
+- **Caching**: Redis
+- **Background Jobs**: BullMQ
+- **AI Integration**: MCP Server
+
+## Structure
+
+```
+src/
+├── features/           # Feature-based architecture
+├── igniter.ts          # Igniter.js configuration
+├── igniter.router.ts   # API router
+└── igniter.client.ts   # Auto-generated client
+```
+
+## MCP Tools
+
+The project includes an MCP Server with tools for:
+- Code analysis
+- Task management
+- CLI command execution
+- Dependency investigation
+- Memory system
+
+## Patterns
+
+1. **Feature-First**: Organize by features
+2. **Type Safety**: Use TypeScript strict
+3. **API Actions**: query/mutation/stream
+4. **Server Components**: Prefer RSC
+5. **Validation**: Zod for input
+
+## Resources
+
+- Documentation: https://igniterjs.com/docs
+- MCP Server: Integrated tools
+- Type Safety: Auto-generated client
+- Hot Reload: Turbopack
+```
+
+### Zed Editor
+
+**File**: `.zed/settings.json`
+
+```json
+{
+  "ai": {
+    "rules": [
+      "You are an expert in Igniter.js and Next.js",
+      "This project uses MCP Server for AI integration",
+      "Architecture: Next.js 15+ + Igniter.js + Prisma + Redis",
+      "Structure: Feature-based with controllers and actions",
+      "Patterns: Type safety, RSC, Zod validation",
+      "Use available MCP tools for analysis",
+      "Organize code by features, not by type",
+      "Prefer Server Components over Client Components"
+    ]
+  }
+}
+```
+
+### Gemini CLI
+
+**File**: `.gemini/config.md`
+
+```markdown
+# Igniter.js Next.js Project
+
+## Architecture
+- **Framework**: Next.js 15+ with App Router
+- **API Layer**: Igniter.js with type-safety
+- **Database**: Prisma ORM + PostgreSQL
+- **Caching**: Redis via adapter
+- **Background Jobs**: BullMQ via adapter
+- **AI Integration**: Complete MCP Server
+
+## Structure
+```
+src/
+├── features/           # Feature-based architecture
+├── igniter.ts          # Igniter.js configuration
+├── igniter.router.ts   # API router assembly
+└── igniter.client.ts   # Auto-generated client
+```
+
+## MCP Tools
+- Code and feature analysis
+- Task management
+- CLI command execution
+- Integrated memory system
+- Agent delegation
+
+## Patterns
+1. **Feature-First**: Organize by features
+2. **Type Safety**: TypeScript strict mode
+3. **API Actions**: query/mutation/stream
+4. **Server Components**: Prefer RSC
+5. **Validation**: Zod for input
+
+## Resources
+- Documentation: https://igniterjs.com/docs
+- MCP Server: Integrated tools
+- Type Safety: Auto-generated client
+- Hot Reload: Turbopack
+```
+
+## Automatic Download
+
+### 1. Create Project with Starter
+
+```bash
+# Use the official starter (recommended)
+npx create-igniter@latest starter-nextjs
+
+# Or clone directly
+git clone https://github.com/felipebarcelospro/igniter-js.git
+cd igniter-js/apps/starter-nextjs
+npm install
+```
+
+### 2. Rules Already Included
+
+The starter automatically includes:
+- `.cursor/rules/` - For Cursor
+- `.cursorrules` - For Claude Code
+- `.github/copilot/` - For VS Code Copilot
+- `.windsurf/` - For Windsurf
+- `.zed/` - For Zed Editor
+- `.gemini/` - For Gemini CLI
+
+### 3. Automatic Configuration
+
+```bash
+# The starter automatically configures:
+npm run dev          # Development server
+npm run build        # Compilation
+npm run test         # Tests
+npm run lint         # Linting
+```
+
+## Manual Configuration (Existing Projects)
+
+### 1. Install MCP Server
+
+```bash
+npm install @igniter-js/mcp-server
+```
+
+### 2. Configure Igniter.js
+
+```typescript
+// src/igniter.ts
+import { createMcpServer } from '@igniter-js/mcp-server';
+
+export const igniter = Igniter
+  .context<IgniterAppContext>()
+  .mcp(createMcpServer({
+    enableMemoryManager: true,
+    enableTaskManager: true,
+    enableAgentDelegation: true
+  }))
+  .build();
+```
+
+### 3. Create Rules
+
+Copy the appropriate rules for your favorite Code Agent from the examples above.
+
+## Next Steps
+
+1. **Choose the Starter**: Use the official Next.js starter
+2. **Configure the Code Agent**: Add the appropriate rules
+3. **Explore the MCP Server**: Use the integrated tools
+4. **Develop with AI**: Take advantage of the complete integration
+
+---
+
+The Igniter.js Starter for Next.js provides a complete AI-native development experience, with all the necessary rules for your favorite Code Agent and a fully integrated MCP Server. Start by creating a new project and discover how AI can accelerate your development!

@@ -1,339 +1,100 @@
-# MCP Server do Igniter.js
-
-O **MCP Server do Igniter.js** é uma implementação completa do Model Context Protocol (MCP) que transforma seu projeto Igniter.js em um servidor de ferramentas para AI Agents. Ele permite que Code Agents como Cursor, Claude Code, VS Code Copilot e outros acessem e utilizem seu projeto através de uma interface padronizada e segura.
-
-## O que é o MCP Server?
-
-O **Model Context Protocol (MCP)** é um protocolo aberto que padroniza como aplicações fornecem contexto para Large Language Models (LLMs). Pense no MCP como uma porta USB-C para aplicações de IA - assim como o USB-C fornece uma maneira padronizada de conectar seus dispositivos a vários periféricos, o MCP fornece uma maneira padronizada de conectar modelos de IA a diferentes fontes de dados e ferramentas.
-
-### Por que usar o MCP Server?
-
-- **🤖 AI-Native**: Seu projeto se torna nativamente compatível com AI Agents
-- **🔧 Ferramentas Padronizadas**: Todas as funcionalidades são expostas como ferramentas MCP padronizadas
-- **🔄 Integração Universal**: Funciona com qualquer cliente MCP compatível
-- **🛡️ Seguro**: Execução isolada e controle granular sobre permissões
-- **📚 Contexto Rico**: Fornece acesso completo ao seu projeto e código
-
-## Arquitetura do MCP Server
-
-```mermaid
-graph TB
-    subgraph "AI Agent (Cliente MCP)"
-        A[Code Agent]
-        B[Cursor/Claude/GPT]
-    end
-    
-    subgraph "MCP Server do Igniter.js"
-        C[MCP Server]
-        D[Tool Registry]
-        E[Memory Manager]
-        F[Task Manager]
-    end
-    
-    subgraph "Seu Projeto Igniter.js"
-        G[API Endpoints]
-        H[Database]
-        I[File System]
-        J[CLI Tools]
-    end
-    
-    A --> C
-    B --> C
-    C --> D
-    C --> E
-    C --> F
-    D --> G
-    E --> H
-    F --> I
-    F --> J
-    
-    style C fill:#3b82f6
-    style D fill:#10b981
-    style E fill:#f59e0b
-    style F fill:#ef4444
-```
-
-## Ferramentas Disponibilizadas
-
-O MCP Server do Igniter.js expõe uma ampla gama de ferramentas organizadas em categorias:
-
-### 🛠️ Ferramentas de Desenvolvimento
-
-- **CLI Tools**: Execução de comandos `igniter dev`, `igniter build`, `igniter test`
-- **Build & Test**: Compilação, testes e validação do projeto
-- **File Analysis**: Análise de estrutura de arquivos e código TypeScript
-
-### 🔍 Ferramentas de Investigação
-
-- **Code Investigation**: Busca de implementações, símbolos e dependências
-- **API Validation**: Teste de endpoints e validação de especificações OpenAPI
-- **Documentation Access**: Acesso a documentação externa e interna
-
-### 📚 Ferramentas de Memória e Conhecimento
-
-- **Memory Management**: Sistema de memória baseado em MDX para persistência de conhecimento
-- **Task Management**: Gerenciamento completo de tarefas e projetos
-- **Relationship Mapping**: Mapeamento de relacionamentos entre diferentes tipos de memória
-
-### 🤖 Ferramentas de Delegação de Agentes
-
-- **Agent Delegation**: Delegação de tarefas para agentes especializados
-- **Background Execution**: Execução em background com monitoramento
-- **Multi-Agent Support**: Suporte para Claude, Gemini, GPT e agentes customizados
-
-### 🔗 Integração com GitHub
-
-- **Issue Management**: Criação e busca de issues do GitHub
-- **Code Search**: Busca de código em repositórios
-- **Repository Integration**: Integração completa com o ecossistema GitHub
-
-## Como Funciona
-
-### 1. Descoberta de Ferramentas
-
-O cliente MCP descobre automaticamente todas as ferramentas disponíveis:
-
-```json
-{
-  "method": "tools/list",
-  "params": {},
-  "result": {
-    "tools": [
-      {
-        "name": "analyze_file",
-        "title": "Analyze File",
-        "description": "Analyzes the structure, imports, exports, functions, and TypeScript errors of a file.",
-        "inputSchema": {
-          "filePath": "string",
-          "includeErrors": "boolean",
-          "projectRoot": "string?"
-        }
-      }
-    ]
-  }
-}
-```
-
-### 2. Execução de Ferramentas
-
-O cliente pode executar qualquer ferramenta disponível:
-
-```json
-{
-  "method": "tools/call",
-  "params": {
-    "name": "analyze_file",
-    "arguments": {
-      "filePath": "src/features/user-management/controller.ts",
-      "includeErrors": true
-    }
-  }
-}
-```
-
-### 3. Resposta Estruturada
-
-A ferramenta retorna resultados estruturados e acionáveis:
-
-```json
-{
-  "result": {
-    "content": [
-      {
-        "type": "text",
-        "text": "File analysis complete: 0 errors, 2 warnings, healthy status"
-      }
-    ]
-  }
-}
-```
-
-## Configuração
-
-### Instalação
-
-O MCP Server já está incluído em todos os starters oficiais do Igniter.js. Para projetos existentes:
-
-```bash
-npm install @igniter-js/mcp-server
-```
-
-### Configuração Básica
-
-```typescript
-// src/igniter.ts
-import { createMcpServer } from '@igniter-js/mcp-server';
-
-export const igniter = Igniter
-  .context<IgniterAppContext>()
-  // ... outras configurações
-  .mcp(createMcpServer({
-    // Configurações do MCP Server
-    enableMemoryManager: true,
-    enableTaskManager: true,
-    enableAgentDelegation: true
-  }))
-  .build();
-```
-
-### Variáveis de Ambiente
-
-```bash
-# Para agentes de delegação
-ANTHROPIC_API_KEY=your_claude_key
-GOOGLE_API_KEY=your_gemini_key
-OPENAI_API_KEY=your_gpt_key
-
-# Para integração GitHub
-GITHUB_TOKEN=your_github_token
-```
-
-## Casos de Uso
-
-### 🎯 Desenvolvimento Assistido por IA
-
-```typescript
-// O AI Agent pode analisar seu código automaticamente
-analyze_feature({
-  featurePath: "src/features/user-management",
-  includeStats: true
-})
-
-// E sugerir melhorias baseadas na análise
-```
-
-### 🔄 Gerenciamento de Tarefas
-
-```typescript
-// Criar tarefas automaticamente
-create_task({
-  title: "Implementar validação de email",
-  content: "Adicionar validação Zod para emails",
-  priority: "high",
-  assignee: "agent"
-})
-
-// Delegar para agentes especializados
-delegate_to_agent({
-  task_id: "task-123",
-  agent_type: "claude",
-  execution_mode: "background"
-})
-```
-
-### 📊 Análise de Projeto
-
-```typescript
-// Obter estatísticas completas do projeto
-get_task_statistics({
-  include_delegation_insights: true
-})
-
-// Encontrar candidatos para delegação
-find_delegation_candidates({
-  complexity_threshold: "medium",
-  max_estimated_hours: 8
-})
-```
-
-## Integração com Code Agents
-
-### Cursor
-
-```json
-// .cursor/rules/igniter-mcp.mdc
----
-alwaysApply: true
----
-# Igniter.js MCP Server Expert
-
-Este projeto usa o MCP Server do Igniter.js. Use as ferramentas MCP disponíveis para:
-- Analisar código e estrutura do projeto
-- Gerenciar tarefas e delegações
-- Executar comandos CLI
-- Investigar dependências e implementações
-
-Sempre use as ferramentas MCP apropriadas em vez de tentar acessar o projeto diretamente.
-```
-
-### Claude Code
-
-```json
-// .cursorrules
-Você é um especialista em Igniter.js com acesso ao MCP Server. Use as ferramentas disponíveis para:
-1. Analisar código e estrutura
-2. Gerenciar tarefas e projetos
-3. Executar comandos e validações
-4. Investigar dependências
-
-Sempre prefira usar as ferramentas MCP sobre acesso direto ao código.
-```
-
-### VS Code Copilot
-
-```json
-// .github/copilot/README.md
-Este projeto integra com o MCP Server do Igniter.js. O Copilot pode:
-- Usar ferramentas de análise de código
-- Acessar o sistema de gerenciamento de tarefas
-- Executar comandos CLI do projeto
-- Investigar estrutura e dependências
-```
-
-## Monitoramento e Debugging
-
-### Verificar Status do Servidor
-
-```typescript
-// Verificar ambiente dos agentes
-check_agent_environment({
-  check_docker: true,
-  check_api_keys: true,
-  detailed_report: true
-})
-```
-
-### Monitorar Execuções
-
-```typescript
-// Listar delegações ativas
-list_active_delegations({
-  include_recent: true,
-  max_results: 20
-})
-
-// Verificar status específico
-check_delegation_status({
-  task_id: "task-123"
-})
-```
-
-### Logs e Analytics
-
-```typescript
-// Monitorar tarefas dos agentes
-monitor_agent_tasks({
-  agent_type: "all",
-  include_logs: true,
-  include_analytics: true
-})
-```
-
-## Próximos Passos
-
-1. **Explore as Ferramentas**: Use `tools/list` para descobrir todas as funcionalidades disponíveis
-2. **Configure seu Ambiente**: Configure as variáveis de ambiente necessárias
-3. **Teste a Integração**: Conecte seu Code Agent favorito ao MCP Server
-4. **Personalize**: Ajuste as configurações para suas necessidades específicas
-
-## Recursos Adicionais
-
-- [Documentação Oficial do MCP](https://modelcontextprotocol.io/)
-- [Especificação do Protocolo](https://modelcontextprotocol.io/specification/latest)
-- [Exemplos de Implementação](https://github.com/modelcontextprotocol/servers)
-- [Comunidade MCP](https://modelcontextprotocol.io/community)
+# The Future of AI-Powered Development is Here
+
+Imagine having a conversation with your codebase. Not just reading it or searching through it, but actually *talking* to it. Asking questions like "What would happen if I changed this API endpoint?" or "Show me all the places where user authentication might break if I refactor this function."
+
+This isn't science fiction anymore. This is what the **Igniter.js MCP Server** makes possible today.
+
+## What Makes Igniter.js Different?
+
+Most frameworks were built for humans. They're organized in ways that make sense to developers who read documentation, follow patterns, and understand context from years of experience. But AI agents? They think differently. They need structure, they need context, and they need a way to understand not just what your code does, but *why* it does it.
+
+Igniter.js is the first full-stack framework designed from the ground up to be **AI-native**. Every architectural decision, every convention, every tool was built with one question in mind: "How can we make this incredibly easy for AI agents to understand and work with?"
+
+## The Problem with Traditional Development
+
+Here's what typically happens when you work with AI coding assistants today:
+
+You ask your AI agent to help you build a feature. It looks at your code, makes some educated guesses, and gives you something that *might* work. But it doesn't really understand your database schema, your existing API patterns, your business logic, or how everything connects together.
+
+It's like asking someone to help you cook dinner, but they can only see one ingredient at a time. They might know that tomatoes are red and sugar is sweet, but they can't see the full recipe, understand the cooking process, or know how all the flavors work together.
+
+## Enter the Model Context Protocol
+
+The **Model Context Protocol (MCP)** changes everything. Think of it as giving your AI agent X-ray vision into your entire project. Instead of guessing what your code does, it can actually *ask* your codebase questions and get real answers.
+
+But here's the thing: MCP is just the protocol. It's like having a phone line installed - you still need someone interesting to talk to on the other end.
+
+That's where Igniter.js comes in.
+
+## Your Codebase as a Conversation Partner
+
+When you use Igniter.js with MCP, your project becomes an active participant in development. Your AI agent can literally ask questions like:
+
+- "What are all the API endpoints in this feature?"
+- "Show me the database relationships for the User model"
+- "What happens when I run the test suite?"
+- "Are there any TypeScript errors I should know about?"
+- "What tasks are currently pending in the project?"
+
+And your codebase answers. Not with guesses or approximations, but with real, live, accurate information.
+
+## Beyond Code Completion: True Understanding
+
+Most AI coding tools today are sophisticated autocomplete systems. They're pattern matching against billions of lines of code to predict what you probably want to write next. That's helpful, but it's not understanding.
+
+With Igniter.js MCP Server, your AI agent develops actual understanding of your project. It knows your architecture. It understands your data flow. It can see the relationships between your features, predict the impact of changes, and even suggest improvements based on actual analysis rather than generic best practices.
+
+## The Magic of Contextual Memory
+
+Here's where it gets really interesting. The Igniter.js MCP Server doesn't just understand your code - it remembers your conversations about it. When you explain a complex business rule to your AI agent, it stores that knowledge and relates it to the relevant code.
+
+Months later, when you're working on a related feature, your AI agent remembers that conversation and can apply that business knowledge to new situations. It's like having a pair programming partner who never forgets anything and gets smarter every day.
+
+## Multi-Agent Collaboration
+
+But why stop at one AI agent? With Igniter.js MCP Server, you can have specialized agents working together on your project:
+
+- A **Research Agent** that excels at understanding new requirements and finding relevant code
+- A **Implementation Agent** that's great at writing clean, maintainable code
+- A **Testing Agent** that focuses on quality assurance and edge cases
+- A **Documentation Agent** that keeps everything up to date and well-explained
+
+Each agent has access to the same rich context about your project, but they can focus on what they do best. They can even delegate tasks to each other, creating a true AI development team.
+
+## Real-World Impact
+
+Let's talk about what this means for actual development:
+
+**Day 1**: You start a new feature. Instead of spending hours understanding how existing authentication works, you ask your AI agent. It analyzes your codebase and explains not just the code, but the architectural decisions and security considerations.
+
+**Week 2**: You need to refactor a critical component. Your AI agent can predict exactly what will break, suggest migration strategies, and even help you write the migration scripts.
+
+**Month 3**: A new team member joins. Instead of weeks of onboarding, your AI agent can give them a personalized tour of the codebase, explaining the business logic and architectural decisions specific to your project.
+
+**Month 6**: You're planning a major feature. Your AI agent analyzes the entire codebase, identifies potential conflicts, suggests architectural improvements, and even helps you break the work into manageable tasks.
+
+## The Network Effect
+
+Here's the really exciting part: as more developers use Igniter.js with MCP, the entire ecosystem gets smarter. Patterns that work well get reinforced. Common problems get solved once and shared. The framework itself evolves based on real usage patterns from thousands of AI-assisted development sessions.
+
+We're not just building a framework; we're creating a new way of developing software where human creativity is amplified by AI understanding.
+
+## Getting Started
+
+The beauty of Igniter.js MCP Server is that it's not some distant future technology. It's available today. Every Igniter.js starter project comes with MCP Server pre-configured and ready to use with your favorite AI coding assistant.
+
+Whether you use Cursor, Claude, VS Code Copilot, or any other MCP-compatible tool, you can start having real conversations with your codebase immediately.
+
+## The Bigger Picture
+
+We believe that the future of software development is collaborative - not just between humans, but between humans and AI agents that truly understand the code they're working with.
+
+Igniter.js MCP Server is our contribution to that future. It's a framework that makes AI agents first-class participants in the development process, with the context and tools they need to be truly helpful rather than just occasionally clever.
+
+This isn't about replacing developers. It's about giving developers superpowers. It's about turning every development session into a collaborative conversation with intelligent agents who understand your code as well as you do.
+
+The age of AI-native development has begun. And it starts with Igniter.js.
 
 ---
 
-O MCP Server do Igniter.js transforma seu projeto em uma plataforma verdadeiramente AI-native, permitindo que Code Agents trabalhem com seu código de forma inteligente e eficiente. Comece explorando as ferramentas disponíveis e descubra como a IA pode acelerar seu desenvolvimento!
-
+Ready to experience the future of development? Create your first AI-native project with Igniter.js today.
