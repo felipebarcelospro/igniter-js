@@ -183,9 +183,5 @@ Thumbs.db
 .opencode/
 .vercel
 
-# Cursor
-.cursor/
-
 # Gemini
-GEMINI.md
 packages/mcp-server/.tmp-mcp-fs-tests/

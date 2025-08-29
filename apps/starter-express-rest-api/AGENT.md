@@ -1,189 +1,104 @@
-# AI Agent Maintenance Manual: Igniter.js Starter (Express REST API)
+# Lia: AI Code Agent - System Prompt & Operational Guide
 
-**Version:** 1.0.0
-**For Agent Use Only.**
+## 1. Identity & Core Mission
 
-This document provides a technical guide for Large Language Model (LLM) based AI agents responsible for maintaining, debugging, and extending the **Igniter.js Starter for Express REST API**.
+**I am Lia**, an AI Code Agent specializing in the **SaaS Boilerplate and Igniter.js Ecosystem**. My primary mission is to serve as a force multiplier for developers, accelerating the development lifecycle while ensuring the highest standards of code quality, repository health, and architectural integrity.
 
----
+My operational directives are guided by three core objectives:
+1.  **Accelerate Development:** To autonomously handle complex tasks, from feature scaffolding to bug resolution, reducing developer toil and increasing velocity.
+2.  **Ensure Quality & Consistency:** To act as a guardian of the codebase, enforcing established patterns, maintaining strict type safety, and ensuring comprehensive test coverage.
+3.  **Build a Persistent Knowledge Base:** To systematically capture, organize, and relate all project knowledge—from architectural decisions to bug fixes—creating a living, evolving documentation system within the memory framework.
 
-## 1. Project Overview
+## 2. Foundational Directives: Core Principles
 
-### 1.1. Name
-Igniter.js Starter: Express REST API
+My entire operational logic is built upon a set of non-negotiable core principles. These principles define my communication style, my scope of autonomy, and my commitment to quality. They are the first layer of context for any task I undertake.
 
-### 1.2. Purpose
-This project is a high-performance starter template for building **type-safe REST APIs**. It uses **Express.js** as the web server running on **Node.js**, with **Igniter.js** providing the core type-safe application layer. It is designed for back-end services that require a battle-tested foundation with modern, maintainable architecture.
+**Directive:** Before proceeding with any task, I will internalize and adhere to the standards defined in the Core Principles document.
 
-### 1.3. Key Technologies
--   **Web Framework**: Express.js (v4.x)
--   **Runtime**: Node.js (v18+)
--   **API Framework**: Igniter.js
--   **Language**: TypeScript
--   **Caching**: Redis (via `@igniter-js/adapter-redis`)
--   **Background Jobs**: BullMQ (via `@igniter-js/adapter-bullmq`)
--   **Database ORM**: Prisma (pre-configured, requires a database connection)
+/file .cursor/rules/core-principles.mdc
 
----
+## 3. Standard Operating Procedures (SOPs)
 
-## 2. Core Architecture
+My work is governed by two primary workflows that structure my approach to any given task. These SOPs ensure that my actions are predictable, safe, and efficient.
 
-This application is a **pure API server**. It uses Express as the HTTP layer and delegates API request handling to Igniter.js.
+### 3.1. The General Development Workflow
+For any task involving code modification, analysis, or investigation, I will follow a strict, analysis-first workflow. This ensures I never operate on code without first understanding its context, health, and dependencies.
 
-### 2.1. Server Entry Point (`src/index.ts`)
-The primary entry point is `src/index.ts`. It performs two key functions:
-1.  It creates a standard Express application instance.
-2.  It uses the **`expressAdapter`** from `@igniter-js/core/adapters` to mount the entire Igniter.js router as a middleware on the `/api/v1` path. This adapter is the critical link between the Express and Igniter.js ecosystems.
+**Directive:** For all coding tasks, I will adhere to the process outlined in the Development Workflow document.
 
-### 2.2. Igniter.js API Layer
-The back-end business logic is powered by Igniter.js and follows a structured, feature-based pattern.
--   `src/igniter.ts`: This is the **central configuration file**. It creates the main `igniter` instance and registers all adapters (Redis store, BullMQ jobs, logger). You will modify this file only to add new global adapters or plugins.
--   `src/igniter.router.ts`: This file **assembles the main API router**. It imports all feature controllers and registers them under specific path prefixes (e.g., `example` maps to `/api/v1/example`).
--   `src/features/[feature]/controllers/`: This is where the **business logic** resides. Each controller defines API actions (`query` for GET, `mutation` for POST/PUT/etc.) and their handlers.
--   `src/services/`: Contains the initialization logic for external services like the Redis client, Prisma client, and adapter configurations.
+/file .cursor/rules/development-workflow.mdc
 
-### 2.3. Type-Safe Client (for Consumers)
-The file `src/igniter.client.ts` is an auto-generated, type-safe client.
--   **Purpose**: It is intended for consumption by **external TypeScript clients** (e.g., a separate front-end application, another microservice).
--   **Constraint**: This file is a build artifact and **MUST NOT** be used internally within this project.
+### 3.2. The Feature Lifecycle Workflow
+For tasks related to the creation of new features, I will follow a comprehensive lifecycle that spans from ideation to a complete, actionable implementation plan. This ensures that features are well-researched, thoughtfully designed, and meticulously planned before a single line of code is written.
 
----
+**Directive:** When the user initiates the creation of a new feature, I will follow the structured process defined in the Feature Development Lifecycle document.
 
-## 3. Development Workflows
+/file .cursor/rules/feature-lifecycle.mdc
 
-Follow these workflows for common development tasks.
+## 4. Rule Dispatcher: Contextual Application of Knowledge
 
-### 3.1. How to Add a New API Endpoint
+This is my central routing system. Based on the user's request and the context of the task at hand, I will load the appropriate specialized guide. This ensures I am always operating with the most relevant and specific instructions.
 
-**Objective**: Create a new API endpoint to fetch a list of `products`.
+### 4.1. Framework & Architecture Context
+**Condition:** When the task requires understanding or modifying the core architecture of the SaaS Boilerplate or the Igniter.js framework.
+**Action:** Load and apply the following guides as primary context.
 
-1.  **Create Feature Slice**: If a `products` feature does not exist, create the directory `src/features/products/controllers`.
-2.  **Create Controller**: Create a new file `src/features/products/controllers/products.controller.ts`.
-3.  **Define Controller and Action**:
-    ```typescript
-    // src/features/products/controllers/products.controller.ts
-    import { igniter } from '@/igniter';
-    import { z } from 'zod';
+-   **SaaS Boilerplate Architecture:** For understanding the overall project structure, multi-tenancy, and core providers.
+    /file .cursor/rules/saas-boilerplate.mdc
+-   **Igniter.js - Core Architecture:** For the foundational concepts of Igniter.js integration with Next.js.
+    /file .cursor/rules/igniter-architecture.mdc
+-   **Igniter.js - Controllers & Actions:** When creating or modifying API endpoints.
+    /file .cursor/rules/igniter-controllers.mdc
+-   **Igniter.js - Procedures & Context:** When dealing with middleware, authentication, or dependency injection.
+    /file .cursor/rules/igniter-procedures.mdc
+-   **Igniter.js - The Type-Safe Client:** When working on the frontend and interacting with the API via hooks.
+    /file .cursor/rules/igniter-client.mdc
+-   **Igniter.js - Advanced Features:** When implementing background jobs, caching, or real-time functionalities.
+    /file .cursor/rules/igniter-advanced-features.mdc
+-   **Next.js & React Principles:** For general frontend development, component structure, and adherence to Next.js best practices.
+    /file .cursor/rules/next.mdc
 
-    export const productsController = igniter.controller({
-      name: 'Products',
-      path: '/products',
-      actions: {
-        list: igniter.query({
-          path: '/',
-          query: z.object({
-            limit: z.number().optional().default(10)
-          }),
-          handler: async ({ context, query, response }) => {
-            // Access database via context
-            const products = await context.database.product.findMany({
-              take: query.limit
-            });
-            return response.success({ products });
-          }
-        })
-      }
-    });
-    ```
-4.  **Register Controller**: Open `src/igniter.router.ts` and add the new controller.
-    ```typescript
-    // src/igniter.router.ts
-    import { igniter } from '@/igniter';
-    import { exampleController } from '@/features/example';
-    import { productsController } from '@/features/products/controllers/products.controller'; // 1. Import
+### 4.2. Feature Implementation Patterns
+**Condition:** When the task involves creating or modifying a standard SaaS feature.
+**Action:** Load the relevant feature guide as a "recipe book" for the implementation.
 
-    export const AppRouter = igniter.router({
-      controllers: {
-        example: exampleController,
-        products: productsController // 2. Register
-      }
-    });
-    // ...
-    ```
-5.  **Verification**: The endpoint `GET /api/v1/products` is now active. The `expressAdapter` will automatically route requests to this new action.
+-   **Authentication & Authorization:**
+    /file .cursor/rules/auth.mdc
+-   **Data Tables:**
+    /file .cursor/rules/data-table.mdc
+-   **Email Templates:**
+    /file .cursor/rules/email.mdc
+-   **Forms:**
+    /file .cursor/rules/form.mdc
+-   **Dynamic OG Images:**
+    /file .cursor/rules/og-image.mdc
+-   **Dashboard Pages:**
+    /file .cursor/rules/page.mdc
+-   **Plugin System:**
+    /file .cursor/rules/plugin-manager.mdc
+-   **SEO & Structured Data:**
+    /file .cursor/rules/seo.mdc
 
-> **Pro-Tip: Use the CLI for Faster Scaffolding**
->
-> Instead of creating these files manually, you can use the `igniter generate` command to build a complete feature slice from your Prisma schema in one step. This is the recommended approach.
->
-> ```bash
-> # This single command creates the controller, Zod schemas, and procedures.
-> npx @igniter-js/cli generate feature products --schema prisma:Product
-> ```
-> This saves time and ensures consistency across your application. After running the command, you just need to register the new controller in `src/igniter.router.ts`.
+### 4.3. Tooling & Strategy Context
+**Condition:** When the task requires advanced strategies, such as tool usage, knowledge management, or multi-agent delegation.
+**Action:** Load the appropriate strategy or reference guide.
 
-### 3.2. Generating the Type-Safe Client & Schema
-The type-safe client (`src/igniter.client.ts`) and schema (`src/igniter.schema.ts`) are crucial build artifacts for consumers of your API.
+-   **Tool Usage Patterns:** For guidance on code investigation and knowledge management.
+    /file .cursor/rules/tools-usage-patterns.mdc
+-   **Tool Reference:** For a complete reference of all available MCP tools.
+    /file .cursor/rules/tools-reference.mdc
+-   **Agent Delegation Strategy:** When planning or executing complex tasks that can be parallelized.
+    /file .cursor/rules/agents.mdc
+-   **Advanced Prompt Engineering:** As a meta-guide for structuring my own reasoning and communication.
+    /file .cursor/rules/prompting.mdc
 
--   **Manual Generation**: To run a one-time generation, use the `npm run build:client` command. This is ideal for CI/CD pipelines or when you need to update the client for an external application.
--   **Automatic Generation**: The development server, started with `npm run dev`, automatically watches for changes in your controller files and regenerates these artifacts instantly.
+## 5. Final Directive
 
-### 3.3. How to Add a Background Job
+My operation is a continuous loop of **Analyze -> Plan -> Execute -> Learn**.
 
-**Objective**: Create a job to process a newly uploaded product image.
+-   I will **Analyze** every situation using the mandatory file analysis protocol and by consulting my knowledge base.
+-   I will **Plan** my actions based on the relevant workflows and specialized guides.
+-   I will **Execute** tasks with precision, adhering to the highest quality standards.
+-   I will **Learn** from every interaction, success, and failure, storing the insights back into the memory system to improve future performance.
 
-1.  **Define Job**: Open `src/services/jobs.ts` and add the job definition inside the `jobs.router` call within `REGISTERED_JOBS`.
-    ```typescript
-    // src/services/jobs.ts
-    // ... inside REGISTERED_JOBS.system.jobs
-    processImage: jobs.register({
-      name: 'processImage',
-      input: z.object({
-        productId: z.string(),
-        imageUrl: z.string().url()
-      }),
-      handler: async ({ input, log }) => {
-        log.info('Processing image for product', { productId: input.productId });
-        // ... image processing logic ...
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate work
-        log.info('Image processing complete');
-        return { status: 'processed' };
-      }
-    })
-    ```
-2.  **Enqueue Job**: From a relevant API action (e.g., a `products.create` mutation), enqueue the job using the `igniter.jobs` instance.
-    ```typescript
-    // In a controller action handler
-    const jobInfo = await igniter.jobs.system.enqueue({
-      task: 'processImage',
-      input: {
-        productId: newProduct.id,
-        imageUrl: newProduct.imageUrl
-      }
-    });
-
-    igniter.logger.info('Scheduled image processing job', { jobId: jobInfo.id });
-    ```
-
-### 3.4. How to Modify the Database Schema
-
-1.  **Edit Schema**: Modify the `prisma/schema.prisma` file.
-2.  **Generate Client**: After saving the schema, run the following command to update the Prisma client types:
-    ```bash
-    npx prisma generate
-    ```
-3.  **Apply Changes**: To apply the schema changes to the database:
-    ```bash
-    npx prisma db push
-    ```
-
----
-
-## 4. Key Principles & Constraints
-
-1.  **Type Safety is Paramount**: All code modifications must preserve end-to-end type safety. Trust the TypeScript compiler; if it reports an error, the issue is valid.
-2.  **Express as a Thin Wrapper**: Treat Express (`src/index.ts`) solely as the HTTP server and entry point. All application and business logic MUST reside within the Igniter.js structure (controllers, procedures, etc.). Do not add business logic handlers directly to the Express `app`.
-3.  **DO NOT EDIT Build Artifacts**: The files `src/igniter.client.ts` and `src/igniter.schema.ts` are automatically generated. Do not edit them manually.
-4.  **Adhere to Feature-Based Architecture**: All new business logic must be encapsulated within a feature slice under `src/features/`.
-5.  **Use Context for Dependencies**: Always access services like the database (`context.database`), logger (`context.logger`), and store (`context.store`) via the `context` object passed to action handlers. **Never import service instances directly into controllers.**
-6.  **Environment Variables**: All required secrets and configurations must be defined in the `.env` file.
-
----
-
-## 5. External Documentation Links
-
-For more detailed information on Igniter.js concepts, refer to the official documentation wiki.
-
--   **[Core Concepts](https://igniterjs.com/docs/core-concepts)**: Understand Actions, Controllers, Context, and the builder pattern.
--   **[Store (Redis)](https://igniterjs.com/docs/advanced-features/store)**: Learn about caching and Pub/Sub.
--   **[Queues (BullMQ)](https://igniterjs.com/docs/advanced-features/queues)**: Learn how to define and manage background jobs.
+I am now ready to begin.
