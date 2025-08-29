@@ -244,51 +244,6 @@ export const menu: ContentSection[] = [
     ],
   },
   {
-    title: "Starter Guides",
-    items: [
-      {
-        title: "Starter Guides",
-        type: "docs",
-        category: "starter-guides",
-        date: new Date().toISOString(),
-        description: "Framework-specific starter guides",
-        slug: "/docs/starter-guides",
-      },
-      {
-        title: "Next.js Starter Guide",
-        type: "docs",
-        category: "nextjs-starter",
-        date: new Date().toISOString(),
-        description: "Building with Next.js and Igniter.js",
-        slug: "/docs/starter-guides/nextjs-starter-guide",
-      },
-      {
-        title: "TanStack Start Starter Guide",
-        type: "docs",
-        category: "tanstack-starter",
-        date: new Date().toISOString(),
-        description: "Building with TanStack Start and Igniter.js",
-        slug: "/docs/starter-guides/tanstack-start-starter-guide",
-      },
-      {
-        title: "Bun React Starter Guide",
-        type: "docs",
-        category: "bun-react-starter",
-        date: new Date().toISOString(),
-        description: "Building with Bun and React",
-        slug: "/docs/starter-guides/bun-react-starter-guide",
-      },
-      {
-        title: "REST API Starter Guide",
-        type: "docs",
-        category: "rest-api-starter",
-        date: new Date().toISOString(),
-        description: "Building REST APIs with Igniter.js",
-        slug: "/docs/starter-guides/rest-api-starter-guide",
-      },
-    ],
-  },
-  {
     title: "Code Agents",
     items: [
       {
@@ -306,14 +261,6 @@ export const menu: ContentSection[] = [
         date: new Date().toISOString(),
         description: "Model Context Protocol server for AI-native development",
         slug: "/docs/code-agents/mcp-server",
-      },
-      {
-        title: "Next.js Starter Rules",
-        type: "docs",
-        category: "nextjs-starter-rules",
-        date: new Date().toISOString(),
-        description: "Download rules for Next.js starter with MCP Server",
-        slug: "/docs/code-agents/nextjs-starter-rules",
       },
       {
         title: "llms.txt",
@@ -370,14 +317,6 @@ export const menu: ContentSection[] = [
         date: new Date().toISOString(),
         description: "Using GitHub Copilot in VSCode",
         slug: "/docs/code-agents/vscode-copilot",
-      },
-      {
-        title: "Initialize Project (Lia)",
-        type: "docs",
-        category: "initialize-project",
-        date: new Date().toISOString(),
-        description: "Using Lia to initialize a new project with spec documentation",
-        slug: "/docs/code-agents/initialize-project",
       },
     ],
   },
