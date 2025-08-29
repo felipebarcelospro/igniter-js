@@ -31,7 +31,9 @@ export type InferActionResponse<THandlerReturn> =
     ? THandlerReturn extends Promise<infer TUnwrapped>
       ? InferActionResponse<TUnwrapped>
       : THandlerReturn extends IgniterResponseProcessor<any, infer TData>
-      ? TData
+      ? TData extends IgniterProcessorResponse<infer TSuccess, infer TError>
+        ? IgniterProcessorResponse<TSuccess, TError>
+        : never
       : THandlerReturn extends Response
       ? InferWebResponse<THandlerReturn>
       : InferDirectResponse<THandlerReturn>
@@ -341,8 +343,8 @@ export type InferEndpoint<
   params: TActionInferParams;
   handler: TActionHandler;
   $Input: TActionInferInput;
-  $Output: TActionInferResponse extends { data: infer TData } ? TData : never;
-  $Errors: TActionInferResponse extends { error: infer TError } ? TError : never;
+  $Output: TActionInferResponse extends { status: 'success', data: infer TData } ? TData : never;
+  $Errors: TActionInferResponse extends { status: Exclude<IgniterProcessorResponse['status'], 'success'>, error: infer TError } ? TError : never;
   $Caller: TActionInferCaller;
   $Response: TActionInferResponse;
 }>;

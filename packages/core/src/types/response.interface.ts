@@ -1,6 +1,7 @@
 import type { Prettify } from "./utils.interface";
 
 export type IgniterProcessorResponse<TSuccess = unknown, TError = unknown> = {
+  status: 'success' | 'error' | 'badRequest' | 'unauthorized' | 'forbidden' | 'notFound' | 'redirect';
   data: TSuccess;
   error: TError | null;
 };
