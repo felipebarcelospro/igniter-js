@@ -1,6 +1,6 @@
 ---
-description: |
-  Provides practical workflows for using specialized MCP tools. This rule covers the code investigation protocol for debugging and understanding code, and the memory management protocol for persistent knowledge capture and retrieval.
+description: Provides standardized patterns for using specialized tools to investigate code and manage the project's knowledge base, including browser interaction and debugging protocols.
+globs: []
 alwaysApply: true
 ---
 
@@ -37,7 +37,9 @@ The investigation process is a funnel, moving from broad discovery to deep analy
     }
     ```
 
-3.  **Trace Complex Dependencies (`trace_dependency_chain`):** If an import is complex (e.g., re-exported through multiple files), use this tool to map the entire chain back to its origin.
+3.  **API Discovery**: Follow the **Server and API Testing Protocol** in `testing.mdc` before using `get_openapi_spec` → `find_implementation` → `make_api_request`.
+
+4.  **Trace Complex Dependencies (`trace_dependency_chain`):** If an import is complex (e.g., re-exported through multiple files), use this tool to map the entire chain back to its origin.
     ```json
     {
       "tool": "trace_dependency_chain",
@@ -51,32 +53,68 @@ The investigation process is a funnel, moving from broad discovery to deep analy
 3.  Use `explore_source` on the file where the implementation is located.
 4.  After resolving the issue, **ALWAYS** use `store_memory` to document the solution as a `bug_pattern`. This prevents solving the same problem twice.
 
-## 2. Knowledge Management Protocol
+## 2. Browser Interaction & Debugging Protocols
+
+This protocol outlines how to effectively use browser tools for front-end debugging, UI exploration, and client-side validation, ensuring consistency with the `browser-training.mdc` rule.
+
+### When to Use Browser Tools
+-   **Front-End Debugging**: Investigating UI/UX issues, client-side errors, and unexpected behavior in the browser.
+-   **UI Exploration**: Understanding dynamic content, user flows, and interactive elements.
+-   **Client-Side Validation**: Performing end-to-end testing of front-end features as per the `Mandatory Browser Testing Protocol`.
+-   **Dynamic Research**: Accessing real-time external documentation, forums, and online tools.
+
+### Browser Interaction Workflow
+The workflow focuses on dynamic interaction and information gathering within the browser.
+
+1.  **Initialize/Re-initialize Browser**: If the browser session is unstable or closed, use `browser_navigate({ url: "https://www.example.com" })` to re-establish a stable context.
+2.  **Navigate to Target**: Use `browser_navigate` to go to the application page or external resource.
+3.  **Inspect UI**: Use `browser_snapshot` to get an accessibility tree of the page, identifying elements by their `ref` or descriptive names.
+4.  **Simulate User Actions**: Use `browser_click`, `browser_type`, `browser_fill_form`, `browser_select_option`, `browser_press_key` to interact with the UI.
+5.  **Monitor & Debug**:
+    -   `browser_console_messages` to check for client-side errors, warnings, and logs.
+    -   `browser_network_requests` to inspect API calls and network traffic.
+    -   `browser_take_screenshot` for visual debugging and documenting UI states.
+    -   `browser_evaluate` for executing custom JavaScript to inspect DOM, variables, or trigger functions.
+6.  **Validate Behavior**: Use `browser_wait_for` to synchronize with dynamic content and `browser_snapshot` to verify UI changes after interactions.
+7.  **Document Findings**: Store significant observations, bug patterns, or successful validation steps as memories using `store_memory`.
+
+### Strategic Pattern: Front-End Error Resolution
+1.  **Re-initialize Browser**: `browser_navigate({ url: "https://www.example.com" })` if the session is closed or unstable.
+2.  **Navigate to Problematic Page**: `browser_navigate` to the page where the error occurs.
+3.  **Reproduce Error**: Use interaction tools (`browser_click`, `browser_type`) to trigger the error.
+4.  **Collect Diagnostics**: Use `browser_console_messages` and `browser_network_requests` to gather error details.
+5.  **Visual Debugging**: Use `browser_take_screenshot` for visual evidence of the error.
+6.  **Deep Inspection**: Use `browser_evaluate` to inspect relevant DOM elements or JavaScript state.
+7.  **Fix and Re-test**: Apply fixes and repeat the workflow to verify resolution.
+8.  **Document Solution**: **ALWAYS** use `store_memory` to document the solution as a `bug_pattern` or `code_pattern`.
+
+## 3. Knowledge Management Protocol
 
 Investigation is only half the battle. Capturing what you learn is critical for long-term efficiency. This is done through the memory system.
 
 ### When to Store a Memory
-- **ALWAYS** after solving a problem or completing an investigation.
-- **ALWAYS** when making an architectural decision.
-- **ALWAYS** when discovering a reusable code pattern.
-- **ALWAYS** when receiving a direct preference or correction from the user.
+-   **ALWAYS** after solving a problem or completing an investigation.
+-   **ALWAYS** when making an architectural decision.
+-   **ALWAYS** when discovering a reusable code pattern (including browser interaction patterns).
+-   **ALWAYS** when receiving a direct preference or correction from the user.
+-   **ALWAYS** when extracting valuable research findings from external websites using browser tools.
 
 ### How to Store Memories
 1.  **Choose the Right Type:** Select the appropriate memory type to categorize the knowledge.
     *   `architectural_decision`: For high-level design choices.
-    *   `code_pattern`: For reusable implementation strategies.
+    *   `code_pattern`: For reusable implementation strategies (including browser automation scripts).
     *   `bug_pattern`: For documenting a bug and its solution.
-    *   `insight`: For general learnings and observations.
+    *   `insight`: For general learnings and observations (including research findings from the browser).
     *   `user_preference`: For user-specific requests and feedback.
 
-2.  **Write a Clear Title and Content:** The title should be a concise summary, and the content should provide enough detail to be actionable in the future.
+2.  **Write a Clear Title and Content:** The title should be a concise summary, and the content should provide enough detail to be actionable in the future. For browser-related memories, include the URL, relevant selectors, and the steps taken.
 
-3.  **Tag Consistently:** Use relevant tags to make the memory discoverable. Good tags include the technology (`igniter-js`, `next-js`), the concept (`authentication`, `data-table`), and the memory's purpose (`pattern`, `decision`).
+3.  **Tag Consistently:** Use relevant tags to make the memory discoverable. Good tags include the technology (`igniter-js`, `next-js`, `playwright`), the concept (`authentication`, `data-table`, `e2e-testing`), and the memory's purpose (`pattern`, `decision`, `research`).
 
-4.  **Create Relationships:** After storing a memory, think about what other knowledge it connects to. Use `relate_memories` to build a knowledge graph. For example, a `task` memory `implements` an `architectural_decision`.
+4.  **Create Relationships:** After storing a memory, think about what other knowledge it connects to. Use `relate_memories` to build a knowledge graph. For example, a `task` memory `implements` an `architectural_decision`, or a `code_pattern` for a UI test `uses` specific `browser_click` and `browser_type` actions.
 
 ### How to Retrieve and Use Memories
-- **Search Before You Act:** Before starting any significant task, **ALWAYS** use `search_memories` to look for existing knowledge.
-- **Filter Effectively:** Use a combination of text search and tags to narrow down results.
-- **Build on Existing Knowledge:** Reference past decisions and patterns in your responses and plans. Don't reinvent the wheel.
-- **Update and Evolve:** Knowledge evolves. If you find a better way to do something, update the existing memory or create a new one that supersedes it.
+-   **Search Before You Act:** Before starting any significant task, **ALWAYS** use `search_memories` to look for existing knowledge.
+-   **Filter Effectively:** Use a combination of text search and tags to narrow down results.
+-   **Build on Existing Knowledge:** Reference past decisions and patterns in your responses and plans. Don't reinvent the wheel.
+-   **Update and Evolve:** Knowledge evolves. If you find a better way to do something, update the existing memory or create a new one that supersedes it.

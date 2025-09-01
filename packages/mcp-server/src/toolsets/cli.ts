@@ -26,7 +26,7 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
       if (port) args.push(`--port ${port}`);
       // Note: The CLI's dev command implies watching, so we don't need a specific flag unless we want to disable it.
 
-      const command = `npm run dev ${args.join(" ")}`.trim();
+      const command = `npx @igniter-js/cli@latest dev ${args.join(" ")}`.trim();
       const result = await execAsync(command, { timeout: 15000 }); // Increased timeout for dev server startup
 
       return {
@@ -110,7 +110,7 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
       const args = [name];
       if (schema) args.push(`--schema "${schema}"`);
 
-      const command = `npx igniter generate feature ${args.join(" ")}`.trim();
+      const command = `npx @igniter-js/cli@latest generate feature ${args.join(" ")}`.trim();
       const result = await execAsync(command, { timeout: 30000 });
 
       return {
@@ -135,7 +135,7 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
     },
   }, async ({ name, feature }: { name: string; feature: string }) => {
     try {
-      const command = `npx igniter generate controller ${name} --feature ${feature}`.trim();
+      const command = `npx @igniter-js/cli@latest generate controller ${name} --feature ${feature}`.trim();
       const result = await execAsync(command, { timeout: 30000 });
 
       return {
@@ -160,7 +160,7 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
     },
   }, async ({ name, feature }: { name: string; feature: string }) => {
     try {
-      const command = `npx igniter generate procedure ${name} --feature ${feature}`.trim();
+      const command = `npx @igniter-js/cli@latest generate procedure ${name} --feature ${feature}`.trim();
       const result = await execAsync(command, { timeout: 30000 });
 
       return {
@@ -195,7 +195,7 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
       if (options.docs) args.push("--docs");
       if (options.docsOutput) args.push(`--docs-output ${options.docsOutput}`);
 
-      const command = `npx igniter generate schema ${args.join(" ")}`.trim();
+      const command = `npx @igniter-js/cli@latest generate schema ${args.join(" ")}`.trim();
       const result = await execAsync(command, { timeout: 30000 });
 
       return {
@@ -224,7 +224,7 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
       if (output) args.push(`--output ${output}`);
       if (ui) args.push("--ui");
 
-      const command = `npx igniter generate docs ${args.join(" ")}`.trim();
+      const command = `npx @igniter-js/cli@latest generate docs ${args.join(" ")}`.trim();
       const result = await execAsync(command, { timeout: 30000 });
 
       return {
@@ -233,6 +233,74 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
     } catch (error: any) {
       return {
         content: [{ type: "text", text: `Failed to generate API docs: ${error.message}` }],
+      };
+    }
+  });
+
+  server.registerTool("add_package_dependency", {
+    title: "Add Package Dependency",
+    description: "Adds a new dependency to a project using the configured package manager (npm, yarn, bun).",
+    inputSchema: {
+      package_name: z.string().describe("The name of the package to add (e.g., axios, lodash)."),
+      version: z.string().optional().describe("The specific version of the package (e.g., ^1.0.0, latest). Defaults to the latest version."),
+      dev_dependency: z.boolean().optional().default(false).describe("If true, adds as a development dependency."),
+    },
+  }, async ({ package_name, version, dev_dependency }: { package_name: string; version?: string; dev_dependency?: boolean; }) => {
+    try {
+      // Simple package manager detection
+      const fs = require('fs');
+      const path = require('path');
+
+      let command = '';
+      if (fs.existsSync(path.join(process.cwd(), 'bun.lockb'))) {
+        command = `bun add ${dev_dependency ? '-d' : ''} ${package_name}${version ? '@' + version : ''}`;
+      } else if (fs.existsSync(path.join(process.cwd(), 'yarn.lock'))) {
+        command = `yarn add ${dev_dependency ? '-D' : ''} ${package_name}${version ? '@' + version : ''}`;
+      } else {
+        command = `npm install ${dev_dependency ? '--save-dev' : ''} ${package_name}${version ? '@' + version : ''}`;
+      }
+
+      const result = await execAsync(command, { timeout: 120000 }); // Long timeout for package installation
+
+      return {
+        content: [{ type: "text", text: `Package '${package_name}' added successfully.\n\nOutput:\n${result.stdout}` }],
+      };
+    } catch (error: any) {
+      return {
+        content: [{ type: "text", text: `Failed to add package: ${error.message}\n\nStderr:\n${error.stderr}` }],
+      };
+    }
+  });
+
+  server.registerTool("remove_package_dependency", {
+    title: "Remove Package Dependency",
+    description: "Removes an existing dependency from a project.",
+    inputSchema: {
+      package_name: z.string().describe("The name of the package to remove."),
+    },
+  }, async ({ package_name }: { package_name: string }) => {
+    try {
+      // Simple package manager detection
+      const fs = require('fs');
+      const path = require('path');
+
+      let command = '';
+      if (fs.existsSync(path.join(process.cwd(), 'bun.lockb'))) {
+        command = `bun remove ${package_name}`;
+      } else if (fs.existsSync(path.join(process.cwd(), 'yarn.lock'))) {
+        command = `yarn remove ${package_name}`;
+      } else {
+        command = `npm uninstall ${package_name}`;
+      }
+
+      const result = await execAsync(command, { timeout: 120000 }); // Long timeout for package removal
+
+      return {
+        content: [{ type: "text", text: `Package '${package_name}' removed successfully.\n\nOutput:\n${result.stdout}` }],
+      };
+    } catch (error: any) {
+      return {
+        content: [{ type: "text", text: `Failed to remove package: ${error.message}\n\nStderr:\n${error.stderr}` }],
       };
     }
   });

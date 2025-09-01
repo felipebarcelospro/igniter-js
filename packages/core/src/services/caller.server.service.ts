@@ -1,5 +1,5 @@
 import type { RequestProcessor } from "../processors";
-import type { ContextCallback, IgniterBaseConfig, IgniterControllerBaseAction, IgniterControllerConfig, IgniterRouter, IgniterRouterCaller, MutationActionCallerResult, QueryActionCallerResult, RealtimeActionCallerResult } from "../types";
+import type { ContextCallback, DocsConfig, IgniterBaseConfig, IgniterControllerBaseAction, IgniterControllerConfig, IgniterRouter, IgniterRouterCaller, MutationActionCallerResult, QueryActionCallerResult, RealtimeActionCallerResult } from "../types";
 
 /**
  * Creates a proxy-based caller for invoking actions via controller namespace (server-only).
@@ -10,9 +10,10 @@ export function createServerCaller<
   TConfig extends IgniterBaseConfig,
   TPlugins extends Record<string, any>,
   TControllers extends Record<string, IgniterControllerConfig<any>>,
+  TDocs extends DocsConfig
 >(
   controllers: TControllers,
-  processor: RequestProcessor<IgniterRouter<TContext, TControllers, TConfig, TPlugins>>
+  processor: RequestProcessor<IgniterRouter<TContext, TControllers, TConfig, TPlugins, TDocs>>
 ): IgniterRouterCaller<TControllers> {
   const caller = new Proxy({} as IgniterRouterCaller<TControllers>, {
     get(_, controllerName: string) {
@@ -31,7 +32,7 @@ export function createServerCaller<
             return {
               useRealtime: (...args: any[]) => ({} as RealtimeActionCallerResult<typeof action>),
               useQuery: (...args: any[]) => ({} as QueryActionCallerResult<typeof action>),
-              query: async (input: any) => {
+              query: async (input: typeof action['$Infer']['$Input']) => {
                 if (!processor) {
                   throw new Error('Processor is required to call actions on server');
                 }
@@ -42,7 +43,7 @@ export function createServerCaller<
 
           return {
             useMutation: (...args: any[]) => ({} as MutationActionCallerResult<typeof action>),
-            mutate: async (input: any) => {
+            mutate: async (input: typeof action['$Infer']['$Input']) => {
               if (!processor) {
                 throw new Error('Processor is required to call actions on server');
               }

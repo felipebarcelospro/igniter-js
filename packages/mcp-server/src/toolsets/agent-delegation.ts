@@ -6,7 +6,6 @@ import { z } from "zod";
 import { executeWithAgent, checkAgentEnvironment } from "../agents/executor";
 import { getAvailableAgents, getAgentProvider } from "../agents/providers";
 import { AgentProvider } from "../agents/types";
-import { generateEnvSetupCommands } from "../utils/exec";
 import { ToolsetContext } from "./types";
 export function registerAgentDelegationTools({ server, memoryManager, execAsync }: ToolsetContext) {
   // --- Agent Delegation Tools ---
@@ -40,25 +39,25 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
   }) => {
     try {
       await memoryManager.initializeProject();
-      
-      // Get task details  
+
+      // Get task details
       const task = await memoryManager.getById('task', task_id);
       if (!task) {
         return { content: [{ type: "text", text: `Task with ID ${task_id} not found` }] };
       }
-      
+
       // Validate agent configuration
       const agentProvider = getAgentProvider(agent_type as AgentProvider);
       if (!agentProvider) {
         return { content: [{ type: "text", text: `Unsupported agent type: ${agent_type}` }] };
       }
-      
+
       // Prepare configurations
       const agentConfig = {
         provider: agent_type as AgentProvider,
         timeout_minutes: execution_config?.timeout_minutes || 30
       };
-      
+
       const sandboxConfig = {
         enabled: execution_config?.sandbox_enabled ?? true,
         type: 'docker' as const,
@@ -66,15 +65,15 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
         fresh_environment: execution_config?.fresh_environment ?? false,
         proxy: execution_config?.proxy
       };
-      
+
       if (execution_mode === 'background') {
         // Start background delegation
-        const result = await (memoryManager as any).startBackgroundDelegation(task_id, agent_type, {
+        const result = await memoryManager.startBackgroundDelegation(task_id, agent_type, {
           ...execution_config,
           ...agentConfig,
           ...sandboxConfig
         });
-        
+
         if (result.success) {
           return {
             content: [{
@@ -88,7 +87,9 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
       } else {
         // Synchronous execution (legacy mode)
         // Update task status to delegated
-        await memoryManager.update('task', task_id, {
+        await memoryManager.update({
+          id: task_id,
+          type: task.type,
           frontmatter: {
             status: 'in_progress',
             assignee: 'agent',
@@ -100,7 +101,7 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
           }
           }
         });
-        
+
         // Execute delegation synchronously
         const result = await executeWithAgent(
           agent_type as AgentProvider,
@@ -110,23 +111,28 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
           sandboxConfig,
           context
         );
-        
+
         // Update task with results
         const newStatus = result.success ? 'done' : 'blocked';
-        await memoryManager.update('task', task_id, {
+
+        await memoryManager.update({
+          id: task_id,
+          type: task.type,
           frontmatter: {
             status: newStatus,
             completed_at: result.success ? new Date().toISOString() : undefined
           }
         });
-        
+
         // Add execution results to task content
         const resultContent = `\n\n## Agent Execution Results\n\n**Agent:** ${agent_type}\n**Sandbox:** ${sandboxConfig.enabled ? 'enabled' : 'disabled'}\n**Execution time:** ${result.execution_time}s\n**Success:** ${result.success}\n\n### Output:\n${result.output}\n\n### Error:\n${result.error || 'None'}`;
-        
-        await memoryManager.update('task', task_id, {
+
+        await memoryManager.update({
+          id: task_id,
+          type: task.type,
           content: task.content + resultContent
         });
-        
+
         return {
           content: [{
             type: "text",
@@ -140,7 +146,7 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
   });
 
   // --- Background Job Monitoring Tools ---
-  
+
   server.registerTool("check_delegation_status", {
     title: "Check Delegation Status",
     description: "Check the current status of a delegated task, including progress, output, and execution details. Use when: monitoring background delegation progress, debugging execution issues, or getting real-time updates on agent work. Provides comprehensive status information for any delegated task.",
@@ -150,17 +156,17 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
   }, async ({ task_id }: { task_id: string }) => {
     try {
       await memoryManager.initializeProject();
-      
+
       const status = await (memoryManager as any).getDelegationStatus(task_id);
-      
+
       if (status.status === 'not_found') {
         return { content: [{ type: "text", text: `❌ **Task not found:** No task with ID ${task_id} exists` }] };
       }
-      
+
       if (status.status === 'not_delegated') {
         return { content: [{ type: "text", text: `ℹ️ **Task not delegated:** Task ${task_id} has not been delegated to any agent` }] };
       }
-      
+
       const statusIconMap = {
         'queued': '⏳',
         'running': '🔄',
@@ -169,31 +175,31 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
         'cancelled': '⏹️'
       } as const;
       const statusIcon = statusIconMap[status.status as keyof typeof statusIconMap] || '❓';
-      
+
       let response = `${statusIcon} **Delegation Status for Task ${task_id}**\n\n`;
       response += `**Status:** ${status.status}\n`;
       response += `**Agent:** ${status.agent_type || 'Unknown'}\n`;
-      
+
       if (status.started_at) {
         response += `**Started:** ${new Date(status.started_at).toLocaleString()}\n`;
       }
-      
+
       if (status.completed_at) {
         response += `**Completed:** ${new Date(status.completed_at).toLocaleString()}\n`;
       }
-      
+
       if (status.progress) {
         response += `**Progress:** ${status.progress}\n`;
       }
-      
+
       if (status.error) {
         response += `**Error:** ${status.error}\n`;
       }
-      
+
       if (status.output) {
         response += `\n**Output:**\n\`\`\`\n${status.output}\n\`\`\``;
       }
-      
+
       return { content: [{ type: "text", text: response }] };
     } catch (error: any) {
       return { content: [{ type: "text", text: `❌ **Error checking status:** ${error.message}` }] };
@@ -210,46 +216,46 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
   }, async ({ include_recent, max_results }: { include_recent: boolean; max_results: number }) => {
     try {
       await memoryManager.initializeProject();
-      
-      const activeDelegations = await (memoryManager as any).listActiveDelegations();
-      
+
+      const activeDelegations = await memoryManager.listActiveDelegations();
+
       let allDelegations = [...activeDelegations];
-      
+
       // Include recent completed delegations if requested
       if (include_recent) {
         const allTasks = await memoryManager.listByType('task');
-        const recentCompleted = allTasks.filter((task: any) => 
+        const recentCompleted = allTasks.filter((task: any) =>
           task.frontmatter.delegation_status === 'completed' &&
           task.frontmatter.delegation_completed_at &&
           (Date.now() - new Date(task.frontmatter.delegation_completed_at).getTime()) < 24 * 60 * 60 * 1000
         );
         allDelegations.push(...recentCompleted);
       }
-      
+
       // Sort by status priority and time
       allDelegations.sort((a: any, b: any) => {
         const statusPriority = { 'running': 1, 'queued': 2, 'completed': 3, 'failed': 4, 'cancelled': 5 };
         const aPriority = statusPriority[a.frontmatter.delegation_status as keyof typeof statusPriority] || 6;
         const bPriority = statusPriority[b.frontmatter.delegation_status as keyof typeof statusPriority] || 6;
-        
+
         if (aPriority !== bPriority) return aPriority - bPriority;
-        
+
         // Same priority, sort by time (newest first)
         const aTime = new Date(a.frontmatter.delegation_started_at || 0).getTime();
         const bTime = new Date(b.frontmatter.delegation_started_at || 0).getTime();
         return bTime - aTime;
       });
-      
+
       // Limit results
       allDelegations = allDelegations.slice(0, max_results);
-      
+
       if (allDelegations.length === 0) {
         return { content: [{ type: "text", text: `ℹ️ **No active delegations found**\n\nNo tasks are currently delegated or recently completed.` }] };
       }
-      
+
       let response = `📊 **Active Delegations Overview**\n\n`;
       response += `**Total delegations:** ${allDelegations.length}\n\n`;
-      
+
       for (const task of allDelegations) {
         const statusIconMap = {
           'queued': '⏳',
@@ -259,23 +265,23 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
           'cancelled': '⏹️'
         } as const;
         const statusIcon = statusIconMap[task.frontmatter.delegation_status as keyof typeof statusIconMap] || '❓';
-        
+
         response += `${statusIcon} **${task.title}**\n`;
         response += `   • **ID:** ${task.id}\n`;
         response += `   • **Status:** ${task.frontmatter.delegation_status}\n`;
         response += `   • **Agent:** ${task.frontmatter.delegated_to || 'Unknown'}\n`;
-        
+
         if (task.frontmatter.delegation_started_at) {
           response += `   • **Started:** ${new Date(task.frontmatter.delegation_started_at).toLocaleString()}\n`;
         }
-        
+
         if (task.frontmatter.delegation_progress) {
           response += `   • **Progress:** ${task.frontmatter.delegation_progress}\n`;
         }
-        
+
         response += '\n';
       }
-      
+
       return { content: [{ type: "text", text: response }] };
     } catch (error: any) {
       return { content: [{ type: "text", text: `❌ **Error listing delegations:** ${error.message}` }] };
@@ -291,9 +297,9 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
   }, async ({ task_id }: { task_id: string }) => {
     try {
       await memoryManager.initializeProject();
-      
+
       const result = await (memoryManager as any).cancelDelegation(task_id);
-      
+
       if (result.success) {
         return { content: [{ type: "text", text: `✅ **Delegation cancelled successfully!**\n\nTask ${task_id} has been cancelled and returned to 'todo' status.` }] };
       } else {
@@ -323,27 +329,29 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
   }) => {
     try {
       const results: string[] = [];
-      
+
       // Get delegated tasks from memory
       await memoryManager.initializeProject();
-      const allTasks = await memoryManager.listByType('insight');
-      let delegatedTasks = allTasks.filter((task: any) => 
+
+      const allTasks = await memoryManager.listByType('task');
+
+      let delegatedTasks = allTasks.filter((task: any) =>
         task.frontmatter.assignee === 'agent' && task.frontmatter.delegated_to
       );
-      
+
       // Apply filters
       if (agent_type && agent_type !== 'all') {
         delegatedTasks = delegatedTasks.filter((task: any) => task.frontmatter.delegated_to === agent_type);
       }
-      
+
       if (task_filter) {
-        delegatedTasks = delegatedTasks.filter((task: any) => 
-          task.id.includes(task_filter) || 
+        delegatedTasks = delegatedTasks.filter((task: any) =>
+          task.id.includes(task_filter) ||
           task.frontmatter.feature_id === task_filter ||
           task.title.toLowerCase().includes(task_filter.toLowerCase())
         );
       }
-      
+
       // Task summary
       const summary = {
         total: delegatedTasks.length,
@@ -358,17 +366,17 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
           return acc;
         }, {} as Record<string, number>)
       };
-      
+
       results.push(`# Agent Task Monitoring Report\n`);
       results.push(`**Total Delegated Tasks:** ${summary.total}`);
       results.push(`**By Status:** ${Object.entries(summary.by_status).map(([k, v]) => `${k}: ${v}`).join(', ')}`);
       results.push(`**By Agent:** ${Object.entries(summary.by_agent).map(([k, v]) => `${k}: ${v}`).join(', ')}\n`);
-      
+
       // Recent tasks
       const recentTasks = delegatedTasks
         .sort((a: any, b: any) => new Date(b.frontmatter.delegated_at || 0).getTime() - new Date(a.frontmatter.delegated_at || 0).getTime())
         .slice(0, 10);
-        
+
       if (recentTasks.length > 0) {
         results.push(`## Recent Delegated Tasks\n`);
         for (const task of recentTasks) {
@@ -377,39 +385,39 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
           const delegatedAt = task.frontmatter.delegated_at;
           results.push(`- **${task.title}** (${task.id})`);
           results.push(`  - Agent: ${agent}, Status: ${status}`);
-          results.push(`  - Delegated: ${new Date(delegatedAt).toLocaleString()}`);
+          delegatedAt && results.push(`  - Delegated: ${new Date(delegatedAt).toLocaleString()}`);
         }
         results.push('');
       }
-      
+
       // Include logs if requested
       if (include_logs) {
         try {
-          const logCommand = agent_type === 'all' 
+          const logCommand = agent_type === 'all'
             ? `npx vibekit logs --lines ${log_lines || 50}`
             : `npx vibekit logs --agent ${agent_type} --lines ${log_lines || 50}`;
-          
+
           const logResult = await execAsync(logCommand);
           results.push(`## Recent Agent Logs\n\`\`\`\n${logResult.stdout}\n\`\`\``);
         } catch (error: any) {
           results.push(`## Recent Agent Logs\n*Failed to retrieve logs: ${error.message}*`);
         }
       }
-      
+
       // Include analytics if requested
       if (include_analytics) {
         try {
           const analyticsCommand = agent_type === 'all'
             ? `npx vibekit analytics --days 1`
             : `npx vibekit analytics --agent ${agent_type} --days 1`;
-          
+
           const analyticsResult = await execAsync(analyticsCommand);
           results.push(`## Agent Analytics\n\`\`\`\n${analyticsResult.stdout}\n\`\`\``);
         } catch (error: any) {
           results.push(`## Agent Analytics\n*Failed to retrieve analytics: ${error.message}*`);
         }
       }
-      
+
       return {
         content: [{
           type: "text",
@@ -444,38 +452,38 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
       if (debug_env) {
         process.env.VIBEKIT_DEBUG = 'true';
       }
-      
+
       const env = await checkAgentEnvironment();
       const results: string[] = [];
       let overallStatus = 'READY';
-      
+
       results.push('# Agent Environment Status Report\n');
-      
+
       // Enhanced environment validation section
       if (env.env_validation) {
         results.push('## Environment Variables Status\n');
-        
+
         if (env.env_validation.valid) {
           results.push('✅ **Environment Variables:** All required API keys are configured');
         } else {
           results.push('❌ **Environment Variables:** Missing required API keys');
           overallStatus = 'NEEDS_SETUP';
-          
+
           for (const issue of env.env_validation.issues) {
             results.push(`   - ${issue}`);
           }
         }
-        
+
         if (debug_env || detailed_report) {
           results.push('\n### Environment Variable Details:');
           for (const [key, configured] of Object.entries(env.env_validation.env_status)) {
             results.push(`   - ${key}: ${configured ? '✅ Configured' : '❌ Missing'}`);
           }
         }
-        
+
         results.push('');
       }
-      
+
       // Node.js check
       if (env.node_version) {
         const majorVersion = parseInt(env.node_version.replace('v', '').split('.')[0]);
@@ -489,7 +497,7 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
         results.push(`❌ **Node.js:** Not found or not accessible`);
         overallStatus = 'NEEDS_SETUP';
       }
-      
+
       // CLI availability
       if (env.cli_available) {
         results.push(`✅ **Agent CLI:** Available via npx vibekit`);
@@ -498,7 +506,7 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
         results.push(`   - Try: npm install -g vibekit-cli or check your npm/node setup`);
         overallStatus = 'NEEDS_SETUP';
       }
-      
+
       // Docker checks
       if (check_docker) {
         if (env.docker_available) {
@@ -514,21 +522,21 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
           overallStatus = 'NEEDS_SETUP';
         }
       }
-      
+
       results.push('\n## Agent Providers\n');
-      
+
       // Agent provider checks
       for (const [agent, status] of Object.entries(env.agent_status)) {
         if (status.configured) {
           results.push(`✅ **${agent}:** Configured`);
-          
+
                       if (check_models) {
               // VibeKit CLI uses default models - no selection available
               results.push(`   Models: Default (no selection available)`);
             }
         } else {
           results.push(`⚠️ **${agent}:** ${status.issues.join(', ')}`);
-          
+
           // Add specific setup instructions
           const config = getAgentProvider(agent as AgentProvider);
           if (config?.requires_api_key) {
@@ -536,17 +544,17 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
           }
         }
       }
-      
+
       // Enhanced API key details
       if (check_api_keys) {
         results.push('\n## API Key Configuration\n');
-        
+
         results.push('### Environment Variable Sources Checked:');
         results.push('- System environment variables (process.env)');
         results.push('- .env files in current directory and parent directories');
         results.push('- Shell profile files (~/.zshrc, ~/.bashrc)');
         results.push('');
-        
+
         const providers = getAvailableAgents();
         for (const provider of providers) {
           const config = getAgentProvider(provider);
@@ -555,14 +563,14 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
             const icon = envStatus ? '✅' : '❌';
             const status = envStatus ? 'configured' : 'missing';
             results.push(`${icon} **${provider}:** ${config.requires_api_key} ${status}`);
-            
+
             if (!envStatus) {
               results.push(`   - Add ${config.requires_api_key}="your-key-here" to .env file or shell profile`);
             }
           }
         }
       }
-      
+
       // Detailed diagnostics
       if (detailed_report) {
         results.push('\n## Detailed Diagnostics\n');
@@ -577,16 +585,16 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
             results.push(`  - Required env var: ${config.requires_api_key}`);
           }
         }
-        
+
         results.push('\n### Environment Detection:');
         results.push(`- Current working directory: ${process.cwd()}`);
         results.push(`- Node.js version: ${env.node_version || 'Not detected'}`);
         results.push(`- Platform: ${process.platform}`);
         results.push(`- Shell: ${process.env.SHELL || 'Unknown'}`);
       }
-      
+
       results.push(`\n## Overall Status: **${overallStatus}**\n`);
-      
+
       if (overallStatus === 'NEEDS_SETUP') {
         results.push('**🔧 Issues found! Use `setup_agent_environment` for guided setup.**');
         results.push('');
@@ -597,12 +605,12 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
       } else {
         results.push('**🎉 All systems ready for agent task delegation!**');
       }
-      
+
       // Reset debug flag
       if (debug_env) {
         delete process.env.VIBEKIT_DEBUG;
       }
-      
+
       return {
         content: [{
           type: "text",
@@ -630,29 +638,29 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
     format?: string;
   }) => {
     const instructions: string[] = [];
-    
+
     instructions.push('# Agent Delegation Environment Setup\n');
     instructions.push('Complete setup guide for agent task delegation capabilities.\n');
-    
+
     // Platform detection
     let detectedPlatform = platform;
     if (platform === 'auto') {
       const os = process.platform;
       detectedPlatform = os === 'darwin' ? 'macos' : os === 'win32' ? 'windows' : 'linux';
     }
-    
+
     instructions.push(`**Target Platform:** ${detectedPlatform}\n`);
-    
+
     // Node.js setup
     instructions.push('## 1. Node.js Requirements (18.0.0+)\n');
     instructions.push('Ensure Node.js 18.0.0+ is installed:\n');
-    
+
     if (format === 'shell') {
       instructions.push('```bash');
       instructions.push('# Check current version');
       instructions.push('node --version');
       instructions.push('');
-      
+
       switch (detectedPlatform) {
         case 'macos':
           instructions.push('# Install via Homebrew (recommended)');
@@ -679,19 +687,19 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
       instructions.push('- Required: 18.0.0 or higher');
       instructions.push('- Recommended: Use nvm for version management\n');
     }
-    
+
     // API Keys setup
     if (include_api_setup) {
       instructions.push('## 2. API Keys Configuration\n');
       instructions.push('Set up your agent service API keys:\n');
-      
+
       const agents = getAvailableAgents();
       for (const agent of agents) {
         const config = getAgentProvider(agent);
         if (config?.requires_api_key) {
           instructions.push(`### ${agent.charAt(0).toUpperCase() + agent.slice(1)}`);
           instructions.push(`Set the \`${config.requires_api_key}\` environment variable:\n`);
-          
+
           if (format === 'shell') {
             instructions.push('```bash');
             instructions.push(`export ${config.requires_api_key}="your-api-key-here"`);
@@ -711,12 +719,12 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
         }
       }
     }
-    
+
     // Docker setup
     if (include_docker) {
       instructions.push('## 3. Docker Setup (Optional - for sandbox isolation)\n');
       instructions.push('Install Docker for secure task execution:\n');
-      
+
       switch (detectedPlatform) {
         case 'macos':
           instructions.push('- Download Docker Desktop from [docker.com](https://docs.docker.com/desktop/install/mac-install/)');
@@ -740,7 +748,7 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
           instructions.push('- Ensure WSL2 is enabled');
           break;
       }
-      
+
       instructions.push('\nVerify installation:');
       if (format === 'shell') {
         instructions.push('```bash');
@@ -751,11 +759,11 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
         instructions.push('- Run `docker --version` and `docker ps`\n');
       }
     }
-    
+
     // Verification
     instructions.push('## 4. Verify Setup\n');
     instructions.push('Test your configuration:\n');
-    
+
     if (format === 'shell') {
       instructions.push('```bash');
       instructions.push('# Test agent CLI');
@@ -768,21 +776,21 @@ export function registerAgentDelegationTools({ server, memoryManager, execAsync 
       instructions.push('- Test CLI: `npx vibekit --version`');
       instructions.push('- Run simple test: `npx vibekit claude "Hello, test task"`\n');
     }
-    
+
     // Next steps
     instructions.push('## 5. Next Steps\n');
     instructions.push('- Use `check_agent_environment` to verify configuration');
     instructions.push('- Start delegating tasks with `delegate_to_agent`');
     instructions.push('- Monitor progress with `monitor_agent_tasks`');
     instructions.push('- Create tasks with `create_task`\n');
-    
+
     // Quick troubleshooting
     instructions.push('## Troubleshooting\n');
     instructions.push('**Command not found:** Check PATH and reinstall Node.js');
     instructions.push('**Permission errors:** Use nvm or check user permissions');
     instructions.push('**Docker issues:** Ensure Docker daemon is running');
     instructions.push('**API errors:** Verify API keys are correctly set\n');
-    
+
     return {
       content: [{
         type: "text",

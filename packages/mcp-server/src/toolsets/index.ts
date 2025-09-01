@@ -12,6 +12,7 @@ import { registerCodeInvestigationTools } from "./code-investigation";
 import { registerMemoryTools } from "./memory";
 import { registerTaskManagementTools } from "./task-management";
 import { registerAgentDelegationTools } from "./agent-delegation";
+import { registerDebuggingTools } from "./debugging";
 
 /**
  * Register all toolsets with the MCP server
@@ -19,22 +20,23 @@ import { registerAgentDelegationTools } from "./agent-delegation";
 export function registerAllToolsets(context: ToolsetContext) {
   // Development and project management
   registerCliTools(context);
-  
+
   // API development and testing
   registerApiValidationTools(context);
-  
+
   // Research and documentation
   registerDocumentationTools(context);
   registerGitHubTools(context);
-  
+
   // Code analysis and investigation
   registerFileAnalysisTools(context);
   registerCodeInvestigationTools(context);
-  
+  registerDebuggingTools(context);
+
   // Knowledge and task management
   registerMemoryTools(context);
   registerTaskManagementTools(context);
-  
+
   // Agent delegation and automation
   registerAgentDelegationTools(context);
 }
@@ -47,6 +49,7 @@ export {
   registerGitHubTools,
   registerFileAnalysisTools,
   registerCodeInvestigationTools,
+  registerDebuggingTools,
   registerMemoryTools,
   registerTaskManagementTools,
   registerAgentDelegationTools

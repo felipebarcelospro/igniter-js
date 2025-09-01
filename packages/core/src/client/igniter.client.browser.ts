@@ -110,11 +110,27 @@ function createActionFetcher<TAction extends IgniterAction<any, any, any, any, a
     }
 
     // Prepare request options
+    const finalHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...options?.headers,
+    };
+
+    if (options?.cookies) {
+      const cookieString = Object.entries(options.cookies)
+        .map(([key, value]) => `${key}=${encodeURIComponent(value as string)}`)
+        .join('; ');
+
+      if (cookieString) {
+        finalHeaders['Cookie'] = finalHeaders['Cookie']
+          ? `${finalHeaders['Cookie']}; ${cookieString}`
+          : cookieString;
+      }
+    }
+
     const requestOptions: RequestInit = {
       method: action.method,
-      headers: {
-        "Content-Type": "application/json",
-      }
+      headers: finalHeaders,
+      credentials: options?.credentials,
     };
 
     // Add body for non-GET requests

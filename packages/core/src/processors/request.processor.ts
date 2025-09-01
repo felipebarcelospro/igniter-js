@@ -21,9 +21,9 @@ import { getHeadersSafe } from "../adapters/nextjs";
 import { z } from "zod";
 import { RouteResolverProcessor } from "./route-resolver.processor";
 import {
-  ContextBuilderProcessor,
   type ProcessedContext,
 } from "./context-builder.processor";
+import { ContextBuilderProcessor } from "./context-builder.processor";
 import { MiddlewareExecutorProcessor } from "./middleware-executor.processor";
 import {
   TelemetryManagerProcessor,
@@ -694,13 +694,14 @@ export class RequestProcessor<
    */
   async call<
     TControllerKey extends keyof TConfig["controllers"],
-    TActionKey extends keyof TConfig["controllers"][TControllerKey]["actions"],
+    TActionKey extends keyof TConfig["controllers"][TActionKey]["actions"],
     TAction extends
       TConfig["controllers"][TControllerKey]["actions"][TActionKey],
   >(
     controllerKey: TControllerKey,
     actionKey: TActionKey,
     input: TAction["$Infer"]["$Input"],
+    options?: { headers?: Record<string, string>, cookies?: Record<string, string>, credentials?: RequestCredentials },
   ): Promise<TAction["$Infer"]["$Output"]> {
     // Get the controller
     const controller = this.config.controllers[
@@ -739,7 +740,7 @@ export class RequestProcessor<
       input: Record<string, any>,
     ) {
       let url = parseURL(baseURL, basePATH, controllerPath, actionPath);
-      
+
       // Replace path parameters in the URL
       if (input?.params) {
         for (const [key, value] of Object.entries(input.params)) {
@@ -770,17 +771,34 @@ export class RequestProcessor<
     );
 
     // Safely try to get headers from next/headers if we're in a RSC
-    const headers = await getHeadersSafe();
+    const rscHeaders = await getHeadersSafe();
 
     // Prepare context with the input data
     // Fix: Ensure headers is a plain object, not Headers instance, to avoid TypeError
     const plainHeaders: Record<string, string> = {};
-    if (headers && typeof headers.forEach === "function") {
-      headers.forEach((value: string, key: string) => {
+    if (rscHeaders && typeof rscHeaders.forEach === "function") {
+      rscHeaders.forEach((value: string, key: string) => {
         plainHeaders[key] = value;
       });
-    } else if (headers && typeof headers === "object") {
-      Object.assign(plainHeaders, headers);
+    } else if (rscHeaders && typeof rscHeaders === "object") {
+      Object.assign(plainHeaders, rscHeaders);
+    }
+
+    // Merge custom headers from input
+    if (input?.headers) {
+      Object.assign(plainHeaders, input.headers);
+    }
+
+    // Handle cookies from input
+    if (input?.cookies) {
+      const cookieString = Object.entries(input.cookies)
+        .map(([key, value]) => `${key}=${encodeURIComponent(value as string)}`)
+        .join('; ');
+      if (cookieString) {
+        plainHeaders['Cookie'] = plainHeaders['Cookie']
+          ? `${plainHeaders['Cookie']}; ${cookieString}`
+          : cookieString;
+      }
     }
 
     // Fix: Only include body for methods that allow it (not GET or HEAD)
@@ -793,6 +811,7 @@ export class RequestProcessor<
         ...plainHeaders,
         "Content-Type": "application/json",
       },
+      credentials: input?.credentials,
       ...(hasBody ? { body: JSON.stringify(input.body) } : {}),
     };
 

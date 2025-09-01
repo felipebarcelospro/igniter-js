@@ -30,12 +30,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased dark`}
       >
-        <IgniterProvider
-          options={{
-            enableSSE: true,
-            debug: true,
-          }}
-        >
+        <IgniterProvider>
           {children}
         </IgniterProvider>
       </body>

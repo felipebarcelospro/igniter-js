@@ -10,6 +10,15 @@
         "GOOGLE_API_KEY": "",
         "GITHUB_TOKEN": ""
       }
+    },
+    "browser": {
+      "command": "npx @playwright/mcp@latest",
+      "env": {},
+      "args": []
+    },
+    "shadcn": {
+      "command": "npx",
+      "args": ["shadcn@latest", "mcp"]
     }
   }
 }

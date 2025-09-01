@@ -18,27 +18,9 @@ import { generateQueryKey } from "../utils/queryKey";
 import { IgniterConsoleLogger } from "../services/logger.service";
 import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 import { mergeQueryParams } from "../utils/deepMerge";
+import { normalizeResponseData } from "../utils/response";
 
 type InferIgniterResponse<T> = T extends { data: infer TData, error: infer TError } ? { data: TData | null, error: TError | null } : { data: null, error: null };
-
-/**
- * Normalizes response data to handle potential double-wrapping
- * If the response has the structure { data: {...}, error: null }, extracts the inner data
- * This fixes the issue where TypeScript expects data.url but receives data.data.url
- */
-function normalizeResponseData<T>(response: any): { data: T | null; error: any | null } {
-  // Check if response has the double-wrapped structure
-  if (response && typeof response === 'object' && 'data' in response && 'error' in response) {
-    // If the inner data also has data/error structure, it's double-wrapped
-    if (response.data && typeof response.data === 'object' && 'data' in response.data && 'error' in response.data) {
-      return response.data;
-    }
-    // Return the response as is if it has the correct structure
-    return response;
-  }
-  // If response doesn't have the expected structure, wrap it
-  return { data: response, error: null };
-}
 
 /**
  * Creates a useQueryClient hook for a specific router
@@ -77,7 +59,7 @@ function normalizeInputParams<T extends { query?: any, params?: any, body?: any 
   if (!input) {
     return { query: {}, params: {}, body: {} } as T;
   }
-  
+
   return {
     ...input,
     query: input.query || {},
@@ -130,9 +112,9 @@ export const createUseQuery = <
         params: options?.params,
       } as TAction["$Infer"]["$Input"]);
     }, [options?.query, options?.params]);
-    
+
     const lastUsedParamsRef = useRef<TAction["$Infer"]["$Input"]>(initialParams);
-    
+
     // Update lastUsedParamsRef reactively when options change
     useEffect(() => {
       const newParams = normalizeInputParams({
@@ -216,7 +198,7 @@ export const createUseQuery = <
 
     // Register query with reactive query key that updates when parameters change - usar queryKey estável
     const currentQueryKey = useMemo(() => getQueryKey(lastUsedParamsRef.current), [getQueryKey, stableOptions.query, stableOptions.params]);
-    
+
     useEffect(() => {
       register(currentQueryKey, refetch);
       return () => unregister(currentQueryKey, refetch);
@@ -257,7 +239,7 @@ export const createUseQuery = <
 
     // Initial fetch - usar ref para evitar loop infinito
     const hasExecutedRef = useRef(false);
-    
+
     useEffect(() => {
         if (stableOptions.enabled !== false && optionsRef.current?.refetchOnMount !== false && !hasExecutedRef.current) {
             hasExecutedRef.current = true;
@@ -330,7 +312,7 @@ export const createUseMutation = <
          query: optionsRef.current?.query || {},
          params: optionsRef.current?.params || {},
        } as TAction["$Infer"]["$Input"];
-       
+
        const mergedParams = mergeQueryParams(baseParams, params);
       lastUsedParamsRef.current = mergedParams;
 

@@ -2,7 +2,7 @@ import { IgniterCookie } from "../services/cookie.service";
 import { IgniterResponseProcessor } from "./response.processor";
 import { BodyParserProcessor } from "./body-parser.processor";
 import type { RequestProcessorConfig } from "../types/request.processor";
-import { IgniterLogLevel, type IgniterLogger, type IgniterRouter } from "../types";
+import { type IgniterLogger, type IgniterRouter } from "../types";
 import { IgniterConsoleLogger } from "../services/logger.service";
 import type { IgniterPluginManager } from "../services/plugin.service";
 import { resolveLogLevel, createLoggerContext } from "../utils/logger";
@@ -25,7 +25,7 @@ export interface ProcessedRequest extends Omit<Request, 'path' | 'method' | 'par
  */
 export interface ProcessedContext<TContext = any, TPlugins = any> {
   request: ProcessedRequest;
-  response: IgniterResponseProcessor<TContext, unknown>;
+  response: IgniterResponseProcessor<TContext>;
   $context: TContext;
   $plugins: TPlugins;
 }

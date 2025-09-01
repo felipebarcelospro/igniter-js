@@ -1,13 +1,13 @@
-import type { IgniterResponseProcessor } from "../processors/response.processor";
 import type { HTTPMethod, IgniterCookies, IgniterHeaders } from "./action.interface";
 import type { UnionToIntersection } from "./utils.interface";
 import type { StandardSchemaV1 } from "./schema.interface";
 import type { NextFunction } from "./next.interface";
+import { IgniterResponseProcessor } from "@/processors";
 
 /**
  * Represents the context for an Igniter procedure.
  * @template TActionContext - The type of the custom action context.
- * 
+ *
  * @typedef {Object} IgniterProcedureContext
  * @property {Object} request - The HTTP request information.
  * @property {string} request.path - The request path.
@@ -19,7 +19,7 @@ import type { NextFunction } from "./next.interface";
  * @property {IgniterCookies} request.cookies - The request cookies.
  * @property {TActionContext} context - Custom context passed to the procedure.
  * @property {IgniterResponseProcessor} response - The response processor for handling the procedure output.
- * 
+ *
  * @since 1.0.0
  */
 export type IgniterProcedureContext<TActionContext> = {
@@ -33,7 +33,7 @@ export type IgniterProcedureContext<TActionContext> = {
     cookies: IgniterCookies;
   }
   context: TActionContext;
-  response: IgniterResponseProcessor<TActionContext, unknown>;
+  response: IgniterResponseProcessor<TActionContext>;
   /**
    * Next function for continuing to the next middleware/procedure
    * or handling errors and custom results
@@ -46,7 +46,7 @@ export type IgniterProcedureContext<TActionContext> = {
  * @template TActionContext - The type of the action context.
  * @template TOptions - The type of options passed to the procedure handler.
  * @template TOutput - The type of output returned by the procedure handler.
- * 
+ *
  * @property name - The name of the procedure.
  * @property handler - The function that handles the procedure execution.
  * Takes options and a procedure context as parameters and returns a promise
@@ -68,10 +68,10 @@ export type IgniterProcedure<
 /**
  * Enhanced procedure context that provides better type inference and DX.
  * This is used by the new Builder API and factory functions.
- * 
+ *
  * @template TActionContext - The type of the custom action context
  * @template TOptions - The type of options (validated if schema provided)
- * 
+ *
  * @example
  * ```typescript
  * // Basic usage
@@ -79,7 +79,7 @@ export type IgniterProcedure<
  *   ctx.context.logger.info('Request received', { path: ctx.request.path });
  *   return { requestId: crypto.randomUUID() };
  * });
- * 
+ *
  * // With typed options
  * const authProcedure = igniter.procedure()
  *   .options(z.object({ required: z.boolean() }))
@@ -110,7 +110,7 @@ export type EnhancedProcedureContext<
   /** Application context with injected services and data */
   context: TActionContext;
   /** Type-safe response processor for early returns */
-  response: IgniterResponseProcessor<TActionContext, unknown>;
+  response: IgniterResponseProcessor<TActionContext>;
   /** Validated options (if schema provided) */
   options: TOptions;
   /**
@@ -123,11 +123,11 @@ export type EnhancedProcedureContext<
 /**
  * Handler function signature for enhanced procedures.
  * Provides better ergonomics by destructuring commonly used properties.
- * 
+ *
  * @template TActionContext - The application context type
  * @template TOptions - The options type (validated if schema provided)
  * @template TOutput - The return type of the procedure
- * 
+ *
  * @example
  * ```typescript
  * const rateLimitHandler: EnhancedProcedureHandler<
@@ -137,11 +137,11 @@ export type EnhancedProcedureContext<
  * > = async ({ options, request, context }) => {
  *   const key = `rate_limit:${getClientIP(request)}`;
  *   const current = await context.store.increment(key, { ttl: options.windowMs });
- *   
+ *
  *   if (current > options.max) {
  *     throw new Error('Rate limit exceeded');
  *   }
- *   
+ *
  *   return { rateLimit: { remaining: options.max - current } };
  * };
  * ```
@@ -155,11 +155,11 @@ export type EnhancedProcedureHandler<
 /**
  * Configuration for building enhanced procedures with the Builder API.
  * Supports optional schema validation, custom naming, and enhanced type inference.
- * 
+ *
  * @template TActionContext - The application context type
  * @template TOptionsSchema - The options validation schema (optional)
  * @template TOutput - The return type of the procedure
- * 
+ *
  * @example
  * ```typescript
  * // Basic procedure without options
@@ -167,7 +167,7 @@ export type EnhancedProcedureHandler<
  *   name: 'timestamp',
  *   handler: async () => ({ timestamp: Date.now() })
  * };
- * 
+ *
  * // Procedure with schema validation
  * const cacheProcedure: EnhancedProcedureConfig<
  *   AppContext,
@@ -190,26 +190,26 @@ export type EnhancedProcedureConfig<
   TOptionsSchema extends StandardSchemaV1 | undefined = undefined,
   TOutput = unknown
 > = {
-  /** 
+  /**
    * Human-readable name for the procedure (used in debugging and introspection)
    * @example 'auth', 'rateLimit', 'validateInput'
    */
   name?: string;
-  
-  /** 
+
+  /**
    * Optional schema for validating procedure options.
    * If provided, options will be validated and typed automatically.
    * @example z.object({ required: z.boolean(), roles: z.array(z.string()) })
    */
   optionsSchema?: TOptionsSchema;
-  
-  /** 
+
+  /**
    * The procedure handler function.
    * Receives enhanced context with destructured properties for better DX.
    */
   handler: EnhancedProcedureHandler<
     TActionContext,
-    TOptionsSchema extends StandardSchemaV1 
+    TOptionsSchema extends StandardSchemaV1
       ? StandardSchemaV1.InferInput<TOptionsSchema>
       : undefined,
     TOutput
@@ -219,9 +219,9 @@ export type EnhancedProcedureConfig<
 /**
  * Builder interface for creating enhanced procedures with fluent API.
  * Provides step-by-step configuration with full type safety and inference.
- * 
+ *
  * @template TActionContext - The application context type
- * 
+ *
  * @example
  * ```typescript
  * // Step-by-step building
@@ -234,19 +234,19 @@ export type EnhancedProcedureConfig<
  *   .handler(async ({ options, request, context }) => {
  *     // Full type safety with inferred option types
  *     const token = request.headers.get('authorization');
- *     
+ *
  *     if (!token && options.required) {
  *       throw new Error('Authentication required');
  *     }
- *     
+ *
  *     const user = token ? await verifyToken(token) : null;
- *     
+ *
  *     if (options.roles && user && !hasAnyRole(user, options.roles)) {
  *       throw new Error('Insufficient permissions');
  *     }
- *     
- *     return { 
- *       auth: { 
+ *
+ *     return {
+ *       auth: {
  *         user,
  *         hasRole: (role: string) => user?.roles.includes(role) ?? false,
  *         requireRole: (role: string) => {
@@ -254,7 +254,7 @@ export type EnhancedProcedureConfig<
  *             throw new Error(`Role '${role}' required`);
  *           }
  *         }
- *       } 
+ *       }
  *     };
  *   });
  * ```
@@ -263,10 +263,10 @@ export interface EnhancedProcedureBuilder<TActionContext> {
   /**
    * Set a human-readable name for the procedure.
    * Useful for debugging, introspection, and error messages.
-   * 
+   *
    * @param name - The procedure name
    * @returns Builder with name configured
-   * 
+   *
    * @example
    * ```typescript
    * const procedure = igniter.procedure()
@@ -282,10 +282,10 @@ export interface EnhancedProcedureBuilder<TActionContext> {
    * Configure options schema for validation and type inference.
    * The schema will be used to validate options at runtime and provide
    * full TypeScript inference in the handler.
-   * 
+   *
    * @param schema - Zod or compatible schema for options validation
    * @returns Builder with options schema configured
-   * 
+   *
    * @example
    * ```typescript
    * const procedure = igniter.procedure()
@@ -307,19 +307,19 @@ export interface EnhancedProcedureBuilder<TActionContext> {
   /**
    * Define the procedure handler with enhanced context.
    * This is the final step in the builder chain.
-   * 
+   *
    * @param handler - The procedure implementation
    * @returns Configured procedure ready for use
-   * 
+   *
    * @example
    * ```typescript
    * const loggerProcedure = igniter.procedure()
    *   .handler(async ({ request, context }) => {
    *     const requestId = crypto.randomUUID();
-   *     context.logger.info('Request started', { 
-   *       requestId, 
-   *       method: request.method, 
-   *       path: request.path 
+   *     context.logger.info('Request started', {
+   *       requestId,
+   *       method: request.method,
+   *       path: request.path
    *     });
    *     return { requestId };
    *   });
@@ -337,7 +337,7 @@ export interface EnhancedProcedureBuilder<TActionContext> {
 export interface EnhancedProcedureBuilderWithName<TActionContext, TName extends string> {
   /**
    * Configure options schema for validation and type inference.
-   * 
+   *
    * @param schema - Zod or compatible schema for options validation
    * @returns Builder with both name and options configured
    */
@@ -347,7 +347,7 @@ export interface EnhancedProcedureBuilderWithName<TActionContext, TName extends 
 
   /**
    * Define the procedure handler (final step).
-   * 
+   *
    * @param handler - The procedure implementation
    * @returns Configured procedure with name
    */
@@ -363,7 +363,7 @@ export interface EnhancedProcedureBuilderWithName<TActionContext, TName extends 
 export interface EnhancedProcedureBuilderWithOptions<TActionContext, TOptionsSchema extends StandardSchemaV1> {
   /**
    * Set a human-readable name for the procedure.
-   * 
+   *
    * @param name - The procedure name
    * @returns Builder with both options and name configured
    */
@@ -373,19 +373,19 @@ export interface EnhancedProcedureBuilderWithOptions<TActionContext, TOptionsSch
 
   /**
    * Define the procedure handler with typed options (final step).
-   * 
+   *
    * @param handler - The procedure implementation with typed options
    * @returns Configured procedure with options validation
    */
   handler<TOutput>(
     handler: EnhancedProcedureHandler<
-      TActionContext, 
-      StandardSchemaV1.InferInput<TOptionsSchema>, 
+      TActionContext,
+      StandardSchemaV1.InferInput<TOptionsSchema>,
       TOutput
     >
   ): IgniterProcedure<
-    TActionContext, 
-    StandardSchemaV1.InferInput<TOptionsSchema>, 
+    TActionContext,
+    StandardSchemaV1.InferInput<TOptionsSchema>,
     TOutput
   >;
 }
@@ -395,25 +395,25 @@ export interface EnhancedProcedureBuilderWithOptions<TActionContext, TOptionsSch
  * This is the most complete builder state before the handler.
  */
 export interface EnhancedProcedureBuilderWithNameAndOptions<
-  TActionContext, 
-  TName extends string, 
+  TActionContext,
+  TName extends string,
   TOptionsSchema extends StandardSchemaV1
 > {
   /**
    * Define the procedure handler with typed options (final step).
-   * 
+   *
    * @param handler - The procedure implementation with typed options
    * @returns Configured procedure with name and options validation
    */
   handler<TOutput>(
     handler: EnhancedProcedureHandler<
-      TActionContext, 
-      StandardSchemaV1.InferInput<TOptionsSchema>, 
+      TActionContext,
+      StandardSchemaV1.InferInput<TOptionsSchema>,
       TOutput
     >
   ): IgniterProcedure<
-    TActionContext, 
-    StandardSchemaV1.InferInput<TOptionsSchema>, 
+    TActionContext,
+    StandardSchemaV1.InferInput<TOptionsSchema>,
     TOutput
   > & { name: TName };
 }
@@ -421,9 +421,9 @@ export interface EnhancedProcedureBuilderWithNameAndOptions<
 /**
  * Factory functions for creating procedures with different patterns.
  * Provides shortcuts for common use cases while maintaining full type safety.
- * 
+ *
  * @template TActionContext - The application context type
- * 
+ *
  * @example
  * ```typescript
  * // Simple procedure without options
@@ -431,7 +431,7 @@ export interface EnhancedProcedureBuilderWithNameAndOptions<
  *   context.logger.info('Timestamp requested');
  *   return { timestamp: Date.now() };
  * });
- * 
+ *
  * // Procedure with schema validation
  * const cache = factories.withSchema({
  *   optionsSchema: z.object({ key: z.string(), ttl: z.number().optional() }),
@@ -440,7 +440,7 @@ export interface EnhancedProcedureBuilderWithNameAndOptions<
  *     set: (value: any) => context.store.set(options.key, value, { ttl: options.ttl })
  *   })
  * });
- * 
+ *
  * // Procedure from configuration object
  * const rateLimit = factories.fromConfig({
  *   name: 'rate-limiter',
@@ -452,37 +452,37 @@ export interface EnhancedProcedureBuilderWithNameAndOptions<
  *   }),
  *   handler: async ({ options, request, context, response }) => {
  *     // Generate rate limit key
- *     const key = options.keyGenerator 
+ *     const key = options.keyGenerator
  *       ? options.keyGenerator(request)
  *       : `rate_limit:${getClientIP(request)}`;
- *     
+ *
  *     // Check current usage
- *     const current = await context.store.increment(key, { 
- *       ttl: options.windowMs 
+ *     const current = await context.store.increment(key, {
+ *       ttl: options.windowMs
  *     });
- *     
+ *
  *     // Enforce limit
  *     if (current > options.max) {
  *       return response.tooManyRequests(
  *         options.message || `Rate limit exceeded. Max ${options.max} requests per ${options.windowMs}ms.`
  *       );
  *     }
- *     
- *     return { 
- *       rateLimit: { 
- *         current, 
- *         max: options.max, 
+ *
+ *     return {
+ *       rateLimit: {
+ *         current,
+ *         max: options.max,
  *         remaining: options.max - current,
  *         resetTime: new Date(Date.now() + options.windowMs)
- *       } 
+ *       }
  *     };
  *   }
  * });
- * 
+ *
  * // Usage with custom configuration
  * const apiEndpoint = igniter.query({
- *   use: [rateLimitProcedure({ 
- *     max: 50, 
+ *   use: [rateLimitProcedure({
+ *     max: 50,
  *     windowMs: 30000,
  *     keyGenerator: (req) => `api:${getUserId(req)}:endpoint`
  *   })],
@@ -498,21 +498,21 @@ export interface EnhancedProcedureFactories<TActionContext> {
   /**
    * Create a simple procedure without options or complex configuration.
    * Perfect for basic middleware like request logging, timestamp injection, etc.
-   * 
+   *
    * @param handler - Simple handler function without options
    * @returns Configured procedure
-   * 
+   *
    * @example
    * ```typescript
    * const requestLogger = igniter.procedure.simple(async ({ request, context }) => {
    *   const start = performance.now();
-   *   context.logger.info('Request started', { 
-   *     method: request.method, 
+   *   context.logger.info('Request started', {
+   *     method: request.method,
    *     path: request.path,
    *     userAgent: request.headers.get('user-agent')
    *   });
-   *   
-   *   return { 
+   *
+   *   return {
    *     timing: {
    *       start,
    *       logDuration: () => {
@@ -522,7 +522,7 @@ export interface EnhancedProcedureFactories<TActionContext> {
    *     }
    *   };
    * });
-   * 
+   *
    * // Usage in actions
    * const getUser = igniter.query({
    *   path: '/users/:id',
@@ -543,10 +543,10 @@ export interface EnhancedProcedureFactories<TActionContext> {
   /**
    * Create a procedure with schema validation for options.
    * Provides automatic validation and type inference for procedure options.
-   * 
+   *
    * @param config - Configuration with schema and handler
    * @returns Configured procedure with validation
-   * 
+   *
    * @example
    * ```typescript
    * const authProcedure = igniter.procedure.withSchema({
@@ -557,34 +557,34 @@ export interface EnhancedProcedureFactories<TActionContext> {
    *   }),
    *   handler: async ({ options, request, context, response }) => {
    *     const token = request.headers.get('authorization');
-   *     
+   *
    *     // Handle guest access
    *     if (!token && options.allowGuest && !options.required) {
    *       return { auth: { user: null, isGuest: true } };
    *     }
-   *     
+   *
    *     // Require authentication
    *     if (!token && options.required) {
    *       return response.unauthorized('Authentication required');
    *     }
-   *     
+   *
    *     const user = await verifyToken(token);
-   *     
+   *
    *     // Check role requirements
    *     if (options.roles && !options.roles.some(role => user.roles.includes(role))) {
    *       return response.forbidden('Insufficient permissions');
    *     }
-   *     
-   *     return { 
-   *       auth: { 
-   *         user, 
+   *
+   *     return {
+   *       auth: {
+   *         user,
    *         isGuest: false,
    *         hasRole: (role: string) => user.roles.includes(role)
-   *       } 
+   *       }
    *     };
    *   }
    * });
-   * 
+   *
    * // Usage with typed options
    * const adminAction = igniter.query({
    *   use: [authProcedure({ required: true, roles: ['admin'] })],
@@ -615,10 +615,10 @@ export interface EnhancedProcedureFactories<TActionContext> {
   /**
    * Create a procedure from a complete configuration object.
    * Most flexible option supporting all features: naming, schema validation, etc.
-   * 
+   *
    * @param config - Complete procedure configuration
    * @returns Configured procedure
-   * 
+   *
    * @example
    * ```typescript
    * const rateLimitProcedure = igniter.procedure.fromConfig({
@@ -631,37 +631,37 @@ export interface EnhancedProcedureFactories<TActionContext> {
    *   }),
    *   handler: async ({ options, request, context, response }) => {
    *     // Generate rate limit key
-   *     const key = options.keyGenerator 
+   *     const key = options.keyGenerator
    *       ? options.keyGenerator(request)
    *       : `rate_limit:${getClientIP(request)}`;
-   *     
+   *
    *     // Check current usage
-   *     const current = await context.store.increment(key, { 
-   *       ttl: options.windowMs 
+   *     const current = await context.store.increment(key, {
+   *       ttl: options.windowMs
    *     });
-   *     
+   *
    *     // Enforce limit
    *     if (current > options.max) {
    *       return response.tooManyRequests(
    *         options.message || `Rate limit exceeded. Max ${options.max} requests per ${options.windowMs}ms.`
    *       );
    *     }
-   *     
-   *     return { 
-   *       rateLimit: { 
-   *         current, 
-   *         max: options.max, 
+   *
+   *     return {
+   *       rateLimit: {
+   *         current,
+   *         max: options.max,
    *         remaining: options.max - current,
    *         resetTime: new Date(Date.now() + options.windowMs)
-   *       } 
+   *       }
    *     };
    *   }
    * });
-   * 
+   *
    * // Usage with custom configuration
    * const apiEndpoint = igniter.query({
-   *   use: [rateLimitProcedure({ 
-   *     max: 50, 
+   *   use: [rateLimitProcedure({
+   *     max: 50,
    *     windowMs: 30000,
    *     keyGenerator: (req) => `api:${getUserId(req)}:endpoint`
    *   })],
@@ -677,7 +677,7 @@ export interface EnhancedProcedureFactories<TActionContext> {
     config: EnhancedProcedureConfig<TActionContext, TOptionsSchema, TOutput>
   ): IgniterProcedure<
     TActionContext,
-    TOptionsSchema extends StandardSchemaV1 
+    TOptionsSchema extends StandardSchemaV1
       ? StandardSchemaV1.InferInput<TOptionsSchema>
       : undefined,
     TOutput
@@ -695,10 +695,10 @@ type ExtractProcedureOutput<T> = T extends IgniterProcedure<any, any, infer TOut
 
 /**
  * Infers the procedure context type from an array of IgniterProcedure instances.
- * 
+ *
  * @typeParam TActionProcedures - An array of IgniterProcedure instances with generic types for input, output, and context
  * @returns A union-to-intersection type of the output types of all procedures
- * 
+ *
  * @example
  * ```typescript
  * type Procedures = [
@@ -708,7 +708,7 @@ type ExtractProcedureOutput<T> = T extends IgniterProcedure<any, any, infer TOut
  * type Context = InferProcedureContext<Procedures> // { user: User } & { requestId: string }
  * ```
  */
-export type InferProcedureContext<TActionProcedures extends readonly IgniterProcedure<any, any, any>[]> = 
+export type InferProcedureContext<TActionProcedures extends readonly IgniterProcedure<any, any, any>[]> =
   TActionProcedures extends readonly []
     ? {}
     : UnionToIntersection<
@@ -724,7 +724,7 @@ export type InferProcedureContext<TActionProcedures extends readonly IgniterProc
 /**
  * Infers the context type from an array of IgniterProcedure instances.
  */
-export type InferActionProcedureContext<TActionProcedures extends readonly IgniterProcedure<any, any, any>[]> = 
+export type InferActionProcedureContext<TActionProcedures extends readonly IgniterProcedure<any, any, any>[]> =
 TActionProcedures extends readonly []
   ? {}
   : UnionToIntersection<

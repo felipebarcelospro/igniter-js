@@ -1,12 +1,12 @@
 import { FileSystemService } from './fs';
 import { MdxParser } from './parser';
 import * as path from 'path';
-import type { 
-  MemoryItem, 
-  MemoryFrontmatter, 
-  MemoryType, 
-  SearchQuery, 
-  SearchResult, 
+import type {
+  MemoryItem,
+  MemoryFrontmatter,
+  MemoryType,
+  SearchQuery,
+  SearchResult,
   SearchIndex,
   TaskStatus,
   TaskPriority
@@ -64,6 +64,8 @@ export class MemoryManager {
       relationships: memory.frontmatter?.relationships,
       metadata: memory.frontmatter?.metadata,
       sensitive: memory.frontmatter?.sensitive,
+      execution_order: memory.frontmatter?.execution_order ?? 0,
+      reordered_at: nowIso
     };
 
     const item: MemoryItem = {
@@ -94,14 +96,14 @@ export class MemoryManager {
   /** Lists all memories of a given type. */
   async listByType(type: MemoryType): Promise<MemoryItem[]> {
     await this.initializeProject();
-    
+
     // Use cached index if available for better performance
     if (this.index && this.index.typeIndex.has(type)) {
       const ids = this.index.typeIndex.get(type)!;
       return Array.from(ids).map(id => this.index!.memories.get(id)!).filter(Boolean);
     }
-    
-    const dir = this.fs.getMemoryTypeDir(this.projectRoot, mapTypeToDir(type));
+
+    const dir = this.fs.getMemoryTypeDir(this.projectRoot, this.getHierarchicalPath(type, {} as any));
     if (!(await this.fs.pathExists(dir))) return [];
     const files = await this.fs.listFiles(dir, { ext: '.mdx' });
     const items: MemoryItem[] = [];
@@ -135,42 +137,42 @@ export class MemoryManager {
     const filePath = this.fs.getMemoryFilePath(this.projectRoot, mapTypeToDir(memory.type), memory.id);
     await this.fs.writeFileAtomic(filePath, mdx);
     await this.updateSearchIndex(updated);
-    
+
     // Update task index if this is a task-related memory
     if (TASK_MANAGEMENT_TYPES.includes(memory.type) && this.taskIndex) {
       this.taskIndex.set(memory.id, updated);
     }
-    
+
     // Clear delegation cache if feature_id changed
     if (memory.frontmatter?.feature_id && this.delegationCache) {
       this.delegationCache.delete(memory.frontmatter.feature_id);
     }
-    
+
     return filePath;
   }
 
   /** Deletes a memory file. */
   async delete(type: MemoryType, id: string): Promise<void> {
     await this.initializeProject();
-    
+
     // Get the memory before deletion for cache cleanup
     const existing = await this.getById(type, id);
-    
+
     const filePath = this.fs.getMemoryFilePath(this.projectRoot, mapTypeToDir(type), id);
     await this.fs.deleteFile(filePath);
-    
+
     if (this.index) {
       this.index.memories.delete(id);
       for (const set of this.index.contentIndex.values()) set.delete(id);
       for (const set of this.index.tagIndex.values()) set.delete(id);
       this.index.typeIndex.get(type)?.delete(id);
     }
-    
+
     // Update task index
     if (TASK_MANAGEMENT_TYPES.includes(type) && this.taskIndex) {
       this.taskIndex.delete(id);
     }
-    
+
     // Clear delegation cache if necessary
     if (existing?.frontmatter.feature_id && this.delegationCache) {
       this.delegationCache.delete(existing.frontmatter.feature_id);
@@ -180,21 +182,21 @@ export class MemoryManager {
   /** Enhanced content search with optimized indexing and task-specific filtering. */
   async searchByContent(query: SearchQuery): Promise<SearchResult[]> {
     await this.initializeProject();
-    
+
     // Build index if not available for performance
     if (!this.index) {
       await this.buildSearchIndex();
     }
-    
+
     const types = query.type ? [query.type] : ALL_MEMORY_TYPES;
     const results: SearchResult[] = [];
     const text = (query.text ?? '').toLowerCase();
     const [minC, maxC] = query.confidence ?? [0, 1];
     const [start, end] = query.dateRange ?? [new Date(0), new Date(8640000000000000)];
-    
+
     // Use index for faster search when available
     const candidateIds = new Set<string>();
-    
+
     if (text && this.index) {
       // Use content index for text search
       const tokens = tokenize(text);
@@ -205,7 +207,7 @@ export class MemoryManager {
         }
       }
     }
-    
+
     if (query.tags && query.tags.length > 0 && this.index) {
       // Use tag index for tag search
       const tagCandidates = new Set<string>();
@@ -225,7 +227,7 @@ export class MemoryManager {
           }
         }
       }
-      
+
       if (candidateIds.size === 0) {
         tagCandidates.forEach(id => candidateIds.add(id));
       } else {
@@ -238,7 +240,7 @@ export class MemoryManager {
         intersection.forEach(id => candidateIds.add(id));
       }
     }
-    
+
     // If no specific search criteria, get all memories of specified types
     if (candidateIds.size === 0) {
       for (const type of types) {
@@ -248,29 +250,29 @@ export class MemoryManager {
         }
       }
     }
-    
+
     // Process candidates
     for (const id of candidateIds) {
       const m = this.index?.memories.get(id);
       if (!m) continue;
-      
+
       // Type filter
       if (!types.includes(m.type)) continue;
-      
+
       // Date filter
       const updatedAt = new Date(m.frontmatter.updated_at);
       if (updatedAt < start || updatedAt > end) continue;
-      
+
       // Confidence filter
       if (m.frontmatter.confidence < minC || m.frontmatter.confidence > maxC) continue;
-      
+
       // Sensitive filter
       if (!query.includeSensitive && m.frontmatter.sensitive) continue;
-      
+
       // Calculate score
       let score = 0;
       const highlights: string[] = [];
-      
+
       if (text) {
         const hay = `${m.title}\n${m.content}\n${JSON.stringify(m.frontmatter)}`.toLowerCase();
         if (hay.includes(text)) {
@@ -283,7 +285,7 @@ export class MemoryManager {
       } else {
         score += 0.1; // baseline if only filters are used
       }
-      
+
       if (score > 0) {
         results.push({ memory: m, score, matchType: text ? 'partial' : 'metadata', highlights });
       }
@@ -393,17 +395,17 @@ export class MemoryManager {
       typeIndex: new Map(),
       lastBuiltAt: Date.now(),
     };
-    
+
     // Initialize type index
     for (const t of targetTypes) idx.typeIndex.set(t, new Set());
-    
+
     // Build task index separately for faster task operations
     const taskIndex = new Map<string, MemoryItem>();
-    
+
     for (const m of memories) {
       idx.memories.set(m.id, m);
       idx.typeIndex.get(m.type)?.add(m.id);
-      
+
       // Enhanced tokenization including frontmatter fields
       const contentText = `${m.title} ${m.content}`;
       const metadataText = [
@@ -415,24 +417,24 @@ export class MemoryManager {
         ...(m.frontmatter.acceptance_criteria || []),
         ...(m.frontmatter.files_involved || [])
       ].filter(Boolean).join(' ');
-      
+
       const tokens = tokenize(`${contentText} ${metadataText}`);
       for (const tok of tokens) {
         if (!idx.contentIndex.has(tok)) idx.contentIndex.set(tok, new Set());
         idx.contentIndex.get(tok)!.add(m.id);
       }
-      
+
       for (const tag of m.frontmatter.tags ?? []) {
         if (!idx.tagIndex.has(tag)) idx.tagIndex.set(tag, new Set());
         idx.tagIndex.get(tag)!.add(m.id);
       }
-      
+
       // Add to task index if it's a task-related type
       if (TASK_MANAGEMENT_TYPES.includes(m.type)) {
         taskIndex.set(m.id, m);
       }
     }
-    
+
     this.index = idx;
     this.taskIndex = taskIndex;
     return idx;
@@ -490,9 +492,9 @@ export class MemoryManager {
     }
     return all;
   }
-  
+
   // ============ TASK MANAGEMENT OPTIMIZED METHODS ============
-  
+
   /** Optimized task listing with filtering and sorting for task management tools. */
   async listTasks(filters: {
     status?: TaskStatus;
@@ -509,86 +511,86 @@ export class MemoryManager {
     limit?: number;
   } = {}): Promise<MemoryItem[]> {
     await this.initializeProject();
-    
+
     if (!this.taskIndex) {
       await this.buildSearchIndex();
     }
-    
+
     let tasks = Array.from(this.taskIndex?.values() || []);
-    
+
     // Apply filters
     if (filters.status) {
       tasks = tasks.filter(t => t.frontmatter.status === filters.status);
     }
-    
+
     if (filters.priority) {
       tasks = tasks.filter(t => t.frontmatter.priority === filters.priority);
     }
-    
+
     if (filters.assignee) {
       tasks = tasks.filter(t => t.frontmatter.assignee === filters.assignee);
     }
-    
+
     if (filters.feature_id) {
       tasks = tasks.filter(t => t.frontmatter.feature_id === filters.feature_id);
     }
-    
+
     if (filters.epic_id) {
       tasks = tasks.filter(t => t.frontmatter.feature_id === filters.epic_id || t.frontmatter.tags.includes(`epic-${filters.epic_id}`));
     }
-    
+
     if (filters.parent_id) {
       tasks = tasks.filter(t => t.frontmatter.parent_id === filters.parent_id);
     }
-    
+
     if (filters.has_dependencies !== undefined) {
-      tasks = tasks.filter(t => filters.has_dependencies ? 
-        (t.frontmatter.dependencies && t.frontmatter.dependencies.length > 0) : 
+      tasks = tasks.filter(t => filters.has_dependencies ?
+        (t.frontmatter.dependencies && t.frontmatter.dependencies.length > 0) :
         (!t.frontmatter.dependencies || t.frontmatter.dependencies.length === 0)
       );
     }
-    
+
     if (filters.is_blocked !== undefined) {
-      tasks = tasks.filter(t => filters.is_blocked ? 
-        (t.frontmatter.blocks && t.frontmatter.blocks.length > 0) : 
+      tasks = tasks.filter(t => filters.is_blocked ?
+        (t.frontmatter.blocks && t.frontmatter.blocks.length > 0) :
         (!t.frontmatter.blocks || t.frontmatter.blocks.length === 0)
       );
     }
-    
+
     if (filters.due_before) {
       tasks = tasks.filter(t => t.frontmatter.due_date && new Date(t.frontmatter.due_date) <= filters.due_before!);
     }
-    
+
     if (filters.created_after) {
       tasks = tasks.filter(t => new Date(t.frontmatter.created_at) >= filters.created_after!);
     }
-    
+
     if (filters.tags && filters.tags.length > 0) {
       tasks = tasks.filter(t => filters.tags!.every(tag => t.frontmatter.tags.includes(tag)));
     }
-    
+
     // Sort by priority and creation date
     const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
     tasks.sort((a, b) => {
       const aPriority = priorityOrder[a.frontmatter.priority as keyof typeof priorityOrder] || 0;
       const bPriority = priorityOrder[b.frontmatter.priority as keyof typeof priorityOrder] || 0;
-      
+
       if (aPriority !== bPriority) {
         return bPriority - aPriority; // Higher priority first
       }
-      
+
       // Then by creation date (newer first)
       return new Date(b.frontmatter.created_at).getTime() - new Date(a.frontmatter.created_at).getTime();
     });
-    
+
     // Apply limit
     if (filters.limit && filters.limit > 0) {
       tasks = tasks.slice(0, filters.limit);
     }
-    
+
     return tasks;
   }
-  
+
   /** Get task statistics and workload analysis. */
   async getTaskStatistics(filters: { assignee?: string; feature_id?: string } = {}): Promise<{
     total: number;
@@ -602,7 +604,7 @@ export class MemoryManager {
     overdue_tasks: number;
   }> {
     const tasks = await this.listTasks(filters);
-    
+
     const stats = {
       total: tasks.length,
       by_status: { todo: 0, in_progress: 0, blocked: 0, testing: 0, done: 0, cancelled: 0 } as Record<TaskStatus, number>,
@@ -614,46 +616,46 @@ export class MemoryManager {
       blocked_tasks: 0,
       overdue_tasks: 0
     };
-    
+
     const now = new Date();
     let completedTasks = 0;
-    
+
     for (const task of tasks) {
       // Status counts
       const status = task.frontmatter.status as TaskStatus || 'todo';
       stats.by_status[status]++;
-      
+
       // Priority counts
       const priority = task.frontmatter.priority as TaskPriority || 'medium';
       stats.by_priority[priority]++;
-      
+
       // Assignee counts
       const assignee = task.frontmatter.assignee || 'unassigned';
       stats.by_assignee[assignee] = (stats.by_assignee[assignee] || 0) + 1;
-      
+
       // Hours
       stats.estimated_hours += task.frontmatter.estimated_hours || 0;
       stats.actual_hours += task.frontmatter.actual_hours || 0;
-      
+
       // Completion tracking
       if (status === 'done') completedTasks++;
-      
+
       // Blocked tasks
       if (status === 'blocked' || (task.frontmatter.blocks && task.frontmatter.blocks.length > 0)) {
         stats.blocked_tasks++;
       }
-      
+
       // Overdue tasks
       if (task.frontmatter.due_date && new Date(task.frontmatter.due_date) < now && status !== 'done') {
         stats.overdue_tasks++;
       }
     }
-    
+
     stats.completion_rate = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
-    
+
     return stats;
   }
-  
+
   /** Find tasks that are candidates for delegation based on criteria. */
   async findDelegationCandidates(criteria: {
     complexity_threshold?: 'low' | 'medium' | 'high';
@@ -664,89 +666,89 @@ export class MemoryManager {
     required_tags?: string[];
     exclude_tags?: string[];
   } = {}): Promise<MemoryItem[]> {
-    const tasks = await this.listTasks({ 
+    const tasks = await this.listTasks({
       status: 'todo',
-      assignee: criteria.assignee_filter 
+      assignee: criteria.assignee_filter
     });
-    
+
     return tasks.filter(task => {
       // Independence check - no unresolved dependencies
       if (criteria.independence_required && task.frontmatter.dependencies && task.frontmatter.dependencies.length > 0) {
         return false;
       }
-      
+
       // Complexity check based on estimated hours and tags
       if (criteria.complexity_threshold) {
         const estimatedHours = task.frontmatter.estimated_hours || 0;
-        const complexityTags = task.frontmatter.tags.filter(tag => 
+        const complexityTags = task.frontmatter.tags.filter(tag =>
           tag.includes('complex') || tag.includes('architecture') || tag.includes('integration')
         );
-        
+
         const isComplex = estimatedHours > 8 || complexityTags.length > 0;
         const isSimple = estimatedHours <= 2 && !complexityTags.length;
-        
+
         if (criteria.complexity_threshold === 'low' && !isSimple) return false;
         if (criteria.complexity_threshold === 'high' && !isComplex) return false;
       }
-      
+
       // Sensitive content filter
       if (criteria.exclude_sensitive && task.frontmatter.sensitive) {
         return false;
       }
-      
+
       // Hours limit
       if (criteria.max_estimated_hours && (task.frontmatter.estimated_hours || 0) > criteria.max_estimated_hours) {
         return false;
       }
-      
+
       // Required tags
       if (criteria.required_tags && !criteria.required_tags.every(tag => task.frontmatter.tags.includes(tag))) {
         return false;
       }
-      
+
       // Excluded tags
       if (criteria.exclude_tags && criteria.exclude_tags.some(tag => task.frontmatter.tags.includes(tag))) {
         return false;
       }
-      
+
       return true;
     });
   }
-  
+
   /** Efficiently update task status with optimized index updates. */
   async updateTaskStatus(taskId: string, newStatus: TaskStatus, notes?: string): Promise<void> {
     const task = this.taskIndex?.get(taskId);
     if (!task) {
       throw new Error(`Task with ID ${taskId} not found`);
     }
-    
+
     const updates: Partial<MemoryFrontmatter> = {
       status: newStatus,
       updated_at: new Date().toISOString()
     };
-    
+
     if (newStatus === 'done') {
       updates.completed_at = new Date().toISOString();
     }
-    
+
     if (notes) {
       // Append notes to content
       const updatedContent = `${task.content}\n\n## Status Update - ${new Date().toISOString()}\n${notes}`;
-      await this.update({ 
-        type: task.type, 
-        id: taskId, 
+      await this.update({
+        type: task.type,
+        id: taskId,
         content: updatedContent,
-        frontmatter: updates 
+        frontmatter: updates
       });
     } else {
-      await this.update({ 
-        type: task.type, 
-        id: taskId, 
-        frontmatter: updates 
+      await this.update({
+        type: task.type,
+        id: taskId,
+        frontmatter: updates
       });
     }
   }
-  
+
   /** Get task dependency chain for delegation planning. */
   async getTaskDependencyChain(taskId: string, depth: number = 3): Promise<{
     dependencies: MemoryItem[];
@@ -758,19 +760,19 @@ export class MemoryManager {
     if (!task) {
       return { dependencies: [], dependents: [], blocked_by: [], blocking: [] };
     }
-    
+
     const dependencies: MemoryItem[] = [];
     const dependents: MemoryItem[] = [];
     const visited = new Set<string>();
-    
+
     // Find dependencies recursively
     const findDependencies = async (currentTaskId: string, currentDepth: number) => {
       if (currentDepth >= depth || visited.has(currentTaskId)) return;
       visited.add(currentTaskId);
-      
+
       const currentTask = this.taskIndex?.get(currentTaskId);
       if (!currentTask) return;
-      
+
       for (const depId of currentTask.frontmatter.dependencies || []) {
         const depTask = this.taskIndex?.get(depId);
         if (depTask && !dependencies.find(d => d.id === depId)) {
@@ -779,7 +781,7 @@ export class MemoryManager {
         }
       }
     };
-    
+
     // Find dependents
     const allTasks = Array.from(this.taskIndex?.values() || []);
     for (const t of allTasks) {
@@ -787,9 +789,9 @@ export class MemoryManager {
         dependents.push(t);
       }
     }
-    
+
     await findDependencies(taskId, 0);
-    
+
     return {
       dependencies,
       dependents,
@@ -797,17 +799,17 @@ export class MemoryManager {
       blocking: task.frontmatter.blocks || []
     };
   }
-  
+
   /** Cache delegation results for performance. */
   private async updateDelegationCache(feature_id: string): Promise<void> {
     if (!this.delegationCache) {
       this.delegationCache = new Map();
     }
-    
+
     const tasks = await this.listTasks({ feature_id });
     this.delegationCache.set(feature_id, tasks);
   }
-  
+
   /** Clear caches when memory is updated. */
   private clearCaches(): void {
     this.taskIndex = null;
@@ -819,34 +821,34 @@ export class MemoryManager {
    */
   private getHierarchicalPath(type: MemoryType, frontmatter: MemoryFrontmatter): string {
     const baseDir = mapTypeToDir(type);
-    
+
     // For task management types, create hierarchical structure
     if (TASK_MANAGEMENT_TYPES.includes(type as any)) {
       const pathParts = [baseDir];
-      
+
       // Feature-based organization
       if (frontmatter.feature_id) {
         pathParts.push(`features/${frontmatter.feature_id}`);
       }
-      
+
       // Priority-based sub-organization for tasks
       if (type === 'task' && frontmatter.priority) {
         pathParts.push(frontmatter.priority);
       }
-      
+
       // Status-based organization for bugs
       if (type === 'bug_report' && frontmatter.status) {
         pathParts.push(frontmatter.status);
       }
-      
+
       return pathParts.join('/');
     }
-    
+
     // For other types, use category-based organization if available
     if (frontmatter.category) {
       return `${baseDir}/${frontmatter.category}`;
     }
-    
+
     return baseDir;
   }
 
@@ -854,8 +856,8 @@ export class MemoryManager {
 
   /** Start a background agent delegation job. */
   async startBackgroundDelegation(
-    taskId: string, 
-    agentType: string, 
+    taskId: string,
+    agentType: string,
     config: any
   ): Promise<{ success: boolean; job_id: string; message: string }> {
     try {
@@ -866,16 +868,16 @@ export class MemoryManager {
 
       // Check if task is already delegated
       if (task.frontmatter.delegation_status === 'running' || task.frontmatter.delegation_status === 'queued') {
-        return { 
-          success: false, 
-          job_id: '', 
-          message: `Task ${taskId} is already delegated (status: ${task.frontmatter.delegation_status})` 
+        return {
+          success: false,
+          job_id: '',
+          message: `Task ${taskId} is already delegated (status: ${task.frontmatter.delegation_status})`
         };
       }
 
       // Generate unique job ID
       const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
+
       // Update task with delegation info
       await this.update({
         type: 'task',
@@ -1047,8 +1049,8 @@ export class MemoryManager {
   /** List all active delegations. */
   async listActiveDelegations(): Promise<MemoryItem[]> {
     const allTasks = await this.listByType('task');
-    return allTasks.filter(task => 
-      task.frontmatter.delegation_status === 'running' || 
+    return allTasks.filter(task =>
+      task.frontmatter.delegation_status === 'running' ||
       task.frontmatter.delegation_status === 'queued'
     );
   }
@@ -1139,5 +1141,3 @@ function levenshtein(a: string, b: string): number {
 function escapeId(id: string): string {
   return id.replace(/[^a-zA-Z0-9_]/g, '_');
 }
-
-

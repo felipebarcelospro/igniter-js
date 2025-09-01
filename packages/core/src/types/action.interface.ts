@@ -1,5 +1,5 @@
 import type { IgniterResponseProcessor } from "../processors/response.processor";
-import type { IgniterCommonErrorCode, IgniterProcessorResponse } from "./response.interface";
+import type { IgniterCommonErrorCode, IgniterResponse } from "./response.interface";
 import type { IgniterCookie } from "../services/cookie.service";
 import type { IgniterProcedure, InferActionProcedureContext } from "./procedure.interface";
 import type { StandardSchemaV1 } from "./schema.interface";
@@ -26,59 +26,42 @@ export type InferActionCaller<TActionInput, TActionOutput> =
 /**
  * Utility type to infer the final response type from an action handler.
  */
-export type InferActionResponse<THandlerReturn> =
-  THandlerReturn extends any // 🔄 MUDANÇA: Força distribuição sobre união
-    ? THandlerReturn extends Promise<infer TUnwrapped>
-      ? InferActionResponse<TUnwrapped>
-      : THandlerReturn extends IgniterResponseProcessor<any, infer TData>
-      ? TData extends IgniterProcessorResponse<infer TSuccess, infer TError>
-        ? IgniterProcessorResponse<TSuccess, TError>
-        : never
-      : THandlerReturn extends Response
-      ? InferWebResponse<THandlerReturn>
-      : InferDirectResponse<THandlerReturn>
-    : never;
-
-/**
- * Infer types when using ResponseProcessor
- */
-type InferProcessorResponse<TData> = TData extends IgniterProcessorResponse<infer TSuccess, infer TError>
-  ? {
-      data: TSuccess;
-      error: TError extends IgniterErrorResponse<infer TCode, infer TErrorData>
-        ? IgniterErrorResponse<TCode, TErrorData>
-        : null;
-    }
-  : never;
+ export type InferActionResponse<TReturn> =
+   TReturn extends any
+     ? TReturn extends Promise<infer TData>
+       ? InferActionResponse<TData>
+       : TReturn extends IgniterResponse<infer TDataType, infer TErrorType>
+         ? IgniterResponse<TDataType, TErrorType>
+         : TReturn extends Response
+         ? InferWebResponse<TReturn>
+       : InferDirectResponse<TReturn>
+     : never;
 
 /**
  * Infer types when returning Web API Response directly
  */
 type InferWebResponse<T> = {
-  success: unknown;
-  errors: {
-    code: "ERR_UNKNOWN_ERROR";
-    message?: string;
-    data?: unknown;
-  };
+  data?: unknown;
+  error?: IgniterErrorResponse<IgniterCommonErrorCode>;
 };
 
 /**
  * Infer types when returning value directly
  */
-type InferDirectResponse<T> = {
-  success: T;
-  errors: {
-    code: "ERR_UNKNOWN_ERROR";
-    message?: string;
-    data?: unknown;
-  };
-};
+type InferDirectResponse<T> = T extends IgniterResponse<infer TData, infer TError>
+  ? IgniterResponse<TData, TError>
+  : {
+      data?: T;
+      error?: IgniterErrorResponse;
+    };
 
 /**
  * Base error response type
  */
-type IgniterErrorResponse<TCode extends IgniterCommonErrorCode, TData = unknown> = {
+type IgniterErrorResponse<
+  TCode = IgniterCommonErrorCode,
+  TData = unknown
+> = {
   code: TCode;
   message?: string;
   data?: TData;
@@ -154,7 +137,7 @@ export type IgniterActionContext<
    * Response processor for creating typed HTTP responses.
    * Supports JSON, HTML, SSE, and custom response types.
    */
-  response: IgniterResponseProcessor<TActionContext & InferActionProcedureContext<TActionMiddlewares>, IgniterProcessorResponse<unknown>>;
+   response: IgniterResponseProcessor<TActionContext & InferActionProcedureContext<TActionMiddlewares>>;
 
   /**
    * Realtime service for server-sent events and websocket communication.
@@ -205,7 +188,7 @@ export type IgniterQueryOptions<
       TQueryMiddlewares,
       TQueryPlugins
     >,
-    unknown
+    any
   >
 > = {
   name?: string;
@@ -236,7 +219,7 @@ export type IgniterMutationOptions<
       TMutationMiddlewares,
       TMutationPlugins
     >,
-    unknown
+    any
   >
 > = {
   name?: string;
@@ -270,7 +253,7 @@ export type IgniterAction<
       TActionMiddlewares,
       TActionPlugins
     >,
-    unknown
+    any
   >,
   TActionResponse extends ReturnType<TActionHandler>,
   TActionInfer extends InferEndpoint<
@@ -315,7 +298,7 @@ export type InferEndpoint<
       TActionMiddlewares,
       TActionPlugins
     >,
-    unknown
+    any
   >,
   TResponse extends ReturnType<TActionHandler>,
   TActionInferBody = TActionBody extends StandardSchemaV1
@@ -329,7 +312,10 @@ export type InferEndpoint<
     (TActionBody extends StandardSchemaV1 ? { body: TActionInferBody } : {}) &
       (TActionQuery extends StandardSchemaV1
         ? { query: TActionInferQuery }
-        : {}) & { params: TActionInferParams }
+        : {}) & { params: TActionInferParams } &
+      { headers?: Record<string, string> } &
+      { cookies?: Record<string, string> } &
+      { credentials?: RequestCredentials }
   >,
   TActionInferResponse = InferActionResponse<TResponse>,
   TActionInferCaller = InferActionCaller<TActionInferInput, TActionInferResponse>,
@@ -343,8 +329,8 @@ export type InferEndpoint<
   params: TActionInferParams;
   handler: TActionHandler;
   $Input: TActionInferInput;
-  $Output: TActionInferResponse extends { status: 'success', data: infer TData } ? TData : never;
-  $Errors: TActionInferResponse extends { status: Exclude<IgniterProcessorResponse['status'], 'success'>, error: infer TError } ? TError : never;
+  $Output: TActionInferResponse extends { data: infer TData } ? TData : never;
+  $Errors: TActionInferResponse extends { error: infer TError } ? TError : IgniterErrorResponse<IgniterCommonErrorCode>;
   $Caller: TActionInferCaller;
   $Response: TActionInferResponse;
 }>;

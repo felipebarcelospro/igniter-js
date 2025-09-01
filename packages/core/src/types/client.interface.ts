@@ -45,6 +45,9 @@ export type QueryActionCallerOptions<
   initialData?: Awaited<TAction["$Infer"]["$Output"]>;
   query?: TAction["$Infer"]["query"];
   params?: TAction["$Infer"]["params"];
+  headers?: Record<string, string>;
+  cookies?: Record<string, string>;
+  credentials?: RequestCredentials;
   staleTime?: number;
   refetchInterval?: number;
   refetchIntervalInBackground?: boolean;
@@ -238,6 +241,9 @@ export type MutationActionCallerOptions<
   query?: DeepPartial<TAction["$Infer"]["query"]>;
   params?: DeepPartial<TAction["$Infer"]["params"]>;
   body?: DeepPartial<TAction["$Infer"]["body"]>;
+  headers?: Record<string, string>;
+  cookies?: Record<string, string>;
+  credentials?: RequestCredentials;
   onLoading?: (isLoading: boolean) => void;
   onRequest?: (data: Awaited<TAction["$Infer"]["$Response"]>) => void;
   onSuccess?: (data: Awaited<TAction["$Infer"]["$Output"]>) => void;

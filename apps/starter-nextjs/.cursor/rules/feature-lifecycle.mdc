@@ -1,24 +1,51 @@
 ---
-description: |
-  Defines the complete feature development lifecycle, from initial research and requirement gathering to design, planning, and task creation. This rule integrates documentation research, community feedback via GitHub, and memory-backed planning into a cohesive workflow.
-alwaysApply: false
+description: Use when starting new feature development, conducting research and requirement gathering, creating comprehensive designs, or building detailed implementation plans with analysis protocols.
+globs: []
+alwaysApply: true
 ---
 
 # Feature Development Lifecycle
 
-This document outlines the structured workflow for developing new features, ensuring that every stage—from conception to implementation planning—is systematic, well-researched, and aligned with project goals.
+This document outlines the structured workflow for developing new features, ensuring that every stage—from conception to implementation planning—is systematic, well-researched, aligned with project goals, and follows mandatory analysis protocols for quality assurance.
 
 ## Phase 1: Requirement Gathering & Research
 
 This initial phase focuses on defining *what* needs to be built. It integrates research from documentation and community feedback to create a solid foundation.
 
-### 1.1. Initial Research
+### 1.1. Mandatory Analysis Protocol for Research
+**CRITICAL**: Before researching any feature, analyze existing related files to understand current architecture and patterns:
+
+```javascript
+// Analyze existing similar features or components
+await analyze_feature({
+  featurePath: "src/features/related-feature",
+  includeStats: true,
+  projectRoot: "./"
+});
+
+// Analyze specific files that might be affected
+await analyze_file({
+  filePath: "src/core/relevant-file.ts",
+  includeErrors: true,
+  projectRoot: "./"
+});
+```
+
+**Why this analysis is mandatory:**
+- Prevents feature conflicts with existing code
+- Identifies architectural patterns to follow
+- Reveals dependencies and constraints
+- Ensures consistency with current implementation
+
+### 1.2. Initial Research
 - **Explore Documentation:** Use `get_documentation` to understand existing patterns and APIs relevant to the proposed feature.
 - **Community Insights:** Use `search_github_issues` to find related feature requests, bug reports, or discussions. This helps validate the problem and gather context from the community.
 - **Memory Search:** Use `search_memories` to find internal knowledge, past decisions, or similar features.
+- **Code Analysis:** Use analysis tools to understand existing implementations and patterns.
 
-### 1.2. Defining Requirements
-- **Store Requirements:** Create a memory (`type: "insight"`, `category: "requirements"`) for the feature.
+### 1.3. Defining Requirements
+- **Store Requirements:** Create a memory (`type: "requirement"`, `category: "requirements"`) for the feature.
+- **Include Analysis Context:** Reference any analysis results that informed the requirements.
 - **Content Format:**
     - **Introduction:** A brief summary of the feature.
     - **User Stories:** "As a [role], I want [feature], so that [benefit]."
@@ -26,7 +53,7 @@ This initial phase focuses on defining *what* needs to be built. It integrates r
         - `WHEN [event] THEN [system] SHALL [response]`
         - `IF [precondition] THEN [system] SHALL [response]`
 - **Iteration and Approval:**
-    1.  I will generate the initial requirements based on our discussion.
+    1.  I will generate the initial requirements based on our discussion and analysis findings.
     2.  I will then ask for your feedback: "Do the requirements look good? If so, we can move on to the design."
     3.  This process will be repeated until you give explicit approval. I will not proceed without it.
 
@@ -34,8 +61,41 @@ This initial phase focuses on defining *what* needs to be built. It integrates r
 
 Once requirements are approved, this phase defines *how* the feature will be built.
 
-### 2.1. Technical Design
+### 2.1. Pre-Design Analysis - MANDATORY
+**CRITICAL**: Before creating any design, analyze the current architecture to ensure compatibility:
+
+```javascript
+// Analyze the overall project structure
+await analyze_feature({
+  featurePath: "src/",
+  includeStats: true,
+  projectRoot: "./"
+});
+
+// Analyze files that will be modified or extended
+await analyze_file({
+  filePath: "src/core/main-system.ts",
+  includeErrors: true,
+  projectRoot: "./"
+});
+
+// Check dependency chains for integration points
+await trace_dependency_chain({
+  symbol: "RelatedComponent",
+  startFile: "src/components/related.ts"
+});
+```
+
+**Analysis must inform design decisions:**
+- Current architectural patterns to follow
+- Existing interfaces to implement or extend
+- Dependencies that must be considered
+- Performance implications of changes
+- Type safety requirements
+
+### 2.2. Technical Design
 - **Store Design:** Create an `architectural_decision` memory for the feature design.
+- **Reference Analysis Results:** Include findings from pre-design analysis in the design rationale.
 - **Core Sections:**
     1.  **Overview:** High-level summary of the technical approach.
     2.  **Architecture:** How the feature fits into the existing system. Mermaid diagrams should be used for visualization.
@@ -44,32 +104,120 @@ Once requirements are approved, this phase defines *how* the feature will be bui
     5.  **Error Handling:** Strategy for managing potential errors.
     6.  **Testing Strategy:** Plan for unit, integration, and end-to-end tests.
 - **Link to Requirements:** The design memory **must** be related to the requirements memory (`relationshipType: "implements"`).
+- **Include Analysis Context:** Reference analysis findings that influenced design decisions.
 
-### 2.2. Iteration and Approval
+### 2.3. Iteration and Approval
 - Just as with requirements, I will present the design and ask for your feedback: "Does the design look good? If so, we can move on to the implementation plan."
 - I will incorporate your feedback and iterate until the design is approved.
+- **Design must address analysis findings** and explain how architectural constraints will be handled.
 
 ## Phase 3: Implementation Planning
 
 With an approved design, this phase breaks the work into actionable, code-focused tasks.
 
-### 3.1. Task Creation
+### 3.1. Pre-Planning Analysis - MANDATORY
+**CRITICAL**: Before creating tasks, perform comprehensive analysis of all files that will be affected:
+
+```javascript
+// Analyze all files mentioned in the design
+for (const filePath of designAffectedFiles) {
+  await analyze_file({
+    filePath,
+    includeErrors: true,
+    projectRoot: "./"
+  });
+}
+
+// Analyze integration points and dependencies
+await find_implementation({
+  symbol: "IntegrationInterface",
+  filePath: "src/interfaces/integration.ts"
+});
+```
+
+**Task creation must incorporate analysis results:**
+- Current file health status and existing errors
+- Dependencies that must be handled
+- Integration points that require careful coordination
+- Type safety requirements for each file
+- Performance considerations
+
+### 3.2. Task Creation
 - **Code-Centric Tasks:** The goal is to create a series of prompts for a code-generation agent. Tasks will be incremental, test-driven, and focused exclusively on writing, modifying, or testing code.
+- **Analysis-Informed Tasks:** Each task must include analysis context and specify the expected file health after completion.
 - **Task Granularity:** Each task will be a small, manageable step that builds upon the previous one, ensuring a smooth implementation flow.
 - **Memory and Task Management:**
-    - Each task is stored as a memory (`type: "insight"`, `category: "task"`) with tags like `["planning", "task", "todo", "<feature-name>"]`.
+    - Each task is stored as a memory (`type: "task"`, `category: "implementation"`) with tags like `["planning", "task", "todo", "<feature-name>"]`.
     - A corresponding task is created in the project management system using `create_task`.
+    - **Include Analysis Context:** Each task must reference relevant analysis results and file health requirements.
 - **Dependencies:** Tasks will be linked to the design memory (`implements`) and to each other (`depends_on`).
+- **Analysis Requirements:** Each task must specify which files need analysis before and after implementation.
 
-### 3.2. Delegation Strategy
+### 3.3. Delegation Strategy
 - After creating all tasks, I will analyze them to propose a delegation strategy, identifying which tasks are suitable for autonomous agent execution versus which ones require my direct implementation.
+- **Analysis Requirements for Delegation:** Tasks suitable for delegation must have clear analysis requirements and health criteria.
 
-### 3.3. Final Approval
+### 3.4. Final Approval
 - I will present the complete task list and delegation strategy for your final approval.
 - Once you approve the plan, this lifecycle is complete. The next step is to begin executing the tasks, which is a separate workflow.
 
-## Task Execution (Post-Lifecycle)
+## Task Execution (Post-Lifecycle) - Analysis Protocol
 
 - To begin implementation, you can ask me to work on a specific task.
 - I will search for tasks with the status `todo` and the relevant feature tag.
-- I will execute **one task at a time**, updating its status from `todo` to `in_progress` and finally to `done`, waiting for your review at each step.
+
+### Mandatory Analysis Protocol for Task Execution:
+1. **Pre-Task Analysis**: Before starting any task, analyze all affected files to understand current state
+2. **Task Execution**: Implement the task following the analysis-informed approach
+3. **Post-Task Analysis**: After completing any modifications, re-analyze all affected files to verify health
+4. **Quality Verification**: Ensure no TypeScript errors, proper imports/exports, and type safety
+5. **API Testing**: Use validation tools to test any API changes
+6. **Status Update**: Only mark task as `done` after successful analysis verification
+
+### Execution Workflow:
+- I will execute **one task at a time**, updating its status from `todo` to `in_progress` and finally to `done`
+- **CRITICAL**: Each task completion requires successful post-analysis verification
+- I will wait for your review at each step, but only after ensuring analysis passes
+- If analysis reveals errors, I will fix them before marking the task complete
+
+**Never skip analysis steps - they are mandatory for quality assurance.**
+
+## Implementation Transition to Specialized Workflows
+
+Once feature lifecycle planning is complete, implementation must transition to specialized workflow rules based on the feature type:
+
+### For UI/UX Focused Features:
+- **Primary Rule**: Use `ux-ui-workflow.mdc` for design system integration and user experience patterns
+- **Secondary Rules**: Reference `frontend-development.mdc` for React implementation and `development-workflow.mdc` for quality assurance
+- **Key Focus Areas**:
+  - Design token compliance from `globals.css`
+  - Shadcn UI component integration
+  - Accessibility (WCAG 2.1 AA) implementation
+  - User experience optimization patterns
+
+### For Front-End Development Features:
+- **Primary Rule**: Use `frontend-development.mdc` for React/Next.js patterns and Igniter.js integration
+- **Secondary Rules**: Reference `ux-ui-workflow.mdc` for design system and `development-workflow.mdc` for quality standards
+- **Key Focus Areas**:
+  - Presentation layer organization
+  - Igniter.js client integration patterns
+  - Performance optimization
+  - Component architecture patterns
+
+### For Full-Stack Features:
+- **Workflow Sequence**: Use `ux-ui-workflow.mdc` → `frontend-development.mdc` → `development-workflow.mdc`
+- **Integration Points**: Ensure seamless coordination between frontend and backend development
+- **Quality Gates**: Apply all three specialized workflows for comprehensive coverage
+
+### Implementation Guidelines:
+- **Start with Planning**: Use `planning.mdc` for initial feature planning and task breakdown
+- **Apply Specialized Rules**: Use the appropriate specialized workflow based on feature focus
+- **Cross-Reference Rules**: When in doubt, reference all relevant workflows for comprehensive coverage
+- **Quality Assurance**: Apply `development-workflow.mdc` standards throughout implementation
+
+**This workflow is ONLY for creating design and planning memories. The actual implementation of the feature should be done through the specialized workflow rules (ux-ui-workflow.mdc, frontend-development.mdc, development-workflow.mdc).**
+
+- The model MUST NOT attempt to implement the feature as part of this workflow
+- The model MUST clearly communicate to the user that this workflow is complete once the design and planning memories are created
+- The model MUST inform the user that they can begin executing tasks by searching for task memories with tags like `["planning", "task", "todo", "<feature-name>"]` and updating their status from "todo" to "in_progress" to "done"
+- The model MUST reference the appropriate specialized workflow for implementation based on the feature type

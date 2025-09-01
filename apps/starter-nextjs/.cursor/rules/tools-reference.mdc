@@ -1,92 +1,112 @@
 ---
-description: Complete reference for all MCP tools: CLI operations, API validation, documentation lookup, GitHub integration, file analysis, code investigation, memory management, task management. Use when: planning features, developing code, researching solutions, managing project knowledge, analyzing files, debugging issues.
+description: Provides a complete reference for Igniter.js MCP Server tools, including CLI operations, API validation, file analysis, code investigation, memory management, task management, GitHub integration, agent delegation, and browser automation.
 globs: []
 alwaysApply: true
 ---
 
 # MCP Tools Complete Reference
 
+## Tool Usage Guidelines
+
+### When to Use Tools by Context
+| Context | Primary Tools | Supporting Tools | Best Practice |
+|---------|---------------|------------------|---------------|
+| **Before Any Code Work** | `analyze_file` | - | **MANDATORY**: Always analyze before modifications |
+| **Debugging TypeScript Errors** | `find_implementation` → `explore_source` → `analyze_file` | `trace_dependency_chain` | Follow investigation protocol, fix errors before proceeding |
+| **API Development/Testing** | `get_openapi_spec` → `make_api_request` | `generate_docs` | Test happy path + error scenarios, validate OpenAPI |
+| **Research & Knowledge Gathering** | `search_memories` → `get_documentation` → `search_github_code` | `search_github_issues` | Check internal knowledge first, then external sources |
+| **Complex Refactoring** | `analyze_feature` → `trace_dependency_chain` | `find_implementation` | Understand full impact before making changes |
+| **Task Planning & Management** | `search_memories` → `list_tasks` → `create_task` | `check_agent_environment`, `delegate_to_agent` | Plan first, then delegate if appropriate |
+| **Performance Issues** | `analyze_file` → `monitor_agent_tasks` | `search_github_issues` | Measure and monitor performance changes |
+| **Team Collaboration** | `create_github_issue` | `search_github_issues`, `get_github_issue` | Use GitHub for issues, search for existing solutions |
+| **New Feature Development** | `generate_feature` → `generate_controller` → `generate_procedure` | `generate_schema`, `generate_docs` | Start with scaffolding, then implement and document |
+| **Code Generation** | `generate_schema` → `generate_docs` | `get_openapi_spec` | Generate client code and documentation from API structure |
+| **Browser Automation & Research** | `browser_navigate` → `browser_snapshot` → `browser_evaluate` | `browser_type`, `browser_click`, `browser_resize`, `browser_take_screenshot`, `browser_console_messages`, `browser_network_requests`, `browser_wait_for`, `browser_tabs` | **MANDATORY**: For UI validation, dynamic research, and interactive debugging |
+
+## 0. CRITICAL SAFETY & VALIDATION PROTOCOLS
+
+### Build Operations Ban
+**🚫 ABSOLUTE PROHIBITION:**
+- **NEVER execute build commands without explicit user permission**
+- Includes: `npm run build`, `bun run build`, `yarn build`, or any build-related commands
+- Always ask for explicit permission before any build operation
+- Build operations are considered high-risk and require user oversight
+
+### Mandatory Testing Protocol
+**🔬 VALIDATION REQUIREMENT: All implementations require autonomous testing.**
+- **Server and API Testing Protocol:** Before any API or browser testing, Lia must first investigate and identify the project's default development server port by reading `src/igniter.client.ts`. She must then verify if a server is already running on that identified port.
+- **Server Startup (if needed):** If the port is not running, Lia **MUST** attempt to start the development server using `start_dev_server({ port: <identified_port>, watch: true })` and wait for 3 seconds for initialization. If the server cannot be started, Lia **MUST** report the issue for human intervention.
+- **Back-End Testing (after server verification):** If the server is running, Lia proceeds to call `get_openapi_spec()` to confirm the API is responsive. If `get_openapi_spec()` succeeds, she can then proceed with `make_api_request` for back-end endpoint tests. If `get_openapi_spec()` fails, even with the port open, Lia **MUST** report the issue for human intervention.
+- **Front-End Testing (after server verification):** If the server is running on the identified port, Lia can immediately proceed to open the browser (Playwright) and begin front-end tests.
+- **Cannot advance tasks:** Without successful testing validation.
+- **Research:** Use browser freely for market research, documentation, and staying updated.
+
 ## Tool Categories & Workflow Integration
 
-### CLI & Project Management
-Core project development lifecycle and scaffolding tools.
+## CLI Tools - Development Lifecycle
+Core tools for Igniter.js project management and development workflow.
 
-**`dev`** - Start Igniter.js development server
-- **Description**: Starts the development server, enabling live reloading, client generation, and interactive debugging.
+### `start_dev_server` - Igniter.js Development Server
 - **Parameters**: `port?: number`, `watch?: boolean`
-- **Use when**: Beginning development sessions to run the project locally and test changes in real-time.
-- **Workflow**: Start of Work phase.
-- **Example**: `dev({ port: 3000, watch: true })`
+- **Use when**: Starting development to run project locally with live reload and client generation (or as part of the server startup protocol).
+- **Example**: `start_dev_server({ port: 3000, watch: true })`
 
-**`build`** - Build the Igniter.js project
-- **Description**: Compiles the project for production, including the web framework and the final Igniter.js client.
+### `build_project` - Production Build
 - **Parameters**: `mode?: "development" | "production"`
-- **Use when**: Preparing for deployment or testing the production build locally.
-- **Workflow**: Pre-deployment validation.
-- **Example**: `build({ mode: "production" })`
+- **Use when**: Compiling for production or testing production build locally
+- **Example**: `build_project({ mode: "production" })`
 
-**`test`** - Run project test suite
-- **Description**: Executes the project's test suite to validate changes and prevent regressions.
+### `run_tests` - Execute Test Suite
 - **Parameters**: `filter?: string`, `watch?: boolean`
-- **Use when**: After making changes to ensure code quality and correctness.
-- **Workflow**: Work phase validation, continuous testing.
-- **Example**: `test({ filter: "@igniter-js/core", watch: false })`
+- **Use when**: Validating changes and preventing regressions
+- **Example**: `run_tests({ filter: "@igniter-js/core", watch: false })`
 
-**`generateFeature`** - Scaffold a new feature module
-- **Description**: Creates a new, fully structured feature module with directories for controllers, procedures, and types.
+### Scaffolding Tools - Code Generation
+
+### `generate_feature` - Create New Feature
 - **Parameters**: `name: string`, `schema?: string`
-- **Use when**: Starting a new area of functionality (e.g., 'users', 'products').
-- **Workflow**: Planning and initial Work phase.
-- **Example**: `generateFeature({ name: "user-management" })`
+- **Use when**: Starting a new area of functionality (e.g., 'users', 'products')
+- **Example**: `generate_feature({ name: "user-management" })`
 
-**`generateController`** - Scaffold a new controller
-- **Description**: Creates a new controller file within an existing feature to group related API actions.
+### `generate_controller` - Add API Controller
 - **Parameters**: `name: string`, `feature: string`
-- **Use when**: Adding a new set of related endpoints to a feature (e.g., a 'profile' controller in the 'user' feature).
-- **Workflow**: Work phase, when expanding a feature.
-- **Example**: `generateController({ name: "profile", feature: "user" })`
+- **Use when**: Creating new API endpoints in an existing feature
+- **Example**: `generate_controller({ name: "profile", feature: "user" })`
 
-**`generateProcedure`** - Scaffold a new procedure
-- **Description**: Creates a new procedure (middleware) file for reusable logic like authentication or logging.
+### `generate_procedure` - Create Business Logic Procedure
 - **Parameters**: `name: string`, `feature: string`
-- **Use when**: You need to share logic across multiple actions, such as an authentication check.
-- **Workflow**: Work phase, for implementing cross-cutting concerns.
-- **Example**: `generateProcedure({ name: "auth", feature: "user" })`
+- **Use when**: Implementing reusable business logic or middleware
+- **Example**: `generate_procedure({ name: "auth", feature: "user" })`
 
-**`generateSchema`** - Generate client schema
-- **Description**: Manually triggers the generation of the type-safe client schema from the API router.
+### `generate_schema` - Generate Type-Safe Client
 - **Parameters**: `output?: string`, `watch?: boolean`, `docs?: boolean`, `docsOutput?: string`
-- **Use when**: In CI/CD pipelines or to force regeneration without the dev server.
-- **Workflow**: Build and deployment processes.
-- **Example**: `generateSchema({ output: "src/generated" })`
+- **Use when**: Creating/updating the auto-generated client for type-safe API calls
+- **Example**: `generate_schema({ output: "src/generated" })`
 
-**`generateDocs`** - Generate API documentation
-- **Description**: Creates an OpenAPI specification and an optional interactive HTML UI for the API.
+### `generate_docs` - Create API Documentation
 - **Parameters**: `output?: string`, `ui?: boolean`
-- **Use when**: You need to update or create API documentation for internal or external use.
-- **Workflow**: Documentation and release phases.
-- **Example**: `generateDocs({ ui: true })`
+- **Use when**: Generating OpenAPI documentation and interactive docs
+- **Example**: `generate_docs({ ui: true })`
 
+## API Validation Tools - HTTP Testing
+Tools for testing Igniter.js API endpoints and validating OpenAPI specifications.
 
-### API Validation & Testing
-Essential tools for API development and testing.
+### `get_openapi_spec` - Retrieve OpenAPI Specification
+- Parameters: `url?: string`
+- **Use when**: To confirm the API is responsive after server verification (for back-end testing).
+- **Workflow**: Part of the Back-End Testing protocol.
+- **Requirements**: Server must be running and serving the OpenAPI spec. `src/igniter.client.ts` must have been read and its port verified.
+- **Impediments**: Server down, invalid OpenAPI endpoint, or API not responding correctly.
+- **Example**: `get_openapi_spec({ url: "http://localhost:3000/api/v1/docs/openapi.json" })`
 
-**\`get_openapi_spec\`** - Retrieve OpenAPI specification
-- Parameters: \`url?: string\` (defaults to http://localhost:3000/docs/openapi.json)
-- Use when: Understanding API structure, before implementing clients
-- Workflow: Planning → Work transition, API documentation phase
-- Requirements: Server must be running and serving OpenAPI spec
-- Impediments: Server down, invalid OpenAPI endpoint
-- Example: \`get_openapi_spec({ url: "http://localhost:3000/docs/openapi.json" })\`
-
-**\`make_api_request\`** - Execute HTTP requests for testing
-- Parameters: \`method: "GET"|"POST"|"PUT"|"DELETE"|"PATCH"\`, \`url: string\`, \`headers?: Record<string,string>\`, \`body?: any\`, \`timeout?: number\`
-- Use when: Validating implementations, debugging API issues, integration testing
-- Workflow: Work phase validation, Revise phase testing
-- Requirements: Target server must be accessible
-- Impediments: Network issues, authentication failures, server errors
-- Best practices: Always test successful and error cases
-- Example: \`make_api_request({ method: "POST", url: "/api/users", body: { name: "Test" }, headers: { "Content-Type": "application/json" } })\`
+### `make_api_request` - Execute HTTP Requests for Testing
+- **Parameters**: `method: "GET"|"POST"|"PUT"|"DELETE"|"PATCH"`, `url: string`, `headers?: Record<string,string>`, `body?: any`, `timeout?: number`
+- **Use when**: Testing Back-End API endpoints, validating API behavior, debugging API issues, integration testing (only after server and OpenAPI spec are confirmed operational).
+- **Workflow**: Back-End Testing protocol.
+- **Requirements**: Target server must be accessible, and `get_openapi_spec` must have successfully confirmed API responsiveness.
+- **Impediments**: Network issues, authentication failures, server errors, or incorrect API contracts.
+- **Best practices**: Always test successful and error cases, ensure headers and body match API contract.
+- **Example**: `make_api_request({ method: "POST", url: "/api/users", body: { name: "Test" }, headers: { "Content-Type": "application/json" } })`
 
 ### Documentation & Research
 Tools for accessing external knowledge and documentation.
@@ -99,8 +119,11 @@ Tools for accessing external knowledge and documentation.
 - Impediments: Documentation site changes, rate limiting
 - Example: \`get_documentation({ source: "nextjs", topic: "app/building-your-application" })\`
 
-### GitHub Integration
-Tools for community research and issue management.
+### Code Investigation Tools
+Advanced tools for understanding codebases and resolving symbols.
+
+### GitHub & Project Management Integration
+Tools for community research, issue tracking, and collaboration.
 
 **\`search_github_issues\`** - Search for GitHub issues and pull requests
 - Parameters: \`query: string\`, \`repository?: string\`, \`state?: "open"|"closed"|"all"\`, \`labels?: string[]\`, \`sort?: "created"|"updated"|"comments"\`, \`order?: "asc"|"desc"\`, \`per_page?: number\`
@@ -110,25 +133,24 @@ Tools for community research and issue management.
 - Best practices: Use specific search terms, filter by relevant labels
 - Example: \`search_github_issues({ query: "router error typescript", state: "open" })\`
 
-**\`create_github_issue\`** - Create new GitHub issues
-- Parameters: \`title: string\`, \`body: string\`, \`repository?: string\`, \`labels?: string[]\`, \`assignees?: string[]\`
-- Use when: Reporting bugs, proposing features, documenting decisions
-- Workflow: Feedback and Learn phases
-- Requirements: GitHub write permissions, GITHUB_TOKEN environment variable
-- Example: \`create_github_issue({ title: "Bug: Router fails with nested paths", body: "Steps to reproduce..." })\`
+**`create_github_issue`** - Create new GitHub issues
+- **Parameters**: `title: string`, `body: string`, `repository?: string`, `labels?: string[]`, `assignees?: string[]`
+- **Use when**: Reporting bugs, proposing features, documenting decisions
+- **Workflow**: Feedback and Learn phases
+- **Requirements**: GitHub write permissions, GITHUB_TOKEN environment variable
+- **Example**: `create_github_issue({ title: "Bug: Router fails with nested paths", body: "Steps to reproduce..." })`
 
-**\`get_github_issue\`** - Get detailed issue information
-- Parameters: \`issueNumber: number\`, \`repository?: string\`
-- Use when: Following up on specific issues, understanding context
-- Workflow: Research and validation phases
-- Example: \`get_github_issue({ issueNumber: 123 })\`
+**`list_issues`** - List repository issues
+- **Description**: Lists issues in a GitHub repository with comprehensive filtering options.
+- **Parameters**: `owner: string`, `repo: string`, `after?: string`, `direction?: "ASC" | "DESC"`, `labels?: string[]`, `orderBy?: "CREATED_AT" | "UPDATED_AT" | "COMMENTS"`, `perPage?: number`, `since?: string`, `state?: "OPEN" | "CLOSED"`
+- **Use when**: Project planning, issue prioritization, status tracking, sprint planning.
+- **Workflow**: Planning and monitoring phases.
+- **Best practices**: Use filters to focus on relevant issues, combine with labels for categorization.
+- **Example**: `list_issues({ owner: "felipebarcelospro", repo: "igniter-js", state: "OPEN", labels: ["bug", "high-priority"] })`
 
-**\`search_github_code\`** - Find code examples and patterns
-- Parameters: \`query: string\`, \`repository?: string\`, \`language?: string\`, \`filename?: string\`
-- Use when: Learning implementation patterns, finding integration examples
-- Workflow: Planning and Work phases
-- Best practices: Use specific function names, include file extensions
-- Example: \`search_github_code({ query: "createRouter igniter", language: "typescript" })\`
+
+
+
 
 ### File Analysis & Health Monitoring
 CRITICAL tools for understanding and maintaining code quality.
@@ -157,39 +179,31 @@ CRITICAL tools for understanding and maintaining code quality.
 - Best practices: Run after implementing features to ensure quality
 - Example: \`analyze_feature({ featurePath: "src/features/user-management", includeStats: true })\`
 
-### Code Investigation & Symbol Resolution
-Advanced tools for understanding complex codebases and resolving symbols.
+### Code Investigation Tools
+Advanced tools for understanding codebases and resolving symbols.
 
-**\`find_implementation\`** - Locate where symbols are implemented
-- Parameters: \`symbol: string\`, \`filePath: string\`, \`projectRoot?: string\`
-- Use when: TypeScript errors about unknown symbols, API usage questions, finding definitions
-- Workflow: Error debugging, understanding unfamiliar code, API discovery
-- Output: Implementation locations (project vs node_modules), import context
-- Requirements: Valid symbol name, accessible file path
-- Example: \`find_implementation({ symbol: "createRouter", filePath: "src/igniter.router.ts" })\`
+### `find_implementation` - Locate Symbol Definitions
+- **Parameters**: `symbol: string`, `filePath: string`, `projectRoot?: string`
+- **Use when**: TypeScript errors about unknown symbols, finding API definitions
+- **Output**: Implementation locations, import context
+- **Example**: `find_implementation({ symbol: "createRouter", filePath: "src/igniter.router.ts" })`
 
-**\`explore_source\`** - Deep analysis of implementation files
-- Parameters: \`filePath: string\`, \`symbol?: string\`, \`includeContext?: boolean\`
-- Use when: Understanding library internals, analyzing found implementations, studying APIs
-- Workflow: After \`find_implementation\`, when investigating node_modules
-- Output: File structure, symbol-specific analysis, package info, dependencies
-- Best practices: Use with specific symbol for focused analysis
-- Example: \`explore_source({ filePath: "node_modules/@igniter-js/core/dist/index.d.ts", symbol: "Router" })\`
+### `explore_source` - Deep File Analysis
+- **Parameters**: `filePath: string`, `symbol?: string`, `includeContext?: boolean`
+- **Use when**: Understanding library internals, analyzing implementations
+- **Output**: File structure, symbol analysis, package info, dependencies
+- **Example**: `explore_source({ filePath: "node_modules/@igniter-js/core/dist/index.d.ts", symbol: "Router" })`
 
-**\`trace_dependency_chain\`** - Map complete symbol dependency path
-- Parameters: \`symbol: string\`, \`startFile: string\`, \`maxDepth?: number\`
-- Use when: Complex import chains, barrel file navigation, re-export tracking
-- Workflow: Deep debugging, understanding complex dependencies
-- Output: Full dependency path, re-export detection, final implementation
-- Requirements: Symbol must exist in dependency chain
-- Impediments: Circular dependencies, missing files
-- Example: \`trace_dependency_chain({ symbol: "middleware", startFile: "src/app.ts", maxDepth: 5 })\`
+### `trace_dependency_chain` - Map Import Chains
+- **Parameters**: `symbol: string`, `startFile: string`, `maxDepth?: number`
+- **Use when**: Complex import chains, barrel file navigation
+- **Output**: Full dependency path, re-export detection
+- **Example**: `trace_dependency_chain({ symbol: "middleware", startFile: "src/app.ts", maxDepth: 5 })`
 
-**Code Investigation Protocol**:
-1. **Error Investigation**: \`find_implementation\` → \`explore_source\` → \`analyze_file\`
-2. **API Discovery**: \`find_implementation\` → \`explore_source\` with context
-3. **Complex Tracing**: \`trace_dependency_chain\` → \`explore_source\` on final implementation
-4. **Store Findings**: Use \`store_memory\` with type \`code_pattern\` for insights
+**Investigation Protocol**:
+1. **TypeScript Errors**: `find_implementation` → `explore_source` → `analyze_file` → `store_memory`
+2. **API Discovery**: `get_openapi_spec` → `find_implementation` → `make_api_request`
+3. **Dependency Issues**: `trace_dependency_chain` → `explore_source` → `analyze_feature`
 
 ### Memory Management & Knowledge Base
 Tools for persistent knowledge and learning.
@@ -228,6 +242,9 @@ Tools for persistent knowledge and learning.
 - Workflow: Reflect and Learn phases
 - Features: Auto-generates reflection if no content provided
 - Example: \`reflect_on_memories({ title: "API Development Insights", content: "Key learnings..." })\`
+
+### Advanced Debugging & Error Resolution
+Specialized tools and protocols for complex debugging scenarios.
 
 ### Task Management & Project Organization
 CRITICAL tools for managing development tasks, project coordination, and workload distribution.
@@ -270,38 +287,44 @@ CRITICAL tools for managing development tasks, project coordination, and workloa
 - Features: Validates task existence, maintains scope integrity
 - Example: \`reorder_tasks({ scope_id: "user-auth", task_order: ["task-1", "task-3", "task-2"] })\`
 
-### Agent Delegation & Workload Distribution
-Advanced tools for delegating tasks to specialized agents and monitoring distributed work.
+### Agent Delegation Tools
+Advanced tools for delegating tasks to specialized AI agents.
 
-**\`delegate_to_agent\`** - Delegate tasks to specialized coding agents
-- Parameters: \`task_id: string\`, \`agent_type: "claude"|"gemini"|"gpt"|"perplexity"\`, \`execution_config?: { model?, sandbox_enabled?, network_access?, fresh_environment?, timeout_minutes?, proxy? }\`, \`context?: { files?, instructions?, constraints?, working_directory? }\`
-- Use when: Complex tasks require specialized attention, parallel execution needed, focused expertise required, Lia needs to focus on strategic work
-- Workflow: After task creation, when workload distribution is beneficial
-- Features: Secure sandbox execution, model selection, comprehensive monitoring, automatic task status updates
-- Best practices: Use for independent tasks, provide clear context, monitor progress
-- Example: \`delegate_to_agent({ task_id: "api-docs-123", agent_type: "claude", execution_config: { model: "claude-3-5-sonnet", sandbox_enabled: true } })\`
+### `delegate_to_agent` - Delegate Tasks to AI Agents
+- **Parameters**: `task_id: string`, `agent_type: "claude"|"gemini"|"gpt"|"perplexity"`, `execution_mode?: "background"|"sync"`, `execution_config?: {...}`, `context?: {...}`
+- **Use when**: Complex tasks, parallel execution needed, specialized expertise required
+- **Features**: Background execution, sandbox isolation, progress monitoring
+- **Example**: `delegate_to_agent({ task_id: "api-docs-123", agent_type: "claude", execution_mode: "background" })`
 
-**\`monitor_agent_tasks\`** - Monitor progress of delegated work
-- Parameters: \`agent_type?: "claude"|"gemini"|"gpt"|"perplexity"|"all"\`, \`include_logs?: boolean\`, \`include_analytics?: boolean\`, \`log_lines?: number\`, \`task_filter?: string\`
-- Use when: Checking delegation status, collecting results, debugging delegation issues, generating progress reports
-- Workflow: During delegation monitoring, progress reviews
-- Features: Real-time logs, execution analytics, task filtering, comprehensive reporting
-- Output: Task progress summary, execution logs, performance analytics
-- Example: \`monitor_agent_tasks({ agent_type: "claude", include_logs: true, task_filter: "user-auth" })\`
+### `monitor_agent_tasks` - Monitor Agent Progress
+- **Parameters**: `agent_type?: "all"|"claude"|"gemini"|"gpt"|"perplexity"`, `include_logs?: boolean`, `include_analytics?: boolean`, `log_lines?: number`, `task_filter?: string`
+- **Use when**: Checking delegation status, collecting results, debugging issues
+- **Example**: `monitor_agent_tasks({ agent_type: "claude", include_logs: true })`
 
-**\`check_agent_environment\`** - Verify agent delegation environment readiness
-- Parameters: \`check_docker?: boolean\`, \`check_api_keys?: boolean\`, \`check_models?: boolean\`, \`detailed_report?: boolean\`
-- Use when: Before delegation workflows, troubleshooting delegation issues, environment diagnostics
-- Workflow: Pre-delegation validation, setup verification
-- Features: Docker status, API key validation, model availability, comprehensive diagnostics
-- Example: \`check_agent_environment({ check_docker: true, check_api_keys: true, detailed_report: true })\`
+### `check_delegation_status` - Check Single Task Status
+- **Parameters**: `task_id: string`
+- **Use when**: Monitoring specific delegated task progress
+- **Example**: `check_delegation_status({ task_id: "api-docs-123" })`
 
-**\`setup_agent_environment\`** - Get guided setup for agent delegation
-- Parameters: \`platform?: "auto"|"macos"|"linux"|"windows"\`, \`include_docker?: boolean\`, \`include_api_setup?: boolean\`, \`format?: "markdown"|"shell"\`
-- Use when: Initial environment setup, fixing delegation configuration, onboarding new developers
-- Workflow: Environment preparation, troubleshooting setup issues
-- Features: Platform-specific instructions, automated installation options, comprehensive setup guide
-- Example: \`setup_agent_environment({ platform: "macos", include_docker: true, format: "shell" })\`
+### `list_active_delegations` - List All Active Delegations
+- **Parameters**: `include_recent?: boolean`, `max_results?: number`
+- **Use when**: Getting overview of all delegated work
+- **Example**: `list_active_delegations({ include_recent: true, max_results: 20 })`
+
+### `cancel_delegation` - Cancel Running Tasks
+- **Parameters**: `task_id: string`
+- **Use when**: Stopping unnecessary work, freeing resources
+- **Example**: `cancel_delegation({ task_id: "api-docs-123" })`
+
+### `check_agent_environment` - Verify Agent Setup
+- **Parameters**: `check_docker?: boolean`, `check_api_keys?: boolean`, `detailed_report?: boolean`
+- **Use when**: Before delegation, troubleshooting setup issues
+- **Example**: `check_agent_environment({ check_docker: true, check_api_keys: true })`
+
+### `setup_agent_environment` - Guided Environment Setup
+- **Parameters**: `platform?: "auto"|"macos"|"linux"|"windows"`, `include_docker?: boolean`, `include_api_setup?: boolean`, `format?: "markdown"|"shell"`
+- **Use when**: Initial setup, fixing configuration issues
+- **Example**: `setup_agent_environment({ platform: "macos", include_docker: true })`
 
 ## Workflow Integration Patterns
 
@@ -365,25 +388,59 @@ Advanced tools for delegating tasks to specialized agents and monitoring distrib
 ## Tool Selection Strategy
 
 ### When to Use Each Tool
-- **Before ANY file work**: \`analyze_file\` (MANDATORY)
-- **Unknown symbols/imports**: \`find_implementation\` → \`explore_source\`
-- **Complex dependencies**: \`trace_dependency_chain\`
-- **API testing**: \`get_openapi_spec\` → \`make_api_request\`
-- **Research**: \`search_github_code\` → \`get_documentation\`
-- **Knowledge capture**: \`store_memory\` → \`relate_memories\`
-- **Project management**: \`list_tasks\` → \`create_task\` → \`update_task_status\`
-- **Workload distribution**: \`check_agent_environment\` → \`delegate_to_agent\` → \`monitor_agent_tasks\`
-- **Strategic planning**: \`search_memories\` → \`create_task\` → \`assess delegation potential\`
+- **Before ANY file work**: \`analyze_file\` (MANDATORY - always first)
+- **Debugging TypeScript errors**: \`find_implementation\` → \`explore_source\` → \`analyze_file\`
+- **API development/testing**: \`get_openapi_spec\` → \`make_api_request\` → \`generate_docs\`
+- **Research**: \`search_memories\` → \`get_documentation\` → \`search_github_issues\`
+- **Code investigation**: \`trace_dependency_chain\` → \`analyze_feature\` → \`store_memory\`
+- **Task management**: \`list_tasks\` → \`create_task\` → \`update_task_status\`
+- **Agent delegation**: \`check_agent_environment\` → \`delegate_to_agent\` → \`monitor_agent_tasks\`
+- **Documentation**: \`generate_schema\` → \`generate_docs\` → \`get_openapi_spec\`
+- **Planning**: \`search_memories\` → \`list_tasks\` → \`create_task\`
+- **Front-End Testing/Research**: `browser_navigate` → `browser_snapshot` → `browser_evaluate`
 
-### Delegation Decision Matrix
-| Task Characteristics | Action | Tool Chain |
-|---------------------|--------|------------|
-| Complex + Independent | Delegate | \`check_agent_environment\` → \`delegate_to_agent\` → \`monitor_agent_tasks\` |
-| Strategic + Integrated | Execute Directly | \`update_task_status\` → normal workflow |
-| Research Heavy | Delegate to Research Agent | \`delegate_to_agent\` with research context |
-| Code Review/Testing | Delegate to Specialist | \`delegate_to_agent\` with validation focus |
-| Architecture/Design | Execute Directly | Requires Lia's strategic oversight |
-| Documentation | Delegate | \`delegate_to_agent\` with documentation context |
+**Delegation Decision Matrix** (Enhanced)
+| Task Characteristics | Action | Tool Chain | Success Criteria |
+|---------------------|--------|------------|------------------|
+| Complex + Independent | Delegate | `check_agent_environment` → `delegate_to_agent` → `monitor_agent_tasks` | 90%+ completion rate, meets requirements |
+| Strategic + Integrated | Execute Directly | `search_memories` → `update_task_status` → normal workflow | Full architectural coherence |
+| Research Heavy | Delegate to Research Agent | `delegate_to_agent` with `agent_type: "perplexity"` + research context | Comprehensive findings, validated accuracy |
+| Code Review/Testing | Delegate to Specialist | `analyze_file` → `delegate_to_agent` with `agent_type: "gemini"` + validation focus | All tests pass, code quality standards met |
+| Architecture/Design | Execute Directly | Requires Lia's strategic oversight | Aligns with project vision and principles |
+| Documentation | Delegate | \`get_documentation\` → \`delegate_to_agent\` with documentation context | Clear, comprehensive, accurate |
+| Performance Optimization | Mixed | \`analyze_file\` → \`delegate_to_agent\` + direct validation | Measurable performance improvement |
+| Security Implementation | Execute Directly | \`search_github_issues\` → \`analyze_file\` → direct implementation | Security audit passed, best practices followed |
+
+### Troubleshooting & Recovery Protocols
+
+#### When Tools Fail
+**Network/API Issues:**
+- Verify server status → `start_dev_server` to start server
+- Test different endpoints → `make_api_request` with various URLs
+- Check OpenAPI availability → `get_openapi_spec` with explicit URL
+- Review delegation status → `monitor_agent_tasks` for blocked tasks
+
+**Analysis Errors:**
+- `analyze_file` fails → use `find_implementation` for symbol lookup first
+- `find_implementation` not found → try `search_github_code` for similar patterns
+- Feature analysis issues → analyze individual files with `analyze_file` first
+
+**Memory System Issues:**
+- Search returns empty → start with `search_memories` without filters
+- Relationship confusion → manually review with `get_github_issue` for existing docs
+- Storage conflicts → use different memory types or update existing entries
+
+**Delegation Problems:**
+- Agent environment fails → `setup_agent_environment` with specific platform
+- Execution timeout → use `cancel_delegation` and re-submit with simpler scope
+- Quality issues → `create_github_issue` for human review
+
+#### Recovery Strategies
+1. **Start with simplest approach** - use CLI tools first (`start_dev_server`, `run_tests`)
+2. **Isolate the problem** - test one tool at a time before complex workflows
+3. **Document workarounds** - `store_memory` successful recovery patterns
+4. **Seek human help** - `create_github_issue` when automation fails
+5. **Prevent recurrence** - update workflows based on troubleshooting experience
 
 ### Requirements for Success
 - Valid TypeScript project configuration
@@ -391,19 +448,83 @@ Advanced tools for delegating tasks to specialized agents and monitoring distrib
 - GitHub token for write operations
 - Running development server for API tools
 - Proper file permissions for memory storage
+- Docker environment for agent delegation (when applicable)
 
-### Common Impediments
-- Server not running (affects API tools)
-- Network connectivity issues (affects external tools)
-- Missing dependencies (affects analysis tools)
-- Invalid file paths (affects file analysis)
-- Rate limiting (affects GitHub API calls)
+### Common Impediments & Solutions
+- **Server not running**: Start with `dev()` before using API tools, fallback to static analysis
+- **Network connectivity**: Use `search_memories` for offline knowledge, cache documentation
+- **Missing dependencies**: Run analysis locally with available tools, use `diagnostics`
+- **Invalid file paths**: Verify paths with `list_directory`, use `grep` for broader searches
+- **Rate limiting**: Implement delays between calls, switch to local alternatives
+- **Tool failures**: Have fallback chains ready, use `store_memory` for workaround documentation
+- **Context confusion**: Use `visualize_memory_graph` to understand relationships
 
-### Best Practices
-- Always run \`analyze_file\` before working with any file
-- Use specific search terms for better GitHub results
-- Tag memories consistently for easy retrieval
-- Include confidence levels in stored knowledge
-- Test both success and error scenarios with API tools
-- Store investigation results to avoid repeated work
-- Use appropriate tool chains for complex problems
+### Best Practices (Enhanced)
+- **MANDATORY**: Always run `analyze_file` before ANY file operation
+- **Sequential Investigation**: Follow protocols in order - find → explore → analyze → store
+- **Memory-First Approach**: Search existing knowledge before external research
+- **Comprehensive Testing**: Test both success and error scenarios with API tools
+- **Context Preservation**: Store investigation paths and solutions for reuse
+- **Progressive Complexity**: Start simple, escalate complexity only when needed
+- **Error Recovery**: Always have Plan B when tools fail or timeout
+- **Knowledge Synthesis**: Connect new insights to existing patterns via relationships
+
+### Integration with Rules System
+Each tool directly supports specific rules:
+- **tools-usage-patterns.mdc**: Protocol enforcement for investigation workflows
+- **development-workflow.mdc**: File analysis requirements and CLI scaffolding
+- **api-validation-workflow.mdc**: OpenAPI validation and API request testing
+- **agents.mdc**: Agent delegation, monitoring, and environment setup
+- **core-principles.mdc**: Memory management and continuous learning
+- **planning.mdc**: Task creation and delegation planning
+- **feature-lifecycle.mdc**: Feature generation and progress tracking
+
+### Performance Optimization Guidelines
+- **Batch operations** when possible to reduce API calls
+- **Cache results** of expensive operations using memory system
+- **Use targeted searches** to avoid broad, slow operations
+- **Parallel execution** for independent tasks when delegation is available
+- **Early validation** to catch issues before complex chains
+
+### Security Considerations
+- **Validate inputs** before using \`make_api_request\` with user data
+- **Sanitize outputs** from \`get_documentation\` and external sources
+- **Audit agent delegation** - use \`monitor_agent_tasks\` for sensitive operations
+- **Store security findings** as \`bug_pattern\` memories
+- **Report vulnerabilities** via \`create_github_issue\` immediately
+- **Use sandbox mode** for \`delegate_to_agent\` in sensitive contexts
+- **Review API keys** with \`check_agent_environment\` before delegation
+
+## Browser Automation Tools - Autonomous Testing & Research
+Critical tools for autonomous validation and research capabilities.
+
+### Playwright Browser Automation
+**MANDATORY FOR ALL IMPLEMENTATIONS:**
+- **Purpose**: Autonomous browser testing for front-end validation
+- **Critical Requirement**: Cannot advance tasks without Playwright validation
+- **Use when**: Testing user interactions, form submissions, navigation, UI states
+- **Workflow**: All development phases requiring front-end validation
+- **Capabilities**:
+  - User journey testing (complete flows from start to finish)
+  - Form validation and error state testing
+  - Navigation and routing validation
+  - Interactive element testing (buttons, links, modals)
+  - Responsive design testing across devices
+  - Accessibility testing (keyboard navigation, screen readers)
+  - Visual regression testing
+- **Integration**: Provides autonomous validation layer similar to API testing
+- **Quality Gate**: Final validation before task advancement
+
+### Browser Research Tools
+**UNRESTRICTED ACCESS FOR RESEARCH:**
+- **Purpose**: Market analysis, documentation access, community insights
+- **Use when**: Research, market analysis, staying updated with technology
+- **Capabilities**:
+  - Forums and communities (Stack Overflow, Reddit, GitHub Discussions)
+  - Official documentation access (latest API docs, framework updates)
+  - Market analysis (technology trends, competitor solutions)
+  - News and updates (breaking changes, security updates)
+  - Visual references (UI inspiration, design patterns)
+  - Community solutions and real-world implementations
+- **Integration**: Research-driven development for current, customizable solutions
+- **Freedom**: Browser usage is freely allowed for comprehensive research

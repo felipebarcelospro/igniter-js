@@ -1,0 +1,551 @@
+---
+description: Provides comprehensive workflow patterns that integrate with MCP tools to handle common development scenarios systematically.
+globs: []
+alwaysApply: true
+---
+
+# Workflow Patterns for Development Scenarios
+
+This rule provides comprehensive workflow patterns that integrate with MCP tools to handle common development scenarios systematically. Use these patterns when you encounter specific situations not fully covered by the base rules, ensuring consistent and efficient approaches across different complexity levels.
+
+## 1. Code Investigation & Debugging Workflows
+
+### 1.1 TypeScript Compilation Errors Pattern
+
+**When to Use**: When encountering TypeScript compilation errors that prevent build/deployment.
+
+**Workflow Sequence**:
+```mermaid
+graph TD
+    A[TS Compilation Error] --> B{analyze_file - health check}
+    B --> C{Health status?}
+    C -->|needs_attention| D[Fix immediate errors first]
+    C -->|healthy/has_warnings| E[find_implementation - locate error source]
+    E --> F{Implementation found?}
+    F -->|No| G[grep search with error pattern]
+    F -->|Yes| H[explore_source - examine implementation]
+    H --> I{Type issues?}
+    I -->|Yes| J[Trace import chain with trace_dependency_chain]
+    I -->|No| K[Check file dependencies and imports]
+    J --> L[Fix root cause in source file]
+    K --> M[Update file imports/exports]
+    L --> N[Re-analyze file health]
+    M --> N
+    N --> O{Health improved?}
+    O -->|Yes| P[Proceed with development]
+    O -->|No| Q[Store as bug_pattern memory]
+    Q --> R[Escalate to human developer]
+```
+
+**Tool Chain**:
+- `analyze_file` (MANDATORY - first step)
+- `find_implementation` → `explore_source` → `trace_dependency_chain`
+- `grep` (for complex pattern searches)
+- `store_memory` (document solutions as `bug_pattern`)
+
+**Success Criteria**:
+- File health status changes from `needs_attention` to `healthy`
+- No TypeScript compilation errors
+- Solution documented for future reference
+
+### 1.2 Runtime Error Resolution Pattern
+
+**When to Use**: When application crashes or behaves unexpectedly during execution.
+
+**Workflow Sequence**:
+```mermaid
+graph TD
+    A[Runtime Error Occurs] --> B[analyze_file - current state]
+    B --> C{Error logs available?}
+    C -->|Yes| D[grep for error messages]
+    C -->|No| E[start dev server with debug logging]
+    D --> F[search_github_issues for similar errors]
+    E --> F
+    F --> G{Solutions found?}
+    G -->|Yes| H[Apply community solutions]
+    G -->|No| I[find_implementation of problematic function]
+    I --> J[explore_source of implementation]
+    J --> K{Logic error found?}
+    K -->|Yes| L[Fix logic and retest]
+    K -->|No| M[make_api_request to test specific endpoints]
+    L --> N[Run comprehensive tests]
+    M --> O{API working?}
+    O -->|Yes| P[Error is in UI layer]
+    O -->|No| Q[Check database connections]
+    P --> R[Update client-side error handling]
+    Q --> S[Fix database issues]
+    N --> T{Tests pass?}
+    R --> T
+    S --> T
+    T -->|Yes| U[store_memory as bug_pattern]
+    T -->|No| V[Escalate with detailed context]
+```
+
+**Tool Chain**:
+- `analyze_file` → `grep` → `find_implementation`
+- `search_github_issues` → `get_documentation` (community knowledge)
+- `make_api_request` (API layer testing)
+- `store_memory` (successful patterns)
+
+**Success Criteria**:
+- Application runs without errors
+- All affected functionality works correctly
+- Error handling is robust
+- Solution is documented for future reference
+
+## 2. Feature Development Workflows
+
+### 2.1 New Feature Implementation Pattern
+
+**When to Use**: Starting development of a new feature from requirements to deployment.
+
+**Workflow Sequence**:
+```mermaid
+graph TD
+    A[Feature Request] --> B[search_memories - existing patterns]
+    B --> C{Similar features exist?}
+    C -->|Yes| D[Adapt existing implementation]
+    C -->|No| E[create_task - breakdown feature]
+    E --> F[analyze_feature - current architecture]
+    F --> G{Architecture conflicts?}
+    G -->|Yes| H[create_github_issue - architectural discussion]
+    G -->|No| I[create_branch - feature branch]
+    I --> J[generateFeature - scaffold structure]
+    J --> K[Implement core logic with TDD]
+    K --> L{Unit tests pass?}
+    L -->|No| M[Debug with investigation tools]
+    L -->|Yes| N[generateDocs - update API docs]
+    M --> O[Test implementation]
+    O --> N
+    N --> P[make_api_request - integration testing]
+    P --> Q{API tests pass?}
+    Q -->|No| R[Fix API issues]
+    Q -->|Yes| S[create_pull_request]
+    R --> P
+    S --> T[Monitor CI/CD pipeline]
+    T --> U{Pipeline passes?}
+    U -->|Yes| V[merge_pull_request]
+    U -->|No| W[Fix pipeline issues]
+    W --> T
+    V --> X[Deploy to staging]
+    X --> Y[store_memory - feature complete]
+```
+
+**Tool Chain**:
+- `search_memories` → `create_task` → `analyze_feature`
+- `create_branch` → `generateFeature` → `generateDocs`
+- `make_api_request` → `create_pull_request` → `merge_pull_request`
+- `store_memory` (feature documentation)
+
+**Success Criteria**:
+- Feature works end-to-end
+- All tests pass (unit, integration, e2e)
+- API documentation is updated
+- Feature is deployed successfully
+- Solution is documented in memory system
+
+### 2.2 Refactoring Existing Code Pattern
+
+**When to Use**: When needing to improve existing code without changing functionality.
+
+**Workflow Sequence**:
+```mermaid
+graph TD
+    A[Refactoring Need Identified] --> B[analyze_feature - scope assessment]
+    B --> C[analyze_file - specific files to refactor]
+    C --> D[trace_dependency_chain - impact analysis]
+    D --> E{Impact manageable?}
+    E -->|No| F[create_github_issue - discuss refactoring scope]
+    E -->|Yes| G[create_branch - refactoring branch]
+    G --> H[Run existing test suite]
+    H --> I{Tests pass baseline?}
+    I -->|No| J[Fix failing tests first]
+    I -->|Yes| K[Apply refactoring changes]
+    J --> L[Commit baseline test results]
+    L --> K
+    K --> M[analyze_file - verify each change]
+    M --> N{Health maintained?}
+    N -->|No| O[Revert problematic changes]
+    N -->|Yes| P[Run tests after each change]
+    O --> Q[Debug refactoring issues]
+    P --> R{Tests still pass?}
+    Q --> M
+    R -->|No| S[Revert to last working state]
+    R -->|Yes| T[Continue refactoring]
+    T --> U{All files refactored?}
+    U -->|No| M
+    U -->|Yes| V[Final test suite run]
+    V --> W{Tests pass?}
+    W -->|No| X[Debug integration issues]
+    W -->|Yes| Y[Update API documentation if needed]
+    X --> Z[Fix issues and retest]
+    Z --> V
+    Y --> AA[create_pull_request]
+    AA --> BB[store_memory - refactoring insights]
+```
+
+**Tool Chain**:
+- `analyze_feature` → `analyze_file` → `trace_dependency_chain`
+- `create_branch` → `create_pull_request`
+- `store_memory` (refactoring patterns and insights)
+
+**Success Criteria**:
+- Code functionality remains unchanged
+- Code quality metrics improve
+- All existing tests still pass
+- Documentation is updated if public APIs changed
+- Refactoring insights are captured for future use
+
+## 3. API Development Workflows
+
+### 3.1 New Endpoint Creation Pattern
+
+**When to Use**: Adding new API endpoints to an existing feature.
+
+**Workflow Sequence**:
+```mermaid
+graph TD
+    A[New Endpoint Required] --> B[analyze_feature - existing feature structure]
+    B --> C[search_memories - API patterns]
+    C --> D{Similar endpoints exist?}
+    D -->|Yes| E[Adapt existing controller pattern]
+    D -->|No| F[Design API contract]
+    E --> G[generateController - scaffold new endpoint]
+    F --> G
+    G --> H[analyze_file - generated controller]
+    H --> I{Structure correct?}
+    I -->|No| J[Manual adjustments needed]
+    I -->|Yes| K[Implement business logic]
+    J --> K
+    K --> L[Add input validation with Zod]
+    L --> M[Test endpoint with make_api_request]
+    M --> N{Response correct?}
+    N -->|No| O[Debug endpoint issues]
+    N -->|Yes| P[Add comprehensive tests]
+    O --> L
+    P --> Q{Tests pass?}
+    Q -->|No| R[Fix test issues]
+    Q -->|Yes| S[Update OpenAPI documentation]
+    R --> P
+    S --> T[get_openapi_spec - verify documentation]
+    T --> U{Docs accurate?}
+    U -->|No| V[Fix documentation]
+    U -->|Yes| W[Integration with client]
+    V --> T
+    W --> X[store_memory - API pattern]
+```
+
+**Tool Chain**:
+- `analyze_feature` → `search_memories` → `generateController`
+- `analyze_file` → `make_api_request` → `get_openapi_spec`
+- `store_memory` (API implementation patterns)
+
+**Success Criteria**:
+- Endpoint returns correct responses
+- Input validation works properly
+- OpenAPI documentation is accurate
+- Integration tests pass
+- Pattern is documented for reuse
+
+### 3.2 API Error Handling Improvement Pattern
+
+**When to Use**: Improving error responses and handling in existing APIs.
+
+**Workflow Sequence**:
+```mermaid
+graph TD
+    A[API Error Issues] --> B[make_api_request - test error scenarios]
+    B --> C[Analyze error responses]
+    C --> D{Error format consistent?}
+    D -->|No| E[Standardize error response format]
+    D -->|Yes| F[Check error logging]
+    E --> G[Update all endpoints with consistent format]
+    F --> H{Logging adequate?}
+    H -->|No| I[Enhance error logging with context]
+    H -->|Yes| J[Analyze error patterns]
+    I --> K[Update monitoring and alerting]
+    J --> L{User-friendly messages?}
+    K --> L
+    L -->|No| M[Add proper error translations]
+    L -->|Yes| N[Implement error recovery mechanisms]
+    M --> O[Test all error scenarios]
+    N --> O
+    O --> P{All scenarios covered?}
+    P -->|No| Q[Add missing test cases]
+    P -->|Yes| R[Update API documentation]
+    Q --> O
+    R --> S[store_memory - error handling patterns]
+```
+
+**Tool Chain**:
+- `make_api_request` (error scenario testing)
+- `analyze_file` (controller error handling review)
+- `get_openapi_spec` (documentation validation)
+- `store_memory` (error pattern documentation)
+
+**Success Criteria**:
+- Error responses are consistent and informative
+- Proper logging is in place
+- User experience with errors is improved
+- Documentation reflects error handling
+- Patterns are documented for consistency
+
+## 4. Performance Optimization Workflows
+
+### 4.1 Database Query Optimization Pattern
+
+**When to Use**: Identifying and fixing slow database queries.
+
+**Workflow Sequence**:
+```mermaid
+graph TD
+    A[Performance Issue Identified] --> B[analyze_file - database queries]
+    B --> C[Run performance benchmarks]
+    C --> D{Queries optimized?}
+    D -->|No| E[grep for N+1 query patterns]
+    D -->|Yes| F[Analyze query execution plans]
+    E --> G[Fix N+1 problems with includes]
+    F --> H{Indexes missing?}
+    G --> I[Test query performance]
+    H -->|No| J[Check query structure]
+    H -->|Yes| K[Add appropriate indexes]
+    I --> L{Performance improved?}
+    J --> L
+    K --> L
+    L -->|No| M[Rewrite complex queries]
+    L -->|Yes| N[Cache frequently used data]
+    M --> O[Implement query result caching]
+    N --> O
+    O --> P[Test with realistic data volume]
+    P --> Q{Performance acceptable?}
+    Q -->|No| R[Profile with detailed metrics]
+    Q -->|Yes| S[Update monitoring thresholds]
+    R --> T[Implement monitoring alerts]
+    S --> T
+    T --> U[Document optimization changes]
+    U --> V[store_memory - performance patterns]
+```
+
+**Tool Chain**:
+- `analyze_file` → `grep` (query pattern analysis)
+- `monitor_agent_tasks` (performance monitoring during optimization)
+- `store_memory` (performance optimization techniques)
+
+**Success Criteria**:
+- Query performance meets acceptable thresholds
+- No degradation in other functionality
+- Monitoring is in place for regression detection
+- Optimization patterns are documented
+
+### 4.2 Bundle Size Optimization Pattern
+
+**When to Use**: Reducing JavaScript bundle size for better loading performance.
+
+**Workflow Sequence**:
+```mermaid
+graph TD
+    A[Bundle Size Concern] --> B[analyze_feature - current bundle]
+    B --> C[Run bundle analyzer]
+    C --> D{Size acceptable?}
+    D -->|No| E[grep for unused imports]
+    D -->|Yes| F[End workflow]
+    E --> G[Remove unused imports]
+    G --> H[Implement code splitting]
+    H --> I[Lazy load heavy components]
+    I --> J[Tree shake unused libraries]
+    J --> K[Use dynamic imports strategically]
+    K --> L[Rebuild and measure bundle]
+    L --> M{Size reduced sufficiently?}
+    M -->|No| N[Profile largest dependencies]
+    M -->|Yes| O[Test loading performance]
+    N --> P[Replace heavy libraries]
+    O --> Q{Loading improved?}
+    P --> L
+    Q -->|No| R[Debug loading bottlenecks]
+    Q -->|Yes| S[Implement bundle monitoring]
+    R --> T[Fix loading issues]
+    T --> O
+    S --> U[Document bundle optimization]
+    U --> V[store_memory - optimization techniques]
+```
+
+**Tool Chain**:
+- `analyze_feature` → `grep` (import analysis)
+- `monitor_agent_tasks` (bundle size monitoring)
+- `store_memory` (optimization techniques)
+
+**Success Criteria**:
+- Bundle size reduced to acceptable limits
+- Loading performance improved measurably
+- No functionality loss from optimizations
+- Continuous monitoring in place
+
+## 5. Knowledge Management Workflows
+
+### 5.1 Research and Learning Pattern
+
+**When to Use**: When needing to learn new concepts, libraries, or best practices.
+
+**Workflow Sequence**:
+```mermaid
+graph TD
+    A[Learning Need] --> B[search_memories - existing knowledge]
+    B --> C{Knowledge exists?}
+    C -->|Yes| D[Review and update if needed]
+    C -->|No| E[browser_navigate - to search engine/doc site]
+    E --> F[browser_type - search query]
+    F --> G[browser_press_key - Enter for search]
+    G --> H[browser_snapshot - evaluate results page]
+    H --> I{Relevant link identified?}
+    I -->|Yes| J[browser_click - navigate to link]
+    I -->|No| K[Refine search / browser_navigate - to another source]
+    J --> L[browser_evaluate - extract content/code]
+    L --> M[store_memory - extracted insights]
+    M --> N[relate_memories - to relevant tasks/patterns]
+    N --> O[Reflect on learnings]
+```
+
+**Tool Chain**:
+- `search_memories` → `browser_navigate` → `browser_type` → `browser_press_key` → `browser_snapshot` → `browser_click` → `browser_evaluate`
+- `get_documentation` → `search_github_issues` → `search_github_code` → `relate_memories` → `store_memory`
+- `analyze_file` (for implementation validation)
+
+**Success Criteria**:
+- Knowledge gap is filled
+- Implementation works correctly
+- Knowledge is properly stored and connected
+- Insights are shared when beneficial
+
+### 5.2 Architecture Decision Documentation Pattern
+
+**When to Use**: Making significant architectural decisions that affect the codebase.
+
+**Workflow Sequence**:
+```mermaid
+graph TD
+    A[Architecture Decision Needed] --> B[search_memories - similar decisions]
+    B --> C{Guidance available?}
+    C -->|Yes| D[Apply existing pattern]
+    C -->|No| E[get_documentation - best practices]
+    D --> F[Implement decision]
+    E --> F
+    F --> G[Document decision rationale]
+    G --> H[Implement decision in code]
+    H --> I[Test implementation thoroughly]
+    I --> J{Monitor outcomes}
+    J --> K{Results positive?}
+    K -->|Yes| L[Full adoption and documentation]
+    K -->|No| M[Adjust approach or revert]
+    L --> N[store_memory as architectural_decision]
+    M --> O[Document lessons learned]
+    N --> P[relate_memories to affected code]
+    O --> P
+    P --> Q[Update team documentation]
+    Q --> R[Monitor long-term impact]
+```
+
+**Tool Chain**:
+- `search_memories` → `get_documentation` → `store_memory`
+- `relate_memories` → `visualize_memory_graph` (decision impact)
+- `analyze_feature` (implementation assessment)
+
+**Success Criteria**:
+- Decision rationale is well documented
+- Implementation is successful
+- Impact is monitored and measured
+- Lessons learned are captured
+- Knowledge is properly connected in the memory system
+
+## Tool Integration Matrix
+
+| Scenario | Primary Tools | Supporting Tools | Memory Type |
+|----------|---------------|------------------|-------------|
+| TS Errors | `analyze_file` → `find_implementation` → `explore_source` | `grep`, `trace_dependency_chain` | `bug_pattern` |
+| New Feature | `create_task` → `generateFeature` → `create_pull_request` | `analyze_feature`, `make_api_request` | `architectural_decision` |
+| API Development | `generateController` → `get_openapi_spec` → `make_api_request` | `analyze_file`, `store_memory` | `code_pattern` |
+| Refactoring | `analyze_feature` → `trace_dependency_chain` → `create_branch` | `grep`, `analyze_file` | `code_pattern` |
+| Performance | `monitor_agent_tasks` → `analyze_file` → `grep` | `diagnostics`, `store_memory` | `performance_insight` |
+| Research | `search_memories` → `get_documentation` → `search_github_code` | `store_memory`, `relate_memories` | `insight` |
+| Architecture | `search_memories` → `store_memory` → `relate_memories` | `visualize_memory_graph`, `analyze_feature` | `architectural_decision` |
+| Back-end Testing | `get_openapi_spec` → **Playwright** → `make_api_request` | Browser automation, autonomous validation | `api_mapping` |
+| Front-end Testing | **Playwright** → browser automation → autonomous validation | Cannot advance without browser testing | `code_pattern` |
+| Research | Browser access → `search_memories` → `get_documentation` | Forums, documentation, market analysis | `insight` |
+| Market Analysis | Browser research → community insights → technology updates | Stack Overflow, Reddit, latest docs | `insight` |
+
+## Critical Testing & Validation Protocols
+
+### API Testing First - MANDATORY PROTOCOL
+**🚨 ABSOLUTE REQUIREMENT:**
+1. **ALWAYS start with `get_openapi_spec`** to verify app status
+2. **If offline, automatically start dev server** with `start_dev_server`
+3. **Wait for server initialization** (2-3 seconds)
+4. **Retry `get_openapi_spec`** to confirm accessibility
+5. **ONLY THEN proceed** with `make_api_request` and other testing
+
+### Browser Testing Integration - ABSOLUTE REQUIREMENT
+**🔬 VALIDATION REQUIREMENT:**
+- **ALL implementations require Playwright validation**
+- **Cannot advance to next task/subtask** without browser testing
+- **Browser testing provides autonomous validation** similar to API testing
+- **Back-end tasks require browser validation** for complete integration testing
+- **Front-end tasks require browser validation** for user interaction testing
+
+**Playwright Testing Workflow:**
+- **User Journey Testing:** Complete flows from start to finish
+- **Form Validation:** Submissions, validation, error states
+- **Navigation Testing:** Routing, page transitions, URL changes
+- **Interactive Elements:** Buttons, links, modals, dynamic content
+- **Responsive Testing:** Across different screen sizes and devices
+- **Accessibility Testing:** Keyboard navigation, screen readers, focus management
+
+### Research & Market Analysis Freedom
+**🌐 UNRESTRICTED BROWSER ACCESS:**
+- **Forums and Communities:** Stack Overflow, Reddit, GitHub Discussions
+- **Official Documentation:** Latest API docs, framework updates, library changes
+- **Market Analysis:** Technology trends, competitor solutions, user preferences
+- **News and Updates:** Breaking changes, security updates, new releases
+- **Visual References:** UI/UX inspiration, design patterns, accessibility guidelines
+- **Community Solutions:** Real-world implementations and solutions
+
+## Build Operations Prohibition
+
+### Critical Safety Protocol
+**🚫 ABSOLUTE BAN ON BUILD OPERATIONS:**
+- **NEVER execute build commands** without explicit user permission
+- **Includes:** `npm run build`, `bun run build`, `yarn build`, or any build-related commands
+- **Always ask for explicit permission** before any build operation
+- **Build operations are high-risk** and require user oversight
+- **Document build permission requests** for accountability
+
+**Build Command Examples (FORBIDDEN without permission):**
+- `npm run build`
+- `bun run build`
+- `yarn build`
+- `tsc --build`
+- Any production build scripts
+
+**Build Request Protocol:**
+1. **Always ask user** before executing any build command
+2. **Document the reason** for needing the build
+3. **Get explicit approval** before proceeding
+4. **Record build outcomes** for future reference
+
+## Success Metrics
+
+### Quality Gates
+- **Investigation Workflows**: Problem root cause identified within 3 tool calls
+- **Development Workflows**: All tests pass, no regression in existing functionality
+- **Performance Workflows**: Measurable improvement (10%+ for query performance, 20%+ for bundle size)
+- **Knowledge Workflows**: New insights stored and properly connected to existing knowledge
+
+### Monitoring Metrics
+- Time to resolution for different workflow types
+- Success rate of workflow completion
+- Pattern reuse frequency from stored memories
+- Team adoption of documented workflows
+
+### Continuous Improvement
+- Weekly review of workflow effectiveness
+- Update workflows based on success/failure patterns
+- Document workarounds for common tool limitations
+- Expand patterns based on new development scenarios

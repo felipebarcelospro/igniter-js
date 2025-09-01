@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/mcp-server",
-  "version": "0.0.40",
+  "version": "0.0.46",
   "private": false,
   "description": "MCP Server for Igniter.js ecosystem interaction via STDIO.",
   "main": "dist/index.js",
@@ -33,6 +33,7 @@
     "@types/axios": "^0.9.36",
     "@types/node": "^22.16.2",
     "@types/turndown": "^5.0.5",
+    "@types/chrome-remote-interface": "^0.31.12",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2",
     "vitest": "^1.6.1"
@@ -42,6 +43,7 @@
     "@octokit/rest": "^22.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "axios": "^1.7.7",
+    "chrome-remote-interface": "^0.33.0",
     "fast-xml-parser": "^5.2.5",
     "gray-matter": "^4.0.3",
     "turndown": "^7.2.1",

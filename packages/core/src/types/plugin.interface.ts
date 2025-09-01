@@ -6,7 +6,7 @@ import type {
   IgniterCookies,
   InferParamPath,
 } from "../types";
-import type { IgniterResponseProcessor } from "../processors/response.processor";
+import { IgniterResponseProcessor } from "@/processors/response.processor";
 
 // ============ SELF-REFERENTIAL PLUGIN ARCHITECTURE ============
 
@@ -100,7 +100,7 @@ export type PluginControllerAction<
     /** Self-reference for accessing plugin's own actions */
     self: PluginSelfContext<TContext, TActions>;
     /** Response processor for building responses */
-    response: IgniterResponseProcessor<TContext, any>;
+    response: IgniterResponseProcessor<TContext>;
   }) => any | Promise<any>;
 };
 
@@ -476,7 +476,7 @@ export type PluginRegistration = {
  * ```
  */
 export type IgniterPlugin<
-  TContext extends object | ContextCallback,  
+  TContext extends object | ContextCallback,
   TName extends string,
   TMeta extends Record<string, any>,
   TConfig extends Record<string, any>,

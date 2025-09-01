@@ -19,9 +19,9 @@ export function registerGitHubTools({ server, octokit }: ToolsetContext) {
       order: z.enum(['asc', 'desc']).optional().describe("Sort direction"),
       per_page: z.number().min(1).max(100).optional().describe("Number of results per page (max 100)")
     },
-  }, async ({ query, repository, state, labels, sort, order, per_page }: { 
-    query: string, 
-    repository?: string, 
+  }, async ({ query, repository, state, labels, sort, order, per_page }: {
+    query: string,
+    repository?: string,
     state?: string,
     labels?: string[],
     sort?: string,
@@ -30,16 +30,16 @@ export function registerGitHubTools({ server, octokit }: ToolsetContext) {
   }) => {
     try {
       const [owner, repo] = (repository || 'felipebarcelospro/igniter-js').split('/');
-      
+
       const searchQuery = `${query} repo:${owner}/${repo}`;
-      
+
       const response = await octokit.rest.search.issuesAndPullRequests({
         q: searchQuery,
         sort: sort as any,
         order: order as any,
         per_page: per_page || 30
       });
-      
+
       const issues = response.data.items.map((issue: any) => ({
         number: issue.number,
         title: issue.title,
@@ -51,12 +51,12 @@ export function registerGitHubTools({ server, octokit }: ToolsetContext) {
         labels: issue.labels.map((label: any) => label.name),
         body: issue.body?.substring(0, 500) + (issue.body && issue.body.length > 500 ? '...' : '')
       }));
-      
+
       const result = {
         total_count: response.data.total_count,
         issues
       };
-      
+
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (error: any) {
       return { content: [{ type: "text", text: `Error searching GitHub issues: ${error.message}` }] };
@@ -73,16 +73,16 @@ export function registerGitHubTools({ server, octokit }: ToolsetContext) {
       labels: z.array(z.string()).optional().describe("Labels to add to the issue"),
       assignees: z.array(z.string()).optional().describe("Users to assign to the issue")
     },
-  }, async ({ title, body, repository, labels, assignees }: { 
-    title: string, 
-    body: string, 
+  }, async ({ title, body, repository, labels, assignees }: {
+    title: string,
+    body: string,
     repository?: string,
     labels?: string[],
     assignees?: string[]
   }) => {
     try {
       const [owner, repo] = (repository || 'felipebarcelospro/igniter-js').split('/');
-      
+
       const issue = await octokit.rest.issues.create({
         owner,
         repo,
@@ -91,7 +91,7 @@ export function registerGitHubTools({ server, octokit }: ToolsetContext) {
         labels,
         assignees
       });
-      
+
       const result = {
         number: issue.data.number,
         title: issue.data.title,
@@ -99,7 +99,7 @@ export function registerGitHubTools({ server, octokit }: ToolsetContext) {
         state: issue.data.state,
         created_at: issue.data.created_at
       };
-      
+
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (error: any) {
       return { content: [{ type: "text", text: `Error creating GitHub issue: ${error.message}` }] };
@@ -116,13 +116,13 @@ export function registerGitHubTools({ server, octokit }: ToolsetContext) {
   }, async ({ issueNumber, repository }: { issueNumber: number, repository?: string }) => {
     try {
       const [owner, repo] = (repository || 'felipebarcelospro/igniter-js').split('/');
-      
+
       const issue = await octokit.rest.issues.get({
         owner,
         repo,
         issue_number: issueNumber
       });
-      
+
       const result = {
         number: issue.data.number,
         title: issue.data.title,
@@ -138,7 +138,7 @@ export function registerGitHubTools({ server, octokit }: ToolsetContext) {
         milestone: issue.data.milestone?.title,
         comments: issue.data.comments
       };
-      
+
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (error: any) {
       return { content: [{ type: "text", text: `Error getting GitHub issue: ${error.message}` }] };
@@ -157,7 +157,7 @@ export function registerGitHubTools({ server, octokit }: ToolsetContext) {
   }, async ({ query, repository, language, filename }: { query: string, repository?: string, language?: string, filename?: string }) => {
     try {
       let searchQuery = query;
-      
+
       if (repository) {
         searchQuery += ` repo:${repository}`;
       }
@@ -167,12 +167,12 @@ export function registerGitHubTools({ server, octokit }: ToolsetContext) {
       if (filename) {
         searchQuery += ` filename:${filename}`;
       }
-      
+
       const response = await octokit.rest.search.code({
         q: searchQuery,
         per_page: 20
       });
-      
+
       const results = response.data.items.map((item: any) => ({
         name: item.name,
         path: item.path,
@@ -180,10 +180,54 @@ export function registerGitHubTools({ server, octokit }: ToolsetContext) {
         html_url: item.html_url,
         score: item.score
       }));
-      
+
       return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
     } catch (error: any) {
       return { content: [{ type: "text", text: `Error searching GitHub code: ${error.message}` }] };
+    }
+  });
+
+  server.registerTool("read_github_file", {
+    title: "Read GitHub File",
+    description: "Reads the raw content of a file from a GitHub repository.",
+    inputSchema: {
+      owner: z.string().describe("The username or organization that owns the repository."),
+      repo: z.string().describe("The name of the repository."),
+      path: z.string().describe("The path to the file within the repository (e.g., src/main.ts)."),
+      ref: z.string().optional().describe("The branch, tag, or commit SHA. Defaults to the repository's default branch if not provided."),
+    },
+  }, async ({ owner, repo, path, ref }: { owner: string, repo: string, path: string, ref?: string }) => {
+    try {
+      const response = await octokit.rest.repos.getContent({
+        owner,
+        repo,
+        path,
+        ref,
+      });
+
+      // The getContent response for a file is an object, for a directory it's an array.
+      if (Array.isArray(response.data)) {
+        return { content: [{ type: "text", text: `Error: The specified path '${path}' is a directory, not a file.` }] };
+      }
+
+      // Ensure the response object is a file and has content.
+      if ('content' in response.data) {
+        const content = Buffer.from(response.data.content, 'base64').toString('utf-8');
+        return { content: [{ type: "text", text: content }] };
+      }
+
+      // This case should ideally not be hit if the path is a file, but it's a safeguard.
+      return { content: [{ type: "text", text: "Error: Could not retrieve file content. The path may not be a file or is empty." }] };
+    } catch (error: any) {
+      // Handle specific API errors based on status codes.
+      if (error.status === 404) {
+        return { content: [{ type: "text", text: `Error: The repository '${owner}/${repo}' or the file at path '${path}' was not found.` }] };
+      }
+      if (error.status === 403) {
+        return { content: [{ type: "text", text: `Error: Permission denied. Check if you have access to the repository '${owner}/${repo}'.` }] };
+      }
+      // Generic error for network issues or other problems.
+      return { content: [{ type: "text", text: `An unexpected error occurred: ${error.message}` }] };
     }
   });
 }

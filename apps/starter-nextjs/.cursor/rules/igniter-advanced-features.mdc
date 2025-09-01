@@ -1,7 +1,7 @@
 ---
-description: |
-  A guide to the advanced features of Igniter.js, including the background jobs system (BullMQ), the caching and pub/sub store (Redis), and the real-time system for live UI updates.
-alwaysApply: false
+description: Use when implementing background jobs (BullMQ), caching/pub-sub systems (Redis), or real-time features with Server-Sent Events for production-grade applications.
+globs: []
+alwaysApply: true
 ---
 
 # Igniter.js: Advanced Features

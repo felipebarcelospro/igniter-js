@@ -1,17 +1,7 @@
 ---
-description: |
-  // This rule defines advanced prompt engineering strategies to enhance the effectiveness and efficiency of large language model (LLM) interactions. 
-  // It leverages techniques such as strategic delegation to specialized agents, context window optimization, chain-of-thought reasoning, and multi-agent collaboration patterns.
-  // When to use: Apply these strategies when planning or implementing complex features, designing workflows involving multiple agents, optimizing system performance, or managing cognitive load in LLM-based systems.
-  // Why use: These approaches improve reasoning quality, scalability, and maintainability of LLM solutions by distributing tasks intelligently, reducing unnecessary context, and enabling more robust problem-solving.
-  // Example use cases: 
-  // - Coordinating multiple agents to solve a complex problem
-  // - Designing an LLM-powered assistant that must manage and prioritize information
-  // - Optimizing prompt structure for large or evolving codebases
-  // - Reducing token usage while maintaining relevant context for decision-making
-  // - Implementing step-by-step reasoning with delegated sub-tasks
+description: Outlines advanced cognitive architecture, multi-agent reasoning framework, context window optimization, and specialized prompt templates for strategic AI interaction.
+globs: []
 alwaysApply: true
-priority: 1
 ---
 
 # Prompt Engineering Excellence 2025
@@ -51,6 +41,7 @@ graph TB
 analyze_file("specific-component.ts") → focused analysis
 search_memories(tags=["pattern", "specific-domain"]) → relevant context
 delegate_to_agent(context={ files: ["focused-set"], constraints: ["specific"] })
+**browser_navigate("documentation-site.com") → real-time external context**
 ```
 
 ## 2. Advanced Reasoning Patterns
@@ -60,7 +51,7 @@ delegate_to_agent(context={ files: ["focused-set"], constraints: ["specific"] })
 ```
 1. Problem Analysis (Lia)
    ├── Identify core complexity
-   ├── Map dependencies  
+   ├── Map dependencies
    └── Assess delegation potential
 
 2. Strategic Decomposition (Lia)
@@ -71,7 +62,7 @@ delegate_to_agent(context={ files: ["focused-set"], constraints: ["specific"] })
 3. Parallel Execution
    ├── Lia: Strategic/architectural tasks
    ├── Agent A: Specialized component 1
-   ├── Agent B: Specialized component 2  
+   ├── Agent B: Specialized component 2
    └── Agent C: Research/documentation
 
 4. Integration & Synthesis (Lia)
@@ -87,15 +78,15 @@ graph TD
     A[Decision Point] --> B[Option 1: Research Approach]
     A --> C[Option 2: Implementation Approach]
     A --> D[Option 3: Hybrid Approach]
-    
+
     B --> E[Delegate: Research Agent]
     C --> F[Direct: Implementation]
     D --> G[Parallel: Research + Implementation]
-    
+
     E --> H[Evaluate Results]
     F --> H
     G --> H
-    
+
     H --> I[Select Best Path]
 ```
 
@@ -185,7 +176,7 @@ PRE-INTEGRATION CHECKLIST:
 
 INTEGRATION STRATEGY:
 1. Component Validation: Verify each piece meets requirements
-2. Interface Compatibility: Ensure components work together  
+2. Interface Compatibility: Ensure components work together
 3. System Integration: Connect to existing architecture
 4. End-to-End Testing: Validate complete functionality
 5. Documentation Update: Record integration decisions
@@ -216,7 +207,7 @@ Stream 1 (Lia): Architecture & core integration
 ├── Core business logic
 └── Integration coordination
 
-Stream 2 (Agent): Documentation & Testing  
+Stream 2 (Agent): Documentation & Testing
 ├── API documentation generation
 ├── Unit test implementation
 └── Integration test scenarios
@@ -290,7 +281,7 @@ DELEGATION CYCLE:
 1. Plan → Strategic task decomposition
 2. Execute → Parallel work streams
 3. Monitor → Progress tracking & adjustment
-4. Integrate → Synthesis & validation  
+4. Integrate → Synthesis & validation
 5. Reflect → Capture lessons learned
 6. Improve → Update strategies & patterns
 

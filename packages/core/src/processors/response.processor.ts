@@ -1,8 +1,8 @@
-import { IgniterLogLevel, type IgniterLogger } from "../types"
+import { type IgniterLogger } from "../types"
 import { SSEProcessor } from "./sse.processor"
 import { IgniterConsoleLogger } from "../services/logger.service"
 import type { CookieOptions } from "../types/cookie.interface"
-import type { IgniterProcessorResponse, IgniterErrorResponse, IgniterCommonErrorCode } from "../types/response.interface"
+import { IgniterCommonErrorCode, IgniterResponseError, IgniterResponse } from "../types/response.interface"
 import type { IgniterStoreAdapter } from "../types/store.interface"
 import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
@@ -108,10 +108,10 @@ export interface RevalidateOptions<TContext = unknown, TData = ResponseData> {
  *   .toResponse();
  * ```
  */
-export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
+export class IgniterResponseProcessor<TContext = unknown> {
   private _status: number = 200
   private _statusExplicitlySet: boolean = false
-  private _response: TData = {} as TData
+  private _response = {} as IgniterResponse
   private _headers = new Headers()
   private _cookies: string[] = []
   private _isStream: boolean = false
@@ -148,8 +148,8 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
   static init<TContext = unknown>(
     store?: IgniterStoreAdapter,
     context?: TContext
-  ): IgniterResponseProcessor<TContext, unknown> {
-    const instance = new IgniterResponseProcessor<TContext, unknown>();
+  ): IgniterResponseProcessor<TContext> {
+    const instance = new IgniterResponseProcessor<TContext>();
     instance._store = store;
     instance._context = context;
 
@@ -168,11 +168,11 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * @returns A new typed instance
    * @private
    */
-  private withData<TNewData>(): IgniterResponseProcessor<TContext, TNewData> {
-    const newInstance = new IgniterResponseProcessor<TContext, TNewData>();
+  private withData<TNewData>(): IgniterResponseProcessor<TContext> {
+    const newInstance = new IgniterResponseProcessor<TContext>();
     newInstance._status = this._status;
     newInstance._statusExplicitlySet = this._statusExplicitlySet;
-    newInstance._response = {} as TNewData;
+    newInstance._response = {} as IgniterResponse<TNewData>;
     newInstance._headers = new Headers(this._headers);
     newInstance._cookies = [...this._cookies];
     newInstance._isStream = this._isStream;
@@ -219,16 +219,17 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * });
    * ```
    */
-  stream<TStreamData = ResponseData>(options: StreamOptions<TStreamData>) {
+  stream<TStreamData>(options: StreamOptions<TStreamData>) {
     // Derive channelId from controller and action if provided
     if (options.controllerKey && options.actionKey && !options.channelId) {
       options.channelId = `${options.controllerKey}.${options.actionKey}`;
     }
 
     this.logger.debug("SSE stream configured", { channelId: options.channelId });
-    const newInstance = this.withData<IgniterProcessorResponse<TStreamData, null>>();
+    const newInstance = this.withData<IgniterResponse<TStreamData>>();
     newInstance._isStream = true;
-    newInstance._streamOptions = options as StreamOptions<ResponseData>;
+    // @ts-expect-error - Ignore type mismatch for now
+    newInstance._streamOptions = options as StreamOptions<TStreamData>;
     newInstance._status = 200;
     return newInstance;
   }
@@ -285,13 +286,12 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   success<TSuccessData>(data?: TSuccessData) {
-    const instance = this.withData<IgniterProcessorResponse<TSuccessData, null>>()
-    instance._response = {} as IgniterProcessorResponse<TSuccessData, null>;
-    instance._response.status = 'success';
+    const instance = this.withData<IgniterResponse<TSuccessData>>()
+    instance._response = {} as IgniterResponse<TSuccessData>;
     instance._response.data = data as TSuccessData;
     instance._response.error = null;
     if (!this._statusExplicitlySet) instance._status = 200;
-    return instance;
+    return instance as unknown as IgniterResponse<TSuccessData>;
   }
 
   /**
@@ -309,13 +309,12 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   created<TCreatedData>(data: TCreatedData) {
-    const instance = this.withData<IgniterProcessorResponse<TCreatedData, null>>()
-    instance._response = {} as IgniterProcessorResponse<TCreatedData, null>;
-    instance._response.status = 'success';
+    const instance = this.withData<IgniterResponse<TCreatedData>>()
+    instance._response = {} as IgniterResponse<TCreatedData>;
     instance._response.data = data as TCreatedData;
     instance._response.error = null;
     if (!this._statusExplicitlySet) instance._status = 201;
-    return instance;
+    return instance as unknown as IgniterResponse<TCreatedData>;
   }
 
   /**
@@ -331,9 +330,8 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   noContent() {
-    const instance = this.withData<IgniterProcessorResponse<null, null>>()
-    instance._response = {} as IgniterProcessorResponse<null, null>;
-    instance._response.status = 'success';
+    const instance = this.withData<IgniterResponse<null>>()
+    instance._response = {} as IgniterResponse<null>;
     instance._response.data = null;
     instance._response.error = null;
     // Keep JSON shape consistent unless explicitly overridden
@@ -341,7 +339,7 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
       instance._status = 204;
       this.logger.debug("Status set", { status: 204 });
     }
-    return instance;
+    return instance as unknown as IgniterResponse<null>;
   }
 
   /**
@@ -448,22 +446,18 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
     return cookie;
   }
 
-  error<TErrorCode extends string, TData extends ResponseData>(error: {
-    code: TErrorCode;
-    message: string;
-    data?: TData;
-  }) {
-    const instance = this.withData<IgniterProcessorResponse<null, IgniterErrorResponse<TErrorCode, TData>>>()
-    instance._response = {} as IgniterProcessorResponse<null, IgniterErrorResponse<TErrorCode, TData>>;
-    instance._response.status = 'error';
-    instance._response.data = null;
-    instance._response.error = error;
+  error<TErrorCode extends IgniterCommonErrorCode>(error: IgniterResponseError<TErrorCode>) {
+    this._status = 400
+    this._response = {} as IgniterResponse<null, IgniterResponseError<TErrorCode>>;
+    this._response.error = error;
+    this._response.data = null;
+
     if (!this._statusExplicitlySet) {
-      const defaultStatus = this.getDefaultStatusForErrorCode(error.code);
-      instance._status = defaultStatus;
-      this.logger.debug(`Setting response status to ${defaultStatus} for error code '${error.code}'.`);
+      const defaultStatus = this.getDefaultStatusForErrorCode(error.getCode());
+      this._status = defaultStatus;
+      this.logger.debug(`Setting response status to ${defaultStatus} for error code '${error.getCode()}'.`);
     }
-    return instance;
+    return this as unknown as IgniterResponse<null, IgniterResponseError<TErrorCode>>;
   }
 
   /**
@@ -478,16 +472,15 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   badRequest<TBadRequestData>(message = 'Bad Request', data?: TBadRequestData) {
-    const instance = this.withData<IgniterProcessorResponse<null, IgniterErrorResponse<'ERR_BAD_REQUEST', TBadRequestData>>>()
-    instance._response = {} as IgniterProcessorResponse<null, IgniterErrorResponse<'ERR_BAD_REQUEST', TBadRequestData>>;
-    instance._response.status = 'badRequest';
-    instance._response.data = null;
-    instance._response.error = {} as IgniterErrorResponse<'ERR_BAD_REQUEST', TBadRequestData>;
-    instance._response.error.message = message;
-    instance._response.error.data = data;
-    instance._response.error.code = 'ERR_BAD_REQUEST';
-    if (!this._statusExplicitlySet) instance._status = 400;
-    return instance;
+    this._response = {} as IgniterResponse<null, IgniterResponseError<'ERR_BAD_REQUEST'>>;
+    this._response.data = null;
+    this._response.error = new IgniterResponseError({
+      message,
+      data,
+      code: 'ERR_BAD_REQUEST'
+    });
+    if (!this._statusExplicitlySet) this._status = 400;
+    return this as unknown as IgniterResponse<null, IgniterResponseError<'ERR_BAD_REQUEST'>>;
   }
 
   /**
@@ -502,16 +495,15 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   unauthorized<TUnauthorizedData>(message = 'Unauthorized', data?: TUnauthorizedData) {
-    const instance = this.withData<IgniterProcessorResponse<null, IgniterErrorResponse<'ERR_UNAUTHORIZED', TUnauthorizedData>>>()
-    instance._response = {} as IgniterProcessorResponse<null, IgniterErrorResponse<'ERR_UNAUTHORIZED', TUnauthorizedData>>;
-    instance._response.status = 'unauthorized';
-    instance._response.data = null;
-    instance._response.error = {} as IgniterErrorResponse<'ERR_UNAUTHORIZED', TUnauthorizedData>;
-    instance._response.error.message = message;
-    instance._response.error.data = data;
-    instance._response.error.code = 'ERR_UNAUTHORIZED';
-    if (!this._statusExplicitlySet) instance._status = 401;
-    return instance;
+    this._response = {} as IgniterResponse<null, IgniterResponseError<'ERR_UNAUTHORIZED'>>;
+    this._response.data = null;
+    this._response.error = new IgniterResponseError({
+      message,
+      data,
+      code: 'ERR_UNAUTHORIZED'
+    });
+    if (!this._statusExplicitlySet) this._status = 401;
+    return this as unknown as IgniterResponse<null, IgniterResponseError<'ERR_UNAUTHORIZED'>>;
   }
 
   /**
@@ -526,16 +518,15 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   forbidden<TForbiddenData>(message = 'Forbidden', data?: TForbiddenData) {
-    const instance = this.withData<IgniterProcessorResponse<null, IgniterErrorResponse<'ERR_FORBIDDEN', TForbiddenData>>>()
-    instance._response = {} as IgniterProcessorResponse<null, IgniterErrorResponse<'ERR_FORBIDDEN', TForbiddenData>>;
-    instance._response.status = 'forbidden';
-    instance._response.data = null;
-    instance._response.error = {} as IgniterErrorResponse<'ERR_FORBIDDEN', TForbiddenData>;
-    instance._response.error.message = message;
-    instance._response.error.data = data;
-    instance._response.error.code = 'ERR_FORBIDDEN';
-    if (!this._statusExplicitlySet) instance._status = 403;
-    return instance;
+    this._response = {} as IgniterResponse<null, IgniterResponseError<'ERR_FORBIDDEN'>>;
+    this._response.data = null;
+    this._response.error = new IgniterResponseError({
+      message,
+      data,
+      code: 'ERR_FORBIDDEN'
+    });
+    if (!this._statusExplicitlySet) this._status = 403;
+    return this as unknown as IgniterResponse<null, IgniterResponseError<'ERR_FORBIDDEN'>>;
   }
 
   /**
@@ -550,16 +541,15 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   notFound<TNotFoundData>(message = 'Not Found', data?: TNotFoundData) {
-    const instance = this.withData<IgniterProcessorResponse<null, IgniterErrorResponse<'ERR_NOT_FOUND', TNotFoundData>>>()
-    instance._response = {} as IgniterProcessorResponse<null, IgniterErrorResponse<'ERR_NOT_FOUND', TNotFoundData>>;
-    instance._response.status = 'notFound';
-    instance._response.data = null;
-    instance._response.error = {} as IgniterErrorResponse<'ERR_NOT_FOUND', TNotFoundData>;
-    instance._response.error.message = message;
-    instance._response.error.data = data;
-    instance._response.error.code = 'ERR_NOT_FOUND';
-    if (!this._statusExplicitlySet) instance._status = 404;
-    return instance;
+    this._response = {} as IgniterResponse<null, IgniterResponseError<'ERR_NOT_FOUND'>>;
+    this._response.data = null;
+    this._response.error = new IgniterResponseError({
+      message,
+      data,
+      code: 'ERR_NOT_FOUND'
+    });
+    if (!this._statusExplicitlySet) this._status = 404;
+    return this as unknown as IgniterResponse<null, IgniterResponseError<'ERR_NOT_FOUND'>>;
   }
 
   /**
@@ -575,21 +565,16 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   redirect(destination: string, type: 'replace' | 'push' = 'replace') {
-    type RedirectData = {
-      destination: string;
-      type: 'replace' | 'push';
-    }
+    this._response = {} as IgniterResponse<null, IgniterResponseError<'ERR_REDIRECT'>>;
+    this._response.data = null;
+    this._response.error = new IgniterResponseError({
+      message: 'Redirect',
+      data: { destination, type },
+      code: 'ERR_REDIRECT'
+    });
 
-    const instance = this.withData<IgniterProcessorResponse<null, IgniterErrorResponse<'ERR_REDIRECT', RedirectData>>>()
-    instance._response = {} as IgniterProcessorResponse<null, IgniterErrorResponse<'ERR_REDIRECT', RedirectData>>;
-    instance._response.status = 'redirect';
-    instance._response.data = null;
-    instance._response.error = {} as IgniterErrorResponse<'ERR_REDIRECT', RedirectData>;
-    instance._response.error.message = 'Redirect';
-    instance._response.error.data = { destination, type };
-    instance._response.error.code = 'ERR_REDIRECT';
-    if (!this._statusExplicitlySet) instance._status = 302;
-    return instance;
+    if (!this._statusExplicitlySet) this._status = 302;
+    return this as unknown as IgniterResponse<null, IgniterResponseError<'ERR_REDIRECT'>>;
   }
 
   /**
@@ -606,13 +591,12 @@ export class IgniterResponseProcessor<TContext = unknown, TData = unknown> {
    * ```
    */
   json<TJsonData>(data: TJsonData) {
-    const instance = this.withData<IgniterProcessorResponse<TJsonData, null>>()
-    instance._response = {} as IgniterProcessorResponse<TJsonData, null>;
-    instance._response.status = 'success';
+    const instance = this.withData<IgniterResponse<TJsonData>>()
+    instance._response = {} as IgniterResponse<TJsonData>;
     instance._response.data = data as TJsonData;
     instance._response.error = null;
     if (!this._statusExplicitlySet) instance._status = 200;
-    return instance;
+    return instance as unknown as IgniterResponse<TJsonData>;
   }
 
   /**

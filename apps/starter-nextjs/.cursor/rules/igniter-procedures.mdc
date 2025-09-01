@@ -1,140 +1,202 @@
 ---
-description: |
-  A guide to Igniter.js procedures and the context system. Explains how to create middleware for reusable business logic, dependency injection, and extending the request context in a type-safe manner.
+description: Provides the correct and validated pattern for creating and using procedures (middlewares) in Igniter.js.
+globs: ["src/features/**/procedures/**"]
 alwaysApply: false
 ---
 
-# Igniter.js: Procedures and Context
+# Igniter.js: Procedures (Middlewares)
 
-This guide covers two core concepts in Igniter.js: the **Context** system for dependency injection and **Procedures** for creating reusable middleware.
+This guide provides the **correct and validated** pattern for creating and using procedures (middlewares) in Igniter.js.
 
-## 1. The Context System
+## 1. How Procedures Extend Context
 
-The Context is a type-safe dependency injection mechanism that makes global services and request-specific data available throughout your API layer.
+Procedures in Igniter.js extend the context for subsequent actions by **returning an object**. This is a critical pattern to understand.
 
-### 1.1. Base Context
-The base context defines services that are available in *every* request handler. It is defined once when you initialize the Igniter instance.
+-   **DO NOT use `next(newContext)`:** Unlike frameworks like Express, you must not call a `next` function to extend context.
+-   **RETURN an object:** The object you return from the procedure's handler will be shallow-merged into the `context` that the final action receives.
+-   **Special Case: `next()` for Post-Action Processing**: The `next()` function in a procedure's handler should **only** be used if the procedure needs to capture and process the *result* of the subsequent action (e.g., for auditing, performance monitoring, or response modification). In such cases, `await next()` should be called, and the result should then be handled. Otherwise, procedures should either return an object to extend the context (e.g., `{ auth: { user } }`) or `void` (implicitly or explicit `return;`) to simply allow the request to proceed without modifying the context.
+-   **Auth Procedure Context for Optional Authentication**: When an `authProcedure` is configured with `required: false` (or if authentication fails but is not strictly required), it **MUST** explicitly return an object like `{ auth: { user: null } }` to maintain consistent context typing, indicating that no authenticated user is present.
 
--   **File Location:** `src/igniter.context.ts`
--   **Purpose:** To provide singleton services like database clients, loggers, and other providers to your actions and procedures.
+### ✅ Correct Example: `auth.procedure.ts`
 
-```typescript
-// src/igniter.context.ts
-export function createContext() {
-  return {
-    database: prisma, // Prisma client instance
-    // ... other global services
-  };
-}
-
-export type IgniterAppContext = ReturnType<typeof createContext>;
-
-// src/igniter.ts
-export const igniter = Igniter
-  .context<IgniterAppContext>()
-  // ... rest of the configuration
-  .create();
-```
-Inside any action handler, you can now access `context.database` in a fully type-safe way.
-
-### 1.2. Dynamic Context Extension
-The real power of the context comes from its ability to be dynamically extended on a per-request basis. **Procedures** are the mechanism for this.
-
-When a procedure returns a value, that value is deeply merged into the `context` object, making it available to all subsequent procedures and the final action handler. This process is fully type-safe.
-
-## 2. Procedures (`igniter.procedure`)
-
-A Procedure is a piece of reusable logic that runs before your main action handler. It is the Igniter.js equivalent of middleware. Procedures are ideal for handling cross-cutting concerns like authentication, logging, or data transformation.
-
-### 2.1. Creating a Simple Procedure
-A procedure is a function that receives the handler context and can perform actions. If it returns an object, that object is merged into the main context.
+This example demonstrates how to verify a user and add their information to the context, now leveraging globally injected services and repositories.
 
 ```typescript
-// A simple logging procedure
-export const logProcedure = igniter.procedure({
-  handler: async (_, { request, context }) => {
-    context.logger.info(`Request received for path: ${request.path}`);
-    // This procedure doesn't return anything, so it doesn't modify the context.
-  },
-});
-```
+// src/features/auth/procedures/auth.procedure.ts (Example - Refactored)
+import { igniter } from "@/igniter";
+import { User } from "@prisma/client";
+import { JWT_SECRET } from "../auth.interfaces";
+import { AuthRepository } from "../repositories/auth.repository"; // Import here for instantiation within procedure
 
-### 2.2. A Procedure that Extends the Context
-This is the most common pattern. Here, an authentication procedure verifies a user token and adds the user object to the context.
-
-```typescript
-// src/features/auth/procedures/auth.procedure.ts
-import { getUserByToken } from '@/services/authService';
-
-export const authProcedure = igniter.procedure({
-  handler: async (_, { request, response, context }) => {
-    const token = request.headers.get('Authorization');
-    const user = await getUserByToken(token);
-
-    if (!user) {
-      // Procedures can short-circuit the request
-      return response.unauthorized('Invalid or missing authentication token.');
-    }
-
-    // The returned object is merged into the context
-    return {
-      auth: {
-        user: user, // Now `context.auth.user` will be available
-      }
-    };
-  },
-});
-```
-
-### 2.3. Using Procedures in Actions
-You can apply one or more procedures to an action using the `use` array. They are executed in the order they are defined.
-
-```typescript
-// In a controller
-getProfile: igniter.query({
-  path: '/me',
-  use: [authProcedure()], // Apply the auth procedure
-  handler: ({ context }) => {
-    // Because authProcedure ran, `context.auth.user` is now available and fully typed.
-    // The base context `context.database` is also still available.
-    return context.auth.user;
-  },
-})
-```
-
-### 2.4. Parameterized Procedures
-Procedures can also accept options, making them even more flexible.
-
-```typescript
-// A procedure that can require different roles
-type RoleAuthOptions = {
-  role: 'ADMIN' | 'MEMBER';
+// Define the type for the options that can be passed when using the procedure.
+/**
+ * @typedef {object} AuthProcedureOptions
+ * @property {boolean} [required=true] - Indicates if authentication is mandatory for the route.
+ */
+type AuthProcedureOptions = {
+  required?: boolean;
 };
 
-export const roleAuthProcedure = igniter.procedure({
-  handler: async (options: RoleAuthOptions, { response, context }) => {
-    // Assumes authProcedure has already run and added `context.auth.user`
-    const { user } = context.auth;
+// Define the shape of the extended context we are adding.
+/**
+ * @typedef {object} AuthContext
+ * @property {object} features - Features context object.
+ * @property {object} features.auth - Authentication context object.
+ * @property {object} features.auth.session - User session details.
+ * @property {User | null} features.auth.session.user - The authenticated user object or null if unauthenticated.
+ * @property {AuthRepository} features.auth.repository - The auth repository for user-related database operations.
+ */
+type AuthContext = {
+  auth: {
+    session: {
+      user: User | null;
+    };
+    repository: AuthRepository;
+  };
+};
 
-    if (user.role !== options.role) {
-      return response.forbidden(`Requires ${options.role} role.`);
+/**
+   * @method handler
+   * @description
+   * Procedure responsible for authenticating the user by validating the JWT token from the request cookies.
+   * Instantiates the AuthRepository and injects it into the context at `auth.repository`.
+   * If `options.required` is true, authentication is enforced: if the session token is missing, invalid, or the user is not found, a 401 Unauthorized response is returned.
+   * If `options.required` is false, unauthenticated access is allowed and the user in context may be null.
+   *
+   * @param {AuthProcedureOptions} [options={ required: true }] - Options for the procedure. If `required` is true, authentication is mandatory.
+   * @param {object} ctx - The context object provided by Igniter.js.
+   * @param {object} ctx.request - The incoming request object.
+   * @param {object} ctx.response - The response builder object.
+   * @param {object} ctx.context - The current application context.
+   * @returns {Promise<AuthContext | Response | void>} Returns the extended context with user info and AuthRepository if authentication passes or is not required, or a 401 response if authentication fails and is required.
+   */
+export const authProcedure = igniter.procedure({
+  name: "authentication",  
+  handler: async (options: AuthProcedureOptions = { required: true }, ctx): Promise<AuthContext | Response | void> => {
+    const { request, response, context } = ctx;
+    
+    // Observation: Extract the session token from request cookies.
+    const sessionToken = request.cookies.get("sessionToken");
+
+    // Business Rule: Instantiate AuthRepository using the database client from the context.
+    const authRepository = new AuthRepository(context.services.database);
+
+    // Security Rule: If authentication is required and there is no session token, return 401 Unauthorized.
+    if (options.required && !sessionToken) {
+      throw new IgniterResponseError({
+        code: "ERR_UNAUTHORIZED",
+        message: "Authentication required. Please provide a valid session token.",
+      })
     }
 
-    // No return value needed if we are just performing a check
-  },
-});
+    let userId: string | undefined;
 
-// Using the parameterized procedure in an action
-deletePost: igniter.mutation({
-  path: '/:id',
-  method: 'DELETE',
-  use: [
-    authProcedure(), // First, ensure the user is authenticated
-    roleAuthProcedure({ role: 'ADMIN' }), // Then, check if they are an admin
-  ],
-  handler: ({ request, context }) => {
-    // This handler will only run if the user is an authenticated admin.
-    // ... delete logic
+    // Security Rule: If a session token exists, attempt to verify it and extract the user ID.
+    if (sessionToken) {
+      const decoded = context.services.jwt.verifyToken(sessionToken) as { userId: string };
+      if (decoded) userId = decoded.userId;
+    }
+
+    // Business Rule: Attempt to find the user by ID using the AuthRepository.
+    const user = await authRepository.getUserById(userId);
+
+    // Security Rule: If authentication is required but the user is not found, return 401 Unauthorized.
+    if (options.required && !user) {
+      throw new IgniterResponseError({
+        code: "ERR_UNAUTHORIZED",
+        message: "Authenticated user not found.",
+      })
+    }
+
+    // Response: Return the extended context with user session and repository.
+    return { auth: { session: { user }, repository: authRepository } };
   },
 });
+```
+
+## 2. Applying Procedures to Actions
+
+Procedures are applied to individual actions or entire controllers using the `use` property.
+
+-   **Action-Level:** Apply to a specific query or mutation. This is the most common and recommended approach.
+-   **Controller-Level:** Apply to all actions within a controller.
+
+### ✅ Correct Usage in a Controller
+
+```typescript
+import { igniter } from "@/igniter";
+import { z } from "zod";
+import { authProcedure } from "../../auth/procedures/auth.procedure";
+import { eventsProcedure } from "../procedures/events.procedure";
+
+export const eventsController = igniter.controller({
+  name: "events",
+  path: "/events",
+  actions: {
+    create: igniter.mutation({
+      name: "Create",
+      description: "Create new event type",
+      path: "/",
+      use: [authProcedure({ required: true }), eventsProcedure()], // Injects auth and events repository
+      body: z.object({ /* ... */ }),
+      handler: async ({ request, response, context }) => {
+        // Authentication: Retrieve the authenticated user's ID from the context.
+        const userId = context.auth.session.user!.id;
+
+        // Business Logic: Create a new event using the EventsRepository.
+        const event = await context.events.repository.create({
+          title: request.body.title,
+          description: request.body.description,
+          duration: request.body.duration,
+          userId,
+        });
+
+        // Response: Return the newly created event with a 201 status.
+        return response.created(event);
+      },
+    }),
+    list: igniter.query({
+      name: "List",
+      description: "List all user events",
+      path: "/",
+      use: [authProcedure({ required: true }), eventsProcedure()], // Injects auth and events repository
+      handler: async ({ response, context }) => {
+        // Authentication: Retrieve the authenticated user's ID from the context.
+        const userId = context.auth.session.user!.id;
+
+        // Business Logic: Retrieve all events belonging to the authenticated user.
+        const events = await context.events.repository.list(userId);
+
+        // Response: Return the list of events with a 200 status.
+        return response.success(events);
+      },
+    }),
+  },
+});
+```
+
+## 3. Common Pitfalls
+
+### ❌ Incorrectly Extending Context or Misusing `next()`
+
+```typescript
+// ❌ WRONG - Using next() to extend context or not handling its return
+handler: async (options, ctx) => {
+  const { context, next } = ctx;
+  const newContext = { ...context, auth: { user } };
+  return next(newContext); // This will fail or lose context extension!
+  // OR (if not awaiting next() when result processing is needed)
+  next(); // Loses the opportunity to process the action's result.
+}
+```
+
+### ❌ Forgetting to Return the Context Object
+
+```typescript
+// ❌ WRONG - Modifying context directly
+handler: async (options, ctx) => {
+  const { context } = ctx;
+  context.auth = { user }; // This mutation will be lost!
+  return;
+}
 ```

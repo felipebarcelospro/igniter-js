@@ -1,10 +1,7 @@
 ---
-description: |
-  Comprehensive guide to using the Igniter.js Client, covering server-side and client-side usage patterns,
-  React hooks (useQuery, useMutation, useRealtime), context management, realtime features, and best practices.
-  This rule explains the universal client architecture and how it works seamlessly across different Next.js environments.
-alwaysApply: true
-priority: 2
+description: Provides comprehensive guidance on using the Igniter.js Client for universal type-safe API communication across server and client environments.
+globs: ["src/igniter.client.ts", "src/app/**"]
+alwaysApply: false
 ---
 
 # Igniter.js Client Usage Guide

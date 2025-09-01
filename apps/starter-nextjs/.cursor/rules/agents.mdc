@@ -1,11 +1,7 @@
 ---
-description: |
-  Advanced agent delegation strategies for optimal workload distribution and specialized task execution. 
-  Defines when and how to delegate tasks to specialized coding agents, monitoring strategies, and integration 
-  patterns. Apply when: planning complex features, managing high workloads, requiring specialized expertise, 
-  optimizing parallel execution.
+description: Defines the agent delegation strategy and best practices for optimal workload distribution and specialized task execution.
+globs: []
 alwaysApply: true
-priority: 2
 ---
 
 # Agent Delegation Strategy & Best Practices
@@ -156,11 +152,11 @@ flowchart TD
 monitor_agent_tasks({ agent_type: "claude", task_filter: "current-feature" })
 
 # Detailed progress with logs
-monitor_agent_tasks({ 
-  agent_type: "claude", 
-  include_logs: true, 
+monitor_agent_tasks({
+  agent_type: "claude",
+  include_logs: true,
   include_analytics: true,
-  log_lines: 100 
+  log_lines: 100
 })
 ```
 
@@ -189,12 +185,12 @@ graph TB
     B --> D[Task 2: Unit Tests]
     B --> E[Task 3: Documentation]
     B --> F[Task 4: Integration Tests]
-    
+
     C --> G[Delegate to Claude]
     D --> H[Delegate to Gemini]
     E --> I[Delegate to Claude]
     F --> J[Execute Directly]
-    
+
     G --> K[Integration Phase]
     H --> K
     I --> K

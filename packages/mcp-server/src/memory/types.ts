@@ -61,33 +61,35 @@ export interface MemoryFrontmatter {
   relationships?: Relationship[];
   metadata?: Record<string, unknown>;
   sensitive?: boolean;
-  
+  execution_order?: number;
+  reordered_at?: string;
+
   // Task Management Fields (for requirement/design/task/bug_report types)
   status?: TaskStatus;
   priority?: TaskPriority;
   assignee?: string;
   due_date?: string; // ISO date
   completed_at?: string; // ISO date
-  
+
   // Hierarchy
   parent_id?: string; // For subtasks
   feature_id?: string; // Which feature this belongs to
   order?: number; // For ordering in lists
-  
+
   // Dependencies
   dependencies?: string[]; // Memory IDs this depends on
   blocks?: string[]; // Memory IDs this blocks
-  
+
   // Sub-tasks
   subtasks?: SubTask[];
-  
+
   // Development specific
   acceptance_criteria?: string[]; // For tasks
   files_involved?: string[]; // Code files this affects
   test_cases?: string[]; // Test scenarios
   estimated_hours?: number;
   actual_hours?: number;
-  
+
   // Enhanced delegation fields for background execution
   delegation_status?: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
   delegation_started_at?: string;
@@ -98,7 +100,7 @@ export interface MemoryFrontmatter {
   delegation_error?: string;             // Erro se falhou
   delegation_attempts?: number;          // Tentativas de execução
   delegation_timeout_minutes?: number;   // Timeout configurado
-  
+
   // Legacy delegation fields (for backward compatibility)
   delegated_to?: string;                 // Agent type (legacy)
   delegated_at?: string;                 // Delegation timestamp (legacy)
@@ -180,5 +182,3 @@ export interface SearchIndex {
   typeIndex: Map<MemoryType, Set<string>>; // type -> memory IDs
   lastBuiltAt: number;
 }
-
-

@@ -1,6 +1,7 @@
 ---
-description: Complete feature development lifecycle using memory-backed planning. Creates requirements, design, and task memories. Use when: starting new features, planning implementations, organizing development work, managing project specifications.
-alwaysApply: false
+description: Use when transforming rough ideas into structured requirements (EARS format), creating architectural designs, building actionable task lists, or following spec-driven development methodology.
+globs: []
+alwaysApply: true
 ---
 # Feature Spec Creation Workflow
 
@@ -184,11 +185,37 @@ Convert the feature design into a series of prompts for a code-generation LLM th
 - The model MUST continue the feedback-revision cycle until explicit approval is received.
 - The model MUST stop once all task memories and delegation strategy have been approved.
 
-**This workflow is ONLY for creating design and planning memories. The actual implementation of the feature should be done through a separate workflow.**
+## Implementation Transition Protocols
+
+### Workflow Handover to Specialized Rules
+Once planning is complete, implementation must transition to specialized workflow rules:
+
+**For UI/UX Implementation:**
+- Use `ux-ui-workflow.mdc` for design system integration, component patterns, and user experience optimization
+- Apply design tokens from `globals.css` for consistent theming
+- Follow Shadcn UI integration patterns and block-based development
+
+**For Front-End Development:**
+- Use `frontend-development.mdc` for React/Next.js patterns, Igniter.js integration, and component architecture
+- Apply presentation layer organization and optimization patterns
+- Follow established testing and performance optimization protocols
+
+**For General Development:**
+- Use `development-workflow.mdc` for analysis-first development and quality assurance
+- Follow established TypeScript and architectural patterns
+
+### Implementation Guidelines
+- **Start with UX/UI**: Begin implementation by applying `ux-ui-workflow.mdc` patterns
+- **Apply Front-End Patterns**: Use `frontend-development.mdc` for component and state management
+- **Follow Development Standards**: Use `development-workflow.mdc` for quality assurance
+- **Cross-Reference Rules**: When in doubt, reference all three specialized workflows
+
+**This workflow is ONLY for creating design and planning memories. The actual implementation of the feature should be done through the specialized workflow rules (ux-ui-workflow.mdc, frontend-development.mdc, development-workflow.mdc).**
 
 - The model MUST NOT attempt to implement the feature as part of this workflow
 - The model MUST clearly communicate to the user that this workflow is complete once the design and planning memories are created
-- The model MUST inform the user that they can begin executing tasks by searching for task memories with tags like `["planning", "task", "todo", "<feature-name>"]` and updating their status from "todo" to "in_progress" to "done".
+- The model MUST inform the user that they can begin executing tasks by searching for task memories with tags like `["planning", "task", "todo", "<feature-name>"]` and updating their status from "todo" to "in_progress" to "done"
+- The model MUST reference the appropriate specialized workflow for implementation
 
 
 **Example Memory Usage:**
