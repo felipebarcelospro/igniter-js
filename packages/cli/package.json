@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/cli",
-  "version": "0.2.63",
+  "version": "0.2.64",
   "description": "CLI for Igniter.js type-safe client generation",
   "main": "dist/index.js",
   "bin": {
@@ -30,6 +30,7 @@
   "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "@igniter-js/cli": "file:",
     "@igniter-js/core": "*",
     "@mrleebo/prisma-ast": "^0.5.0",
     "c12": "^3.0.4",
@@ -38,14 +39,14 @@
     "commander": "^11.0.0",
     "concurrently": "^7.6.0",
     "cross-spawn": "^7.0.3",
+    "esbuild": "^0.23.0",
     "execa": "^8.0.1",
     "is-binary-path": "^3.0.0",
     "ofetch": "^1.3.4",
     "ora": "^8.2.0",
     "prompts": "^2.4.2",
     "tree-kill": "^1.2.2",
-    "tsx": "^4.7.0",
-    "esbuild": "^0.23.0"
+    "tsx": "^4.7.0"
   },
   "devDependencies": {
     "@igniter-js/eslint-config": "*",

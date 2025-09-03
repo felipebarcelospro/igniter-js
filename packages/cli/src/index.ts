@@ -3,6 +3,7 @@
 import { Command } from "commander";
 import * as fs from "fs";
 import * as path from "path";
+
 import {
   detectFramework,
   getFrameworkList,
@@ -23,6 +24,7 @@ import {
   handleGenerateProcedure
 } from './adapters/scaffold';
 import { IgniterRouter } from "@igniter-js/core";
+import { killProcessOnPort } from "./lib/port-manager";
 
 const program = new Command();
 
@@ -122,6 +124,11 @@ program
   .option("--no-interactive", "Disable interactive mode (use regular concurrent mode)")
   .option("--docs-output <dir>", "Output directory for OpenAPI docs", "./src/docs")
   .action(async (options) => {
+    // Liberar a porta antes de iniciar o servidor
+    const port = parseInt(options.port) || 3000;
+    logger.info(`Checking and freeing port ${port}...`);
+    await killProcessOnPort(port);
+
     const detectedFramework = detectFramework();
     const framework = options.framework ? (isFrameworkSupported(options.framework) ? options.framework : "generic") : detectedFramework;
     const useInteractive = options.interactive !== false;
@@ -146,7 +153,7 @@ program
           command: frameworkCommand,
           color: 'green',
           cwd: process.cwd(),
-          env: { PORT: options.port.toString(), NODE_ENV: 'development' }
+          env: { PORT: port.toString(), NODE_ENV: 'development' }
         });
       }
     }
