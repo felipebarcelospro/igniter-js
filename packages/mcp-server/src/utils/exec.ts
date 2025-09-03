@@ -1,13 +1,6 @@
-/**
- * Utility for executing shell commands with proper error handling and environment variable management
- */
-
-import { exec } from "child_process";
-import { promisify } from "util";
-import * as fs from "fs";
-import * as path from "path";
-
-const originalExecAsync = promisify(exec);
+import { spawn } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface ExecOptions {
   timeout?: number;
@@ -15,6 +8,8 @@ export interface ExecOptions {
   env?: Record<string, string>;
   loadDotEnv?: boolean;
   debug?: boolean;
+  input?: string; // Added to pipe to stdin
+  logFilePath?: string; // Path to stream stdout/stderr to
 }
 
 /**
@@ -69,7 +64,7 @@ function loadDotEnvFiles(startDir: string = process.cwd()): Record<string, strin
 /**
  * Get comprehensive environment variables for agent execution
  */
-function getAgentEnvironment(options: ExecOptions = {}): Record<string, string> {
+export function getAgentEnvironment(options: ExecOptions = {}): Record<string, string> {
   const env: Record<string, string> = { ...process.env } as Record<string, string>;
   
   // Load .env files if requested (default: true)
@@ -147,45 +142,94 @@ function debugEnvironment(env: Record<string, string>, debug?: boolean): void {
 }
 
 /**
- * Enhanced execAsync with environment variable management
+ * A more robust exec utility using `spawn` to handle streams and prevent hanging.
  */
-export async function execAsync(
-  command: string, 
+export function execAsync(
+  command: string,
   options: ExecOptions = {}
-): Promise<{ stdout: string; stderr: string }> {
-  const env = getAgentEnvironment(options);
-  
-  if (options.debug) {
-    debugEnvironment(env, true);
-    console.log(`Executing command: ${command}`);
-  }
-  
-  try {
-    const result = await originalExecAsync(command, {
-      timeout: options.timeout || 60000, // Increased default timeout
-      cwd: options.cwd || process.cwd(),
-      env
-    });
-    
-    return {
-      stdout: result.stdout,
-      stderr: result.stderr
-    };
-  } catch (error: any) {
-    // Enhanced error reporting
-    const errorMsg = [
-      `Command failed: ${command}`,
-      `Working directory: ${options.cwd || process.cwd()}`,
-      `Error: ${error.message}`
-    ];
-    
+): Promise<{ stdout: string; stderr:string; pid: number }> {
+  return new Promise((resolve, reject) => {
+    const [cmd, ...args] = command.split(' ');
+    const env = getAgentEnvironment(options);
+    let stdoutBuffer = '';
+    let stderrBuffer = '';
+    let timer: NodeJS.Timeout | null = null;
+    let logStream: fs.WriteStream | null = null;
+
     if (options.debug) {
-      errorMsg.push(`Environment variables checked: ${Object.keys(getAgentEnvironment(options)).filter(k => k.includes('API_KEY')).join(', ')}`);
+      debugEnvironment(env, true);
+      console.log(`Executing command: ${command}`);
+      console.log(`Working directory: ${options.cwd || process.cwd()}`);
     }
-    
-    throw new Error(errorMsg.join('\n'));
-  }
+
+    if (options.logFilePath) {
+      logStream = fs.createWriteStream(options.logFilePath, { flags: 'a' });
+      logStream.write(`\n--- Command Execution Started: ${new Date().toISOString()} ---\n`);
+      logStream.write(`Command: ${command}\n`);
+      logStream.write(`Working Dir: ${options.cwd || process.cwd()}\n`);
+      logStream.write(`-------------------------------------------\n`);
+    }
+
+    const child = spawn(cmd, args, {
+      cwd: options.cwd || process.cwd(),
+      env,
+      shell: true, // Use shell to handle complex commands
+    });
+
+    if (options.timeout) {
+      timer = setTimeout(() => {
+        child.kill('SIGTERM'); // Terminate the process
+        reject(new Error(`Command timed out after ${options.timeout}ms: ${command}`));
+      }, options.timeout);
+    }
+
+    child.stdout.on('data', (data) => {
+      const dataString = data.toString();
+      stdoutBuffer += dataString;
+      if (logStream) logStream.write(dataString);
+    });
+
+    child.stderr.on('data', (data) => {
+      const dataString = data.toString();
+      stderrBuffer += dataString;
+      if (logStream) logStream.write(dataString);
+    });
+
+    child.on('error', (err) => {
+      if (timer) clearTimeout(timer);
+      if (logStream) {
+        logStream.write(`\n--- Error Event: ${new Date().toISOString()} ---\n`);
+        logStream.write(`Error: ${err.message}\n`);
+        logStream.end();
+      }
+      reject(err);
+    });
+
+    child.on('close', (code) => {
+      if (timer) clearTimeout(timer);
+      if (logStream) {
+        logStream.write(`\n--- Command Execution Finished with Code ${code}: ${new Date().toISOString()} ---\n`);
+        logStream.end();
+      }
+      if (code === 0) {
+        resolve({ stdout: stdoutBuffer, stderr: stderrBuffer, pid: child.pid! });
+      } else {
+        const error = new Error(`Command failed with exit code ${code}: ${command}\n\nStderr:\n${stderrBuffer}\n\nStdout:\n${stdoutBuffer}`);
+        (error as any).exitCode = code;
+        (error as any).stdout = stdoutBuffer;
+        (error as any).stderr = stderrBuffer;
+        reject(error);
+      }
+    });
+
+    // Pipe input to stdin if provided
+    if (options.input) {
+      child.stdin.write(options.input);
+      child.stdin.end();
+    }
+  });
 }
+
 
 /**
  * Execute a command with enhanced options and error handling
@@ -193,7 +237,7 @@ export async function execAsync(
 export async function executeCommand(
   command: string, 
   options: ExecOptions = {}
-): Promise<{ stdout: string; stderr: string }> {
+): Promise<{ stdout: string; stderr: string; pid: number }> {
   return execAsync(command, options);
 }
 

@@ -1,10 +1,6 @@
 ---
-description: Use when working on Front-End development tasks, React components, Next.js pages, and client-side functionality - provides comprehensive Front-End workflow with Igniter.js + Next.js + Shadcn UI patterns.
-globs: ["src/app/**", "src/components/**"]
-alwaysApply: false
-priority: 4
+alwaysApply: true
 ---
-
 # Front-End Development Workflow
 
 This rule provides comprehensive guidance for front-end development in Igniter.js + Next.js + Shadcn UI projects, ensuring consistent architecture, component patterns, and seamless integration with existing workflows.
@@ -25,7 +21,7 @@ src/features/[feature]/presentation/
 ├── contexts/            # React contexts for state management
 │   └── [feature]-context.tsx
 ├── utils/              # Pure utility functions
-│   └── [feature]-utils.ts
+│   └── [specific-util-for-feature].ts // 1 util per file
 └── types/              # Local type definitions
     └── [feature]-types.ts
 ```
@@ -149,6 +145,7 @@ import { api } from '@/igniter.client'
 
 function BoardsList() {
   const { data: boardsData, isLoading, error } = api.boards.list.useQuery()
+
   const boards = boardsData?.data // Access nested response structure
 
   if (isLoading) return <BoardsSkeleton />
@@ -167,8 +164,9 @@ function BoardsList() {
 const createBoardMutation = api.boards.create.useMutation({
   onSuccess: (result: any) => {
     console.log('Board created:', result?.data)
+
     // Handle success - invalidate queries and navigate
-    invalidate('boards.list')
+    queryClient.invalidate('boards.list') // from igniter.client.ts
     router.push(`/app/boards/${result?.data?.id}`)
   },
   onError: (error: any) => {
@@ -188,12 +186,11 @@ const handleCreateBoard = (boardData: CreateBoardInput) => {
 'use client'
 
 import { api } from '@/igniter.client'
-import { useIgniterQueryClient } from '@igniter-js/core/client'
 
 function BoardDetail({ boardId }: { boardId: string }) {
-  const { invalidate } = useIgniterQueryClient()
+  const { invalidate } = useQueryClient()
 
-  const { data: boardData, isLoading, error } = api.boards.getById.useQuery({
+  const { data: boardData, isLoading, error, invalidate } = api.boards.getById.useQuery({
     params: { id: boardId },
     enabled: !!boardId,
   })
@@ -203,8 +200,9 @@ function BoardDetail({ boardId }: { boardId: string }) {
   const createList = api.lists.create.useMutation({
     onSuccess: (result: any) => {
       console.log('List created:', result?.data)
+      
       // Invalidate the board query to refetch updated data
-      invalidate('boards.getById', { params: { id: boardId } })
+      invalidate()
     },
     onError: (error: any) => {
       console.error('Failed to create list:', error)
@@ -319,7 +317,7 @@ function BoardsErrorFallback() {
 </div>
 ```
 
-## 3. Shadcn UI Integration & Design System
+### 3. Shadcn UI Integration & Design System
 
 ### 3.1 Component Variants & Theming
 
@@ -452,6 +450,60 @@ export function AppSidebar() {
       </SidebarFooter>
     </Sidebar>
   )
+}
+```
+
+### 3.3 Component Discovery and Registry Management
+
+This section outlines how to leverage Shadcn UI tools for efficient component discovery and how to manage component registries within your project.
+
+#### 3.3.1 Discovering Components with Shadcn Tools
+You can use the built-in Shadcn tools to list and search for components across configured registries. This helps in quickly finding suitable components for your project.
+
+**Listing All Available Components:**
+Use the `mcp_shadcn_list_items_in_registries` tool to see all components from a specific registry or across multiple registries.
+
+```json
+{
+  "tool": "mcp_shadcn_list_items_in_registries",
+  "args": {
+    "registries": ["@shadcn", "@marketing"]
+  }
+}
+```
+
+**Searching for Specific Components:**
+When you have a specific component in mind or a keyword, `mcp_shadcn_search_items_in_registries` can help you find it using fuzzy matching.
+
+```json
+{
+  "tool": "mcp_shadcn_search_items_in_registries",
+  "args": {
+    "registries": ["@shadcn", "@marketing"],
+    "query": "hero section"
+  }
+}
+```
+
+**Proactive Component Suggestions:**
+As an AI assistant, I will proactively use these tools to search for relevant components based on your development context and feature requirements. If I identify a component that could be beneficial, I will suggest it to you, along with reasoning and potential usage.
+
+#### 3.3.2 Adding New Registries to `components.json`
+The `components.json` file is where you configure your Shadcn UI registries. You can add new registries, including third-party or private ones, to expand your component sources.
+
+**Structure in `components.json`:**
+
+```json
+{
+  "registries": {
+    "@acme": "https://registry.acme.com/{name}.json",
+    "@internal": {
+      "url": "https://internal.company.com/{name}.json",
+      "headers": {
+        "Authorization": "Bearer ${REGISTRY_TOKEN}"
+      }
+    }
+  }
 }
 ```
 
@@ -884,13 +936,13 @@ function BoardsList() {
 
 ## 8. Testing Patterns
 
-### 8.1 CRITICAL: Mandatory Browser Testing with Playwright
+### 8.1 CRITICAL: Mandatory Browser Testing
 
-**🚨 ABSOLUTE REQUIREMENT: ALL Front-End implementations require Playwright validation.**
+**🚨 ABSOLUTE REQUIREMENT: ALL Front-End implementations require browser validation.**
 
 **Browser Testing Protocol (Front-End Only):**
 ```typescript
-// 1. MANDATORY: After the server status check confirms the port is running, use Playwright for autonomous Front-End validation.
+// 1. MANDATORY: After the server status check confirms the port is running, use your browser tools for autonomous Front-End validation.
 // 2. CRITICAL: Cannot advance to next task/subtask without successful browser testing.
 // 3. Browser testing provides autonomous end-to-end validation for the Front-End.
 // 4. Test all user interactions, form submissions, navigation, and UI states.
@@ -908,101 +960,6 @@ function BoardsList() {
 - **Task Block:** Front-End implementation cannot proceed to next phase without Playwright validation.
 - **Quality Gate:** Browser testing serves as final autonomous validation for the Front-End.
 - **Autonomous Testing:** Provides independent validation layer for Front-End implementations.
-
-### 8.2 Component Testing
-
-**Unit Test Pattern:**
-```tsx
-// ✅ CORRECT - Component testing with RTL
-import { render, screen, fireEvent } from '@testing-library/react'
-import { BoardCard } from './board-card'
-
-const mockBoard = {
-  id: '1',
-  title: 'Test Board',
-  description: 'A test board',
-  color: '#0079bf',
-  position: 0,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  userId: 'user-1',
-}
-
-describe('BoardCard', () => {
-  it('renders board information', () => {
-    render(<BoardCard board={mockBoard} />)
-
-    expect(screen.getByText('Test Board')).toBeInTheDocument()
-    expect(screen.getByText('A test board')).toBeInTheDocument()
-  })
-
-  it('calls onEdit when edit button is clicked', () => {
-    const mockOnEdit = jest.fn()
-    render(<BoardCard board={mockBoard} onEdit={mockOnEdit} />)
-
-    const editButton = screen.getByRole('button', { name: /edit/i })
-    fireEvent.click(editButton)
-
-    expect(mockOnEdit).toHaveBeenCalledWith(mockBoard)
-  })
-})
-```
-
-**Integration Test Pattern:**
-```tsx
-// ✅ CORRECT - Integration testing
-import { render, screen, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BoardsList } from './boards-list'
-
-// Mock the API
-jest.mock('@/igniter.client', () => ({
-  api: {
-    boards: {
-      list: {
-        useQuery: jest.fn(),
-      },
-    },
-  },
-}))
-
-const createTestQueryClient = () => new QueryClient({
-  defaultOptions: {
-    queries: { retry: false },
-  },
-})
-
-function renderWithProviders(component: React.ReactElement) {
-  const queryClient = createTestQueryClient()
-  return render(
-    <QueryClientProvider client={queryClient}>
-      {component}
-    </QueryClientProvider>
-  )
-}
-
-describe('BoardsList Integration', () => {
-  it('displays loading state initially', () => {
-    renderWithProviders(<BoardsList />)
-    expect(screen.getByText('Loading boards...')).toBeInTheDocument()
-  })
-
-  it('displays boards when loaded', async () => {
-    const mockBoards = [mockBoard]
-    ;(api.boards.list.useQuery as jest.Mock).mockReturnValue({
-      data: mockBoards,
-      isLoading: false,
-      error: null,
-    })
-
-    renderWithProviders(<BoardsList />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Test Board')).toBeInTheDocument()
-    })
-  })
-})
-```
 
 ## 9. Research & Market Analysis Protocol
 
@@ -1029,11 +986,3 @@ describe('BoardsList Integration', () => {
 - **Market Research:** Ensure solutions are competitive and user-friendly
 - **Technology Updates:** Keep up with framework updates and new features
 - **Best Practices:** Research latest patterns and implement them
-
-## 10. Accessibility (WCAG 2.1 AA) Patterns
-
-### 9.1 Semantic HTML & ARIA
-
-**Accessible Form Pattern:**
-```
-```

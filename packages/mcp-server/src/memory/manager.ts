@@ -12,6 +12,9 @@ import type {
   TaskPriority
 } from './types';
 import { TASK_MANAGEMENT_TYPES, ALL_MEMORY_TYPES } from './types';
+import { executeWithAgent } from '../agents/executor';
+import type { AgentProvider, AgentConfig } from '../agents/types';
+import PQueue from 'p-queue';
 
 /**
  * Orchestrates memory operations by delegating to filesystem and parsing services.
@@ -20,21 +23,22 @@ export class MemoryManager {
   private readonly fs: FileSystemService;
   private readonly parser: MdxParser;
   private projectRoot!: string;
-  private index: SearchIndex | null = null;
-  private taskIndex: Map<string, MemoryItem> | null = null;
-  private delegationCache: Map<string, MemoryItem[]> | null = null;
-  private backgroundJobs: Map<string, any> = new Map(); // Active background processes
+  private jobQueue: PQueue;
+  private isInitialized = false;
 
   constructor(deps: { fs: FileSystemService; parser: MdxParser; projectRoot?: string }) {
     this.fs = deps.fs;
     this.parser = deps.parser;
     this.projectRoot = deps.projectRoot ?? process.cwd();
+    this.jobQueue = new PQueue({ concurrency: 2 }); // Concorrência de no máximo 2 agentes
   }
 
   /** Initializes project: resolves root and ensures memory directory structure. */
   async initializeProject(): Promise<void> {
+    if (this.isInitialized) return;
     this.projectRoot = await this.fs.resolveProjectRoot(this.projectRoot);
     await this.fs.ensureDirectoryStructure(this.projectRoot);
+    this.isInitialized = true;
   }
 
   /** Returns the resolved project root used by the manager. */
@@ -80,32 +84,55 @@ export class MemoryManager {
     const dirPath = this.getHierarchicalPath(type, fullFrontmatter);
     const filePath = this.fs.getMemoryFilePath(this.projectRoot, dirPath, id);
     await this.fs.writeFileAtomic(filePath, mdx);
+
     return filePath;
   }
 
   /** Loads a memory by type and id. */
   async getById(type: MemoryType, id: string): Promise<MemoryItem | null> {
     await this.initializeProject();
-    const filePath = this.fs.getMemoryFilePath(this.projectRoot, mapTypeToDir(type), id);
-    if (!(await this.fs.pathExists(filePath))) return null;
-    const content = await this.fs.readFileUtf8(filePath);
-    const item = this.parser.parseContent(content, filePath);
-    return item;
+    // Use the comprehensive findByIdAcrossTypes for robust searching
+    const item = await this.findByIdAcrossTypes(id);
+    // Return the item only if it matches the expected type
+    return item && item.type === type ? item : null;
+  }
+
+  private async findFileById(directory: string, id: string): Promise<string | null> {
+    const allFiles = await this._listAllMdxFiles(directory);
+    const targetFile = `${id}.mdx`;
+    for (const file of allFiles) {
+        if (path.basename(file) === targetFile) {
+            return file;
+        }
+    }
+    return null;
+  }
+
+  private async _listAllMdxFiles(directory: string): Promise<string[]> {
+    let allFiles: string[] = [];
+    if (!(await this.fs.pathExists(directory))) {
+      return [];
+    }
+    const entries = await this.fs.listDirContents(directory); // Use listDirContents
+    for (const entry of entries) {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.is_directory) {
+        allFiles = allFiles.concat(await this._listAllMdxFiles(entryPath));
+      } else if (entry.name.endsWith('.mdx')) {
+        allFiles.push(entryPath);
+      }
+    }
+    return allFiles;
   }
 
   /** Lists all memories of a given type. */
   async listByType(type: MemoryType): Promise<MemoryItem[]> {
     await this.initializeProject();
 
-    // Use cached index if available for better performance
-    if (this.index && this.index.typeIndex.has(type)) {
-      const ids = this.index.typeIndex.get(type)!;
-      return Array.from(ids).map(id => this.index!.memories.get(id)!).filter(Boolean);
-    }
-
-    const dir = this.fs.getMemoryTypeDir(this.projectRoot, this.getHierarchicalPath(type, {} as any));
-    if (!(await this.fs.pathExists(dir))) return [];
-    const files = await this.fs.listFiles(dir, { ext: '.mdx' });
+    // Get the base directory for the memory type
+    const baseDir = this.fs.getMemoryTypeDir(this.projectRoot, mapTypeToDir(type));
+    
+    const files = await this._listAllMdxFiles(baseDir); // Use the new recursive helper
     const items: MemoryItem[] = [];
     for (const f of files) {
       try {
@@ -134,20 +161,9 @@ export class MemoryManager {
       },
     };
     const mdx = this.parser.generateMdxContent(updated);
-    const filePath = this.fs.getMemoryFilePath(this.projectRoot, mapTypeToDir(memory.type), memory.id);
+    const filePath = this.fs.getMemoryFilePath(this.projectRoot, this.getHierarchicalPath(memory.type, updated.frontmatter), memory.id);
     await this.fs.writeFileAtomic(filePath, mdx);
-    await this.updateSearchIndex(updated);
-
-    // Update task index if this is a task-related memory
-    if (TASK_MANAGEMENT_TYPES.includes(memory.type) && this.taskIndex) {
-      this.taskIndex.set(memory.id, updated);
-    }
-
-    // Clear delegation cache if feature_id changed
-    if (memory.frontmatter?.feature_id && this.delegationCache) {
-      this.delegationCache.delete(memory.frontmatter.feature_id);
-    }
-
+    
     return filePath;
   }
 
@@ -158,35 +174,15 @@ export class MemoryManager {
     // Get the memory before deletion for cache cleanup
     const existing = await this.getById(type, id);
 
-    const filePath = this.fs.getMemoryFilePath(this.projectRoot, mapTypeToDir(type), id);
+    const filePath = this.fs.getMemoryFilePath(this.projectRoot, this.getHierarchicalPath(type, existing?.frontmatter || {} as any), id);
     await this.fs.deleteFile(filePath);
-
-    if (this.index) {
-      this.index.memories.delete(id);
-      for (const set of this.index.contentIndex.values()) set.delete(id);
-      for (const set of this.index.tagIndex.values()) set.delete(id);
-      this.index.typeIndex.get(type)?.delete(id);
-    }
-
-    // Update task index
-    if (TASK_MANAGEMENT_TYPES.includes(type) && this.taskIndex) {
-      this.taskIndex.delete(id);
-    }
-
-    // Clear delegation cache if necessary
-    if (existing?.frontmatter.feature_id && this.delegationCache) {
-      this.delegationCache.delete(existing.frontmatter.feature_id);
-    }
   }
 
   /** Enhanced content search with optimized indexing and task-specific filtering. */
   async searchByContent(query: SearchQuery): Promise<SearchResult[]> {
     await this.initializeProject();
 
-    // Build index if not available for performance
-    if (!this.index) {
-      await this.buildSearchIndex();
-    }
+    const index = await this.buildSearchIndex();
 
     const types = query.type ? [query.type] : ALL_MEMORY_TYPES;
     const results: SearchResult[] = [];
@@ -197,22 +193,22 @@ export class MemoryManager {
     // Use index for faster search when available
     const candidateIds = new Set<string>();
 
-    if (text && this.index) {
+    if (text && index) {
       // Use content index for text search
       const tokens = tokenize(text);
       for (const token of tokens) {
-        const ids = this.index.contentIndex.get(token);
+        const ids = index.contentIndex.get(token);
         if (ids) {
           ids.forEach(id => candidateIds.add(id));
         }
       }
     }
 
-    if (query.tags && query.tags.length > 0 && this.index) {
+    if (query.tags && query.tags.length > 0 && index) {
       // Use tag index for tag search
       const tagCandidates = new Set<string>();
       for (const tag of query.tags) {
-        const ids = this.index.tagIndex.get(tag);
+        const ids = index.tagIndex.get(tag);
         if (ids) {
           if (tagCandidates.size === 0) {
             ids.forEach(id => tagCandidates.add(id));
@@ -244,7 +240,7 @@ export class MemoryManager {
     // If no specific search criteria, get all memories of specified types
     if (candidateIds.size === 0) {
       for (const type of types) {
-        const typeIds = this.index?.typeIndex.get(type);
+        const typeIds = index?.typeIndex.get(type);
         if (typeIds) {
           typeIds.forEach(id => candidateIds.add(id));
         }
@@ -253,7 +249,7 @@ export class MemoryManager {
 
     // Process candidates
     for (const id of candidateIds) {
-      const m = this.index?.memories.get(id);
+      const m = index?.memories.get(id);
       if (!m) continue;
 
       // Type filter
@@ -302,6 +298,7 @@ export class MemoryManager {
     const nowIso = new Date().toISOString();
     const newRel = {
       id: to.id,
+      target_type: to.type,
       type: rel.type,
       strength: rel.strength,
       confidence: rel.confidence,
@@ -333,14 +330,19 @@ export class MemoryManager {
     const rels = centerItem.frontmatter.relationships ?? [];
     const results: MemoryItem[] = [];
     for (const r of rels) {
-      // Try all types since relationship target type is not stored explicitly; fallback to first match
-      const types: MemoryType[] = ['code_pattern','architectural_decision','user_preference','insight','relationship_map','reflection','bug_pattern','performance_insight','api_mapping'] as MemoryType[];
-      let found: MemoryItem | null = null;
-      for (const t of types) {
-        const it = await this.getById(t, r.id);
-        if (it) { found = it; break; }
+      // Use the target_type for efficient lookup
+      if (r.target_type) {
+        const item = await this.getById(r.target_type, r.id);
+        if (item) {
+          results.push(item);
+        }
+      } else {
+        // Fallback for older relationships without target_type
+        const item = await this.findByIdAcrossTypes(r.id);
+        if (item) {
+          results.push(item);
+        }
       }
-      if (found) results.push(found);
     }
     return results;
   }
@@ -376,10 +378,21 @@ export class MemoryManager {
   }
 
   private async findByIdAcrossTypes(id: string): Promise<MemoryItem | null> {
-    const types: MemoryType[] = ['code_pattern','architectural_decision','user_preference','insight','relationship_map','reflection','bug_pattern','performance_insight','api_mapping'] as MemoryType[];
-    for (const t of types) {
-      const it = await this.getById(t, id);
-      if (it) return it;
+    await this.initializeProject(); // Ensure project is initialized before file system operations
+    for (const type of ALL_MEMORY_TYPES) {
+      const baseDir = this.fs.getMemoryTypeDir(this.projectRoot, mapTypeToDir(type));
+      const filePath = await this.findFileById(baseDir, id);
+      if (filePath) {
+        try {
+          const content = await this.fs.readFileUtf8(filePath);
+          const item = this.parser.parseContent(content, filePath);
+          if (item.id === id) {
+              return item;
+          }
+        } catch (error) {
+          console.warn(`Error parsing memory file ${filePath}:`, error);
+        }
+      }
     }
     return null;
   }
@@ -435,40 +448,16 @@ export class MemoryManager {
       }
     }
 
-    this.index = idx;
-    this.taskIndex = taskIndex;
     return idx;
-  }
-
-  /** Updates search index with a single memory. */
-  async updateSearchIndex(memory: MemoryItem): Promise<void> {
-    if (!this.index) {
-      await this.buildSearchIndex();
-      return;
-    }
-    this.index.memories.set(memory.id, memory);
-    this.index.typeIndex.get(memory.type)?.add(memory.id);
-    const tokens = tokenize(`${memory.title} ${memory.content}`);
-    for (const set of this.index.contentIndex.values()) set.delete(memory.id);
-    for (const tok of tokens) {
-      if (!this.index.contentIndex.has(tok)) this.index.contentIndex.set(tok, new Set());
-      this.index.contentIndex.get(tok)!.add(memory.id);
-    }
-    for (const set of this.index.tagIndex.values()) set.delete(memory.id);
-    for (const tag of memory.frontmatter.tags ?? []) {
-      if (!this.index.tagIndex.has(tag)) this.index.tagIndex.set(tag, new Set());
-      this.index.tagIndex.get(tag)!.add(memory.id);
-    }
   }
 
   /** Fuzzy search by token edit distance threshold. */
   async fuzzySearch(text: string, maxDistance: number = 1, type?: MemoryType): Promise<SearchResult[]> {
     await this.initializeProject();
-    if (!this.index) await this.buildSearchIndex(type ? [type] : undefined);
-    const idx = this.index!;
+    const index = await this.buildSearchIndex(type ? [type] : undefined);
     const tokens = tokenize(text);
     const candidateIds = new Set<string>();
-    for (const [tok, ids] of idx.contentIndex.entries()) {
+    for (const [tok, ids] of index.contentIndex.entries()) {
       for (const q of tokens) {
         if (levenshtein(tok, q) <= maxDistance) {
           ids.forEach((id) => candidateIds.add(id));
@@ -477,7 +466,7 @@ export class MemoryManager {
     }
     const results: SearchResult[] = [];
     for (const id of candidateIds) {
-      const m = idx.memories.get(id)!;
+      const m = index.memories.get(id)!;
       results.push({ memory: m, score: 1, matchType: 'partial', highlights: [] });
     }
     results.sort((a, b) => b.score - a.score);
@@ -512,11 +501,9 @@ export class MemoryManager {
   } = {}): Promise<MemoryItem[]> {
     await this.initializeProject();
 
-    if (!this.taskIndex) {
-      await this.buildSearchIndex();
-    }
+    const index = await this.buildSearchIndex();
 
-    let tasks = Array.from(this.taskIndex?.values() || []);
+    let tasks = Array.from(index.memories.values()).filter(t => TASK_MANAGEMENT_TYPES.includes(t.type));
 
     // Apply filters
     if (filters.status) {
@@ -717,7 +704,7 @@ export class MemoryManager {
 
   /** Efficiently update task status with optimized index updates. */
   async updateTaskStatus(taskId: string, newStatus: TaskStatus, notes?: string): Promise<void> {
-    const task = this.taskIndex?.get(taskId);
+    const task = await this.getById('task', taskId);
     if (!task) {
       throw new Error(`Task with ID ${taskId} not found`);
     }
@@ -756,7 +743,7 @@ export class MemoryManager {
     blocked_by: string[];
     blocking: string[];
   }> {
-    const task = this.taskIndex?.get(taskId);
+    const task = await this.getById('task', taskId);
     if (!task) {
       return { dependencies: [], dependents: [], blocked_by: [], blocking: [] };
     }
@@ -770,11 +757,11 @@ export class MemoryManager {
       if (currentDepth >= depth || visited.has(currentTaskId)) return;
       visited.add(currentTaskId);
 
-      const currentTask = this.taskIndex?.get(currentTaskId);
+      const currentTask = await this.getById('task', currentTaskId);
       if (!currentTask) return;
 
       for (const depId of currentTask.frontmatter.dependencies || []) {
-        const depTask = this.taskIndex?.get(depId);
+        const depTask = await this.getById('task', depId);
         if (depTask && !dependencies.find(d => d.id === depId)) {
           dependencies.push(depTask);
           await findDependencies(depId, currentDepth + 1);
@@ -783,7 +770,7 @@ export class MemoryManager {
     };
 
     // Find dependents
-    const allTasks = Array.from(this.taskIndex?.values() || []);
+    const allTasks = await this.listByType('task');
     for (const t of allTasks) {
       if (t.frontmatter.dependencies?.includes(taskId)) {
         dependents.push(t);
@@ -800,48 +787,17 @@ export class MemoryManager {
     };
   }
 
-  /** Cache delegation results for performance. */
-  private async updateDelegationCache(feature_id: string): Promise<void> {
-    if (!this.delegationCache) {
-      this.delegationCache = new Map();
-    }
-
-    const tasks = await this.listTasks({ feature_id });
-    this.delegationCache.set(feature_id, tasks);
-  }
-
-  /** Clear caches when memory is updated. */
-  private clearCaches(): void {
-    this.taskIndex = null;
-    this.delegationCache = null;
-  }
-
   /**
    * Generate hierarchical directory path based on memory type and metadata
    */
   private getHierarchicalPath(type: MemoryType, frontmatter: MemoryFrontmatter): string {
     const baseDir = mapTypeToDir(type);
 
-    // For task management types, create hierarchical structure
+    // For task management types, DO NOT create a hierarchical structure based on metadata.
+    // This was the source of the bug where tasks were not being found.
+    // All tasks should be saved in their root type directory (e.g., 'project/tasks').
     if (TASK_MANAGEMENT_TYPES.includes(type as any)) {
-      const pathParts = [baseDir];
-
-      // Feature-based organization
-      if (frontmatter.feature_id) {
-        pathParts.push(`features/${frontmatter.feature_id}`);
-      }
-
-      // Priority-based sub-organization for tasks
-      if (type === 'task' && frontmatter.priority) {
-        pathParts.push(frontmatter.priority);
-      }
-
-      // Status-based organization for bugs
-      if (type === 'bug_report' && frontmatter.status) {
-        pathParts.push(frontmatter.status);
-      }
-
-      return pathParts.join('/');
+      return baseDir;
     }
 
     // For other types, use category-based organization if available
@@ -857,8 +813,9 @@ export class MemoryManager {
   /** Start a background agent delegation job. */
   async startBackgroundDelegation(
     taskId: string,
-    agentType: string,
-    config: any
+    agentType: AgentProvider,
+    config: AgentConfig,
+    outputFile: string
   ): Promise<{ success: boolean; job_id: string; message: string }> {
     try {
       const task = await this.getById('task', taskId);
@@ -895,12 +852,13 @@ export class MemoryManager {
           delegation_timeout_minutes: config?.timeout_minutes || 30,
           delegation_attempts: 0,
           status: 'in_progress',
-          assignee: 'agent'
+          assignee: 'agent',
+          delegation_output_file: outputFile // Store the output file path
         }
       });
 
       // Start background execution
-      this.executeBackgroundJob(jobId, taskId, agentType, config);
+      this.jobQueue.add(() => this.executeBackgroundJob(jobId, taskId, agentType, config, outputFile));
 
       return {
         success: true,
@@ -917,8 +875,49 @@ export class MemoryManager {
     }
   }
 
+  /** Re-enqueues jobs that were interrupted by a server restart. */
+  async requeueInterruptedJobs(): Promise<void> {
+    const allTasks = await this.listByType('task');
+    
+    const interruptedTasks = allTasks.filter(task =>
+      task.frontmatter.delegation_status === 'running' ||
+      task.frontmatter.delegation_status === 'queued'
+    );
+
+    if (interruptedTasks.length > 0) {
+      for (const task of interruptedTasks) {
+        const { id, title, content, frontmatter } = task;
+        const agentType = frontmatter.delegated_to as AgentProvider;
+        const config = frontmatter.delegation_config as AgentConfig;
+        const outputFile = frontmatter.delegation_output_file;
+
+        if (agentType && config && outputFile) {
+          // Add a note to the log file
+          try {
+            const logNote = `\n--- [SERVER RESTART DETECTED at ${new Date().toISOString()}] ---\nRe-enqueuing interrupted job.\n---\n`;
+            await this.fs.appendFile(outputFile, logNote);
+          } catch (e) {
+            // This is a non-critical error, so we can ignore it
+          }
+
+          // Reset status to 'queued' and add to the queue
+          await this.update({
+            type: 'task',
+            id,
+            frontmatter: {
+              delegation_status: 'queued',
+              delegation_progress: 'Re-queued after server restart.'
+            }
+          });
+
+          this.jobQueue.add(() => this.executeBackgroundJob(`requeued-${id}`, id, agentType, config, outputFile));
+        }
+      }
+    }
+  }
+
   /** Execute agent delegation in background. */
-  private async executeBackgroundJob(jobId: string, taskId: string, agentType: string, config: any): Promise<void> {
+  private async executeBackgroundJob(jobId: string, taskId: string, agentType: AgentProvider, config: AgentConfig, outputFile: string): Promise<void> {
     try {
       // Update status to running
       await this.update({
@@ -926,49 +925,117 @@ export class MemoryManager {
         id: taskId,
         frontmatter: {
           delegation_status: 'running',
-          delegation_progress: 'Starting agent execution...'
-        }
-      });
-
-      // Create output file path
-      const outputFile = path.join(this.projectRoot, '.github', 'lia', 'jobs', `${jobId}.log`);
-      await this.fs.ensureDirectoryStructure(this.projectRoot);
-      await this.fs.writeFileAtomic(outputFile, `Job started at ${new Date().toISOString()}\n`);
-
-      // Update task with output file
-      await this.update({
-        type: 'task',
-        id: taskId,
-        frontmatter: {
+          delegation_progress: 'Starting agent execution...', 
           delegation_output_file: outputFile
         }
       });
 
-      // Execute agent (this will be implemented in the executor)
-      // For now, we'll simulate the execution
-              setTimeout(async () => {
-          await this.update({
-            type: 'task',
-            id: taskId,
-            frontmatter: {
-              delegation_status: 'completed',
-              delegation_completed_at: new Date().toISOString(),
-              delegation_progress: 'Agent execution completed successfully',
-              status: 'done'
-            }
-          });
-        }, 5000); // Simulate 5 second execution
+      // Ensure output file exists
+      await this.fs.ensureDirectoryStructure(this.projectRoot);
+      await this.fs.writeFileAtomic(outputFile, `Job started at ${new Date().toISOString()}\n`);
+      await this.fs.writeFileAtomic(outputFile, `Output will be streamed to this file in real-time.\n`);
 
-    } catch (error: any) {
-              await this.update({
+      const task = await this.getById('task', taskId);
+      if (!task) {
+        throw new Error(`Task ${taskId} not found for execution.`);
+      }
+
+      // Check if task has been cancelled
+      if (task.frontmatter.delegation_status === 'cancelled') {
+        await this.update({
+          type: 'task',
+          id: taskId,
+          frontmatter: {
+            delegation_status: 'cancelled',
+            delegation_progress: 'Delegation cancelled by user before execution started.',
+            status: 'todo'
+          }
+        });
+        return; // Exit if task was cancelled
+      }
+
+      // Execute the agent
+      const result = await executeWithAgent(
+        agentType,
+        task.title,
+        task.content,
+        { ...config, logFilePath: outputFile } // Pass log file path to execAsync
+      );
+
+      // Update task with process ID
+      await this.update({
+        type: 'task',
+        id: taskId,
+        frontmatter: {
+          delegation_process_id: result.pid
+        }
+      });
+
+      // Log the final report summary to the output file
+      const logContent = `
+=====================================
+Agent Execution Summary
+=====================================
+- **Status:** ${result.success ? '✅ Success' : '❌ Failed'}
+- **Agent:** ${result.agent_used}
+- **Execution Time:** ${result.execution_time}s
+- **YOLO Mode:** ${result.yolo_mode_used}
+- **Sandbox:** ${result.sandbox_used}
+- **Command:** ${result.command_executed || 'N/A'}
+- **Exit Code:** ${result.exit_code || 'N/A'}
+
+${result.error ? `--- Final Error/Issue ---
+${result.error}
+` : ''}
+`;
+      const existingContent = await this.fs.readFileUtf8(outputFile);
+      await this.fs.writeFileAtomic(outputFile, existingContent + logContent);
+
+
+      // Update task based on result
+      if (result.success) {
+        await this.update({
+          type: 'task',
+          id: taskId,
+          frontmatter: {
+            delegation_status: 'completed',
+            delegation_completed_at: new Date().toISOString(),
+            delegation_progress: 'Agent execution completed successfully',
+            status: 'done',
+            execution_time: result.execution_time
+          }
+        });
+      } else {
+        await this.update({
           type: 'task',
           id: taskId,
           frontmatter: {
             delegation_status: 'failed',
-            delegation_error: error.message,
-            delegation_progress: 'Agent execution failed'
+            delegation_error: result.error || 'Agent execution failed without a specific error message.',
+            delegation_progress: 'Agent execution failed',
+            status: 'blocked'
           }
         });
+      }
+
+    } catch (error: any) {
+      const errorMessage = `Critical error during background job execution: ${error.message}`;
+      try {
+        const existingContent = await this.fs.readFileUtf8(outputFile);
+        await this.fs.writeFileAtomic(outputFile, `${existingContent}\n\n--- CRITICAL ERROR ---\n${errorMessage}`);
+      } catch (e) {
+        // If reading the original log fails, just write the error.
+        await this.fs.writeFileAtomic(outputFile, `--- CRITICAL ERROR ---\n${errorMessage}`);
+      }
+      await this.update({
+        type: 'task',
+        id: taskId,
+        frontmatter: {
+          delegation_status: 'failed',
+          delegation_error: errorMessage,
+          delegation_progress: 'Agent execution failed due to a system error.'
+        }
+      });
     }
   }
 
@@ -990,9 +1057,19 @@ export class MemoryManager {
     let output = '';
     if (task.frontmatter.delegation_output_file) {
       try {
-        output = await this.fs.readFileUtf8(task.frontmatter.delegation_output_file);
-      } catch {
-        output = 'Output file not accessible';
+        // Read only last N lines for performance, or full if small
+        const fullOutput = await this.fs.readFileUtf8(task.frontmatter.delegation_output_file);
+        const lines = fullOutput.split('\n');
+        const maxLines = 200; // Limit output for display
+        output = lines.length > maxLines ? lines.slice(-maxLines).join('\n') : fullOutput;
+
+        // Add a note if output was truncated
+        if (lines.length > maxLines) {
+          output = `... (output truncated, showing last ${maxLines} lines)\n` + output;
+        }
+
+      } catch (e) {
+        output = `Output file not accessible or error reading: ${(e as Error).message}`;
       }
     }
 
@@ -1016,16 +1093,32 @@ export class MemoryManager {
         }
 
       if (task.frontmatter.delegation_status !== 'running' && task.frontmatter.delegation_status !== 'queued') {
-        return { success: false, message: `Task is not running (status: ${task.frontmatter.delegation_status})` };
+        return { success: false, message: `Task is not running or queued (status: ${task.frontmatter.delegation_status})` };
+      }
+
+      // If queued, mark as cancelled. The job runner will skip it.
+      if (task.frontmatter.delegation_status === 'queued') {
+        await this.update({
+          type: 'task',
+          id: taskId,
+          frontmatter: {
+            delegation_status: 'cancelled',
+            delegation_progress: 'Delegation cancelled by user before execution started.',
+            status: 'todo'
+          }
+        });
+        return { success: true, message: `Delegation for task ${taskId} was pending and has been cancelled.` };
       }
 
       // Kill process if running
       if (task.frontmatter.delegation_process_id) {
         try {
           process.kill(task.frontmatter.delegation_process_id, 'SIGTERM');
-        } catch {
-          // Process might already be dead
+        } catch (e) {
+          return { success: false, message: `Error killing process ${task.frontmatter.delegation_process_id}: ${(e as Error).message}` };
         }
+      } else {
+        return { success: false, message: `No process ID found for task ${taskId} to kill.` };
       }
 
       // Update task status
@@ -1035,7 +1128,8 @@ export class MemoryManager {
         frontmatter: {
           delegation_status: 'cancelled',
           delegation_progress: 'Delegation cancelled by user',
-          status: 'todo'
+          status: 'todo',
+          delegation_process_id: undefined // Clear the process ID
         }
       });
 

@@ -92,6 +92,13 @@ export class FileSystemService {
     await nodeFs.rename(tempPath, filePath);
   }
 
+  /** Appends content to a file, creating it if it doesn't exist. */
+  async appendFile(filePath: string, content: string): Promise<void> {
+    const dir = path.dirname(filePath);
+    await nodeFs.mkdir(dir, { recursive: true });
+    await nodeFs.appendFile(filePath, content, 'utf-8');
+  }
+
   /** Reads a UTF-8 text file. */
   async readFileUtf8(filePath: string): Promise<string> {
     return nodeFs.readFile(filePath, 'utf-8');
@@ -103,6 +110,15 @@ export class FileSystemService {
     const files = entries.filter((e) => e.isFile()).map((e) => path.join(dirPath, e.name));
     if (opts?.ext) return files.filter((f) => f.toLowerCase().endsWith(opts.ext!.toLowerCase()));
     return files;
+  }
+
+  /** Lists all contents (files and directories) in a given directory. */
+  async listDirContents(dirPath: string): Promise<{ name: string; is_directory: boolean }[]> {
+    const entries = await nodeFs.readdir(dirPath, { withFileTypes: true });
+    return entries.map(entry => ({
+      name: entry.name,
+      is_directory: entry.isDirectory()
+    }));
   }
 
   /** Deletes a file if exists. */

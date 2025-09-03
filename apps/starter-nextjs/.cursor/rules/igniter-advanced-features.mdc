@@ -1,121 +1,388 @@
 ---
-description: Use when implementing background jobs (BullMQ), caching/pub-sub systems (Redis), or real-time features with Server-Sent Events for production-grade applications.
-globs: []
 alwaysApply: true
 ---
-
 # Igniter.js: Advanced Features
 
-This guide covers the advanced, production-grade features of Igniter.js that enable complex, scalable application development.
+This guide covers the advanced, production-grade features of Igniter.js that enable complex, scalable application development. All examples follow the established patterns from our procedures guide and use the latest API from `@igniter-js/core`.
 
 ## 1. Background Jobs (BullMQ)
 
 The jobs system allows you to offload long-running or resource-intensive tasks to a separate background worker process, preventing API requests from timing out and improving user experience.
 
-### 1.1. Defining a Job
-Jobs are defined in a dedicated job router file. Each job has a unique name, a Zod schema for its input, and a handler function.
+### 1.1. Jobs Router with Type-Safe Definitions
 
--   **File Location:** `src/providers/jobs.ts` (or a similar central location)
+Jobs are defined using a router pattern with Zod schemas for type safety and proper error handling.
 
 ```typescript
-// src/providers/jobs.ts
-import { jobs } from '@/igniter';
+// src/services/jobs.ts
+import { createBullMQAdapter } from '@igniter-js/adapter-bullmq';
+import { bullmqConnection } from '@/services/redis';
 import { z } from 'zod';
 
-export const emailJobs = jobs.router({
-  sendWelcomeEmail: jobs.register({
-    // Zod schema for type-safe job inputs
-    input: z.object({
-      userId: z.string(),
-    }),
-    // The handler that performs the background work
-    handler: async ({ input, context }) => {
-      const user = await context.database.user.findUnique({ where: { id: input.userId } });
-      if (user) {
-        await context.mail.send({
-          to: user.email,
-          template: 'welcome',
-          data: { name: user.name },
-        });
-      }
-    },
+/**
+ * @description BullMQ jobs adapter for background task processing
+ */
+export const jobsAdapter = createBullMQAdapter({
+  connection: bullmqConnection,
+  defaultJobOptions: {
+    removeOnComplete: 100,
+    removeOnFail: 50,
+  }
+});
+
+// Define job schemas with Zod
+const SendWelcomeEmailSchema = z.object({
+  userId: z.string(),
+  userEmail: z.string().email(),
+  userName: z.string(),
+});
+
+const ProcessImageSchema = z.object({
+  imageUrl: z.string().url(),
+  userId: z.string(),
+  dimensions: z.object({
+    width: z.number(),
+    height: z.number(),
   }),
 });
 
-export const REGISTERED_JOBS = {
-  emails: emailJobs,
-};
+/**
+ * @description Email jobs router with type-safe definitions
+ */
+export const emailJobsRouter = jobsAdapter.router({
+  jobs: {
+    sendWelcomeEmail: jobsAdapter.register({
+      name: 'send-welcome-email',
+      input: SendWelcomeEmailSchema,
+      handler: async ({ input, context }) => {
+        // Business Rule: Send welcome email using mail service
+        await context.services.mail.send({
+          to: input.userEmail,
+          template: 'welcome',
+          data: {
+            name: input.userName,
+            userId: input.userId,
+          },
+        });
+
+        // Security Rule: Log email sending for audit trail
+        igniter.logger.info('Welcome email sent', {
+          userId: input.userId,
+          email: input.userEmail,
+        });
+
+        return { success: true, sentAt: new Date() };
+      },
+    }),
+
+    sendPasswordReset: jobsAdapter.register({
+      name: 'send-password-reset',
+      input: z.object({
+        userId: z.string(),
+        userEmail: z.string().email(),
+        resetToken: z.string(),
+      }),
+      handler: async ({ input, context }) => {
+        // Business Rule: Generate reset link and send email
+        const resetLink = `${process.env.APP_URL}/reset-password?token=${input.resetToken}`;
+
+        await context.services.mail.send({
+          to: input.userEmail,
+          template: 'password-reset',
+          data: {
+            resetLink,
+            expiresIn: '1 hour',
+          },
+        });
+
+        // Security Rule: Log password reset attempt
+        igniter.logger.warn('Password reset email sent', {
+          userId: input.userId,
+          email: input.userEmail,
+        });
+
+        return { success: true };
+      },
+    }),
+  },
+  namespace: 'email',
+  defaultOptions: {
+    queue: { name: 'email-queue' },
+    job: { priority: 5 },
+  },
+});
+
+/**
+ * @description Consolidated jobs configuration for Igniter.js
+ */
+export const REGISTERED_JOBS = jobsAdapter.merge({
+  email: emailJobsRouter,
+});
 ```
 
-### 1.2. Enqueuing a Job
-Jobs are typically enqueued from within a mutation handler. The API call returns immediately to the user while the job is processed in the background.
+### 1.2. Enqueuing Jobs from Controllers
+
+Jobs are enqueued from within mutation handlers using the type-safe API.
 
 ```typescript
-// In a controller
-createUser: igniter.mutation({
-  // ...
-  handler: async ({ request, context, response }) => {
-    const newUser = await context.database.user.create({ data: request.body });
+// src/features/auth/controllers/auth.controller.ts
+import { igniter } from "@/igniter";
+import { z } from "zod";
+import { authProcedure } from "../procedures/auth.procedure";
 
-    // Schedule the job to run in the background
-    await igniter.jobs.emails.schedule({
-      task: 'sendWelcomeEmail',
-      input: { userId: newUser.id }, // Type-checked against the job's Zod schema
-    });
+export const authController = igniter.controller({
+  name: "auth",
+  path: "/auth",
+  description: "User authentication with background job processing",
+  actions: {
+    signUp: igniter.mutation({
+      name: "SignUp",
+      description: "Create new user account with welcome email",
+      path: "/sign-up",
+      method: "POST",
+      use: [authProcedure({ required: false })],
+      body: z.object({
+        name: z.string().min(2),
+        email: z.string().email(),
+        password: z.string().min(8),
+      }),
+      handler: async ({ request, context, response }) => {
+        // Observation: Extract validated user data
+        const { name, email, password } = request.body;
 
-    return response.created(newUser);
-  }
-})
+        // Business Rule: Check if user already exists
+        const existingUser = await context.services.database.user.findUnique({
+          where: { email },
+        });
+
+        if (existingUser) {
+          return response.badRequest("User with this email already exists");
+        }
+
+        // Security Rule: Hash password before storing
+        const passwordHash = await context.services.password.hash(password);
+
+        // Business Rule: Create user in database
+        const newUser = await context.services.database.user.create({
+          data: {
+            name,
+            email,
+            passwordHash,
+          },
+        });
+
+        // Business Rule: Schedule welcome email job (non-blocking)
+        await igniter.jobs.email.sendWelcomeEmail.schedule({
+          task: 'sendWelcomeEmail',
+          input: {
+            userId: newUser.id,
+            userEmail: email,
+            userName: name,
+          },
+        });
+
+        // Observation: Log successful registration
+        igniter.logger.info('User registered successfully', {
+          userId: newUser.id,
+          email,
+        });
+
+        // Response: Return user data without password
+        const { passwordHash: _, ...userResponse } = newUser;
+        return response.created(userResponse);
+      },
+    }),
+  },
+});
 ```
 
 ## 2. Store (Redis)
 
 The store provides a high-performance, Redis-backed key-value store for caching and pub/sub messaging.
 
-### 2.1. Caching
-Use the store to cache frequently accessed or computationally expensive data, reducing database load.
+### 2.1. Advanced Caching with Cache Procedures
 
 ```typescript
-// In a query handler
-getPost: igniter.query({
-  path: '/:id',
-  handler: async ({ request, context, response }) => {
-    const postId = request.params.id;
-    const cacheKey = `post:${postId}`;
+// src/features/common/procedures/cache.procedure.ts
+import { igniter } from "@/igniter";
 
-    // 1. Try to get the post from the cache
-    const cachedPost = await igniter.store.get(cacheKey);
-    if (cachedPost) {
-      return response.success(JSON.parse(cachedPost));
+/**
+ * @typedef {object} CacheOptions
+ * @property {string} [key] - Custom cache key (auto-generated if not provided)
+ * @property {number} [ttl=300] - Time-to-live in seconds (5 minutes default)
+ * @property {boolean} [enabled=true] - Whether caching is enabled
+ * @property {string[]} [varyBy=[]] - Request properties to vary cache by
+ */
+type CacheOptions = {
+  key?: string;
+  ttl?: number;
+  enabled?: boolean;
+  varyBy?: string[];
+};
+
+/**
+ * @typedef {object} CacheContext
+ * @property {object} cache - Caching context
+ * @property {string} cache.key - Generated cache key
+ * @property {boolean} cache.hit - Whether cache was hit
+ * @property {any} cache.data - Cached data (if hit)
+ */
+type CacheContext = {
+  cache: {
+    key: string;
+    hit: boolean;
+    data?: any;
+  };
+};
+
+/**
+ * @const cacheProcedure
+ * @description
+ * Procedure that implements response caching using Redis.
+ * Checks for cached responses and caches new responses.
+ *
+ * @param {CacheOptions} [options={}] - Caching configuration
+ * @returns {Promise<CacheContext | Response>} Cache context or cached response
+ */
+export const cacheProcedure = igniter.procedure({
+  name: "cacheProcedure",
+  handler: async (options: CacheOptions = {}, ctx): Promise<CacheContext | Response> => {
+    const { request, response, next } = ctx;
+    const { key, ttl = 300, enabled = true, varyBy = [] } = options;
+
+    // Business Rule: Generate cache key if not provided
+    const cacheKey = key || generateCacheKey(request, varyBy);
+
+    // Business Rule: Check if caching is enabled
+    if (!enabled) {
+      return {
+        cache: {
+          key: cacheKey,
+          hit: false
+        }
+      };
     }
 
-    // 2. If not in cache, fetch from DB
-    const post = await context.database.post.findUnique({ where: { id: postId } });
-    if (!post) {
-      return response.notFound();
+    // Business Rule: Try to get cached response
+    const cachedData = await igniter.store.get(`cache:${cacheKey}`);
+
+    if (cachedData) {
+      // Observation: Cache hit - return cached response
+      const parsed = JSON.parse(cachedData);
+      return response.status(parsed.status).json(parsed.body);
     }
 
-    // 3. Store the result in the cache for 1 hour
-    await igniter.store.set(cacheKey, JSON.stringify(post), {
-      ttl: 3600, // Time-to-live in seconds
-    });
+    // Context Extension: Add cache context for the action
+    const extendedContext = {
+      cache: {
+        key: cacheKey,
+        hit: false
+      }
+    };
 
-    return response.success(post);
+    // Business Rule: Execute the action to get fresh response
+    const result = await next();
+
+    // Business Rule: Cache the response if it's successful
+    if (result && typeof result.status === 'number' && result.status < 400) {
+      const cacheData = {
+        status: result.status,
+        body: result.body,
+        timestamp: Date.now()
+      };
+
+      await igniter.store.set(`cache:${cacheKey}`, JSON.stringify(cacheData), {
+        ttl
+      });
+    }
+
+    // Business Rule: Return the original response
+    return result;
   }
-})
+});
+
+/**
+ * @function generateCacheKey
+ * @description Generates a cache key based on request properties
+ * @param {Request} request - The incoming request
+ * @param {string[]} varyBy - Properties to vary cache by
+ * @returns {string} Generated cache key
+ */
+function generateCacheKey(request: Request, varyBy: string[]): string {
+  const url = new URL(request.url!);
+  let key = `${request.method}:${url.pathname}`;
+
+  // Business Rule: Include query parameters in cache key
+  if (varyBy.includes('query')) {
+    const queryParams = Array.from(url.searchParams.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('&');
+    if (queryParams) key += `?${queryParams}`;
+  }
+
+  // Business Rule: Include user ID if authenticated
+  if (varyBy.includes('user')) {
+    // This would need to be implemented based on auth context
+    key += `:user_${'userId'}`;
+  }
+
+  return key;
+}
 ```
 
-### 2.2. Pub/Sub
-Use publish/subscribe for event-driven communication between different parts of your application or even different services.
+### 2.2. Pub/Sub with Advanced Patterns
 
 ```typescript
-// Service A publishes an event
-await igniter.store.publish('user:created', { userId: '123' });
+// src/features/notifications/services/notification.service.ts
+import { igniter } from "@/igniter";
 
-// Service B subscribes to the event
-igniter.store.subscribe('user:created', (message) => {
-  console.log('New user created:', message.userId);
-});
+/**
+ * @class NotificationService
+ * @description Service for handling real-time notifications using Redis pub/sub
+ */
+export class NotificationService {
+  /**
+   * @method publishUserNotification
+   * @description Publishes a notification to a specific user
+   * @param {string} userId - Target user ID
+   * @param {object} notification - Notification data
+   */
+  async publishUserNotification(userId: string, notification: any) {
+    const channel = `user:${userId}:notifications`;
+
+    await igniter.store.publish(channel, {
+      id: `notif_${Date.now()}_${Math.random()}`,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      data: notification.data,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Business Rule: Log notification publishing
+    igniter.logger.info('Notification published', {
+      userId,
+      channel,
+      type: notification.type,
+    });
+  }
+
+  /**
+   * @method subscribeToUserNotifications
+   * @description Subscribes to user-specific notifications
+   * @param {string} userId - User ID to subscribe to
+   * @param {Function} callback - Callback function for notifications
+   * @returns {object} Subscription object with unsubscribe method
+   */
+  subscribeToUserNotifications(userId: string, callback: (message: any) => void) {
+    const channel = `user:${userId}:notifications`;
+
+    return igniter.store.subscribe(channel, (message) => {
+      callback(message);
+    });
+  }
+}
 ```
 
 ## 3. Realtime (Server-Sent Events)
@@ -148,6 +415,7 @@ export const postsController = igniter.controller({
       body: z.object({ title: z.string() }),
       handler: async ({ request, context, response }) => {
         const newPost = await context.database.post.create({ data: request.body });
+        
         // 2. Revalidate the 'posts.list' query. All connected clients will update.
         return response.created(newPost).revalidate('posts.list');
       }
@@ -172,12 +440,7 @@ notifications: igniter.query({
     // Subscribe this connection to a specific channel
     const subscription = igniter.store.subscribe(`user:${userId}:notifications`, (message) => {
       // When a message is published to this channel, send it to the client
-      realtime.send(message);
-    });
-
-    // Clean up the subscription when the client disconnects
-    realtime.onDisconnect(() => {
-      subscription.unsubscribe();
+      igniter.realtime.publish('card:created', { message });
     });
   }
 })
@@ -189,3 +452,359 @@ await igniter.store.publish(`user:123:notifications`, {
 });
 ```
 On the client, you would use the `api.notifications.useRealtime()` hook to subscribe to this stream.
+
+## 4. Telemetry & Observability
+
+Telemetry provides comprehensive observability for monitoring application performance, errors, and user behavior.
+
+### 4.1. Telemetry Configuration
+
+```typescript
+// src/services/telemetry.ts
+import { createOpenTelemetryProvider } from '@igniter-js/telemetry';
+
+/**
+ * @description OpenTelemetry provider for distributed tracing and metrics
+ */
+export const telemetry = createOpenTelemetryProvider({
+  serviceName: 'trello-clone',
+  serviceVersion: '1.0.0',
+  exporter: {
+    type: 'otlp',
+    endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
+    headers: {
+      authorization: `Bearer ${process.env.OTEL_EXPORTER_OTLP_TOKEN}`,
+    },
+  },
+  sampling: {
+    ratio: 0.1, // Sample 10% of traces in production
+  },
+  metrics: {
+    enabled: true,
+    interval: 60000, // Export metrics every minute
+  },
+});
+```
+
+### 4.2. Telemetry Integration in Procedures
+
+```typescript
+// src/features/common/procedures/telemetry.procedure.ts
+import { igniter } from "@/igniter";
+
+/**
+ * @typedef {object} TelemetryOptions
+ * @property {string} [operationName] - Custom operation name for tracing
+ * @property {object} [tags] - Additional tags for the span
+ * @property {boolean} [captureErrors=true] - Whether to capture and trace errors
+ */
+type TelemetryOptions = {
+  operationName?: string;
+  tags?: Record<string, string>;
+  captureErrors?: boolean;
+};
+
+/**
+ * @typedef {object} TelemetryContext
+ * @property {object} telemetry - Telemetry context
+ * @property {string} telemetry.spanId - Current span ID
+ * @property {Function} telemetry.addTag - Function to add tags to current span
+ * @property {Function} telemetry.setStatus - Function to set span status
+ */
+type TelemetryContext = {
+  telemetry: {
+    spanId: string;
+    addTag: (key: string, value: string) => void;
+    setStatus: (status: 'ok' | 'error', message?: string) => void;
+  };
+};
+
+/**
+ * @const telemetryProcedure
+ * @description
+ * Procedure that creates telemetry spans for observability and tracing.
+ * Automatically captures errors and performance metrics.
+ *
+ * @param {TelemetryOptions} [options={}] - Telemetry configuration
+ * @returns {Promise<TelemetryContext | Response>} Telemetry context or forwards response
+ */
+export const telemetryProcedure = igniter.procedure({
+  name: "telemetryProcedure",
+  handler: async (options: TelemetryOptions = {}, { request, response, next }) => {
+    const { operationName, tags = {}, captureErrors = true } = options;
+
+    // Business Rule: Generate operation name if not provided
+    const opName = operationName || `${request.method} ${new URL(request.url!).pathname}`;
+
+    // Business Rule: Start telemetry span
+    const span = igniter.telemetry.startSpan(opName, {
+      attributes: {
+        'http.method': request.method,
+        'http.url': request.url,
+        'http.user_agent': request.headers.get('user-agent'),
+        ...tags,
+      },
+    });
+
+    // Context Extension: Add telemetry context
+    const telemetryContext = {
+      telemetry: {
+        spanId: span.spanContext().spanId,
+        addTag: (key: string, value: string) => {
+          span.setAttribute(key, value);
+        },
+        setStatus: (status: 'ok' | 'error', message?: string) => {
+          if (status === 'error') {
+            span.recordException(new Error(message || 'Operation failed'));
+            span.setStatus({ code: 2, message: message || 'Operation failed' });
+          } else {
+            span.setStatus({ code: 1, message });
+          }
+        },
+      },
+    };
+
+    try {
+      // Business Rule: Execute the action within the span
+      const result = await next();
+
+      // Business Rule: Set success status
+      span.setStatus({ code: 1, message: 'Operation completed successfully' });
+
+      // Business Rule: Add response metrics
+      if (result && typeof result.status === 'number') {
+        span.setAttribute('http.status_code', result.status);
+      }
+
+      return result;
+    } catch (error) {
+      // Business Rule: Capture and trace errors if enabled
+      if (captureErrors) {
+        span.recordException(error);
+        span.setStatus({ code: 2, message: error.message });
+      }
+
+      // Business Rule: Log error with telemetry context
+      igniter.logger.error('Operation failed', {
+        spanId: telemetryContext.telemetry.spanId,
+        operation: opName,
+        error: error.message,
+      });
+
+      throw error;
+    } finally {
+      // Business Rule: Always end the span
+      span.end();
+    }
+  }
+});
+
+## 6. Production-Ready Patterns
+
+### 6.1. Health Check Endpoints
+
+```typescript
+// src/features/health/controllers/health.controller.ts
+import { igniter } from "@/igniter";
+
+export const healthController = igniter.controller({
+  name: "health",
+  path: "/health",
+  description: "Health check endpoints for monitoring",
+  actions: {
+    readiness: igniter.query({
+      name: "Readiness",
+      description: "Check if service is ready to accept traffic",
+      path: "/readiness",
+      handler: async ({ response }) => {
+        try {
+          // Business Rule: Check database connectivity
+          await igniter.services.database.$queryRaw`SELECT 1`;
+
+          // Business Rule: Check Redis connectivity
+          await igniter.store.set('health-check', 'ok', { ttl: 10 });
+
+          // Business Rule: Check job queue status
+          const jobStats = await igniter.jobs.email.getStats();
+
+          return response.success({
+            status: 'ready',
+            timestamp: new Date().toISOString(),
+            services: {
+              database: 'healthy',
+              redis: 'healthy',
+              jobs: 'healthy',
+            },
+            jobStats,
+          });
+        } catch (error) {
+          // Business Rule: Return not ready status
+          return response.status(503).json({
+            status: 'not ready',
+            timestamp: new Date().toISOString(),
+            error: error.message,
+          });
+        }
+      },
+    }),
+
+    liveness: igniter.query({
+      name: "Liveness",
+      description: "Check if service is alive",
+      path: "/liveness",
+      handler: async ({ response }) => {
+        // Business Rule: Simple liveness check
+        return response.success({
+          status: 'alive',
+          timestamp: new Date().toISOString(),
+          uptime: process.uptime(),
+        });
+      },
+    }),
+
+    metrics: igniter.query({
+      name: "Metrics",
+      description: "Get application metrics",
+      path: "/metrics",
+      handler: async ({ response }) => {
+        // Business Rule: Collect application metrics
+        const metrics = {
+          memory: process.memoryUsage(),
+          uptime: process.uptime(),
+          version: process.version,
+          platform: process.platform,
+          timestamp: new Date().toISOString(),
+        };
+
+        return response.success(metrics);
+      },
+    }),
+  },
+});
+```
+
+### 6.2. Circuit Breaker Pattern
+
+```typescript
+// src/features/common/procedures/circuit-breaker.procedure.ts
+import { igniter } from "@/igniter";
+
+/**
+ * @typedef {object} CircuitBreakerOptions
+ * @property {string} serviceName - Name of the service being protected
+ * @property {number} [failureThreshold=5] - Number of failures before opening circuit
+ * @property {number} [timeoutMs=5000] - Timeout for service calls
+ * @property {number} [resetTimeoutMs=30000] - Time before trying to close circuit
+ */
+type CircuitBreakerOptions = {
+  serviceName: string;
+  failureThreshold?: number;
+  timeoutMs?: number;
+  resetTimeoutMs?: number;
+};
+
+/**
+ * @typedef {object} CircuitBreakerContext
+ * @property {object} circuitBreaker - Circuit breaker context
+ * @property {string} circuitBreaker.state - Current state (closed/open/half-open)
+ * @property {boolean} circuitBreaker.allowed - Whether request is allowed
+ * @property {number} circuitBreaker.failureCount - Current failure count
+ */
+type CircuitBreakerContext = {
+  circuitBreaker: {
+    state: 'closed' | 'open' | 'half-open';
+    allowed: boolean;
+    failureCount: number;
+  };
+};
+
+/**
+ * @const circuitBreakerProcedure
+ * @description
+ * Procedure that implements circuit breaker pattern to prevent cascading failures.
+ * Automatically opens circuit when service failures exceed threshold.
+ *
+ * @param {CircuitBreakerOptions} options - Circuit breaker configuration
+ * @returns {Promise<CircuitBreakerContext | Response>} Circuit breaker context or error response
+ */
+export const circuitBreakerProcedure = igniter.procedure({
+  name: "circuitBreakerProcedure",
+  handler: async (options: CircuitBreakerOptions, ctx): Promise<CircuitBreakerContext | Response> => {
+    const { request, response, next } = ctx;
+    const {
+      serviceName,
+      failureThreshold = 5,
+      timeoutMs = 5000,
+      resetTimeoutMs = 30000
+    } = options;
+
+    const circuitKey = `circuit:${serviceName}`;
+    const failureKey = `failures:${serviceName}`;
+
+    // Business Rule: Get current circuit state
+    const circuitState = await igniter.store.get(circuitKey) || 'closed';
+    const failureCount = parseInt(await igniter.store.get(failureKey) || '0');
+
+    // Business Rule: Check if circuit should be opened
+    if (circuitState === 'open') {
+      const lastFailureTime = parseInt(await igniter.store.get(`${circuitKey}:lastFailure`) || '0');
+      const timeSinceLastFailure = Date.now() - lastFailureTime;
+
+      if (timeSinceLastFailure < resetTimeoutMs) {
+        // Circuit is still open
+        return response.status(503).json({
+          error: 'Service temporarily unavailable',
+          retryAfter: Math.ceil((resetTimeoutMs - timeSinceLastFailure) / 1000),
+        });
+      } else {
+        // Time to try half-open state
+        await igniter.store.set(circuitKey, 'half-open', { ttl: 300 });
+      }
+    }
+
+    // Context Extension: Add circuit breaker context
+    const breakerContext = {
+      circuitBreaker: {
+        state: circuitState,
+        allowed: circuitState !== 'open',
+        failureCount,
+      },
+    };
+
+    try {
+      // Business Rule: Execute the action with timeout
+      const result = await Promise.race([
+        next(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Service timeout')), timeoutMs)
+        ),
+      ]);
+
+      // Business Rule: Success - reset failure count and close circuit
+      await igniter.store.set(failureKey, '0');
+      await igniter.store.set(circuitKey, 'closed');
+
+      return result;
+    } catch (error) {
+      // Business Rule: Failure - increment failure count
+      const newFailureCount = failureCount + 1;
+      await igniter.store.set(failureKey, newFailureCount.toString());
+
+      if (newFailureCount >= failureThreshold) {
+        // Business Rule: Open circuit
+        await igniter.store.set(circuitKey, 'open');
+        await igniter.store.set(`${circuitKey}:lastFailure`, Date.now().toString());
+      }
+
+      // Business Rule: Log circuit breaker activation
+      igniter.logger.warn('Circuit breaker activated', {
+        serviceName,
+        failureCount: newFailureCount,
+        threshold: failureThreshold,
+        error: error.message,
+      });
+
+      throw error;
+    }
+  }
+});

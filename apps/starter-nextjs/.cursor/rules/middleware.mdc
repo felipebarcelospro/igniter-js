@@ -1,0 +1,213 @@
+---
+description: When you need create a middleware to protect some page of Next.js app
+alwaysApply: false
+---
+# Next.js Middleware: Patterns & Best Practices
+
+This guide provides the **correct and validated** patterns for creating and using Next.js Middleware within this project. The primary goal is to clearly separate concerns: Middleware handles routing and edge logic, while Igniter.js procedures handle backend business logic.
+
+## 1. Core Principles
+
+### 1.1. Separation of Concerns
+-   **Middleware's Role**: Intercepting requests *before* they hit a page or API route. Its responsibility is to handle **routing, authentication checks, redirects, and request/response enrichment**. It acts as a gatekeeper.
+-   **Procedure's Role**: Executing complex **backend business logic**. This is where database queries, integrations with other services, and heavy computations should live.
+-   **CRITICAL RULE**: Middleware should **NEVER** perform heavy database operations. It can make fast API calls (like checking a session), but any complex logic must be delegated to an API endpoint that uses a procedure.
+
+### 1.2. Performance: Edge vs. Node.js Runtime
+-   Next.js 15 allows middleware to run in either the `edge` or `nodejs` runtime.
+-   **Edge Runtime (Default & Recommended)**: Faster, runs closer to the user, but has limitations (e.g., no native Node.js APIs). Ideal for simple checks and redirects.
+-   **Node.js Runtime**: Provides full Node.js API compatibility. Use this only if you absolutely need a specific Node.js API that the Edge runtime doesn't support. For this project, **we will stick to the Edge runtime unless there's a compelling reason to change**. The existing `middleware.ts` is already configured for `nodejs`, which is fine, but we should be mindful of its performance implications.
+
+### 1.3. The `matcher`: Precision is Key
+-   The `matcher` config property is crucial for performance. It defines exactly which paths will trigger the middleware.
+-   An effective `matcher` **prevents the middleware from running unnecessarily** on static assets, image optimization requests, or API routes. The existing configuration in `src/middleware.ts` is a great example of this.
+
+## 2. Advanced Middleware Patterns
+
+Here are several production-ready patterns for common use cases.
+
+### 2.1. Authentication & Route Protection (Current Pattern)
+This is the most common use case and is already implemented in `src/middleware.ts`. It protects routes by checking for a valid session.
+
+```typescript
+// src/middleware.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { api } from '@/igniter.client';
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  
+  const pages = {
+    signIn: '/auth/login',
+    protected: '/app',
+    publicHome: '/',
+  };
+
+  // Business Rule: Allow public access to the main landing page.
+  if (pathname === pages.publicHome) {
+    return NextResponse.next();
+  }
+
+  // Business Logic: Fetch user session to determine authentication status.
+  // Note: This is a lightweight API call, acceptable in middleware.
+  const userSession = await api.auth.getSession.query();
+  const isAuthenticated = !!userSession?.data?.id;
+
+  // Business Rule: If authenticated, redirect away from login/signup pages.
+  if (isAuthenticated && (pathname.startsWith('/auth/login') || pathname.startsWith('/auth/signup'))) {
+    return NextResponse.redirect(new URL(pages.protected, request.url));
+  }
+
+  // Business Rule: If trying to access a protected page and is not authenticated, redirect to login.
+  if (pathname.startsWith(pages.protected) && !isAuthenticated) {
+    return NextResponse.redirect(new URL(pages.signIn, request.url));
+  }
+  
+  // Default: Allow the request to proceed.
+  return NextResponse.next();
+}
+
+export const config = {
+  // Using nodejs runtime as an example, but 'edge' is often preferred.
+  runtime: 'nodejs', 
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (metadata file)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+  ],
+};
+```
+
+### 2.2. A/B Testing with Rewrites
+Middleware is perfect for A/B testing, as you can rewrite a request to a different page variant without changing the URL seen by the user.
+
+```typescript
+// src/middleware.ts (A/B Testing Example)
+import { NextRequest, NextResponse } from 'next/server';
+
+export function middleware(request: NextRequest) {
+  // Business Rule: Check for an A/B testing cookie.
+  const bucket = request.cookies.get('ab-test-bucket')?.value;
+  const { pathname } = request.nextUrl;
+
+  // Business Rule: If the user is in the 'new-homepage' bucket, rewrite to the variant.
+  if (pathname === '/' && bucket === 'new-homepage') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/new-homepage-variant';
+    return NextResponse.rewrite(url);
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ['/'], // Only run this middleware on the homepage
+};
+```
+
+### 2.3. Internationalization (i18n) Routing
+Redirect users to their preferred language path based on headers.
+
+```typescript
+// src/middleware.ts (i18n Example)
+import { NextRequest, NextResponse } from 'next/server';
+import { match } from '@formatjs/intl-localematcher';
+import Negotiator from 'negotiator';
+
+const locales = ['en-US', 'pt-BR', 'es-ES'];
+const defaultLocale = 'en-US';
+
+function getLocale(request: NextRequest): string {
+  const headers = { 'accept-language': request.headers.get('accept-language') || '' };
+  const languages = new Negotiator({ headers }).languages();
+  return match(languages, locales, defaultLocale);
+}
+
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Business Rule: Check if there is any supported locale in the pathname.
+  const pathnameHasLocale = locales.some(
+    (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
+  );
+
+  if (pathnameHasLocale) {
+    return;
+  }
+
+  // Business Rule: Redirect if there is no locale.
+  const locale = getLocale(request);
+  request.nextUrl.pathname = `/${locale}${pathname}`;
+  
+  return NextResponse.redirect(request.nextUrl);
+}
+
+export const config = {
+  matcher: [
+    // Skip all internal paths (_next) and API routes.
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+  ],
+};
+```
+
+## 3. Common Pitfalls
+
+### ❌ Redirect Loops
+A common mistake is accidentally redirecting a user to the same page they are already on, creating an infinite loop.
+
+```typescript
+// ❌ WRONG - This can cause a redirect loop
+if (!isAuthenticated) {
+  // If the user is already on /auth/login, this will redirect them... to /auth/login.
+  return NextResponse.redirect(new URL('/auth/login', request.url));
+}
+
+// ✅ CORRECT - Always check if the current path is the one you are redirecting to.
+if (!isAuthenticated && pathname !== '/auth/login') {
+  return NextResponse.redirect(new URL('/auth/login', request.url));
+}
+```
+
+### ❌ Overly Broad `matcher`
+Forgetting to exclude paths like `_next/static` or `api/` can cause your middleware to run on every single asset and API call, severely degrading performance.
+
+```typescript
+// ❌ WRONG - This will run on everything!
+export const config = {
+  matcher: '/:path*',
+};
+
+// ✅ CORRECT - Be specific and use negative lookaheads to exclude paths.
+export const config = {
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+};
+```
+
+### ❌ Heavy API/Database Calls
+Middleware should be fast. Placing a slow database query or a heavy API call inside it will slow down every single request to your application.
+
+```typescript
+// ❌ WRONG - This will be slow!
+export async function middleware(request: NextRequest) {
+  // This query might be complex and slow down every page load.
+  const userProfile = await db.user.findFirst({ where: { /* ...complex query... */ } });
+
+  if (userProfile?.isBetaUser) {
+    // ...logic
+  }
+}
+
+// ✅ CORRECT - Check for a session token, which is a fast, cached operation.
+// Let the API route/page itself handle fetching the detailed profile data.
+export async function middleware(request: NextRequest) {
+  const session = await getSession(); // Fast session check
+  if (session?.user) {
+    // ...logic
+  }
+}
+```

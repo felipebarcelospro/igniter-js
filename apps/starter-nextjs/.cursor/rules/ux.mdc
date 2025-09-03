@@ -1,10 +1,7 @@
 ---
 description: Use when working on UI/UX tasks, user experience design, interface components, and user journey optimization - provides comprehensive UX workflow with design systems integration.
-globs: ["src/components/**", "src/app/**"]
 alwaysApply: false
-priority: 3
 ---
-
 # UX/UI Workflow & Design System
 
 This rule provides comprehensive guidance for UI/UX development in Igniter.js + Next.js + Shadcn UI projects, ensuring consistent design systems, user experience optimization, and seamless integration with existing workflows.

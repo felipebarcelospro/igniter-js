@@ -25,6 +25,7 @@ export interface SubTask {
 
 export interface Relationship {
   id: string;
+  target_type: MemoryType;
   type:
     | 'depends_on'
     | 'implements'
@@ -105,6 +106,7 @@ export interface MemoryFrontmatter {
   delegated_to?: string;                 // Agent type (legacy)
   delegated_at?: string;                 // Delegation timestamp (legacy)
   delegation_config?: Record<string, any>; // Delegation configuration (legacy)
+  execution_time?: number;               // Tempo de execução em segundos
 }
 
 export interface MemoryItem {

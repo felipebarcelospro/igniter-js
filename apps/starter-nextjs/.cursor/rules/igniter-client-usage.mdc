@@ -1,9 +1,8 @@
 ---
 description: Provides comprehensive guidance on using the Igniter.js Client for universal type-safe API communication across server and client environments.
-globs: ["src/igniter.client.ts", "src/app/**"]
+globs: src/igniter.client.ts,src/app/**/*,src/features/**/*/presentation/**/*
 alwaysApply: false
 ---
-
 # Igniter.js Client Usage Guide
 
 This rule provides comprehensive guidance on using the Igniter.js Client, which offers universal type-safe API communication across server and client environments with advanced features like real-time updates, caching, and React hooks integration.

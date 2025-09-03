@@ -1,6 +1,5 @@
 ---
-description: Provides a complete and accurate reference for creating controllers and actions in Igniter.js, based on direct analysis of the source code and real-world implementation experience.
-globs: ["src/features/**/controllers/**"]
+globs: src/features/**/*
 alwaysApply: false
 ---
 This guide provides a **COMPLETE and ACCURATE** reference for creating controllers and actions in Igniter.js, based on direct analysis of the source code and real-world implementation experience.

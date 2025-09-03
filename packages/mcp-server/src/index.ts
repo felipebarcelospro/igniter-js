@@ -45,11 +45,14 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   
-  // Initialize memory manager
+  // Initialize memory manager and requeue any interrupted jobs
   try {
     await memoryManager.initializeProject();
+    await memoryManager.requeueInterruptedJobs();
   } catch (err) {
-    console.warn("Memory initialization warning:", err);
+    const error = err instanceof Error ? err.message : String(err);
+    // Use stderr for warnings to avoid interfering with stdio JSON-RPC
+    process.stderr.write(`[MCP-SERVER-WARNING] Memory initialization failed: ${error}\n`);
   }
 }
 
