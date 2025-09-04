@@ -42,9 +42,14 @@ export function InkDashboard({
   const [currentTab, setCurrentTab] = useState(0);
   const [startTime] = useState(Date.now());
 
-  // Calculate total tabs: processes + API + Jobs + Telemetry + Lia Dashboard
+  // Calculate tab indices based on the original structure
+  const frameworkTabIndex = 0; // First process (framework)
+  const igniterTabIndex = 1; // Second process (Igniter)
+  const apiTabIndex = processes.length; // API tab after processes
+  const jobsTabIndex = processes.length + 1; // Jobs tab
+  const telemetryTabIndex = processes.length + 2; // Telemetry tab
+  const liaTabIndex = processes.length + 3; // Lia Dashboard is the last tab
   const totalTabs = processes.length + 4; // +4 for API, Jobs, Telemetry, and Lia Dashboard
-  const liaTabIndex = totalTabs - 1; // Lia Dashboard is the last tab
 
   // Handle keyboard input
   useInput((input, key) => {
@@ -66,19 +71,27 @@ export function InkDashboard({
         break;
       case 'j':
         // Quick switch to Jobs tab
-        setCurrentTab(processes.length + 2);
+        setCurrentTab(jobsTabIndex);
         break;
-      case 's':
-        // Quick switch to Store/API tab
-        setCurrentTab(processes.length);
+      case 'a':
+        // Quick switch to API tab
+        setCurrentTab(apiTabIndex);
         break;
       case 't':
         // Quick switch to Telemetry tab
-        setCurrentTab(processes.length + 1);
+        setCurrentTab(telemetryTabIndex);
         break;
       case 'l':
         // Quick switch to Lia Dashboard
         setCurrentTab(liaTabIndex);
+        break;
+      case 'f':
+        // Quick switch to Framework tab
+        setCurrentTab(frameworkTabIndex);
+        break;
+      case 'i':
+        // Quick switch to Igniter tab
+        setCurrentTab(igniterTabIndex);
         break;
       case '1':
       case '2':
@@ -157,86 +170,101 @@ export function InkDashboard({
 
       {/* Tabs */}
       <Box flexDirection="row" marginBottom={1}>
-        {processes.map((process, index) => {
-          const status = processStatus.get(index);
-          const isActive = currentTab === index;
-          const statusColor = status ? getStatusColor(status.status) : 'gray';
-          const statusIcon = status ? getStatusIcon(status.status) : '○';
-          
-          return (
-            <Box key={index} marginRight={2}>
-              <Text 
-                color={isActive ? 'cyan' : statusColor}
-                bold={isActive}
-              >
-                {statusIcon} {index + 1}. {process.name}
-              </Text>
-            </Box>
-          );
-        })}
+        {/* Framework Tab */}
+        <Box marginRight={2}>
+          <Text 
+            color={currentTab === frameworkTabIndex ? 'cyan' : 'green'}
+            bold={currentTab === frameworkTabIndex}
+          >
+            {getTabIcon('framework', currentTab === frameworkTabIndex)} {frameworkTabIndex + 1}. Framework
+          </Text>
+        </Box>
+        
+        {/* Igniter Tab */}
+        <Box marginRight={2}>
+          <Text 
+            color={currentTab === igniterTabIndex ? 'cyan' : 'blue'}
+            bold={currentTab === igniterTabIndex}
+          >
+            {getTabIcon('igniter', currentTab === igniterTabIndex)} {igniterTabIndex + 1}. Igniter
+          </Text>
+        </Box>
         
         {/* API Tab */}
         <Box marginRight={2}>
           <Text 
-            color={currentTab === processes.length ? 'cyan' : 'green'}
-            bold={currentTab === processes.length}
+            color={currentTab === apiTabIndex ? 'cyan' : 'yellow'}
+            bold={currentTab === apiTabIndex}
           >
-            ● {processes.length + 1}. API
+            {getTabIcon('api', currentTab === apiTabIndex)} {apiTabIndex + 1}. API
           </Text>
         </Box>
         
         {/* Jobs Tab */}
         <Box marginRight={2}>
           <Text 
-            color={currentTab === processes.length + 1 ? 'cyan' : 'blue'}
-            bold={currentTab === processes.length + 1}
+            color={currentTab === jobsTabIndex ? 'cyan' : 'magenta'}
+            bold={currentTab === jobsTabIndex}
           >
-            ● {processes.length + 2}. Jobs
+            {getTabIcon('jobs', currentTab === jobsTabIndex)} {jobsTabIndex + 1}. Jobs
           </Text>
         </Box>
         
         {/* Telemetry Tab */}
         <Box marginRight={2}>
           <Text 
-            color={currentTab === processes.length + 2 ? 'cyan' : 'magenta'}
-            bold={currentTab === processes.length + 2}
+            color={currentTab === telemetryTabIndex ? 'cyan' : 'red'}
+            bold={currentTab === telemetryTabIndex}
           >
-            ● {processes.length + 3}. Telemetry
+            {getTabIcon('telemetry', currentTab === telemetryTabIndex)} {telemetryTabIndex + 1}. Telemetry
           </Text>
         </Box>
         
         {/* Lia Dashboard Tab */}
         <Box marginRight={2}>
           <Text 
-            color={currentTab === liaTabIndex ? 'cyan' : 'yellow'}
+            color={currentTab === liaTabIndex ? 'cyan' : 'gray'}
             bold={currentTab === liaTabIndex}
           >
-            🤖 {liaTabIndex + 1}. Lia Dashboard
+            {getTabIcon('lia', currentTab === liaTabIndex)} {liaTabIndex + 1}. Lia
           </Text>
         </Box>
       </Box>
 
       {/* Content */}
       <Box flexDirection="column" flexGrow={1}>
-        {currentTab < processes.length && (
+        {/* Framework Tab */}
+        {currentTab === frameworkTabIndex && (
           <ProcessLogView 
-            logs={processLogs.get(currentTab) || []}
-            processName={processes[currentTab]?.name || 'Unknown'}
+            logs={processLogs.get(frameworkTabIndex) || []}
+            processName={processes[frameworkTabIndex]?.name || 'Framework'}
           />
         )}
         
-        {currentTab === processes.length && (
+        {/* Igniter Tab */}
+        {currentTab === igniterTabIndex && (
+          <ProcessLogView 
+            logs={processLogs.get(igniterTabIndex) || []}
+            processName={processes[igniterTabIndex]?.name || 'Igniter'}
+          />
+        )}
+        
+        {/* API Tab */}
+        {currentTab === apiTabIndex && (
           <ApiView />
         )}
         
-        {currentTab === processes.length + 1 && (
+        {/* Jobs Tab */}
+        {currentTab === jobsTabIndex && (
           <JobsView />
         )}
         
-        {currentTab === processes.length + 2 && (
+        {/* Telemetry Tab */}
+        {currentTab === telemetryTabIndex && (
           <TelemetryView />
         )}
         
+        {/* Lia Dashboard Tab */}
         {currentTab === liaTabIndex && (
           <LiaDashboardTab 
             isActive={true}
@@ -248,14 +276,10 @@ export function InkDashboard({
       {/* Footer */}
       <Box flexDirection="row" justifyContent="space-between" marginTop={1}>
         <Text color="gray">
-          1-{totalTabs}: Switch tab | Tab: Next | c: Clear | r: Refresh | h: Help | q: Quit
+          1-{totalTabs}: Switch tab | Tab: Next | f/i/a/j/t/l: Quick switch | c: Clear | r: Refresh | h: Help | q: Quit
         </Text>
         <Text color="gray">
-          Current: {currentTab < processes.length ? processes[currentTab]?.name : 
-                   currentTab === processes.length ? 'API' :
-                   currentTab === processes.length + 1 ? 'Jobs' :
-                   currentTab === processes.length + 2 ? 'Telemetry' :
-                   'Lia Dashboard'}
+          Current: {getCurrentTabName(currentTab)}
         </Text>
       </Box>
     </Box>
@@ -325,7 +349,7 @@ function HelpView({ onClose, totalTabs }: { onClose: () => void; totalTabs: numb
   return (
     <Box flexDirection="column">
       <Text color="cyan" bold>❓ Help</Text>
-      <Text color="gray">{'─'.repeat(40)}</Text>
+      <Text color="gray">{'─'.repeat(50)}</Text>
       
       <Text color="white" bold>Navigation:</Text>
       <Text>1-{totalTabs}: Switch between tabs</Text>
@@ -336,10 +360,20 @@ function HelpView({ onClose, totalTabs }: { onClose: () => void; totalTabs: numb
       <Text>q: Quit dashboard</Text>
       
       <Text color="white" bold marginTop={1}>Quick Access:</Text>
-      <Text>j: Jump to Jobs tab</Text>
-      <Text>s: Jump to Store/API tab</Text>
-      <Text>t: Jump to Telemetry tab</Text>
-      <Text>l: Jump to Lia Dashboard</Text>
+      <Text>f: Framework tab (Next.js, Vite, etc.)</Text>
+      <Text>i: Igniter tab (Schema generation)</Text>
+      <Text>a: API tab (HTTP requests monitoring)</Text>
+      <Text>j: Jobs tab (Background jobs)</Text>
+      <Text>t: Telemetry tab (Observability)</Text>
+      <Text>l: Lia Dashboard (AI agent monitoring)</Text>
+      
+      <Text color="white" bold marginTop={1}>Available Tabs:</Text>
+      <Text>⚡ 1. Framework - Your app dev server</Text>
+      <Text>🔥 2. Igniter - Schema generation & docs</Text>
+      <Text>🌐 3. API - HTTP requests monitoring</Text>
+      <Text>⚙️ 4. Jobs - Background jobs queue</Text>
+      <Text>📊 5. Telemetry - Performance monitoring</Text>
+      <Text>🤖 6. Lia - AI agent dashboard</Text>
       
       <Text color="gray" marginTop={1}>Press any key to close help</Text>
     </Box>
@@ -354,4 +388,28 @@ function getLogIcon(type: string): string {
     case 'info': return '◇';
     default: return '○';
   }
+}
+
+function getTabIcon(tabType: string, isActive: boolean): string {
+  const activeIcon = isActive ? '●' : '○';
+  
+  switch (tabType) {
+    case 'framework': return '⚡';
+    case 'igniter': return '🔥';
+    case 'api': return '🌐';
+    case 'jobs': return '⚙️';
+    case 'telemetry': return '📊';
+    case 'lia': return '🤖';
+    default: return activeIcon;
+  }
+}
+
+function getCurrentTabName(currentTab: number): string {
+  if (currentTab === 0) return 'Framework';
+  if (currentTab === 1) return 'Igniter';
+  if (currentTab === 2) return 'API';
+  if (currentTab === 3) return 'Jobs';
+  if (currentTab === 4) return 'Telemetry';
+  if (currentTab === 5) return 'Lia Dashboard';
+  return 'Unknown';
 }

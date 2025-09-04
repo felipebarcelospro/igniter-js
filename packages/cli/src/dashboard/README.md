@@ -4,7 +4,15 @@ Este diretório contém a implementação da nova dashboard interativa do Ignite
 
 ## 🎯 Funcionalidades
 
-### Dashboard da Lia
+### Abas Disponíveis
+1. **⚡ Framework** - Servidor de desenvolvimento do seu app (Next.js, Vite, etc.)
+2. **🔥 Igniter** - Geração de schema e documentação OpenAPI
+3. **🌐 API** - Monitoramento de requisições HTTP em tempo real
+4. **⚙️ Jobs** - Monitoramento de jobs em background (BullMQ)
+5. **📊 Telemetry** - Observabilidade e monitoramento de performance
+6. **🤖 Lia** - Dashboard da IA com monitoramento de agentes
+
+### Dashboard da Lia (Aba 6)
 - **Overview**: Visão geral das métricas da Lia, tarefas, agentes e memória
 - **Tasks**: Monitoramento de tarefas com status, progresso e delegação
 - **Memory**: Exploração da memória do MCP Server com busca e filtros
@@ -51,12 +59,14 @@ igniter dev --no-interactive
 ```
 
 ### Navegação na Dashboard
-- **1-4**: Alternar entre abas de processos
+- **1-6**: Alternar entre abas
 - **Tab**: Próxima aba
-- **l**: Ir direto para a dashboard da Lia
-- **j**: Ir para aba de Jobs
-- **s**: Ir para aba de Store/API
-- **t**: Ir para aba de Telemetry
+- **f**: Framework (Next.js, Vite, etc.)
+- **i**: Igniter (Schema generation)
+- **a**: API (HTTP requests monitoring)
+- **j**: Jobs (Background jobs)
+- **t**: Telemetry (Observability)
+- **l**: Lia Dashboard (AI agent monitoring)
 - **r**: Atualizar dados
 - **c**: Limpar logs/filtros
 - **h**: Ajuda
