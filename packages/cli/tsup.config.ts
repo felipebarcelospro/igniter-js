@@ -11,4 +11,6 @@ export default defineConfig({
   target: 'node18',
   outDir: 'dist',
   platform: 'node',
+  jsx: 'automatic',
+  external: ['react', 'ink'],
 }) 
