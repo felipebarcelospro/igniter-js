@@ -133,41 +133,67 @@ program
     const framework = options.framework ? (isFrameworkSupported(options.framework) ? options.framework : "generic") : detectedFramework;
     const useInteractive = options.interactive !== false;
     logger.info(`Starting ${useInteractive ? 'interactive' : 'concurrent'} development mode`, { framework });
-    const { runInteractiveProcesses, runConcurrentProcesses } = await import("./adapters/framework/concurrent-processes");
-    const processes = [];
-    if (!options.noFramework && framework !== 'generic') {
-      const frameworkCommands = {
-        nextjs: "npm run dev",
-        vite: "npm run dev",
-        nuxt: "npm run dev",
-        sveltekit: "npm run dev",
-        remix: "npm run dev",
-        astro: "npm run dev",
-        express: "npm run dev",
-        'tanstack-start': "npm run dev"
-      };
-      const frameworkCommand = options.cmd || frameworkCommands[framework as keyof typeof frameworkCommands];
-      if (frameworkCommand) {
-        processes.push({
-          name: framework.charAt(0).toUpperCase() + framework.slice(1),
-          command: frameworkCommand,
-          color: 'green',
-          cwd: process.cwd(),
-          env: { PORT: port.toString(), NODE_ENV: 'development' }
-        });
-      }
-    }
-    const docsFlags = ` --docs --docs-output ${options.docsOutput}`;
-    processes.push({
-      name: "Igniter",
-      command: `igniter generate schema --watch --framework ${framework} --output ${options.output}${docsFlags}`,
-      color: "blue",
-      cwd: process.cwd()
-    });
+    
+    // Use Ink dashboard for interactive mode, fallback to concurrent for non-interactive
     if (useInteractive) {
-      await runInteractiveProcesses(processes);
+      const { runInkInteractiveProcesses } = await import("./dashboard/adapters/ink-process-manager");
+      const { runConcurrentProcesses } = await import("./adapters/framework/concurrent-processes");
+      
+      // Check if we should use Ink dashboard (default) or legacy interactive mode
+      const useInkDashboard = process.env.IGNITER_USE_LEGACY_INTERACTIVE !== 'true';
+      
+      if (useInkDashboard) {
+        await runInkInteractiveProcesses(processes);
+      } else {
+        const { runInteractiveProcesses } = await import("./adapters/framework/concurrent-processes");
+        await runInteractiveProcesses(processes);
+      }
     } else {
+      const { runConcurrentProcesses } = await import("./adapters/framework/concurrent-processes");
       await runConcurrentProcesses({ processes, killOthers: true });
+    }
+  });
+
+// Generate command (parent for subcommands)
+const generate = program
+  .command("generate")
+  .description("Scaffold new features or generate client schema");
+
+// Generate Schema subcommand
+generate
+  .command("schema")
+  .description("Generate client schema from your Igniter router (for CI/CD or manual builds)")
+  .option("--framework <type>", `Framework type (${getFrameworkList()}, generic)`)
+  .option("--output <dir>", "Output directory", "src/")
+  .option("--watch", "Watch for changes and regenerate automatically")
+  .option("--docs", "Enable automatic OpenAPI documentation generation")
+  .option("--docs-output <dir>", "Output directory for OpenAPI docs", "./src/docs")
+  .action(async (options) => {
+    const startTime = performance.now();
+    const detectedFramework = detectFramework();
+    const framework = options.framework ? (isFrameworkSupported(options.framework) ? options.framework : "generic") : detectedFramework;
+    logger.group("Igniter.js CLI");
+    logger.info(`Starting client schema ${options.watch ? 'watching' : 'generation'}`, { framework, output: options.output });
+    const watcherSpinner = createDetachedSpinner("Loading generator...");
+    watcherSpinner.start();
+    const { IgniterWatcher } = await import("./adapters/build/watcher");
+    const watcher = new IgniterWatcher({
+      framework,
+      outputDir: options.output,
+      debug: program.opts().debug, // Pass global debug flag to watcher
+      controllerPatterns: ["**/*.controller.{ts,js}"],
+      generateDocs: options.docs,
+      docsOutputDir: options.docsOutput,
+    });
+    watcherSpinner.success("Generator loaded");
+    if (options.watch) {
+      await watcher.start();
+    } else {
+      await watcher.generate();
+      const duration = ((performance.now() - startTime) / 1000).toFixed(2);
+      logger.success(`Generation complete in ${duration}s`);
+      logger.groupEnd();
+      process.exit(0);
     }
   });
 
