@@ -1808,7 +1808,7 @@ export function createIgniterWatcherProcess(options: {
 }): ProcessConfig {
   return {
     name: 'Igniter',
-    command: `igniter watch${options.debug ? ' --debug' : ''}`,
+    command: `npx @igniter-js/cli@latest generate schema --watch${options.debug ? ' --debug' : ''}`,
     color: PROCESS_COLORS.igniter,
     cwd: options.cwd,
     env: {

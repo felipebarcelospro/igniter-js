@@ -6,13 +6,30 @@ import { z } from "zod";
 import { MEMORY_TYPES, REL_TYPES } from "../constants";
 import { ToolsetContext } from "./types";
 
+function getMemoryTypes() {
+  return [
+    "code_pattern", 
+    "architectural_decision", 
+    "user_preference", 
+    "insight", 
+    "relationship_map", 
+    "reflection", 
+    "bug_pattern", 
+    "performance_insight", 
+    "api_mapping", 
+    "requirement", 
+    "design", 
+    "bug_report"
+  ] as const;
+}
+
 export function registerMemoryTools({ server, memoryManager }: ToolsetContext) {
   // --- Memory Tools ---
   server.registerTool("store_memory", {
-    title: "Store Memory (MDX)",
-    description: "Creates a memory MDX file under .github/lia/memories/",
+    title: "Create Memory",
+    description: "ALWAYS use this tool to store something that you want to remember (Except Tasks, for tasks you need to use create_task tool). You can check your memories in the .github/lia/memories/",
     inputSchema: {
-      type: z.enum(MEMORY_TYPES),
+      type: z.enum(getMemoryTypes()).optional(),
       title: z.string(),
       content: z.string(),
       category: z.string().optional(),

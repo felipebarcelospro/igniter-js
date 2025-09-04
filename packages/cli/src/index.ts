@@ -158,9 +158,10 @@ program
       }
     }
     const docsFlags = ` --docs --docs-output ${options.docsOutput}`;
+    
     processes.push({
       name: "Igniter",
-      command: `igniter generate schema --watch --framework ${framework} --output ${options.output}${docsFlags}`,
+      command: `npx @igniter-js/cli@latest generate schema --watch --framework ${framework} --output ${options.output}${docsFlags}`,
       color: "blue",
       cwd: process.cwd()
     });

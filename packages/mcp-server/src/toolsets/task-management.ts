@@ -277,7 +277,7 @@ export function registerTaskManagementTools({ server, memoryManager }: ToolsetCo
         content,
         frontmatter: {
           status: 'todo' as any,
-          priority: (priority || 'medium') as any,
+          priority: (priority || 'medium') as TaskPriority,
           assignee: assignee || 'human',
           feature_id,
           estimated_hours,
@@ -392,6 +392,7 @@ export function registerTaskManagementTools({ server, memoryManager }: ToolsetCo
 
       // Get all tasks for the scope
       const allTasks = await memoryManager.listByType('task');
+      
       const scopeTasks = allTasks.filter((task: any) =>
         task.frontmatter.feature_id === scope_id || task.frontmatter.epic_id === scope_id
       );

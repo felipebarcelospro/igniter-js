@@ -51,7 +51,7 @@ export class MemoryManager {
     await this.initializeProject();
 
     const nowIso = new Date().toISOString();
-    const type: MemoryType = (memory as any).type;
+    const type: MemoryType = memory.type;
     const id = this.parser.generateMemoryId(memory.title, type);
 
     const fullFrontmatter: MemoryFrontmatter = {
@@ -796,7 +796,7 @@ export class MemoryManager {
     // For task management types, DO NOT create a hierarchical structure based on metadata.
     // This was the source of the bug where tasks were not being found.
     // All tasks should be saved in their root type directory (e.g., 'project/tasks').
-    if (TASK_MANAGEMENT_TYPES.includes(type as any)) {
+    if (TASK_MANAGEMENT_TYPES.includes(type)) {
       return baseDir;
     }
 
