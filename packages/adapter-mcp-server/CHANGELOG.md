@@ -2,15 +2,43 @@
 
 ## 0.3.0 (Unreleased)
 
-### Minor Changes
+### Major Changes
 
-- **Enhanced MCP Adapter Extensibility & OAuth Support**
-  
-  This release significantly improves the MCP adapter API to provide better extensibility, OAuth authorization support, and a simplified developer experience.
+- **API Refactoring for Improved Type Safety and Developer Experience**
 
-  #### New Features
+  The API has been refactored to provide better type inference and a cleaner developer experience.
 
-  - **Custom Prompts**: Register custom prompts that AI agents can use to guide interactions
+  #### Breaking Changes
+
+  1. **New Function Signature**: Changed from `createMcpAdapter(router, options)` to `createMcpAdapter(options)` where `router` is now a required property in the options object.
+
+  2. **Automatic Context Inference**: The `context` function option has been removed. Context is now automatically inferred from the router's built-in context, eliminating the need for manual context creation.
+
+  **Migration:**
+
+  ```typescript
+  // Before (v0.2.x)
+  const handler = createMcpAdapter(AppRouter, {
+    serverInfo: { name: 'My Server', version: '1.0.0' },
+    context: (req) => ({
+      context: { user: 'test' },
+      tools: [],
+      request: req,
+      timestamp: Date.now()
+    })
+  });
+
+  // After (v0.3.x)
+  const handler = createMcpAdapter({
+    router: AppRouter,
+    serverInfo: { name: 'My Server', version: '1.0.0' },
+    // context is automatically inferred!
+  });
+  ```
+
+#### New Features
+
+  - **Custom Prompts**: Register prompts that AI agents can use to guide interactions
     ```typescript
     prompts: {
       custom: [{
@@ -38,24 +66,19 @@
       issuer: 'https://auth.example.com',
       resourceMetadataPath: '/.well-known/oauth-protected-resource',
       scopes: ['mcp:read', 'mcp:write'],
-      verifyToken: async (token) => ({ valid: true })
+      verifyToken: async (token, context) => ({ valid: true })
     }
     ```
     - Automatic Bearer token verification
     - Protected resource metadata endpoint exposure
     - Proper 401 responses with WWW-Authenticate headers
 
-  #### Breaking Changes
-
-  - Fixed TypeScript type parameter issues with `IgniterRouter` (now requires 5 type parameters)
-  - All existing configurations remain backward compatible
-
   #### Improvements
 
-  - Comprehensive event handling system
-  - Enhanced documentation with migration guide
-  - Updated examples demonstrating all new features
-  - Better type inference for custom tools, prompts, and resources
+  - **Enhanced Type Inference**: All handlers (prompts, resources, oauth.verifyToken, events) now automatically receive the correctly typed context from the router
+  - **Reduced Boilerplate**: No need to manually create and return context objects
+  - **Better Documentation**: Comprehensive examples showing all new features
+  - **Cleaner API**: Single configuration object is more intuitive and easier to understand
 
 ## 0.2.0
 
