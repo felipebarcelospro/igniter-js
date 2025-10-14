@@ -19,6 +19,14 @@ vi.mock('@typescript-eslint/parser', () => ({
   parse: vi.fn()
 }));
 
+// Mock FileSystemService
+vi.mock('../memory/fs', () => ({
+  createFileSystemService: vi.fn(() => ({
+    resolveProjectRoot: vi.fn(async (dir: string) => dir),
+    pathExists: vi.fn(async () => false) // Default to false - no tsconfig found
+  }))
+}));
+
 describe('AST Parsing Utils', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -353,6 +361,13 @@ describe('AST Parsing Utils', () => {
     });
 
     it('should analyze TypeScript errors with default options', async () => {
+      // Mock FileSystemService to say tsconfig doesn't exist
+      const { createFileSystemService } = await import('../memory/fs');
+      vi.mocked(createFileSystemService).mockReturnValue({
+        resolveProjectRoot: vi.fn(async (dir: string) => dir),
+        pathExists: vi.fn(async () => false)
+      } as any);
+      
       const content = `
         function test(param: unknownType): void {
           undeclaredVariable = 5;
@@ -372,6 +387,13 @@ describe('AST Parsing Utils', () => {
     });
 
     it('should parse tsconfig.json when project root provided', async () => {
+      // Mock FileSystemService to indicate tsconfig.json exists
+      const { createFileSystemService } = await import('../memory/fs');
+      vi.mocked(createFileSystemService).mockReturnValue({
+        resolveProjectRoot: vi.fn(async (dir: string) => dir),
+        pathExists: vi.fn(async () => true)
+      } as any);
+      
       const mockTsconfig = {
         compilerOptions: {
           target: 'ES2020',
@@ -379,9 +401,6 @@ describe('AST Parsing Utils', () => {
           skipLibCheck: true
         }
       };
-      
-      vi.mocked(fs.access).mockResolvedValue(undefined);
-      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(mockTsconfig));
       
       // Mock TypeScript config parsing
       const mockReadConfigFile = vi.spyOn(ts, 'readConfigFile');
@@ -394,6 +413,7 @@ describe('AST Parsing Utils', () => {
       
       mockParseJsonConfigFileContent.mockReturnValue({
         options: mockTsconfig.compilerOptions,
+        fileNames: [],
         errors: []
       } as any);
       
@@ -405,7 +425,12 @@ describe('AST Parsing Utils', () => {
     });
 
     it('should handle missing tsconfig.json gracefully', async () => {
-      vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
+      // Mock FileSystemService to indicate tsconfig.json doesn't exist
+      const { createFileSystemService } = await import('../memory/fs');
+      vi.mocked(createFileSystemService).mockReturnValue({
+        resolveProjectRoot: vi.fn(async (dir: string) => dir),
+        pathExists: vi.fn(async () => false)
+      } as any);
       
       const content = 'const test: string = "hello";';
       
@@ -413,10 +438,17 @@ describe('AST Parsing Utils', () => {
       
       expect(result).toHaveProperty('typescript_errors');
       expect(result).toHaveProperty('health_summary');
+      expect(result.typescript_errors).toHaveLength(0);
+      expect(result.health_summary.compilable).toBe(true);
     });
 
     it('should handle invalid tsconfig.json gracefully', async () => {
-      vi.mocked(fs.access).mockResolvedValue(undefined);
+      // Mock FileSystemService to indicate tsconfig.json exists
+      const { createFileSystemService } = await import('../memory/fs');
+      vi.mocked(createFileSystemService).mockReturnValue({
+        resolveProjectRoot: vi.fn(async (dir: string) => dir),
+        pathExists: vi.fn(async () => true)
+      } as any);
       
       const mockReadConfigFile = vi.spyOn(ts, 'readConfigFile');
       mockReadConfigFile.mockReturnValue({
@@ -429,9 +461,18 @@ describe('AST Parsing Utils', () => {
       const result = await analyzeTypeScriptErrors('/test.ts', content, '/project');
       
       expect(result).toHaveProperty('typescript_errors');
+      expect(result.typescript_errors).toHaveLength(0);
+      expect(result.health_summary.compilable).toBe(true);
     });
 
     it('should categorize diagnostic severity correctly', async () => {
+      // Mock FileSystemService to say tsconfig doesn't exist
+      const { createFileSystemService } = await import('../memory/fs');
+      vi.mocked(createFileSystemService).mockReturnValue({
+        resolveProjectRoot: vi.fn(async (dir: string) => dir),
+        pathExists: vi.fn(async () => false)
+      } as any);
+      
       // Create a mock that will trigger both errors and warnings
       const content = `
         // This should trigger a warning
@@ -448,10 +489,22 @@ describe('AST Parsing Utils', () => {
     });
 
     it('should handle analysis errors gracefully', async () => {
-      // Mock a scenario that would cause TypeScript analysis to fail
-      const invalidContent = null as any;
+      // Reset the FileSystemService mock to default behavior for this test
+      const { createFileSystemService } = await import('../memory/fs');
+      vi.mocked(createFileSystemService).mockReturnValue({
+        resolveProjectRoot: vi.fn(async (dir: string) => dir),
+        pathExists: vi.fn(async () => true)
+      } as any);
       
-      const result = await analyzeTypeScriptErrors('/test.ts', invalidContent);
+      // Mock ts.readConfigFile to throw an error
+      const mockReadConfigFile = vi.spyOn(ts, 'readConfigFile');
+      mockReadConfigFile.mockImplementation(() => {
+        throw new Error('Config read failed');
+      });
+      
+      const content = 'const test: string = "hello";';
+      
+      const result = await analyzeTypeScriptErrors('/test.ts', content);
       
       expect(result.typescript_errors).toHaveLength(1);
       expect(result.typescript_errors[0]).toMatchObject({
@@ -462,6 +515,13 @@ describe('AST Parsing Utils', () => {
     });
 
     it('should provide detailed error information', async () => {
+      // Mock FileSystemService to say tsconfig doesn't exist
+      const { createFileSystemService } = await import('../memory/fs');
+      vi.mocked(createFileSystemService).mockReturnValue({
+        resolveProjectRoot: vi.fn(async (dir: string) => dir),
+        pathExists: vi.fn(async () => false)
+      } as any);
+      
       const content = `
         function test(): string {
           return 123; // Type error: number is not assignable to string
@@ -481,6 +541,13 @@ describe('AST Parsing Utils', () => {
     });
 
     it('should calculate health summary correctly', async () => {
+      // Mock FileSystemService to say tsconfig doesn't exist for this test
+      const { createFileSystemService } = await import('../memory/fs');
+      vi.mocked(createFileSystemService).mockReturnValue({
+        resolveProjectRoot: vi.fn(async (dir: string) => dir),
+        pathExists: vi.fn(async () => false)
+      } as any);
+      
       const content = 'const valid: string = "hello";';
       
       const result = await analyzeTypeScriptErrors('/test.ts', content);

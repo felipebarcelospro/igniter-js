@@ -3,6 +3,7 @@ import { parse } from "@typescript-eslint/parser";
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { pathExists } from './file-analysis';
+import { createFileSystemService } from '../memory/fs';
 
 /**
  * Parses the AST structure of code content to extract functions, classes, and types.
@@ -230,37 +231,44 @@ export async function analyzeTypeScriptErrors(filePath: string, fileContent: str
     const absoluteFilePath = path.resolve(filePath);
     const effectiveProjectRoot = projectRoot || path.dirname(absoluteFilePath);
 
-    // 1. Find and parse the correct tsconfig.json
-    const tsconfigPath = ts.findConfigFile(effectiveProjectRoot, ts.sys.fileExists, 'tsconfig.json');
+    // 1. Find and parse the correct tsconfig.json using FileSystemService
+    // This approach works correctly in MCP context (running via bunx)
+    const fsService = createFileSystemService(effectiveProjectRoot);
+    const resolvedProjectRoot = await fsService.resolveProjectRoot(effectiveProjectRoot);
+    const tsconfigPath = path.join(resolvedProjectRoot, 'tsconfig.json');
+    
+    // If tsconfig.json doesn't exist, return no errors instead of using problematic fallback
+    if (!(await fsService.pathExists(tsconfigPath))) {
+      return diagnostics;
+    }
 
-    let compilerOptions: ts.CompilerOptions = {
-      // Fallback options if tsconfig.json is not found
-      target: ts.ScriptTarget.ESNext,
-      module: ts.ModuleKind.ESNext,
-      lib: ["lib.es2020.d.ts", "lib.dom.d.ts"],
-      strict: true,
-      esModuleInterop: true,
-      skipLibCheck: true,
-    };
+    let compilerOptions: ts.CompilerOptions;
     let rootFileNames: string[] = [absoluteFilePath];
 
-    if (tsconfigPath) {
-      const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
-      if (!configFile.error) {
-        const parsedConfig = ts.parseJsonConfigFileContent(
-          configFile.config,
-          ts.sys,
-          path.dirname(tsconfigPath)
-        );
-        if (parsedConfig.errors.length === 0) {
-          compilerOptions = parsedConfig.options;
-          rootFileNames = parsedConfig.fileNames;
-          // Ensure the file being analyzed is part of the compilation
-          if (!rootFileNames.map(p => path.resolve(p)).includes(absoluteFilePath)) {
-            rootFileNames.push(absoluteFilePath);
-          }
-        }
-      }
+    // Parse the tsconfig.json
+    const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+    if (configFile.error) {
+      // If there's an error reading the config, return no errors
+      return diagnostics;
+    }
+    
+    const parsedConfig = ts.parseJsonConfigFileContent(
+      configFile.config,
+      ts.sys,
+      path.dirname(tsconfigPath)
+    );
+    
+    if (parsedConfig.errors.length > 0) {
+      // If there are errors parsing the config, return no errors
+      return diagnostics;
+    }
+    
+    compilerOptions = parsedConfig.options;
+    rootFileNames = parsedConfig.fileNames;
+    
+    // Ensure the file being analyzed is part of the compilation
+    if (!rootFileNames.map(p => path.resolve(p)).includes(absoluteFilePath)) {
+      rootFileNames.push(absoluteFilePath);
     }
 
     // 2. Create a custom CompilerHost that uses in-memory content for the target file
