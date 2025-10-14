@@ -1,91 +1,62 @@
-import type { IgniterRouter, IgniterControllerConfig, IgniterAction } from "@igniter-js/core";
+import type { IgniterRouter, IgniterControllerConfig, IgniterAction, ContextCallback } from "@igniter-js/core";
 import type { 
   McpAdapterOptions, 
   McpContext, 
   McpToolInfo, 
   McpResponse, 
   McpHandler, 
-  InferMcpContext
+  InferMcpContextFromRouter
 } from "./types";
-
-/**
- * Creates an MCP adapter with automatic type inference from context function.
- * 
- * @overload
- */
-export function createMcpAdapter<
-  TContext extends object,
-  TControllers extends Record<string, IgniterControllerConfig<any>>,
-  TOptions extends McpAdapterOptions<TContext, any>
->(
-  router: IgniterRouter<TContext, TControllers, any, any, any>,
-  options: TOptions & {
-    context: (request: Request) => McpContext<any> | Promise<McpContext<any>>;
-  }
-): McpHandler;
-
-/**
- * Creates an MCP adapter using router's context type.
- * 
- * @overload
- */
-export function createMcpAdapter<
-  TContext extends object,
-  TControllers extends Record<string, IgniterControllerConfig<any>>
->(
-  router: IgniterRouter<TContext, TControllers, any, any, any>,
-  options?: McpAdapterOptions<TContext, TContext>
-): McpHandler;
 
 /**
  * Creates an MCP (Model Context Protocol) adapter for an Igniter router.
  * This adapter transforms Igniter actions into MCP tools that can be used by AI models.
  * 
  * **Automatic Type Inference:**
- * - If you provide a `context` function, types are inferred from its return type
- * - Otherwise, types are inferred from the router's context type
+ * - Context type is automatically inferred from the router
+ * - All handlers (prompts, resources, events, OAuth) receive the correctly typed context
  * 
- * @template TContext - The type of the router context
- * @template TControllers - The type of the router controllers
+ * @template TContext - The type of the router context (inferred automatically)
  * 
- * @param router - The Igniter router to adapt
- * @param options - MCP adapter configuration options
+ * @param options - MCP adapter configuration options including the router
  * @returns MCP handler function compatible with @vercel/mcp-adapter
  * 
  * @example
  * ```typescript
- * // Basic usage - uses router context type
- * const mcpHandler = createMcpAdapter(router);
- * export { mcpHandler as GET, mcpHandler as POST };
- * 
- * // With custom context - types inferred automatically
- * const mcpHandler = createMcpAdapter(router, {
- *   context: async (req) => ({
- *     context: { user: await getUser(req), db: getDB() },
- *     tools: [],
- *     request: req,
- *     user: await getUser(req), // ✅ Fully typed!
- *     timestamp: Date.now(),
- *     client: req.headers.get('user-agent') || 'unknown'
- *   }),
- *   events: {
- *     onToolCall: (name, args, ctx) => {
- *       // ✅ ctx.user is fully typed here!
- *       console.log(`User ${ctx.user?.name} called ${name}`);
+ * // New API - router is part of options
+ * const handler = createMcpAdapter({
+ *   router: AppRouter,
+ *   serverInfo: {
+ *     name: 'My MCP Server',
+ *     version: '1.0.0',
+ *   },
+ *   oauth: {
+ *     issuer: 'https://auth.example.com',
+ *     verifyToken: async (token, context) => {
+ *       // context is fully typed from the router!
+ *       return { valid: true };
  *     }
+ *   },
+ *   prompts: {
+ *     custom: [{
+ *       name: 'help',
+ *       handler: async (args, context) => {
+ *         // context is fully typed from the router!
+ *         return { messages: [] };
+ *       }
+ *     }]
  *   }
  * });
+ * export { handler as GET, handler as POST };
  * ```
  */
 export function createMcpAdapter<
-  TContext extends object,
-  TControllers extends Record<string, IgniterControllerConfig<any>>,
-  TOptions extends McpAdapterOptions<TContext, any> = McpAdapterOptions<TContext, TContext>
+  TContext extends object | ContextCallback = any
 >(
-  router: IgniterRouter<TContext, TControllers, any, any, any>,
-  options: TOptions = {} as TOptions
+  options: McpAdapterOptions<TContext>
 ): McpHandler {
-  type TInferredContext = InferMcpContext<TContext, TOptions>;
+  const router = options.router;
+  
   // Extract tools from router
   const tools = extractToolsFromRouter(router, options);
   
@@ -100,7 +71,7 @@ export function createMcpAdapter<
           tool.schema || {},
           async (args: any) => {
             const startTime = Date.now();
-            const context = await createMcpContext<TContext, TInferredContext>(router, options, args);
+            const context = await createMcpContext<TContext>(router, args);
             
             try {
               // Trigger onToolCall event
@@ -109,7 +80,7 @@ export function createMcpAdapter<
               }
               
               // Execute the tool
-              const result = await executeTool<TContext, TInferredContext>(router, tool, args, context, options);
+              const result = await executeTool<TContext>(router, tool, args, context, options);
               
               // Trigger onToolSuccess event
               const duration = Date.now() - startTime;
@@ -151,7 +122,7 @@ export function createMcpAdapter<
             customTool.description,
             customTool.schema,
             async (args: any) => {
-              const context = await createMcpContext<TContext, TInferredContext>(router, options, args);
+              const context = await createMcpContext<TContext>(router, args);
               return await customTool.handler(args, context);
             }
           );
@@ -166,7 +137,7 @@ export function createMcpAdapter<
             prompt.description,
             prompt.arguments,
             async (args: any) => {
-              const context = await createMcpContext<TContext, TInferredContext>(router, options, args);
+              const context = await createMcpContext<TContext>(router, args);
               return await prompt.handler(args, context);
             }
           );
@@ -182,7 +153,7 @@ export function createMcpAdapter<
             resource.description,
             resource.mimeType,
             async () => {
-              const context = await createMcpContext<TContext, TInferredContext>(router, options, {});
+              const context = await createMcpContext<TContext>(router, {});
               return await resource.handler(context);
             }
           );
@@ -209,6 +180,9 @@ export function createMcpAdapter<
   
   // Wrap handler to add request/response events and OAuth support
   const wrappedHandler: McpHandler = async (request: Request) => {
+    // Create context first (will be used by OAuth verification and events)
+    const context = await createMcpContext<TContext>(router, {}, request);
+    
     // Handle OAuth protected resource metadata endpoint
     if (options.oauth?.resourceMetadataPath) {
       const url = new URL(request.url);
@@ -248,7 +222,7 @@ export function createMcpAdapter<
 
       const token = authHeader.substring(7);
       try {
-        const verificationResult = await options.oauth.verifyToken(token);
+        const verificationResult = await options.oauth.verifyToken(token, context);
         const isValid = typeof verificationResult === 'boolean' 
           ? verificationResult 
           : verificationResult.valid;
@@ -284,8 +258,6 @@ export function createMcpAdapter<
         );
       }
     }
-
-    const context = await createMcpContext<TContext, TInferredContext>(router, options, {}, request);
     
     try {
       // Trigger onRequest event
@@ -331,9 +303,9 @@ export function createMcpAdapter<
 /**
  * Extract tools from Igniter router.
  */
-function extractToolsFromRouter<TContext extends object, TControllers extends Record<string, IgniterControllerConfig<any>>, TInferredContext>(
-  router: IgniterRouter<TContext, TControllers, any, any, any>,
-  options: McpAdapterOptions<TContext, TInferredContext>
+function extractToolsFromRouter<TContext extends object | ContextCallback>(
+  router: IgniterRouter<TContext, any, any, any, any>,
+  options: McpAdapterOptions<TContext>
 ): McpToolInfo[] {
   const tools: McpToolInfo[] = [];
   
@@ -391,19 +363,12 @@ function extractToolsFromRouter<TContext extends object, TControllers extends Re
 /**
  * Create MCP context for tool execution with type inference.
  */
-async function createMcpContext<TContext extends object, TInferredContext>(
+async function createMcpContext<TContext extends object | ContextCallback>(
   router: IgniterRouter<TContext, any, any, any, any>,
-  options: McpAdapterOptions<TContext, TInferredContext>,
   args: any,
   request?: Request
-): Promise<McpContext<TInferredContext>> {
-  const tools = extractToolsFromRouter(router, options);
+): Promise<McpContext<TContext>> {
   const req = request || new Request('http://localhost');
-  
-  // Use custom context function if provided
-  if (options.context) {
-    return await options.context(req);
-  }
   
   // Create context using router's context function
   let routerContext: TContext | undefined;
@@ -418,9 +383,27 @@ async function createMcpContext<TContext extends object, TInferredContext>(
     }
   }
   
+  // Extract tools (do this here to avoid circular dependency)
+  const tools: McpToolInfo[] = [];
+  for (const [controllerName, controller] of Object.entries(router.controllers)) {
+    const typedController = controller as IgniterControllerConfig<any>;
+    for (const [actionName, action] of Object.entries(typedController.actions)) {
+      const actionConfig = action as IgniterAction<any, any, any, any, any, any, any, any, any, any>;
+      tools.push({
+        name: `${controllerName}.${actionName}`,
+        description: actionConfig.description || `Execute ${controllerName} ${actionName}`,
+        controller: controllerName,
+        action: actionName,
+        method: actionConfig.method,
+        schema: actionConfig.body || actionConfig.query || {},
+        tags: [controllerName, actionConfig.method?.toLowerCase()].filter(Boolean)
+      });
+    }
+  }
+  
   // Create base context using router's context type
-  const baseContext: McpContext<TInferredContext> = {
-    context: (routerContext || {}) as TInferredContext,
+  const baseContext: McpContext<TContext> = {
+    context: (routerContext || {}) as TContext,
     tools,
     request: req,
     timestamp: Date.now(),
@@ -433,12 +416,12 @@ async function createMcpContext<TContext extends object, TInferredContext>(
 /**
  * Execute a tool using the Igniter router with type inference.
  */
-async function executeTool<TContext extends object, TInferredContext>(
+async function executeTool<TContext extends object | ContextCallback>(
   router: IgniterRouter<TContext, any, any, any, any>,
   tool: McpToolInfo,
   args: any,
-  context: McpContext<TInferredContext>,
-  options: McpAdapterOptions<TContext, TInferredContext>
+  context: McpContext<TContext>,
+  options: McpAdapterOptions<TContext>
 ): Promise<McpResponse> {
   try {
     const caller = router.$caller[tool.controller][tool.action];
@@ -477,8 +460,8 @@ async function executeTool<TContext extends object, TInferredContext>(
 /**
  * Resolve instructions synchronously (for initial setup).
  */
-function resolveInstructionsSync<TContext extends object, TInferredContext>(
-  options: McpAdapterOptions<TContext, TInferredContext>,
+function resolveInstructionsSync<TContext extends object | ContextCallback>(
+  options: McpAdapterOptions<TContext>,
   tools: McpToolInfo[]
 ): string {
   if (!options.instructions) {
@@ -497,8 +480,8 @@ function resolveInstructionsSync<TContext extends object, TInferredContext>(
 /**
  * Resolve instructions (can be string or function) with type inference.
  */
-async function resolveInstructions<TContext extends object, TInferredContext>(
-  options: McpAdapterOptions<TContext, TInferredContext>,
+async function resolveInstructions<TContext extends object | ContextCallback>(
+  options: McpAdapterOptions<TContext>,
   tools: McpToolInfo[]
 ): Promise<string> {
   if (!options.instructions) {
@@ -510,8 +493,8 @@ async function resolveInstructions<TContext extends object, TInferredContext>(
   }
   
   // Create a basic context for instructions
-  const context: McpContext<TInferredContext> = {
-    context: {} as TInferredContext,
+  const context: McpContext<TContext> = {
+    context: {} as TContext,
     tools,
     request: new Request('http://localhost'),
     timestamp: Date.now(),

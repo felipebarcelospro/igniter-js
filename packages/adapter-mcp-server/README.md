@@ -29,7 +29,7 @@ bun add @igniter-js/adapter-mcp-server @igniter-js/core
 
 ## Basic Usage
 
-The primary export of this package is the `createMcpAdapter` factory function. You use this function to wrap your existing `AppRouter` and expose it through an API route handler.
+The primary export of this package is the `createMcpAdapter` factory function. You pass a configuration object that includes your `AppRouter` and additional options.
 
 ### 1. Create the MCP Route Handler
 
@@ -41,10 +41,12 @@ import { createMcpAdapter } from '@igniter-js/adapter-mcp-server';
 import { AppRouter } from '@/igniter.router'; // Import your main Igniter.js router
 
 /**
- * Create the MCP handler by passing your AppRouter to the adapter.
- * The adapter introspects your router and exposes its actions as tools.
+ * Create the MCP handler with the new API.
+ * Context is automatically inferred from the router.
  */
-const mcpHandler = createMcpAdapter(AppRouter, {
+const handler = createMcpAdapter({
+  router: AppRouter,
+  
   serverInfo: {
     name: 'Igniter.js MCP Server',
     version: '1.0.0',
@@ -52,25 +54,13 @@ const mcpHandler = createMcpAdapter(AppRouter, {
   
   // Optional: Provide custom instructions for the AI agent.
   instructions: "This is the API for the Acme Corporation. Use the available tools to manage users and products.",
-
-  // Optional: Define custom context for the MCP server.
-  // This can be used to pass user-specific authentication data.
-  context: async (req) => {
-    const user = await getUserFromRequest(req); // Your auth logic
-    return {
-      context: { user },
-      tools: [],
-      request: req,
-      timestamp: Date.now(),
-    };
-  },
 });
 
 /**
  * Export the handler for Next.js to handle both GET and POST requests,
  * which are used by different MCP transport methods (like SSE and WebSockets).
  */
-export { mcpHandler as GET, mcpHandler as POST };
+export { handler as GET, handler as POST };
 ```
 
 ### 2. Connect from an MCP Client
@@ -97,7 +87,8 @@ The MCP adapter will translate this into a call to `api.users.list.query()` on y
 You can register custom tools that are not part of your Igniter router:
 
 ```typescript
-const mcpHandler = createMcpAdapter(AppRouter, {
+const handler = createMcpAdapter({
+  router: AppRouter,
   tools: {
     custom: [
       {
@@ -108,6 +99,7 @@ const mcpHandler = createMcpAdapter(AppRouter, {
           taxRate: z.number(),
         }),
         handler: async (args, context) => {
+          // context is automatically typed from the router
           const tax = args.amount * args.taxRate;
           return {
             content: [{
@@ -127,7 +119,8 @@ const mcpHandler = createMcpAdapter(AppRouter, {
 Register prompts that AI agents can use to guide interactions:
 
 ```typescript
-const mcpHandler = createMcpAdapter(AppRouter, {
+const handler = createMcpAdapter({
+  router: AppRouter,
   prompts: {
     custom: [
       {
@@ -137,6 +130,7 @@ const mcpHandler = createMcpAdapter(AppRouter, {
           { name: 'userId', description: 'User ID to debug', required: true }
         ],
         handler: async (args, context) => {
+          // context is automatically typed from the router
           return {
             messages: [
               {
@@ -160,7 +154,8 @@ const mcpHandler = createMcpAdapter(AppRouter, {
 Expose resources that AI agents can read:
 
 ```typescript
-const mcpHandler = createMcpAdapter(AppRouter, {
+const handler = createMcpAdapter({
+  router: AppRouter,
   resources: {
     custom: [
       {
@@ -169,6 +164,7 @@ const mcpHandler = createMcpAdapter(AppRouter, {
         description: 'Current application configuration',
         mimeType: 'application/json',
         handler: async (context) => {
+          // context is automatically typed from the router
           const settings = await getAppSettings();
           return {
             contents: [
@@ -191,12 +187,14 @@ const mcpHandler = createMcpAdapter(AppRouter, {
 Protect your MCP server with OAuth:
 
 ```typescript
-const mcpHandler = createMcpAdapter(AppRouter, {
+const handler = createMcpAdapter({
+  router: AppRouter,
   oauth: {
     issuer: 'https://auth.example.com',
     resourceMetadataPath: '/.well-known/oauth-protected-resource',
     scopes: ['mcp:read', 'mcp:write'],
-    verifyToken: async (token) => {
+    verifyToken: async (token, context) => {
+      // context is automatically typed from the router
       // Verify the token with your auth provider
       const result = await verifyJWT(token);
       return {
@@ -219,9 +217,11 @@ The adapter will:
 Monitor and log MCP operations:
 
 ```typescript
-const mcpHandler = createMcpAdapter(AppRouter, {
+const handler = createMcpAdapter({
+  router: AppRouter,
   events: {
     onRequest: async (request, context) => {
+      // context is automatically typed from the router
       console.log('MCP request received:', request.url);
     },
     onResponse: async (response, context) => {
@@ -248,7 +248,8 @@ const mcpHandler = createMcpAdapter(AppRouter, {
 Customize how router actions are exposed as tools:
 
 ```typescript
-const mcpHandler = createMcpAdapter(AppRouter, {
+const handler = createMcpAdapter({
+  router: AppRouter,
   tools: {
     // Disable automatic mapping of all router actions
     autoMap: true,
@@ -278,7 +279,8 @@ const mcpHandler = createMcpAdapter(AppRouter, {
 Configure the underlying MCP adapter:
 
 ```typescript
-const mcpHandler = createMcpAdapter(AppRouter, {
+const handler = createMcpAdapter({
+  router: AppRouter,
   adapter: {
     basePath: '/api/mcp',
     maxDuration: 60,
@@ -293,23 +295,36 @@ const mcpHandler = createMcpAdapter(AppRouter, {
 
 ## Migration Guide
 
-If you're upgrading from an older version, the API is fully backward compatible. All existing configurations will continue to work. The new features are opt-in:
+The API has been refactored for better clarity and type safety. The main change is that the `router` is now part of the configuration object, and context is automatically inferred from the router.
 
 ```typescript
-// Old API (still works)
-const mcpHandler = createMcpAdapter(AppRouter, {
+// Old API (v0.2.x)
+const handler = createMcpAdapter(AppRouter, {
   serverInfo: { name: 'My Server', version: '1.0.0' },
-  context: (req) => ({ /* ... */ }),
+  context: (req) => ({ 
+    context: { user: 'test' },
+    tools: [],
+    request: req,
+    timestamp: Date.now()
+  }),
   adapter: { basePath: '/api/mcp' }
 });
 
-// New API (with extended features)
-const mcpHandler = createMcpAdapter(AppRouter, {
+// New API (v0.3.x) - cleaner and more type-safe
+const handler = createMcpAdapter({
+  router: AppRouter,  // Now part of the config object
   serverInfo: { name: 'My Server', version: '1.0.0' },
-  context: (req) => ({ /* ... */ }),
-  prompts: { custom: [ /* ... */ ] },  // NEW
-  resources: { custom: [ /* ... */ ] }, // NEW
-  oauth: { /* ... */ },                 // NEW
+  // context is automatically inferred from the router!
+  adapter: { basePath: '/api/mcp' }
+});
+
+// With new features
+const handler = createMcpAdapter({
+  router: AppRouter,
+  serverInfo: { name: 'My Server', version: '1.0.0' },
+  prompts: { custom: [ /* ... */ ] },    // NEW: AI prompts
+  resources: { custom: [ /* ... */ ] },  // NEW: Readable resources
+  oauth: { /* ... */ },                   // NEW: OAuth support
   adapter: { basePath: '/api/mcp' }
 });
 ```

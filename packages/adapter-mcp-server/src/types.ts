@@ -1,4 +1,4 @@
-import type { IgniterRouter } from "@igniter-js/core";
+import type { IgniterRouter, ContextCallback } from "@igniter-js/core";
 
 /**
  * MCP context passed to event handlers and instructions function.
@@ -116,21 +116,26 @@ export interface McpResource<TContext = any> {
 /**
  * OAuth configuration for MCP Authorization.
  */
-export interface McpOAuthConfig {
+export interface McpOAuthConfig<TContext = any> {
   /** OAuth issuer URL (authorization server) */
   issuer: string;
   /** Path to OAuth protected resource metadata endpoint */
   resourceMetadataPath?: string;
   /** Token verification function */
-  verifyToken?: (token: string) => Promise<boolean | { valid: boolean; user?: any }>;
+  verifyToken?: (token: string, context: McpContext<TContext>) => Promise<boolean | { valid: boolean; user?: any }>;
   /** Scopes required for access */
   scopes?: string[];
 }
 
 /**
  * MCP adapter configuration options with automatic type inference.
+ * 
+ * @template TContext - The context type inferred from the router
  */
-export interface McpAdapterOptions<TContext = any, TInferredContext = any> {
+export interface McpAdapterOptions<TContext extends object | ContextCallback = any> {
+  /** Igniter router to expose as MCP server */
+  router: IgniterRouter<TContext, any, any, any, any>;
+  
   /** Server information */
   serverInfo?: {
     /** Server name */
@@ -140,7 +145,7 @@ export interface McpAdapterOptions<TContext = any, TInferredContext = any> {
   };
   
   /** Instructions for the MCP server */
-  instructions?: string | ((context: McpContext<TInferredContext>) => string | Promise<string>);
+  instructions?: string | ((context: McpContext<TContext>) => string | Promise<string>);
   
   /** Tool configuration */
   tools?: {
@@ -153,49 +158,46 @@ export interface McpAdapterOptions<TContext = any, TInferredContext = any> {
     /** Transform action configurations */
     transform?: (controller: string, action: string, actionConfig: any) => McpToolConfig;
     /** Custom tools to add */
-    custom?: McpCustomTool<TInferredContext>[];
+    custom?: McpCustomTool<TContext>[];
   };
 
   /** Prompts configuration */
   prompts?: {
     /** Custom prompts to register */
-    custom?: McpPrompt<TInferredContext>[];
+    custom?: McpPrompt<TContext>[];
   };
 
   /** Resources configuration */
   resources?: {
     /** Custom resources to register */
-    custom?: McpResource<TInferredContext>[];
+    custom?: McpResource<TContext>[];
   };
 
   /** OAuth configuration for MCP Authorization */
-  oauth?: McpOAuthConfig;
+  oauth?: McpOAuthConfig<TContext>;
   
   /** Event handlers */
   events?: {
     /** Called when a tool is invoked */
-    onToolCall?: (toolName: string, args: any, context: McpContext<TInferredContext>) => void | Promise<void>;
+    onToolCall?: (toolName: string, args: any, context: McpContext<TContext>) => void | Promise<void>;
     /** Called when a tool succeeds */
-    onToolSuccess?: (toolName: string, result: any, duration: number, context: McpContext<TInferredContext>) => void | Promise<void>;
+    onToolSuccess?: (toolName: string, result: any, duration: number, context: McpContext<TContext>) => void | Promise<void>;
     /** Called when a tool fails */
-    onToolError?: (toolName: string, error: Error, context: McpContext<TInferredContext>) => void | Promise<void>;
+    onToolError?: (toolName: string, error: Error, context: McpContext<TContext>) => void | Promise<void>;
     /** Called on MCP request */
-    onRequest?: (request: Request, context: McpContext<TInferredContext>) => void | Promise<void>;
+    onRequest?: (request: Request, context: McpContext<TContext>) => void | Promise<void>;
     /** Called on MCP response */
-    onResponse?: (response: any, context: McpContext<TInferredContext>) => void | Promise<void>;
+    onResponse?: (response: any, context: McpContext<TContext>) => void | Promise<void>;
     /** Called on general MCP adapter errors */
-    onError?: (error: Error, context: McpContext<TInferredContext>) => void | Promise<void>;
+    onError?: (error: Error, context: McpContext<TContext>) => void | Promise<void>;
   };
-  
-  /** Context creation function with automatic type inference */
-  context?: (request: Request) => McpContext<TInferredContext> | Promise<McpContext<TInferredContext>>;
   
   /** Response transformation */
   response?: {
     /** Transform Igniter response to MCP format */
-    transform?: (igniterResponse: any, toolName: string, context: McpContext<TInferredContext>) => McpResponse | Promise<McpResponse>;
+    transform?: (igniterResponse: any, toolName: string, context: McpContext<TContext>) => McpResponse | Promise<McpResponse>;
     /** Handle errors */
-    onError?: (error: Error, toolName: string, context: McpContext<TInferredContext>) => McpResponse | Promise<McpResponse>;
+    onError?: (error: Error, toolName: string, context: McpContext<TContext>) => McpResponse | Promise<McpResponse>;
   };
   
   /** Adapter-specific options */
@@ -217,27 +219,11 @@ export interface McpAdapterOptions<TContext = any, TInferredContext = any> {
 }
 
 /**
- * Utility type to infer context type from context function.
- */
-export type InferMcpContextFromFunction<T> = T extends (request: Request) => McpContext<infer U> | Promise<McpContext<infer U>>
-  ? U
-  : never;
-
-/**
  * Utility type to infer context type from router.
  */
 export type InferMcpContextFromRouter<TRouter> = TRouter extends IgniterRouter<infer TContext, any, any, any, any>
   ? TContext
   : never;
-
-/**
- * Utility type to infer the full context from options.
- */
-export type InferMcpContext<TRouterContext, TOptions> = TOptions extends { context: infer TContextFn }
-  ? TContextFn extends (request: Request) => McpContext<infer TInferred> | Promise<McpContext<infer TInferred>>
-    ? TInferred
-    : TRouterContext
-  : TRouterContext;
 
 /**
  * MCP handler function type.
