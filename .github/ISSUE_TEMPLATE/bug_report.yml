@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible bug in SaaS Boilerplate
+description: Report a reproducible bug in Igniter.js
 labels:
   - bug
 body:
@@ -54,7 +54,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: SaaS Boilerplate version / commit SHA
+      label: Igniter.js version / commit SHA
       placeholder: main @ abc1234
     validations:
       required: true
