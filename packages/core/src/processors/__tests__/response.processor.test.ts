@@ -162,12 +162,10 @@ describe('Response Processor', () => {
         .toResponse();
 
       expect(response.status).toBe(204);
+      expect(response.headers.get('Content-Type')).toBeNull();
       
-      const body = await response.json();
-      expect(body).toEqual({
-        error: null,
-        data: null
-      });
+      const text = await response.text();
+      expect(text).toBe('');
     });
 
     it('should create JSON response with custom data', async () => {
@@ -952,8 +950,6 @@ describe('Response Processor', () => {
             .toResponse(),
         IgniterResponseProcessor.init().json({ test: 3 })
             .toResponse(),
-        IgniterResponseProcessor.init().noContent()
-            .toResponse(),
       ]);
 
       const bodies = await Promise.all(responses.map(r => r.json()));
@@ -962,6 +958,47 @@ describe('Response Processor', () => {
         expect(body).toHaveProperty('error', null);
         expect(body).toHaveProperty('data');
       });
+    });
+
+    it('should handle noContent response with empty body', async () => {
+      const response = await IgniterResponseProcessor.init()
+        .noContent()
+        .toResponse();
+      
+      expect(response.status).toBe(204);
+      expect(response.headers.get('Content-Type')).toBeNull();
+      
+      const text = await response.text();
+      expect(text).toBe('');
+    });
+
+    it('should handle 204 with cookies and custom headers', async () => {
+      const response = await IgniterResponseProcessor.init()
+        .setHeader('X-Custom-Header', 'test-value')
+        .setCookie('session', 'token123')
+        .noContent()
+        .toResponse();
+      
+      expect(response.status).toBe(204);
+      expect(response.headers.get('Content-Type')).toBeNull();
+      expect(response.headers.get('X-Custom-Header')).toBe('test-value');
+      expect(response.headers.get('Set-Cookie')).toContain('session=token123');
+      
+      const text = await response.text();
+      expect(text).toBe('');
+    });
+
+    it('should handle 204 with revalidation', async () => {
+      const response = await IgniterResponseProcessor.init()
+        .revalidate(['users', 'posts'])
+        .noContent()
+        .toResponse();
+      
+      expect(response.status).toBe(204);
+      expect(response.headers.get('Content-Type')).toBeNull();
+      
+      const text = await response.text();
+      expect(text).toBe('');
     });
 
     it('should always return consistent response structure for errors', async () => {
