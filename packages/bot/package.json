@@ -1,0 +1,111 @@
+{
+  "name": "@igniter-js/bot",
+  "version": "0.1.0-alpha.0",
+  "description": "A modern, type-safe multi-platform bot framework for the Igniter.js ecosystem (adapters, middleware, commands, rich content).",
+  "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/felipebarcelospro/igniter-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/felipebarcelospro/igniter-js/issues"
+  },
+  "homepage": "https://igniterjs.com",
+  "keywords": [
+    "igniter-js",
+    "bot",
+    "chatbot",
+    "telegram",
+    "whatsapp",
+    "messaging",
+    "adapter",
+    "middleware",
+    "commands",
+    "typescript",
+    "zod",
+    "framework",
+    "type-safe"
+  ],
+  "sideEffects": false,
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.mjs",
+      "require": "./dist/adapters/index.cjs"
+    },
+    "./adapters/*": {
+      "types": "./dist/adapters/*.d.ts",
+      "import": "./dist/adapters/*.mjs",
+      "require": "./dist/adapters/*.cjs"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.mjs",
+      "require": "./dist/types/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "AGENT.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "prepublishOnly": "npm run clean && npm run build && npm run typecheck"
+  },
+  "dependencies": {
+    "zod": "^3.25.67"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  },
+  "devDependencies": {
+    "@igniter-js/eslint-config": "*",
+    "@types/node": "^22.9.0",
+    "eslint": "^8.57.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  },
+  "tsup": {
+    "entry": {
+      "index": "src/index.ts",
+      "adapters/index": "src/adapters/index.ts",
+      "adapters/telegram/index": "src/adapters/telegram/index.ts",
+      "adapters/whatsapp/index": "src/adapters/whatsapp/index.ts",
+      "types/index": "src/types/index.ts"
+    },
+    "format": [
+      "esm",
+      "cjs"
+    ],
+    "splitting": false,
+    "dts": true,
+    "clean": true,
+    "outDir": "dist",
+    "target": "es2022",
+    "shims": false,
+    "minify": false
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  }
+}
