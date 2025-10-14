@@ -180,7 +180,6 @@ Thumbs.db
 # Trae AI
 .trae/
 .gemini/
-.github/
 .opencode/
 .vercel
 

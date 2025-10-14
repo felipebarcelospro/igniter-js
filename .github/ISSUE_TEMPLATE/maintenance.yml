@@ -1,0 +1,38 @@
+name: Maintenance / Chore
+description: Track technical debt, refactors, or project hygiene tasks
+labels:
+  - chore
+body:
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: This work does not change user-facing behavior
+          required: true
+        - label: I assessed risk and rollout implications
+          required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Explain why this maintenance task is needed.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Outline the work to be done, including affected modules or systems.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Define what success looks like.
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies / blockers
+      description: List related issues or prerequisites.

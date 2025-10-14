@@ -1,40 +1,59 @@
-<!--
+## Overview
 
-Thank you for your contribution to Igniter.js!
+- **Context:** Why is this change necessary?
+- **Summary:** What does this pull request deliver?
+- **Linked Issues:** Fixes #123 / Relates to #456
 
-To help us review your Pull Request, please read our [Contributing Guidelines](https://github.com/felipebarcelospro/igniter-js/blob/main/CONTRIBUTING.md) and fill out the template below.
+## Change Type
 
--->
+- [ ] Feature / Enhancement
+- [ ] Bug fix
+- [ ] Docs / Content update
+- [ ] Chore / Refactor
+- [ ] Security / Compliance
+- [ ] Release automation / Ops
 
-### What type of PR is this?
+## Implementation Notes
 
-- [ ]  Bug fix
-- [ ] New feature
-- [ ] Documentation update
-- [ ] Code refactoring
-- [ ] Dependency update
-- [ ] Other (please describe):
+- Key decisions, trade-offs, or patterns introduced
+- Follow-up tasks or deferred work (if any)
 
-### What is the purpose of this PR?
+## Screenshots / Media
 
-<!-- Please provide a clear and concise description of the problem this PR solves. -->
-<!-- If it fixes an open issue, please link to the issue here. Ex.: Closes #123 -->
+> Add UI screenshots, recordings, or API traces where helpful.
 
-### What changes were made?
+## Testing Evidence
 
-<!-- Please provide a detailed summary of the changes you have made. -->
+- [ ] `npm run lint`
+- [ ] `npm run typecheck`
+- [ ] `npm test`
+- [ ] End-to-end scenario(s): `npm run dev` + manual steps listed below
+- [ ] Additional commands (e.g., migrations, scripts): 
 
-### How should this be tested?
+**Manual validation notes:**
 
-<!-- Please provide step-by-step instructions on how to test your changes. -->
-1.
-2.
-3.
+```
+Describe manual test steps, environments, or data sets used.
+```
 
-### Checklist
+## Backward Compatibility & Rollout
 
-- [ ] I have read the [Contributing Guidelines](https://github.com/felipebarcelospro/igniter-js/blob/main/CONTRIBUTING.md).
-- [ ] I have added tests that prove my fix is effective or that my feature works.
-- [ ] I have updated the documentation with the relevant changes.
-- [ ] All new and existing tests passed.
-- [ ] My code follows the code style of this project.
+- Does this introduce breaking changes? If yes, explain impact and mitigation.
+- Deployment considerations or migration steps (database, infrastructure, feature flags).
+- Rollback plan.
+
+## Documentation
+
+- [ ] README updated (if user-facing)
+- [ ] Added/updated internal docs (`.github/docs`)
+- [ ] Storybook / design system docs updated (if applicable)
+- [ ] Release notes or changelog prepared
+
+## Contributor Checklist
+
+- [ ] I reviewed the [Contribution Checklist](./docs/contribution-checklist.md).
+- [ ] I adhered to the Code of Conduct and Security Policy.
+- [ ] I requested review from relevant subject-matter experts.
+- [ ] I considered accessibility and localization for UI changes.
+- [ ] I verified licensing or third-party attribution requirements.
+- [ ] I documented any config or environment variable changes.

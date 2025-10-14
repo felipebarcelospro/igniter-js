@@ -1,0 +1,31 @@
+name: Documentation update
+description: Suggest improvements or fixes to the documentation
+labels:
+  - documentation
+body:
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and discussions
+          required: true
+        - label: I reviewed the current documentation to confirm the gap
+          required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe what part of the documentation needs to change and why.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed changes
+      description: Provide the updates you suggest, including file paths if known.
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Link to relevant sections, PRs, or external resources.

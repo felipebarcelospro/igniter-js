@@ -1,0 +1,97 @@
+name: Bug report
+description: Report a reproducible bug in SaaS Boilerplate
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report a bug. Please fill out the checklist below so we can reproduce and fix the issue quickly.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and discussions
+          required: true
+        - label: I have read the Contribution Checklist
+          required: true
+        - label: I am using the latest version of `main`
+          required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Provide a clear and concise description of the bug.
+      placeholder: When I do X, Y happens...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide the exact steps so we can reproduce the issue.
+      placeholder: |
+        1. Go to…
+        2. Click on…
+        3. Scroll down to…
+        4. See error…
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Describe what actually happened.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: SaaS Boilerplate version / commit SHA
+      placeholder: main @ abc1234
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment details
+      description: Provide runtime info and integration context.
+      placeholder: |
+        - OS:
+        - Node.js version:
+        - Browser (if applicable):
+        - Database:
+        - Feature flags / environment variables changed:
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - blocker (production down)
+        - high (major feature broken)
+        - medium (degraded experience)
+        - low (minor issue)
+    validations:
+      required: true
+  - type: checkboxes
+    id: regression
+    attributes:
+      label: Regression
+      options:
+        - label: This bug is a regression from a previous release
+        - label: This affects a fresh install with default settings
+  - type: textarea
+    id: logs
+    attributes:
+      label: Diagnostics
+      description: Attach relevant logs, stack traces, or screenshots. Sanitize sensitive data.
+      render: bash

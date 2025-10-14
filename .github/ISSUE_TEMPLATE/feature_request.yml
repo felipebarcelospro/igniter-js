@@ -1,0 +1,51 @@
+name: Feature request
+description: Propose a new idea or improvement
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: Help us evaluate your idea quickly by filling out the sections below.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and discussions
+          required: true
+        - label: I have read the Contribution Checklist
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem does this feature solve? Why is it valuable?
+    validations:
+      required: true
+  - type: textarea
+    id: goals
+    attributes:
+      label: Success criteria / KPIs
+      description: How will we know this feature solved the problem?
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe how you would like to solve the problem. Include diagrams, user flows, or API contracts.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you considered other approaches?
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks or open questions
+      description: Highlight uncertainties, dependencies, or rollout risks.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Share links, documentation, or examples that help explain the request.
