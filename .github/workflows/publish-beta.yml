@@ -43,6 +43,14 @@ jobs:
       - name: 'Version packages'
         run: npx changeset version
 
+      - name: 'Commit version changes'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "chore: version beta packages [skip ci]" || echo "No changes to commit"
+          git push || echo "No changes to push"
+
       - name: 'Build packages after version bump'
         run: npm run build
 
@@ -52,3 +60,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: 'Exit prerelease mode'
+        run: npx changeset pre exit
