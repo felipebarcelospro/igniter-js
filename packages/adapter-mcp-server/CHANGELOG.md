@@ -1,5 +1,62 @@
 # @igniter-js/adapter-mcp-server
 
+## 0.3.0 (Unreleased)
+
+### Minor Changes
+
+- **Enhanced MCP Adapter Extensibility & OAuth Support**
+  
+  This release significantly improves the MCP adapter API to provide better extensibility, OAuth authorization support, and a simplified developer experience.
+
+  #### New Features
+
+  - **Custom Prompts**: Register custom prompts that AI agents can use to guide interactions
+    ```typescript
+    prompts: {
+      custom: [{
+        name: 'debugUser',
+        description: 'Debug user account issues',
+        handler: async (args, context) => ({ /* ... */ })
+      }]
+    }
+    ```
+
+  - **Custom Resources**: Expose resources that AI agents can read
+    ```typescript
+    resources: {
+      custom: [{
+        uri: 'config://app/settings',
+        name: 'Application Settings',
+        handler: async (context) => ({ /* ... */ })
+      }]
+    }
+    ```
+
+  - **OAuth Authorization**: First-class support for OAuth-based authorization
+    ```typescript
+    oauth: {
+      issuer: 'https://auth.example.com',
+      resourceMetadataPath: '/.well-known/oauth-protected-resource',
+      scopes: ['mcp:read', 'mcp:write'],
+      verifyToken: async (token) => ({ valid: true })
+    }
+    ```
+    - Automatic Bearer token verification
+    - Protected resource metadata endpoint exposure
+    - Proper 401 responses with WWW-Authenticate headers
+
+  #### Breaking Changes
+
+  - Fixed TypeScript type parameter issues with `IgniterRouter` (now requires 5 type parameters)
+  - All existing configurations remain backward compatible
+
+  #### Improvements
+
+  - Comprehensive event handling system
+  - Enhanced documentation with migration guide
+  - Updated examples demonstrating all new features
+  - Better type inference for custom tools, prompts, and resources
+
 ## 0.2.0
 
 ### Minor Changes
