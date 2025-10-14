@@ -19,26 +19,46 @@ import { registerDebuggingTools } from "./debugging";
  */
 export function registerAllToolsets(context: ToolsetContext) {
   // Development and project management
-  registerCliTools(context);
+  if (process.env.ENABLE_CLI_TOOLS !== 'false') {
+    registerCliTools(context);
+  }
 
   // API development and testing
-  registerApiValidationTools(context);
+  if (process.env.ENABLE_API_VALIDATION_TOOLS !== 'false') {
+    registerApiValidationTools(context);
+  }
 
   // Research and documentation
-  registerDocumentationTools(context);
-  registerGitHubTools(context);
+  if (process.env.ENABLE_DOCUMENTATION_TOOLS !== 'false') {
+    registerDocumentationTools(context);
+  }
+  if (process.env.ENABLE_GITHUB_TOOLS !== 'false') {
+    registerGitHubTools(context);
+  }
 
   // Code analysis and investigation
-  registerFileAnalysisTools(context);
-  registerCodeInvestigationTools(context);
-  registerDebuggingTools(context);
+  if (process.env.ENABLE_FILE_ANALYSIS_TOOLS !== 'false') {
+    registerFileAnalysisTools(context);
+  }
+  if (process.env.ENABLE_CODE_INVESTIGATION_TOOLS !== 'false') {
+    registerCodeInvestigationTools(context);
+  }
+  if (process.env.ENABLE_DEBUGGING_TOOLS !== 'false') {
+    registerDebuggingTools(context);
+  }
 
   // Knowledge and task management
-  registerMemoryTools(context);
-  registerTaskManagementTools(context);
+  if (process.env.ENABLE_MEMORY_TOOLS !== 'false') {
+    registerMemoryTools(context);
+  }
+  if (process.env.ENABLE_TASK_MANAGEMENT_TOOLS !== 'false') {
+    registerTaskManagementTools(context);
+  }
 
   // Agent delegation and automation
-  registerAgentDelegationTools(context);
+  if (process.env.ENABLE_AGENT_DELEGATION_TOOLS !== 'false') {
+    registerAgentDelegationTools(context);
+  }
 }
 
 // Export individual toolset registrars for selective registration

@@ -156,6 +156,8 @@ yarn.lock
 pnpm-lock.yaml
 bun.lock
 
+.zed
+
 # IDE specific
 .vscode/settings.json
 .vscode/launch.json
