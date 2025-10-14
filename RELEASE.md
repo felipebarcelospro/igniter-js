@@ -2,6 +2,40 @@
 
 This document outlines the automated release and publishing workflow for the Igniter.js monorepo.
 
+## Workflow Diagram
+
+```mermaid
+graph TD
+    A[Developer Makes Changes] --> B{Which Branch?}
+    B -->|beta/*| C[Push to beta/*]
+    B -->|feature/*| D[Create PR to main]
+    
+    C --> E[Beta Workflow Triggers]
+    E --> F[Enter Prerelease Mode]
+    F --> G[Version Packages with -beta suffix]
+    G --> H[Build Packages]
+    H --> I[Publish to NPM with @beta tag]
+    I --> J[Exit Prerelease Mode]
+    J --> K[Beta Available: npm install @pkg@beta]
+    
+    D --> L[PR Title Validated]
+    L --> M{Valid Conventional Commit?}
+    M -->|No| N[Fix PR Title]
+    N --> L
+    M -->|Yes| O[Create Changeset]
+    O --> P[Merge to main]
+    P --> Q[Main Workflow Triggers]
+    Q --> R[Create Version Packages PR]
+    R --> S[Review Version PR]
+    S --> T[Merge Version PR]
+    T --> U[Publish to NPM with @latest tag]
+    U --> V[Latest Available: npm install @pkg]
+    
+    style K fill:#90EE90
+    style V fill:#90EE90
+    style N fill:#FFB6C1
+```
+
 ## Overview
 
 The Igniter.js project uses an automated CI/CD workflow for versioning and publishing packages to NPM. The workflow is designed to:
