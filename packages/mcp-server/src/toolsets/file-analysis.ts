@@ -21,7 +21,7 @@ export function registerFileAnalysisTools({ server }: ToolsetContext) {
     title: "Analyze File",
     description: "Analyzes the structure, imports, exports, functions, and TypeScript errors of a file.",
     inputSchema: {
-      filePath: z.string().describe("Path to the file to analyze"),
+      filePath: z.string().describe("Absolute path to the file to analyze."),
       includeErrors: z.boolean().default(true).describe("Include TypeScript and ESLint diagnostics"),
       projectRoot: z.string().optional().describe("Project root for better TypeScript analysis")
     },
@@ -32,6 +32,9 @@ export function registerFileAnalysisTools({ server }: ToolsetContext) {
       const extension = path.extname(absolutePath);
       const language = getLanguageFromExtension(extension);
 
+      // Parse structure first so we can enrich health summary later
+      const structure = parseASTStructure(fileContent, language);
+
       const result: any = {
         file_info: {
           path: absolutePath,
@@ -41,14 +44,79 @@ export function registerFileAnalysisTools({ server }: ToolsetContext) {
           size: fileContent.length,
           lines: fileContent.split('\n').length
         },
-        structure: parseASTStructure(fileContent, language),
-        diagnostics: {},
+        structure,
+        diagnostics: {
+          typescript_errors: [],
+          eslint_errors: [],
+          health_summary: {
+            error_count: 0,
+            warning_count: 0,
+            overall_status: 'healthy',
+            compilable: true
+          }
+        },
         health_summary: {}
       };
 
+      // Collect TS diagnostics (only for TS/TSX and when requested)
       if (includeErrors && ['.ts', '.tsx'].includes(extension)) {
         result.diagnostics = await analyzeTypeScriptErrors(absolutePath, fileContent, projectRoot);
       }
+
+      // Derive an augmented health summary that merges static diagnostics with structural signals
+      const diagSummary = result.diagnostics.health_summary || {
+        error_count: 0,
+        warning_count: 0,
+        overall_status: 'healthy',
+        compilable: true
+      };
+
+      // Lightweight heuristic signals
+      const lineCount = result.file_info.lines;
+      const functionCount = structure.functions?.length || 0;
+      const classCount = structure.classes?.length || 0;
+      const exportCount = structure.exports?.length || structure.functions?.filter((f: any) => f.isExported).length || 0;
+      const importCount = structure.imports?.length || 0;
+
+      // Heuristic flags
+      const flags: string[] = [];
+      if (lineCount > 400) flags.push('large_file');
+      if (functionCount > 25) flags.push('many_functions');
+      if (classCount > 10) flags.push('many_classes');
+      if (diagSummary.error_count === 0 && diagSummary.warning_count === 0 && flags.length === 0) {
+        flags.push('clean');
+      }
+
+      // Simple maintainability score (0-100)
+      let score = 100;
+      score -= diagSummary.error_count * 5;
+      score -= Math.min(20, diagSummary.warning_count * 2);
+      if (lineCount > 400) score -= Math.min(15, Math.floor((lineCount - 400) / 50));
+      if (functionCount > 25) score -= Math.min(10, functionCount - 25);
+      if (classCount > 10) score -= Math.min(10, (classCount - 10) * 2);
+      score = Math.max(0, Math.min(100, score));
+
+      // Derive final status (errors > warnings > heuristic)
+      let overall = diagSummary.overall_status;
+      if (overall === 'healthy') {
+        if (flags.includes('large_file') || flags.includes('many_functions') || flags.includes('many_classes')) {
+          overall = 'has_warnings';
+        }
+      }
+
+      result.health_summary = {
+        ...diagSummary,
+        overall_status: overall,
+        maintainability_score: score,
+        metrics: {
+          lines: lineCount,
+            imports: importCount,
+          functions: functionCount,
+          classes: classCount,
+          exports: exportCount
+        },
+        flags
+      };
 
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (error: any) {
@@ -60,11 +128,11 @@ export function registerFileAnalysisTools({ server }: ToolsetContext) {
     title: "Analyze Feature",
     description: "Comprehensive analysis of a feature implementation including files, structure, errors, and API endpoints.",
     inputSchema: {
-      featurePath: z.string().describe("Path to feature directory or main file"),
-      projectRoot: z.string().optional().describe("Project root for better analysis"),
+      featurePath: z.string().describe("Absolute path to feature directory or main file"),
+      projectRoot: z.string().describe("Project root for better analysis"),
       includeStats: z.boolean().default(true).describe("Include file statistics and metrics")
     },
-  }, async ({ featurePath, projectRoot, includeStats }: { featurePath: string, projectRoot?: string, includeStats?: boolean }) => {
+  }, async ({ featurePath, projectRoot }: { featurePath: string, projectRoot?: string, includeStats?: boolean }) => {
     try {
       const absolutePath = path.resolve(featurePath);
       const detectedProjectRoot = projectRoot || await findProjectRoot(absolutePath);
@@ -87,7 +155,6 @@ export function registerFileAnalysisTools({ server }: ToolsetContext) {
           problematic_files: [],
           healthy_files: []
         },
-        api_endpoints: [],
         recommendations: []
       };
 
@@ -162,10 +229,6 @@ export function registerFileAnalysisTools({ server }: ToolsetContext) {
             } else {
               result.health_summary.healthy_files.push(filePath);
             }
-
-            // Extract API endpoints if it's a router/controller file
-            const endpoints = extractAPIEndpoints(fileContent, filePath);
-            result.api_endpoints.push(...endpoints);
           }
 
           result.files.push(fileAnalysis);

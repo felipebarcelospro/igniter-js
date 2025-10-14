@@ -123,56 +123,6 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
     }
   });
 
-  server.registerTool("generate_controller", {
-    title: "Generate Controller",
-    description: `**What it does:** Scaffolds a new controller file within an existing feature.
-**When to use:** To group a set of related API actions (queries and mutations) under a common path. For example, within a 'user' feature, you might have a 'profile' controller.
-**How it works:** Runs 'igniter generate controller <name> --feature <feature>'.
-**Result:** A new controller file (e.g., 'profile.controller.ts') inside the specified feature's 'controllers' directory.`,
-    inputSchema: {
-      name: z.string().describe("The name of the controller (e.g., 'profile', 'settings')."),
-      feature: z.string().describe("The parent feature name where the controller will be created."),
-    },
-  }, async ({ name, feature }: { name: string; feature: string }) => {
-    try {
-      const command = `npx @igniter-js/cli@latest generate controller ${name} --feature ${feature}`.trim();
-      const result = await execAsync(command, { timeout: 30000 });
-
-      return {
-        content: [{ type: "text", text: `Controller '${name}' in feature '${feature}' generated successfully!\n\nOutput:\n${result.stdout}\n\nErrors:\n${result.stderr}` }],
-      };
-    } catch (error: any) {
-      return {
-        content: [{ type: "text", text: `Failed to generate controller: ${error.message}` }],
-      };
-    }
-  });
-
-  server.registerTool("generate_procedure", {
-    title: "Generate Procedure",
-    description: `**What it does:** Scaffolds a new procedure (middleware) file within an existing feature.
-**When to use:** To create reusable logic that runs before your action handlers, such as authentication checks, logging, or role validation.
-**How it works:** Runs 'igniter generate procedure <name> --feature <feature>'.
-**Result:** A new procedure file (e.g., 'auth.procedure.ts') inside the specified feature's 'procedures' directory.`,
-    inputSchema: {
-      name: z.string().describe("The name of the procedure (e.g., 'auth', 'isAdmin')."),
-      feature: z.string().describe("The parent feature name where the procedure will be created."),
-    },
-  }, async ({ name, feature }: { name: string; feature: string }) => {
-    try {
-      const command = `npx @igniter-js/cli@latest generate procedure ${name} --feature ${feature}`.trim();
-      const result = await execAsync(command, { timeout: 30000 });
-
-      return {
-        content: [{ type: "text", text: `Procedure '${name}' in feature '${feature}' generated successfully!\n\nOutput:\n${result.stdout}\n\nErrors:\n${result.stderr}` }],
-      };
-    } catch (error: any) {
-      return {
-        content: [{ type: "text", text: `Failed to generate procedure: ${error.message}` }],
-      };
-    }
-  });
-
   // --- Generation & Docs Tools ---
 
   server.registerTool("generate_schema", {
@@ -181,12 +131,6 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
 **When to use:** Primarily in CI/CD environments or when you need to force a regeneration without running the dev server. The 'dev' command typically handles this automatically.
 **How it works:** Runs 'igniter generate schema'. It introspects your main router file and outputs the client files.
 **Result:** Updated client schema files in the specified output directory.`,
-    inputSchema: {
-      output: z.string().optional().describe("Output directory for the generated client. Defaults to 'src/'."),
-      watch: z.boolean().optional().describe("Watch for changes and regenerate automatically. Defaults to false for manual runs."),
-      docs: z.boolean().optional().describe("Also generate OpenAPI documentation. Defaults to false."),
-      docsOutput: z.string().optional().describe("Output directory for OpenAPI docs if --docs is enabled."),
-    },
   }, async (options: { output?: string; watch?: boolean; docs?: boolean; docsOutput?: string }) => {
     try {
       const args = [];
@@ -195,8 +139,17 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
       if (options.docs) args.push("--docs");
       if (options.docsOutput) args.push(`--docs-output ${options.docsOutput}`);
 
-      const command = `npx @igniter-js/cli@latest generate schema ${args.join(" ")}`.trim();
-      const result = await execAsync(command, { timeout: 30000 });
+      const command = [
+        `npx @igniter-js/cli@latest generate schema`.trim(),
+        `npx @igniter-js/cli@latest generate docs`.trim()
+      ];
+
+      for (const cmd of command) {
+        const result = await execAsync(`${cmd} ${args.join(" ")}`.trim(), { timeout: 30000 });
+        if (result.stderr) {
+          throw new Error(result.stderr);
+        }
+      }
 
       return {
         content: [{ type: "text", text: `Schema generated successfully!\n\nOutput:\n${result.stdout}\n\nErrors:\n${result.stderr}` }],
@@ -204,35 +157,6 @@ export function registerCliTools({ server, execAsync }: ToolsetContext) {
     } catch (error: any) {
       return {
         content: [{ type: "text", text: `Failed to generate schema: ${error.message}` }],
-      };
-    }
-  });
-
-  server.registerTool("generate_docs", {
-    title: "Generate API Docs",
-    description: `**What it does:** Generates an OpenAPI specification file from your API router. Can also create a self-contained HTML UI for browsing the API.
-**When to use:** To create or update your API documentation for internal teams or external consumers.
-**How it works:** Runs 'igniter generate docs'. It introspects the router and generates a JSON file based on your controllers, actions, and Zod schemas.
-**Result:** An 'openapi.json' file and optionally an 'index.html' file in the specified output directory.`,
-    inputSchema: {
-      output: z.string().optional().describe("Output directory for the OpenAPI spec. Defaults to './src/docs'."),
-      ui: z.boolean().optional().describe("If true, generates a self-contained HTML file with the Scalar UI for interactive documentation."),
-    },
-  }, async ({ output, ui }: { output?: string; ui?: boolean }) => {
-    try {
-      const args = [];
-      if (output) args.push(`--output ${output}`);
-      if (ui) args.push("--ui");
-
-      const command = `npx @igniter-js/cli@latest generate docs ${args.join(" ")}`.trim();
-      const result = await execAsync(command, { timeout: 30000 });
-
-      return {
-        content: [{ type: "text", text: `API documentation generated successfully!\n\nOutput:\n${result.stdout}\n\nErrors:\n${result.stderr}` }],
-      };
-    } catch (error: any) {
-      return {
-        content: [{ type: "text", text: `Failed to generate API docs: ${error.message}` }],
       };
     }
   });
