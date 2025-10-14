@@ -20,9 +20,12 @@ This package is an **Adapter** that exposes an entire Igniter.js `AppRouter` as 
 This adapter acts as a translation and execution layer between the MCP standard and the Igniter.js framework.
 
 ### 2.1. The Adapter's Core Responsibility
-The fundamental responsibility of this adapter is to perform two main operations:
+The fundamental responsibility of this adapter is to perform several main operations:
 1.  **Introspection & Tool Definition:** When initialized, the adapter inspects the provided `AppRouter` object. It iterates through every controller and action, transforming each `IgniterAction` into a formal "tool" definition that an MCP client can understand.
 2.  **Execution & Translation:** When an MCP client requests a tool to be executed, the adapter receives this request, translates the tool call back into an Igniter.js action call, executes it, and then translates the result back into an MCP-compliant format.
+3.  **Prompts & Resources:** The adapter supports registering custom prompts and resources, allowing AI agents to access structured guidance and data.
+4.  **OAuth Authorization:** The adapter can enforce OAuth-based authorization, requiring valid Bearer tokens and exposing protected resource metadata endpoints.
+5.  **Event Handling:** Comprehensive event hooks allow monitoring and logging of all MCP operations.
 
 ### 2.2. Introspection and Tool Generation
 This is the heart of the adapter.
@@ -57,8 +60,11 @@ The package has a minimal and focused structure.
     > **Maintenance**: Any change to how tools are defined, executed, or how results are formatted will happen in this file.
 
 *   `src/types.ts`
-    > **Purpose**: Contains all TypeScript `interface` and `type` definitions that are **specific to this adapter**. This most importantly includes the `McpAdapterOptions` type, which defines the configuration object that can be passed to `createMcpAdapter` (e.g., for providing custom instructions or context).
-    > **Maintenance**: If you need to add a new configuration option to the adapter, its type definition must be added here first.
+    > **Purpose**: Contains all TypeScript `interface` and `type` definitions that are **specific to this adapter**. This most importantly includes:
+    >    - `McpAdapterOptions` type, which defines the configuration object
+    >    - `McpPrompt`, `McpResource`, and `McpOAuthConfig` interfaces for extensibility features
+    >    - `McpContext`, `McpToolInfo`, `McpCustomTool`, and `McpResponse` core types
+    > **Maintenance**: If you need to add a new configuration option or extend functionality, update type definitions here first.
 
 ---
 

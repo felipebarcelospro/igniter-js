@@ -18,7 +18,7 @@ export function createMcpAdapter<
   TControllers extends Record<string, IgniterControllerConfig<any>>,
   TOptions extends McpAdapterOptions<TContext, any>
 >(
-  router: IgniterRouter<TContext, TControllers, any, any>,
+  router: IgniterRouter<TContext, TControllers, any, any, any>,
   options: TOptions & {
     context: (request: Request) => McpContext<any> | Promise<McpContext<any>>;
   }
@@ -33,7 +33,7 @@ export function createMcpAdapter<
   TContext extends object,
   TControllers extends Record<string, IgniterControllerConfig<any>>
 >(
-  router: IgniterRouter<TContext, TControllers, any, any>,
+  router: IgniterRouter<TContext, TControllers, any, any, any>,
   options?: McpAdapterOptions<TContext, TContext>
 ): McpHandler;
 
@@ -82,7 +82,7 @@ export function createMcpAdapter<
   TControllers extends Record<string, IgniterControllerConfig<any>>,
   TOptions extends McpAdapterOptions<TContext, any> = McpAdapterOptions<TContext, TContext>
 >(
-  router: IgniterRouter<TContext, TControllers, any, any>,
+  router: IgniterRouter<TContext, TControllers, any, any, any>,
   options: TOptions = {} as TOptions
 ): McpHandler {
   type TInferredContext = InferMcpContext<TContext, TOptions>;
@@ -157,6 +157,37 @@ export function createMcpAdapter<
           );
         }
       }
+
+      // Register custom prompts
+      if (options.prompts?.custom) {
+        for (const prompt of options.prompts.custom) {
+          server.prompt(
+            prompt.name,
+            prompt.description,
+            prompt.arguments,
+            async (args: any) => {
+              const context = await createMcpContext<TContext, TInferredContext>(router, options, args);
+              return await prompt.handler(args, context);
+            }
+          );
+        }
+      }
+
+      // Register custom resources
+      if (options.resources?.custom) {
+        for (const resource of options.resources.custom) {
+          server.resource(
+            resource.uri,
+            resource.name,
+            resource.description,
+            resource.mimeType,
+            async () => {
+              const context = await createMcpContext<TContext, TInferredContext>(router, options, {});
+              return await resource.handler(context);
+            }
+          );
+        }
+      }
     },
     {
       // Server options
@@ -176,8 +207,84 @@ export function createMcpAdapter<
     }
   );
   
-  // Wrap handler to add request/response events
+  // Wrap handler to add request/response events and OAuth support
   const wrappedHandler: McpHandler = async (request: Request) => {
+    // Handle OAuth protected resource metadata endpoint
+    if (options.oauth?.resourceMetadataPath) {
+      const url = new URL(request.url);
+      if (url.pathname === options.oauth.resourceMetadataPath) {
+        return new Response(
+          JSON.stringify({
+            resource: url.origin,
+            authorization_servers: [options.oauth.issuer],
+            scopes_supported: options.oauth.scopes || []
+          }),
+          { 
+            status: 200, 
+            headers: { 'Content-Type': 'application/json' } 
+          }
+        );
+      }
+    }
+
+    // OAuth token verification
+    if (options.oauth?.verifyToken) {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'unauthorized',
+            message: 'Missing or invalid Authorization header'
+          }),
+          { 
+            status: 401, 
+            headers: { 
+              'Content-Type': 'application/json',
+              'WWW-Authenticate': `Bearer realm="${options.oauth.issuer}"`
+            } 
+          }
+        );
+      }
+
+      const token = authHeader.substring(7);
+      try {
+        const verificationResult = await options.oauth.verifyToken(token);
+        const isValid = typeof verificationResult === 'boolean' 
+          ? verificationResult 
+          : verificationResult.valid;
+
+        if (!isValid) {
+          return new Response(
+            JSON.stringify({ 
+              error: 'invalid_token',
+              message: 'Token verification failed'
+            }),
+            { 
+              status: 401, 
+              headers: { 
+                'Content-Type': 'application/json',
+                'WWW-Authenticate': `Bearer realm="${options.oauth.issuer}", error="invalid_token"`
+              } 
+            }
+          );
+        }
+      } catch (error) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'invalid_token',
+            message: 'Token verification error'
+          }),
+          { 
+            status: 401, 
+            headers: { 
+              'Content-Type': 'application/json',
+              'WWW-Authenticate': `Bearer realm="${options.oauth.issuer}", error="invalid_token"`
+            } 
+          }
+        );
+      }
+    }
+
     const context = await createMcpContext<TContext, TInferredContext>(router, options, {}, request);
     
     try {
@@ -225,7 +332,7 @@ export function createMcpAdapter<
  * Extract tools from Igniter router.
  */
 function extractToolsFromRouter<TContext extends object, TControllers extends Record<string, IgniterControllerConfig<any>>, TInferredContext>(
-  router: IgniterRouter<TContext, TControllers, any, any>,
+  router: IgniterRouter<TContext, TControllers, any, any, any>,
   options: McpAdapterOptions<TContext, TInferredContext>
 ): McpToolInfo[] {
   const tools: McpToolInfo[] = [];
@@ -236,7 +343,8 @@ function extractToolsFromRouter<TContext extends object, TControllers extends Re
   
   // Iterate through controllers and actions
   for (const [controllerName, controller] of Object.entries(router.controllers)) {
-    for (const [actionName, action] of Object.entries(controller.actions)) {
+    const typedController = controller as IgniterControllerConfig<any>;
+    for (const [actionName, action] of Object.entries(typedController.actions)) {
       const actionConfig = action as IgniterAction<any, any, any, any, any, any, any, any, any, any>;
       
       // Apply filter if provided
@@ -284,7 +392,7 @@ function extractToolsFromRouter<TContext extends object, TControllers extends Re
  * Create MCP context for tool execution with type inference.
  */
 async function createMcpContext<TContext extends object, TInferredContext>(
-  router: IgniterRouter<TContext, any, any, any>,
+  router: IgniterRouter<TContext, any, any, any, any>,
   options: McpAdapterOptions<TContext, TInferredContext>,
   args: any,
   request?: Request
@@ -326,7 +434,7 @@ async function createMcpContext<TContext extends object, TInferredContext>(
  * Execute a tool using the Igniter router with type inference.
  */
 async function executeTool<TContext extends object, TInferredContext>(
-  router: IgniterRouter<TContext, any, any, any>,
+  router: IgniterRouter<TContext, any, any, any, any>,
   tool: McpToolInfo,
   args: any,
   context: McpContext<TInferredContext>,

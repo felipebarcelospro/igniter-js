@@ -84,6 +84,50 @@ export interface McpResponse {
 }
 
 /**
+ * MCP Prompt definition.
+ */
+export interface McpPrompt<TContext = any> {
+  /** Prompt name */
+  name: string;
+  /** Prompt description */
+  description?: string;
+  /** Prompt arguments schema */
+  arguments?: any[];
+  /** Prompt handler function */
+  handler: (args: any, context: McpContext<TContext>) => Promise<{ messages: Array<{ role: string; content: { type: string; text: string } }> }>;
+}
+
+/**
+ * MCP Resource definition.
+ */
+export interface McpResource<TContext = any> {
+  /** Resource URI */
+  uri: string;
+  /** Resource name */
+  name: string;
+  /** Resource description */
+  description?: string;
+  /** Resource MIME type */
+  mimeType?: string;
+  /** Resource handler function */
+  handler: (context: McpContext<TContext>) => Promise<{ contents: Array<{ uri: string; mimeType?: string; text?: string; blob?: string }> }>;
+}
+
+/**
+ * OAuth configuration for MCP Authorization.
+ */
+export interface McpOAuthConfig {
+  /** OAuth issuer URL (authorization server) */
+  issuer: string;
+  /** Path to OAuth protected resource metadata endpoint */
+  resourceMetadataPath?: string;
+  /** Token verification function */
+  verifyToken?: (token: string) => Promise<boolean | { valid: boolean; user?: any }>;
+  /** Scopes required for access */
+  scopes?: string[];
+}
+
+/**
  * MCP adapter configuration options with automatic type inference.
  */
 export interface McpAdapterOptions<TContext = any, TInferredContext = any> {
@@ -111,6 +155,21 @@ export interface McpAdapterOptions<TContext = any, TInferredContext = any> {
     /** Custom tools to add */
     custom?: McpCustomTool<TInferredContext>[];
   };
+
+  /** Prompts configuration */
+  prompts?: {
+    /** Custom prompts to register */
+    custom?: McpPrompt<TInferredContext>[];
+  };
+
+  /** Resources configuration */
+  resources?: {
+    /** Custom resources to register */
+    custom?: McpResource<TInferredContext>[];
+  };
+
+  /** OAuth configuration for MCP Authorization */
+  oauth?: McpOAuthConfig;
   
   /** Event handlers */
   events?: {
@@ -167,7 +226,7 @@ export type InferMcpContextFromFunction<T> = T extends (request: Request) => Mcp
 /**
  * Utility type to infer context type from router.
  */
-export type InferMcpContextFromRouter<TRouter> = TRouter extends IgniterRouter<infer TContext, any, any, any>
+export type InferMcpContextFromRouter<TRouter> = TRouter extends IgniterRouter<infer TContext, any, any, any, any>
   ? TContext
   : never;
 
