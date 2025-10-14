@@ -318,14 +318,15 @@ export class IgniterResponseProcessor<TContext = unknown> {
   }
 
   /**
-   * Creates a No Content response.
-   * Useful for successful operations that don't return data.
-   * Uses status 200 to maintain consistent JSON response structure.
+   * Creates a 204 No Content response.
+   * Useful for successful operations that don't return data (e.g., DELETE operations).
+   * Returns HTTP 204 status with no response body, compliant with RFC 7231.
    *
    * @returns Current instance for chaining
    *
    * @example
    * ```typescript
+   * // DELETE operation that removes a resource
    * response.noContent();
    * ```
    */
@@ -334,7 +335,7 @@ export class IgniterResponseProcessor<TContext = unknown> {
     instance._response = {} as IgniterResponse<null>;
     instance._response.data = null;
     instance._response.error = null;
-    // Keep JSON shape consistent unless explicitly overridden
+    // Set 204 status unless explicitly overridden
     if (!this._statusExplicitlySet) {
       instance._status = 204;
       this.logger.debug("Status set", { status: 204 });
@@ -783,6 +784,18 @@ export class IgniterResponseProcessor<TContext = unknown> {
 
     for (const cookie of this._cookies) {
       headers.append("Set-Cookie", cookie);
+    }
+
+    // Special handling for 204 No Content per RFC 7231
+    if (this._status === 204) {
+      // 204 responses MUST NOT include a message body or Content-Type
+      headers.delete("Content-Type");
+      this.logger.debug("204 No Content response - removing body and Content-Type header");
+      
+      return new Response(null, {
+        status: 204,
+        headers,
+      });
     }
 
     if(!headers.has("Content-Type")) {
