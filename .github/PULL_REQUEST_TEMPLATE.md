@@ -4,6 +4,12 @@
 - **Summary:** What does this pull request deliver?
 - **Linked Issues:** Fixes #123 / Relates to #456
 
+> **Important:** Ensure your PR title follows [Conventional Commits](https://www.conventionalcommits.org/) format:
+> - `feat: Add new feature`
+> - `fix: Resolve bug`
+> - `docs: Update documentation`
+> - See [RELEASE.md](../RELEASE.md) for more details on release workflow.
+
 ## Change Type
 
 - [ ] Feature / Enhancement
@@ -48,6 +54,7 @@ Describe manual test steps, environments, or data sets used.
 - [ ] Added/updated internal docs (`.github/docs`)
 - [ ] Storybook / design system docs updated (if applicable)
 - [ ] Release notes or changelog prepared
+- [ ] Created changeset (run `npm run changeset` if this affects published packages)
 
 ## Contributor Checklist
 

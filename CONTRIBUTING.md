@@ -27,18 +27,37 @@ We use GitHub to sync code to and from our internal repository. Pull requests ar
 
 1. Install dependencies:
 ```bash
-bun install
+npm install
 ```
 
 2. Run tests:
 ```bash
-bun test
+npm test
 ```
 
 3. Build the project:
 ```bash
-bun run build
+npm run build
 ```
+
+## Release Workflow
+
+This project uses automated versioning and publishing. See [RELEASE.md](./RELEASE.md) for detailed information about:
+
+- Creating changesets for your changes
+- Branch naming conventions (main vs. beta/*)
+- How releases are automated via GitHub Actions
+- Conventional Commits requirements
+
+### Quick Changeset Guide
+
+When you make changes to published packages, create a changeset:
+
+```bash
+npm run changeset
+```
+
+Follow the prompts to document your changes. This ensures proper versioning and changelog generation.
 
 ## Code Style Guidelines
 
@@ -68,9 +87,11 @@ bun run build
 
 ## Pull Request Process
 
-1. Update the README.md with details of changes to the interface, if applicable.
-2. Update the documentation with any new API changes.
-3. The PR will be merged once you have the sign-off of at least one maintainer.
+1. Ensure your PR title follows [Conventional Commits](https://www.conventionalcommits.org/) format (e.g., `feat: Add new feature`, `fix: Resolve bug`)
+2. Create a changeset if your changes affect published packages: `npm run changeset`
+3. Update the README.md with details of changes to the interface, if applicable.
+4. Update the documentation with any new API changes.
+5. The PR will be merged once you have the sign-off of at least one maintainer.
 
 ## Any contributions you make will be under the MIT Software License
 

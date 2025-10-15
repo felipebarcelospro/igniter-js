@@ -29,6 +29,20 @@ npx @igniter-js/cli@latest init my-app
 npm install @igniter-js/core zod
 ```
 
+### Try Beta Features
+
+Want to try the latest features before they're released? Install the beta version:
+
+```bash
+# Install beta version
+npm install @igniter-js/core@beta
+
+# Or initialize a new project with beta
+npx @igniter-js/cli@beta init my-app
+```
+
+> **Note:** Beta versions are pre-release and may contain bugs. Use in production at your own risk.
+
 ## 🎯 Key Features
 
 - **🔒 End-to-End Type Safety** - Define once, use everywhere with full TypeScript inference
@@ -132,6 +146,7 @@ function UserProfile({ userId }: { userId: string }) {
 - **🐛 [Issues](https://github.com/felipebarcelospro/igniter-js/issues)** - Report bugs and request features
 - **💬 [Discussions](https://github.com/felipebarcelospro/igniter-js/discussions)** - Ask questions and share ideas
 - **🤝 [Contributing](https://github.com/felipebarcelospro/igniter-js/blob/main/CONTRIBUTING.md)** - Help make Igniter.js better
+- **📦 [Release Guide](https://github.com/felipebarcelospro/igniter-js/blob/main/RELEASE.md)** - Versioning and publishing workflow for maintainers
 
 ## 📄 License
 
