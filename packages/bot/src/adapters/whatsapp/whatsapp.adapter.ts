@@ -105,7 +105,7 @@ export const whatsapp = Bot.adapter({
 
     if (!message) {
       logger?.debug?.('[whatsapp] ignoring update without message')
-      return null
+      return null as any
     }
 
     const authorId = message.from
@@ -157,7 +157,7 @@ export const whatsapp = Bot.adapter({
       event: 'message',
       provider: 'whatsapp',
       channel: {
-        id: channelId,
+        id: channelId as string,
         name: value.metadata?.display_phone_number || channelId,
         isGroup,
       },
