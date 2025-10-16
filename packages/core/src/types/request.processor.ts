@@ -8,7 +8,7 @@ export interface RequestProcessorConfig<TConfig extends IgniterRouter<any, any, 
   baseURL?: TConfig['config']['baseURL'];
   basePATH?: TConfig['config']['basePATH'];  
   controllers: TConfig['controllers'];
-  context: TConfig['$context'];
+  context: TConfig['$Infer']['$context'];
   plugins?: Record<string, any>;
   docs?: DocsConfig;
 }

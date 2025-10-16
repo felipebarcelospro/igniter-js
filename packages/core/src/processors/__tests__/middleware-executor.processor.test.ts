@@ -75,9 +75,9 @@ const createMockContext = (overrides: Partial<ProcessedContext> = {}): Processed
 // Mock procedures for testing
 const createMockProcedure = (
   name: string,
-  handler: IgniterProcedure<any, any, any>['handler'],
-  options: Partial<IgniterProcedure<any, any, any>> = {}
-): IgniterProcedure<any, any, any> => ({
+  handler: IgniterProcedure<unknown, unknown, unknown>['handler'],
+  options: Partial<IgniterProcedure<unknown, unknown, unknown>> = {}
+): IgniterProcedure<unknown, unknown, unknown> => ({
   name,
   handler,
   ...options,

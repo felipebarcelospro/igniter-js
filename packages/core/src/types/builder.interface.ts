@@ -187,7 +187,7 @@ export interface IgniterBuilderConfig<
    * ]
    * ```
    */
-  middleware?: readonly IgniterProcedure<any, any, any>[];
+  middleware?: readonly IgniterProcedure<unknown, unknown, unknown>[];
 
   /**
    * Store adapter for data persistence, caching, pub/sub messaging, and sessions.
@@ -310,7 +310,7 @@ export interface IgniterBuilderConfig<
 export type IgniterBuilderExtension<
   TContext extends object, 
   TConfig extends IgniterBaseConfig, 
-  TMiddlewares extends readonly IgniterProcedure<any, any, any>[], 
+  TMiddlewares extends readonly IgniterProcedure<unknown, unknown, unknown>[], 
   TStore extends IgniterStoreAdapter, 
   TLogger extends IgniterLogger, 
   TJobs extends JobsNamespaceProxy<any>, 
@@ -322,7 +322,6 @@ export type IgniterBuilderExtension<
   builder: IgniterBuilder<
     TContext, 
     TConfig, 
-    TMiddlewares, 
     TStore, 
     TLogger, 
     TJobs, 
@@ -334,7 +333,6 @@ export type IgniterBuilderExtension<
 ) => IgniterBuilder<
   TContext, 
   TConfig, 
-  TMiddlewares, 
   TStore, 
   TLogger, 
   TJobs, 
@@ -343,335 +341,6 @@ export type IgniterBuilderExtension<
   TPlugins, 
   TDocs
 >;
-
-/**
- * Collection of helper functions for common builder configuration patterns.
- * These utilities provide convenient ways to configure authentication, middlewares,
- * and other common patterns in a reusable and composable manner.
- *
- * @example
- * ```typescript
- * import { Igniter } from '@igniter-js/core';
- *
- * const igniter = Igniter
- *   .context<AppContext>()
- *   .helpers.compose(
- *     Igniter.helpers.withAuth(authMiddleware),
- *     Igniter.helpers.withConfig({ baseURL: 'https://api.example.com' }),
- *     Igniter.helpers.withMiddlewares([rateLimitMiddleware, corsMiddleware])
- *   )
- *   .create();
- * ```
- */
-export type IgniterHelpers<
-  TContext extends object, 
-  TConfig extends IgniterBaseConfig
-> = {
-  /**
-   * Configures the context function for the builder.
-   * Sets up the application context that will be available to all actions and procedures.
-   *
-   * @param contextFn - Function that creates the context from a request
-   * @returns Builder extension function
-   *
-   * @example
-   * ```typescript
-   * const withDatabaseContext = Igniter.helpers.withContext(async (req) => ({
-   *   db: await createDatabaseConnection(),
-   *   user: await getUserFromRequest(req),
-   *   requestId: req.headers.get('x-request-id') || crypto.randomUUID()
-   * }));
-   * ```
-   */
-  withContext: <
-    TContext extends object, 
-    TConfig extends IgniterBaseConfig, 
-    TMiddlewares extends readonly IgniterProcedure<any, any, any>[], 
-    TStore extends IgniterStoreAdapter, 
-    TLogger extends IgniterLogger, 
-    TJobs extends JobsNamespaceProxy<any>, 
-    TTelemetry extends IgniterTelemetryProvider, 
-    TRealtime extends IgniterRealtimeService, 
-    TPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>,
-    TDocs extends DocsConfig
-  >(
-    contextFn: (request: Request) => TContext | Promise<TContext>,
-  ) => (builder: IgniterBuilder<
-    TContext, 
-    TConfig, 
-    TMiddlewares, 
-    TStore, 
-    TLogger, 
-    TJobs, 
-    TTelemetry, 
-    TRealtime, 
-    TPlugins, 
-    TDocs
-  >) => IgniterBuilder<
-    TContext, 
-    TConfig, 
-    TMiddlewares, 
-    TStore, 
-    TLogger, 
-    TJobs, 
-    TTelemetry, 
-    TRealtime, 
-    TPlugins, 
-    TDocs
-  >;
-
-  /**
-   * Adds an authentication middleware to the builder.
-   * Provides a convenient way to add authentication as a global middleware.
-   *
-   * @param authMiddleware - The authentication procedure to apply globally
-   * @returns Builder extension function
-   *
-   * @example
-   * ```typescript
-   * const authProcedure = igniter.procedure()
-   *   .options(z.object({ required: z.boolean() }))
-   *   .handler(async ({ options, request }) => {
-   *     const token = request.headers.get('authorization');
-   *     if (options.required && !token) {
-   *       throw new Error('Authentication required');
-   *     }
-   *     return { auth: { user: await verifyToken(token) } };
-   *   });
-   *
-   * const withAuth = Igniter.helpers.withAuth(authProcedure({ required: false }));
-   * ```
-   */
-  withAuth: <
-    TContext extends object, 
-    TConfig extends IgniterBaseConfig, 
-    TMiddlewares extends readonly IgniterProcedure<any, any, any>[], 
-    TStore extends IgniterStoreAdapter, 
-    TLogger extends IgniterLogger, 
-    TJobs extends JobsNamespaceProxy<any>, 
-    TTelemetry extends IgniterTelemetryProvider, 
-    TRealtime extends IgniterRealtimeService, 
-    TPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>,
-    TDocs extends DocsConfig
-  >(
-    authMiddleware: IgniterProcedure<TContext, any, any>,
-  ) => (builder: IgniterBuilder<
-    TContext, 
-    TConfig, 
-    TMiddlewares, 
-    TStore, 
-    TLogger, 
-    TJobs, 
-    TTelemetry, 
-    TRealtime, 
-    TPlugins, 
-    TDocs
-  >) => IgniterBuilder<
-    TContext, 
-    TConfig, 
-    TMiddlewares, 
-    TStore, 
-    TLogger, 
-    TJobs, 
-    TTelemetry, 
-    TRealtime, 
-    TPlugins, 
-    TDocs
-  >;
-
-  /**
-   * Adds multiple middlewares to the builder in a single operation.
-   * Useful for applying a set of related middlewares together.
-   *
-   * @param middlewares - Array of middleware procedures to apply
-   * @returns Builder extension function
-   *
-   * @example
-   * ```typescript
-   * const securityMiddlewares = [
-   *   corsMiddleware({ origin: ['https://example.com'] }),
-   *   rateLimitMiddleware({ max: 100, windowMs: 60000 }),
-   *   authMiddleware({ required: false })
-   * ];
-   *
-   * const withSecurity = Igniter.helpers.withMiddlewares(securityMiddlewares);
-   * ```
-   */
-  withMiddlewares: <
-    TContext extends object, 
-    TConfig extends IgniterBaseConfig, 
-    TMiddlewares extends readonly IgniterProcedure<any, any, any>[], 
-    TStore extends IgniterStoreAdapter, 
-    TLogger extends IgniterLogger, 
-    TJobs extends JobsNamespaceProxy<any>, 
-    TTelemetry extends IgniterTelemetryProvider, 
-    TRealtime extends IgniterRealtimeService, 
-    TPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>,
-    TDocs extends DocsConfig
-  >(
-    middlewares: readonly IgniterProcedure<TContext, any, any>[],
-  ) => (builder: IgniterBuilder<
-    TContext, 
-    TConfig, 
-    TMiddlewares, 
-    TStore, 
-    TLogger, 
-    TJobs, 
-    TTelemetry, 
-    TRealtime, 
-    TPlugins, 
-    TDocs
-  >) => IgniterBuilder<
-    TContext, 
-    TConfig, 
-    TMiddlewares, 
-    TStore, 
-    TLogger, 
-    TJobs, 
-    TTelemetry, 
-    TRealtime, 
-    TPlugins, 
-    TDocs
-  >;
-
-  /**
-   * Configures router settings for the builder.
-   * Sets up base URL and path configuration for the application.
-   *
-   * @param config - Router configuration options
-   * @returns Builder extension function
-   *
-   * @example
-   * ```typescript
-   * const withApiConfig = Igniter.helpers.withConfig({
-   *   baseURL: process.env.API_BASE_URL || 'http://localhost:3000',
-   *   basePATH: '/api/v1'
-   * });
-   * ```
-   */
-  withConfig: <
-    TContext extends object, 
-    TConfig extends IgniterBaseConfig, 
-    TMiddlewares extends readonly IgniterProcedure<any, any, any>[], 
-    TStore extends IgniterStoreAdapter, 
-    TLogger extends IgniterLogger, 
-    TJobs extends JobsNamespaceProxy<any>, 
-    TTelemetry extends IgniterTelemetryProvider, 
-    TRealtime extends IgniterRealtimeService, 
-    TPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>,
-    TDocs extends DocsConfig
-  >(
-    config: TConfig,
-  ) => (builder: IgniterBuilder<
-    TContext, 
-    TConfig, 
-    TMiddlewares, 
-    TStore, 
-    TLogger, 
-    TJobs, 
-    TTelemetry, 
-    TRealtime, 
-    TPlugins, 
-    TDocs
-  >) => IgniterBuilder<
-    TContext, 
-    TConfig, 
-    TMiddlewares, 
-    TStore, 
-    TLogger, 
-    TJobs, 
-    TTelemetry, 
-    TRealtime, 
-    TPlugins, 
-    TDocs
-  >;
-
-  /**
-   * Composes multiple builder configuration functions together.
-   * Enables functional composition of builder extensions for cleaner setup.
-   *
-   * @param configs - Array of builder extension functions to compose
-   * @returns Composed builder extension function
-   *
-   * @example
-   * ```typescript
-   * const productionConfig = Igniter.helpers.compose(
-   *   Igniter.helpers.withContext(createProductionContext),
-   *   Igniter.helpers.withAuth(authMiddleware),
-   *   Igniter.helpers.withConfig({
-   *     baseURL: 'https://api.production.com',
-   *     basePATH: '/api/v1'
-   *   }),
-   *   Igniter.helpers.withMiddlewares([
-   *     rateLimitMiddleware({ max: 1000 }),
-   *     corsMiddleware({ origin: ['https://app.production.com'] })
-   *   ])
-   * );
-   *
-   * const igniter = Igniter.context<AppContext>().extend(productionConfig).create();
-   * ```
-   */
-  compose: <
-    TContext extends object, 
-    TConfig extends IgniterBaseConfig, 
-    TMiddlewares extends readonly IgniterProcedure<any, any, any>[], 
-    TStore extends IgniterStoreAdapter, 
-    TLogger extends IgniterLogger, 
-    TJobs extends JobsNamespaceProxy<any>, 
-    TTelemetry extends IgniterTelemetryProvider, 
-    TRealtime extends IgniterRealtimeService, 
-    TPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>,
-    TDocs extends DocsConfig
-  >(
-    ...configs: Array<
-      (builder: IgniterBuilder<
-        TContext, 
-        TConfig, 
-        TMiddlewares, 
-        TStore, 
-        TLogger, 
-        TJobs, 
-        TTelemetry, 
-        TRealtime, 
-        TPlugins, 
-        TDocs
-      >) => IgniterBuilder<
-        TContext, 
-        TConfig, 
-        TMiddlewares, 
-        TStore, 
-        TLogger, 
-        TJobs, 
-        TTelemetry, 
-        TRealtime, 
-        TPlugins, 
-        TDocs
-      >
-    >
-  ) => (builder: IgniterBuilder<
-    TContext, 
-    TConfig, 
-    TMiddlewares, 
-    TStore, 
-    TLogger, 
-    TJobs, 
-    TTelemetry, 
-    TRealtime, 
-    TPlugins, 
-    TDocs
-  >) => IgniterBuilder<
-    TContext, 
-    TConfig, 
-    TMiddlewares, 
-    TStore, 
-    TLogger, 
-    TJobs, 
-    TTelemetry, 
-    TRealtime, 
-    TPlugins, 
-    TDocs
-  >;
-};
 
 // ============ PLUGIN TYPE HELPERS ============
 

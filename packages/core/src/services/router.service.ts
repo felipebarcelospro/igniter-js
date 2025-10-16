@@ -127,7 +127,13 @@ export const createIgniterRouter = <
   TConfig extends IgniterBaseConfig,
   TPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>> = {},
   TDocs extends DocsConfig = { openapi: undefined }
->(params: {
+>({
+  context,
+  controllers,
+  config,
+  plugins,
+  docs
+}: {
   context: TContext;
   controllers: TControllers;
   config: TConfig;
@@ -137,27 +143,15 @@ export const createIgniterRouter = <
   type TRouter = IgniterRouter<TContext, TControllers, TConfig, TPlugins, TDocs>;
 
   const processor = new RequestProcessor<TRouter>({
-    baseURL: params.config.baseURL,
-    basePATH: params.config.basePATH,
-    controllers: params.controllers,
-    plugins: params.plugins,
-    context: params.context,
-    docs: params.docs,
+    baseURL: config.baseURL,
+    basePATH: config.basePATH,
+    controllers: controllers,
+    plugins: plugins,
+    context: context,
+    docs: docs,
   });
 
   return {
-    /**
-     * The inferred context type for this router.
-     * Accessed internally for type inference and DX.
-     */
-    $context: {} as TContext,
-
-    /**
-     * The inferred plugins type for this router.
-     * Accessed internally for type inference and DX.
-     */
-    $plugins: {} as TPlugins,
-
     /**
      * Type-safe server-side action invoker.
      * Use for SSR, integration tests, or calling actions without HTTP.
@@ -165,21 +159,21 @@ export const createIgniterRouter = <
      * @example
      * const result = await router.$caller.users.getUserById({ id: "123" });
      */
-    $caller: createServerCaller(params.controllers, processor),
+    caller: createServerCaller(controllers, processor) as unknown as TRouter['caller'],
 
     /**
      * The registered controllers for this router.
      * Each controller groups related actions.
      */
-    controllers: params.controllers,
+    controllers: controllers,
 
     /**
      * The router configuration (baseURL, basePATH).
      */
     config: {
-      baseURL: params.config.baseURL,
-      basePATH: params.config.basePATH,
-      ...params.config,
+      baseURL: config.baseURL,
+      basePATH: config.basePATH,
+      ...config,
     },
 
     /**
@@ -209,8 +203,8 @@ export const createIgniterRouter = <
 
       const url = new URL(request.url);
       const path = url.pathname;
-      const basePath = params.config.basePATH ?? '/api/v1';
-      const playgroundPath = params.docs?.playground?.route ?? '/docs'
+      const basePath = config.basePATH ?? '/api/v1';
+      const playgroundPath = docs?.playground?.route ?? '/docs'
 
       logger.debug('Parsed request:', {
         path,
@@ -220,9 +214,9 @@ export const createIgniterRouter = <
       });
 
       // Check if is playground
-      if(path.startsWith(parseURL(basePath, playgroundPath))) {
+      if (path.startsWith(parseURL(basePath, playgroundPath))) {
         logger.debug('Routing to playground');
-        const playground = initializeIgniterPlayground(params.docs, basePath);
+        const playground = initializeIgniterPlayground(docs, basePath);
         try {
           const response = await playground.process(request);
           logger.debug('Playground response:', {
@@ -239,7 +233,7 @@ export const createIgniterRouter = <
       logger.debug('Routing to processor');
       try {
         const response = await processor.process(request);
-        
+
         logger.debug('Processor response:', {
           status: response.status,
           headers: Object.fromEntries(response.headers)
@@ -251,5 +245,10 @@ export const createIgniterRouter = <
         throw error;
       }
     },
-  };
+
+    $Infer: {
+      $context: {},
+      $plugins: {}
+    }
+  } as TRouter;
 };

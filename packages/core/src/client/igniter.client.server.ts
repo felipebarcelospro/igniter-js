@@ -20,5 +20,5 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any,
   }
 
   // Server-side: Use direct router.$caller (zero browser dependencies)
-  return router.$caller as unknown as InferRouterCaller<TRouter>;
+  return router.caller as unknown as InferRouterCaller<TRouter>;
 }; 

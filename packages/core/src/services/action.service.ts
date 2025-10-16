@@ -33,7 +33,7 @@ export const createIgniterQuery = <
   TQueryContext extends object,
   TQueryPath extends string,
   TQueryQuery extends StandardSchemaV1 | undefined,
-  TQueryMiddlewares extends readonly IgniterProcedure<TQueryContext, unknown, unknown>[],
+  TQueryMiddlewares extends readonly IgniterProcedure<TQueryContext, any, unknown>[] | undefined,
   TQueryPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>,
   TQueryHandler extends IgniterActionHandler<
     IgniterActionContext<TQueryContext, TQueryPath, QueryMethod, undefined, TQueryQuery, TQueryMiddlewares, TQueryPlugins>,
@@ -118,7 +118,7 @@ export const createIgniterMutation = <
   TMutationMethod extends MutationMethod,
   TMutationBody extends StandardSchemaV1 | undefined,
   TMutationQuery extends StandardSchemaV1 | undefined,
-  TMutationMiddlewares extends readonly IgniterProcedure<TMutationContext, any, any>[],
+  TMutationMiddlewares extends readonly IgniterProcedure<TMutationContext, any, any>[] | undefined,
   TMutationPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>,
   TMutationHandler extends IgniterActionHandler<
     IgniterActionContext<TMutationContext, TMutationPath, TMutationMethod, TMutationBody, TMutationQuery, TMutationMiddlewares, TMutationPlugins>,

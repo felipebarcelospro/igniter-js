@@ -478,7 +478,7 @@ export class RequestProcessor<
       if (handler.use && Array.isArray(handler.use)) {
         const actionResult = await MiddlewareExecutorProcessor.executeAction(
           context,
-          handler.use as IgniterProcedure<any, any, any>[],
+          handler.use as IgniterProcedure<unknown, unknown, unknown>[],
         );
 
         if (!actionResult.success) {
@@ -587,6 +587,7 @@ export class RequestProcessor<
         cookies: context.request.cookies,
         body: context.request.body,
         query: context.request.query,
+        raw: context.request.raw,
       },
       context: context.$context,
       plugins: context.$plugins,

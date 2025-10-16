@@ -28,27 +28,45 @@ export function createServerCaller<
             throw new Error(`Action "${actionName}" not found in controller "${controllerName}".`);
           }
 
-          if(action.method === 'GET') {
+          if (action.method === 'GET') {
             return {
+              type: 'query' as const,
               useRealtime: (...args: any[]) => ({} as RealtimeActionCallerResult<typeof action>),
               useQuery: (...args: any[]) => ({} as QueryActionCallerResult<typeof action>),
-              query: async (input: typeof action['$Infer']['$Input']) => {
+              query: async (input: typeof action['$Infer']['$Input'] & {
+                headers?: Record<string, string> | undefined;
+                cookies?: Record<string, string>;
+                credentials?: RequestCredentials;
+              }) => {
                 if (!processor) {
                   throw new Error('Processor is required to call actions on server');
                 }
-                return processor.call(controllerName, actionName, input);
+                return processor.call(controllerName, actionName, input, {
+                  headers: input?.headers,
+                  cookies: input?.cookies,
+                  credentials: input?.credentials,
+                });
               }
             }
           }
 
           return {
+            type: 'mutation' as const,
             useMutation: (...args: any[]) => ({} as MutationActionCallerResult<typeof action>),
-            mutate: async (input: typeof action['$Infer']['$Input']) => {
+            mutate: async (input: typeof action['$Infer']['$Input'] & {
+              headers?: Record<string, string> | undefined;
+              cookies?: Record<string, string>;
+              credentials?: RequestCredentials;
+            }) => {
               if (!processor) {
                 throw new Error('Processor is required to call actions on server');
               }
 
-              return processor.call(controllerName, actionName, input);
+              return processor.call(controllerName, actionName, input, {
+                headers: input?.headers,
+                cookies: input?.cookies,
+                credentials: input?.credentials,
+              });
             }
           }
         }
