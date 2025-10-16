@@ -1,4 +1,10 @@
+import type { IgniterAction } from "@igniter-js/core";
 import type { IgniterRouter, ContextCallback } from "@igniter-js/core";
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import type { McpServer, ReadResourceCallback, RegisteredPrompt } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { CallToolResult, type GetPromptResult, type ServerCapabilities } from "@modelcontextprotocol/sdk/types.js";
+import { ZodRawShape, ZodObject } from "zod";
+import type { ZodOptional, ZodType, ZodTypeDef, infer as ZodInfer, AnyZodObject, objectOutputType, ZodTypeAny } from "zod/v3";
 
 /**
  * MCP context passed to event handlers and instructions function.
@@ -10,13 +16,15 @@ export interface McpContext<TContext = any> {
   tools: McpToolInfo[];
   /** Request information */
   request: Request;
-  /** User information if available */
-  user?: any;
   /** Timestamp of the request */
   timestamp: number;
   /** Client information */
   client?: string;
+  /** MCP Server */
+  server?: McpServer;
 }
+
+export type InferZodRawShape<T> = T extends ZodObject<infer R> ? R : T extends ZodRawShape ? T : never
 
 /**
  * Information about an MCP tool.
@@ -33,7 +41,7 @@ export interface McpToolInfo {
   /** HTTP method */
   method: string;
   /** Tool schema */
-  schema?: any;
+  schema?: ZodRawShape;
   /** Tool tags */
   tags?: string[];
 }
@@ -41,15 +49,21 @@ export interface McpToolInfo {
 /**
  * Custom MCP tool definition with type inference.
  */
-export interface McpCustomTool<TContext = any> {
+export interface McpCustomTool<
+  TArgs extends ArgsRawShape,
+  TContext = any
+> {
   /** Tool name */
   name: string;
   /** Tool description */
   description: string;
-  /** Tool schema (Zod schema) */
-  schema: any;
+  /** Tool schema (ZodObject or ZodRawShape) */
+  schema: TArgs;
   /** Tool handler function */
-  handler: (args: any, context: McpContext<TContext>) => Promise<any> | any;
+  handler: (
+    args: objectOutputType<TArgs, ZodTypeAny>,
+    context: McpContext<TContext>
+  ) => Promise<CallToolResult> | CallToolResult;
   /** Tool tags */
   tags?: string[];
 }
@@ -63,7 +77,7 @@ export interface McpToolConfig {
   /** Tool description */
   description: string;
   /** Tool schema */
-  schema?: any;
+  schema?: ZodObject<any> | ZodRawShape;
   /** Tool tags */
   tags?: string[];
 }
@@ -83,155 +97,211 @@ export interface McpResponse {
   }>;
 }
 
+export type ArgsRawShape = {
+    [k: string]: ZodTypeAny;
+};
+
 /**
  * MCP Prompt definition.
  */
-export interface McpPrompt<TContext = any> {
+export interface McpPrompt<Args extends ArgsRawShape, TContext = any> {
   /** Prompt name */
   name: string;
   /** Prompt description */
-  description?: string;
+  description: string;
   /** Prompt arguments schema */
-  arguments?: any[];
+  arguments?: Args;
   /** Prompt handler function */
-  handler: (args: any, context: McpContext<TContext>) => Promise<{ messages: Array<{ role: string; content: { type: string; text: string } }> }>;
+  handler: (args: objectOutputType<Args, ZodTypeAny>, context: McpContext<TContext>) => GetPromptResult | Promise<GetPromptResult>;
 }
 
 /**
  * MCP Resource definition.
  */
 export interface McpResource<TContext = any> {
-  /** Resource URI */
-  uri: string;
   /** Resource name */
   name: string;
-  /** Resource description */
-  description?: string;
-  /** Resource MIME type */
-  mimeType?: string;
+  /** Resource URI */
+  uri: string;
   /** Resource handler function */
-  handler: (context: McpContext<TContext>) => Promise<{ contents: Array<{ uri: string; mimeType?: string; text?: string; blob?: string }> }>;
+  handler: ReadResourceCallback;
 }
 
 /**
  * OAuth configuration for MCP Authorization.
  */
-export interface McpOAuthConfig<TContext = any> {
+export interface McpOAuthConfig<TContext = object | ContextCallback> {
   /** OAuth issuer URL (authorization server) */
   issuer: string;
   /** Path to OAuth protected resource metadata endpoint */
   resourceMetadataPath?: string;
   /** Token verification function */
-  verifyToken?: (token: string, context: McpContext<TContext>) => Promise<boolean | { valid: boolean; user?: any }>;
+  verifyToken?: (props: { request: Request; bearerToken?: string | undefined, context: McpContext<TContext> }) => AuthInfo | undefined | Promise<AuthInfo | undefined>;
   /** Scopes required for access */
   scopes?: string[];
 }
 
+export interface McpServerInfo {
+  name: string;
+  version: string;
+}
+
+/** 
+ * Function type for custom tool naming strategy.
+ */
+export type McpToolNaming = (controller: string, action: string) => string;
+
+/**
+ * Function type to filter tools.
+ */
+export type McpToolFilter = (controller: string, action: string, actionConfig: IgniterAction<any, any, any, any, any, any, any, any, any, any>) => boolean;
+
+/**
+ * Function type to transform tool configurations.
+ */
+export type McpToolTransform = (controller: string, action: string, actionConfig: IgniterAction<any, any, any, any, any, any, any, any, any, any>) => McpToolConfig;
+
+/**
+ * MCP tools configuration options.
+ */
+export interface McpToolsOptions<TContext = any> {
+  /** Automatically map all router actions as tools */
+  autoMap?: boolean;
+  /** Custom naming strategy for tools */
+  naming?: McpToolNaming;
+  /** Filter which actions to expose as tools */
+  filter?: McpToolFilter;
+  /** Transform action configurations */
+  transform?: McpToolTransform;
+  /** Custom tools to add */
+  custom?: McpCustomTool<any, TContext>[];
+}
+
+/**
+ * MCP prompts configuration options.
+ */
+export interface McpPromptsOptions<TContext = any> {
+  /** Custom prompts to register */
+  custom?: McpPrompt<any, TContext>[];
+}
+
+/**
+ * MCP resources configuration options.
+ */
+export interface McpResourcesOptions<TContext = any> {
+  /** Custom resources to register */
+  custom?: McpResource<TContext>[];
+}
+
+/**
+ * MCP events configuration options.
+ */
+export interface McpEventsOptions<TContext = any> {
+  /** Called when a tool is invoked */
+  onToolCall?: (toolName: string, args: any, context: McpContext<TContext>) => void | Promise<void>;
+  /** Called when a tool succeeds */
+  onToolSuccess?: (toolName: string, result: any, duration: number, context: McpContext<TContext>) => void | Promise<void>;
+  /** Called when a tool fails */
+  onToolError?: (toolName: string, error: Error, context: McpContext<TContext>) => void | Promise<void>;
+  /** Called on MCP request */
+  onRequest?: (request: Request, context: McpContext<TContext>) => void | Promise<void>;
+  /** Called on MCP response */
+  onResponse?: (response: any, context: McpContext<TContext>) => void | Promise<void>;
+  /** Called on general MCP adapter errors */
+  onError?: (error: Error, context: McpContext<TContext>) => void | Promise<void>;
+}
+
+/**
+ * MCP response configuration options.
+ */
+export interface McpResponseOptions<TContext = any> {
+  /** Transform Igniter response to MCP format */
+  transform?: (igniterResponse: any, toolName: string, context: McpContext<TContext>) => CallToolResult | Promise<CallToolResult>;
+  /** Handle errors */
+  onError?: (error: Error, toolName: string, context: McpContext<TContext>) => CallToolResult | Promise<CallToolResult>;
+}
+
+/**
+ * MCP adapter-specific configuration options.
+ */
+export interface McpAdapterSpecificOptions {
+  streamableHttpEndpoint?: string;
+  sseEndpoint?: string;
+  sseMessageEndpoint?: string;
+  basePath?: string;
+  redisUrl?: string;
+  disableSse?: boolean;
+  maxDuration?: number;
+  verboseLogs?: boolean;
+  redis?: {
+    url: string;
+  };
+}
+
 /**
  * MCP adapter configuration options with automatic type inference.
- * 
+ *
  * @template TContext - The context type inferred from the router
  */
-export interface McpAdapterOptions<TContext extends object | ContextCallback = any> {
+export interface McpAdapterOptions<
+  TRouter extends IgniterRouter<any, any, any, any, any>,
+  TContext extends object | ContextCallback = InferMcpContextFromRouter<TRouter>
+> {
+  logger?: {
+    log: (message: string) => void;
+    error: (message: string) => void;
+    warn: (message: string) => void;
+    debug: (message: string) => void;
+  }
+
   /** Igniter router to expose as MCP server */
-  router: IgniterRouter<TContext, any, any, any, any>;
-  
+  router: TRouter;
+
+  /** Optional instructions function */
+  instructions?: string;  
+
+  /** Optional server capabilities to advertise */
+  capatibilities?: ServerCapabilities;
+
   /** Server information */
-  serverInfo?: {
-    /** Server name */
-    name: string;
-    /** Server version */
-    version: string;
-  };
-  
-  /** Instructions for the MCP server */
-  instructions?: string | ((context: McpContext<TContext>) => string | Promise<string>);
-  
+  serverInfo?: McpServerInfo;
+
   /** Tool configuration */
-  tools?: {
-    /** Automatically map all router actions as tools */
-    autoMap?: boolean;
-    /** Custom naming strategy for tools */
-    naming?: (controller: string, action: string) => string;
-    /** Filter which actions to expose as tools */
-    filter?: (controller: string, action: string, actionConfig: any) => boolean;
-    /** Transform action configurations */
-    transform?: (controller: string, action: string, actionConfig: any) => McpToolConfig;
-    /** Custom tools to add */
-    custom?: McpCustomTool<TContext>[];
-  };
+  tools?: McpToolsOptions<TContext>;
 
   /** Prompts configuration */
-  prompts?: {
-    /** Custom prompts to register */
-    custom?: McpPrompt<TContext>[];
-  };
+  prompts?: McpPromptsOptions<TContext>;
 
   /** Resources configuration */
-  resources?: {
-    /** Custom resources to register */
-    custom?: McpResource<TContext>[];
-  };
+  resources?: McpResourcesOptions<TContext>;
 
   /** OAuth configuration for MCP Authorization */
   oauth?: McpOAuthConfig<TContext>;
-  
+
   /** Event handlers */
-  events?: {
-    /** Called when a tool is invoked */
-    onToolCall?: (toolName: string, args: any, context: McpContext<TContext>) => void | Promise<void>;
-    /** Called when a tool succeeds */
-    onToolSuccess?: (toolName: string, result: any, duration: number, context: McpContext<TContext>) => void | Promise<void>;
-    /** Called when a tool fails */
-    onToolError?: (toolName: string, error: Error, context: McpContext<TContext>) => void | Promise<void>;
-    /** Called on MCP request */
-    onRequest?: (request: Request, context: McpContext<TContext>) => void | Promise<void>;
-    /** Called on MCP response */
-    onResponse?: (response: any, context: McpContext<TContext>) => void | Promise<void>;
-    /** Called on general MCP adapter errors */
-    onError?: (error: Error, context: McpContext<TContext>) => void | Promise<void>;
-  };
-  
+  events?: McpEventsOptions<TContext>;
+
   /** Response transformation */
-  response?: {
-    /** Transform Igniter response to MCP format */
-    transform?: (igniterResponse: any, toolName: string, context: McpContext<TContext>) => McpResponse | Promise<McpResponse>;
-    /** Handle errors */
-    onError?: (error: Error, toolName: string, context: McpContext<TContext>) => McpResponse | Promise<McpResponse>;
-  };
-  
+  response?: McpResponseOptions<TContext>;
+
   /** Adapter-specific options */
-  adapter?: {
-    /** Base path for MCP endpoints */
-    basePath?: string;
-    /** Maximum duration for requests */
-    maxDuration?: number;
-    /** Enable verbose logging */
-    verboseLogs?: boolean;
-    /** Redis configuration for SSE transport */
-    redis?: {
-      /** Redis URL */
-      url?: string;
-      /** Key prefix for Redis keys */
-      keyPrefix?: string;
-    };
-  };
+  adapter?: McpAdapterSpecificOptions;
 }
 
 /**
  * Utility type to infer context type from router.
  */
-export type InferMcpContextFromRouter<TRouter> = TRouter extends IgniterRouter<infer TContext, any, any, any, any>
-  ? TContext
+export type InferMcpContextFromRouter<TRouter> = TRouter extends IgniterRouter<any, any, any, any, any>
+  ? TRouter['$Infer']['$context']
   : never;
 
 /**
- * MCP handler function type.
- */
-export type McpHandler = {
-  (request: Request): Promise<Response>;
-  /** For Next.js compatibility */
-  GET?: McpHandler;
-  POST?: McpHandler;
-  DELETE?: McpHandler;
-}; 
+ * MCP handler with optional authentication for IgniterMcpServer
+*/
+export type IgniterMcpHandler = {
+  handler: (request: Request) => Promise<Response> | Response;
+  auth: {
+    resourceHandler: (request: Request) => Promise<Response> | Response;
+    corsHandler: (request: Request) => Promise<Response> | Response;
+  };
+}
