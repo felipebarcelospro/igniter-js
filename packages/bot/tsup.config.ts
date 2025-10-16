@@ -7,18 +7,31 @@ import { defineConfig } from 'tsup'
  *  - Generate both ESM and CJS builds for wide compatibility
  *  - Emit type declarations (.d.ts + maps)
  *  - Keep external peer/runtime deps (e.g. zod) out of the bundle
- *  - Allow future addition of more entry points (adapters, etc.)
+ *  - Generate all entry points declared in package.json exports
+ *  - Use .mjs extension for ESM files (as expected by package.json)
+ *  - Use .cjs extension for CJS files
  *
  * Notes:
- *  - Primary public surface should be funneled through `src/index.ts`
- *    which must re-export Bot, adapters and types for optimal DX.
+ *  - Package.json exports require multiple entry points to be generated
  *  - Adapters remain tree-shakeable because we avoid side-effects
- *    and expose granular exports in package.json.
+ *  - All exports must be available for proper module resolution
+ *  - ESM files must use .mjs extension to match package.json expectations
  */
 export default defineConfig({
-  entry: [
-    'src/index.ts', // (to be created / should barrel-export everything)
-  ],
+  entry: {
+    // Main entry point
+    'index': 'src/index.ts',
+
+    // Adapters barrel
+    'adapters/index': 'src/adapters/index.ts',
+
+    // Individual adapters (for @igniter-js/bot/adapters/*)
+    'adapters/telegram/index': 'src/adapters/telegram/index.ts',
+    'adapters/whatsapp/index': 'src/adapters/whatsapp/index.ts',
+
+    // Types barrel (for @igniter-js/bot/types)
+    'types/index': 'src/types/index.ts',
+  },
   format: ['esm', 'cjs'],
   dts: true,
   sourcemap: true,
@@ -31,10 +44,16 @@ export default defineConfig({
   ],
   // Ensures we don't accidentally bundle Node built-ins or optional deps
   noExternal: [],
-  splitting: true,
+  splitting: false, // Disable splitting to maintain file structure
   treeshake: true,
   minify: false, // Keep unminified for easier debugging (can revisit for stable)
   skipNodeModulesBundle: true,
+  // Use .mjs extension for ESM files to match package.json exports
+  outExtension({ format }) {
+    return {
+      js: format === 'esm' ? '.mjs' : '.cjs',
+    }
+  },
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
   },

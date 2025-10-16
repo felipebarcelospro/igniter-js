@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/bot",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.3",
   "description": "A modern, type-safe multi-platform bot framework for the Igniter.js ecosystem (adapters, middleware, commands, rich content).",
   "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
   "license": "MIT",
