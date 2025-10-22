@@ -82,7 +82,12 @@ The AI can now discover and call your API actions:
 
 The MCP adapter will translate this into a call to `api.users.list.query()` on your backend, execute it, and return the result to the AI.
 
-For more detailed guides, please refer to the **[Official Igniter.js Wiki](https://igniterjs.com/docs)**.
+## Documentation
+
+For comprehensive guides, advanced configuration, security best practices, and examples:
+
+- **[MCP Adapter Documentation](https://igniterjs.com/docs/code-agents/mcp-adapter)** - Full guide with advanced features
+- **[Official Igniter.js Docs](https://igniterjs.com/docs)** - Complete framework documentation
 
 ## Contributing
 
