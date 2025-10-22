@@ -18,7 +18,7 @@ export function createMcpAdapter<
   TControllers extends Record<string, IgniterControllerConfig<any>>,
   TOptions extends McpAdapterOptions<TContext, any>
 >(
-  router: IgniterRouter<TContext, TControllers, any, any>,
+  router: IgniterRouter<TContext, TControllers, any, any, any>,
   options: TOptions & {
     context: (request: Request) => McpContext<any> | Promise<McpContext<any>>;
   }
@@ -33,7 +33,7 @@ export function createMcpAdapter<
   TContext extends object,
   TControllers extends Record<string, IgniterControllerConfig<any>>
 >(
-  router: IgniterRouter<TContext, TControllers, any, any>,
+  router: IgniterRouter<TContext, TControllers, any, any, any>,
   options?: McpAdapterOptions<TContext, TContext>
 ): McpHandler;
 
@@ -82,7 +82,7 @@ export function createMcpAdapter<
   TControllers extends Record<string, IgniterControllerConfig<any>>,
   TOptions extends McpAdapterOptions<TContext, any> = McpAdapterOptions<TContext, TContext>
 >(
-  router: IgniterRouter<TContext, TControllers, any, any>,
+  router: IgniterRouter<TContext, TControllers, any, any, any>,
   options: TOptions = {} as TOptions
 ): McpHandler {
   type TInferredContext = InferMcpContext<TContext, TOptions>;
@@ -225,7 +225,7 @@ export function createMcpAdapter<
  * Extract tools from Igniter router.
  */
 function extractToolsFromRouter<TContext extends object, TControllers extends Record<string, IgniterControllerConfig<any>>, TInferredContext>(
-  router: IgniterRouter<TContext, TControllers, any, any>,
+  router: IgniterRouter<TContext, TControllers, any, any, any>,
   options: McpAdapterOptions<TContext, TInferredContext>
 ): McpToolInfo[] {
   const tools: McpToolInfo[] = [];
@@ -284,7 +284,7 @@ function extractToolsFromRouter<TContext extends object, TControllers extends Re
  * Create MCP context for tool execution with type inference.
  */
 async function createMcpContext<TContext extends object, TInferredContext>(
-  router: IgniterRouter<TContext, any, any, any>,
+  router: IgniterRouter<TContext, any, any, any, any>,
   options: McpAdapterOptions<TContext, TInferredContext>,
   args: any,
   request?: Request
@@ -326,7 +326,7 @@ async function createMcpContext<TContext extends object, TInferredContext>(
  * Execute a tool using the Igniter router with type inference.
  */
 async function executeTool<TContext extends object, TInferredContext>(
-  router: IgniterRouter<TContext, any, any, any>,
+  router: IgniterRouter<TContext, any, any, any, any>,
   tool: McpToolInfo,
   args: any,
   context: McpContext<TInferredContext>,
