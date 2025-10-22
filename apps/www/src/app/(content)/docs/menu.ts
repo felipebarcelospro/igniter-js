@@ -263,6 +263,14 @@ export const menu: ContentSection[] = [
         slug: "/docs/code-agents/mcp-server",
       },
       {
+        title: "MCP Adapter",
+        type: "docs",
+        category: "mcp-adapter",
+        date: new Date().toISOString(),
+        description: "Transform your Igniter.js API into an MCP server for AI agents",
+        slug: "/docs/code-agents/mcp-adapter",
+      },
+      {
         title: "llms.txt",
         type: "docs",
         category: "llms-txt",

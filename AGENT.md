@@ -271,7 +271,7 @@ This table summarizes the role of each package in the ecosystem. For detailed te
 | `@igniter-js/cli`                 | The command-line interface for scaffolding new projects and running the interactive development server (`igniter init`, `igniter dev`).  | `commander`, `inquirer`  |
 | `@igniter-js/adapter-redis`       | Implements the `IgniterStoreAdapter` interface. Provides caching and Pub/Sub functionality using a Redis backend.                          | `ioredis`                |
 | `@igniter-js/adapter-bullmq`      | Implements the `IgniterJobQueueAdapter` interface. Provides background job processing using BullMQ and Redis.                              | `bullmq`                 |
-| `@igniter-js/adapter-mcp-server`  | Transforms the Igniter.js router into a Model-Context-Protocol (MCP) server, allowing AI agents to use the API as a set of tools.      | `@model-context/server`  |
+| `@igniter-js/adapter-mcp-server`  | Transforms the Igniter.js router into a Model-Context-Protocol (MCP) server, allowing AI agents to use the API as a set of tools.      | `@vercel/mcp-adapter`, `@modelcontextprotocol/sdk`  |
 | `@igniter-js/adapter-opentelemetry` | Implements the `IgniterTelemetryProvider`. Integrates distributed tracing and metrics using the OpenTelemetry standard.                | `@opentelemetry/sdk-node`|
 | `@igniter-js/eslint-config`       | A shared ESLint configuration to enforce a consistent code style across all packages in the monorepo.                                | `eslint`, `typescript-eslint`|
 

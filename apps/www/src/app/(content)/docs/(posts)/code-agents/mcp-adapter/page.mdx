@@ -1,0 +1,309 @@
+# MCP Adapter for Igniter.js
+
+The **MCP Adapter** (`@igniter-js/adapter-mcp-server`) transforms your Igniter.js API router into a Model Context Protocol (MCP) server, allowing AI agents to interact with your API endpoints as if they were native tools.
+
+## What is the MCP Adapter?
+
+While the `@igniter-js/mcp-server` CLI tool provides development and project management tools for the Igniter.js ecosystem, the **MCP Adapter** package exposes your **actual application API** to AI agents. This enables AI systems to programmatically invoke your business logic, query your data, and perform mutations—all with full type safety.
+
+## Key Differences
+
+| Feature | `@igniter-js/mcp-server` (CLI) | `@igniter-js/adapter-mcp-server` (API Adapter) |
+|---------|-------------------------------|----------------------------------------------|
+| **Purpose** | Development tools for Igniter.js projects | Expose your API to AI agents |
+| **Tools Provided** | Project scaffolding, file analysis, code generation | Your API endpoints as callable tools |
+| **Installation** | Global CLI tool | Package in your application |
+| **Usage** | `npx @igniter-js/mcp-server` | Import and configure in your API routes |
+
+## Installation
+
+Install the adapter alongside your Igniter.js core package:
+
+```bash
+# npm
+npm install @igniter-js/adapter-mcp-server @igniter-js/core
+
+# yarn
+yarn add @igniter-js/adapter-mcp-server @igniter-js/core
+
+# pnpm
+pnpm add @igniter-js/adapter-mcp-server @igniter-js/core
+
+# bun
+bun add @igniter-js/adapter-mcp-server @igniter-js/core
+```
+
+## Basic Setup
+
+### 1. Create the MCP Route Handler
+
+In your Next.js application, create an API route to handle MCP requests:
+
+```typescript
+// src/app/api/mcp/[...transport]/route.ts
+import { createMcpAdapter } from '@igniter-js/adapter-mcp-server';
+import { AppRouter } from '@/igniter.router';
+
+/**
+ * Create the MCP handler by passing your AppRouter.
+ * The adapter introspects your router and exposes all actions as tools.
+ */
+const mcpHandler = createMcpAdapter(AppRouter, {
+  // Optional: Custom instructions for the AI agent
+  instructions: "This API manages users and products for Acme Corp.",
+});
+
+// Export for Next.js to handle GET and POST requests
+export { mcpHandler as GET, mcpHandler as POST };
+```
+
+### 2. Connect from an MCP Client
+
+Your API is now accessible as an MCP server. Configure your AI tool to connect to:
+
+```
+http://localhost:3000/api/mcp/sse
+```
+
+## Advanced Configuration
+
+### Custom Context
+
+Pass user-specific context to your API handlers:
+
+```typescript
+const mcpHandler = createMcpAdapter(AppRouter, {
+  context: async (req) => {
+    const user = await authenticateUser(req);
+    return {
+      context: { user },
+      tools: [],
+      request: req,
+      user,
+      timestamp: Date.now(),
+      client: req.headers.get('user-agent') || 'unknown'
+    };
+  },
+});
+```
+
+### Tool Filtering
+
+Control which endpoints are exposed:
+
+```typescript
+const mcpHandler = createMcpAdapter(AppRouter, {
+  tools: {
+    // Only expose specific actions
+    filter: (controller, action, config) => {
+      return !action.startsWith('internal');
+    },
+    // Custom tool naming
+    naming: (controller, action) => `${controller}_${action}`,
+  },
+});
+```
+
+### Response Transformation
+
+Customize how responses are formatted:
+
+```typescript
+const mcpHandler = createMcpAdapter(AppRouter, {
+  response: {
+    transform: async (result, toolName, context) => ({
+      content: [{
+        type: 'text',
+        text: `Result from ${toolName}: ${JSON.stringify(result)}`
+      }]
+    }),
+  },
+});
+```
+
+### Event Handlers
+
+Monitor and log tool usage:
+
+```typescript
+const mcpHandler = createMcpAdapter(AppRouter, {
+  events: {
+    onToolCall: (name, args, context) => {
+      console.log(`Tool called: ${name}`, args);
+    },
+    onToolSuccess: (name, result, duration, context) => {
+      console.log(`Tool ${name} succeeded in ${duration}ms`);
+    },
+    onToolError: (name, error, context) => {
+      console.error(`Tool ${name} failed:`, error);
+    },
+  },
+});
+```
+
+## Use Cases
+
+### 1. AI-Powered Admin Interfaces
+
+Allow AI assistants to manage your application data through natural language:
+
+```
+User: "Find all users who signed up in the last week"
+AI: *Calls users.list tool with date filter*
+AI: "Found 42 users who joined in the last 7 days..."
+```
+
+### 2. Automated Testing
+
+Use AI agents to test your API endpoints:
+
+```typescript
+// In your test suite
+const testAgent = new McpClient('http://localhost:3000/api/mcp/sse');
+const result = await testAgent.callTool('users.create', {
+  name: 'Test User',
+  email: 'test@example.com'
+});
+```
+
+### 3. Internal Tools Integration
+
+Integrate with AI-powered workflow automation:
+
+```
+Slack Bot: "Create a new project named 'Q1 Marketing'"
+→ Calls projects.create via MCP
+→ Returns project ID and link
+```
+
+## Security Considerations
+
+### Authentication
+
+Always validate user permissions in your context function:
+
+```typescript
+const mcpHandler = createMcpAdapter(AppRouter, {
+  context: async (req) => {
+    const token = req.headers.get('authorization');
+    if (!token) {
+      throw new Error('Unauthorized');
+    }
+    const user = await verifyToken(token);
+    return { context: { user }, request: req };
+  },
+});
+```
+
+### Rate Limiting
+
+Implement rate limiting for MCP endpoints:
+
+```typescript
+import { Ratelimit } from '@upstash/ratelimit';
+
+const ratelimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, '10 s'),
+});
+
+const mcpHandler = createMcpAdapter(AppRouter, {
+  events: {
+    onRequest: async (request, context) => {
+      const { success } = await ratelimit.limit(context.client);
+      if (!success) {
+        throw new Error('Rate limit exceeded');
+      }
+    },
+  },
+});
+```
+
+### Tool Filtering
+
+Never expose sensitive internal endpoints:
+
+```typescript
+const mcpHandler = createMcpAdapter(AppRouter, {
+  tools: {
+    filter: (controller, action, config) => {
+      // Block internal or admin-only actions
+      const blockedPrefixes = ['internal', 'admin', 'debug'];
+      return !blockedPrefixes.some(prefix => 
+        action.toLowerCase().startsWith(prefix)
+      );
+    },
+  },
+});
+```
+
+## Type Safety
+
+The MCP Adapter maintains full type safety throughout:
+
+- **Input Validation**: Zod schemas from your actions validate tool arguments
+- **Response Types**: Return types are preserved from your handlers
+- **Context Inference**: Custom context types are automatically inferred
+
+```typescript
+// Your action definition
+export const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    getUser: igniter.query({
+      path: '/:id',
+      params: z.object({ id: z.string() }),
+      handler: async ({ params }) => {
+        // params.id is typed as string
+        return await db.user.findUnique({ where: { id: params.id } });
+      },
+    }),
+  },
+});
+
+// When called via MCP, the same validation applies
+```
+
+## Debugging
+
+Enable verbose logging to troubleshoot issues:
+
+```typescript
+const mcpHandler = createMcpAdapter(AppRouter, {
+  adapter: {
+    verboseLogs: true,
+  },
+  events: {
+    onToolCall: (name, args) => {
+      console.log(`[MCP] Calling ${name}`, args);
+    },
+    onToolError: (name, error) => {
+      console.error(`[MCP] Error in ${name}:`, error);
+    },
+  },
+});
+```
+
+## Performance
+
+The MCP Adapter uses direct server-side invocation via `router.$caller`, bypassing the HTTP stack for maximum performance:
+
+```typescript
+// Instead of HTTP: ~50ms overhead
+await fetch('/api/users/123');
+
+// Direct invocation: ~1ms overhead
+await router.$caller.users.getUser({ params: { id: '123' } });
+```
+
+## Next Steps
+
+- Learn about the [MCP Server CLI](/docs/code-agents/mcp-server) for development tools
+- Explore [integrating with Cursor](/docs/code-agents/cursor)
+- Read about [AI-native development patterns](/docs/code-agents/introduction)
+
+## Further Reading
+
+- [Official MCP Specification](https://modelcontextprotocol.io/)
+- [Vercel MCP Adapter Documentation](https://vercel.com/docs/mcp)
+- [Igniter.js Router Documentation](/docs/core-concepts/routing)

@@ -35,7 +35,7 @@ npm install @igniter-js/core zod
 - **⚡ Zero Code Generation** - No build steps, no schemas to sync
 - **🔌 Framework Agnostic** - Works with Next.js, Express, Bun, and more
 - **🎛️ Built-in Features** - Queues, Real-time, Caching, and Telemetry
-- **🤖 Code Agent Optimized** - Optimized for code agents and AI assistance
+- **🤖 AI-Native Development** - MCP Adapter transforms your API into AI-consumable tools for code agents
 - **📦 Plugin System** - Extensible and modular architecture
 
 ## 📖 Documentation & Resources
