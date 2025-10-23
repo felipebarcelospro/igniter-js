@@ -88,7 +88,7 @@ export function createMcpAdapter<
             server.tool(
               sanitizeMcpName(customTool.name),
               customTool.description,
-              customTool.schema,
+              customTool.args,
               async (args: any) => {
                 const context = await createMcpContext<TRouter>({ router, request });
                 return await customTool.handler(args, context);
@@ -104,7 +104,7 @@ export function createMcpAdapter<
               server.prompt(
                 sanitizeMcpName(prompt.name),
                 prompt.description,
-                prompt.arguments,
+                prompt.args,
                 async (args, extra) => {
                   const context = await createMcpContext<TRouter>({ router, request });
                   return prompt.handler(args, context);

@@ -130,10 +130,10 @@ const { handler } = IgniterMcpServer
   .addTool({
     name: 'calculateTax',
     description: 'Calculate tax for a given amount',
-    args: z.object({
+    args: {
       amount: z.number(),
       taxRate: z.number(),
-    }),
+    },
     handler: async (args, context) => {
       // context is automatically typed from the router!
       const tax = args.amount * args.taxRate;
@@ -148,7 +148,7 @@ const { handler } = IgniterMcpServer
   .addTool({
     name: 'getCurrentTime',
     description: 'Get the current server time',
-    args: z.object({}),
+    args: {},
     handler: async (args, context) => {
       return {
         content: [{
@@ -175,9 +175,9 @@ const { handler } = IgniterMcpServer
   .addPrompt({
     name: 'debugUser',
     description: 'Debug user account issues',
-    args: z.object({
+    args: {
       userId: z.string(),
-    }),
+    },
     handler: async (args, context) => {
       // context is automatically typed from the router!
       return {
@@ -303,10 +303,10 @@ const { server } = createMcpAdapter({
     custom: [{
       name: 'calculateTax',
       description: 'Calculate tax for a given amount',
-      args: z.object({
+      args: {
         amount: z.number(),
         taxRate: z.number(),
-      }),
+      },
       handler: async (args, context) => {
         const tax = args.amount * args.taxRate;
         return {
@@ -322,7 +322,7 @@ const { server } = createMcpAdapter({
     custom: [{
       name: 'debugUser',
       description: 'Debug user account issues',
-      args: z.object({ userId: z.string() }),
+      args: { userId: z.string() },
       handler: async (args, context) => {
         return {
           messages: [{

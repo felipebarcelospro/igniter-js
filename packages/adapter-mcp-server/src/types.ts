@@ -57,8 +57,8 @@ export interface McpCustomTool<
   name: string;
   /** Tool description */
   description: string;
-  /** Tool schema (ZodObject or ZodRawShape) */
-  schema: TArgs;
+  /** Tool arguments schema (ZodRawShape: { field: z.string() }) */
+  args: TArgs;
   /** Tool handler function */
   handler: (
     args: objectOutputType<TArgs, ZodTypeAny>,
@@ -109,8 +109,8 @@ export interface McpPrompt<Args extends ArgsRawShape, TContext = any> {
   name: string;
   /** Prompt description */
   description: string;
-  /** Prompt arguments schema */
-  arguments?: Args;
+  /** Prompt arguments schema (ZodRawShape: { field: z.string() }) */
+  args?: Args;
   /** Prompt handler function */
   handler: (args: objectOutputType<Args, ZodTypeAny>, context: McpContext<TContext>) => GetPromptResult | Promise<GetPromptResult>;
 }
