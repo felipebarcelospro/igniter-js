@@ -35,11 +35,11 @@ export type InferServerRouterCallerAction<
 > = TAction extends { method: "GET" }
   ? {
       type: 'query';
-      query: (input: Prettify<TCallerParams & ServerExtraCallerInput>) => Promise<TCallerReturn>;
+      query: (input: TCallerParams) => Promise<TCallerReturn>;
     }
   : {
       type: 'mutation';
-      mutate: (input: Prettify<TCallerParams & ServerExtraCallerInput>) => Promise<TCallerReturn>;
+      mutate: (input: TCallerParams) => Promise<TCallerReturn>;
     };
 
 export type InferServerRouterCaller<
