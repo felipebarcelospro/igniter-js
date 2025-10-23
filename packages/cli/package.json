@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/cli",
-  "version": "0.2.69",
+  "version": "0.2.70",
   "description": "CLI for Igniter.js type-safe client generation",
   "main": "dist/index.js",
   "bin": {
