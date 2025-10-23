@@ -1,6 +1,6 @@
 # AI Agent Maintenance Manual: `@igniter-js/adapter-mcp-server`
 
-**Version:** 1.0.0
+**Version:** 2.0.0 (v0.3.0+)
 **For AI Agent:** You are an expert TypeScript software engineer. This document is your primary technical guide to the `@igniter-js/adapter-mcp-server` package. Read and understand it thoroughly before attempting any modifications. Your goal is to perform maintenance tasks accurately, respecting the architectural principles outlined here.
 
 ---
@@ -12,6 +12,13 @@
 
 ### 1.2. Purpose
 This package is an **Adapter** that exposes an entire Igniter.js `AppRouter` as a set of "tools" consumable by AI agents and clients that adhere to the **Model-Context-Protocol (MCP)**. Its primary function is to make your Igniter.js API "AI-native," allowing large language models to understand and execute your API actions to fulfill user requests.
+
+### 1.3. New in v0.3.0: Builder Pattern API
+Version 0.3.0 introduces a new **Builder Pattern API** (`IgniterMcpServer`) alongside the existing function-based API (`createMcpAdapter`). The builder pattern provides:
+- Full TypeScript type inference for tools, prompts, and resources
+- Fluent, chainable API for step-by-step configuration
+- Better IDE autocomplete and type safety
+- Explicit separation of concerns
 
 ---
 
@@ -27,17 +34,59 @@ The fundamental responsibility of this adapter is to perform several main operat
 4.  **OAuth Authorization:** The adapter can enforce OAuth-based authorization, requiring valid Bearer tokens and exposing protected resource metadata endpoints.
 5.  **Event Handling:** Comprehensive event hooks allow monitoring and logging of all MCP operations.
 
-### 2.2. Introspection and Tool Generation
-This is the heart of the adapter.
--   **Router Traversal:** The `createMcpAdapter` function recursively traverses the `AppRouter.controllers` map.
--   **Action-to-Tool Mapping:** Each `IgniterAction` (from `igniter.query` or `igniter.mutation`) is converted into an MCP tool. The tool's name is derived from its path in the router, such as `users.list` or `posts.getById`.
--   **Schema Conversion:** This is a critical step. The Zod schemas defined in the `body` and `query` properties of an `IgniterAction` are converted into **JSON Schema**. The JSON Schema standard is what MCP uses to describe the parameters a tool accepts. This allows the AI agent to know exactly what arguments are required and what their types are. Libraries like `zod-to-json-schema` are often used for this purpose.
+### 2.2. Two API Patterns
 
-### 2.3. The Execution Flow
+The adapter now supports two distinct API patterns:
+
+#### 2.2.1. Builder Pattern API (Recommended)
+The builder pattern provides a fluent, chainable API:
+
+```typescript
+const { handler, auth } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withServerInfo({ name: 'My Server', version: '1.0.0' })
+  .addTool({ ... })
+  .addPrompt({ ... })
+  .withOAuth({ ... })
+  .build();
+```
+
+**Benefits:**
+- Full type inference for tools, prompts, and resources
+- Progressive configuration with clear separation
+- Better IDE support and autocomplete
+- Type-safe at every step
+
+#### 2.2.2. Function API (Simple Configuration)
+The function-based API provides a simpler, single-object configuration:
+
+```typescript
+const { server, auth } = createMcpAdapter({
+  router: AppRouter,
+  serverInfo: { name: 'My Server', version: '1.0.0' },
+  tools: { custom: [...] },
+  prompts: { custom: [...] },
+  oauth: { ... }
+});
+```
+
+**Benefits:**
+- Single configuration object
+- Less verbose for simple setups
+- Works well in JavaScript projects
+
+### 2.3. Introspection and Tool Generation
+This is the heart of the adapter.
+-   **Router Traversal:** Both APIs use the internal `extractToolsFromRouter` utility to traverse the `AppRouter.controllers` map.
+-   **Action-to-Tool Mapping:** Each `IgniterAction` (from `igniter.query` or `igniter.mutation`) is converted into an MCP tool. The tool's name is derived from its path in the router, such as `users.list` or `posts.getById`.
+-   **Schema Conversion:** The Zod schemas defined in the `body` and `query` properties of an `IgniterAction` are converted into **JSON Schema**. The JSON Schema standard is what MCP uses to describe the parameters a tool accepts.
+
+### 2.4. The Execution Flow
 When an AI agent decides to call a tool, the following sequence occurs:
 1.  **Incoming MCP Request:** The adapter's handler receives an HTTP request from the MCP client with a payload indicating the tool to run and its arguments.
 2.  **Tool-to-Action Resolution:** The adapter looks up the requested tool name (e.g., `users.create`) and finds the corresponding `IgniterAction` in its internal map.
-3.  **Server-Side Invocation:** Instead of making an HTTP request to itself, the adapter uses the powerful `router.$caller` property. The `$caller` allows direct, type-safe, server-side invocation of any action, bypassing the HTTP stack entirely for maximum performance.
+3.  **Server-Side Invocation:** The adapter uses the powerful `router.$caller` property. The `$caller` allows direct, type-safe, server-side invocation of any action, bypassing the HTTP stack entirely for maximum performance.
 4.  **Argument Passing:** The arguments from the MCP request are passed as the `input` to the `$caller` method (e.g., `router.$caller.users.create({ body: { ... } })`).
 5.  **Result Formatting:** The result from the action's execution is received. The adapter then formats this result into the expected MCP response format (typically a JSON object or a simple string) and sends it back to the client.
 
@@ -45,26 +94,49 @@ When an AI agent decides to call a tool, the following sequence occurs:
 
 ## 3. File & Directory Map (`src/`)
 
-The package has a minimal and focused structure.
+The package has been refactored into a modular structure:
 
-*   `src/index.ts`
-    > **Purpose**: The public entry point of the package. It exports the primary factory function, `createMcpAdapter`.
-    > **Maintenance**: This file should only be modified if the main export's signature or name changes.
+*   **`src/index.ts`**
+    > **Purpose**: The public entry point. Exports both the builder pattern (`IgniterMcpServer`) and function API (`createMcpAdapter`).
+    > **Maintenance**: Update when adding new public exports.
 
-*   `src/mcp.adapter.ts`
-    > **Purpose**: **This is the most critical file.** It contains the implementation of the `createMcpAdapter` factory function. All core logic resides here, including:
-    >    - The introspection loop that builds the tool definitions.
-    >    - The schema conversion logic (Zod to JSON Schema).
-    >    - The HTTP request handler that processes incoming MCP tool calls.
-    >    - The logic that uses `router.$caller` to execute actions.
-    > **Maintenance**: Any change to how tools are defined, executed, or how results are formatted will happen in this file.
+*   **`src/builder/builder.ts`**
+    > **Purpose**: Implements the `IgniterMcpServer` builder class with all chainable methods.
+    > **Key Methods**: `.router()`, `.withServerInfo()`, `.addTool()`, `.addPrompt()`, `.addResource()`, `.withOAuth()`, `.withEvents()`, `.build()`
+    > **Maintenance**: This is where you add new builder methods or modify the fluent API.
 
-*   `src/types.ts`
-    > **Purpose**: Contains all TypeScript `interface` and `type` definitions that are **specific to this adapter**. This most importantly includes:
-    >    - `McpAdapterOptions` type, which defines the configuration object
-    >    - `McpPrompt`, `McpResource`, and `McpOAuthConfig` interfaces for extensibility features
-    >    - `McpContext`, `McpToolInfo`, `McpCustomTool`, and `McpResponse` core types
-    > **Maintenance**: If you need to add a new configuration option or extend functionality, update type definitions here first.
+*   **`src/core/adapter.ts`**
+    > **Purpose**: Implements the `createMcpAdapter` function (function-based API). This is the core adapter logic.
+    > **Key Responsibilities**:
+    >    - Tool registration loop
+    >    - Integration with `@vercel/mcp-adapter`
+    >    - Event handling
+    >    - OAuth middleware integration
+    > **Maintenance**: Modify this when changing core adapter behavior.
+
+*   **`src/executors/execute-tool.ts`**
+    > **Purpose**: Contains the `executeTool` function that handles tool execution via `router.$caller`.
+    > **Maintenance**: Update when changing how tools are invoked or how results are formatted.
+
+*   **`src/utils/extract-tools-from-router.ts`**
+    > **Purpose**: Utility that traverses the router and extracts tool definitions from actions.
+    > **Maintenance**: Modify when adding new filtering, naming, or transformation logic.
+
+*   **`src/utils/create-mcp-context.ts`**
+    > **Purpose**: Creates the MCP context object that's passed to handlers.
+    > **Maintenance**: Update when adding new context properties or changing context creation logic.
+
+*   **`src/utils/sanitize-mcp-name.ts`**
+    > **Purpose**: Sanitizes tool names to be MCP-compatible.
+    > **Maintenance**: Update if tool naming rules change.
+
+*   **`src/types.ts`**
+    > **Purpose**: Contains all TypeScript `interface` and `type` definitions.
+    > **Key Types**: 
+    >    - `McpAdapterOptions` - Configuration for function API
+    >    - `McpPrompt`, `McpResource`, `McpOAuthConfig` - Extensibility interfaces
+    >    - `McpContext`, `McpToolInfo`, `McpCustomTool`, `McpResponse` - Core types
+    > **Maintenance**: Always update type definitions here first when adding new features.
 
 ---
 
@@ -72,9 +144,124 @@ The package has a minimal and focused structure.
 
 This section provides explicit, step-by-step instructions for performing common maintenance tasks on this adapter.
 
-### Task 1: Add Support for a New Action Property in Tool Definitions
+### Task 1: Add a New Builder Method
 
-**Scenario:** A new `summary` property has been added to the `IgniterAction` interface in `@igniter-js/core`. We need the MCP adapter to use this `summary` as the `description` for the generated tool, as it's more concise than the full `description` property.
+**Scenario:** You need to add a new configuration option to the builder pattern, for example `withTimeout(timeout: number)`.
+
+**Steps:**
+
+1.  **Update Types** (`src/types.ts`):
+    ```typescript
+    // Add to McpAdapterOptions
+    export interface McpAdapterOptions<...> {
+      // ... existing fields
+      timeout?: number;
+    }
+    ```
+
+2.  **Update Builder Class** (`src/builder/builder.ts`):
+    ```typescript
+    withTimeout(timeout: number): IgniterMcpServer<TRouter, TCustomTools, TCustomPrompts, TCustomResources> {
+      this._options.timeout = timeout;
+      return new IgniterMcpServer<TRouter, TCustomTools, TCustomPrompts, TCustomResources>({
+        ...this._options,
+      });
+    }
+    ```
+
+3.  **Update Core Adapter** (`src/core/adapter.ts`):
+    - Use the new option in the adapter logic where needed
+
+4.  **Update Documentation**:
+    - Add example to README.md
+    - Document the new method in AGENT.md
+
+### Task 2: Add Support for a New Action Property in Tool Definitions
+
+**Scenario:** A new `summary` property has been added to the `IgniterAction` interface in `@igniter-js/core`. We need the MCP adapter to use this `summary` as the `description` for the generated tool.
+
+**Steps:**
+
+1.  **Locate Tool Extraction Logic**: 
+    - File: `src/utils/extract-tools-from-router.ts`
+
+2.  **Modify the Tool Definition Mapping**:
+    ```typescript
+    // Inside extract-tools-from-router.ts
+    
+    const toolInfo: McpToolInfo = {
+      name: toolName,
+      // OLD: description: actionConfig.description || 'No description',
+      // NEW: Prioritize summary
+      description: actionConfig.summary || actionConfig.description || `Executes ${toolName}`,
+      controller: controllerName,
+      action: actionName,
+      method: actionConfig.method,
+      schema: actionConfig.body || actionConfig.query || {},
+    };
+    ```
+
+3.  **Test the Change**:
+    - Build the package
+    - Verify tools now use `summary` when available
+
+### Task 3: Add a New Event Hook
+
+**Scenario:** Add a new `onToolTransform` event that's called when a tool is being prepared for registration.
+
+**Steps:**
+
+1.  **Update Types** (`src/types.ts`):
+    ```typescript
+    export interface McpEventsOptions<TContext = any> {
+      // ... existing events
+      onToolTransform?: (tool: McpToolInfo, context: McpContext<TContext>) => void | Promise<void>;
+    }
+    ```
+
+2.  **Update Builder** (`src/builder/builder.ts`):
+    - The `withEvents` method will automatically support the new event
+
+3.  **Add Hook Invocation** (`src/core/adapter.ts` or `src/utils/extract-tools-from-router.ts`):
+    ```typescript
+    // In the tool registration loop
+    if (options.events?.onToolTransform) {
+      await options.events.onToolTransform(tool, context);
+    }
+    ```
+
+4.  **Update Documentation**:
+    - Add example to README.md under Event Handlers section
+
+### Task 4: Modify Context Creation
+
+**Scenario:** Add a new property to the MCP context that all handlers receive.
+
+**Steps:**
+
+1.  **Update Context Type** (`src/types.ts`):
+    ```typescript
+    export interface McpContext<TContext = any> {
+      // ... existing properties
+      metadata?: Record<string, any>; // NEW
+    }
+    ```
+
+2.  **Update Context Creation** (`src/utils/create-mcp-context.ts`):
+    ```typescript
+    export async function createMcpContext<...>(...): Promise<McpContext<TContext>> {
+      return {
+        // ... existing properties
+        metadata: {}, // NEW: initialize metadata
+      };
+    }
+    ```
+
+3.  **Test**:
+    - Verify all handlers now receive the new property
+    - Check TypeScript types are correct
+
+---
 
 1.  **Objective Analysis:** The goal is to change the tool generation logic to prioritize a new `summary` field for the tool's description.
 2.  **Locate Tool Generation Logic:** The logic that introspects the `AppRouter` and creates the list of MCP tools is the target.
