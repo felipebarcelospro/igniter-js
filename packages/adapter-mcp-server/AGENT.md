@@ -34,8 +34,8 @@ This is the heart of the adapter.
 When an AI agent decides to call a tool, the following sequence occurs:
 1.  **Incoming MCP Request:** The adapter's handler receives an HTTP request from the MCP client with a payload indicating the tool to run and its arguments.
 2.  **Tool-to-Action Resolution:** The adapter looks up the requested tool name (e.g., `users.create`) and finds the corresponding `IgniterAction` in its internal map.
-3.  **Server-Side Invocation:** Instead of making an HTTP request to itself, the adapter uses the powerful `router.$caller` property. The `$caller` allows direct, type-safe, server-side invocation of any action, bypassing the HTTP stack entirely for maximum performance.
-4.  **Argument Passing:** The arguments from the MCP request are passed as the `input` to the `$caller` method (e.g., `router.$caller.users.create({ body: { ... } })`).
+3.  **Server-Side Invocation:** Instead of making an HTTP request to itself, the adapter uses the powerful `router.caller` property. The `caller` allows direct, type-safe, server-side invocation of any action, bypassing the HTTP stack entirely for maximum performance.
+4.  **Argument Passing:** The arguments from the MCP request are passed as the `input` to the `caller` method (e.g., `router.caller.users.create({ body: { ... } })`).
 5.  **Result Formatting:** The result from the action's execution is received. The adapter then formats this result into the expected MCP response format (typically a JSON object or a simple string) and sends it back to the client.
 
 ---
@@ -53,7 +53,7 @@ The package has a minimal and focused structure.
     >    - The introspection loop that builds the tool definitions.
     >    - The schema conversion logic (Zod to JSON Schema).
     >    - The HTTP request handler that processes incoming MCP tool calls.
-    >    - The logic that uses `router.$caller` to execute actions.
+    >    - The logic that uses `router.caller` to execute actions.
     > **Maintenance**: Any change to how tools are defined, executed, or how results are formatted will happen in this file.
 
 *   `src/types.ts`
@@ -107,10 +107,10 @@ This section provides explicit, step-by-step instructions for performing common 
 
 ### Task 2: Allow Custom Context to be Passed to Called Actions
 
-**Scenario:** When the MCP server calls an action via `$caller`, the action currently receives the default application context. We need a way to provide a custom, per-request context, for example, to pass the identity of the AI agent making the call.
+**Scenario:** When the MCP server calls an action via `caller`, the action currently receives the default application context. We need a way to provide a custom, per-request context, for example, to pass the identity of the AI agent making the call.
 
-1.  **Objective Analysis:** The `router.$caller` method needs a way to accept a custom context. This is a feature of `@igniter-js/core`. The adapter then needs to be updated to leverage this feature.
-2.  **Verify/Update Core Capability:** First, confirm that the `$caller` in `@igniter-js/core` supports passing context. Let's assume it has been updated to `router.$caller.users.create({ body: {...} }, { customContext: {...} })`.
+1.  **Objective Analysis:** The `router.caller` method needs a way to accept a custom context. This is a feature of `@igniter-js/core`. The adapter then needs to be updated to leverage this feature.
+2.  **Verify/Update Core Capability:** First, confirm that the `caller` in `@igniter-js/core` supports passing context. Let's assume it has been updated to `router.caller.users.create({ body: {...} }, { customContext: {...} })`.
 3.  **Update Adapter's Type Definitions:** The `createMcpAdapter` options should accept a context factory function.
     -   **File:** `packages/adapter-mcp-server/src/types.ts`.
     -   **Action:** Modify the `McpAdapterOptions` interface.
@@ -129,7 +129,7 @@ This section provides explicit, step-by-step instructions for performing common 
     ```
 4.  **Locate Execution Logic:**
     -   **File:** `packages/adapter-mcp-server/src/mcp.adapter.ts`.
-    -   **Action:** Find where `processor.call` (or `router.$caller`) is invoked.
+    -   **Action:** Find where `processor.call` (or `router.caller`) is invoked.
 5.  **Implement Context Injection:** Modify the execution logic to create and pass the custom context.
     ```typescript
     // Inside the MCP request handler in mcp.adapter.ts
@@ -143,7 +143,7 @@ This section provides explicit, step-by-step instructions for performing common 
     }
     
     // Execute the action using the caller, passing the custom context.
-    // This assumes the `$caller` method was updated to accept a context object.
+    // This assumes the `caller` method was updated to accept a context object.
     const result = await processor.call(
       controllerName, 
       actionName, 

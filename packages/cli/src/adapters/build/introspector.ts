@@ -4,6 +4,7 @@ import { build, type BuildFailure } from 'esbuild';
 import { createChildLogger, formatError } from '../logger';
 import { IgniterRouter, IgniterControllerConfig, IgniterAction } from '@igniter-js/core';
 import zodToJsonSchema from 'zod-to-json-schema';
+import { createRequire } from 'module';
 
 // This file is responsible for dynamically loading and introspecting the user's Igniter router.
 
@@ -117,6 +118,15 @@ export async function loadRouter(routerPath: string): Promise<IgniterRouter<any,
       format: 'cjs',
       write: false, // Keep the result in memory
       logLevel: 'silent', // We will handle our own logging
+      external: [
+        '@igniter-js/*',
+        '@prisma/*',
+        'prisma',
+        'redis',
+        'ioredis',
+        'bullmq',
+        '@opentelemetry/*'
+      ],
     });
 
     const [outputFile] = result.outputFiles;
@@ -128,7 +138,19 @@ export async function loadRouter(routerPath: string): Promise<IgniterRouter<any,
     // We create a temporary module environment to `require` the code.
     const compiledCode = outputFile.text;
     const routerModule = { exports: {} };
-    const requireFunc = (moduleName: string) => require(moduleName);
+    
+    // Create a require function that resolves modules from the project directory
+    // This allows the bundled code to require external dependencies from the user's project
+    const projectRequire = createRequire(fullPath);
+    const requireFunc = (moduleName: string) => {
+      try {
+        // Try to require from the project's node_modules first
+        return projectRequire(moduleName);
+      } catch (error) {
+        // Fall back to the global require if not found in project
+        return require(moduleName);
+      }
+    };
 
     // This is a sandboxed execution of the compiled CJS code.
     const factory = new Function('exports', 'require', 'module', '__filename', '__dirname', compiledCode);

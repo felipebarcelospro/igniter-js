@@ -46,5 +46,5 @@ export type IgniterRouter<
   handler: (request: Request) => Promise<Response>;
   $context: TContext;
   $plugins: TPlugins;
-  $caller: IgniterRouterCaller<TControllers>;
+  caller: IgniterRouterCaller<TControllers>;
 }
