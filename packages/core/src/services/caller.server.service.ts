@@ -1,5 +1,5 @@
 import type { RequestProcessor } from "../processors";
-import type { ContextCallback, DocsConfig, IgniterBaseConfig, IgniterControllerBaseAction, IgniterControllerConfig, IgniterRouter, IgniterRouterCaller, MutationActionCallerResult, QueryActionCallerResult, RealtimeActionCallerResult } from "../types";
+import type { ContextCallback, DocsConfig, IgniterBaseConfig, IgniterControllerBaseAction, IgniterControllerConfig, IgniterRouter, InferServerRouterCaller, MutationActionCallerResult, QueryActionCallerResult, RealtimeActionCallerResult } from "../types";
 
 /**
  * Creates a proxy-based caller for invoking actions via controller namespace (server-only).
@@ -14,8 +14,8 @@ export function createServerCaller<
 >(
   controllers: TControllers,
   processor: RequestProcessor<IgniterRouter<TContext, TControllers, TConfig, TPlugins, TDocs>>
-): IgniterRouterCaller<TControllers> {
-  const caller = new Proxy({} as IgniterRouterCaller<TControllers>, {
+): InferServerRouterCaller<IgniterRouter<TContext, TControllers, TConfig, TPlugins, TDocs>> {
+  const caller = new Proxy({} as InferServerRouterCaller<IgniterRouter<TContext, TControllers, TConfig, TPlugins, TDocs>>, {
     get(_, controllerName: string) {
       const controller = controllers[controllerName as keyof TControllers];
       if (!controller) {
