@@ -7,8 +7,8 @@ import * as os from 'os';
 describe('loadRouter - error scenario from bug report', () => {
   it('should not throw "Cannot read properties of undefined (reading caller)" error', async () => {
     // This test reproduces the bug scenario where the router is loaded but
-    // the $caller property is missing or undefined, causing a TypeError
-    // when createIgniterClient tries to access router.$caller
+    // the caller property is missing or undefined, causing a TypeError
+    // when createIgniterClient tries to access router.caller
     
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'igniter-bug-test-'));
     
@@ -53,21 +53,21 @@ describe('loadRouter - error scenario from bug report', () => {
       
       // Verify the router has all required properties
       expect(router).toBeDefined();
-      expect(router.$caller).toBeDefined();
-      expect(typeof router.$caller).toBe('object');
+      expect(router.caller).toBeDefined();
+      expect(typeof router.caller).toBe('object');
       
       // Verify we can introspect the router without errors
       const introspected = introspectRouter(router);
       expect(introspected.schema.controllers).toBeDefined();
       expect(introspected.schema.controllers.example).toBeDefined();
       
-      // The critical check: $caller should be accessible and have the controller
-      expect(router.$caller.example).toBeDefined();
-      expect(router.$caller.example.hello).toBeDefined();
+      // The critical check: caller should be accessible and have the controller
+      expect(router.caller.example).toBeDefined();
+      expect(router.caller.example.hello).toBeDefined();
       
       // This is what createIgniterClient does - it should not throw
       expect(() => {
-        const caller = router.$caller;
+        const caller = router.caller;
         expect(caller).toBeTruthy();
       }).not.toThrow();
       

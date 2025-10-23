@@ -19,7 +19,7 @@ import { resolveLogLevel, createLoggerContext } from "../utils/logger";
  * - **Define your context and plugins up front** for maximum type safety and DX.
  * - **Group related actions into controllers** for modularity and maintainability.
  * - **Leverage plugins** for cross-cutting concerns (auth, logging, telemetry, etc).
- * - **Use the `$caller` property** for type-safe server-side invocation (great for testing and SSR).
+ * - **Use the `caller` property** for type-safe server-side invocation (great for testing and SSR).
  * - **Always use the `handler` method** as your HTTP entrypoint (e.g., in Next.js, Express, or custom servers).
  *
  * ---
@@ -72,7 +72,7 @@ import { resolveLogLevel, createLoggerContext } from "../utils/logger";
  * ### 3. Type-Safe Server-Side Calls (SSR, Testing)
  * ```typescript
  * // Call an action directly on the server (bypassing HTTP)
- * const result = await router.$caller.users.getUserById({ id: "123" });
+ * const result = await router.caller.users.getUserById({ id: "123" });
  * ```
  *
  * ### 4. Customizing Base URL and Path
@@ -102,7 +102,7 @@ import { resolveLogLevel, createLoggerContext } from "../utils/logger";
  * @returns A fully-configured, type-safe IgniterRouter instance:
  *   - `$context`: The inferred context type.
  *   - `$plugins`: The inferred plugins type.
- *   - `$caller`: Type-safe server-side action invoker.
+ *   - `caller`: Type-safe server-side action invoker.
  *   - `controllers`: The registered controllers.
  *   - `config`: The router config (baseURL, basePATH).
  *   - `handler`: The HTTP request handler (async function).
@@ -110,7 +110,7 @@ import { resolveLogLevel, createLoggerContext } from "../utils/logger";
  * ---
  * ## Advanced Usage
  * - **Dynamic Context**: Pass an async function to `context` for per-request context (e.g., user/session).
- * - **Testing**: Use `$caller` for fast, type-safe unit/integration tests without HTTP.
+ * - **Testing**: Use `caller` for fast, type-safe unit/integration tests without HTTP.
  * - **Custom Adapters**: Use `handler` in any Node.js/Edge/Serverless environment.
  * - **Type Inference**: All types are inferred automatically for maximum DX.
  *
@@ -163,9 +163,9 @@ export const createIgniterRouter = <
      * Use for SSR, integration tests, or calling actions without HTTP.
      *
      * @example
-     * const result = await router.$caller.users.getUserById({ id: "123" });
+     * const result = await router.caller.users.getUserById({ id: "123" });
      */
-    $caller: createServerCaller(params.controllers, processor),
+    caller: createServerCaller(params.controllers, processor),
 
     /**
      * The registered controllers for this router.

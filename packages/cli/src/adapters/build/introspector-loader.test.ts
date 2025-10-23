@@ -60,7 +60,7 @@ describe('loadRouter with external dependencies', () => {
     
     expect(router).toBeDefined();
     expect(router.controllers).toBeDefined();
-    expect(router.$caller).toBeDefined();
+    expect(router.caller).toBeDefined();
     expect(router.handler).toBeDefined();
     
     // Check that the controller was loaded correctly
@@ -69,15 +69,15 @@ describe('loadRouter with external dependencies', () => {
     expect(router.controllers.test.actions.hello).toBeDefined();
   });
 
-  it('should have a properly initialized $caller property', async () => {
+  it('should have a properly initialized caller property', async () => {
     const router = await loadRouter(routerPath);
     
-    // The $caller should be a Proxy object
-    expect(typeof router.$caller).toBe('object');
-    expect(router.$caller).not.toBeNull();
+    // The caller should be a Proxy object
+    expect(typeof router.caller).toBe('object');
+    expect(router.caller).not.toBeNull();
     
     // It should have the controller accessible
-    expect(router.$caller.test).toBeDefined();
-    expect(router.$caller.test.hello).toBeDefined();
+    expect(router.caller.test).toBeDefined();
+    expect(router.caller.test.hello).toBeDefined();
   });
 });

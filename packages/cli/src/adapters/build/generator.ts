@@ -14,7 +14,7 @@ type IgniterRouterSchema = {
   handler: any
   $context: any
   $plugins: any
-  $caller: any
+  caller: any
 }
 
 type IgniterRouter = {
@@ -27,7 +27,7 @@ type IgniterRouter = {
   handler: any
   $context: any
   $plugins: any
-  $caller: any
+  caller: any
 }
 
 /**
