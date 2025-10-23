@@ -20,7 +20,7 @@ const createMockSchema = <T>(defaultValue: T): StandardSchemaV1<T, T> => ({
 });
 
 // Mock procedures with proper structure
-const createMockProcedure = (name: string): IgniterProcedure<any, any, any> => ({
+const createMockProcedure = (name: string): IgniterProcedure<unknown, unknown, unknown> => ({
   name,
   handler: vi.fn().mockResolvedValue({})
 });

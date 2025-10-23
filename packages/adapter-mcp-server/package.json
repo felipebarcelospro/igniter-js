@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/adapter-mcp-server",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "private": false,
@@ -12,14 +12,16 @@
     "build": "tsup src/index.ts --dts --format esm,cjs --out-dir dist"
   },
   "devDependencies": {
-    "@igniter-js/core": "*",
-    "@vercel/mcp-adapter": "^0.2.0",
-    "@modelcontextprotocol/sdk": "^1.10.2"
+    "@igniter-js/core": "*"
   },
   "peerDependencies": {
-    "@igniter-js/core": "*",
-    "@vercel/mcp-adapter": "^0.2.0",
-    "@modelcontextprotocol/sdk": "^1.10.2"
+    "@igniter-js/core": "*"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "@socotra/modelcontextprotocol-sdk": "1.18.0",
+    "mcp-handler": "^1.0.3",
+    "zod": "^3"
+  }
 }

@@ -67,6 +67,14 @@ type IgniterErrorResponse<
   data?: TData;
 };
 
+type InferActionContext<
+  TActionContext extends object,
+  TActionMiddlewares extends readonly IgniterProcedure<any, any, unknown>[] | undefined
+> = TActionContext & (
+  TActionMiddlewares extends readonly IgniterProcedure<any, any, unknown>[]
+    ? InferActionProcedureContext<TActionMiddlewares>
+    : {}
+);
 
 /**
  * Complete action context provided to action handlers.
@@ -106,7 +114,7 @@ export type IgniterActionContext<
   TActionMethod extends HTTPMethod,
   TActionBody extends StandardSchemaV1 | undefined,
   TActionQuery extends StandardSchemaV1 | undefined,
-  TActionMiddlewares extends readonly IgniterProcedure<any, any, any>[],
+  TActionMiddlewares extends readonly IgniterProcedure<any, unknown, unknown>[] | undefined,
   TActionPlugins extends Record<string, any>,
 > = {
   /**
@@ -125,25 +133,26 @@ export type IgniterActionContext<
     query: TActionQuery extends StandardSchemaV1
       ? StandardSchemaV1.InferInput<TActionQuery>
       : undefined;
+    raw: Request;
   };
 
   /**
    * Enhanced application context merging base context, middleware context, and plugin extensions.
    * Provides access to all application services and plugin-provided context data.
    */
-  context: TActionContext & InferActionProcedureContext<TActionMiddlewares>;
+  context: InferActionContext<TActionContext, TActionMiddlewares>;
 
   /**
    * Response processor for creating typed HTTP responses.
    * Supports JSON, HTML, SSE, and custom response types.
    */
-   response: IgniterResponseProcessor<TActionContext & InferActionProcedureContext<TActionMiddlewares>>;
+   response: IgniterResponseProcessor<InferActionContext<TActionContext, TActionMiddlewares>>;
 
   /**
    * Realtime service for server-sent events and websocket communication.
    * Enables real-time updates to connected clients.
    */
-  realtime: IgniterRealtimeService<TActionContext & InferActionProcedureContext<TActionMiddlewares>>;
+  realtime: IgniterRealtimeService<InferActionContext<TActionContext, TActionMiddlewares>>;
 
   /**
    * Type-safe plugin access registry.
@@ -176,7 +185,7 @@ export type IgniterQueryOptions<
   TQueryContext extends object,
   TQueryPath extends string,
   TQueryQuery extends StandardSchemaV1 | undefined,
-  TQueryMiddlewares extends readonly IgniterProcedure<any, any, any>[],
+  TQueryMiddlewares extends readonly IgniterProcedure<any, any, unknown>[] | undefined,
   TQueryPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>,
   TQueryHandler extends IgniterActionHandler<
     IgniterActionContext<
@@ -207,7 +216,7 @@ export type IgniterMutationOptions<
   TMutationMethod extends MutationMethod,
   TMutationBody extends StandardSchemaV1 | undefined,
   TMutationQuery extends StandardSchemaV1 | undefined,
-  TMutationMiddlewares extends readonly IgniterProcedure<any, any, any>[],
+  TMutationMiddlewares extends readonly IgniterProcedure<any, any, unknown>[] | undefined,
   TMutationPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>,
   TMutationHandler extends IgniterActionHandler<
     IgniterActionContext<
@@ -241,7 +250,7 @@ export type IgniterAction<
   TActionMethod extends HTTPMethod,
   TActionBody extends StandardSchemaV1 | undefined,
   TActionQuery extends StandardSchemaV1 | undefined,
-  TActionMiddlewares extends readonly IgniterProcedure<any, any, any>[],
+  TActionMiddlewares extends readonly IgniterProcedure<any, any, unknown>[] | undefined,
   TActionPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>,
   TActionHandler extends IgniterActionHandler<
     IgniterActionContext<
@@ -286,7 +295,7 @@ export type InferEndpoint<
   TActionMethod extends HTTPMethod,
   TActionBody extends StandardSchemaV1 | undefined,
   TActionQuery extends StandardSchemaV1 | undefined,
-  TActionMiddlewares extends readonly IgniterProcedure<TActionContext, unknown, unknown>[],
+  TActionMiddlewares extends readonly IgniterProcedure<any, any, unknown>[] | undefined,
   TActionPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>,
   TActionHandler extends IgniterActionHandler<
     IgniterActionContext<

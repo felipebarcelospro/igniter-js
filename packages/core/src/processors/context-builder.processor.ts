@@ -18,6 +18,7 @@ export interface ProcessedRequest extends Omit<Request, 'path' | 'method' | 'par
   cookies: IgniterCookie;
   body: any;
   query: Record<string, string>;
+  raw: Request;
 };
 
 /**
@@ -85,6 +86,7 @@ export class ContextBuilderProcessor {
     // Parse request components
     const cookies = new IgniterCookie(request.headers);
     const response = new IgniterResponseProcessor();
+    
     let body = null;
 
     try {
@@ -104,6 +106,7 @@ export class ContextBuilderProcessor {
       cookies: cookies,
       body: body,
       query: Object.fromEntries(url.searchParams),
+      raw: request,
     };
 
     // Build final context with proper structure

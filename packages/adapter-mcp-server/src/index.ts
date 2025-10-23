@@ -1,3 +1,3 @@
-export * from './mcp.adapter';
-export * from './types';
-export * from './index'; 
+export * from './builder/builder'
+export * from './core/adapter'
+export * from './types'

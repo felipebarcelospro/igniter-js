@@ -46,7 +46,7 @@ export class MiddlewareExecutorProcessor {
    */
   static async executeGlobal(
     context: ProcessedContext,
-    middlewares: IgniterProcedure<any, any, any>[]
+    middlewares: IgniterProcedure<unknown, unknown, unknown>[]
   ): Promise<MiddlewareExecutionResult> {
     let updatedContext = { ...context };
 
@@ -199,7 +199,7 @@ export class MiddlewareExecutorProcessor {
    */
   static async executeAction(
     context: ProcessedContext,
-    middlewares: IgniterProcedure<any, any, any>[]
+    middlewares: IgniterProcedure<unknown, unknown, unknown>[]
   ): Promise<MiddlewareExecutionResult> {
     let updatedContext = { ...context };
 
