@@ -73,7 +73,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/add-use-client.js",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
