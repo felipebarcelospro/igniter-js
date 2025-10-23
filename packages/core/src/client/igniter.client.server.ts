@@ -2,7 +2,7 @@ import type { IgniterRouter, ClientConfig, InferRouterCaller } from '../types';
 
 /**
  * Creates a server-side client for Igniter Router
- * This version uses router.$caller directly (zero browser dependencies)
+ * This version uses router.caller directly (zero browser dependencies)
  * @param config Client configuration
  * @returns A typed client for calling server actions
  */
@@ -19,6 +19,6 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any,
     router = router();
   }
 
-  // Server-side: Use direct router.$caller (zero browser dependencies)
+  // Server-side: Use direct router.caller (zero browser dependencies)
   return router.caller as unknown as InferRouterCaller<TRouter>;
 }; 

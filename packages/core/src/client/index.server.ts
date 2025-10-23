@@ -3,5 +3,5 @@
 export { IgniterProvider, useIgniterQueryClient } from "./igniter.context";
 export { useRealtime } from "./igniter.hooks";
 
-// Server-specific createIgniterClient (uses router.$caller directly)
+// Server-specific createIgniterClient (uses router.caller directly)
 export { createIgniterClient } from './igniter.client.server';

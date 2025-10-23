@@ -32,7 +32,7 @@ export const api = createIgniterClient<AppRouterType>({
 ### 1.2 Execution Environments
 
 **Server-Side Execution (RSC, API Routes, Middleware):**
-- Direct function calls via `router.$caller`
+- Direct function calls via `router.caller`
 - Zero HTTP overhead
 - Full access to server context
 - Synchronous execution model
