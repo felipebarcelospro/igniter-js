@@ -125,7 +125,9 @@ export async function loadRouter(routerPath: string): Promise<IgniterRouter<any,
         'redis',
         'ioredis',
         'bullmq',
-        '@opentelemetry/*'
+        '@opentelemetry/*',
+        'chalk',
+        'supports-color'
       ],
     });
 
