@@ -6,11 +6,12 @@ import type { IgniterRouter, ClientConfig, InferRouterCaller } from '../types';
  * @param config Client configuration
  * @returns A typed client for calling server actions
  */
-export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any, any, any>>(
+export const createIgniterClient = <TRouter extends Omit<IgniterRouter<any, any, any, any, any>, 'caller'>>(
   {
     router,
-  }: ClientConfig<TRouter>
-): InferRouterCaller<TRouter> => {
+  }: ClientConfig<TRouter & { caller: any }>
+): InferRouterCaller<TRouter & { caller: any }> => {
+  
   if (!router) {
     throw new Error('Router is required to create an Igniter client');
   }
@@ -20,5 +21,5 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any,
   }
 
   // Server-side: Use direct router.caller (zero browser dependencies)
-  return router.caller as unknown as InferRouterCaller<TRouter>;
+  return router.caller as unknown as InferRouterCaller<TRouter & { caller: any }>;
 }; 

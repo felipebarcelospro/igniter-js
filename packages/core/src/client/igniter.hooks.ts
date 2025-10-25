@@ -27,7 +27,7 @@ type InferIgniterResponse<T> = T extends { data: infer TData, error: infer TErro
  * @returns A React hook for querying data
  */
 export const createUseQueryClient = <
-  TRouter extends IgniterRouter<any, any, any, any, any>,
+  TRouter extends Omit<IgniterRouter<any, any, any, any, any>, 'caller'> & { caller: any }
 >() => {
   return () => {
     const { register, unregister, invalidate } = useIgniterQueryClient();
