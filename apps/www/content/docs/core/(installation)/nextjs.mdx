@@ -1,0 +1,413 @@
+---
+title: Next.js
+description: Build full-stack, type-safe applications with Igniter.js and Next.js App Router.
+---
+
+Igniter.js integrates seamlessly with Next.js to provide end-to-end type safety between your React components and API layer. This guide walks you through building a complete full-stack application with the Next.js App Router.
+
+The combination delivers the best of both worlds: Next.js's excellent developer experience with React Server Components, paired with Igniter.js's automatic type inference and runtime safety. You'll write less boilerplate, catch more bugs at compile time, and ship features faster.
+
+<Callout type="info" title="App Router Required">
+  This guide uses Next.js 15+ with the App Router. The Pages Router is not supported.
+</Callout>
+
+---
+
+## Quick Start
+
+The fastest way to start is using the official CLI, which scaffolds a complete application with all necessary configuration:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npx create-igniter-app@latest my-app --template nextjs
+    cd my-app
+    npm install
+    npm run dev
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm create igniter-app my-app --template nextjs
+    cd my-app
+    pnpm install
+    pnpm dev
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn create igniter-app my-app --template nextjs
+    cd my-app
+    yarn install
+    yarn dev
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx create-igniter-app my-app --template nextjs
+    cd my-app
+    bun install
+    bun dev
+    ```
+  </Tab>
+</Tabs>
+
+Your app runs at `http://localhost:3000`. API is at `http://localhost:3000/api/v1`, and interactive docs at `http://localhost:3000/api/v1/docs` 🚀
+
+---
+
+## Manual Setup
+
+Follow this guide to add Igniter.js to an existing Next.js project or understand how everything works.
+
+### Prerequisites
+
+Before you begin, ensure you have:
+- **Node.js** 18.0+ (20.0+ recommended)
+- **Next.js** 15.0+ with App Router
+- **TypeScript** 5.0+
+
+### Step 1: Install Core Package
+
+Install Igniter.js and Zod for schema validation:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/core zod
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/core zod
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/core zod
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/core zod
+    ```
+  </Tab>
+</Tabs>
+
+Zod provides excellent TypeScript inference and runtime validation, making it the recommended choice for Igniter.js projects.
+
+### Step 2: Define Application Context
+
+The context defines dependencies available throughout your API (database, services, etc.). Create `src/igniter.context.ts`:
+
+```typescript title="src/igniter.context.ts"
+/**
+ * Application Context Type
+ * Defines what dependencies are available to all API handlers
+ */
+export interface AppContext {
+  // Add your dependencies here, e.g.:
+  // db: PrismaClient
+  // auth: AuthService
+}
+
+/**
+ * Context Factory
+ * Creates the context instance passed to handlers
+ */
+export function createIgniterAppContext(): AppContext {
+  return {
+    // Initialize dependencies here
+  }
+}
+```
+
+### Step 3: Initialize Igniter.js
+
+Create the main Igniter instance with configuration. Create `src/igniter.ts`:
+
+```typescript title="src/igniter.ts"
+import { Igniter } from '@igniter-js/core'
+import { createIgniterAppContext } from './igniter.context'
+
+export const igniter = Igniter
+  .context(createIgniterAppContext())
+  .config({
+    baseURL: process.env.NEXT_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
+    basePATH: process.env.NEXT_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
+  })
+  .docs({
+    info: {
+      title: 'My Next.js API',
+      version: '1.0.0',
+      description: 'API built with Igniter.js',
+    }
+  })
+  .create()
+```
+
+The builder pattern makes it easy to add features later like `.store()` (Redis), `.jobs()` (background tasks), `.logger()`, and `.telemetry()`.
+
+### Step 4: Create Your First Controller
+
+Controllers group related endpoints. Create `src/features/example/controllers/example.controller.ts`:
+
+```typescript title="src/features/example/controllers/example.controller.ts"
+import { igniter } from '@/igniter'
+
+export const exampleController = igniter.controller({
+  name: 'Example',
+  path: '/example',
+  actions: {
+    hello: igniter.query({
+      path: '/hello',
+      handler: async ({ response }) => {
+        return response.success({ 
+          message: 'Hello from Igniter.js!',
+          timestamp: new Date().toISOString()
+        })
+      },
+    }),
+  },
+})
+```
+
+Create barrel export at `src/features/example/index.ts`:
+
+```typescript title="src/features/example/index.ts"
+export * from './controllers/example.controller'
+```
+
+This creates `GET /api/v1/example/hello` with fully typed responses.
+
+### Step 5: Create Application Router
+
+The router assembles all controllers. Create `src/igniter.router.ts`:
+
+```typescript title="src/igniter.router.ts"
+import { igniter } from './igniter'
+import { exampleController } from './features/example'
+
+export const AppRouter = igniter.router({
+  controllers: {
+    example: exampleController
+  }
+})
+
+export type AppRouterType = typeof AppRouter
+```
+
+The type export enables the type-safe client without exposing server implementation.
+
+### Step 6: Create Next.js API Route
+
+Connect the router to Next.js using the adapter. Create `src/app/api/v1/[[...all]]/route.ts`:
+
+```typescript title="src/app/api/v1/[[...all]]/route.ts"
+import { AppRouter } from '@/igniter.router'
+import { nextRouteHandlerAdapter } from '@igniter-js/core/adapters'
+
+export const { GET, POST, PUT, DELETE } = nextRouteHandlerAdapter(AppRouter)
+```
+
+The `[[...all]]` catch-all route handles all methods and paths under `/api/v1/`.
+
+### Step 7: Generate Type-Safe Client
+
+Create the client for frontend usage at `src/igniter.client.ts`:
+
+```typescript title="src/igniter.client.ts"
+import { createIgniterClient } from '@igniter-js/core/client'
+import type { AppRouterType } from './igniter.router'
+
+export const api = createIgniterClient<AppRouterType>({
+  baseURL: process.env.NEXT_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
+  basePATH: process.env.NEXT_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
+  router: () => {
+    if (typeof window === 'undefined') {
+      return require('./igniter.router').AppRouter
+    }
+    return require('./igniter.schema').AppRouterSchema
+  },
+})
+
+export type ApiClient = typeof api
+```
+
+This client works in both Server and Client Components with full type safety.
+
+---
+
+## Usage in Components
+
+### Server Components
+
+Use direct API calls in Server Components:
+
+```typescript title="app/page.tsx"
+import { api } from '@/igniter.client'
+
+export default async function HomePage() {
+  const { message } = await api.example.hello.query()
+  
+  return <div>Message: {message}</div>
+}
+```
+
+### Client Components
+
+Use React hooks for automatic loading/error states:
+
+```typescript title="components/example.tsx"
+'use client'
+
+import { api } from '@/igniter.client'
+
+export function ExampleComponent() {
+  const { data, isLoading, error } = api.example.hello.useQuery()
+  
+  if (isLoading) return <div>Loading...</div>
+  if (error) return <div>Error: {error.message}</div>
+  
+  return <div>Message: {data.message}</div>
+}
+```
+
+---
+
+## Generating Schema and Docs
+
+Igniter.js can automatically generate OpenAPI schemas and TypeScript types for your API.
+
+### Install CLI (Optional)
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install -D @igniter-js/cli
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add -D @igniter-js/cli
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add -D @igniter-js/cli
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add -D @igniter-js/cli
+    ```
+  </Tab>
+</Tabs>
+
+### Generate Schema
+
+Run the CLI to generate `igniter.schema.ts` and OpenAPI documentation:
+
+```bash
+npx igniter-cli generate
+```
+
+This creates:
+- `src/igniter.schema.ts` - Type-safe schema for client-side usage
+- `src/docs/openapi.json` - OpenAPI 3.0 specification
+
+### Update Igniter Config
+
+Import the generated OpenAPI schema in `src/igniter.ts`:
+
+```typescript title="src/igniter.ts"
+import { Igniter } from '@igniter-js/core'
+import { createIgniterAppContext } from './igniter.context'
+import openapi from './docs/openapi.json'
+
+export const igniter = Igniter
+  .context(createIgniterAppContext())
+  .config({
+    baseURL: process.env.NEXT_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
+    basePATH: process.env.NEXT_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
+  })
+  .docs({
+    openapi, // ← Add generated OpenAPI
+    info: {
+      title: 'My Next.js API',
+      version: '1.0.0',
+      description: 'API built with Igniter.js',
+    }
+  })
+  .create()
+```
+
+---
+
+## Igniter Studio (API Playground)
+
+Igniter.js includes an interactive API playground called **Igniter Studio**, powered by Scalar. It's automatically available at `/api/v1/docs` when you configure the `.docs()` method.
+
+To access it:
+
+1. Start your dev server: `npm run dev`
+2. Navigate to `http://localhost:3000/api/v1/docs`
+3. You'll see an interactive interface where you can:
+   - Browse all API endpoints
+   - View request/response schemas
+   - Test endpoints directly in the browser
+   - See auto-generated examples
+
+The playground updates automatically as you add new endpoints or modify existing ones. It's perfect for API development and testing without needing external tools like Postman.
+
+---
+
+## Project Structure
+
+Here's the recommended structure:
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="app">
+      <Folder name="api">
+        <Folder name="v1">
+          <Folder name="[[...all]]">
+            <File name="route.ts" />
+          </Folder>
+        </Folder>
+      </Folder>
+    </Folder>
+    <Folder name="features">
+      <Folder name="example">
+        <Folder name="controllers">
+          <File name="example.controller.ts" />
+        </Folder>
+        <File name="index.ts" />
+      </Folder>
+    </Folder>
+    <Folder name="docs">
+      <File name="openapi.json" />
+    </Folder>
+    <File name="igniter.ts" />
+    <File name="igniter.context.ts" />
+    <File name="igniter.router.ts" />
+    <File name="igniter.client.ts" />
+    <File name="igniter.schema.ts" />
+  </Folder>
+</Files>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Core Concepts" href="/docs/builder">
+    Learn about Builder, Router, and Controllers
+  </Card>
+  <Card title="Actions" href="/docs/actions">
+    Create queries and mutations with validation
+  </Card>
+  <Card title="Client" href="/docs/client">
+    Master the type-safe client and hooks
+  </Card>
+</Cards>

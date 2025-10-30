@@ -1,0 +1,122 @@
+---
+title: Jobs
+description: Build robust background job processing with type-safe queues, scheduling, and workers using the BullMQ adapter.
+---
+
+The **Jobs** system in Igniter.js provides a powerful, type-safe way to handle background job processing. Built on top of BullMQ and Redis, it allows you to offload time-consuming tasks, schedule jobs for later execution, and process them reliably with built-in retry logic and monitoring.
+
+## Key Features
+
+- **Type-Safe Job Definitions**: Define jobs with Zod schemas for compile-time and runtime type safety
+- **Background Processing**: Execute long-running tasks without blocking your API
+- **Flexible Scheduling**: Schedule jobs for later execution or set up recurring cron jobs
+- **Comprehensive Retry Logic**: Built-in retry strategies with exponential backoff, linear, and custom delays
+- **Job Lifecycle Hooks**: React to job events with `onStart`, `onSuccess`, `onFailure`, and `onComplete` hooks
+- **Multi-Tenancy Support**: Organize jobs by namespace and use queue prefixes for multi-tenant applications
+- **Advanced Monitoring**: Search, filter, and monitor job status, execution times, and results
+
+## Architecture Overview
+
+Igniter.js Jobs follow an **adapter-based architecture**. The core framework defines the interface (`IgniterJobQueueAdapter`), and concrete implementations (like the BullMQ adapter) provide the actual queue processing.
+
+```typescript
+┌─────────────────────────────────────────┐
+│         @igniter-js/core               │
+│   (Job Queue Interface & Types)         │
+└─────────────────┬───────────────────────┘
+                  │
+                  │ implements
+                  │
+┌─────────────────▼───────────────────────┐
+│    @igniter-js/adapter-bullmq           │
+│   (BullMQ Implementation)                │
+└─────────────────┬───────────────────────┘
+                  │
+                  │ uses
+                  │
+         ┌────────▼────────┐
+         │      Redis      │
+         │   (Job Queue)   │
+         └─────────────────┘
+```
+
+## Quick Example
+
+Here's a minimal example showing how to set up and use jobs:
+
+```typescript
+// 1. Create the adapter
+import { createBullMQAdapter } from '@igniter-js/adapter-bullmq';
+import { createRedisStoreAdapter } from '@igniter-js/adapter-redis';
+import { Redis } from 'ioredis';
+import { z } from 'zod';
+
+const redis = new Redis(process.env.REDIS_URL);
+const store = createRedisStoreAdapter({ client: redis });
+
+const jobs = createBullMQAdapter({
+  store,
+  autoStartWorker: { concurrency: 5 },
+});
+
+// 2. Define a job router
+const emailRouter = jobs.router({
+  namespace: 'emails',
+  jobs: {
+    sendWelcome: jobs.register({
+      input: z.object({ email: z.string().email() }),
+      handler: async ({ payload, context }) => {
+        await context.emailService.sendWelcome(payload.email);
+        return { sent: true };
+      },
+    }),
+  },
+});
+
+// 3. Merge routers
+const REGISTERED_JOBS = jobs.merge({
+  emails: emailRouter,
+});
+
+// 4. Register with Igniter
+import { Igniter } from '@igniter-js/core';
+
+export const igniter = Igniter
+  .context<AppContext>()
+  .store(store)
+  .jobs(REGISTERED_JOBS)
+  .create();
+
+// 5. Use in your actions
+igniter.jobs.emails.schedule({
+  task: 'sendWelcome',
+  input: { email: 'user@example.com' },
+});
+```
+
+<Callout type="info" title="What's Next?">
+  Ready to dive in? Start with the [Getting Started](/docs/jobs/getting-started) guide to set up your first job, or explore the [Job Definitions](/docs/jobs/job-definitions) guide to understand how jobs are structured.
+</Callout>
+
+## Documentation Structure
+
+This documentation is organized into logical sections:
+
+- **Getting Started**: Set up the BullMQ adapter and create your first job
+- **Job Definitions**: Learn how to define and register jobs with type safety
+- **Routers**: Organize jobs into namespaces and routers
+- **Scheduling**: Schedule jobs for future execution with advanced options
+- **Cron Jobs**: Set up recurring jobs with cron expressions
+- **Workers**: Configure and manage job workers
+- **Search & Monitoring**: Find and monitor jobs in your queue
+- **Advanced Features**: Explore hooks, retry strategies, and webhooks
+- **Multi-Tenancy**: Build multi-tenant applications with queue prefixes
+
+---
+
+## Related Resources
+
+- **[Store Documentation](/docs/store)**: The Redis adapter used by the jobs system
+- **[Core Concepts](/docs/builder)**: Understanding the Igniter builder pattern
+- **[Context](/docs/context)**: How application context works with jobs
+

@@ -1,0 +1,163 @@
+---
+title: "TanStack Start App"
+description: "A modern full-stack application built with TanStack Start featuring type-safe routing and server functions."
+framework: "TanStack Start"
+cover: "/templates/tanstack-base-template.png"
+demo: "https://github.com/felipebarcelospro/igniter-js/tree/main/apps/starter-tanstack-start"
+repository: "https://github.com/felipebarcelospro/igniter-js/tree/main/apps/starter-tanstack-start"
+stack: ["TanStack Start", "Vite", "React", "TypeScript", "Prisma", "PostgreSQL", "Redis", "BullMQ"]
+useCases: ["Full-Stack"]
+creator:
+  username: "felipebarcelospro"
+---
+
+## Overview
+
+This template provides a modern, performant foundation for full-stack web applications using TanStack Start, Vite, and Igniter.js. It combines file-based routing with an end-to-end type-safe API layer.
+
+## Features
+
+- ✅ **Full-Stack with TanStack Start**: A cohesive, modern full-stack framework powered by Vite.
+- ✅ **End-to-End Type Safety**: Powered by Igniter.js, ensuring type safety between your front-end and back-end.
+- ✅ **File-Based Routing**: Uses TanStack Router for intuitive, type-safe routing.
+- ✅ **Server-Side Data Fetching**: Leverages TanStack Router's loaders to fetch data on the server.
+- ✅ **Feature-Based API Architecture**: A scalable project structure that organizes API code by business domain.
+- ✅ **Ready-to-Use Services**: Pre-configured examples for:
+  - **Caching**: Integrated with Redis via `@igniter-js/adapter-redis`.
+  - **Background Jobs**: Asynchronous task processing with BullMQ via `@igniter-js/adapter-bullmq`.
+- ✅ **Auto-Generated API Client**: A fully-typed client that mirrors your API, providing autocomplete and compile-time error checking.
+
+## Project Structure
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="components" />
+    <Folder name="features">
+      <Folder name="example">
+        <Folder name="controllers" />
+      </Folder>
+    </Folder>
+    <Folder name="routes">
+      <Folder name="api">
+        <Folder name="v1">
+          <File name="$.ts" />
+        </Folder>
+      </Folder>
+      <File name="__root.tsx" />
+      <File name="index.tsx" />
+    </Folder>
+    <Folder name="services" />
+    <File name="igniter.ts" />
+    <File name="igniter.client.ts" />
+    <File name="igniter.router.ts" />
+    <File name="router.tsx" />
+  </Folder>
+</Files>
+
+## Quick Start
+
+<Steps>
+  <Step>
+    ### Clone the Repository
+    ```bash
+    git clone https://github.com/felipebarcelospro/igniter-js.git
+    cd igniter-js/apps/starter-tanstack-start
+    ```
+  </Step>
+  
+  <Step>
+    ### Install Dependencies
+    <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+      <Tab value="npm">
+        ```bash
+        npm install
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm install
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn install
+        ```
+      </Tab>
+      <Tab value="bun">
+        ```bash
+        bun install
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step>
+    ### Configure Environment Variables
+    Create a `.env` file in the root of this starter and add your database and Redis connection URLs:
+    ```bash
+    # .env
+    DATABASE_URL="postgresql://user:password@localhost:5432/mydatabase?schema=public"
+    REDIS_URL="redis://127.0.0.1:6379"
+    ```
+  </Step>
+  
+  <Step>
+    ### Run Database Migrations
+    ```bash
+    npx prisma db push
+    ```
+  </Step>
+  
+  <Step>
+    ### Run the Development Server
+    ```bash
+    npm run dev
+    ```
+    Your application will be available at `http://localhost:5173`.
+  </Step>
+</Steps>
+
+<Callout type="info">
+  Ensure you have Node.js (v18 or higher), npm (or compatible package manager), a running Redis instance, and a PostgreSQL database.
+</Callout>
+
+## Key Features Explained
+
+### API Integration via Catch-All Route
+
+The connection between TanStack Start and Igniter.js is a catch-all API route at `src/routes/api/v1/$.ts`. This route captures all requests to `/api/v1/*` and delegates them to the Igniter.js API router handler.
+
+### Igniter.js API Layer
+
+Backend API logic is defined using Igniter.js:
+- **Initialization (`src/igniter.ts`)**: Core Igniter instance configured with adapters for store (Redis), jobs (BullMQ), and logging.
+- **Router (`src/igniter.router.ts`)**: Assembles the main API router by importing all feature controllers.
+- **Controllers (`src/features/[feature]/controllers/`)**: Group related API actions (queries and mutations).
+
+### Type-Safe Client & React Hooks
+
+Igniter.js automatically generates a type-safe client (`src/igniter.client.ts`) for seamless interaction with your backend from the frontend, providing full type-checking and autocompletion.
+
+**Example Client Component Usage:**
+```tsx
+// src/routes/index.tsx
+'use client';
+import { api } from '@/igniter.client';
+
+export function Component() {
+  const { data, isLoading } = api.example.health.useQuery();
+
+  if (isLoading) return <div>Loading...</div>;
+
+  return (
+    <div>
+      <h1>Welcome to TanStack Start!</h1>
+      <p>API Status: {data?.status}</p>
+    </div>
+  );
+}
+```
+
+## Deployment
+
+This template can be deployed to various platforms that support Node.js applications. Follow the quick start guide to get your application running locally, then refer to TanStack Start's deployment documentation for production environments.

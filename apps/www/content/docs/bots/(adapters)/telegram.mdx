@@ -1,0 +1,315 @@
+---
+title: Telegram Adapter
+description: Integrate your bot with Telegram using the official Telegram adapter.
+---
+
+The Telegram adapter is your gateway to the Telegram Bot API. It simplifies everything about working with Telegram—from webhook setup to command synchronization, message parsing to sending responses. Think of it as a bridge that translates between Telegram's API format and Igniter.js's unified bot interface, so you can focus on building features instead of dealing with API specifics.
+
+---
+
+## Configuration
+
+Before you can start receiving messages, you need to configure the Telegram adapter with your bot's credentials. This involves getting a token from Telegram's BotFather and optionally setting up webhook details. The configuration is straightforward, but each option plays an important role in how your bot interacts with Telegram.
+
+```typescript
+import { telegram } from '@igniter-js/bot'
+
+const telegramAdapter = telegram({
+  token: process.env.TELEGRAM_TOKEN!,
+  handle: '@your_bot_username',
+  webhook: {
+    url: process.env.TELEGRAM_WEBHOOK_URL!,
+    secret: process.env.TELEGRAM_SECRET // Optional
+  }
+})
+```
+
+### Configuration Options
+
+Each configuration option serves a specific purpose in how your bot connects and responds to Telegram:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `token` | Yes | Your Telegram Bot API token (get from @BotFather) |
+| `handle` | Yes | Your bot's username (e.g., `@my_bot`) for mention detection |
+| `webhook.url` | Optional | HTTPS endpoint where Telegram will send updates |
+| `webhook.secret` | Optional | Secret token to validate webhook authenticity |
+
+<Callout type="info" title="Getting a Token">
+  To get a Telegram bot token:
+  1. Open Telegram and search for [@BotFather](https://t.me/BotFather)
+  2. Send `/newbot` and follow the instructions
+  3. Copy the token you receive
+</Callout>
+
+---
+
+## Webhook Setup
+
+When you call `bot.start()`, the Telegram adapter handles all the tedious webhook setup automatically. This is one of the adapter's biggest conveniences—instead of manually configuring webhooks through Telegram's API, you just provide a URL and the adapter does the rest. It cleans up old webhooks, syncs your commands, and registers the new endpoint, all in one go.
+
+Here's what happens behind the scenes when you call `bot.start()`:
+
+1. **Deletes existing webhooks** - Prevents conflicts from previous configurations
+2. **Syncs bot commands** - Makes your commands appear in Telegram's command menu
+3. **Registers the new webhook** - Tells Telegram where to send incoming messages
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+
+const bot = Bot.create({
+  id: 'my-bot',
+  name: 'My Bot',
+  adapters: {
+    telegram: telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      handle: '@my_bot',
+      webhook: {
+        url: 'https://your-domain.com/api/telegram',
+        secret: process.env.TELEGRAM_SECRET
+      }
+    })
+  }
+})
+
+// This automatically sets up the webhook
+await bot.start()
+```
+
+---
+
+## Command Synchronization
+
+One of Telegram's nice features is the built-in command menu. When users type `/` in a chat with your bot, Telegram shows a list of available commands. The adapter automatically synchronizes your bot's commands with Telegram when `bot.start()` is called, so this menu stays up-to-date without any manual work.
+
+This synchronization happens automatically, but it's worth understanding how it works. The adapter reads all your registered commands (their names and descriptions) and sends them to Telegram's servers. Telegram then displays these in the command menu, making your bot more discoverable and easier to use.
+
+```typescript
+const bot = Bot.create({
+  adapters: {
+    telegram: telegram({ /* ... */ })
+  },
+  commands: {
+    start: {
+      name: 'start',
+      description: 'Start the bot', // This appears in Telegram's menu
+      // ...
+    },
+    help: {
+      name: 'help',
+      description: 'Show help', // This also appears
+      // ...
+    }
+  }
+})
+```
+
+Commands are registered for all group chats. Users can see them by typing `/` in a chat with your bot.
+
+---
+
+## Message Types Supported
+
+The Telegram adapter understands and processes various types of messages that users might send. This includes text, media files, and of course commands. Each type is normalized into Igniter.js's unified message format, so your bot code doesn't need to handle Telegram-specific structures.
+
+<Accordions>
+  <Accordion title="Text Messages">
+    The most common message type. When users send plain text, it comes through as a text message:
+    
+    ```typescript
+    // Incoming text messages
+    if (ctx.message.content?.type === 'text') {
+      const text = ctx.message.content.content
+      // Process text...
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Commands">
+    Commands are automatically parsed from messages starting with `/`. The adapter extracts the command name and parameters, making them easy to handle:
+    
+    ```typescript
+    // Command: /start hello world
+    if (ctx.message.content?.type === 'command') {
+      const command = ctx.message.content.command // 'start'
+      const params = ctx.message.content.params   // ['hello', 'world']
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Media Messages">
+    Telegram supports rich media content, and the adapter extracts all the important details for you:
+    
+    ```typescript
+    // Images
+    if (ctx.message.content?.type === 'image') {
+      const imageUrl = ctx.message.content.content
+      const file = ctx.message.content.file
+      const caption = ctx.message.content.caption
+    }
+    
+    // Documents
+    if (ctx.message.content?.type === 'document') {
+      const fileUrl = ctx.message.content.content
+      const file = ctx.message.content.file
+    }
+    
+    // Audio/Voice
+    if (ctx.message.content?.type === 'audio') {
+      const audioUrl = ctx.message.content.content
+      const file = ctx.message.content.file
+    }
+    ```
+  </Accordion>
+</Accordions>
+
+---
+
+## Sending Messages
+
+Sending messages through Telegram is straightforward—use the bot's `send` method and the adapter handles all the API details. The adapter automatically formats your message according to Telegram's requirements, so you don't need to worry about the specifics of Telegram's API.
+
+```typescript
+await ctx.bot.send({
+  provider: 'telegram',
+  channel: ctx.channel.id,
+  content: {
+    type: 'text',
+    content: 'Hello from Telegram!'
+  }
+})
+```
+
+### MarkdownV2 Formatting
+
+Telegram supports MarkdownV2 formatting for rich text, but it has strict escaping requirements. The adapter automatically escapes special characters when sending messages, so you don't accidentally break message formatting:
+
+```typescript
+// The adapter handles escaping automatically
+await ctx.bot.send({
+  provider: 'telegram',
+  channel: ctx.channel.id,
+  content: {
+    type: 'text',
+    content: 'Bold text: *hello*' // Automatically escaped
+  }
+})
+```
+
+<Callout type="info" title="MarkdownV2 Escaping">
+  The adapter uses the `escapeMarkdownV2` helper internally to ensure special characters are properly escaped. You don't need to manually escape text.
+</Callout>
+
+---
+
+## Group Mentions
+
+In group chats, bots typically shouldn't respond to every message—that would be spam. Instead, Telegram bots only respond when explicitly mentioned. The `handle` option tells the adapter how to detect when your bot is being addressed.
+
+**In private chats**: The bot always responds (no mention needed).
+
+**In group chats**: The bot only responds when:
+- The message starts with `/` (commands)
+- The message contains `@my_bot` (mentions)
+
+Use `ctx.message.isMentioned` to check if your bot was mentioned:
+
+```typescript
+bot.on('message', async (ctx) => {
+  if (ctx.message.isMentioned) {
+    // Bot was mentioned in a group chat
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: 'Hey! You mentioned me!'
+      }
+    })
+  }
+})
+```
+
+---
+
+## Error Handling
+
+The adapter handles common errors gracefully, providing clear feedback when something goes wrong. This helps you debug issues quickly and ensures your bot fails gracefully rather than crashing.
+
+- **Invalid token**: Throws error during initialization
+- **Webhook setup failure**: Logs error and throws
+- **Network errors**: Throws error for retry logic
+
+Listen to errors via the bot's error event:
+
+```typescript
+bot.on('error', async (ctx) => {
+  // @ts-expect-error - error injected internally
+  const err = ctx.error
+  console.error('Bot error:', err.code, err.message)
+})
+```
+
+---
+
+## Complete Example
+
+Here's a complete example that brings together everything we've covered: configuration, command handling, message processing, and error handling. This example shows how all the pieces fit together in a real-world bot. You can use this as a starting point for your own Telegram bot, adapting it to your specific needs.
+
+This example demonstrates:
+- **Adapter Configuration**: Setting up the Telegram adapter with token, handle, and webhook details
+- **Command Handling**: Creating commands with aliases and descriptions that sync with Telegram's menu
+- **Event Listeners**: Reacting to incoming messages and errors
+- **Message Sending**: Using the unified API to send responses to users
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+
+const bot = Bot.create({
+  id: 'telegram-bot',
+  name: 'Telegram Bot',
+  adapters: {
+    telegram: telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      handle: '@my_telegram_bot',
+      webhook: {
+        url: process.env.TELEGRAM_WEBHOOK_URL!,
+        secret: process.env.TELEGRAM_SECRET
+      }
+    })
+  },
+  commands: {
+    start: {
+      name: 'start',
+      aliases: ['hello'],
+      description: 'Start the bot',
+      help: 'Use /start to begin',
+      async handle(ctx) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: `👋 Hello! Welcome to ${ctx.bot.name}`
+          }
+        })
+      }
+    }
+  },
+  on: {
+    message: async (ctx) => {
+      // Log all text messages
+      if (ctx.message.content?.type === 'text') {
+        console.log(`Text from ${ctx.message.author.name}: ${ctx.message.content.content}`)
+      }
+    },
+    error: async (ctx) => {
+      // @ts-expect-error
+      console.error('Error:', ctx.error)
+    }
+  }
+})
+
+await bot.start()
+```
+

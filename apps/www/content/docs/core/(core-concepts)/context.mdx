@@ -1,0 +1,709 @@
+---
+title: Context
+description: Master application context in Igniter.js with static and dynamic patterns for request-scoped data, dependency injection, and type-safe access.
+---
+
+## Overview
+
+**Context** is the foundation of your Igniter.js application. It provides shared data and dependencies that are available to every action, procedure, and middleware throughout your API.
+
+```typescript
+import { Igniter } from '@igniter-js/core';
+
+const igniter = Igniter
+  .context<AppContext>()
+  .create();
+```
+
+<Callout type="info" title="What is Context?">
+  Context is an object containing your application's dependencies (database, services, configuration) and request-specific data (user, session, request ID) that flows through every action.
+</Callout>
+
+---
+
+## Context Types
+
+Igniter.js supports two context patterns:
+
+### Static Context
+
+A **fixed object** that remains the same for all requests. Best for:
+- ✅ Database connections
+- ✅ Service instances
+- ✅ Application configuration
+- ✅ Shared utilities
+
+```typescript
+interface AppContext {
+  db: Database;
+  config: AppConfig;
+  services: {
+    email: EmailService;
+    storage: StorageService;
+  };
+}
+
+const igniter = Igniter
+  .context<AppContext>()
+  .create();
+```
+
+### Dynamic Context (Callback)
+
+A **function** that creates context for each request. Best for:
+- ✅ User authentication
+- ✅ Session management
+- ✅ Request IDs
+- ✅ Per-request telemetry
+
+```typescript
+type ContextCallback = (req: Request) => Promise<AppContext> | AppContext;
+
+const igniter = Igniter
+  .context(async (req: Request) => {
+    const session = await getSession(req);
+    const user = session ? await db.users.findById(session.userId) : null;
+    
+    return {
+      db,
+      user,
+      session,
+      requestId: crypto.randomUUID(),
+      ip: req.headers.get('x-forwarded-for') || 'unknown'
+    };
+  })
+  .create();
+```
+
+---
+
+## Static Context
+
+### Defining Static Context
+
+Use a type parameter to define your context shape:
+
+```typescript
+import { Igniter } from '@igniter-js/core';
+import { db } from './lib/database';
+import { emailService } from './lib/email';
+import { storageService } from './lib/storage';
+
+interface AppContext {
+  db: Database;
+  email: EmailService;
+  storage: StorageService;
+  config: {
+    apiUrl: string;
+    env: 'development' | 'production';
+  };
+}
+
+const igniter = Igniter
+  .context<AppContext>()
+  .create();
+```
+
+<Callout type="warn" title="Type Only">
+  With static context using `.context<T>()`, you're only defining the **type**. The actual context object is typically provided globally or through your framework's environment.
+</Callout>
+
+### Accessing Static Context
+
+```typescript
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    list: igniter.query({
+      handler: async ({ context, response }) => {
+        // ✅ context.db is fully typed as Database
+        const users = await context.db.users.findMany();
+        
+        // ✅ context.email is EmailService
+        await context.email.send({
+          to: 'admin@example.com',
+          subject: 'Users listed',
+          body: `Found ${users.length} users`
+        });
+        
+        return response.success({ users });
+      }
+    })
+  }
+});
+```
+
+### When to Use Static Context
+
+Use static context when:
+- Your dependencies don't change per request
+- You don't need per-request isolation
+- You want simpler configuration
+- Performance is critical (no callback overhead)
+
+**Example: Shared Services**
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+import { Redis } from 'ioredis';
+
+const db = new PrismaClient();
+const redis = new Redis();
+
+interface AppContext {
+  db: typeof db;
+  redis: typeof redis;
+  env: {
+    nodeEnv: string;
+    apiUrl: string;
+  };
+}
+
+const igniter = Igniter
+  .context<AppContext>()
+  .create();
+```
+
+---
+
+## Dynamic Context (Callback)
+
+### Defining Dynamic Context
+
+Pass a function that receives the `Request` object and returns context:
+
+```typescript
+import { Igniter } from '@igniter-js/core';
+
+const igniter = Igniter
+  .context(async (req: Request) => {
+    // Extract auth token
+    const token = req.headers.get('authorization')?.replace('Bearer ', '');
+    
+    // Get user from token
+    const user = token ? await getUserFromToken(token) : null;
+    
+    // Get session
+    const sessionId = req.headers.get('x-session-id');
+    const session = sessionId ? await getSession(sessionId) : null;
+    
+    return {
+      db,
+      user,
+      session,
+      requestId: crypto.randomUUID(),
+      timestamp: new Date(),
+      ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+      userAgent: req.headers.get('user-agent') || 'unknown'
+    };
+  })
+  .create();
+```
+
+### Accessing Dynamic Context
+
+The context is **created fresh for each request** and injected into every action:
+
+```typescript
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    me: igniter.query({
+      handler: async ({ context, response }) => {
+        // ✅ context.user is inferred from callback return type
+        if (!context.user) {
+          return response.unauthorized({
+            message: 'Authentication required'
+          });
+        }
+        
+        // ✅ Access request-specific data
+        console.log('Request ID:', context.requestId);
+        console.log('User IP:', context.ip);
+        
+        return response.success({
+          user: context.user,
+          session: context.session
+        });
+      }
+    })
+  }
+});
+```
+
+### When to Use Dynamic Context
+
+Use dynamic context when:
+- You need authentication/authorization
+- You want per-request isolation
+- You need request-specific metadata (IDs, timestamps)
+- You have request-dependent dependencies
+
+**Example: Multi-Tenant Application**
+
+```typescript
+const igniter = Igniter
+  .context(async (req: Request) => {
+    // Extract tenant from subdomain or header
+    const hostname = new URL(req.url).hostname;
+    const tenant = hostname.split('.')[0];
+    
+    // Get tenant-specific database
+    const db = await getTenantDatabase(tenant);
+    
+    // Get user
+    const user = await getUserFromRequest(req);
+    
+    return {
+      tenant,
+      db,
+      user,
+      requestId: crypto.randomUUID()
+    };
+  })
+  .create();
+```
+
+---
+
+## Type Inference
+
+### Automatic Inference from Callback
+
+TypeScript automatically infers the context type from your callback's return value:
+
+```typescript
+const igniter = Igniter
+  .context(async (req: Request) => {
+    return {
+      db: database,
+      user: await getUser(req),
+      timestamp: new Date()
+    };
+  })
+  .create();
+
+// ✅ Context type is automatically:
+// {
+//   db: typeof database;
+//   user: User | null;
+//   timestamp: Date;
+// }
+```
+
+### Explicit Type Annotation
+
+You can also explicitly type the callback:
+
+```typescript
+interface AppContext {
+  db: Database;
+  user: User | null;
+  requestId: string;
+}
+
+const igniter = Igniter
+  .context(async (req: Request): Promise<AppContext> => {
+    return {
+      db: database,
+      user: await getUser(req),
+      requestId: crypto.randomUUID()
+    };
+  })
+  .create();
+```
+
+### Extracting Context Type
+
+Get the context type from your router:
+
+```typescript
+const AppRouter = igniter.router({
+  controllers: { users: userController }
+});
+
+// Extract context type
+type AppContext = typeof AppRouter.$Infer.$context;
+
+// Use in external functions
+async function getUserData(context: AppContext) {
+  return context.db.users.findMany();
+}
+```
+
+---
+
+## Context with Procedures
+
+Procedures can **extend the context** by adding new properties:
+
+```typescript
+import { igniter } from '@/igniter';
+
+// Create auth procedure that adds `currentUser`
+const authProcedure = igniter.procedure({
+  handler: async ({ context, request }) => {
+    const token = request.headers.get('authorization');
+    
+    if (!token) {
+      throw new Error('No authorization token');
+    }
+    
+    const user = await verifyToken(token);
+    
+    // ✅ Extend context with currentUser
+    return {
+      currentUser: user
+    };
+  }
+});
+
+// Use in action
+const protectedController = igniter.controller({
+  path: '/protected',
+  actions: {
+    getData: igniter.query({
+      path: '/',
+      procedures: [authProcedure],
+      handler: async ({ context, response }) => {
+        // ✅ context.currentUser is available!
+        console.log('Current user:', context.currentUser);
+        
+        return response.success({
+          message: `Hello, ${context.currentUser.name}`
+        });
+      }
+    })
+  }
+});
+```
+
+<Callout type="success" title="Type-Safe Extension">
+  The context type automatically includes properties added by procedures. Full IntelliSense!
+</Callout>
+
+---
+
+## Context Best Practices
+
+### 1. Keep Context Lightweight
+
+Don't load unnecessary data in context:
+
+```typescript
+// ❌ Bad - Loading everything upfront
+const igniter = Igniter
+  .context(async (req: Request) => {
+    const user = await getUser(req);
+    const posts = await db.posts.findMany({ userId: user.id });     // ❌ Not always needed
+    const comments = await db.comments.findMany({ userId: user.id }); // ❌ Not always needed
+    
+    return { db, user, posts, comments };
+  })
+  .create();
+
+// ✅ Good - Load only what's needed
+const igniter = Igniter
+  .context(async (req: Request) => {
+    const user = await getUser(req);
+    
+    return { db, user };  // ✅ Load posts/comments in actions when needed
+  })
+  .create();
+```
+
+### 2. Use Lazy Loading
+
+Create helper functions for optional data:
+
+```typescript
+const igniter = Igniter
+  .context(async (req: Request) => {
+    const userId = await getUserIdFromToken(req);
+    
+    return {
+      db,
+      userId,
+      // ✅ Lazy loader for user data
+      getUser: async () => {
+        return userId ? await db.users.findById(userId) : null;
+      },
+      // ✅ Lazy loader for permissions
+      getPermissions: async () => {
+        return userId ? await db.permissions.findMany({ userId }) : [];
+      }
+    };
+  })
+  .create();
+
+// Usage in action
+const userController = igniter.controller({
+  actions: {
+    profile: igniter.query({
+      handler: async ({ context, response }) => {
+        // Only loads user if needed
+        const user = await context.getUser();
+        return response.success({ user });
+      }
+    })
+  }
+});
+```
+
+### 3. Cache Expensive Operations
+
+Use memoization for expensive context operations:
+
+```typescript
+const igniter = Igniter
+  .context(async (req: Request) => {
+    const userId = await getUserIdFromToken(req);
+    
+    // ✅ Cache user data
+    let cachedUser: User | null = null;
+    
+    return {
+      db,
+      userId,
+      getUser: async () => {
+        if (!cachedUser && userId) {
+          cachedUser = await db.users.findById(userId);
+        }
+        return cachedUser;
+      }
+    };
+  })
+  .create();
+```
+
+### 4. Separate Concerns
+
+Structure context into logical groups:
+
+```typescript
+const igniter = Igniter
+  .context(async (req: Request) => {
+    return {
+      // Database
+      db: database,
+      
+      // Authentication
+      auth: {
+        user: await getUser(req),
+        session: await getSession(req),
+        permissions: await getPermissions(req)
+      },
+      
+      // Request metadata
+      meta: {
+        requestId: crypto.randomUUID(),
+        timestamp: new Date(),
+        ip: req.headers.get('x-forwarded-for') || 'unknown'
+      },
+      
+      // Services
+      services: {
+        email: emailService,
+        storage: storageService,
+        analytics: analyticsService
+      }
+    };
+  })
+  .create();
+
+// Usage
+const handler = async ({ context, response }) => {
+  console.log('User:', context.auth.user);
+  console.log('Request ID:', context.meta.requestId);
+  await context.services.email.send({ ... });
+};
+```
+
+---
+
+## Advanced Patterns
+
+### Conditional Context
+
+Adjust context based on request properties:
+
+```typescript
+const igniter = Igniter
+  .context(async (req: Request) => {
+    const isAdmin = req.headers.get('x-admin-key') === process.env.ADMIN_KEY;
+    
+    return {
+      db,
+      user: await getUser(req),
+      isAdmin,
+      // ✅ Admin-only database access
+      adminDb: isAdmin ? adminDatabase : null
+    };
+  })
+  .create();
+```
+
+### Multi-Tenant Context
+
+Route requests to tenant-specific resources:
+
+```typescript
+const igniter = Igniter
+  .context(async (req: Request) => {
+    // Extract tenant from header or subdomain
+    const tenant = req.headers.get('x-tenant-id') || extractTenantFromHost(req);
+    
+    if (!tenant) {
+      throw new Error('Tenant not specified');
+    }
+    
+    // Get tenant-specific database connection
+    const db = await getTenantDatabase(tenant);
+    
+    return {
+      tenant,
+      db,
+      user: await getUser(req),
+      requestId: crypto.randomUUID()
+    };
+  })
+  .create();
+```
+
+### Request Tracing Context
+
+Add distributed tracing metadata:
+
+```typescript
+const igniter = Igniter
+  .context(async (req: Request) => {
+    const traceId = req.headers.get('x-trace-id') || crypto.randomUUID();
+    const spanId = crypto.randomUUID();
+    
+    return {
+      db,
+      user: await getUser(req),
+      trace: {
+        traceId,
+        spanId,
+        parentSpanId: req.headers.get('x-parent-span-id') || null
+      }
+    };
+  })
+  .create();
+```
+
+---
+
+## Context vs Procedures
+
+| Feature | Context | Procedures |
+|---------|---------|------------|
+| **When runs** | Once per request | For specific actions |
+| **Purpose** | Provide base dependencies | Add action-specific logic |
+| **Scope** | All actions | Selected actions |
+| **Type merging** | Base type | Extends base type |
+| **Performance** | Runs for every request | Runs only when needed |
+
+**Use context for:**
+- Database connections
+- Core services
+- Request metadata
+- User authentication (basic)
+
+**Use procedures for:**
+- Role-based authorization
+- Input transformation
+- Rate limiting
+- Action-specific enrichment
+
+---
+
+## Complete Example
+
+Here's a production-ready context setup:
+
+```typescript
+import { Igniter } from '@igniter-js/core';
+import { PrismaClient } from '@prisma/client';
+import { Redis } from 'ioredis';
+
+// Services
+const db = new PrismaClient();
+const redis = new Redis(process.env.REDIS_URL);
+const emailService = createEmailService();
+
+// Context callback
+const igniter = Igniter
+  .context(async (req: Request) => {
+    // Extract request metadata
+    const requestId = crypto.randomUUID();
+    const ip = req.headers.get('x-forwarded-for') || 'unknown';
+    const userAgent = req.headers.get('user-agent') || 'unknown';
+    
+    // Authentication
+    const token = req.headers.get('authorization')?.replace('Bearer ', '');
+    let user = null;
+    let session = null;
+    
+    if (token) {
+      try {
+        const decoded = await verifyJWT(token);
+        user = await db.users.findUnique({ where: { id: decoded.userId } });
+        session = await redis.get(`session:${decoded.sessionId}`);
+      } catch (error) {
+        console.error('Auth error:', error);
+      }
+    }
+    
+    return {
+      // Core dependencies
+      db,
+      redis,
+      
+      // Services
+      email: emailService,
+      
+      // Authentication
+      user,
+      session,
+      
+      // Request metadata
+      requestId,
+      ip,
+      userAgent,
+      timestamp: new Date(),
+      
+      // Feature flags
+      features: {
+        enableAnalytics: process.env.FEATURE_ANALYTICS === 'true',
+        enableNotifications: process.env.FEATURE_NOTIFICATIONS === 'true'
+      }
+    };
+  })
+  .create();
+
+export { igniter };
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Procedures" href="/docs/procedures">
+    Learn how to extend context with reusable middleware
+  </Card>
+  
+  <Card title="Actions" href="/docs/actions">
+    Use context in queries and mutations
+  </Card>
+  
+  <Card title="Error Handling" href="/docs/error-handling">
+    Handle context errors gracefully
+  </Card>
+  
+  <Card title="Testing" href="/docs/testing">
+    Mock context for unit tests
+  </Card>
+</Cards>

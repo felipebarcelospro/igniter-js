@@ -1,0 +1,654 @@
+---
+title: Pub/Sub Messaging
+description: Publish and subscribe to channels for event-driven communication. Build real-time features, microservices communication, and decoupled architectures using Pub/Sub.
+---
+
+## Overview
+
+Pub/Sub (Publish/Subscribe) messaging enables event-driven communication between different parts of your application or across microservices. The Store adapter provides a simple, type-safe interface for publishing messages to channels and subscribing to receive them.
+
+<Callout type="info">
+  Pub/Sub is particularly powerful for building real-time features, decoupling services, and implementing event-driven architectures. Messages are automatically serialized as JSON.
+</Callout>
+
+---
+
+## Core Concepts
+
+### Channels
+
+Channels are named topics where messages are published. Subscribers listen to specific channels to receive messages.
+
+```typescript
+// Channel names can be any string
+const channel = 'notifications';
+const channel = 'user:123:events';
+const channel = 'orders:updates';
+```
+
+### Publishers
+
+Publishers send messages to channels. Any part of your application can publish messages.
+
+### Subscribers
+
+Subscribers register callbacks to receive messages from channels. Multiple subscribers can listen to the same channel.
+
+---
+
+## Basic Usage
+
+### Publishing Messages
+
+Use `publish()` to send messages to a channel:
+
+```typescript
+handler: async ({ context }) => {
+  // Publish a simple message
+  await context.store.publish('notifications', {
+    userId: '123',
+    message: 'You have a new notification',
+    timestamp: new Date().toISOString(),
+  });
+  
+  return response.success({ published: true });
+}
+```
+
+### Subscribing to Channels
+
+Use `subscribe()` to listen for messages:
+
+```typescript
+// In your application startup or service initialization
+const setupSubscriptions = async (context: AppContext) => {
+  await context.store.subscribe('notifications', async (message) => {
+    console.log('Notification received:', message);
+    
+    // Process the notification
+    await processNotification(message);
+  });
+};
+```
+
+### Unsubscribing
+
+Use `unsubscribe()` to stop listening:
+
+```typescript
+// Remove a specific callback
+const callback = async (message) => { /* ... */ };
+await context.store.subscribe('notifications', callback);
+
+// Later, unsubscribe
+await context.store.unsubscribe('notifications', callback);
+
+// Or unsubscribe all callbacks for a channel
+await context.store.unsubscribe('notifications');
+```
+
+---
+
+## Common Patterns
+
+### Event Broadcasting
+
+Broadcast events to all subscribers:
+
+```typescript
+// Publisher: User action triggers event
+export const usersController = igniter.controller({
+  path: '/users',
+  actions: {
+    update: igniter.mutation({
+      handler: async ({ request, context, response }) => {
+        const user = await context.db.user.update({
+          where: { id: request.params.id },
+          data: request.body,
+        });
+        
+        // Broadcast user update event
+        await context.store.publish('user:updated', {
+          userId: user.id,
+          changes: request.body,
+          timestamp: new Date().toISOString(),
+        });
+        
+        return response.success({ user });
+      },
+    }),
+  },
+});
+
+// Subscriber: Listen for user updates
+await context.store.subscribe('user:updated', async (event) => {
+  // Update search index
+  await updateSearchIndex(event.userId);
+  
+  // Send notification
+  await sendNotification(event.userId, 'Your profile was updated');
+  
+  // Update analytics
+  await trackEvent('user_updated', event);
+});
+```
+
+### Real-Time Notifications
+
+Build real-time notification systems:
+
+```typescript
+// Publisher: Send notification
+const sendNotification = async (
+  userId: string,
+  message: string,
+  context: AppContext
+) => {
+  await context.store.publish(`notifications:${userId}`, {
+    userId,
+    message,
+    read: false,
+    createdAt: new Date().toISOString(),
+  });
+};
+
+// Subscriber: Listen for user-specific notifications
+const setupUserNotifications = async (userId: string, context: AppContext) => {
+  await context.store.subscribe(`notifications:${userId}`, async (notification) => {
+    // Send WebSocket message to user
+    await sendWebSocketMessage(userId, notification);
+    
+    // Store in database
+    await context.db.notification.create({
+      data: notification,
+    });
+  });
+};
+```
+
+### Cross-Service Communication
+
+Enable communication between microservices:
+
+```typescript
+// Already in Service A
+await context.store.publish('order:created', {
+  orderId: '123',
+  userId: '456',
+  items: [...],
+  total: 99.99,
+});
+
+// Service B: Process orders
+await context.store.subscribe('order:created', async (order) => {
+  // Calculate shipping
+  const shipping = await calculateShipping(order);
+  
+  // Publish to next service
+  await context.store.publish('order:shipping:calculated', {
+    orderId: order.orderId,
+    shipping,
+  });
+});
+
+// Service C: Send confirmation
+await context.store.subscribe('order:shipping:calculated', async (data) => {
+  await sendOrderConfirmation(data.orderId);
+});
+```
+
+---
+
+## Advanced Patterns
+
+### Fan-Out Pattern
+
+Publish to multiple channels from a single event:
+
+```typescript
+const publishUserEvent = async (event: UserEvent, context: AppContext) => {
+  // Publish to general channel
+  await context.store.publish('events:all', event);
+  
+  // Publish to user-specific channel
+  await context.store.publish(`events:user:${event.userId}`, event);
+  
+  // Publish to feature-specific channel
+  if (event.type === 'profile_updated') {
+    await context.store.publish('events:profile', event);
+  }
+};
+```
+
+### Filtering and Routing
+
+Implement message filtering:
+
+```typescript
+// Subscriber with filtering logic
+await context.store.subscribe('events:all', async (event) => {
+  // Only process events for active users
+  if (event.userStatus === 'active') {
+    await processEvent(event);
+  }
+  
+  // Route to specific handlers based on type
+  switch (event.type) {
+    case 'user_created':
+      await handleUserCreated(event);
+      break;
+    case 'user_updated':
+      await handleUserUpdated(event);
+      break;
+    default:
+      await handleGenericEvent(event);
+  }
+});
+```
+
+### Request-Response Pattern
+
+Implement request-response using correlation IDs:
+
+```typescript
+// Requestor
+const requestData = async (query: string, context: AppContext) => {
+  const correlationId = generateId();
+  
+  return new Promise((resolve) => {
+    // Subscribe to response channel
+    const responseCallback = async (response: any) => {
+      if (response.correlationId === correlationId) {
+        await context.store.unsubscribe(`response:${correlationId}`, responseCallback);
+        resolve(response.data);
+      }
+    };
+    
+    context.store.subscribe(`response:${correlationId}`, responseCallback);
+    
+    // Publish request
+    context.store.publish('requests:data', {
+      correlationId,
+      query,
+    });
+  });
+};
+
+// Responder
+await context.store.subscribe('requests:data', async (request) => {
+  const data = await fetchData(request.query);
+  
+  await context.store.publish(`response:${request.correlationId}`, {
+    correlationId: request.correlationId,
+    data,
+  });
+});
+```
+
+---
+
+## Channel Naming Conventions
+
+Use consistent naming patterns for better organization:
+
+```typescript
+// Entity-based channels
+`user:${userId}:events`           // User-specific events
+`order:${orderId}:updates`         // Order updates
+`product:${productId}:changes`     // Product changes
+
+// Feature-based channels
+`notifications:${userId}`          // User notifications
+`chat:${roomId}:messages`          // Chat messages
+`analytics:events`                 // Analytics events
+
+// Service-based channels
+`email:send`                       // Email service
+`payment:process`                  // Payment service
+`inventory:update`                 // Inventory service
+
+// Pattern-based channels
+`events:${entityType}:${entityId}` // Generic event pattern
+`commands:${commandType}`          // Command pattern
+`queries:${queryType}`            // Query pattern
+```
+
+---
+
+## Error Handling
+
+Handle errors in subscribers gracefully:
+
+```typescript
+await context.store.subscribe('orders:created', async (order) => {
+  try {
+    await processOrder(order);
+  } catch (error) {
+    // Log error but don't break the subscription
+    context.logger.error('Failed to process order', {
+      error,
+      orderId: order.id,
+    });
+    
+    // Optionally publish error event
+    await context.store.publish('errors:orders', {
+      orderId: order.id,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+```
+
+### Retry Logic
+
+Implement retry logic for critical messages:
+
+```typescript
+const processWithRetry = async (
+  message: any,
+  maxRetries = 3
+): Promise<void> => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await processMessage(message);
+      return; // Success
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error; // Final attempt failed
+      }
+      
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve =>
+        setTimeout(resolve, Math.pow(2, attempt) * 1000)
+      );
+    }
+  }
+};
+
+await context.store.subscribe('critical:events', async (message) => {
+  await processWithRetry(message);
+});
+```
+
+---
+
+## Lifecycle Management
+
+### Application Startup
+
+Initialize subscriptions on application startup:
+
+```typescript
+// src/services/subscriptions.ts
+export const initializeSubscriptions = async (context: AppContext) => {
+  // User events
+  await context.store.subscribe('user:created', handleUserCreated);
+  await context.store.subscribe('user:updated', handleUserUpdated);
+  await context.store.subscribe('user:deleted', handleUserDeleted);
+  
+  // Order events
+  await context.store.subscribe('order:created', handleOrderCreated);
+  await context.store.subscribe('order:status:changed', handleOrderStatusChanged);
+  
+  // Notifications
+  await context.store.subscribe('notifications', handleNotification);
+  
+  console.log('✅ All subscriptions initialized');
+};
+```
+
+### Graceful Shutdown
+
+Clean up subscriptions on shutdown:
+
+```typescript
+const cleanupSubscriptions = async (context: AppContext) => {
+  // Unsubscribe from all channels
+  await context.store.unsubscribe('user:created');
+  await context.store.unsubscribe('user:updated');
+  await context.store.unsubscribe('order:created');
+  // ... other subscriptions
+  
+  console.log('✅ All subscriptions cleaned up');
+};
+
+// In your shutdown handler
+process.on('SIGTERM', async () => {
+  await cleanupSubscriptions(context);
+  process.exit(0);
+});
+```
+
+---
+
+## Real-World Examples
+
+### Activity Feed
+
+Build an activity feed system:
+
+```typescript
+// Publisher: User performs action
+const recordActivity = async (
+  userId: string,
+  activity: Activity,
+  context: AppContext
+) => {
+  // Store in database
+  await context.db.activity.create({
+    data: { userId, ...activity },
+  });
+  
+  // Publish to activity feed
+  await context.store.publish(`feed:${userId}`, {
+    userId,
+    activity,
+    timestamp: new Date().toISOString(),
+  });
+  
+  // Also publish to global feed
+  await context.store.publish('feed:global', {
+    userId,
+    activity,
+    timestamp: new Date().toISOString(),
+  });
+};
+
+// Subscriber: Update activity feed cache
+await context.store.subscribe('feed:global', async (activity) => {
+  // Update cached feed
+  const feed = await context.store.get<Activity[]>('feed:global:cached') || [];
+  feed.unshift(activity);
+  
+  // Keep only last 100 activities
+  const limitedFeed = feed.slice(0, 100);
+  await context.store.set('feed:global:cached', limitedFeed, { ttl: 3600 });
+});
+```
+
+### Cache Invalidation
+
+Invalidate cache when data changes:
+
+```typescript
+// Publisher: Data updated
+const updateProduct = async (
+  productId: string,
+  data: ProductData,
+  context: AppContext
+) => {
+  await context.db.product.update({
+    where: { id: productId },
+    data,
+  });
+  
+  // Publish cache invalidation event
+  await context.store.publish('cache:invalidate', {
+    keys: [
+      `product:${productId}`,
+      'products:list',
+      `product:${productId}:related`,
+    ],
+  });
+};
+
+// Subscriber: Invalidate cache
+await context.store.subscribe('cache:invalidate', async (event) => {
+  await Promise.all(
+    event.keys.map(key => context.store.delete(key))
+  );
+});
+```
+
+### Multi-Tenant Events
+
+Handle multi-tenant scenarios:
+
+```typescript
+// Publisher: Tenant-scoped event
+const publishTenantEvent = async (
+  tenantId: string,
+  event: Event,
+  context: AppContext
+) => {
+  await context.store.publish(`tenant:${tenantId}:events`, event);
+};
+
+// Subscriber: Tenant-specific handler
+const setupTenantSubscriptions = async (
+  tenantId: string,
+  context: AppContext
+) => {
+  await context.store.subscribe(`tenant:${tenantId}:events`, async (event) => {
+    // Process tenant-specific event
+    await processTenantEvent(tenantId, event);
+  });
+};
+```
+
+---
+
+## Best Practices
+
+### 1. Use Meaningful Channel Names
+
+```typescript
+// ✅ Good: Clear and descriptive
+await context.store.publish('order:created', orderData);
+await context.store.publish('user:profile:updated', profileData);
+
+// ❌ Bad: Vague or unclear
+await context.store.publish('event', data);
+await context.store.publish('update', data);
+```
+
+### 2. Structure Your Messages
+
+```typescript
+// ✅ Good: Well-structured message
+await context.store.publish('order:created', {
+  orderId: '123',
+  userId: '456',
+  items: [...],
+  total: 99.99,
+  timestamp: new Date().toISOString(),
+  metadata: {
+    source: 'api',
+    version: '1.0',
+  },
+});
+
+// ❌ Bad: Unstructured or unclear
+await context.store.publish('order:created', 'some data');
+```
+
+### 3. Handle Errors Gracefully
+
+```typescript
+// ✅ Good: Error handling
+await context.store.subscribe('events', async (message) => {
+  try {
+    await processMessage(message);
+  } catch (error) {
+    context.logger.error('Failed to process message', { error, message });
+    // Don't throw - keep subscription alive
+  }
+});
+```
+
+### 4. Avoid Long-Running Operations
+
+Keep subscriber callbacks fast, or offload work:
+
+```typescript
+// ✅ Good: Offload heavy work
+await context.store.subscribe('orders:created', async (order) => {
+  // Schedule job for heavy processing
+  await igniter.jobs.orders.schedule({
+    task: 'processOrder',
+    input: { orderId: order.id },
+  });
+});
+
+// ❌ Bad: Heavy work in subscriber
+await context.store.subscribe('orders:created', async (order) => {
+  await heavyProcessing(order); // Blocks other messages
+});
+```
+
+---
+
+## Troubleshooting
+
+### Messages Not Received
+
+If subscribers aren't receiving messages:
+
+1. **Verify subscription is active:**
+   ```typescript
+   // Ensure subscription is set up before publishing
+   await context.store.subscribe('channel', callback);
+   await context.store.publish('channel', message);
+   ```
+
+2. **Check channel names match:**
+   ```typescript
+   // Publisher and subscriber must use exact same channel name
+   await context.store.publish('notifications', message);
+   await context.store.subscribe('notifications', callback); // ✅ Match
+   ```
+
+3. **Verify Redis connection:**
+   ```typescript
+   const redis = (context.store.client as Redis);
+   await redis.ping(); // Should return 'PONG'
+   ```
+
+### Duplicate Messages
+
+If messages are received multiple times:
+
+- This is expected behavior - each subscriber receives all messages
+- Use idempotency keys to handle duplicates:
+  ```typescript
+  const processedIds = new Set<string>();
+  
+  await context.store.subscribe('events', async (message) => {
+    if (processedIds.has(message.id)) {
+      return; // Already processed
+    }
+    
+    processedIds.add(message.id);
+    await processMessage(message);
+  });
+  ```
+
+---
+
+## Next Steps
+
+- Learn about [atomic operations](/docs/store/atomic-operations) for counters
+- Explore [advanced usage patterns](/docs/store/advanced)
+- Check out the complete [API reference](/docs/store/api-reference)
+

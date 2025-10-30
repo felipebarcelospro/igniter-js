@@ -1,0 +1,79 @@
+---
+title: "v0.2.0-alpha.0 - Modular Architecture & Real-Time Support"
+description: "Major release introducing modular adapters, real-time capabilities, build-time extraction, and Turborepo migration."
+---
+
+Released on June 30, 2025
+
+## Major Features
+
+### Modular Architecture
+
+Igniter.js is now a fully modular, type-safe backend framework. This alpha release debuts a robust architecture with first-class type safety, powerful built-in features, and standalone adapters for extensibility and flexibility.
+
+### Adapters Extracted to Standalone Packages
+
+All adapters are now standalone packages:
+
+- `@igniter-js/adapter-redis` - Redis adapter for caching and pub/sub
+- `@igniter-js/adapter-bullmq` - BullMQ adapter for background jobs
+- `@igniter-js/adapter-opentelemetry` - OpenTelemetry adapter for telemetry
+- `@igniter-js/adapter-mcp-server` - MCP Server adapter for AI integrations
+
+### Real-Time System
+
+- **Type-Safe Events**: Type-safe, context-aware event publishing and subscription
+- **Server-Sent Events**: Built-in SSE processor with automatic client management
+- **Channel-Based**: Channel-based, namespaced communication with fine-grained access control
+- **Automatic Reconnection**: Automatic reconnection and event replay for reliable delivery
+- **Strongly-Typed**: Strongly-typed event payloads and handler signatures
+
+### Build-Time Extraction
+
+- **Zero Bundle Contamination**: Resolved bundle contamination (2.3MB → 45KB)
+- **Schema-Based Client**: Create schema-based client that eliminates bundle contamination
+- **Type-Safe Client**: Generate type-safe client with zero server code contamination
+- **Framework Detection**: Automatic framework detection and auto-configuration
+
+### Turborepo Migration
+
+Migrated repository to Turborepo monorepo structure for better build performance and developer experience.
+
+## Breaking Changes
+
+- **New Modular Package Architecture**: Adapters extracted into standalone packages
+- **Updated Import Paths**: Updated import paths and API patterns
+- **Client-Side Proxy**: Implemented client-side proxy to prevent handler execution
+
+## Bug Fixes
+
+- Fixed client error handling in createFetcher
+- Fixed response processor to return structured error format
+- Fixed request processor to handle optional middleware use array
+- Fixed client environment detection and bundling issues
+- Added 'use client' directive to igniter.client.ts to resolve Next.js error
+
+## Documentation
+
+- Complete rewrite of README.md
+- Added comprehensive guides for all starter applications
+- Added MCP adapter documentation
+
+## Installation
+
+```bash
+# Core framework
+npm install @igniter-js/core
+
+# Choose the adapters you need
+npm install @igniter-js/adapter-redis ioredis
+npm install @igniter-js/adapter-bullmq bullmq
+npm install @igniter-js/adapter-opentelemetry
+npm install @igniter-js/adapter-mcp-server
+```
+
+## Links
+
+- [Getting Started](/docs/core/quick-start)
+- [Adapters Documentation](/docs/store)
+

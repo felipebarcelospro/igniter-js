@@ -1,0 +1,9 @@
+{
+  "title": "Adapters",
+  "pages": [
+    "telegram",
+    "whatsapp",
+    "creating-custom-adapters"
+  ]
+}
+

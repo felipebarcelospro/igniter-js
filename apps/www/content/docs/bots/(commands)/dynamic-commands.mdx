@@ -1,0 +1,402 @@
+---
+title: Dynamic Commands
+description: Register commands at runtime to build extensible bots.
+---
+
+Dynamic command registration lets you add commands to your bot after it's been created. This is powerful because it enables patterns like plugin systems, hot-reload during development, and permission-based command loading. Instead of defining all commands upfront, you can build bots that adapt and grow as your application evolves.
+
+The ability to register commands dynamically opens up architectural possibilities. You can build modular bots where each feature registers its own commands, create plugin systems where external modules add functionality, or implement permission systems where commands are only available to authorized users. This flexibility makes your bots more maintainable and extensible.
+
+---
+
+## Why Dynamic Commands?
+
+Sometimes you need to add commands to your bot after creation. Here are common scenarios where dynamic registration shines:
+
+- **Plugin Systems**: Load commands from external modules
+- **Development**: Hot-reload commands during development
+- **Permissions**: Add commands based on user roles
+- **Configuration**: Load commands from a database or config file
+
+---
+
+## Registering Commands
+
+Use `bot.registerCommand()` to add commands dynamically after your bot has been created. This method takes two parameters: the command name (as a string) and the command object itself. Once registered, the command is immediately available to users—there's no need to restart your bot or reinitialize anything.
+
+The `registerCommand()` method automatically rebuilds the internal command index, so aliases work correctly with newly registered commands. This makes it safe to register commands at any point during your bot's lifecycle, whether that's at startup, on-demand, or in response to external events.
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+
+const bot = Bot.create({
+  id: 'my-bot',
+  name: 'My Bot',
+  adapters: {
+    telegram: telegram({ /* ... */ })
+  },
+  commands: {
+    // Initial commands...
+  }
+})
+
+// Register a new command after creation
+bot.registerCommand('echo', {
+  name: 'echo',
+  aliases: ['repeat'],
+  description: 'Repeat your message',
+  help: 'Usage: /echo <text>',
+  async handle(ctx, params) {
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: params.join(' ') || '(empty)'
+      }
+    })
+  }
+})
+```
+
+---
+
+## Use Cases
+
+Dynamic command registration enables several powerful patterns that make your bots more flexible and maintainable. Each use case demonstrates a different way to leverage runtime command registration for better architecture and developer experience:
+
+<Accordions>
+  <Accordion title="Plugin System">
+    Load commands from separate modules to create a modular bot architecture. This pattern allows you to keep commands organized in separate files, enabling features to register themselves independently. It's especially useful for large bots where you want to split functionality across multiple modules or packages.
+    
+    ```typescript
+    // src/bot/commands/weather.ts
+    export const weatherCommand = {
+      name: 'weather',
+      aliases: ['w'],
+      description: 'Get weather information',
+      help: 'Usage: /weather <city>',
+      async handle(ctx, params) {
+        const city = params[0] || 'default'
+        // Fetch weather...
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: `Weather in ${city}: Sunny ☀️`
+          }
+        })
+      }
+    }
+    
+    // src/bot/commands/news.ts
+    export const newsCommand = {
+      name: 'news',
+      aliases: ['n'],
+      description: 'Get latest news',
+      help: 'Usage: /news',
+      async handle(ctx) {
+        // Fetch news...
+      }
+    }
+    
+    // src/bot.ts
+    import { Bot } from '@igniter-js/bot'
+    import { weatherCommand } from './commands/weather'
+    import { newsCommand } from './commands/news'
+    
+    const bot = Bot.create({
+      id: 'my-bot',
+      name: 'My Bot',
+      adapters: {
+        telegram: telegram({ /* ... */ })
+      },
+      commands: {
+        start: { /* ... */ }
+      }
+    })
+    
+    // Load commands dynamically
+    bot.registerCommand('weather', weatherCommand)
+    bot.registerCommand('news', newsCommand)
+    ```
+    
+    This approach scales beautifully—you can add new features by creating new command files and registering them, without modifying your core bot configuration. It's perfect for teams where different developers work on different features.
+  </Accordion>
+  
+  <Accordion title="Permission-Based Commands">
+    Add commands based on user permissions to create role-based access control. This pattern lets you show different commands to different users, making your bot feel personalized and secure. Commands are only registered when needed, keeping your bot's command list clean and relevant.
+    
+    ```typescript
+    import { Bot } from '@igniter-js/bot'
+    
+    const bot = Bot.create({
+      // ...
+    })
+    
+    // Only add admin commands if user is admin
+    async function setupAdminCommands(userId: string) {
+      const isAdmin = await checkAdminPermissions(userId)
+      
+      if (isAdmin) {
+        bot.registerCommand('admin', {
+          name: 'admin',
+          aliases: ['a'],
+          description: 'Admin panel',
+          help: 'Use /admin',
+          async handle(ctx) {
+            // Admin logic...
+          }
+        })
+        
+        bot.registerCommand('ban', {
+          name: 'ban',
+          aliases: [],
+          description: 'Ban a user',
+          help: 'Usage: /ban <user>',
+          async handle(ctx, params) {
+            // Ban logic...
+          }
+        })
+      }
+    }
+    ```
+    
+    This pattern is powerful for SaaS bots where different subscription tiers get access to different commands. You can load premium commands for premium users, admin commands for admins, and keep the base bot lightweight for everyone.
+  </Accordion>
+  
+  <Accordion title="Hot Reload During Development">
+    Reload commands when files change to speed up development. This pattern eliminates the need to restart your entire bot server every time you modify a command—just save the file and the command reloads automatically. It's a huge productivity boost during development.
+    
+    ```typescript
+    // src/bot.ts
+    import { Bot } from '@igniter-js/bot'
+    import { watch } from 'fs'
+    import { join } from 'path'
+    
+    const bot = Bot.create({
+      // ...
+    })
+    
+    // Watch for command file changes
+    const commandsDir = join(__dirname, 'commands')
+    watch(commandsDir, async (eventType, filename) => {
+      if (filename?.endsWith('.ts')) {
+        // Reload command
+        const commandModule = await import(`./commands/${filename}`)
+        const command = commandModule.default
+        
+        bot.registerCommand(command.name, command)
+        console.log(`Reloaded command: ${command.name}`)
+      }
+    })
+    ```
+    
+    With hot reload, you can iterate on commands quickly without disrupting your bot's operation. Users can continue using the bot while you develop new features, making testing and debugging much more efficient.
+  </Accordion>
+</Accordions>
+
+---
+
+## Removing Commands
+
+Currently, the package doesn't provide a built-in way to remove commands once they've been registered. This design choice keeps the implementation simple and predictable, but it means you'll need to use workarounds if you need to disable commands at runtime. Understanding these limitations helps you plan your architecture accordingly.
+
+Here are practical workarounds you can use:
+
+1. **Recreating the bot** (not recommended for production)
+2. **Using middleware** to intercept and ignore specific commands
+3. **Conditional logic** in handlers to disable commands
+
+```typescript
+// Workaround: Use middleware to disable commands
+const disabledCommands = new Set(['old-command'])
+
+bot.use(async (ctx, next) => {
+  if (ctx.message.content?.type === 'command') {
+    const cmdName = ctx.message.content.command
+    
+    if (disabledCommands.has(cmdName)) {
+      await ctx.bot.send({
+        provider: ctx.provider,
+        channel: ctx.channel.id,
+        content: {
+          type: 'text',
+          content: '❌ This command is no longer available.'
+        }
+      })
+      return // Don't call next()
+    }
+  }
+  
+  await next()
+})
+```
+
+---
+
+## Command Updates
+
+Updating a command is straightforward—simply register it again with the same name. When you call `registerCommand()` with an existing command name, the bot automatically replaces the old command with the new one. This makes it easy to update command behavior, add aliases, or modify help text without recreating your bot instance.
+
+This pattern is particularly useful for updating commands during runtime, such as when loading new versions of command modules or applying configuration changes. The update happens immediately, so users will see the new behavior on their next command invocation.
+
+```typescript
+// Register initial command
+bot.registerCommand('greet', {
+  name: 'greet',
+  aliases: [],
+  description: 'Greet the user',
+  help: 'Use /greet',
+  async handle(ctx) {
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: 'Hello!'
+      }
+    })
+  }
+})
+
+// Update the command later
+bot.registerCommand('greet', {
+  name: 'greet',
+  aliases: ['hello', 'hi'], // Updated: added aliases
+  description: 'Greet the user',
+  help: 'Use /greet, /hello, or /hi',
+  async handle(ctx) {
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: '👋 Hello! Welcome!'
+      }
+    })
+  }
+})
+```
+
+---
+
+## Complete Example
+
+Here's a complete example that demonstrates dynamic command loading from a directory. This pattern is ideal for production bots where you want to organize commands in separate files and load them automatically. The example shows how to scan a commands directory, import each command module, and register them dynamically.
+
+This example demonstrates:
+- **Dynamic Loading**: Scanning a directory and loading commands automatically
+- **Command Organization**: Keeping commands in separate files for better maintainability
+- **Initialization Pattern**: Loading commands before starting the bot
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+import { readdir } from 'fs/promises'
+import { join } from 'path'
+
+const bot = Bot.create({
+  id: 'dynamic-bot',
+  name: 'Dynamic Bot',
+  adapters: {
+    telegram: telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      handle: '@dynamic_bot',
+      webhook: {
+        url: process.env.TELEGRAM_WEBHOOK_URL!
+      }
+    })
+  },
+  commands: {
+    start: {
+      name: 'start',
+      aliases: [],
+      description: 'Start the bot',
+      help: 'Use /start',
+      async handle(ctx) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: 'Bot started! Commands loaded dynamically.'
+          }
+        })
+      }
+    }
+  }
+})
+
+// Load commands from directory
+async function loadCommands() {
+  const commandsDir = join(__dirname, 'commands')
+  const files = await readdir(commandsDir)
+  
+  for (const file of files) {
+    if (file.endsWith('.ts')) {
+      const commandModule = await import(`./commands/${file}`)
+      const command = commandModule.default
+      
+      bot.registerCommand(command.name, command)
+      console.log(`Loaded command: ${command.name}`)
+    }
+  }
+}
+
+// Load commands on startup
+await loadCommands()
+await bot.start()
+```
+
+---
+
+## Best Practices
+
+Dynamic command registration gives you flexibility, but it also requires discipline. Following these practices ensures your dynamically registered commands integrate smoothly with your bot and don't cause unexpected behavior.
+
+<Accordions>
+  <Accordion title="Validate Commands">
+    Ensure commands have all required fields before registering. Invalid commands can cause runtime errors or unexpected behavior. Validate command structure, handler functions, and metadata before calling `registerCommand()`.
+  </Accordion>
+  
+  <Accordion title="Handle Errors">
+    Wrap registration in try-catch for graceful failures. If command registration fails (due to invalid structure or missing fields), your bot should continue running. Don't let registration errors crash your entire bot.
+  </Accordion>
+  
+  <Accordion title="Log Registration">
+    Log when commands are registered for debugging. Knowing which commands were registered dynamically helps you troubleshoot issues and understand your bot's runtime behavior. Include command names and timestamps in your logs.
+  </Accordion>
+  
+  <Accordion title="Update Command Index">
+    Remember that aliases are rebuilt on registration. Every time you register a command, the bot rebuilds its internal command index. If you're registering many commands, consider batching registrations to minimize overhead.
+  </Accordion>
+  
+  <Accordion title="Test Changes">
+    Verify dynamic commands work as expected. Dynamic registration happens at runtime, so test your command registration logic thoroughly. Verify that commands execute correctly, errors are handled, and conflicts don't break existing functionality.
+  </Accordion>
+</Accordions>
+
+---
+
+## Limitations
+
+Dynamic command registration is powerful, but it has some constraints you should be aware of. Understanding these limitations helps you plan your architecture and avoid frustrating debugging sessions.
+
+<Accordions>
+  <Accordion title="No command removal">
+    Can't remove commands once registered (workaround available). Once a command is registered, there's no built-in way to unregister it. If you need to remove commands, you'll need to recreate the bot instance or implement a workaround using command filtering.
+  </Accordion>
+  
+  <Accordion title="Re-indexing overhead">
+    Command index is rebuilt on each registration (O(n) operation). Every time you register a command, the bot rebuilds its internal command index. For bots with many commands, this can add noticeable latency during registration.
+  </Accordion>
+  
+  <Accordion title="No conflict detection">
+    Registering a command with an existing name overwrites it. The bot doesn't warn you if you register a command that already exists—it just replaces the old one. Be careful when registering commands dynamically to avoid accidentally overwriting important commands.
+  </Accordion>
+</Accordions>
+
+---
+
+

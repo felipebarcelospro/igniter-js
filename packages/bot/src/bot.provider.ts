@@ -228,6 +228,105 @@ export class Bot<
   }
 
   /**
+   * Factory helper for creating commands with validation and type safety.
+   * 
+   * This method validates that all required fields are present and provides
+   * type safety when creating commands in separate files.
+   * 
+   * @example
+   * ```typescript
+   * // src/bot/commands/start.ts
+   * import { Bot } from '@igniter-js/bot'
+   * 
+   * export const startCommand = Bot.command({
+   *   name: 'start',
+   *   aliases: ['hello'],
+   *   description: 'Greets the user',
+   *   help: 'Use /start to receive a welcome message',
+   *   async handle(ctx) {
+   *     await ctx.bot.send({
+   *       provider: ctx.provider,
+   *       channel: ctx.channel.id,
+   *       content: { type: 'text', content: '👋 Welcome!' }
+   *     })
+   *   }
+   * })
+   * ```
+   */
+  static command(command: BotCommand): BotCommand {
+    // Validate required fields
+    if (!command.name || typeof command.name !== 'string') {
+      throw new Error('Command must have a valid name (string)')
+    }
+    if (!Array.isArray(command.aliases)) {
+      throw new Error('Command aliases must be an array')
+    }
+    if (!command.description || typeof command.description !== 'string') {
+      throw new Error('Command must have a valid description (string)')
+    }
+    if (!command.help || typeof command.help !== 'string') {
+      throw new Error('Command must have valid help text (string)')
+    }
+    if (typeof command.handle !== 'function') {
+      throw new Error('Command must have a handle function')
+    }
+
+    // Validate command name format (no slashes, no spaces)
+    if (command.name.includes('/') || command.name.includes(' ')) {
+      throw new Error('Command name must not contain slashes or spaces')
+    }
+
+    // Validate aliases format
+    for (const alias of command.aliases) {
+      if (typeof alias !== 'string') {
+        throw new Error(`Command alias must be a string: ${alias}`)
+      }
+      if (alias.includes('/') || alias.includes(' ')) {
+        throw new Error(`Command alias must not contain slashes or spaces: ${alias}`)
+      }
+    }
+
+    return command
+  }
+
+  /**
+   * Factory helper for creating middleware with validation and type safety.
+   * 
+   * This method validates that the middleware function is properly structured
+   * and provides type safety when creating middleware in separate files.
+   * 
+   * @example
+   * ```typescript
+   * // src/bot/middleware/auth.ts
+   * import { Bot } from '@igniter-js/bot'
+   * 
+   * export const authMiddleware = Bot.middleware(async (ctx, next) => {
+   *   if (!isAuthorized(ctx.message.author.id)) {
+   *     await ctx.bot.send({
+   *       provider: ctx.provider,
+   *       channel: ctx.channel.id,
+   *       content: { type: 'text', content: 'Unauthorized' }
+   *     })
+   *     return // Block request
+   *   }
+   *   await next() // Continue to next middleware/handler
+   * })
+   * ```
+   */
+  static middleware(middleware: Middleware): Middleware {
+    if (typeof middleware !== 'function') {
+      throw new Error('Middleware must be a function')
+    }
+
+    // Validate function signature (should accept ctx and next)
+    if (middleware.length !== 2) {
+      throw new Error('Middleware function must accept exactly 2 parameters: (ctx, next)')
+    }
+
+    return middleware
+  }
+
+  /**
    * Factory for constructing a Bot with strong typing.
    */
   static create<

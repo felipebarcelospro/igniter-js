@@ -1,0 +1,20 @@
+{
+  "title": "MCP Server",
+  "root": true,
+  "pages": [
+    "index",
+    "getting-started",
+    "---APIs---",
+    "builder-pattern",
+    "function-api",
+    "---Features---",
+    "custom-tools",
+    "prompts-resources",
+    "oauth",
+    "events",
+    "---Advanced---",
+    "advanced",
+    "best-practices"
+  ]
+}
+

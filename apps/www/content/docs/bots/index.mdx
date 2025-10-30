@@ -1,0 +1,209 @@
+---
+title: Introduction
+description: Build type-safe, multi-platform bots for Telegram, WhatsApp, and more. Create chatbots with a clean adapter architecture, middleware support, and powerful command system.
+---
+
+## Overview
+
+The Bots package provides a modern, type-safe foundation for building multi-platform chatbots in Igniter.js applications. Whether you're creating a Telegram bot, WhatsApp integration, or supporting multiple messaging platforms, this package gives you a unified, extensible API with excellent developer experience.
+
+<Callout type="info">
+  The Bots package is currently in **alpha**. The public API may evolve to improve developer experience and internal consistency before the first stable release.
+</Callout>
+
+### Key Features
+
+- **Multi-Platform**: First-party adapters for Telegram and WhatsApp Cloud API
+- **Adapter Pattern**: Clean, extensible architecture for adding new messaging providers
+- **Type Safety**: End-to-end TypeScript with Zod runtime validation
+- **Middleware Pipeline**: Express-like chain for cross-cutting concerns (auth, metrics, rate limiting)
+- **Command System**: Aliases, help text, and structured command handling
+- **Mention Detection**: Configurable bot handle activation for group contexts
+- **Structured Logging**: Pluggable logger interface for consistent logging
+- **Error Handling**: Consistent error codes and `BotError` class for better observability
+- **Lightweight**: Tree-shakeable exports with no hidden side effects
+- **Extensible**: Dynamic runtime registration of adapters, commands, and middleware
+
+---
+
+## Architecture
+
+The Bots system follows Igniter.js's adapter pattern. The core `Bot` class provides a unified interface while adapters handle platform-specific logic.
+
+<Card title="Architecture Flow">
+<Mermaid chart={`graph LR
+    A[Your Application] --> B[Bot Core]
+    B --> C[Middleware Pipeline]
+    B --> D[Command System]
+    B --> E[Event Listeners]
+    
+    B --> F[Telegram Adapter]
+    B --> G[WhatsApp Adapter]
+    B --> H[Custom Adapters]
+    
+    F --> I[Telegram API]
+    G --> J[WhatsApp Cloud API]
+    H --> K[Your Platform]`} />
+</Card>
+
+---
+
+## Introduction
+
+Get started with the Bots package in just a few steps. This quick guide will help you create your first bot and understand the core concepts.
+<Card title="How to Start">
+
+<Steps>
+  <Step>
+    ### Install the Package
+    
+    Install the Bots package using your preferred package manager:
+    
+    <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+      <Tab value="npm">
+        ```bash
+        npm install @igniter-js/bot
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm add @igniter-js/bot
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn add @igniter-js/bot
+        ```
+      </Tab>
+      <Tab value="bun">
+        ```bash
+        bun add @igniter-js/bot
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step>
+    ### Create Your First Bot
+    
+    Create a bot instance with a simple command:
+    
+    ```typescript
+    import { Bot, telegram } from '@igniter-js/bot'
+    
+    const bot = Bot.create({
+      id: 'demo-bot',
+      name: 'Demo Bot',
+      adapters: {
+        telegram: telegram({
+          token: process.env.TELEGRAM_TOKEN!,
+          handle: '@demo_bot',
+          webhook: {
+            url: process.env.TELEGRAM_WEBHOOK_URL!,
+            secret: process.env.TELEGRAM_SECRET
+          }
+        })
+      },
+      commands: {
+        start: Bot.command({
+          name: 'start',
+          aliases: ['hello'],
+          description: 'Greets the user',
+          help: 'Use /start to receive a welcome message.',
+          async handle(ctx) {
+            await ctx.bot.send({
+              provider: ctx.provider,
+              channel: ctx.channel.id,
+              content: { type: 'text', content: '👋 Welcome, friend!' }
+            })
+          }
+        })
+      }
+    })
+    
+    await bot.start()
+    ```
+  </Step>
+  
+  <Step>
+    ### Handle Webhooks
+    
+    Create a webhook handler to receive messages from Telegram:
+    
+    ```typescript
+    // Next.js API Route example
+    export async function POST(req: Request) {
+      return bot.handle('telegram', req)
+    }
+    ```
+  </Step>
+</Steps>
+</Card>
+
+## Concepts
+
+Understand the core concepts that make the Bots package powerful and easy to use. Each concept is designed to work together seamlessly, providing a complete solution for building multi-platform chatbots.
+
+<Cards>
+  <Card
+    title="Adapters"
+    description="Connect your bot to messaging platforms with platform-specific adapters. Each adapter handles webhook formats, API calls, and message parsing automatically."
+    href="/docs/bots/telegram"
+  />
+  
+  <Card
+    title="Commands"
+    description="Structured message handlers triggered by user input. Commands support aliases, help text, and parameter parsing for a clean developer experience."
+    href="/docs/bots/command-basics"
+  />
+  
+  <Card
+    title="Middleware"
+    description="Express-like middleware pipeline for cross-cutting concerns. Use middleware for authentication, logging, rate limiting, and more."
+    href="/docs/bots/middleware-basics"
+  />
+  
+  <Card
+    title="Message Handling"
+    description="Process incoming messages, extract content (text, images, documents, audio), and route them through middleware and handlers efficiently."
+    href="/docs/bots/receiving-messages"
+  />
+</Cards>
+
+---
+
+## Example Use Cases
+
+The Bots package is flexible enough to power a wide variety of applications. Here are some common use cases where bots shine:
+
+<Accordions>
+  <Accordion title="Customer Support Bots">
+    Handle support requests across multiple platforms from a single codebase. Users can reach out via Telegram or WhatsApp, and your bot can route conversations, answer FAQs, and escalate complex issues to human agents. Perfect for businesses that need to provide consistent support across different messaging channels.
+  </Accordion>
+  
+  <Accordion title="Notification Systems">
+    Send alerts and updates via Telegram or WhatsApp. Perfect for monitoring systems, deployment notifications, or keeping users informed about important events in your application. Build reliable notification systems that reach users where they already are.
+  </Accordion>
+  
+  <Accordion title="Automation">
+    Trigger actions in your application from chat commands. Build admin interfaces, deploy workflows, or control IoT devices—all through simple chat commands that users can execute from their phones. Transform complex operations into simple, accessible commands.
+  </Accordion>
+  
+  <Accordion title="Multi-Platform Chatbots">
+    Support users on Telegram, WhatsApp, and more from a single codebase. Write your bot logic once, and it works across all platforms—no need to maintain separate implementations for each messaging service. Reduce complexity and maintenance overhead while reaching more users.
+  </Accordion>
+</Accordions>
+
+---
+
+## Roadmap
+
+| Feature | Status |
+|---------|--------|
+| Discord adapter | Planned |
+| Slack adapter | Planned |
+| Session storage interface | Planned |
+| Rate limiting middleware | Planned |
+| Interactive components (buttons) | Research |
+| Scheduled tasks / cron plugin | Research |
+

@@ -1,0 +1,693 @@
+---
+title: Client
+description: Learn how to consume your Igniter.js API from the client-side using type-safe hooks, queries, mutations, and real-time subscriptions in React applications.
+---
+
+## Overview
+
+The **Igniter.js Client** provides a fully type-safe way to consume your API from React applications. It automatically generates typed hooks (`useQuery`, `useMutation`, `useRealtime`) based on your router definition, giving you end-to-end type safety from server to client.
+
+```typescript
+// server/igniter.ts
+export const igniter = createIgniterBuilder()
+  .context<{ db: Database }>()
+  .create();
+
+export const router = igniter.router({
+  users: userController
+});
+
+export type AppRouter = typeof router;
+```
+
+```tsx
+// client/app.tsx
+import { createIgniterClient } from '@igniter-js/core/client';
+import type { AppRouter } from '../server/igniter';
+
+const client = createIgniterClient<AppRouter>({
+  baseURL: 'http://localhost:3000',
+  basePATH: '/api/v1',
+  router: () => router  // ✅ Type-safe client!
+});
+
+function UserList() {
+  const { data, isLoading } = client.users.list.useQuery();
+  //     ^? { users: User[] } - Fully typed!
+  
+  if (isLoading) return <div>Loading...</div>;
+  
+  return (
+    <ul>
+      {data.users.map(user => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+<Callout type="success" title="Zero Configuration">
+  No code generation, no manual types. The client automatically infers all types from your router!
+</Callout>
+
+---
+
+## Client Setup
+
+### Install Dependencies
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/core react
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/core react
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/core react
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/core react
+    ```
+  </Tab>
+</Tabs>
+
+### Create the Client
+
+```typescript
+// lib/client.ts
+import { createIgniterClient } from '@igniter-js/core/client';
+import type { AppRouter } from '../server/igniter';
+
+export const client = createIgniterClient<AppRouter>({
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000',
+  basePATH: '/api/v1',
+  router: () => import('../server/igniter').then(m => m.router)
+});
+```
+
+### Wrap Your App with Provider
+
+```tsx
+// app/layout.tsx
+import { IgniterProvider } from '@igniter-js/core/client';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html>
+      <body>
+        <IgniterProvider>
+          {children}
+        </IgniterProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+---
+
+## useQuery Hook
+
+Use `useQuery` for **fetching data** (GET requests):
+
+### Basic Query
+
+```tsx
+function UserProfile({ userId }: { userId: string }) {
+  const { data, isLoading, error } = client.users.getById.useQuery({
+    params: { id: userId }
+  });
+  
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+  
+  return (
+    <div>
+      <h1>{data.user.name}</h1>
+      <p>{data.user.email}</p>
+    </div>
+  );
+}
+```
+
+### Query with Parameters
+
+```tsx
+function ProductSearch() {
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  const { data, isLoading } = client.products.search.useQuery({
+    query: {
+      q: searchTerm,
+      limit: 20
+    }
+  });
+  
+  return (
+    <div>
+      <input 
+        value={searchTerm} 
+        onChange={(e) => setSearchTerm(e.target.value)}
+        placeholder="Search products..."
+      />
+      
+      {isLoading ? (
+        <div>Searching...</div>
+      ) : (
+        <ul>
+          {data.products.map(product => (
+            <li key={product.id}>{product.name}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+```
+
+### useQuery Options
+
+```typescript
+const { data, isLoading, error, refetch, invalidate } = client.users.list.useQuery({
+  // Query parameters
+  query: { status: 'active' },
+  params: { id: '123' },
+  
+  // Initial data (SSR)
+  initialData: { users: [] },
+  
+  // Caching
+  staleTime: 5000,  // Consider data fresh for 5 seconds
+  
+  // Auto-refetch behaviors
+  enabled: true,                           // Enable/disable query
+  refetchOnMount: true,                    // Refetch on component mount
+  refetchOnWindowFocus: true,              // Refetch when window regains focus
+  refetchOnReconnect: true,                // Refetch when internet reconnects
+  refetchInterval: 10000,                  // Poll every 10 seconds
+  refetchIntervalInBackground: false,      // Don't poll when tab is hidden
+  
+  // Lifecycle callbacks
+  onLoading: (isLoading) => console.log('Loading:', isLoading),
+  onSuccess: (data) => console.log('Success:', data),
+  onError: (error) => console.error('Error:', error),
+  onRequest: (response) => console.log('Request complete:', response),
+  onSettled: (data, error) => console.log('Settled:', { data, error })
+});
+```
+
+### useQuery Return Values
+
+```typescript
+{
+  // Data
+  data: TData | null,              // Response data
+  error: TError | null,            // Error object
+  variables: TInput | undefined,   // Last used query parameters
+  
+  // Status booleans
+  isLoading: boolean,              // Initial load
+  isFetching: boolean,             // Any fetch (including refetch)
+  isSuccess: boolean,              // Successful response
+  isError: boolean,                // Error occurred
+  status: 'loading' | 'success' | 'error',
+  
+  // Actions
+  refetch: (invalidateCache?: boolean) => void,  // Refetch with same params
+  execute: (params?: TInput) => Promise<TData>,  // Fetch with new params
+  invalidate: () => void                         // Invalidate cache
+}
+```
+
+---
+
+## useMutation Hook
+
+Use `useMutation` for **modifying data** (POST, PUT, PATCH, DELETE):
+
+### Basic Mutation
+
+```tsx
+function CreateUserForm() {
+  const { mutate, isLoading, error } = client.users.create.useMutation();
+  
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    
+    await mutate({
+      body: {
+        name: formData.get('name') as string,
+        email: formData.get('email') as string
+      }
+    });
+  };
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input name="name" required />
+      <input name="email" type="email" required />
+      <button type="submit" disabled={isLoading}>
+        {isLoading ? 'Creating...' : 'Create User'}
+      </button>
+      {error && <p>Error: {error.message}</p>}
+    </form>
+  );
+}
+```
+
+### Mutation with Callbacks
+
+```tsx
+function DeletePostButton({ postId }: { postId: string }) {
+  const { mutate, isLoading } = client.posts.delete.useMutation({
+    onSuccess: (data) => {
+      console.log('Post deleted:', data);
+      // Invalidate queries
+      queryClient.invalidate(['posts']);
+    },
+    onError: (error) => {
+      console.error('Failed to delete:', error);
+      alert('Failed to delete post');
+    }
+  });
+  
+  return (
+    <button 
+      onClick={() => mutate({ params: { id: postId } })}
+      disabled={isLoading}
+    >
+      {isLoading ? 'Deleting...' : 'Delete'}
+    </button>
+  );
+}
+```
+
+### useMutation Options
+
+```typescript
+const { mutate, data, error, isLoading, retry } = client.users.update.useMutation({
+  // Static parameters (applied to all mutations)
+  params: { id: userId },
+  
+  // Lifecycle callbacks
+  onLoading: (isLoading) => console.log('Loading:', isLoading),
+  onSuccess: (data) => console.log('Success:', data),
+  onError: (error) => console.error('Error:', error),
+  onRequest: (response) => console.log('Request complete:', response),
+  onSettled: (data, error) => console.log('Settled:', { data, error })
+});
+
+// Call mutation
+mutate({
+  body: { name: 'New Name' },
+  // These override static params
+  params: { id: '456' }
+});
+```
+
+### useMutation Return Values
+
+```typescript
+{
+  // Data
+  data: TData | null,              // Response data
+  error: TError | null,            // Error object
+  variables: TInput | undefined,   // Last used mutation parameters
+  
+  // Status booleans
+  isLoading: boolean,
+  isSuccess: boolean,
+  isError: boolean,
+  status: 'idle' | 'loading' | 'success' | 'error',
+  
+  // Actions
+  mutate: (params: TInput) => Promise<TData>,  // Execute mutation
+  retry: () => void                             // Retry last mutation
+}
+```
+
+---
+
+## Real-Time with useRealtime
+
+Subscribe to Server-Sent Events (SSE) streams:
+
+### Basic Real-Time Subscription
+
+```tsx
+function LiveNotifications({ userId }: { userId: string }) {
+  const { data, isConnected } = client.notifications.live.useRealtime({
+    channelId: `notifications:user:${userId}`,
+    
+    onMessage: (notification) => {
+      console.log('New notification:', notification);
+      // Show toast, play sound, etc.
+    },
+    
+    onConnect: () => {
+      console.log('Connected to notifications stream');
+    },
+    
+    onDisconnect: () => {
+      console.log('Disconnected from notifications stream');
+    }
+  });
+  
+  return (
+    <div>
+      <div>Status: {isConnected ? '🟢 Connected' : '🔴 Disconnected'}</div>
+      
+      {data && (
+        <div className="notification">
+          <strong>{data.title}</strong>
+          <p>{data.message}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### Real-Time with Initial Data
+
+```tsx
+function LiveMetrics() {
+  const { data, isConnected } = client.metrics.stream.useRealtime({
+    channelId: 'metrics:dashboard',
+    
+    initialData: {
+      cpu: 0,
+      memory: 0,
+      requests: 0
+    },
+    
+    onMessage: (metrics) => {
+      // Update chart, gauge, etc.
+    }
+  });
+  
+  return (
+    <div>
+      <h2>Live Server Metrics</h2>
+      <div>CPU: {data?.cpu}%</div>
+      <div>Memory: {data?.memory}%</div>
+      <div>Requests/s: {data?.requests}</div>
+    </div>
+  );
+}
+```
+
+---
+
+## Direct Fetching (No Hooks)
+
+Use `.query()` or `.mutate()` for non-hook scenarios:
+
+### Direct Query
+
+```typescript
+// Outside React component
+async function fetchUser(id: string) {
+  const response = await client.users.getById.query({
+    params: { id }
+  });
+  
+  if (response.error) {
+    throw new Error(response.error.message);
+  }
+  
+  return response.data;
+}
+```
+
+### Direct Mutation
+
+```typescript
+// In event handler, middleware, etc.
+async function createUser(userData: CreateUserInput) {
+  const response = await client.users.create.mutate({
+    body: userData
+  });
+  
+  return response.data;
+}
+```
+
+---
+
+## Cache Management
+
+### Using IgniterQueryClient
+
+```tsx
+import { useIgniterQueryClient } from '@igniter-js/core/client';
+
+function Dashboard() {
+  const queryClient = useIgniterQueryClient();
+  
+  const handleRefresh = () => {
+    // Invalidate all 'users' queries
+    queryClient.invalidate(['users.*']);
+    
+    // Invalidate specific query
+    queryClient.invalidate(['users.list']);
+    
+    // Invalidate multiple
+    queryClient.invalidate(['users.list', 'posts.list']);
+  };
+  
+  return <button onClick={handleRefresh}>Refresh Data</button>;
+}
+```
+
+### Automatic Cache Invalidation
+
+When using `response.revalidate()` on the server, connected clients are automatically notified:
+
+```typescript
+// Server-side
+const createPost = igniter.mutation({
+  handler: async ({ response }) => {
+    const post = await db.posts.create({ data: {...} });
+    
+    // ✅ Automatically invalidates 'posts' query on all clients
+    return response
+      .revalidate(['posts', 'dashboard'])
+      .created({ post });
+  }
+});
+```
+
+---
+
+## Error Handling
+
+### Handle Errors in useQuery
+
+```tsx
+function UserProfile({ userId }: { userId: string }) {
+  const { data, error, isError, isLoading } = client.users.getById.useQuery({
+    params: { id: userId },
+    
+    onError: (error) => {
+      // Log to error tracking service
+      console.error('Failed to load user:', error);
+    }
+  });
+  
+  if (isLoading) return <Skeleton />;
+  
+  if (isError) {
+    return (
+      <div className="error">
+        <h2>Failed to load user</h2>
+        <p>{error.message}</p>
+        {error.code === 'ERR_NOT_FOUND' && (
+          <p>User not found</p>
+        )}
+      </div>
+    );
+  }
+  
+  return <div>{data.user.name}</div>;
+}
+```
+
+### Handle Errors in useMutation
+
+```tsx
+function CreatePostForm() {
+  const { mutate, error, isError } = client.posts.create.useMutation({
+    onError: (error) => {
+      if (error.code === 'VALIDATION_ERROR') {
+        // Show validation errors
+        console.log(error.details);
+      } else {
+        // Generic error
+        alert('Failed to create post');
+      }
+    }
+  });
+  
+  return (
+    <form onSubmit={(e) => {
+      e.preventDefault();
+      mutate({ body: { title: '...', content: '...' } });
+    }}>
+      {/* Form fields */}
+      {isError && (
+        <div className="error">{error.message}</div>
+      )}
+      <button type="submit">Create</button>
+    </form>
+  );
+}
+```
+
+---
+
+## Server-Side Rendering (SSR)
+
+### Next.js App Router
+
+```tsx
+// app/users/page.tsx
+import { client } from '@/lib/client';
+
+export default async function UsersPage() {
+  // ✅ Fetch on server
+  const { data } = await client.users.list.query();
+  
+  return (
+    <div>
+      <h1>Users</h1>
+      <UserList initialData={data} />
+    </div>
+  );
+}
+
+// components/UserList.tsx
+'use client';
+
+function UserList({ initialData }) {
+  const { data } = client.users.list.useQuery({
+    initialData  // ✅ Hydrate with server data
+  });
+  
+  return (
+    <ul>
+      {data.users.map(user => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Next.js Pages Router
+
+```tsx
+// pages/users.tsx
+export async function getServerSideProps() {
+  const { data } = await client.users.list.query();
+  
+  return {
+    props: { users: data.users }
+  };
+}
+
+export default function UsersPage({ users }) {
+  const { data } = client.users.list.useQuery({
+    initialData: { users }
+  });
+  
+  return <ul>{/* ... */}</ul>;
+}
+```
+
+---
+
+## Best Practices
+
+### 1. Create a Shared Client Instance
+
+```typescript
+// ✅ Good - Single instance
+// lib/client.ts
+export const client = createIgniterClient<AppRouter>({ ... });
+
+// ❌ Bad - Multiple instances
+function Component() {
+  const client = createIgniterClient<AppRouter>({ ... });
+}
+```
+
+### 2. Use initialData for SSR
+
+```tsx
+// ✅ Good - Hydrate with server data
+const { data } = client.users.list.useQuery({
+  initialData: serverData
+});
+
+// ❌ Bad - Redundant fetch on client
+const { data } = client.users.list.useQuery();
+```
+
+### 3. Invalidate After Mutations
+
+```tsx
+// ✅ Good - Auto-refresh related queries
+const { mutate } = client.users.create.useMutation({
+  onSuccess: () => {
+    queryClient.invalidate(['users.list']);
+  }
+});
+
+// ❌ Bad - Stale data
+const { mutate } = client.users.create.useMutation();
+```
+
+### 4. Handle Loading and Error States
+
+```tsx
+// ✅ Good - Complete UX
+if (isLoading) return <Skeleton />;
+if (isError) return <ErrorMessage error={error} />;
+return <Content data={data} />;
+
+// ❌ Bad - No feedback
+return <Content data={data} />;
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Actions" href="/docs/actions">
+    Define queries and mutations
+  </Card>
+  
+  <Card title="Response Types" href="/docs/response-types">
+    Return proper responses
+  </Card>
+  
+  <Card title="Real-Time" href="/docs/real-time">
+    Build real-time features
+  </Card>
+  
+  <Card title="Testing" href="/docs/testing">
+    Test your client code
+  </Card>
+</Cards>

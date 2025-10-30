@@ -1,0 +1,800 @@
+---
+title: Procedures
+description: Create reusable middleware with Igniter.js procedures to handle authentication, validation, logging, and cross-cutting concerns with full type safety.
+---
+
+## Overview
+
+**Procedures** are reusable middleware functions that run before your action handlers. They allow you to:
+
+- ✅ Authenticate and authorize requests
+- ✅ Validate and transform inputs
+- ✅ Add request logging and tracing
+- ✅ Inject dependencies into context
+- ✅ Handle rate limiting
+- ✅ Enrich context with computed data
+
+```typescript
+import { igniter } from '@/igniter';
+
+const authProcedure = igniter.procedure({
+  handler: async ({ context, request }) => {
+    const token = request.headers.get('authorization');
+    const user = await verifyToken(token);
+    
+    // ✅ Extend context with user
+    return {
+      currentUser: user
+    };
+  }
+});
+
+// Use in actions
+const protectedAction = igniter.query({
+  path: '/protected',
+  use: [authProcedure],
+  handler: async ({ context, response }) => {
+    // ✅ context.currentUser is now available!
+    return response.success({
+      message: `Hello, ${context.currentUser.name}`
+    });
+  }
+});
+```
+
+<Callout type="info" title="What is a Procedure?">
+  A procedure is middleware that **runs before your action handler** and can **extend the context** with new properties. It's perfect for cross-cutting concerns.
+</Callout>
+
+---
+
+## Creating Procedures
+
+### Basic Procedure
+
+```typescript
+const timestampProcedure = igniter.procedure({
+  handler: async ({ context }) => {
+    return {
+      requestTime: new Date(),
+      timestamp: Date.now()
+    };
+  }
+});
+
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    list: igniter.query({
+      use: [timestampProcedure],
+      handler: async ({ context, response }) => {
+        // ✅ context.requestTime and context.timestamp are available
+        console.log('Request received at:', context.requestTime);
+        
+        const users = await context.db.users.findMany();
+        return response.success({ users, timestamp: context.timestamp });
+      }
+    })
+  }
+});
+```
+
+### Authentication Procedure
+
+```typescript
+const authProcedure = igniter.procedure({
+  handler: async ({ context, request, response }) => {
+    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      // ✅ Return early with error response
+      return response.unauthorized({ message: 'No authorization token' });
+    }
+    
+    try {
+      const user = await verifyJWT(token);
+      
+      if (!user) {
+        return response.unauthorized({ message: 'Invalid token' });
+      }
+      
+      // ✅ Extend context with authenticated user
+      return {
+        currentUser: user,
+        isAuthenticated: true
+      };
+    } catch (error) {
+      return response.unauthorized({ message: 'Token verification failed' });
+    }
+  }
+});
+```
+
+### Logging Procedure
+
+```typescript
+const requestLoggerProcedure = igniter.procedure({
+  handler: async ({ request, context }) => {
+    const requestId = crypto.randomUUID();
+    const startTime = performance.now();
+    
+    context.logger?.info('Request started', {
+      requestId,
+      method: request.method,
+      path: request.path,
+      ip: request.headers.get('x-forwarded-for') || 'unknown',
+      userAgent: request.headers.get('user-agent')
+    });
+    
+    return {
+      requestId,
+      timing: {
+        start: startTime,
+        end: () => {
+          const duration = performance.now() - startTime;
+          context.logger?.info('Request completed', { requestId, duration });
+          return duration;
+        }
+      }
+    };
+  }
+});
+```
+
+---
+
+## Procedure Handler
+
+The procedure handler receives the same context as actions:
+
+```typescript
+handler: async ({ request, context, response, plugins }) => {
+  // Access request data
+  const token = request.headers.get('authorization');
+  const userId = request.params.id;
+  const query = request.query;
+  
+  // Access app context
+  const user = await context.db.users.findUnique({ where: { id: userId } });
+  
+  // Return early with response
+  if (!user) {
+    return response.notFound({ message: 'User not found' });
+  }
+  
+  // Or extend context
+  return {
+    currentUser: user,
+    permissions: await getPermissions(user.id)
+  };
+}
+```
+
+<TypeTable type={{
+  request: {
+    type: 'object',
+    description: 'Request data (method, path, params, headers, cookies, etc.)',
+    required: true
+  },
+  context: {
+    type: 'AppContext',
+    description: 'Application context from Igniter.context()',
+    required: true
+  },
+  response: {
+    type: 'IgniterResponseProcessor',
+    description: 'Response helper methods (success, error, unauthorized, etc.)',
+    required: true
+  },
+  plugins: {
+    type: 'PluginRegistry',
+    description: 'Type-safe access to plugin actions',
+    required: true
+  }
+}} />
+
+---
+
+## Context Extension
+
+Procedures can **extend the context** by returning an object. The returned properties are merged into the context and available in subsequent procedures and the action handler.
+
+### Single Extension
+
+```typescript
+const authProcedure = igniter.procedure({
+  handler: async ({ request }) => {
+    const user = await getUserFromToken(request);
+    
+    // ✅ Add user to context
+    return {
+      currentUser: user
+    };
+  }
+});
+
+// Usage
+const action = igniter.query({
+  use: [authProcedure],
+  handler: async ({ context }) => {
+    // ✅ context.currentUser is available and typed!
+    console.log(context.currentUser.email);
+  }
+});
+```
+
+### Multiple Extensions
+
+Procedures are executed in order, and each can extend the context:
+
+```typescript
+const authProcedure = igniter.procedure({
+  handler: async ({ request }) => {
+    return {
+      currentUser: await getUserFromToken(request)
+    };
+  }
+});
+
+const permissionsProcedure = igniter.procedure({
+  handler: async ({ context }) => {
+    // ✅ Can access currentUser from previous procedure
+    const permissions = await getPermissions(context.currentUser.id);
+    
+    return {
+      permissions,
+      can: (action: string) => permissions.includes(action)
+    };
+  }
+});
+
+// Usage
+const action = igniter.query({
+  use: [authProcedure, permissionsProcedure],
+  handler: async ({ context }) => {
+    // ✅ Both currentUser and permissions are available!
+    if (!context.can('read:users')) {
+      return response.forbidden({ message: 'Insufficient permissions' });
+    }
+  }
+});
+```
+
+---
+
+## Common Patterns
+
+### Role-Based Authorization
+
+```typescript
+const requireRoleProcedure = igniter.procedure({
+  handler: async ({ context, response }) => {
+    if (!context.currentUser) {
+      return response.unauthorized({ message: 'Authentication required' });
+    }
+    
+    const userRoles = await context.db.userRoles.findMany({
+      where: { userId: context.currentUser.id }
+    });
+    
+    return {
+      roles: userRoles.map(r => r.name),
+      hasRole: (role: string) => userRoles.some(r => r.name === role),
+      requireRole: (role: string) => {
+        if (!userRoles.some(r => r.name === role)) {
+          throw new Error(`Role '${role}' required`);
+        }
+      }
+    };
+  }
+});
+
+// Usage
+const adminAction = igniter.query({
+  use: [authProcedure, requireRoleProcedure],
+  handler: async ({ context, response }) => {
+    // ✅ Type-safe role check
+    context.requireRole('admin');
+    
+    const users = await context.db.users.findMany();
+    return response.success({ users });
+  }
+});
+```
+
+### Request Validation
+
+```typescript
+import { z } from 'zod';
+
+const validateApiKeyProcedure = igniter.procedure({
+  handler: async ({ request, response }) => {
+    const apiKey = request.headers.get('x-api-key');
+    
+    if (!apiKey) {
+      return response.unauthorized({ message: 'API key required' });
+    }
+    
+    const keyRecord = await db.apiKeys.findUnique({
+      where: { key: apiKey },
+      include: { user: true }
+    });
+    
+    if (!keyRecord || !keyRecord.isActive) {
+      return response.unauthorized({ message: 'Invalid API key' });
+    }
+    
+    return {
+      apiKeyUser: keyRecord.user,
+      apiKeyPermissions: keyRecord.permissions
+    };
+  }
+});
+```
+
+### Rate Limiting
+
+```typescript
+const rateLimitProcedure = igniter.procedure({
+  handler: async ({ request, context, response }) => {
+    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    const key = `rate_limit:${ip}`;
+    
+    // Increment request count
+    const count = await context.store?.increment(key, { ttl: 60 }); // 60 seconds
+    
+    const limit = 100;
+    const remaining = Math.max(0, limit - (count || 0));
+    
+    if ((count || 0) > limit) {
+      return response.json(
+        { message: 'Rate limit exceeded' },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': limit.toString(),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': (Date.now() + 60000).toString()
+          }
+        }
+      );
+    }
+    
+    return {
+      rateLimit: {
+        limit,
+        remaining,
+        current: count || 0
+      }
+    };
+  }
+});
+```
+
+### Request Tracing
+
+```typescript
+const tracingProcedure = igniter.procedure({
+  handler: async ({ request, context }) => {
+    const traceId = request.headers.get('x-trace-id') || crypto.randomUUID();
+    const spanId = crypto.randomUUID();
+    const parentSpanId = request.headers.get('x-parent-span-id') || null;
+    
+    const span = context.telemetry?.startSpan('http-request', {
+      attributes: {
+        'http.method': request.method,
+        'http.path': request.path,
+        'http.user_agent': request.headers.get('user-agent'),
+        'trace.id': traceId,
+        'span.id': spanId,
+        'span.parent_id': parentSpanId
+      }
+    });
+    
+    return {
+      trace: {
+        traceId,
+        spanId,
+        parentSpanId,
+        span,
+        endSpan: () => span?.end()
+      }
+    };
+  }
+});
+```
+
+### Input Transformation
+
+```typescript
+const sanitizeInputProcedure = igniter.procedure({
+  handler: async ({ request }) => {
+    // Sanitize query parameters
+    const sanitizedQuery = Object.entries(request.query || {}).reduce(
+      (acc, [key, value]) => ({
+        ...acc,
+        [key]: typeof value === 'string' ? value.trim() : value
+      }),
+      {}
+    );
+    
+    // Sanitize body
+    const sanitizedBody = request.body ? 
+      JSON.parse(JSON.stringify(request.body).replace(/<[^>]*>/g, '')) : 
+      undefined;
+    
+    return {
+      sanitized: {
+        query: sanitizedQuery,
+        body: sanitizedBody
+      }
+    };
+  }
+});
+```
+
+---
+
+## Procedure Composition
+
+### Chaining Procedures
+
+Procedures run in order and can build on each other:
+
+```typescript
+const procedure1 = igniter.procedure({
+  handler: async () => ({ step1: 'done' })
+});
+
+const procedure2 = igniter.procedure({
+  handler: async ({ context }) => {
+    // ✅ Access step1 from previous procedure
+    console.log(context.step1);
+    return { step2: 'done' };
+  }
+});
+
+const procedure3 = igniter.procedure({
+  handler: async ({ context }) => {
+    // ✅ Access both step1 and step2
+    console.log(context.step1, context.step2);
+    return { step3: 'done' };
+  }
+});
+
+// Use all three
+const action = igniter.query({
+  use: [procedure1, procedure2, procedure3],
+  handler: async ({ context }) => {
+    // ✅ All three steps are available
+    console.log(context.step1, context.step2, context.step3);
+  }
+});
+```
+
+### Conditional Procedures
+
+Create procedures that conditionally extend context:
+
+```typescript
+const optionalAuthProcedure = igniter.procedure({
+  handler: async ({ request }) => {
+    const token = request.headers.get('authorization');
+    
+    if (!token) {
+      // ✅ Return minimal context if no token
+      return {
+        currentUser: null,
+        isAuthenticated: false
+      };
+    }
+    
+    try {
+      const user = await verifyToken(token);
+      return {
+        currentUser: user,
+        isAuthenticated: true
+      };
+    } catch {
+      return {
+        currentUser: null,
+        isAuthenticated: false
+      };
+    }
+  }
+});
+```
+
+---
+
+## Error Handling
+
+### Early Return with Response
+
+Procedures can return a `Response` to short-circuit execution:
+
+```typescript
+const authProcedure = igniter.procedure({
+  handler: async ({ request, response }) => {
+    const token = request.headers.get('authorization');
+    
+    if (!token) {
+      // ✅ Return response - action handler won't run
+      return response.unauthorized({ message: 'Token required' });
+    }
+    
+    const user = await verifyToken(token);
+    return { currentUser: user };
+  }
+});
+```
+
+### Throwing Errors
+
+You can also throw errors that will be caught automatically:
+
+```typescript
+const authProcedure = igniter.procedure({
+  handler: async ({ request }) => {
+    const token = request.headers.get('authorization');
+    
+    if (!token) {
+      // ✅ Throw error - automatically returns 500
+      throw new Error('No authorization token');
+    }
+    
+    const user = await verifyToken(token);
+    
+    if (!user) {
+      throw new Error('Invalid token');
+    }
+    
+    return { currentUser: user };
+  }
+});
+```
+
+### Custom Error Classes
+
+```typescript
+class UnauthorizedError extends Error {
+  statusCode = 401;
+  constructor(message: string) {
+    super(message);
+    this.name = 'UnauthorizedError';
+  }
+}
+
+const authProcedure = igniter.procedure({
+  handler: async ({ request }) => {
+    const token = request.headers.get('authorization');
+    
+    if (!token) {
+      throw new UnauthorizedError('Token required');
+    }
+    
+    const user = await verifyToken(token);
+    return { currentUser: user };
+  }
+});
+```
+
+---
+
+## Reusable Procedure Factories
+
+Create factory functions for configurable procedures:
+
+```typescript
+function createAuthProcedure(options: { required: boolean }) {
+  return igniter.procedure({
+    handler: async ({ request, response }) => {
+      const token = request.headers.get('authorization');
+      
+      if (!token) {
+        if (options.required) {
+          return response.unauthorized({ message: 'Token required' });
+        }
+        return { currentUser: null, isAuthenticated: false };
+      }
+      
+      const user = await verifyToken(token);
+      return { currentUser: user, isAuthenticated: true };
+    }
+  });
+}
+
+// Usage
+const optionalAuth = createAuthProcedure({ required: false });
+const requiredAuth = createAuthProcedure({ required: true });
+
+const publicAction = igniter.query({
+  use: [optionalAuth],
+  handler: async ({ context }) => {
+    // context.currentUser might be null
+  }
+});
+
+const protectedAction = igniter.query({
+  use: [requiredAuth],
+  handler: async ({ context }) => {
+    // context.currentUser is guaranteed
+  }
+});
+```
+
+---
+
+## Best Practices
+
+### 1. Keep Procedures Focused
+
+Each procedure should have a single responsibility:
+
+```typescript
+// ✅ Good - Single responsibility
+const authProcedure = igniter.procedure({
+  handler: async ({ request }) => {
+    const user = await authenticateUser(request);
+    return { currentUser: user };
+  }
+});
+
+const permissionsProcedure = igniter.procedure({
+  handler: async ({ context }) => {
+    const permissions = await getPermissions(context.currentUser.id);
+    return { permissions };
+  }
+});
+
+// ❌ Bad - Multiple responsibilities
+const authAndPermissionsProcedure = igniter.procedure({
+  handler: async ({ request, context }) => {
+    const user = await authenticateUser(request);
+    const permissions = await getPermissions(user.id);
+    const settings = await getSettings(user.id);
+    const preferences = await getPreferences(user.id);
+    return { currentUser: user, permissions, settings, preferences };
+  }
+});
+```
+
+### 2. Use Type-Safe Returns
+
+Always return typed objects:
+
+```typescript
+// ✅ Good - Typed return
+interface AuthContext {
+  currentUser: User;
+  isAuthenticated: boolean;
+}
+
+const authProcedure = igniter.procedure({
+  handler: async ({ request }): Promise<AuthContext> => {
+    const user = await authenticateUser(request);
+    return {
+      currentUser: user,
+      isAuthenticated: true
+    };
+  }
+});
+```
+
+### 3. Order Matters
+
+Place procedures in the correct order:
+
+```typescript
+// ✅ Correct order
+const action = igniter.query({
+  use: [
+    requestLoggerProcedure,    // 1. Log request
+    authProcedure,             // 2. Authenticate
+    permissionsProcedure,      // 3. Check permissions (needs auth)
+    rateLimitProcedure         // 4. Rate limit
+  ],
+  handler: async ({ context }) => { /* ... */ }
+});
+
+// ❌ Wrong order
+const action = igniter.query({
+  use: [
+    permissionsProcedure,      // ❌ Runs before auth!
+    authProcedure,
+    requestLoggerProcedure
+  ],
+  handler: async ({ context }) => { /* ... */ }
+});
+```
+
+### 4. Early Returns for Errors
+
+Return error responses early to avoid unnecessary processing:
+
+```typescript
+const authProcedure = igniter.procedure({
+  handler: async ({ request, response }) => {
+    // ✅ Early return
+    if (!request.headers.get('authorization')) {
+      return response.unauthorized({ message: 'Token required' });
+    }
+    
+    const user = await verifyToken(request.headers.get('authorization'));
+    
+    // ✅ Another early return
+    if (!user.isActive) {
+      return response.forbidden({ message: 'Account deactivated' });
+    }
+    
+    return { currentUser: user };
+  }
+});
+```
+
+---
+
+## Testing Procedures
+
+### Unit Tests
+
+Test procedures in isolation:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+
+describe('authProcedure', () => {
+  it('should authenticate valid token', async () => {
+    const mockRequest = {
+      headers: new Headers({ 'authorization': 'Bearer valid-token' })
+    };
+    
+    const result = await authProcedure.handler({
+      request: mockRequest,
+      context: {},
+      response: mockResponseProcessor,
+      plugins: {}
+    });
+    
+    expect(result.currentUser).toBeDefined();
+    expect(result.isAuthenticated).toBe(true);
+  });
+
+  it('should reject missing token', async () => {
+    const mockRequest = {
+      headers: new Headers()
+    };
+    
+    const result = await authProcedure.handler({
+      request: mockRequest,
+      context: {},
+      response: mockResponseProcessor,
+      plugins: {}
+    });
+    
+    expect(result.status).toBe(401);
+  });
+});
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Actions" href="/docs/actions">
+    Use procedures in queries and mutations
+  </Card>
+  
+  <Card title="Context" href="/docs/context">
+    Understand how context flows through procedures
+  </Card>
+  
+  <Card title="Error Handling" href="/docs/error-handling">
+    Handle errors in procedures
+  </Card>
+  
+  <Card title="Testing" href="/docs/testing">
+    Test procedures and actions together
+  </Card>
+</Cards>

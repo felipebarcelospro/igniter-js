@@ -1,0 +1,304 @@
+---
+title: Receiving Messages
+description: Handle incoming messages from users.
+---
+
+Your bot receives messages through event listeners and command handlers. This guide shows you how to process different types of incoming messages.
+
+---
+
+## Message Events
+
+The bot emits a `message` event for every incoming message, giving you a centralized place to handle all message types. This event fires before command handlers run, making it perfect for logging, filtering, or preprocessing messages. You can listen to this event to handle messages that don't require commands or to implement custom message processing logic.
+
+Event listeners are flexible and allow you to respond to messages reactively, without requiring users to use specific commands. This makes your bot feel more natural and responsive to user interactions.
+
+The bot emits a `message` event for every incoming message:
+
+```typescript
+bot.on('message', async (ctx) => {
+  // Handle all incoming messages
+  console.log('Received message:', ctx.message.content)
+})
+```
+
+---
+
+## Checking Message Type
+
+Different message types have different structures, so you need to check the message type before processing. This type checking ensures you handle each message type appropriately and access the correct properties. TypeScript's type narrowing helps here—once you check the type, TypeScript knows what properties are available.
+
+Understanding message types is crucial for building bots that handle various content formats. Each type has specific properties you can access, making your bot more capable and user-friendly.
+
+Different message types have different structures:
+
+```typescript
+bot.on('message', async (ctx) => {
+  const content = ctx.message.content
+  
+  if (!content) {
+    return // No content
+  }
+  
+  switch (content.type) {
+    case 'text':
+      // Handle text message
+      console.log('Text:', content.content)
+      break
+      
+    case 'command':
+      // Handle command (usually handled by command system)
+      console.log('Command:', content.command)
+      break
+      
+    case 'image':
+      // Handle image
+      console.log('Image URL:', content.content)
+      break
+      
+    case 'document':
+      // Handle document
+      console.log('Document:', content.file.name)
+      break
+      
+    case 'audio':
+      // Handle audio
+      console.log('Audio URL:', content.content)
+      break
+  }
+})
+```
+
+---
+
+## Text Messages
+
+Text messages are the most common message type and form the foundation of most bot interactions. They contain plain text content that you can process, respond to, or log. Handling text messages is straightforward—you access the content directly and can use it for various purposes like natural language processing, keyword matching, or simple responses.
+
+Plain text messages are perfect for conversational bots, Q&A systems, and bots that need to understand user intent from natural language.
+
+Handle plain text messages:
+
+```typescript
+bot.on('message', async (ctx) => {
+  if (ctx.message.content?.type === 'text') {
+    const text = ctx.message.content.content
+    
+    // Echo the message
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: `You said: ${text}`
+      }
+    })
+  }
+})
+```
+
+---
+
+## Commands
+
+Commands are automatically parsed by the bot framework, making them easy to handle. The command system extracts the command name and parameters, so you can focus on implementing the command logic rather than parsing text. While commands are usually handled by the command system, you can also access them directly in event listeners for custom processing.
+
+The command system provides a structured way for users to interact with your bot, making it clear what actions are available and how to use them.
+
+Commands are automatically parsed. Access them via:
+
+```typescript
+bot.on('message', async (ctx) => {
+  if (ctx.message.content?.type === 'command') {
+    const command = ctx.message.content.command
+    const params = ctx.message.content.params
+    
+    console.log(`Command: ${command}, Params: ${params.join(' ')}`)
+    
+    // Commands are usually handled by the command system,
+    // but you can also handle them here
+  }
+})
+```
+
+---
+
+## Media Messages
+
+Media messages include images, documents, and audio files that users send to your bot. These messages contain file URLs or file objects that you can download, process, or forward. Media handling opens up possibilities for bots that need to process images, documents, or audio files—like image recognition bots, file processors, or audio transcription services.
+
+Each media type has specific properties. Images have captions, documents have file names, and audio files have duration information. Understanding these properties helps you build bots that work with rich media content.
+
+Handle images, documents, and audio:
+
+```typescript
+bot.on('message', async (ctx) => {
+  const content = ctx.message.content
+  
+  if (content?.type === 'image') {
+    const imageUrl = content.content
+    const caption = content.caption
+    
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: `Received image${caption ? `: ${caption}` : ''}`
+      }
+    })
+  }
+  
+  if (content?.type === 'document') {
+    const fileName = content.file.name
+    
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: `Received document: ${fileName}`
+      }
+    })
+  }
+  
+  if (content?.type === 'audio') {
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: 'Received audio message'
+      }
+    })
+  }
+})
+```
+
+---
+
+## Message Context
+
+Every message includes rich context about the sender, channel, and message metadata. This context helps you build intelligent bots that understand who sent the message, where it came from, and what type of interaction it is. Accessing context properties allows you to personalize responses, implement permissions, and understand the conversation context.
+
+The context object is your gateway to understanding the full picture of each message—not just what was said, but who said it, where they said it, and how they said it.
+
+Access message metadata:
+
+```typescript
+bot.on('message', async (ctx) => {
+  // Author information
+  const author = ctx.message.author
+  console.log(`From: ${author.name} (@${author.username})`)
+  
+  // Channel information
+  const channel = ctx.channel
+  console.log(`Channel: ${channel.name} (${channel.isGroup ? 'group' : 'private'})`)
+  
+  // Mention status
+  if (ctx.message.isMentioned) {
+    console.log('Bot was mentioned!')
+  }
+})
+```
+
+---
+
+## Filtering Messages
+
+Filtering messages allows you to process only specific message types or sources, making your bot more efficient and focused. You can filter by message type (text, image, command), channel type (group vs private), mention status, or any other message property. Filtering early in your event handlers prevents unnecessary processing and keeps your bot responsive.
+
+Message filtering is essential for bots that need to behave differently in groups versus private chats, or bots that only respond to specific types of content.
+
+Filter messages by type or content:
+
+```typescript
+// Only handle text messages
+bot.on('message', async (ctx) => {
+  if (ctx.message.content?.type !== 'text') {
+    return // Ignore non-text messages
+  }
+  
+  // Process text message...
+})
+
+// Only handle group messages
+bot.on('message', async (ctx) => {
+  if (!ctx.channel.isGroup) {
+    return // Ignore private messages
+  }
+  
+  // Process group message...
+})
+
+// Only handle mentions
+bot.on('message', async (ctx) => {
+  if (!ctx.message.isMentioned) {
+    return // Ignore non-mentions
+  }
+  
+  // Process mention...
+})
+```
+
+---
+
+## Complete Example
+
+Here's a complete example that demonstrates how to receive and process different message types. This example shows how to handle text messages and images, providing appropriate responses for each type. It demonstrates the core patterns you'll use when building bots that need to handle multiple message types.
+
+This example demonstrates:
+- **Event Listeners**: Using message event listeners to handle incoming messages
+- **Type Checking**: Checking message types before processing
+- **Different Handlers**: Handling different message types appropriately
+- **Response Generation**: Sending appropriate responses based on message type
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+
+const bot = Bot.create({
+  id: 'receive-bot',
+  name: 'Receive Bot',
+  adapters: {
+    telegram: telegram({ /* ... */ })
+  },
+  on: {
+    message: async (ctx) => {
+      const content = ctx.message.content
+      
+      if (!content) {
+        return
+      }
+      
+      switch (content.type) {
+        case 'text':
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: `You said: ${content.content}`
+            }
+          })
+          break
+          
+        case 'image':
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: '📷 Nice image!'
+            }
+          })
+          break
+      }
+    }
+  }
+})
+
+await bot.start()
+```
+
+---
+

@@ -1,0 +1,9 @@
+{
+  "title": "Commands",
+  "pages": [
+    "command-basics",
+    "command-aliases",
+    "dynamic-commands"
+  ]
+}
+

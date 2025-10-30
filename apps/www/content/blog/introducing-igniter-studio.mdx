@@ -1,0 +1,399 @@
+---
+title: "Introducing Igniter Studio: Your Interactive API Development Playground"
+description: "Stop switching between tools. Igniter Studio brings interactive API testing, real-time monitoring, and AI-powered insights directly into your development workflow. Built on Scalar, designed for the future."
+tags: ["announcement", "tools", "developer-experience", "api"]
+---
+
+Modern API development shouldn't require juggling multiple applications. Yet developers constantly switch between their code editor, terminal, and separate API testing tools like Postman or Insomnia. This context-switching destroys focus and slows development.
+
+**Igniter Studio** eliminates this friction by providing a beautiful, interactive API playground built directly into your Igniter.js application. But this is just the beginning—we're building toward a complete AI-powered command center for modern development.
+
+## The Context-Switching Problem
+
+A typical development workflow looks like this:
+
+<Steps>
+  <Step>
+    ### Write Code
+    Make changes in your code editor
+  </Step>
+
+  <Step>
+    ### Start Server
+    Switch to terminal, run development server
+  </Step>
+
+  <Step>
+    ### Test API
+    Switch to Postman/Insomnia, manually configure request
+  </Step>
+
+  <Step>
+    ### Check Logs
+    Switch back to terminal to view logs
+  </Step>
+
+  <Step>
+    ### Debug Issue
+    Switch back to code editor
+  </Step>
+</Steps>
+
+Each context switch breaks your flow and consumes mental energy. **What if all of this happened in one place?**
+
+## Introducing Igniter Studio
+
+Igniter Studio is an interactive API playground that lives alongside your application, automatically consuming your OpenAPI specification to provide a rich, type-aware testing interface.
+
+Built on [Scalar API Reference](https://github.com/scalar/scalar), it offers a modern, beautiful UI that makes API exploration intuitive and enjoyable.
+
+### Get Started in Seconds
+
+Launch Igniter Studio by adding a single flag to your development command:
+
+```bash
+npx @igniter-js/cli dev --docs
+```
+
+That's it! Navigate to `/docs` on your local server and you'll see your entire API ready to explore.
+
+<Callout type="success" title="Zero Configuration Required">
+Igniter Studio automatically detects your API structure from the generated OpenAPI specification. No manual setup, no configuration files—it just works.
+</Callout>
+
+## See It in Action
+
+Watch how seamlessly Igniter Studio integrates into your development workflow:
+
+<div className="relative aspect-video w-full overflow-hidden rounded-lg border">
+  <iframe
+    className="absolute inset-0 h-full w-full"
+    src="https://www.youtube.com/embed/v0BOPH02RBU"
+    title="Igniter Studio Demo"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowFullScreen
+  />
+</div>
+
+## Current Features
+
+### Interactive API Explorer
+
+Browse your entire API structure with an intuitive, searchable interface. Each endpoint displays:
+
+- **Complete type information** derived from your Zod schemas
+- **Request/response examples** automatically generated from your types
+- **Authentication requirements** clearly documented
+- **Parameter descriptions** from your JSDoc comments
+
+### Live API Testing
+
+Test endpoints directly in the browser with:
+
+<Steps>
+  <Step>
+    ### Smart Request Builder
+    Auto-complete for parameters, headers, and request bodies based on your API types
+  </Step>
+
+  <Step>
+    ### Real-Time Responses
+    See responses instantly with syntax highlighting and formatting
+  </Step>
+
+  <Step>
+    ### Request History
+    Access previous requests to quickly iterate on testing
+  </Step>
+
+  <Step>
+    ### Code Generation
+    Export working code samples in multiple languages (cURL, JavaScript, Python, etc.)
+  </Step>
+</Steps>
+
+### Automatic Documentation
+
+Your API documentation stays in sync with your code because it's generated from the same source of truth:
+
+```typescript
+// Your controller automatically generates documentation
+export const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    getUser: igniter.query({
+      path: '/:id',
+      description: 'Retrieve a user by ID', // Shows in Studio
+      query: z.object({
+        id: z.string().uuid().describe('The user UUID')
+      }),
+      handler: async ({ request, response, context }) => {
+        // Implementation
+      }
+    })
+  }
+})
+```
+
+This description and parameter documentation automatically appears in Igniter Studio—no separate documentation files to maintain.
+
+## The Vision: Your AI-Powered Command Center
+
+Igniter Studio today is powerful, but it's just the foundation. We're building toward a complete development command center that brings together everything you need to build, test, and monitor your application.
+
+### Coming Soon: Real-Time Monitoring
+
+<Callout type="info" title="Roadmap Feature">
+Currently in development for a future release.
+</Callout>
+
+See your application's heartbeat in real-time:
+
+- **Live Request Stream**: Watch API requests as they happen with detailed payload inspection
+- **Performance Metrics**: Track response times, error rates, and throughput
+- **Error Tracking**: Catch and diagnose issues the moment they occur
+- **Request Replay**: Reproduce problematic requests for debugging
+
+### Coming Soon: Queue & Job Management
+
+Visual dashboards for background processing:
+
+- **Job Queue Visualization**: See pending, active, and completed jobs
+- **Job Status Monitoring**: Track progress of long-running tasks
+- **Manual Job Control**: Retry failed jobs, cancel stuck operations
+- **Performance Analytics**: Understand job execution patterns
+
+### Coming Soon: Integrated Telemetry
+
+Turn OpenTelemetry data into actionable insights:
+
+- **Distributed Tracing**: Follow requests across services and operations
+- **Performance Profiling**: Identify bottlenecks in your application
+- **Custom Metrics**: Track business-specific KPIs
+- **Alerting**: Get notified when metrics cross thresholds
+
+### Coming Soon: Custom Dashboards
+
+Create personalized views for your specific needs:
+
+- **Business Metrics**: Track sign-ups, conversions, revenue
+- **Technical Health**: Monitor system resources, dependencies
+- **Team Dashboards**: Share important metrics across your team
+- **Embedded Widgets**: Add dashboard panels to your application UI
+
+## The Game-Changer: Integrated AI Assistant
+
+The most transformative feature on our roadmap is **Lia**, your AI assistant, integrated directly into Igniter Studio.
+
+### Natural Language Development
+
+Imagine debugging and managing your application using conversational language:
+
+<Steps>
+  <Step>
+    ### Ask Questions
+    **You:** "Lia, what was the payload of the last failed request to `/users`?"
+    
+    **Lia:** "The last failed request at 14:32:15 had an invalid email format in the request body..."
+  </Step>
+
+  <Step>
+    ### Execute Commands
+    **You:** "Lia, run the test suite for the auth feature."
+    
+    **Lia:** "Running tests... 12 passed, 1 failed. The `login` test is failing due to..."
+  </Step>
+
+  <Step>
+    ### Create Dashboards
+    **You:** "Lia, create a dashboard tracking API error rates over 24 hours."
+    
+    **Lia:** "Dashboard created. I've added widgets for total errors, error rate trend, and top failing endpoints..."
+  </Step>
+
+  <Step>
+    ### Get Guidance
+    **You:** "Lia, how do I add a new scope to authentication?"
+    
+    **Lia:** "To add a new authentication scope, you'll need to modify your auth procedure. Here's how..."
+  </Step>
+</Steps>
+
+### Context-Aware Assistance
+
+Unlike generic AI chatbots, Lia has **full context** of your application:
+
+- Real-time access to your code structure
+- Live monitoring data from your running application
+- Complete request/response history
+- Historical performance metrics
+- Your specific architectural patterns
+
+This creates an unprecedented development experience where your AI assistant truly understands your application's state and can provide precise, actionable guidance.
+
+## Technical Architecture
+
+Igniter Studio is designed to be lightweight and non-intrusive:
+
+### Development Mode
+
+In development, Studio runs alongside your application:
+
+```typescript
+// Automatically enabled with --docs flag
+npx @igniter-js/cli dev --docs
+
+// Accessible at http://localhost:3000/docs
+```
+
+### Production Deployment
+
+For production, you have options:
+
+<Tabs items={['Disable', 'Protected', 'Separate']} groupId="production-mode">
+  <Tab value="Disable">
+    Completely disable Studio in production:
+    ```typescript
+    // igniter.config.ts
+    export default {
+      studio: {
+        enabled: process.env.NODE_ENV === 'development'
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab value="Protected">
+    Enable Studio with authentication:
+    ```typescript
+    // igniter.config.ts
+    export default {
+      studio: {
+        enabled: true,
+        auth: {
+          type: 'basic',
+          users: [{ 
+            username: process.env.STUDIO_USER,
+            password: process.env.STUDIO_PASS 
+          }]
+        }
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab value="Separate">
+    Deploy Studio as a separate instance:
+    ```bash
+    # Deploy only Studio with read-only access
+    npx @igniter-js/cli studio --remote
+    ```
+  </Tab>
+</Tabs>
+
+## Integration with Development Workflow
+
+Igniter Studio seamlessly fits into your existing workflow:
+
+### Local Development
+
+```bash
+# Start dev server with Studio
+npm run dev -- --docs
+
+# Or configure it permanently
+# package.json
+{
+  "scripts": {
+    "dev": "igniter dev --docs"
+  }
+}
+```
+
+### Team Collaboration
+
+Share API documentation with your team by deploying Studio:
+
+```bash
+# Deploy Studio to a shareable URL
+vercel deploy --only-studio
+
+# Or use your existing deployment
+# Studio is available at /docs on any environment
+```
+
+### CI/CD Integration
+
+Validate API contracts in your pipeline:
+
+```bash
+# Generate OpenAPI spec for validation
+igniter openapi > spec.json
+
+# Compare with previous version
+diff spec.json spec.previous.json
+```
+
+## Get Started Today
+
+Igniter Studio is available now in all Igniter.js projects. Start exploring your API in a whole new way:
+
+<Steps>
+  <Step>
+    ### Start Your Project
+    Use any Igniter.js starter template or existing project
+  </Step>
+
+  <Step>
+    ### Launch Studio
+    ```bash
+    npx @igniter-js/cli dev --docs
+    ```
+  </Step>
+
+  <Step>
+    ### Open in Browser
+    Navigate to `http://localhost:3000/docs`
+  </Step>
+
+  <Step>
+    ### Start Exploring
+    Browse your API, test endpoints, and experience the future of API development
+  </Step>
+</Steps>
+
+## Starter Templates
+
+Every Igniter.js starter template comes with Studio pre-configured and ready to use:
+
+- [Next.js Full-Stack Starter](/templates/starter-nextjs)
+- [TanStack Start Starter](/templates/starter-tanstack-start)
+- [Bun + React Starter](/templates/starter-bun-react-app)
+- [Express API Starter](/templates/starter-express-rest-api)
+- [Bun API Starter](/templates/starter-bun-rest-api)
+- [Deno API Starter](/templates/starter-deno-rest-api)
+
+## Share Your Feedback
+
+Igniter Studio is evolving based on your needs. We'd love to hear:
+
+- What features would make your workflow even better?
+- What pain points does Studio solve for you?
+- What should we prioritize on the roadmap?
+
+Join the conversation:
+
+- [GitHub Discussions](https://github.com/felipebarcelospro/igniter-js/discussions)
+- [Discord Community](https://discord.gg/igniterjs)
+- [Twitter](https://twitter.com/igniterjs)
+
+## Resources
+
+- [Studio Documentation](/docs/tools/studio)
+- [OpenAPI Generation](/docs/advanced-features/openapi)
+- [Deployment Guide](/docs/deployment)
+- [Starter Templates](/templates)
+
+---
+
+The future of API development is here. Stop juggling tools and start building with Igniter Studio—your new development command center.

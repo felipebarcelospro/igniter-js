@@ -1,68 +1,45 @@
-# Igniter.js Website (`@igniter-js/www`)
+# docs
 
-This repository contains the source code for the official Igniter.js website and documentation platform, available at [https://igniterjs.com](https://igniterjs.com).
+This is a Next.js application generated with
+[Create Fumadocs](https://github.com/fuma-nama/fumadocs).
 
-Built with Next.js and Tailwind CSS, this project serves as the central hub for our community, providing marketing information, comprehensive documentation, and guides to help developers get the most out of Igniter.js.
+Run development server:
 
-## ✨ Features
+```bash
+npm run dev
+# or
+pnpm dev
+# or
+yarn dev
+```
 
--   **Modern Tech Stack:** Built with [Next.js](https://nextjs.org/) (App Router) for a fast, server-rendered React experience.
--   **Rich Content with MDX:** Documentation pages are written in MDX, allowing for interactive React components directly inside markdown.
--   **Beautifully Styled:** Styled with [Tailwind CSS](https://tailwindcss.com/) for a utility-first workflow.
--   **Component-Based UI:** A rich component library built with [Shadcn/ui](https://ui.shadcn.com/) and animated with [Framer Motion](https://www.framer.com/motion/).
--   **Fully Responsive:** Designed to provide an optimal viewing experience across a wide range of devices.
+Open http://localhost:3000 with your browser to see the result.
 
-## 🚀 Getting Started
+## Explore
 
-Follow these instructions to set up the project for local development.
+In the project, you can see:
 
-### Prerequisites
+- `lib/source.ts`: Code for content source adapter, [`loader()`](https://fumadocs.dev/docs/headless/source-api) provides the interface to access your content.
+- `lib/layout.shared.tsx`: Shared options for layouts, optional but preferred to keep.
 
--   [Node.js](https.md.js.org/) (version specified in the root `package.json`'s `engines` field)
--   [npm](https://www.npmjs.com/) (version 8 or higher recommended for workspace support)
+| Route                     | Description                                            |
+| ------------------------- | ------------------------------------------------------ |
+| `app/(home)`              | The route group for your landing page and other pages. |
+| `app/docs`                | The documentation layout and pages.                    |
+| `app/api/search/route.ts` | The Route Handler for search.                          |
 
-### Installation and Setup
+### Fumadocs MDX
 
-1.  **Clone the Monorepo:**
-    If you haven't already, clone the entire Igniter.js monorepo to your local machine.
-    ```bash
-    git clone https://github.com/your-org/igniter-js.git
-    cd igniter-js
-    ```
+A `source.config.ts` config file has been included, you can customise different options like frontmatter schema.
 
-2.  **Install Dependencies:**
-    From the root of the monorepo, run the following command to install dependencies for all packages, including this website.
-    ```bash
-    npm install
-    ```
-    This command leverages npm workspaces to link all local packages correctly.
+Read the [Introduction](https://fumadocs.dev/docs/mdx) for further details.
 
-3.  **Run the Development Server:**
-    Use the npm `--filter` flag to run the development server specifically for the `@igniter-js/www` package.
-    ```bash
-    npm run dev --filter @igniter-js/www
-    ```
+## Learn More
 
-4.  **Open in Browser:**
-    The website will be running at [http://localhost:3000](http://localhost:3000).
+To learn more about Next.js and Fumadocs, take a look at the following
+resources:
 
-## ✍️ How to Contribute
-
-We welcome contributions from the community! Whether it's fixing a typo, improving documentation, or adding a new feature, your help is appreciated.
-
-### Adding or Editing Documentation
-
-Our documentation is written in MDX (`.mdx`).
-
-1.  **Find the Content:** The documentation files are located in the `src/content/docs` directory (or a similar location, please verify). The file and folder structure in this directory maps directly to the URL paths.
-2.  **Make Your Changes:** Create a new file or edit an existing one. You can use standard Markdown syntax as well as custom React components found in `src/components/mdx/`.
-3.  **Update Navigation (if needed):** If you add a new page, you may need to add it to the sidebar navigation. This is typically configured in a file like `src/configs/docs-nav.ts`.
-4.  **Submit a Pull Request:** Commit your changes and open a pull request against the `main` branch of the monorepo.
-
-### Reporting Issues
-
-If you encounter a bug or have a feature request, please [open an issue](https://github.com/felipebarcelospro/igniter-js/issues) on our GitHub repository. Provide as much detail as possible, including steps to reproduce the issue.
-
-## 📜 License
-
-This project is licensed under the MIT License. See the [LICENSE](../../LICENSE) file in the root of the monorepo for more details.
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js
+  features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- [Fumadocs](https://fumadocs.dev) - learn about Fumadocs

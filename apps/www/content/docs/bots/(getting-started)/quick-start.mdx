@@ -1,0 +1,266 @@
+---
+title: Quick Start
+description: Get a bot running in minutes with this quick start guide.
+---
+
+This quick start guide will help you create a working Telegram bot in just a few minutes. We'll build a simple bot that responds to commands, demonstrating the core concepts of the Igniter.js Bots package. By the end of this guide, you'll have a fully functional bot that you can extend with more features.
+
+The bot we're building will respond to `/start` and `/ping` commands, showing you how commands work, how to send messages, and how to set up webhook handlers. This foundation will help you understand the architecture before diving into more advanced features like middleware, dynamic commands, and multi-platform support.
+
+Even though this is a simple example, it demonstrates several important concepts: command creation with validation using `Bot.command()`, webhook handling, message sending, and event listeners. Once you understand these basics, you'll be ready to build more sophisticated bots.
+
+<Card title="Quick Start Guide">
+<Steps>
+  <Step>
+    ### Install Dependencies
+    
+    Make sure you have the Bots package installed:
+    
+    <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+      <Tab value="npm">
+        ```bash
+        npm install @igniter-js/bot
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm add @igniter-js/bot
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn add @igniter-js/bot
+        ```
+      </Tab>
+      <Tab value="bun">
+        ```bash
+        bun add @igniter-js/bot
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step>
+    ### Set Up Environment Variables
+    
+    Create a `.env` file in your project root:
+    
+    ```bash
+    TELEGRAM_TOKEN=your_bot_token_here
+    TELEGRAM_WEBHOOK_URL=https://your-domain.com/api/telegram
+    TELEGRAM_SECRET=optional_webhook_secret
+    ```
+    
+    <Callout type="info" title="Getting a Telegram Token">
+      To get a Telegram bot token:
+      1. Open Telegram and search for [@BotFather](https://t.me/BotFather)
+      2. Send `/newbot` and follow the instructions
+      3. Copy the token you receive
+    </Callout>
+  </Step>
+  
+  <Step>
+    ### Create the Bot
+    
+    Create a new file `src/bot.ts`. For better organization, we'll use `Bot.command()` to create commands with validation:
+    
+    ```typescript
+    import { Bot, telegram } from '@igniter-js/bot'
+    
+    const startCommand = Bot.command({
+      name: 'start',
+      aliases: ['hello'],
+      description: 'Greets the user',
+      help: 'Use /start to get a welcome message',
+      async handle(ctx) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: { type: 'text', content: '👋 Hello! Welcome to the bot!' }
+        })
+      }
+    })
+    
+    const pingCommand = Bot.command({
+      name: 'ping',
+      aliases: [],
+      description: 'Check if the bot is alive',
+      help: 'Use /ping to check bot latency',
+      async handle(ctx) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: { type: 'text', content: '🏓 pong!' }
+        })
+      }
+    })
+    
+    export const bot = Bot.create({
+      id: 'quick-start-bot',
+      name: 'Quick Start Bot',
+      adapters: {
+        telegram: telegram({
+          token: process.env.TELEGRAM_TOKEN!,
+          handle: '@your_bot_username', // Replace with your bot's username
+          webhook: {
+            url: process.env.TELEGRAM_WEBHOOK_URL!,
+            secret: process.env.TELEGRAM_SECRET
+          }
+        })
+      },
+      commands: {
+        start: startCommand,
+        ping: pingCommand
+      },
+      on: {
+        message: async (ctx) => {
+          // Log all incoming messages
+          if (ctx.message.content?.type === 'text') {
+            console.log(`Received: ${ctx.message.content.content}`)
+          }
+        }
+      }
+    })
+    
+    // Initialize the bot (registers webhooks, syncs commands)
+    await bot.start()
+    ```
+  </Step>
+  
+  <Step>
+    ### Create the Webhook Handler
+    
+    The webhook handler is the entry point where Telegram sends incoming messages. The `bot.handle()` method processes the incoming request, routes it through middleware and commands, and returns an appropriate response. This handler needs to be set up as an HTTP endpoint in your application.
+    
+    Choose your framework:
+    
+    <Accordions>
+      <Accordion title="Next.js App Router">
+        Create `src/app/api/telegram/route.ts`:
+        
+        ```typescript
+        import { bot } from '@/bot'
+        
+        export async function POST(req: Request) {
+          return bot.handle('telegram', req)
+        }
+        ```
+      </Accordion>
+      
+      <Accordion title="Next.js Pages Router">
+        Create `src/pages/api/telegram.ts`:
+        
+        ```typescript
+        import type { NextApiRequest, NextApiResponse } from 'next'
+        import { bot } from '@/bot'
+        
+        export default async function handler(
+          req: NextApiRequest,
+          res: NextApiResponse
+        ) {
+          const response = await bot.handle('telegram', new Request(
+            `https://example.com${req.url}`,
+            {
+              method: req.method,
+              headers: req.headers as HeadersInit,
+              body: JSON.stringify(req.body)
+            }
+          ))
+          
+          const status = response.status
+          const body = await response.text()
+          
+          res.status(status).send(body)
+        }
+        ```
+      </Accordion>
+      
+      <Accordion title="Express.js">
+        ```typescript
+        import express from 'express'
+        import { bot } from './bot'
+        
+        const app = express()
+        
+        app.use('/api/telegram', express.json(), async (req, res) => {
+          const response = await bot.handle('telegram', new Request(
+            `https://example.com${req.url}`,
+            {
+              method: req.method,
+              headers: req.headers as HeadersInit,
+              body: JSON.stringify(req.body)
+            }
+          ))
+          
+          const status = response.status
+          const body = await response.text()
+          
+          res.status(status).send(body)
+        })
+        ```
+      </Accordion>
+    </Accordions>
+  </Step>
+  
+  <Step>
+    ### Test Your Bot
+    
+    1. **Deploy your application** (or use ngrok for local testing)
+    2. **Update your webhook URL** in the environment variables
+    3. **Send `/start`** to your bot on Telegram
+    4. **You should receive** a "Hello! Welcome to the bot!" message
+    
+    <Callout type="success" title="It Works!">
+      If you received the welcome message, congratulations! Your bot is working.
+    </Callout>
+  </Step>
+</Steps>
+</Card>
+
+## What You Built
+
+You've just created a fully functional Telegram bot! Let's break down what you've accomplished and understand how each piece fits together:
+
+<Accordions>
+  <Accordion title="Command System">
+    Your bot now responds to two commands: `/start` and `/ping`. Both commands were created using `Bot.command()`, which provides validation and type safety. The `/start` command has an alias (`/hello`), demonstrating how users can trigger the same command using different names. This is just the beginning—you can add many more commands using the same pattern, each handling different user interactions.
+    
+    The command system is one of the core features of the Bots package. It provides a structured way to handle user input, automatically parsing commands and their parameters. When a user sends `/start`, your bot knows exactly which handler to execute, and TypeScript ensures you're using the correct types throughout.
+  </Accordion>
+  
+  <Accordion title="Message Handling">
+    Your bot can receive and process messages from Telegram. The webhook handler you created acts as the entry point—when Telegram sends a message to your bot, it hits your webhook endpoint, and `bot.handle()` processes it through the entire pipeline. This includes routing through middleware (if you add any), executing commands, and handling events.
+    
+    The `on.message` event listener you added demonstrates how to react to all incoming messages, not just commands. This is useful for logging, analytics, or handling non-command interactions. You can extend this pattern to handle other events like errors or specific message types.
+  </Accordion>
+  
+  <Accordion title="Message Sending">
+    Your bot can send messages back to users using `ctx.bot.send()`. This unified API works across all adapters, so the same code that sends messages to Telegram can also send messages to WhatsApp or any other platform you add. The adapter handles all the platform-specific details, letting you focus on your bot's logic.
+  </Accordion>
+  
+  <Accordion title="Architecture Overview">
+    What you've built follows a clean, scalable architecture:
+    
+    - **Bot Instance**: Created with `Bot.create()`, configured with adapters and commands
+    - **Commands**: Created with `Bot.command()` for validation and type safety
+    - **Webhook Handler**: HTTP endpoint that receives platform messages
+    - **Adapter**: Handles platform-specific communication (Telegram API in this case)
+    
+    This architecture scales beautifully. As your bot grows, you can:
+    - Add more commands by creating new files using `Bot.command()`
+    - Add middleware for cross-cutting concerns like authentication or rate limiting
+    - Support multiple platforms by adding more adapters
+    - Organize code into separate files for better maintainability
+  </Accordion>
+</Accordions>
+
+### Next Steps
+
+Now that you have a working bot, here are some ways to extend it:
+
+- **Add More Commands**: Create commands for specific functionality your bot needs
+- **Add Middleware**: Implement authentication, logging, or rate limiting
+- **Explore Adapters**: Try adding WhatsApp support or other platforms
+- **Read the Full Documentation**: Deep dive into [Commands](/docs/bots/command-basics), [Middleware](/docs/bots/middleware-basics), and [Advanced Features](/docs/bots/error-handling)
+
+The foundation you've built is solid and ready to grow. Every feature you add will follow these same patterns, making your bot easier to understand and maintain as it evolves.

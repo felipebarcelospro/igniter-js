@@ -1,0 +1,351 @@
+---
+title: Lifecycle Hooks
+description: Use pre-process and post-process hooks to enrich context and handle side effects.
+---
+
+Lifecycle hooks run at specific points in the bot's processing pipeline. They're different from middleware—hooks run before middleware (pre-process) or after successful processing (post-process).
+
+---
+
+## Processing Pipeline
+
+The bot processes messages in this order:
+
+1. **Pre-process hooks** - Enrich context (e.g., load session)
+2. **Middleware chain** - Cross-cutting concerns (auth, logging)
+3. **Event listeners** - Handle events (`message`, `error`)
+4. **Command execution** - Execute command handler (if command)
+5. **Post-process hooks** - Side effects (e.g., save session, audit)
+
+---
+
+## Pre-Process Hooks
+
+Pre-process hooks run **before** middleware, making them perfect for enriching the context with data that your middleware or command handlers need. These hooks execute at the very start of the processing pipeline, allowing you to load user sessions, fetch permissions, gather channel metadata, or perform any other context enrichment before any middleware runs.
+
+Understanding when to use pre-process hooks versus middleware is important. Pre-process hooks are ideal for data loading that doesn't need to block processing—if the data load fails, you might want to continue with default values. They're also perfect for operations that should happen regardless of middleware logic, ensuring context is always enriched consistently.
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+
+const bot = Bot.create({
+  adapters: {
+    telegram: telegram({ /* ... */ })
+  },
+  commands: {
+    // ...
+  }
+})
+
+// Load user session before processing
+bot.onPreProcess(async (ctx) => {
+  const userId = ctx.message.author.id
+  
+  // Load session from database
+  const session = await loadUserSession(userId)
+  
+  // Attach to context (extend context type)
+  ;(ctx as any).session = session
+})
+```
+
+### Common Use Cases
+
+Pre-process hooks are versatile and can handle many different scenarios. Here are the most common patterns you'll use:
+
+<Accordions>
+  <Accordion title="Session Loading">
+    Load user session data before processing begins. This ensures session data is available to middleware and command handlers, allowing you to maintain state across multiple interactions. Sessions are perfect for storing user preferences, temporary data, or conversation context.
+    
+    ```typescript
+    bot.onPreProcess(async (ctx) => {
+      const session = await loadSession(ctx.message.author.id)
+      ;(ctx as any).session = session
+    })
+    ```
+    
+    This pattern is essential for bots that need to remember user state between messages. The session loaded here will be available throughout the entire request lifecycle, allowing middleware and handlers to access and modify it.
+  </Accordion>
+  
+  <Accordion title="Context Enrichment">
+    Add additional context data that your middleware and handlers need. This might include user permissions, channel metadata, or any other data that should be available to all downstream processing. Enriching context in pre-process hooks keeps your middleware and handlers clean and focused.
+    
+    ```typescript
+    bot.onPreProcess(async (ctx) => {
+      // Add user permissions
+      const permissions = await getUserPermissions(ctx.message.author.id)
+      ;(ctx as any).permissions = permissions
+      
+      // Add channel metadata
+      const channelMeta = await getChannelMetadata(ctx.channel.id)
+      ;(ctx as any).channelMeta = channelMeta
+    })
+    ```
+    
+    Context enrichment is particularly useful when you need to make authorization decisions in middleware or when different commands need access to the same contextual data. By loading it once in a pre-process hook, you avoid redundant database queries.
+  </Accordion>
+</Accordions>
+
+---
+
+## Post-Process Hooks
+
+Post-process hooks run **after** successful processing completes, but only if no errors occurred during the request lifecycle. They're perfect for side effects like saving state, sending analytics, caching results, or performing cleanup operations. Unlike middleware, post-process hooks don't block processing—they run after everything else has completed successfully.
+
+Use post-process hooks when you need to ensure operations happen only after successful processing. For example, you wouldn't want to save a session if a command handler failed, which is why post-process hooks only run when the entire pipeline succeeds. This makes them ideal for persistence, analytics, and other non-critical side effects.
+
+```typescript
+bot.onPostProcess(async (ctx) => {
+  // Save session after processing
+  if ((ctx as any).session) {
+    await saveSession(ctx.message.author.id, (ctx as any).session)
+  }
+  
+  // Audit successful actions
+  await auditLog({
+    userId: ctx.message.author.id,
+    action: ctx.event,
+    channel: ctx.channel.id,
+    timestamp: new Date()
+  })
+})
+```
+
+### Common Use Cases
+
+Post-process hooks handle the cleanup and side effects that should happen after successful processing. Here are the most common patterns:
+
+<Accordions>
+  <Accordion title="Session Persistence">
+    Save user session data after processing completes successfully. This ensures session changes made during command execution are persisted to your database or storage system. Session persistence is a critical pattern for maintaining state across bot interactions.
+    
+    ```typescript
+    bot.onPostProcess(async (ctx) => {
+      const session = (ctx as any).session
+      if (session) {
+        await saveSession(ctx.message.author.id, session)
+      }
+    })
+    ```
+    
+    This pattern works hand-in-hand with pre-process hooks that load sessions. Together, they create a complete session management system where sessions are loaded at the start, modified during processing, and saved at the end—only if processing succeeds.
+  </Accordion>
+  
+  <Accordion title="Analytics">
+    Track successful bot interactions for analytics and monitoring. Post-process hooks are perfect for analytics because they only run when processing succeeds, giving you accurate metrics about successful operations. Track user interactions, command usage, or any other metrics that help you understand how your bot is being used.
+    
+    ```typescript
+    bot.onPostProcess(async (ctx) => {
+      await trackEvent({
+        event: 'bot.message.processed',
+        userId: ctx.message.author.id,
+        provider: ctx.provider,
+        channel: ctx.channel.id
+      })
+    })
+    ```
+    
+    Analytics in post-process hooks ensure you're only tracking successful operations, which provides cleaner metrics. Failed requests won't pollute your analytics data, making it easier to understand actual bot usage patterns.
+  </Accordion>
+  
+  <Accordion title="Caching">
+    Cache command results or frequently accessed data after successful processing. Caching improves performance by storing results that can be reused later, reducing database queries or API calls. Post-process hooks are ideal for caching because they run after successful operations, ensuring you only cache valid results.
+    
+    ```typescript
+    bot.onPostProcess(async (ctx) => {
+      // Cache command results
+      if (ctx.message.content?.type === 'command') {
+        const command = ctx.message.content.command
+        await cacheCommandResult(command, ctx.message.author.id, {
+          // Cache data...
+        })
+      }
+    })
+    ```
+    
+    Caching in post-process hooks ensures that only successful command results are cached, preventing cache pollution with failed operations. This pattern is especially useful for expensive operations that return the same result for multiple users.
+  </Accordion>
+</Accordions>
+
+---
+
+## Multiple Hooks
+
+You can register multiple hooks of each type, and they'll execute in the order you register them. This allows you to compose complex pre-processing and post-processing logic by breaking it into smaller, focused hooks. Each hook runs sequentially, so you can have one hook that loads sessions, another that loads permissions, and so on.
+
+The order matters because hooks can depend on data set by earlier hooks. For example, a permission-checking hook might depend on session data loaded by an earlier hook. Understanding execution order helps you compose hooks effectively.
+
+```typescript
+bot
+  .onPreProcess(async (ctx) => {
+    console.log('Pre-process hook 1')
+    // Load session
+  })
+  .onPreProcess(async (ctx) => {
+    console.log('Pre-process hook 2')
+    // Load permissions
+  })
+  .onPostProcess(async (ctx) => {
+    console.log('Post-process hook 1')
+    // Save session
+  })
+  .onPostProcess(async (ctx) => {
+    console.log('Post-process hook 2')
+    // Send analytics
+  })
+```
+
+---
+
+## Error Handling
+
+Understanding how errors work in hooks is crucial for building robust bots. Pre-process hooks have different error behavior than post-process hooks, and knowing these differences helps you write hooks that fail gracefully without breaking your bot.
+
+**Pre-process hooks**: Errors thrown in pre-process hooks stop the entire processing pipeline and emit an error event. This means if a pre-process hook throws, middleware and command handlers never run. Use this behavior intentionally—if loading critical data fails, you might want to stop processing.
+
+**Post-process hooks**: Only run if processing succeeded (no errors thrown). If any middleware or command handler throws an error, post-process hooks are skipped entirely. This ensures you don't save state or send analytics for failed operations.
+
+If you need error handling in hooks to prevent crashes:
+
+```typescript
+bot.onPreProcess(async (ctx) => {
+  try {
+    const session = await loadSession(ctx.message.author.id)
+    ;(ctx as any).session = session
+  } catch (error) {
+    console.error('Failed to load session:', error)
+    // Don't throw - allow processing to continue with default session
+    ;(ctx as any).session = { userId: ctx.message.author.id }
+  }
+})
+
+bot.onPostProcess(async (ctx) => {
+  try {
+    await saveSession(ctx.message.author.id, (ctx as any).session)
+  } catch (error) {
+    console.error('Failed to save session:', error)
+    // Don't throw - post-process errors shouldn't affect main flow
+  }
+})
+```
+
+---
+
+## Complete Example
+
+Here's a complete example that demonstrates a real-world bot using both pre-process and post-process hooks to manage user sessions. This example shows how to load session data before processing, use it in commands, and save it after successful processing. It's a production-ready pattern you can adapt for your own bots.
+
+This example demonstrates:
+- **Session Management**: Loading and saving user sessions across requests
+- **Hook Composition**: Using both pre-process and post-process hooks together
+- **State Persistence**: Maintaining state between bot interactions
+- **Error Resilience**: Handling missing sessions gracefully
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+
+const bot = Bot.create({
+  id: 'session-bot',
+  name: 'Session Bot',
+  adapters: {
+    telegram: telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      handle: '@session_bot',
+      webhook: {
+        url: process.env.TELEGRAM_WEBHOOK_URL!
+      }
+    })
+  },
+  commands: {
+    count: {
+      name: 'count',
+      aliases: [],
+      description: 'Count messages',
+      help: 'Use /count',
+      async handle(ctx) {
+        const session = (ctx as any).session || { count: 0 }
+        session.count = (session.count || 0) + 1
+        
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: `You've sent ${session.count} messages!`
+          }
+        })
+        
+        // Save to context for post-process hook
+        ;(ctx as any).session = session
+      }
+    }
+  }
+})
+
+// Load session before processing
+bot.onPreProcess(async (ctx) => {
+  const userId = ctx.message.author.id
+  const session = await loadSession(userId)
+  ;(ctx as any).session = session || { count: 0 }
+})
+
+// Save session after processing
+bot.onPostProcess(async (ctx) => {
+  const session = (ctx as any).session
+  if (session) {
+    await saveSession(ctx.message.author.id, session)
+  }
+})
+
+await bot.start()
+```
+
+---
+
+## Hooks vs Middleware
+
+Understanding when to use hooks versus middleware helps you architect your bot correctly. Both are powerful tools, but they serve different purposes in the processing pipeline.
+
+**Use hooks when:**
+- Loading/saving data that doesn't need to block processing
+- Side effects that should happen regardless of middleware
+- Context enrichment needed by middleware
+
+**Use middleware when:**
+- Cross-cutting concerns that might block processing
+- Authentication that needs to stop unauthorized requests
+- Logging/metrics that need to wrap the entire processing
+
+The key difference is that hooks are non-blocking operations that enrich context or perform side effects, while middleware can block processing and is part of the main request flow. Choose hooks for data loading and persistence, choose middleware for authorization and logging.
+
+---
+
+## Best Practices
+
+Following these practices ensures your hooks integrate smoothly with the bot lifecycle and don't cause unexpected behavior. Good hooks are fast, safe, and focused on their specific purpose. They enhance your bot's functionality without interfering with core processing.
+
+<Accordions>
+  <Accordion title="Don't throw in hooks">
+    Unless you want to stop processing, don't throw errors in hooks. Throwing in a hook stops the entire request processing pipeline, which is usually not what you want. If a hook encounters an error, log it and continue—don't let hook failures break your bot.
+  </Accordion>
+  
+  <Accordion title="Keep hooks fast">
+    Hooks run on every message, so they need to be fast. Avoid heavy operations like database queries or API calls in hooks. If you need to do expensive work, use middleware or command handlers instead. Fast hooks ensure your bot remains responsive even under load.
+  </Accordion>
+  
+  <Accordion title="Handle errors gracefully">
+    Hooks shouldn't crash the bot. Wrap risky operations in try-catch blocks and handle errors appropriately. If a hook fails, the bot should continue functioning normally—consider logging the error and continuing execution.
+  </Accordion>
+  
+  <Accordion title="Use hooks for side effects">
+    Post-process hooks are perfect for persistence. If you need to save data or trigger external actions after a command completes, use a post-process hook. This keeps your command handlers focused on their core logic while hooks handle cross-cutting concerns.
+  </Accordion>
+  
+  <Accordion title="Keep context extensions typed">
+    Use TypeScript properly when extending context. If you add custom properties to the context object, ensure they're properly typed. This provides better IDE support, catches errors at compile time, and makes your code more maintainable.
+  </Accordion>
+</Accordions>
+
+---
+
+

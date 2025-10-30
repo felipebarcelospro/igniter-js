@@ -1,0 +1,442 @@
+---
+title: Best Practices
+description: Production-ready patterns for building bots.
+---
+
+Follow these best practices to build robust, maintainable bots that scale well and provide excellent user experiences. These practices cover security, performance, code organization, and production operations—all essential aspects of building production-ready bots. Understanding and applying these practices helps you avoid common pitfalls and build bots that are reliable, secure, and easy to maintain.
+
+Whether you're building your first bot or scaling to thousands of users, these practices provide a solid foundation for building bots that work well in production environments.
+
+---
+
+## Security
+
+Security is critical for production bots—they handle user data, interact with external APIs, and are exposed to the internet. Following security best practices protects your bot from attacks, prevents data leaks, and ensures your bot operates safely. Security should be considered from the start, not added as an afterthought.
+
+<Accordions>
+  <Accordion title="Never Commit Secrets">
+    Never hardcode API tokens, passwords, or other secrets in your code. These secrets should always come from environment variables or secure secret management systems. Hardcoded secrets are a serious security risk—they can be exposed in version control, shared with team members, or leaked in error messages.
+    
+    ```typescript
+    // ❌ Bad - hardcoded token
+    const bot = Bot.create({
+      adapters: {
+        telegram: telegram({
+          token: '123456:ABC-DEF1234ghIkl'
+        })
+      }
+    })
+    
+    // ✅ Good - use environment variables
+    const bot = Bot.create({
+      adapters: {
+        telegram: telegram({
+          token: process.env.TELEGRAM_TOKEN!
+        })
+      }
+    })
+    ```
+    
+    Always use environment variables for secrets. This keeps secrets out of your codebase and makes it easy to use different credentials for development, staging, and production environments.
+  </Accordion>
+  
+  <Accordion title="Validate Webhooks">
+    Always validate webhook secrets in production to ensure requests are actually coming from the messaging platform. Webhook validation prevents unauthorized requests from reaching your bot and protects against webhook spoofing attacks. Most adapters support webhook secret validation—enable it for production deployments.
+    
+    ```typescript
+    telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      webhook: {
+        url: process.env.TELEGRAM_WEBHOOK_URL!,
+        secret: process.env.TELEGRAM_SECRET // Required for production
+      }
+    })
+    ```
+    
+    Webhook validation is essential for production bots. It ensures that only legitimate requests from the messaging platform reach your bot, protecting against malicious requests and attacks.
+  </Accordion>
+  
+  <Accordion title="Rate Limiting">
+    Implement rate limiting to prevent abuse and protect your bot from being overwhelmed. Rate limiting restricts how many requests each user can make within a time window, preventing spam and protecting your bot's resources. Use middleware or platform-specific rate limiting to enforce limits.
+    
+    ```typescript
+    // Use middleware for rate limiting
+    bot.use(rateLimitMiddleware)
+    ```
+    
+    Rate limiting protects your bot from abuse while ensuring legitimate users can still use it effectively. It's especially important for bots that make external API calls or perform expensive operations.
+  </Accordion>
+</Accordions>
+
+---
+
+## Error Handling
+
+Proper error handling ensures your bot continues functioning even when things go wrong. Errors are inevitable in production—network issues, API failures, invalid input, and unexpected conditions all cause errors. Good error handling catches these errors, logs them appropriately, and provides helpful feedback to users without crashing your bot.
+
+Error handling should be comprehensive but not intrusive. Catch errors at appropriate levels, log them with context, and provide user-friendly feedback. Don't let errors break your bot's functionality or expose sensitive information to users.
+
+<Accordions>
+  <Accordion title="Always Handle Errors">
+    Don't let errors crash your bot. Wrap risky operations in try-catch blocks and provide fallback behavior. A bot that crashes on every error is unusable—even when things go wrong, users should get helpful feedback and the bot should continue functioning.
+    
+    ```typescript
+    bot.on('error', async (ctx) => {
+      // @ts-expect-error
+      const err = ctx.error
+      
+      // Log error
+      logger.error('Bot error', err)
+      
+      // Send user-friendly message
+      await ctx.bot.send({
+        provider: ctx.provider,
+        channel: ctx.channel.id,
+        content: {
+          type: 'text',
+          content: '❌ An error occurred. Please try again later.'
+        }
+      })
+    })
+    ```
+    
+    Comprehensive error handling keeps your bot running even when individual operations fail. Users get feedback, errors are logged, and the bot continues processing other requests.
+  </Accordion>
+  
+  <Accordion title="Graceful Degradation">
+    Handle partial failures gracefully. If one part of your bot fails, other parts should continue working. For example, if sending a message fails, don't crash the entire request—log the error and continue processing other commands or middleware.
+    
+    ```typescript
+    try {
+      await riskyOperation()
+    } catch (error) {
+      // Fallback to simpler operation
+      await fallbackOperation()
+    }
+    ```
+    
+    Graceful degradation ensures your bot remains useful even when some features fail. Users can still use other functionality, and you can fix issues without downtime.
+  </Accordion>
+</Accordions>
+
+---
+
+## Performance
+
+Bot performance directly impacts user experience—slow bots feel unresponsive and frustrate users. Optimizing performance involves keeping middleware fast, caching expensive operations, and avoiding unnecessary work. Performance optimization is especially important for bots that handle high message volumes or make external API calls.
+
+Good performance practices ensure your bot responds quickly even under load. Fast middleware, efficient caching, and optimized database queries all contribute to a responsive bot experience.
+
+<Accordions>
+  <Accordion title="Keep Middleware Fast">
+    Middleware runs on every message, so it needs to be fast. Avoid expensive operations like database queries or API calls in middleware—these slow down every request. If you need expensive operations, use pre-process hooks or move them to command handlers where they only run when needed.
+    
+    ```typescript
+    // ✅ Good - fast middleware
+    const fastMiddleware: Middleware = async (ctx, next) => {
+      // Simple check
+      if (ctx.message.author.id === 'admin') {
+        // ...
+      }
+      await next()
+    }
+    
+    // ❌ Bad - slow middleware
+    const slowMiddleware: Middleware = async (ctx, next) => {
+      // Database query in every request
+      const user = await db.users.findUnique({ /* ... */ })
+      await next()
+    }
+    ```
+    
+    Fast middleware keeps your bot responsive. If you need user data in middleware, cache it or load it in pre-process hooks instead of querying on every request.
+  </Accordion>
+  
+  <Accordion title="Cache Expensive Operations">
+    Cache expensive operations like database queries or API calls to avoid repeating them unnecessarily. Caching improves performance significantly, especially for operations that return the same results for multiple users. Use in-memory caches for development and Redis or similar for production.
+    
+    ```typescript
+    const cache = new Map()
+    
+    const cachedMiddleware: Middleware = async (ctx, next) => {
+      const userId = ctx.message.author.id
+      
+      // Check cache first
+      let user = cache.get(userId)
+      
+      if (!user) {
+        user = await loadUser(userId)
+        cache.set(userId, user)
+      }
+      
+      ;(ctx as any).user = user
+      await next()
+    }
+    ```
+    
+    Caching dramatically improves performance for frequently accessed data. Consider cache invalidation strategies to ensure cached data stays fresh.
+  </Accordion>
+</Accordions>
+
+---
+
+## Code Organization
+
+Well-organized code is easier to maintain, test, and extend. Organizing your bot code into logical modules—separate files for commands, middleware, and utilities—makes your codebase more manageable as it grows. Good organization follows the single responsibility principle, keeping related code together and making dependencies clear.
+
+Organized code is easier to work with, especially as your bot grows and you add more features. Clear structure helps new developers understand the codebase and makes refactoring safer.
+
+<Accordions>
+  <Accordion title="Separate Commands">
+    Keep commands in separate files for better organization and maintainability. Each command file should export a single command object that can be imported and registered with your bot. This pattern scales well as you add more commands and makes it easy to find and modify specific commands.
+    
+    ```typescript
+    // src/bot/commands/weather.ts
+    export const weatherCommand = Bot.command({
+      name: 'weather',
+      // ...
+    })
+    
+    // src/bot/commands/news.ts
+    export const newsCommand = Bot.command({
+      name: 'news',
+      // ...
+    })
+    
+    // src/bot.ts
+    import { weatherCommand } from './commands/weather'
+    import { newsCommand } from './commands/news'
+    
+    const bot = Bot.create({
+      commands: {
+        weather: weatherCommand,
+        news: newsCommand
+      }
+    })
+    ```
+    
+    Separating commands improves maintainability and makes your codebase easier to navigate. Each command is self-contained and can be modified independently.
+  </Accordion>
+  
+  <Accordion title="Reusable Middleware">
+    Keep middleware in separate files so you can reuse it across different bots or projects. Reusable middleware follows the DRY principle and ensures consistent behavior across your bots. Middleware files should export middleware functions that can be imported and registered with any bot.
+    
+    ```typescript
+    // src/bot/middleware/auth.ts
+    export const authMiddleware = Bot.middleware(async (ctx, next) => {
+      // Auth logic...
+    })
+    
+    // src/bot/middleware/logging.ts
+    export const loggingMiddleware = Bot.middleware(async (ctx, next) => {
+      // Logging logic...
+    })
+    ```
+    
+    Reusable middleware promotes code reuse and consistency. You can share middleware between bots or projects, reducing duplication and ensuring consistent behavior.
+  </Accordion>
+</Accordions>
+
+---
+
+## Documentation
+
+Good documentation helps developers understand your bot's functionality and use it correctly. Documenting commands, middleware, and complex logic makes your codebase more maintainable and helps new team members get up to speed quickly. Well-documented code is easier to debug, extend, and refactor.
+
+Documentation should be clear, concise, and focused on helping developers understand how to use your bot effectively. Include examples, explain edge cases, and document any assumptions or limitations.
+
+<Accordions>
+  <Accordion title="Document Commands">
+    Provide clear descriptions and help text for all commands. Good documentation helps users understand what commands do and how to use them correctly. Include usage examples and explain any parameters or requirements.
+    
+    ```typescript
+    const command = Bot.command({
+      name: 'complex',
+      description: 'Clear description of what it does',
+      help: 'Usage: /complex <param1> <param2>',
+      async handle(ctx, params) {
+        // Well-documented handler
+      }
+    })
+    ```
+    
+    Well-documented commands reduce support requests and help users discover functionality. Clear help text is especially important for complex commands with multiple parameters.
+  </Accordion>
+  
+  <Accordion title="Add Comments">
+    Add comments to explain non-obvious logic, complex algorithms, or important business rules. Comments should explain "why" something is done, not just "what" it does. Well-placed comments make your code easier to understand and maintain.
+    
+    ```typescript
+    // Load user session before processing
+    bot.onPreProcess(async (ctx) => {
+      const session = await loadSession(ctx.message.author.id)
+      ;(ctx as any).session = session
+    })
+    ```
+    
+    Strategic comments improve code readability without cluttering your codebase. Focus on explaining complex logic, business rules, and non-obvious design decisions.
+  </Accordion>
+</Accordions>
+
+---
+
+## Monitoring
+
+Monitoring your bot in production helps you understand how it performs, identify issues before they become critical, and track important metrics. Good monitoring includes logging important events, tracking performance metrics, and setting up alerts for errors or anomalies. Monitoring is essential for maintaining production bots and ensuring they operate reliably.
+
+Effective monitoring gives you visibility into your bot's behavior and helps you make data-driven decisions about improvements and optimizations.
+
+<Accordions>
+  <Accordion title="Log Important Events">
+    Log important events like message received, command executed, or errors occurred. Structured logging with context helps you understand bot behavior and debug issues. Include relevant context like user ID, channel, command, and timing information.
+    
+    ```typescript
+    bot.on('message', async (ctx) => {
+      logger.info('Message received', {
+        userId: ctx.message.author.id,
+        provider: ctx.provider,
+        channel: ctx.channel.id
+      })
+    })
+    ```
+    
+    Event logging helps you understand how users interact with your bot and identify patterns or issues. Structured logs make it easier to search and analyze bot behavior.
+  </Accordion>
+  
+  <Accordion title="Track Metrics">
+    Track performance metrics like request duration, error rates, and command usage. Metrics help you identify performance bottlenecks, track error rates, and understand how your bot scales. Send metrics to monitoring services like Prometheus, Datadog, or CloudWatch.
+    
+    ```typescript
+    const metricsMiddleware: Middleware = async (ctx, next) => {
+      const start = Date.now()
+      await next()
+      const duration = Date.now() - start
+      
+      recordMetric('bot.request.duration', duration)
+    }
+    ```
+    
+    Performance metrics help you optimize your bot and identify issues before they become critical. Track metrics that matter for your bot's success—latency, error rates, and usage patterns.
+  </Accordion>
+</Accordions>
+
+---
+
+## Testing
+
+Comprehensive testing ensures your bot works correctly before reaching production. Tests catch bugs early, give you confidence when refactoring, and document expected behavior. Writing tests for commands, middleware, and error handling helps you build reliable bots that work as expected.
+
+Good tests are fast, reliable, and test actual behavior rather than implementation details. Focus on testing what matters—user-facing behavior and critical business logic.
+
+<Accordions>
+  <Accordion title="Test Commands">
+    Write unit tests for command handlers to verify they work correctly. Test valid input, invalid input, edge cases, and error scenarios. Command tests help you catch bugs early and ensure commands behave as expected.
+    
+    ```typescript
+    describe('Commands', () => {
+      it('should handle echo command', async () => {
+        // Test command handler
+      })
+    })
+    ```
+    
+    Command tests are fast and help you verify command logic independently. They're essential for maintaining reliable bots as you add features and refactor code.
+  </Accordion>
+  
+  <Accordion title="Test Middleware">
+    Test middleware to ensure it behaves correctly—calls `next()` when appropriate, blocks requests when intended, and handles errors gracefully. Middleware tests help ensure cross-cutting concerns work correctly across all commands.
+    
+    ```typescript
+    describe('Middleware', () => {
+      it('should rate limit users', async () => {
+        // Test rate limiting
+      })
+    })
+    ```
+    
+    Middleware tests ensure your cross-cutting concerns work correctly. They help you verify authentication, rate limiting, logging, and other middleware behavior.
+  </Accordion>
+</Accordions>
+
+---
+
+## Complete Example
+
+Here's a complete example that brings together multiple best practices into a production-ready bot. This example demonstrates security (environment variables, webhook validation), error handling (global error handlers), performance (fast middleware), code organization (separate commands), and monitoring (structured logging). It shows how all these practices work together to create a robust, maintainable bot.
+
+This example demonstrates:
+- **Security**: Using environment variables and webhook validation
+- **Error Handling**: Comprehensive error handling at multiple levels
+- **Performance**: Fast middleware and efficient caching
+- **Code Organization**: Separated commands and reusable middleware
+- **Monitoring**: Structured logging and metrics tracking
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+import { authMiddleware } from './middleware/auth'
+import { loggingMiddleware } from './middleware/logging'
+import { rateLimitMiddleware } from './middleware/rate-limit'
+import { weatherCommand } from './commands/weather'
+import { newsCommand } from './commands/news'
+import pino from 'pino'
+
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info'
+})
+
+const bot = Bot.create({
+  id: 'production-bot',
+  name: 'Production Bot',
+  logger: {
+    debug: logger.debug.bind(logger),
+    info: logger.info.bind(logger),
+    warn: logger.warn.bind(logger),
+    error: logger.error.bind(logger)
+  },
+  adapters: {
+    telegram: telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      handle: '@production_bot',
+      webhook: {
+        url: process.env.TELEGRAM_WEBHOOK_URL!,
+        secret: process.env.TELEGRAM_SECRET // Webhook validation
+      }
+    })
+  },
+  middlewares: [
+    loggingMiddleware,
+    rateLimitMiddleware,
+    authMiddleware
+  ],
+  commands: {
+    weather: weatherCommand,
+    news: newsCommand
+  }
+})
+
+// Global error handler
+bot.on('error', async (ctx) => {
+  // @ts-expect-error
+  const err = ctx.error
+  
+  logger.error({
+    code: err.code,
+    message: err.message,
+    userId: ctx.message.author.id
+  }, 'Bot error')
+  
+  await ctx.bot.send({
+    provider: ctx.provider,
+    channel: ctx.channel.id,
+    content: {
+      type: 'text',
+      content: '❌ An error occurred. Please try again later.'
+    }
+  })
+})
+
+await bot.start()
+```
+
+---
+

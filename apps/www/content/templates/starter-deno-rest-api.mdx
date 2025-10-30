@@ -1,0 +1,135 @@
+---
+title: "Deno REST API"
+description: "A secure and modern REST API built with Deno runtime and Igniter.js featuring built-in TypeScript support."
+framework: "Deno"
+cover: "/templates/deno-base-template.png"
+demo: "https://github.com/felipebarcelospro/igniter-js/tree/main/apps/starter-deno-rest-api"
+repository: "https://github.com/felipebarcelospro/igniter-js/tree/main/apps/starter-deno-rest-api"
+stack: ["Deno", "TypeScript", "Prisma", "PostgreSQL", "Redis", "BullMQ"]
+useCases: ["API"]
+creator:
+  username: "felipebarcelospro"
+---
+
+## Overview
+
+This template provides a robust and scalable foundation for building high-performance, type-safe REST APIs with Deno and Igniter.js. It's designed for developers who prioritize security, modern features, and a strongly-typed backend.
+
+## Features
+
+- ✅ **Modern Deno Runtime**: Built on Deno, a simple, modern, and secure runtime for JavaScript and TypeScript.
+- ✅ **Type-Safe from the Ground Up**: Powered by Igniter.js, ensuring a strongly-typed codebase that is easy to maintain and refactor.
+- ✅ **Feature-Based Architecture**: A scalable project structure that organizes code by business domain, not technical layers.
+- ✅ **Ready-to-Use Services**: Pre-configured examples for:
+  - **Caching**: Integrated with Redis via `@igniter-js/adapter-redis`.
+  - **Background Jobs**: Asynchronous task processing with BullMQ via `@igniter-js/adapter-bullmq`.
+  - **Structured Logging**: Production-ready, context-aware logging.
+- ✅ **Database Ready**: Comes with Prisma set up for seamless PostgreSQL database integration.
+- ✅ **Auto-Generated Type-Safe Client**: Even as a REST API, you can generate a fully-typed client (`src/igniter.client.ts`) for consumption by other TypeScript services or a separate front-end application.
+
+## Project Structure
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="features">
+      <Folder name="example">
+        <Folder name="controllers" />
+      </Folder>
+    </Folder>
+    <Folder name="services" />
+    <File name="igniter.ts" />
+    <File name="igniter.client.ts" />
+    <File name="igniter.context.ts" />
+    <File name="igniter.router.ts" />
+    <File name="index.ts" />
+  </Folder>
+</Files>
+
+## Quick Start
+
+<Steps>
+  <Step>
+    ### Clone the Repository
+    ```bash
+    git clone https://github.com/felipebarcelospro/igniter-js.git
+    cd igniter-js/apps/starter-deno-rest-api
+    ```
+  </Step>
+  
+  <Step>
+    ### Configure Environment Variables
+    Create a `.env` file in the root of this starter and add your database and Redis connection URLs:
+    ```bash
+    # .env
+    DATABASE_URL="postgresql://user:password@localhost:5432/mydatabase?schema=public"
+    REDIS_URL="redis://127.0.0.1:6379"
+    ```
+  </Step>
+  
+  <Step>
+    ### Run Database Migrations
+    This starter uses Prisma for database management. You'll need to add a task to your `deno.json` to run migrations.
+
+    ```json
+    // deno.json
+    {
+      "tasks": {
+        "dev": "deno run --unstable-sloppy-imports --watch --allow-net --allow-env --import-map=import_map.json src/index.ts",
+        "start": "deno run --unstable-sloppy-imports --allow-net --allow-env --import-map=import_map.json src/index.ts",
+        "prisma:db:push": "deno run --unstable-sloppy-imports -A npm:prisma db push"
+      },
+      // ... rest of the file
+    }
+    ```
+
+    Then, run the task:
+    ```bash
+    deno task prisma:db:push
+    ```
+  </Step>
+  
+  <Step>
+    ### Run the Development Server
+    ```bash
+    deno task dev
+    ```
+    Your API will be available at `http://localhost:8000/api/v1`.
+  </Step>
+</Steps>
+
+<Callout type="info">
+  Ensure you have Deno (v1.x or higher) installed, a running Redis instance, and a PostgreSQL database.
+</Callout>
+
+## Example API Endpoints
+
+This starter includes an `example` controller to demonstrate key features.
+
+-   **Health Check**
+    ```bash
+    curl http://localhost:8000/api/v1/example/
+    ```
+
+-   **Cache Demonstration**
+    ```bash
+    # First request (live data)
+    curl http://localhost:8000/api/v1/example/cache/my-key
+    # Second request (cached data)
+    curl http://localhost:8000/api/v1/example/cache/my-key
+    ```
+
+-   **Schedule a Background Job**
+    ```bash
+    curl -X POST -H "Content-Type: application/json" \
+      -d '{"message": "Hello from curl"}' \
+      http://localhost:8000/api/v1/example/schedule-job
+    ```
+
+-   **List Jobs**
+    ```bash
+    curl http://localhost:8000/api/v1/example/jobs
+    ```
+
+## Deployment
+
+This template can be deployed to various platforms that support Deno applications. Follow the quick start guide to get your API running locally, then refer to Deno's deployment documentation for production environments.

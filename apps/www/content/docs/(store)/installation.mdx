@@ -1,0 +1,362 @@
+---
+title: Installation
+description: Install and configure the Redis adapter for Store. Set up Redis connection, create the adapter instance, and register it with Igniter.js.
+---
+
+## Prerequisites
+
+Before installing the Store adapter, ensure you have:
+
+- **Node.js** 18+ or Bun runtime
+- **Redis** server running (local or remote)
+- An Igniter.js project initialized
+
+---
+
+## Installation
+
+Install the Redis adapter and its peer dependency:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/adapter-redis ioredis
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/adapter-redis ioredis
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/adapter-redis ioredis
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/adapter-redis ioredis
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  The `ioredis` package is a peer dependency. It provides the Redis client that the adapter uses internally.
+</Callout>
+
+---
+
+## Redis Setup
+
+### Local Development
+
+For local development, you can run Redis using Docker:
+
+```bash
+docker run -d -p 6379:6379 redis:7-alpine
+```
+
+Or install Redis directly:
+
+**macOS:**
+```bash
+brew install redis
+brew services start redis
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt-get install redis-server
+sudo systemctl start redis
+```
+
+**Windows:**
+Download and install from [Redis Windows](https://github.com/microsoftarchive/redis/releases) or use WSL.
+
+### Production
+
+For production, use a managed Redis service like:
+
+- **Redis Cloud** (https://redis.com/cloud)
+- **AWS ElastiCache**
+- **Google Cloud Memorystore**
+- **Azure Cache for Redis**
+
+---
+
+## Configuration
+
+### 1. Create the Redis Client
+
+Create a dedicated service file for your Redis connection:
+
+```typescript
+// src/services/store.ts
+import { createRedisStoreAdapter } from '@igniter-js/adapter-redis';
+import { Redis } from 'ioredis';
+
+// Create Redis client
+const redis = new Redis({
+  host: process.env.REDIS_HOST || 'localhost',
+  port: parseInt(process.env.REDIS_PORT || '6379'),
+  password: process.env.REDIS_PASSWORD,
+  db: parseInt(process.env.REDIS_DB || '0'),
+  
+  // Connection options
+  retryStrategy: (times) => {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  },
+  
+  maxRetriesPerRequest: 3,
+  
+  // Enable offline queue for better resilience
+  enableOfflineQueue: true,
+});
+
+// Handle connection events
+redis.on('connect', () => {
+  console.log('✅ Redis connected');
+});
+
+redis.on('error', (err) => {
+  console.error('❌ Redis connection error:', err);
+});
+
+redis.on('close', () => {
+  console.log('⚠️ Redis connection closed');
+});
+
+// Create the adapter
+export const store = createRedisStoreAdapter(redis);
+```
+
+### 2. Environment Variables
+
+Create a `.env` file with your Redis configuration:
+
+```bash
+# .env
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=your-password-here
+REDIS_DB=0
+
+# Or use a Redis URL
+REDIS_URL=redis://localhost:6379
+```
+
+**Using Redis URL:**
+
+```typescript
+// src/services/store.ts
+import { Redis } from 'ioredis';
+
+const redis = new Redis(process.env.REDIS_URL);
+export const store = createRedisStoreAdapter(redis);
+```
+
+### 3. Register with Igniter
+
+Register the store adapter in your main Igniter configuration:
+
+```typescript
+// src/igniter.ts
+import { Igniter } from '@igniter-js/core';
+import { store } from './services/store';
+
+export const igniter = Igniter
+  .context<AppContext>()
+  .store(store)
+  .create();
+```
+
+---
+
+## Configuration Options
+
+### Connection Configuration
+
+The `ioredis` client supports many configuration options:
+
+```typescript
+const redis = new Redis({
+  // Basic connection
+  host: 'localhost',
+  port: 6379,
+  password: 'your-password',
+  db: 0,
+  
+  // Connection pool
+  connectTimeout: 10000,
+  lazyConnect: false,
+  
+  // Retry strategy
+  retryStrategy: (times) => {
+    if (times > 3) {
+      return null; // Stop retrying
+    }
+    return Math.min(times * 50, 2000);
+  },
+  
+  maxRetriesPerRequest: 3,
+  
+  // Keep alive
+  keepAlive: 30000,
+  
+  // TLS/SSL (for production)
+  tls: {
+    // TLS options if using secure connection
+  },
+});
+```
+
+### Connection Pooling
+
+For production applications, consider connection pooling:
+
+```typescript
+import { Redis, Cluster } from 'ioredis';
+
+// Standard single instance
+const redis = new Redis(process.env.REDIS_URL);
+
+// Redis Cluster (for high availability)
+const cluster = new Cluster([
+  { host: '127.0.0.1', port: 7000 },
+  { host: '127.0.0.1', port: 7001 },
+  { host: '127.0.0.1', port: 7002 },
+], {
+  redisOptions: {
+    password: process.env.REDIS_PASSWORD,
+  },
+});
+
+export const store = createRedisStoreAdapter(cluster);
+```
+
+---
+
+## Sharing Redis Connection
+
+You can share the same Redis client between the Store adapter and other adapters (like BullMQ for jobs):
+
+```typescript
+// src/services/store.ts
+import { createRedisStoreAdapter } from '@igniter-js/adapter-redis';
+import { Redis } from 'ioredis';
+
+// Create a single Redis client
+export const redis = new Redis(process.env.REDIS_URL);
+
+// Create store adapter
+export const store = createRedisStoreAdapter(redis);
+```
+
+```typescript
+// src/services/jobs.ts
+import { createBullMQAdapter } from '@igniter-js/adapter-bullmq';
+import { store, redis } from './store';
+
+// Share the Redis connection
+export const jobs = createBullMQAdapter({
+  store, // Uses the same Redis connection
+});
+```
+
+<Callout type="success" title="Best Practice">
+  Sharing a single Redis client between adapters is more efficient than creating multiple connections. The adapter handles separate clients internally for Pub/Sub operations.
+</Callout>
+
+---
+
+## Health Checks
+
+Add health check endpoints to monitor Redis connectivity:
+
+```typescript
+export const healthController = igniter.controller({
+  path: '/health',
+  actions: {
+    check: igniter.query({
+      handler: async ({ context, response }) => {
+        try {
+          // Test Redis connection
+          await context.store.has('health:check');
+          
+          return response.success({
+            status: 'healthy',
+            store: 'connected',
+          });
+        } catch (error) {
+          return response.error({
+            status: 'unhealthy',
+            store: 'disconnected',
+            error: error.message,
+          });
+        }
+      },
+    }),
+  },
+});
+```
+
+---
+
+## Troubleshooting
+
+### Connection Refused
+
+If you see `ECONNREFUSED` errors:
+
+1. **Verify Redis is running:**
+   ```bash
+   redis-cli ping
+   # Should return: PONG
+   ```
+
+2. **Check host and port:**
+   ```typescript
+   const redis = new Redis({
+     host: 'localhost', // Not '127.0.0.1' if using Docker
+     port: 6379,
+   });
+   ```
+
+3. **Check firewall settings:**
+   Ensure port 6379 is open
+
+### Authentication Failed
+
+If authentication fails:
+
+1. **Verify password:**
+   ```bash
+   redis-cli -a your-password ping
+   ```
+
+2. **Check Redis configuration:**
+   Look for `requirepass` in `redis.conf`
+
+### Memory Issues
+
+If Redis runs out of memory:
+
+1. **Set max memory:**
+   ```bash
+   redis-cli CONFIG SET maxmemory 256mb
+   ```
+
+2. **Configure eviction policy:**
+   ```bash
+   redis-cli CONFIG SET maxmemory-policy allkeys-lru
+   ```
+
+---
+
+## Next Steps
+
+- Learn about [caching operations](/docs/store/caching)
+- Explore [Pub/Sub messaging](/docs/store/pubsub)
+- Discover [atomic operations](/docs/store/atomic-operations)
+

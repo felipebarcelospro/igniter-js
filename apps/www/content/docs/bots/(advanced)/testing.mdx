@@ -1,0 +1,261 @@
+---
+title: Testing
+description: Test your bot effectively.
+---
+
+Testing your bot ensures it works correctly. This guide covers testing strategies for bots.
+
+---
+
+## Unit Testing Commands
+
+Unit testing command handlers in isolation helps you verify that each command works correctly without dependencies on the full bot infrastructure. This approach is fast, reliable, and makes it easy to test edge cases and error scenarios. By testing commands independently, you can catch bugs early and refactor with confidence.
+
+Unit tests focus on the command's logic—verifying input validation, output formatting, and error handling. They don't need the full bot infrastructure, making them fast and easy to run in CI/CD pipelines.
+
+Test command handlers in isolation:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import type { BotContext } from '@igniter-js/bot/types'
+
+describe('Command Handler', () => {
+  it('should handle echo command', async () => {
+    const mockCtx = {
+      // Mock context...
+    } as BotContext
+    
+    const command = {
+      name: 'echo',
+      async handle(ctx: BotContext, params: string[]) {
+        return params.join(' ')
+      }
+    }
+    
+    const result = await command.handle(mockCtx, ['hello', 'world'])
+    expect(result).toBe('hello world')
+  })
+})
+```
+
+---
+
+## Integration Testing
+
+Integration testing exercises the full bot pipeline, from webhook requests to command execution. This type of testing ensures all components work together correctly—adapters parse messages correctly, middleware executes in the right order, commands receive the right context, and responses are formatted properly. Integration tests catch issues that unit tests might miss, like adapter integration problems or context passing issues.
+
+Integration tests are slower than unit tests but provide higher confidence that your bot works end-to-end. They're essential for verifying that your bot handles real-world scenarios correctly.
+
+Test the full bot pipeline:
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+
+describe('Bot Integration', () => {
+  it('should handle webhook request', async () => {
+    const bot = Bot.create({
+      id: 'test-bot',
+      name: 'Test Bot',
+      adapters: {
+        telegram: telegram({
+          token: 'test-token',
+          handle: '@test_bot'
+        })
+      },
+      commands: {
+        test: {
+          name: 'test',
+          async handle(ctx) {
+            // Test handler
+          }
+        }
+      }
+    })
+    
+    const request = new Request('http://localhost', {
+      method: 'POST',
+      body: JSON.stringify({
+        message: {
+          text: '/test',
+          // ...
+        }
+      })
+    })
+    
+    const response = await bot.handle('telegram', request)
+    expect(response.status).toBe(200)
+  })
+})
+```
+
+---
+
+## Mocking Adapters
+
+Mocking adapters allows you to test bot behavior without connecting to real messaging platforms. This keeps tests fast, reliable, and isolated from external services. Mock adapters let you simulate different message types, test error scenarios, and verify bot responses without making actual API calls. This pattern is essential for comprehensive test coverage.
+
+Mock adapters are perfect for testing bot logic independently of platform-specific details. You can create mocks that simulate any scenario, making it easy to test edge cases and error conditions.
+
+Create mock adapters for testing:
+
+```typescript
+import { Bot } from '@igniter-js/bot'
+import { z } from 'zod'
+
+const mockAdapter = Bot.adapter({
+  name: 'mock',
+  parameters: z.object({}),
+  async init() {},
+  async send() {},
+  async handle() {
+    return {
+      event: 'message',
+      provider: 'mock',
+      channel: { id: 'test', name: 'Test', isGroup: false },
+      message: {
+        content: { type: 'text', content: 'test', raw: 'test' },
+        author: { id: 'user1', name: 'Test User', username: 'test' },
+        isMentioned: true
+      }
+    }
+  }
+})
+
+const bot = Bot.create({
+  adapters: {
+    mock: mockAdapter({})
+  },
+  // ...
+})
+```
+
+---
+
+## Best Practices
+
+Good tests catch bugs before they reach production and give you confidence when refactoring. These practices ensure your tests are reliable, maintainable, and actually test what matters.
+
+<Accordions>
+  <Accordion title="Test command handlers">
+    Unit test individual commands. Each command should have tests that verify it handles valid input correctly, rejects invalid input gracefully, and provides helpful error messages. Isolated command tests are fast and easy to debug.
+  </Accordion>
+  
+  <Accordion title="Test middleware">
+    Verify middleware behavior. Test that middleware calls `next()` when appropriate, blocks requests when intended, and handles errors gracefully. Middleware tests help ensure cross-cutting concerns work correctly across all commands.
+  </Accordion>
+  
+  <Accordion title="Test error handling">
+    Ensure errors are handled gracefully. Test that errors are caught, logged appropriately, and don't crash the bot. Error handling tests verify your bot remains functional even when things go wrong.
+  </Accordion>
+  
+  <Accordion title="Use mocks">
+    Mock external services and adapters. Don't make real API calls in tests—mock adapters and external services to keep tests fast and reliable. Mocks also let you test error scenarios that would be difficult to reproduce with real services.
+  </Accordion>
+</Accordions>
+
+---
+
+## Complete Example
+
+Here's a complete example that demonstrates comprehensive testing strategies for bots. This example shows how to write unit tests for commands, integration tests for the full bot pipeline, and how to use mock adapters for isolated testing. It demonstrates the testing patterns you'll use to build reliable, well-tested bots.
+
+This example demonstrates:
+- **Unit Testing**: Testing command handlers in isolation
+- **Integration Testing**: Testing the full bot pipeline
+- **Mock Adapters**: Creating mock adapters for testing
+- **Test Coverage**: Comprehensive test coverage strategies
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { Bot } from '@igniter-js/bot'
+import type { BotContext } from '@igniter-js/bot/types'
+import { z } from 'zod'
+
+// Unit test example
+describe('Command Handler', () => {
+  it('should handle echo command', async () => {
+    const mockCtx = {
+      bot: {} as any,
+      provider: 'test',
+      channel: { id: 'test', name: 'Test', isGroup: false },
+      message: {
+        author: { id: 'user1', name: 'Test User' },
+        content: { type: 'text', content: 'test', raw: 'test' },
+        isMentioned: false
+      },
+      event: 'message'
+    } as BotContext
+    
+    const command = {
+      name: 'echo',
+      async handle(ctx: BotContext, params: string[]) {
+        return params.join(' ')
+      }
+    }
+    
+    const result = await command.handle(mockCtx, ['hello', 'world'])
+    expect(result).toBe('hello world')
+  })
+})
+
+// Integration test example
+describe('Bot Integration', () => {
+  it('should handle webhook request', async () => {
+    const mockAdapter = Bot.adapter({
+      name: 'mock',
+      parameters: z.object({}),
+      async init() {},
+      async send() {},
+      async handle() {
+        return {
+          event: 'message',
+          provider: 'mock',
+          channel: { id: 'test', name: 'Test', isGroup: false },
+          message: {
+            content: { type: 'command', command: 'test', params: [], raw: '/test' },
+            author: { id: 'user1', name: 'Test User', username: 'test' },
+            isMentioned: false
+          }
+        }
+      }
+    })
+    
+    const bot = Bot.create({
+      id: 'test-bot',
+      name: 'Test Bot',
+      adapters: {
+        mock: mockAdapter({})
+      },
+      commands: {
+        test: {
+          name: 'test',
+          async handle(ctx) {
+            await ctx.bot.send({
+              provider: ctx.provider,
+              channel: ctx.channel.id,
+              content: {
+                type: 'text',
+                content: 'Test command executed'
+              }
+            })
+          }
+        }
+      }
+    })
+    
+    const request = new Request('http://localhost', {
+      method: 'POST',
+      body: JSON.stringify({
+        message: {
+          text: '/test'
+        }
+      })
+    })
+    
+    const response = await bot.handle('mock', request)
+    expect(response.status).toBe(200)
+  })
+})
+```
+
+---

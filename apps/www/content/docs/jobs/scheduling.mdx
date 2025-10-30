@@ -1,0 +1,436 @@
+---
+title: Scheduling
+description: Schedule jobs for future execution with delays, specific times, and advanced scheduling patterns.
+---
+
+Scheduling allows you to execute jobs at specific times in the future, rather than immediately. Igniter.js provides flexible scheduling options, from simple delays to complex recurring patterns.
+
+## Basic Scheduling
+
+### Schedule with Delay
+
+Run a job after a specified delay (in milliseconds):
+
+```typescript
+await igniter.jobs.emails.schedule({
+  task: 'sendWelcome',
+  input: { email: 'user@example.com' },
+  delay: 5000, // Run after 5 seconds
+});
+```
+
+### Schedule at Specific Time
+
+Schedule a job to run at a specific date/time:
+
+```typescript
+await igniter.jobs.emails.schedule({
+  task: 'sendReminder',
+  input: { userId: '123' },
+  at: new Date('2024-12-25T10:00:00Z'), // Run on Christmas at 10 AM UTC
+});
+```
+
+<Callout type="warn" title="Future Dates Only">
+  The `at` option requires a date in the future. Scheduling a job for a past date will throw an error.
+</Callout>
+
+---
+
+## Recurring Jobs
+
+Schedule jobs to run repeatedly with various patterns:
+
+### Simple Recurrence
+
+Run a job every N milliseconds:
+
+```typescript
+await igniter.jobs.analytics.schedule({
+  task: 'generateReport',
+  input: { reportType: 'daily' },
+  repeat: {
+    every: 24 * 60 * 60 * 1000, // Every 24 hours
+  },
+});
+```
+
+### Cron Patterns
+
+Use cron expressions for complex schedules:
+
+```typescript
+await igniter.jobs.maintenance.schedule({
+  task: 'cleanupDatabase',
+  input: {},
+  repeat: {
+    cron: '0 2 * * *', // Every day at 2 AM
+    tz: 'America/New_York', // Optional timezone
+  },
+});
+```
+
+### Limited Recurrence
+
+Run a job a specific number of times:
+
+```typescript
+await igniter.jobs.notifications.schedule({
+  task: 'sendReminder',
+  input: { userId: '123' },
+  repeat: {
+    cron: '0 9 * * *', // Every day at 9 AM
+    times: 7, // Run 7 times total
+  },
+});
+```
+
+### Recurrence with End Date
+
+Stop recurring after a specific date:
+
+```typescript
+await igniter.jobs.marketing.schedule({
+  task: 'sendCampaign',
+  input: { campaignId: 'summer-sale' },
+  repeat: {
+    cron: '0 10 * * *', // Every day at 10 AM
+    until: new Date('2024-08-31'), // Stop after August 31st
+  },
+});
+```
+
+---
+
+## Advanced Scheduling Options
+
+### Retry Strategies
+
+Configure how failed jobs retry:
+
+```typescript
+await igniter.jobs.api.schedule({
+  task: 'syncExternalData',
+  input: { apiEndpoint: 'https://api.example.com/data' },
+  retryStrategy: 'exponential', // Exponential backoff
+  backoffMultiplier: 2, // Double delay each retry
+  maxRetryDelay: 60000, // Max 60 seconds between retries
+});
+```
+
+Available retry strategies:
+
+- **`exponential`**: Exponential backoff (default)
+- **`linear`**: Fixed delay between retries
+- **`fixed`**: Constant delay specified by `delay`
+- **`custom`**: Array of specific delay values
+
+### Custom Retry Delays
+
+Define exact retry delays:
+
+```typescript
+await igniter.jobs.api.schedule({
+  task: 'syncData',
+  input: {},
+  retryStrategy: {
+    type: 'custom',
+    delays: [1000, 5000, 15000, 60000], // Retry after 1s, 5s, 15s, 60s
+  },
+});
+```
+
+### Conditional Execution
+
+Skip execution if conditions aren't met:
+
+```typescript
+await igniter.jobs.analytics.schedule({
+  task: 'generateReport',
+  input: { reportId: '123' },
+  condition: async () => {
+    // Only run if data is available
+    const hasData = await context.db.events.count() > 0;
+    return hasData;
+  },
+});
+```
+
+### Skip If Running
+
+Prevent duplicate executions:
+
+```typescript
+await igniter.jobs.maintenance.schedule({
+  task: 'backupDatabase',
+  input: {},
+  skipIfRunning: true, // Skip if job with same ID is already running
+});
+```
+
+Or use a custom job ID:
+
+```typescript
+await igniter.jobs.maintenance.schedule({
+  task: 'backupDatabase',
+  input: {},
+  skipIfRunning: 'unique-backup-id', // Use custom ID for deduplication
+});
+```
+
+---
+
+## Business Hours Scheduling
+
+Run jobs only during business hours:
+
+```typescript
+await igniter.jobs.notifications.schedule({
+  task: 'sendReminder',
+  input: { userId: '123' },
+  repeat: {
+    cron: '0 * * * *', // Every hour
+    onlyBusinessHours: true, // Only run 9 AM - 5 PM
+    businessHours: {
+      start: 9, // 9 AM
+      end: 17, // 5 PM
+      timezone: 'America/New_York',
+    },
+  },
+});
+```
+
+### Skip Weekends
+
+Skip weekend executions:
+
+```typescript
+await igniter.jobs.analytics.schedule({
+  task: 'generateReport',
+  input: {},
+  repeat: {
+    cron: '0 9 * * *', // Every day at 9 AM
+    skipWeekends: true, // Skip Saturday and Sunday
+  },
+});
+```
+
+### Specific Weekdays
+
+Run only on specific days:
+
+```typescript
+await igniter.jobs.weekly.schedule({
+  task: 'weeklySummary',
+  input: {},
+  repeat: {
+    cron: '0 9 * * *', // Daily at 9 AM
+    onlyWeekdays: [1, 3, 5], // Monday, Wednesday, Friday only
+  },
+});
+```
+
+---
+
+## Predefined Schedule Patterns
+
+Use predefined patterns for common schedules:
+
+```typescript
+import { SchedulePatterns } from '@igniter-js/core';
+
+// Run every minute
+await igniter.jobs.monitoring.schedule({
+  task: 'checkHealth',
+  input: {},
+  repeat: SchedulePatterns.EVERY_MINUTE,
+});
+
+// Run every hour
+await igniter.jobs.sync.schedule({
+  task: 'syncData',
+  input: {},
+  repeat: SchedulePatterns.EVERY_HOUR,
+});
+
+// Run daily at midnight
+await igniter.jobs.cleanup.schedule({
+  task: 'cleanup',
+  input: {},
+  repeat: SchedulePatterns.DAILY_MIDNIGHT,
+});
+```
+
+Available patterns:
+
+- `EVERY_MINUTE`: `'0 * * * * *'`
+- `EVERY_HOUR`: `'0 0 * * * *'`
+- `DAILY_MIDNIGHT`: `'0 0 0 * * *'`
+- `DAILY_6AM`: `'0 0 6 * * *'`
+- `WEEKLY_MONDAY`: `'0 0 0 * * 1'`
+- `MONTHLY_FIRST_DAY`: `'0 0 0 1 * *'`
+
+---
+
+## Combining Options
+
+Combine multiple scheduling options:
+
+```typescript
+await igniter.jobs.analytics.schedule({
+  task: 'generateReport',
+  input: { reportType: 'weekly' },
+  
+  // Schedule options
+  repeat: {
+    cron: '0 9 * * 1', // Every Monday at 9 AM
+    times: 52, // Run 52 times (1 year)
+    onlyBusinessHours: true,
+    skipWeekends: true,
+  },
+  
+  // Retry configuration
+  retryStrategy: 'exponential',
+  backoffMultiplier: 2,
+  maxRetryDelay: 30000,
+  
+  // Deduplication
+  skipIfRunning: 'weekly-report',
+  
+  // Priority
+  priority: 10, // High priority
+});
+```
+
+---
+
+## Timezone Handling
+
+Always specify timezones for time-sensitive schedules:
+
+```typescript
+await igniter.jobs.marketing.schedule({
+  task: 'sendCampaign',
+  input: { campaignId: '123' },
+  repeat: {
+    cron: '0 9 * * *', // 9 AM
+    tz: 'America/New_York', // In New York timezone
+  },
+});
+```
+
+Without timezone specification, cron jobs use the server's local timezone, which can cause issues in distributed systems.
+
+---
+
+## Job Metadata and Tags
+
+Add metadata and tags for tracking:
+
+```typescript
+await igniter.jobs.analytics.schedule({
+  task: 'processEvent',
+  input: { eventId: '123' },
+  tags: ['analytics', 'batch-processing'],
+  metadata: {
+    source: 'scheduled-job',
+    priority: 'high',
+  },
+});
+```
+
+Metadata and tags are useful for:
+- Filtering jobs in search results
+- Monitoring and alerting
+- Debugging and troubleshooting
+
+---
+
+## Common Scheduling Patterns
+
+### Daily Summary at End of Day
+
+```typescript
+await igniter.jobs.reports.schedule({
+  task: 'dailySummary',
+  input: {},
+  repeat: {
+    cron: '0 23 * * *', // 11 PM daily
+    tz: 'America/New_York',
+  },
+});
+```
+
+### Weekly Report on Monday Morning
+
+```typescript
+await igniter.jobs.reports.schedule({
+  task: 'weeklyReport',
+  input: {},
+  repeat: {
+    cron: '0 9 * * 1', // 9 AM every Monday
+    tz: 'America/New_York',
+  },
+});
+```
+
+### Hourly Health Check During Business Hours
+
+```typescript
+await igniter.jobs.monitoring.schedule({
+  task: 'healthCheck',
+  input: {},
+  repeat: {
+    cron: '0 * * * *', // Every hour
+    onlyBusinessHours: true,
+    businessHours: { start: 9, end: 17 },
+    tz: 'America/New_York',
+  },
+});
+```
+
+---
+
+## Best Practices
+
+1. **Always Specify Timezones**: Use the `tz` option for cron schedules
+2. **Use Descriptive Job IDs**: When using `skipIfRunning`, use meaningful IDs
+3. **Set Reasonable Limits**: Use `times` or `until` to prevent infinite recurrence
+4. **Test Schedules**: Verify cron expressions using online tools before deploying
+5. **Monitor Recurring Jobs**: Set up alerts for failed recurring jobs
+6. **Use Business Hours Wisely**: Don't spam users outside business hours
+
+---
+
+## Troubleshooting
+
+### Jobs Not Executing
+
+**Problem**: Scheduled job doesn't run at expected time
+
+**Solutions**:
+- Verify workers are running: Check logs for worker activity
+- Check Redis connection: Ensure Redis is accessible
+- Verify timezone: Confirm timezone settings match expectations
+- Check cron expression: Validate syntax with cron validator
+
+### Duplicate Executions
+
+**Problem**: Same job runs multiple times
+
+**Solution**: Use `skipIfRunning: true` or provide a unique job ID
+
+### Timezone Issues
+
+**Problem**: Job runs at wrong time
+
+**Solution**: Always specify `tz` option in cron schedules
+
+---
+
+## Next Steps
+
+- **[Cron Jobs](/docs/jobs/cron-jobs)**: Learn about dedicated cron job functionality
+- **[Workers](/docs/jobs/workers)**: Configure workers to process scheduled jobs
+- **[Advanced Features](/docs/jobs/advanced-features)**: Explore webhooks, hooks, and more
+

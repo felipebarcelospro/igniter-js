@@ -1,0 +1,289 @@
+---
+title: Message Types
+description: Explore all supported message types.
+---
+
+The Bots package supports various message types for both receiving and sending. This guide covers all available types.
+
+---
+
+## Supported Types
+
+The Bots package supports five main message types, each with its own structure and use cases. Understanding these types helps you build bots that handle diverse content formats appropriately. Each type has specific properties that provide access to the message content and metadata.
+
+<Accordions>
+  <Accordion title="Text Messages">
+    Text messages are the foundation of bot communication—they contain plain text content that users send to your bot. Text messages are simple, universal, and work across all platforms. They're perfect for commands, questions, and general conversation.
+    
+    ```typescript
+    {
+      type: 'text',
+      content: string,  // The message text
+      raw: string       // Raw message text
+    }
+    ```
+    
+    Text messages are the most common type and form the basis of most bot interactions. You can use them for natural language processing, keyword matching, or simple conversational responses.
+  </Accordion>
+  
+  <Accordion title="Command Messages">
+    Commands are automatically parsed messages that start with `/` and are structured for easy processing. The command system extracts the command name and parameters, making it easy to build command-based bots. Commands provide a structured way for users to interact with your bot.
+    
+    ```typescript
+    {
+      type: 'command',
+      command: string,  // Command name (without /)
+      params: string[], // Command parameters
+      raw: string      // Raw command text
+    }
+    ```
+    
+    Commands are typically handled by the command system, but you can also access them directly in event listeners for custom processing. They're perfect for bot actions that need clear, structured input.
+  </Accordion>
+  
+  <Accordion title="Image Messages">
+    Image messages contain image attachments that users send to your bot. These messages include the image URL, file metadata, and an optional caption. Image handling opens up possibilities for bots that need to process visual content—like image recognition, OCR, or photo manipulation bots.
+    
+    ```typescript
+    {
+      type: 'image',
+      content: string,  // Image URL
+      file: File,      // File object
+      caption?: string // Optional caption
+    }
+    ```
+    
+    Images often include captions that users provide when sending them. The file object contains metadata like file size, dimensions, and MIME type, which you can use for validation or processing decisions.
+  </Accordion>
+  
+  <Accordion title="Document Messages">
+    Document messages contain files like PDFs, Word documents, spreadsheets, or any other file type. These messages include the document URL and file metadata, allowing you to download, process, or forward documents. Document handling is essential for bots that need to work with files.
+    
+    ```typescript
+    {
+      type: 'document',
+      content: string,  // Document URL
+      file: File       // File object
+    }
+    ```
+    
+    Documents include file metadata like name, size, and MIME type. You can use this metadata to validate file types, check file sizes, or route documents to appropriate processing handlers based on file type.
+  </Accordion>
+  
+  <Accordion title="Audio Messages">
+    Audio messages contain voice recordings or audio files that users send to your bot. These messages include the audio URL and file metadata, enabling bots that need to process audio—like transcription services, voice commands, or audio analysis bots.
+    
+    ```typescript
+    {
+      type: 'audio',
+      content: string,  // Audio URL
+      file: File       // File object
+    }
+    ```
+    
+    Audio messages are perfect for voice-based interactions and audio processing. The file object contains metadata like duration, file size, and format, which you can use to determine how to process the audio.
+  </Accordion>
+</Accordions>
+
+---
+
+## Type Checking
+
+TypeScript's type system helps you safely work with different message types. Using type guards and switch statements, TypeScript narrows the type based on your checks, giving you full type safety and autocomplete for each message type. This makes your code safer and easier to write.
+
+Type checking is essential when handling multiple message types—it ensures you access the correct properties for each type and prevents runtime errors from accessing properties that don't exist on certain types.
+
+Use TypeScript type guards:
+
+```typescript
+import type { BotContent } from '@igniter-js/bot/types'
+
+function handleContent(content: BotContent | undefined) {
+  if (!content) {
+    return
+  }
+  
+  switch (content.type) {
+    case 'text':
+      // TypeScript knows content is BotTextContent
+      console.log(content.content)
+      break
+      
+    case 'command':
+      // TypeScript knows content is BotCommandContent
+      console.log(content.command, content.params)
+      break
+      
+    case 'image':
+      // TypeScript knows content is BotImageContent
+      console.log(content.content, content.caption)
+      break
+      
+    case 'document':
+      // TypeScript knows content is BotDocumentContent
+      console.log(content.file.name)
+      break
+      
+    case 'audio':
+      // TypeScript knows content is BotAudioContent
+      console.log(content.file.name)
+      break
+  }
+}
+```
+
+---
+
+## Sending Messages
+
+Currently, the Bots package only supports sending text messages across all adapters. This limitation keeps the API simple and consistent while we work on expanding sending capabilities. Future versions will support sending images, documents, and interactive components like buttons and keyboards.
+
+Even though you can only send text messages, you can still create rich interactions using formatting, multiple messages, and creative text formatting. Text messages support newlines and basic formatting, allowing you to create structured, readable responses.
+
+Currently, only text messages can be sent:
+
+```typescript
+await ctx.bot.send({
+  provider: ctx.provider,
+  channel: ctx.channel.id,
+  content: {
+    type: 'text',
+    content: 'Hello, world!'
+  }
+})
+```
+
+<Callout type="info" title="Future Support">
+  Future versions will support sending images, documents, and interactive components.
+</Callout>
+
+---
+
+## Receiving Messages
+
+Your bot can receive all supported message types—text, commands, images, documents, and audio. This allows you to build bots that process diverse content and respond appropriately to different message formats. The unified message structure makes it easy to handle all types consistently.
+
+Receiving multiple message types opens up possibilities for sophisticated bots that can process images, handle documents, or work with audio content. You can use type checking to handle each type appropriately in your event listeners.
+
+All message types can be received:
+
+```typescript
+bot.on('message', async (ctx) => {
+  const content = ctx.message.content
+  
+  if (!content) {
+    return
+  }
+  
+  switch (content.type) {
+    case 'text':
+      // Handle text
+      break
+      
+    case 'command':
+      // Usually handled by command system
+      break
+      
+    case 'image':
+      // Handle image
+      break
+      
+    case 'document':
+      // Handle document
+      break
+      
+    case 'audio':
+      // Handle audio
+      break
+  }
+})
+```
+
+---
+
+## Attachments
+
+Messages can include attachments—additional files or media that accompany the main message content. Attachments provide access to files that might not be directly part of the message content but are sent alongside it. This is useful for platforms that support multiple attachments or complex message structures.
+
+Working with attachments allows you to process files that users send separately from the main message content. You can iterate through attachments and process each one individually.
+
+Messages can include attachments:
+
+```typescript
+if (ctx.message.attachments) {
+  for (const attachment of ctx.message.attachments) {
+    console.log(`Attachment: ${attachment.name} (${attachment.type})`)
+  }
+}
+```
+
+---
+
+## Complete Example
+
+Here's a complete example that demonstrates how to handle all supported message types. This example shows how to check message types, extract relevant information from each type, and send appropriate responses. It demonstrates the core patterns you'll use when building bots that need to handle diverse content formats.
+
+This example demonstrates:
+- **Type Checking**: Using switch statements to handle different message types
+- **Type Safety**: Leveraging TypeScript's type narrowing for safe property access
+- **Response Generation**: Creating appropriate responses for each message type
+- **Complete Coverage**: Handling all supported message types in one bot
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+
+const bot = Bot.create({
+  id: 'types-bot',
+  name: 'Types Bot',
+  adapters: {
+    telegram: telegram({ /* ... */ })
+  },
+  on: {
+    message: async (ctx) => {
+      const content = ctx.message.content
+      
+      if (!content) {
+        return
+      }
+      
+      let response = ''
+      
+      switch (content.type) {
+        case 'text':
+          response = `Text: ${content.content}`
+          break
+          
+        case 'command':
+          response = `Command: /${content.command} ${content.params.join(' ')}`
+          break
+          
+        case 'image':
+          response = `Image: ${content.caption || 'No caption'}`
+          break
+          
+        case 'document':
+          response = `Document: ${content.file.name}`
+          break
+          
+        case 'audio':
+          response = `Audio: ${content.file.name}`
+          break
+      }
+      
+      await ctx.bot.send({
+        provider: ctx.provider,
+        channel: ctx.channel.id,
+        content: {
+          type: 'text',
+          content: response
+        }
+      })
+    }
+  }
+})
+
+await bot.start()
+```
+
+---
+

@@ -1,0 +1,488 @@
+---
+title: Search & Monitoring
+description: Find, filter, and monitor jobs in your queues to track execution, debug issues, and maintain system health.
+---
+
+The search and monitoring features allow you to inspect jobs in your queues, track their status, and monitor overall system health. This is essential for debugging, troubleshooting, and maintaining production systems.
+
+## Searching Jobs
+
+Use `jobs.search()` to find jobs in your queues:
+
+```typescript
+// Search all jobs
+const allJobs = await igniter.jobs.search();
+
+// Search jobs in a specific queue
+const queueJobs = await igniter.jobs.search({
+  queue: { name: 'email-queue' },
+});
+```
+
+---
+
+## Filtering Jobs
+
+Filter jobs by various criteria:
+
+### By Status
+
+```typescript
+// Find waiting jobs
+const waitingJobs = await igniter.jobs.search({
+  filter: {
+    status: ['waiting'],
+  },
+});
+
+// Find failed jobs
+const failedJobs = await igniter.jobs.search({
+  filter: {
+    status: ['failed'],
+  },
+});
+
+// Find multiple statuses
+const activeJobs = await igniter.jobs.search({
+  filter: {
+    status: ['waiting', 'active', 'delayed'],
+  },
+});
+```
+
+Available statuses:
+- `waiting`: Jobs waiting to be processed
+- `active`: Jobs currently being processed
+- `completed`: Successfully completed jobs
+- `failed`: Jobs that failed
+- `delayed`: Jobs scheduled for future execution
+- `paused`: Jobs in paused queues
+- `stalled`: Jobs that stopped processing unexpectedly
+
+### By Job ID
+
+```typescript
+// Find specific job
+const job = await igniter.jobs.search({
+  filter: {
+    jobId: 'emails.sendWelcome-12345',
+  },
+});
+```
+
+### By Date Range
+
+```typescript
+// Find jobs created in the last hour
+const recentJobs = await igniter.jobs.search({
+  filter: {
+    dateRange: {
+      from: new Date(Date.now() - 60 * 60 * 1000), // 1 hour ago
+      to: new Date(),
+    },
+  },
+});
+
+// Find jobs from last week
+const lastWeekJobs = await igniter.jobs.search({
+  filter: {
+    dateRange: {
+      from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+      to: new Date(),
+    },
+  },
+});
+```
+
+### Combined Filters
+
+```typescript
+// Find failed jobs from last 24 hours
+const recentFailures = await igniter.jobs.search({
+  filter: {
+    status: ['failed'],
+    dateRange: {
+      from: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      to: new Date(),
+    },
+  },
+});
+```
+
+---
+
+## Pagination
+
+Control result size with pagination:
+
+```typescript
+// Get first 50 jobs
+const firstPage = await igniter.jobs.search({
+  filter: {
+    limit: 50,
+    offset: 0,
+  },
+});
+
+// Get next 50 jobs
+const secondPage = await igniter.jobs.search({
+  filter: {
+    limit: 50,
+    offset: 50,
+  },
+});
+```
+
+---
+
+## Sorting
+
+Sort results by timestamp or priority:
+
+```typescript
+// Sort by creation time (newest first)
+const newestJobs = await igniter.jobs.search({
+  filter: {
+    orderBy: 'timestamp:desc',
+  },
+});
+
+// Sort by priority (highest first)
+const priorityJobs = await igniter.jobs.search({
+  filter: {
+    orderBy: 'priority:desc',
+  },
+});
+
+// Sort by creation time (oldest first)
+const oldestJobs = await igniter.jobs.search({
+  filter: {
+    orderBy: 'timestamp:asc',
+  },
+});
+```
+
+---
+
+## Job Search Results
+
+Search results include comprehensive job information:
+
+```typescript
+const results = await igniter.jobs.search();
+
+results.forEach((job) => {
+  console.log(`Job ID: ${job.id}`);
+  console.log(`Job Name: ${job.name}`);
+  console.log(`Status: ${job.status}`);
+  console.log(`Payload:`, job.payload);
+  console.log(`Created At: ${job.createdAt}`);
+  console.log(`Processed At: ${job.processedAt}`);
+  console.log(`Completed At: ${job.completedAt}`);
+  console.log(`Result:`, job.result);
+  console.log(`Error:`, job.error);
+  console.log(`Attempts Made: ${job.attemptsMade}`);
+  console.log(`Priority: ${job.priority}`);
+  console.log(`Metadata:`, job.metadata);
+});
+```
+
+### Result Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Unique job identifier |
+| `name` | `string` | Job name (e.g., `emails.sendWelcome`) |
+| `status` | `JobStatus` | Current job status |
+| `payload` | `any` | Job input data |
+| `createdAt` | `Date` | When job was created |
+| `processedAt` | `Date` | When job started processing (if applicable) |
+| `completedAt` | `Date` | When job completed (if applicable) |
+| `result` | `any` | Job execution result (if successful) |
+| `error` | `string` | Error message (if failed) |
+| `attemptsMade` | `number` | Number of execution attempts |
+| `priority` | `number` | Job priority value |
+| `metadata` | `object` | Custom metadata |
+
+---
+
+## Monitoring Patterns
+
+### Find Failed Jobs
+
+```typescript
+async function findFailedJobs() {
+  const failedJobs = await igniter.jobs.search({
+    filter: {
+      status: ['failed'],
+      limit: 100,
+    },
+  });
+  
+  console.log(`Found ${failedJobs.length} failed jobs`);
+  
+  failedJobs.forEach((job) => {
+    console.log(`- ${job.name} (${job.id}): ${job.error}`);
+  });
+  
+  return failedJobs;
+}
+```
+
+### Monitor Queue Health
+
+```typescript
+async function checkQueueHealth() {
+  const [waiting, active, completed, failed] = await Promise.all([
+    igniter.jobs.search({ filter: { status: ['waiting'] } }),
+    igniter.jobs.search({ filter: { status: ['active'] } }),
+    igniter.jobs.search({ filter: { status: ['completed'] } }),
+    igniter.jobs.search({ filter: { status: ['failed'] } }),
+  ]);
+  
+  return {
+    waiting: waiting.length,
+    active: active.length,
+    completed: completed.length,
+    failed: failed.length,
+    health: failed.length > 100 ? 'unhealthy' : 'healthy',
+  };
+}
+```
+
+### Track Job Execution Times
+
+```typescript
+async function analyzeJobPerformance() {
+  const completedJobs = await igniter.jobs.search({
+    filter: {
+      status: ['completed'],
+      dateRange: {
+        from: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+      },
+      limit: 1000,
+    },
+  });
+  
+  const executionTimes = completedJobs
+    .filter((job) => job.processedAt && job.completedAt)
+    .map((job) => ({
+      name: job.name,
+      duration: job.completedAt!.getTime() - job.processedAt!.getTime(),
+    }));
+  
+  const avgDuration = executionTimes.reduce((sum, job) => sum + job.duration, 0) / executionTimes.length;
+  
+  return {
+    totalJobs: completedJobs.length,
+    averageDuration: avgDuration,
+    slowestJobs: executionTimes
+      .sort((a, b) => b.duration - a.duration)
+      .slice(0, 10),
+  };
+}
+```
+
+---
+
+## Dashboard Implementation
+
+Build a simple monitoring dashboard:
+
+```typescript
+async function getDashboardMetrics() {
+  const [
+    waitingJobs,
+    activeJobs,
+    completedJobs,
+    failedJobs,
+    delayedJobs,
+  ] = await Promise.all([
+    igniter.jobs.search({ filter: { status: ['waiting'], limit: 100 } }),
+    igniter.jobs.search({ filter: { status: ['active'], limit: 100 } }),
+    igniter.jobs.search({ filter: { status: ['completed'], limit: 100 } }),
+    igniter.jobs.search({ filter: { status: ['failed'], limit: 100 } }),
+    igniter.jobs.search({ filter: { status: ['delayed'], limit: 100 } }),
+  ]);
+  
+  return {
+    overview: {
+      waiting: waitingJobs.length,
+      active: activeJobs.length,
+      completed: completedJobs.length,
+      failed: failedJobs.length,
+      delayed: delayedJobs.length,
+    },
+    recentFailures: failedJobs.slice(0, 10),
+    recentCompleted: completedJobs.slice(0, 10),
+  };
+}
+```
+
+---
+
+## Alerting on Issues
+
+Set up alerts based on search results:
+
+```typescript
+async function checkForIssues() {
+  // Check for too many failed jobs
+  const recentFailures = await igniter.jobs.search({
+    filter: {
+      status: ['failed'],
+      dateRange: {
+        from: new Date(Date.now() - 60 * 60 * 1000), // Last hour
+      },
+    },
+  });
+  
+  if (recentFailures.length > 50) {
+    await sendAlert({
+      level: 'critical',
+      message: `High failure rate: ${recentFailures.length} jobs failed in the last hour`,
+    });
+  }
+  
+  // Check for stalled jobs
+  const stalledJobs = await igniter.jobs.search({
+    filter: {
+      status: ['stalled'],
+    },
+  });
+  
+  if (stalledJobs.length > 0) {
+    await sendAlert({
+      level: 'warning',
+      message: `${stalledJobs.length} jobs are stalled`,
+    });
+  }
+  
+  // Check for queue buildup
+  const waitingJobs = await igniter.jobs.search({
+    filter: {
+      status: ['waiting'],
+    },
+  });
+  
+  if (waitingJobs.length > 1000) {
+    await sendAlert({
+      level: 'warning',
+      message: `Queue buildup: ${waitingJobs.length} jobs waiting`,
+    });
+  }
+}
+```
+
+---
+
+## Debugging Specific Jobs
+
+Find and inspect specific jobs for debugging:
+
+```typescript
+async function debugJob(jobId: string) {
+  const jobs = await igniter.jobs.search({
+    filter: {
+      jobId: jobId,
+    },
+  });
+  
+  if (jobs.length === 0) {
+    console.log(`Job ${jobId} not found`);
+    return;
+  }
+  
+  const job = jobs[0];
+  
+  console.log('Job Details:');
+  console.log(`  ID: ${job.id}`);
+  console.log(`  Name: ${job.name}`);
+  console.log(`  Status: ${job.status}`);
+  console.log(`  Payload:`, JSON.stringify(job.payload, null, 2));
+  console.log(`  Created: ${job.createdAt}`);
+  
+  if (job.processedAt) {
+    console.log(`  Processed: ${job.processedAt}`);
+  }
+  
+  if (job.completedAt) {
+    console.log(`  Completed: ${job.completedAt}`);
+    console.log(`  Result:`, JSON.stringify(job.result, null, 2));
+  }
+  
+  if (job.error) {
+    console.log(`  Error: ${job.error}`);
+  }
+  
+  console.log(`  Attempts: ${job.attemptsMade}`);
+  console.log(`  Priority: ${job.priority}`);
+  
+  return job;
+}
+```
+
+---
+
+## Best Practices
+
+1. **Regular Health Checks**: Periodically check queue health
+2. **Monitor Failure Rates**: Alert on high failure rates
+3. **Track Execution Times**: Identify slow jobs
+4. **Set Up Alerts**: Automate alerting for critical issues
+5. **Keep Search Efficient**: Use specific filters to limit results
+6. **Paginate Large Results**: Don't fetch all jobs at once
+7. **Log Important Events**: Use search results for audit logs
+
+---
+
+## Common Monitoring Queries
+
+### Find Jobs Stuck in Active State
+
+```typescript
+const stuckJobs = await igniter.jobs.search({
+  filter: {
+    status: ['active'],
+    dateRange: {
+      from: new Date(Date.now() - 60 * 60 * 1000), // Over 1 hour old
+    },
+  },
+});
+```
+
+### Find Recently Completed Jobs
+
+```typescript
+const recentCompleted = await igniter.jobs.search({
+  filter: {
+    status: ['completed'],
+    dateRange: {
+      from: new Date(Date.now() - 15 * 60 * 1000), // Last 15 minutes
+    },
+    orderBy: 'timestamp:desc',
+    limit: 50,
+  },
+});
+```
+
+### Find High-Priority Waiting Jobs
+
+```typescript
+const highPriorityWaiting = await igniter.jobs.search({
+  filter: {
+    status: ['waiting'],
+    orderBy: 'priority:desc',
+    limit: 20,
+  },
+});
+```
+
+---
+
+## Next Steps
+
+- **[Workers](/docs/jobs/workers)**: Learn how workers process jobs
+- **[Advanced Features](/docs/jobs/advanced-features)**: Explore hooks and webhooks
+- **[Troubleshooting](/docs/jobs/getting-started#troubleshooting)**: Common issues and solutions
+

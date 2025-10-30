@@ -1,0 +1,382 @@
+---
+title: Job Definitions
+description: Learn how to define type-safe jobs with schemas, handlers, and advanced configuration options.
+---
+
+Job definitions are the foundation of the Igniter.js Jobs system. They define what data a job accepts, how it executes, and how it behaves under different conditions.
+
+## Creating a Job Definition
+
+Use `jobs.register()` to create a job definition:
+
+```typescript
+import { jobs } from '@/services/jobs';
+import { z } from 'zod';
+
+const sendEmailJob = jobs.register({
+  name: 'Send Email',
+  input: z.object({
+    to: z.string().email(),
+    subject: z.string().min(1),
+    body: z.string(),
+  }),
+  handler: async ({ payload, context }) => {
+    await context.emailService.send({
+      to: payload.to,
+      subject: payload.subject,
+      body: payload.body,
+    });
+    
+    return { sent: true, timestamp: new Date() };
+  },
+});
+```
+
+### Required Properties
+
+Every job definition requires:
+
+- **`name`**: A descriptive name for the job (used in logs and monitoring)
+- **`input`**: A Zod schema that validates the job payload
+- **`handler`**: The function that executes when the job runs
+
+---
+
+## Input Validation
+
+Jobs automatically validate their input against the provided Zod schema. Invalid input will cause the job to fail before execution:
+
+```typescript
+const processOrderJob = jobs.register({
+  name: 'Process Order',
+  input: z.object({
+    orderId: z.string().uuid(),
+    amount: z.number().positive(),
+    currency: z.enum(['USD', 'EUR', 'GBP']),
+  }),
+  handler: async ({ payload }) => {
+    // payload is guaranteed to match the schema
+    console.log(`Processing order ${payload.orderId}`);
+  },
+});
+
+// ✅ Valid - job will execute
+await igniter.jobs.orders.schedule({
+  task: 'processOrder',
+  input: {
+    orderId: '123e4567-e89b-12d3-a456-426614174000',
+    amount: 99.99,
+    currency: 'USD',
+  },
+});
+
+// ❌ Invalid - job will fail validation
+await igniter.jobs.orders.schedule({
+  task: 'processOrder',
+  input: {
+    orderId: 'invalid-uuid', // Validation error
+    amount: -10, // Must be positive
+  },
+});
+```
+
+<Callout type="info" title="Type Safety">
+  TypeScript infers the input type from your Zod schema, providing compile-time type checking. The schema also provides runtime validation, ensuring data integrity.
+</Callout>
+
+---
+
+## Handler Function
+
+The handler receives an execution context with the payload, application context, and job metadata:
+
+```typescript
+import type { JobExecutionContext } from '@igniter-js/core';
+
+const processPaymentJob = jobs.register({
+  name: 'Process Payment',
+  input: z.object({
+    amount: z.number(),
+    userId: z.string(),
+  }),
+  handler: async (context: JobExecutionContext<AppContext, typeof input>) => {
+    // Access validated payload
+    const { payload } = context;
+    
+    // Access application context
+    const { db, paymentService } = context.context;
+    
+    // Access job metadata
+    const { job } = context;
+    console.log(`Job ${job.id} attempt ${job.attemptsMade}`);
+    
+    // Your business logic
+    const payment = await paymentService.process({
+      amount: payload.amount,
+      userId: payload.userId,
+    });
+    
+    return { success: true, paymentId: payment.id };
+  },
+});
+```
+
+### Execution Context Properties
+
+- **`payload`**: The validated input data (type-safe)
+- **`context`**: Your application context (database, services, etc.)
+- **`job`**: Job metadata (id, attempts, createdAt, etc.)
+
+---
+
+## Job Options
+
+Jobs support various configuration options for retry logic, queue management, and more:
+
+```typescript
+const criticalJob = jobs.register({
+  name: 'Critical Task',
+  input: z.object({ taskId: z.string() }),
+  handler: async ({ payload }) => {
+    // Job logic
+  },
+  
+  // Retry configuration
+  attempts: 5, // Retry up to 5 times on failure
+  backoff: {
+    type: 'exponential',
+    delay: 2000, // Start with 2 second delay
+  },
+  
+  // Queue configuration
+  queue: {
+    name: 'critical-queue',
+    prefix: 'prod', // Useful for multi-tenant apps
+  },
+  
+  // Job retention
+  removeOnComplete: 100, // Keep last 100 completed jobs
+  removeOnFail: 50, // Keep last 50 failed jobs
+  
+  // Job timeout
+  timeout: 30000, // Fail if job takes longer than 30 seconds
+});
+```
+
+### Common Options
+
+| Option | Type | Description |
+|-------|------|-------------|
+| `attempts` | `number` | Maximum retry attempts (default: 3) |
+| `removeOnComplete` | `number \| boolean` | Keep N completed jobs or all if `true` |
+| `removeOnFail` | `number \| boolean` | Keep N failed jobs or all if `true` |
+| `timeout` | `number` | Job timeout in milliseconds |
+| `queue` | `object` | Queue name and prefix configuration |
+| `priority` | `number` | Job priority (higher = processed first) |
+
+---
+
+## Lifecycle Hooks
+
+React to job lifecycle events with hooks:
+
+```typescript
+const trackedJob = jobs.register({
+  name: 'Tracked Task',
+  input: z.object({ data: z.string() }),
+  handler: async ({ payload }) => {
+    // Main job logic
+    return { processed: true };
+  },
+  
+  // Called when job starts
+  onStart: async ({ input, context, job }) => {
+    console.log(`Job ${job.id} started`);
+    await context.analytics.track('job.started', {
+      jobId: job.id,
+      jobName: job.name,
+    });
+  },
+  
+  // Called when job succeeds
+  onSuccess: async ({ input, context, job, result, executionTime }) => {
+    console.log(`Job ${job.id} completed in ${executionTime}ms`);
+    await context.analytics.track('job.completed', {
+      jobId: job.id,
+      executionTime,
+    });
+  },
+  
+  // Called when job fails
+  onFailure: async ({ input, context, job, error, isFinalAttempt }) => {
+    console.error(`Job ${job.id} failed:`, error);
+    
+    if (isFinalAttempt) {
+      // Alert on final failure
+      await context.alerts.send({
+        type: 'critical',
+        message: `Job ${job.name} failed after all retries`,
+      });
+    }
+  },
+  
+  // Called always (success or failure)
+  onComplete: async ({ input, context, job, success, result, error }) => {
+    // Cleanup or logging
+    await context.audit.log({
+      jobId: job.id,
+      status: success ? 'success' : 'failure',
+      timestamp: new Date(),
+    });
+  },
+});
+```
+
+<Callout type="info" title="Hook Execution">
+  Hooks are executed asynchronously and errors in hooks don't fail the job. Use hooks for logging, metrics, and notifications, not critical business logic.
+</Callout>
+
+---
+
+## Type-Safe Job Definitions
+
+TypeScript infers types from your schemas, providing end-to-end type safety:
+
+```typescript
+// Define the job
+const userJob = jobs.register({
+  name: 'Update User',
+  input: z.object({
+    userId: z.string().uuid(),
+    data: z.object({
+      name: z.string().optional(),
+      email: z.string().email().optional(),
+    }),
+  }),
+  handler: async ({ payload }) => {
+    // payload.userId is typed as string
+    // payload.data.name is typed as string | undefined
+    // payload.data.email is typed as string | undefined
+    
+    return { updated: true };
+  },
+});
+
+// TypeScript knows the exact input shape
+await igniter.jobs.users.schedule({
+  task: 'updateUser',
+  input: {
+    userId: '123e4567-e89b-12d3-a456-426614174000',
+    data: {
+      name: 'John Doe',
+      // TypeScript will error if you provide invalid fields
+    },
+  },
+});
+```
+
+---
+
+## Advanced Examples
+
+### Job with Conditional Logic
+
+```typescript
+const conditionalJob = jobs.register({
+  name: 'Conditional Task',
+  input: z.object({
+    userId: z.string(),
+    action: z.enum(['create', 'update', 'delete']),
+  }),
+  handler: async ({ payload, context }) => {
+    switch (payload.action) {
+      case 'create':
+        return await context.users.create(payload);
+      case 'update':
+        return await context.users.update(payload);
+      case 'delete':
+        return await context.users.delete(payload.userId);
+    }
+  },
+});
+```
+
+### Job with Database Transaction
+
+```typescript
+const transactionalJob = jobs.register({
+  name: 'Transactional Task',
+  input: z.object({
+    orderId: z.string(),
+    items: z.array(z.object({
+      productId: z.string(),
+      quantity: z.number(),
+    })),
+  }),
+  handler: async ({ payload, context }) => {
+    // Use database transactions for atomicity
+    return await context.db.$transaction(async (tx) => {
+      const order = await tx.order.create({
+        data: { id: payload.orderId },
+      });
+      
+      for (const item of payload.items) {
+        await tx.orderItem.create({
+          data: {
+            orderId: order.id,
+            productId: item.productId,
+            quantity: item.quantity,
+          },
+        });
+      }
+      
+      return order;
+    });
+  },
+});
+```
+
+### Job with Error Handling
+
+```typescript
+const resilientJob = jobs.register({
+  name: 'Resilient Task',
+  input: z.object({ url: z.string().url() }),
+  handler: async ({ payload, context }) => {
+    try {
+      const response = await fetch(payload.url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      return { success: true, data: await response.json() };
+    } catch (error) {
+      // Log error but let retry logic handle it
+      context.logger.error('Job failed:', error);
+      throw error; // Re-throw to trigger retry
+    }
+  },
+  attempts: 3, // Will retry up to 3 times
+});
+```
+
+---
+
+## Best Practices
+
+1. **Use Descriptive Names**: Job names appear in logs and monitoring tools
+2. **Validate Input Strictly**: Use Zod's strict validation to catch errors early
+3. **Handle Errors Gracefully**: Let retry logic handle transient failures
+4. **Keep Handlers Focused**: Each job should do one thing well
+5. **Use Context for Dependencies**: Access services through context, not global state
+6. **Log Important Events**: Use hooks for observability, not business logic
+
+---
+
+## Next Steps
+
+- **[Routers](/docs/jobs/routers)**: Organize jobs into namespaces and routers
+- **[Scheduling](/docs/jobs/scheduling)**: Schedule jobs for future execution
+- **[Advanced Features](/docs/jobs/advanced-features)**: Explore retry strategies, webhooks, and more
+

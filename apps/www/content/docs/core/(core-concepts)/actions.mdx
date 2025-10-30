@@ -1,0 +1,815 @@
+---
+title: Actions
+description: Master queries and mutations in Igniter.js to create type-safe API endpoints with automatic validation, full IntelliSense, and end-to-end type inference.
+---
+
+## Overview
+
+**Actions** are the core building blocks of your Igniter.js API. They define individual endpoints and come in two types:
+
+- **Query** - For reading data (GET requests)
+- **Mutation** - For modifying data (POST, PUT, DELETE, PATCH requests)
+
+```typescript
+import { igniter } from '@/igniter';
+
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    // Query action
+    list: igniter.query({
+      path: '/',
+      handler: async ({ context, response }) => {
+        const users = await context.db.users.findMany();
+        return response.success({ users });
+      }
+    }),
+    
+    // Mutation action
+    create: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: CreateUserSchema,
+      handler: async ({ request, response }) => {
+        const user = await context.db.users.create(request.body);
+        return response.created({ user });
+      }
+    })
+  }
+});
+```
+
+---
+
+## Query Actions
+
+Query actions are for **reading data**. They use the `GET` HTTP method and should be idempotent (multiple calls produce the same result).
+
+### Basic Query
+
+```typescript
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    list: igniter.query({
+      path: '/',
+      handler: async ({ context, response }) => {
+        const users = await context.db.users.findMany();
+        return response.success({ users });
+      }
+    })
+  }
+});
+
+// Creates endpoint: GET /users/
+```
+
+### Query with Path Parameters
+
+```typescript
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    getById: igniter.query({
+      path: '/:id' as const, // add 'as const' to ensure type inference
+      handler: async ({ request, context, response }) => {
+        // ✅ request.params.id is automatically typed as string
+        const user = await context.db.users.findUnique({
+          where: { id: request.params.id }
+        });
+        
+        if (!user) {
+          return response.notFound({ message: 'User not found' });
+        }
+        
+        return response.success({ user });
+      }
+    })
+  }
+});
+
+// Creates endpoint: GET /users/:id
+```
+
+<Callout type="success" title="Automatic Type Inference">
+  Path parameters are automatically extracted and typed from the path string! `/:id` → `params.id: string`
+</Callout>
+
+### Query with Query Parameters
+
+Use Zod schemas to validate and type query parameters:
+
+```typescript
+import { z } from 'zod';
+
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    search: igniter.query({
+      path: '/search',
+      query: z.object({
+        q: z.string().min(1),
+        limit: z.coerce.number().optional().default(10),
+        offset: z.coerce.number().optional().default(0)
+      }),
+      handler: async ({ request, context, response }) => {
+        // ✅ request.query is fully typed and validated
+        const { q, limit, offset } = request.query;
+        
+        const users = await context.db.users.findMany({
+          where: {
+            name: { contains: q, mode: 'insensitive' }
+          },
+          take: limit,
+          skip: offset
+        });
+        
+        return response.success({ users, query: q, limit, offset });
+      }
+    })
+  }
+});
+
+// Creates endpoint: GET /users/search?q=john&limit=20&offset=0
+```
+
+<Callout type="info" title="z.coerce for Query Params">
+  Query parameters come as strings from URLs. Use `z.coerce.number()` to automatically convert them to numbers!
+</Callout>
+
+### Query Options
+
+<TypeTable type={{
+  path: {
+    type: 'string',
+    description: 'URL path (e.g., "/", "/:id", "/search")',
+    required: true
+  },
+  query: {
+    type: 'StandardSchemaV1',
+    description: 'Query parameters validation schema (Zod, Valibot, Yup)',
+    required: false
+  },
+  use: {
+    type: 'IgniterProcedure[]',
+    description: 'Middleware procedures to run before handler',
+    required: false
+  },
+  handler: {
+    type: 'IgniterActionHandler',
+    description: 'The action handler function',
+    required: true
+  },
+  name: {
+    type: 'string',
+    description: 'Optional name for documentation',
+    required: false
+  },
+  description: {
+    type: 'string',
+    description: 'Optional description for documentation',
+    required: false
+  }
+}} />
+
+---
+
+## Mutation Actions
+
+Mutation actions are for **modifying data**. They support POST, PUT, PATCH, and DELETE methods.
+
+### POST Mutation (Create)
+
+```typescript
+import { z } from 'zod';
+
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    create: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: z.object({
+        name: z.string().min(2),
+        email: z.string().email(),
+        age: z.number().int().min(18).optional()
+      }),
+      handler: async ({ request, context, response }) => {
+        // ✅ request.body is fully typed from CreateUserSchema
+        const user = await context.db.users.create({
+          data: request.body
+        });
+        
+        return response.created({ user });
+      }
+    })
+  }
+});
+
+// Creates endpoint: POST /users/
+```
+
+### PUT Mutation (Update)
+
+```typescript
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    update: igniter.mutation({
+      path: '/:id' as const,
+      method: 'PUT',
+      body: z.object({
+        name: z.string().min(2).optional(),
+        email: z.string().email().optional(),
+        age: z.number().int().min(18).optional()
+      }),
+      handler: async ({ request, context, response }) => {
+        // ✅ request.params.id is typed
+        // ✅ request.body is typed from UpdateUserSchema
+        const user = await context.db.users.update({
+          where: { id: request.params.id },
+          data: request.body
+        });
+        
+        return response.success({ user });
+      }
+    })
+  }
+});
+
+// Creates endpoint: PUT /users/:id
+```
+
+### DELETE Mutation
+
+```typescript
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    delete: igniter.mutation({
+      path: '/:id' as const,
+      method: 'DELETE',
+      handler: async ({ request, context, response }) => {
+        await context.db.users.delete({
+          where: { id: request.params.id }
+        });
+        
+        return response.success({ message: 'User deleted successfully' });
+      }
+    })
+  }
+});
+
+// Creates endpoint: DELETE /users/:id
+```
+
+### PATCH Mutation (Partial Update)
+
+```typescript
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    patch: igniter.mutation({
+      path: '/:id',
+      method: 'PATCH',
+      body: z.object({
+        name: z.string().min(2),
+        email: z.string().email()
+      }).partial(),
+      handler: async ({ request, context, response }) => {
+        const user = await context.db.users.update({
+          where: { id: request.params.id },
+          data: request.body
+        });
+        
+        return response.success({ user });
+      }
+    })
+  }
+});
+
+// Creates endpoint: PATCH /users/:id
+```
+
+### Mutation Options
+
+<TypeTable type={{
+  path: {
+    type: 'string',
+    description: 'URL path (e.g., "/", "/:id")',
+    required: true
+  },
+  method: {
+    type: "'POST' | 'PUT' | 'DELETE' | 'PATCH'",
+    description: 'HTTP method for the mutation',
+    required: true
+  },
+  body: {
+    type: 'StandardSchemaV1',
+    description: 'Request body validation schema',
+    required: false
+  },
+  query: {
+    type: 'StandardSchemaV1',
+    description: 'Query parameters validation schema',
+    required: false
+  },
+  use: {
+    type: 'IgniterProcedure[]',
+    description: 'Middleware procedures to run before handler',
+    required: false
+  },
+  handler: {
+    type: 'IgniterActionHandler',
+    description: 'The action handler function',
+    required: true
+  },
+  name: {
+    type: 'string',
+    description: 'Optional name for documentation',
+    required: false
+  },
+  description: {
+    type: 'string',
+    description: 'Optional description for documentation',
+    required: false
+  }
+}} />
+
+---
+
+## Action Handler
+
+Every action has a `handler` function that processes the request and returns a response.
+
+### Handler Context
+
+The handler receives a context object with:
+
+```typescript
+handler: async ({ request, context, response, plugins }) => {
+  // ...
+}
+```
+
+<TypeTable type={{
+  request: {
+    type: 'object',
+    description: 'Request data (method, path, params, body, query, headers, cookies, raw)',
+    required: true
+  },
+  context: {
+    type: 'AppContext',
+    description: 'Application context (db, user, services, etc.)',
+    required: true
+  },
+  response: {
+    type: 'IgniterResponseProcessor',
+    description: 'Response helper methods (success, created, notFound, etc.)',
+    required: true
+  },
+  plugins: {
+    type: 'PluginRegistry',
+    description: 'Type-safe access to plugin actions',
+    required: true
+  }
+}} />
+
+### Request Object
+
+```typescript
+handler: async ({ request }) => {
+  // HTTP method
+  console.log(request.method);        // "GET" | "POST" | "PUT" | etc.
+  
+  // URL path
+  console.log(request.path);          // "/users/123"
+  
+  // Path parameters (from /:param)
+  console.log(request.params.id);     // "123" (typed!)
+  
+  // Query parameters (if schema defined)
+  console.log(request.query.q);       // "search" (typed!)
+  
+  // Request body (if schema defined)
+  console.log(request.body.name);     // "John" (typed!)
+  
+  // Headers
+  const auth = request.headers.get('authorization');
+  
+  // Cookies
+  const session = request.cookies.get('sessionId');
+  
+  // Raw Web Request object
+  const rawRequest = request.raw;
+}
+```
+
+### Context Object
+
+```typescript
+handler: async ({ context }) => {
+  // Access app context (defined in Igniter.context())
+  const users = await context.db.users.findMany();
+  
+  // Access user (if using dynamic context)
+  if (context.user) {
+    console.log('Authenticated:', context.user.email);
+  }
+  
+  // Access services
+  await context.email.send({ to: 'user@example.com' });
+}
+```
+
+### Response Object
+
+```typescript
+handler: async ({ response }) => {
+  // 200 OK with data
+  return response.success({ users: [] });
+  
+  // 201 Created
+  return response.created({ user: newUser });
+  
+  // 404 Not Found
+  return response.notFound({ message: 'User not found' });
+  
+  // 400 Bad Request
+  return response.badRequest({ message: 'Invalid input' });
+  
+  // 401 Unauthorized
+  return response.unauthorized({ message: 'Authentication required' });
+  
+  // 500 Internal Server Error
+  return response.error({ message: 'Something went wrong' });
+  
+  // Custom response
+  return response.json({ custom: 'data' }, { status: 418 });
+}
+```
+
+### Plugins Object
+
+```typescript
+handler: async ({ plugins, response }) => {
+  // Call plugin actions (type-safe!)
+  await plugins.audit.actions.create({
+    action: 'user:created',
+    userId: '123'
+  });
+  
+  await plugins.email.actions.sendWelcome({
+    to: 'user@example.com',
+    name: 'John'
+  });
+  
+  return response.success({ message: 'Done' });
+}
+```
+
+---
+
+## Validation
+
+### Body Validation
+
+```typescript
+const postController = igniter.controller({
+  path: '/posts',
+  actions: {
+    create: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: z.object({
+        title: z.string().min(3).max(100),
+        content: z.string().min(10),
+        published: z.boolean().default(false),
+        tags: z.array(z.string()).max(5).optional()
+      }),
+      handler: async ({ request, response }) => {
+        // ✅ request.body is fully typed and validated
+        const post = await db.posts.create({
+          data: request.body
+        });
+        
+        return response.created({ post });
+      }
+    })
+  }
+});
+```
+
+If validation fails, Igniter.js automatically returns a `400 Bad Request` with error details:
+
+```json
+{
+  "error": "Validation failed",
+  "issues": [
+    {
+      "path": ["title"],
+      "message": "String must contain at least 3 character(s)"
+    }
+  ]
+}
+```
+
+### Query Validation
+
+```typescript
+const productController = igniter.controller({
+  path: '/products',
+  actions: {
+    search: igniter.query({
+      path: '/search',
+      query: z.object({
+        q: z.string().min(1),
+        category: z.enum(['tech', 'design', 'business']).optional(),
+        minPrice: z.coerce.number().min(0).optional(),
+        maxPrice: z.coerce.number().min(0).optional(),
+        sortBy: z.enum(['price', 'date', 'popularity']).default('date')
+      }),
+      handler: async ({ request, response }) => {
+        const { q, category, minPrice, maxPrice, sortBy } = request.query;
+        
+        const products = await db.products.findMany({
+          where: {
+            name: { contains: q },
+            category: category,
+            price: {
+              gte: minPrice,
+              lte: maxPrice
+            }
+          },
+          orderBy: { [sortBy]: 'desc' }
+        });
+        
+        return response.success({ products });
+      }
+    })
+  }
+});
+```
+
+### Combined Validation
+
+You can validate both body and query parameters:
+
+```typescript
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    createWithInvite: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: z.object({
+        name: z.string(),
+        email: z.string().email()
+      }),
+      query: z.object({
+        inviteCode: z.string().length(8)
+      }),
+      handler: async ({ request, response }) => {
+        // ✅ Both request.body and request.query are typed
+        const { name, email } = request.body;
+        const { inviteCode } = request.query;
+        
+        // Verify invite
+        const invite = await db.invites.findUnique({
+          where: { code: inviteCode }
+        });
+        
+        if (!invite) {
+          return response.badRequest({ message: 'Invalid invite code' });
+        }
+        
+        // Create user
+        const user = await db.users.create({ data: { name, email } });
+        
+        return response.created({ user });
+      }
+    })
+  }
+});
+
+// Usage: POST /users?inviteCode=ABC12345
+// Body: { "name": "John", "email": "john@example.com" }
+```
+
+---
+
+## Procedures (Middleware)
+
+Add reusable logic before your handler using procedures:
+
+```typescript
+const authProcedure = igniter.procedure({
+  handler: async ({ context, request }) => {
+    const token = request.headers.get('authorization');
+    
+    if (!token) {
+      throw new Error('No authorization token');
+    }
+    
+    const user = await verifyToken(token);
+    
+    // ✅ Extend context with currentUser
+    return {
+      currentUser: user
+    };
+  }
+});
+
+const protectedController = igniter.controller({
+  path: '/protected',
+  actions: {
+    getData: igniter.query({
+      path: '/',
+      use: [authProcedure],  // ← Apply middleware
+      handler: async ({ context, response }) => {
+        // ✅ context.currentUser is available!
+        return response.success({
+          message: `Hello, ${context.currentUser.name}`
+        });
+      }
+    })
+  }
+});
+```
+
+---
+
+## Error Handling
+
+### Throwing Errors
+
+```typescript
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    getById: igniter.query({
+      path: '/:id' as const,
+      handler: async ({ request, context, response }) => {
+        const user = await context.db.users.findUnique({
+          where: { id: request.params.id }
+        });
+        
+        if (!user) {
+          // ✅ Option 1: Return error response
+          return response.notFound({ message: 'User not found' });
+        }
+        
+        // ✅ Option 2: Throw error (caught automatically)
+        if (!user.isActive) {
+          throw new Error('User account is deactivated');
+        }
+        
+        return response.success({ user });
+      }
+    })
+  }
+});
+```
+
+### Custom Error Responses
+
+```typescript
+class UserNotFoundError extends Error {
+  constructor(userId: string) {
+    super(`User ${userId} not found`);
+    this.name = 'UserNotFoundError';
+  }
+}
+
+const handler = async ({ request, response }) => {
+  try {
+    const user = await findUser(request.params.id);
+    return response.success({ user });
+  } catch (error) {
+    if (error instanceof UserNotFoundError) {
+      return response.notFound({ message: error.message });
+    }
+    
+    return response.error({ message: 'Unexpected error' });
+  }
+};
+```
+
+---
+
+## Advanced Patterns
+
+### Conditional Responses
+
+```typescript
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    list: igniter.query({
+      path: '/',
+      query: z.object({
+        format: z.enum(['json', 'csv']).default('json')
+      }),
+      handler: async ({ request, context, response }) => {
+        const users = await context.db.users.findMany();
+        
+        if (request.query.format === 'csv') {
+          const csv = convertToCSV(users);
+          return new Response(csv, {
+            headers: { 'Content-Type': 'text/csv' }
+          });
+        }
+        
+        return response.success({ users });
+      }
+    })
+  }
+});
+```
+
+### Streaming Responses
+
+```typescript
+const fileController = igniter.controller({
+  path: '/files',
+  actions: {
+    download: igniter.query({
+      path: '/:id/download' as const,
+      handler: async ({ request, context }) => {
+        const file = await context.db.files.findUnique({
+          where: { id: request.params.id }
+        });
+        
+        const stream = await context.storage.getStream(file.path);
+        
+        return new Response(stream, {
+          headers: {
+            'Content-Type': file.mimeType,
+            'Content-Disposition': `attachment; filename="${file.name}"`
+          }
+        });
+      }
+    })
+  }
+});
+```
+
+### Pagination
+
+```typescript
+const postController = igniter.controller({
+  path: '/posts',
+  actions: {
+    list: igniter.query({
+      path: '/',
+      query: z.object({
+        page: z.coerce.number().min(1).default(1),
+        limit: z.coerce.number().min(1).max(100).default(20)
+      }),
+      handler: async ({ request, context, response }) => {
+        const { page, limit } = request.query;
+        const skip = (page - 1) * limit;
+        
+        const [posts, total] = await Promise.all([
+          context.db.posts.findMany({ skip, take: limit }),
+          context.db.posts.count()
+        ]);
+        
+        return response.success({
+          posts,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+            hasNext: page * limit < total,
+            hasPrev: page > 1
+          }
+        });
+      }
+    })
+  }
+});
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Controllers" href="/docs/controllers">
+    Group actions into logical controllers
+  </Card>
+  
+  <Card title="Procedures" href="/docs/procedures">
+    Create reusable middleware logic
+  </Card>
+  
+  <Card title="Validation" href="/docs/validation">
+    Deep dive into schema validation
+  </Card>
+  
+  <Card title="Response Types" href="/docs/response-types">
+    Master all response helper methods
+  </Card>
+</Cards>

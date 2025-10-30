@@ -1,0 +1,305 @@
+---
+title: Command Aliases
+description: Use aliases to provide multiple ways to trigger the same command.
+---
+
+Command aliases are alternative names for your commands. They let users trigger the same command using different names, making your bot more discoverable and easier to use. Think of aliases as shortcuts or synonyms—users might expect `/hi` to work the same as `/hello`, and aliases let you provide that flexibility without duplicating code.
+
+Aliases are particularly useful for improving user experience. Some users prefer shorter commands (`/ls` vs `/list`), others might think in different languages (`/help` vs `/ajuda`), and some might just make typos. Aliases accommodate all these scenarios, making your bot feel more natural and forgiving.
+
+---
+
+## What Are Aliases?
+
+Aliases are alternative names for a command. When you define aliases, users can trigger the same handler using any of the names you've specified. This is powerful because it lets you support multiple ways of expressing the same intent without writing separate handlers.
+
+```typescript
+greet: {
+  name: 'greet',
+  aliases: ['hello', 'hi', 'hey'],
+  description: 'Greet the user',
+  help: 'Use /greet, /hello, /hi, or /hey',
+  async handle(ctx) {
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: '👋 Hello!'
+      }
+    })
+  }
+}
+```
+
+Now users can use:
+- `/greet`
+- `/hello`
+- `/hi`
+- `/hey`
+
+All of these will trigger the same handler.
+
+---
+
+## How Aliases Work
+
+The bot maintains an internal index that maps both command names and aliases to the same handler. This index is built when commands are registered, so alias resolution is fast—it happens in O(1) time. The resolution is also case-insensitive, so `/GREET` and `/greet` work the same way.
+
+---
+
+## Common Use Cases
+
+There are several common scenarios where aliases shine. Understanding these patterns helps you decide when and how to use aliases effectively in your bot. Each use case demonstrates a different way aliases improve user experience:
+
+<Accordions>
+  <Accordion title="Abbreviations">
+    Provide shorter versions of long commands for users who prefer quick typing. Abbreviations are especially useful for frequently used commands—users appreciate not having to type out full command names every time. This pattern is borrowed from command-line tools where brevity matters.
+    
+    ```typescript
+    list: {
+      name: 'list',
+      aliases: ['ls', 'l'],
+      description: 'List all items',
+      help: 'Use /list, /ls, or /l',
+      // ...
+    }
+    ```
+    
+    Users who are familiar with Unix commands will immediately understand `/ls` means "list", making your bot more intuitive for technical users.
+  </Accordion>
+  
+  <Accordion title="Synonyms">
+    Offer multiple ways to express the same action, accommodating users who think in different terms. Some users might think "delete", others might think "remove", and some might prefer "rm" from their command-line experience. Synonyms let your bot feel natural to different user mental models.
+    
+    ```typescript
+    delete: {
+      name: 'delete',
+      aliases: ['remove', 'rm', 'del'],
+      description: 'Delete an item',
+      help: 'Use /delete, /remove, /rm, or /del',
+      // ...
+    }
+    ```
+    
+    This makes your bot more forgiving and accessible—users don't need to remember the exact command name, just something that sounds right.
+  </Accordion>
+  
+  <Accordion title="Multi-Language Support">
+    Support commands in different languages to make your bot accessible to international users. This is particularly valuable for bots with global audiences. Users can use commands in their native language, making the bot feel more welcoming and reducing language barriers.
+    
+    ```typescript
+    help: {
+      name: 'help',
+      aliases: ['ajuda', 'ayuda', 'aide'],
+      description: 'Show help',
+      help: 'Use /help (or /ajuda, /ayuda, /aide)',
+      // ...
+    }
+    ```
+    
+    Portuguese speakers can use `/ajuda`, Spanish speakers can use `/ayuda`, and French speakers can use `/aide`—all triggering the same helpful command. This approach scales well as you add support for more languages.
+  </Accordion>
+</Accordions>
+
+---
+
+## Examples
+
+Here are complete examples showing how aliases work in real-world scenarios. These examples demonstrate different use cases and help you understand how to apply aliases effectively in your own bots. Each example shows practical patterns you can adapt for your specific needs.
+
+<Accordions>
+  <Accordion title="Todo Bot with Aliases">
+    A complete todo bot demonstrates how aliases make commands more discoverable and user-friendly. Each command has multiple aliases that accommodate different user preferences and typing styles:
+    
+    ```typescript
+    const bot = Bot.create({
+      commands: {
+        add: {
+          name: 'add',
+          aliases: ['new', 'create', 'a'],
+          description: 'Add a new todo',
+          help: 'Use /add, /new, /create, or /a',
+          async handle(ctx, params) {
+            // Add todo logic...
+          }
+        },
+        
+        list: {
+          name: 'list',
+          aliases: ['ls', 'show', 'all'],
+          description: 'List all todos',
+          help: 'Use /list, /ls, /show, or /all',
+          async handle(ctx) {
+            // List todos logic...
+          }
+        },
+        
+        delete: {
+          name: 'delete',
+          aliases: ['remove', 'rm', 'del', 'd'],
+          description: 'Delete a todo',
+          help: 'Use /delete, /remove, /rm, /del, or /d',
+          async handle(ctx, params) {
+            // Delete logic...
+          }
+        },
+        
+        done: {
+          name: 'done',
+          aliases: ['complete', 'check', 'finish'],
+          description: 'Mark todo as done',
+          help: 'Use /done, /complete, /check, or /finish',
+          async handle(ctx, params) {
+            // Mark done logic...
+          }
+        }
+      }
+    })
+    ```
+    
+    Notice how each command has aliases that serve different purposes: `/ls` for quick typing, `/show` for clarity, `/rm` for Unix users, and `/complete` as a synonym. This variety makes the bot accessible to users with different backgrounds and preferences.
+  </Accordion>
+  
+  <Accordion title="Calculator Bot">
+    A calculator bot shows how aliases work with commands that accept parameters. The aliases make the command more discoverable while maintaining the same parameter handling:
+    
+    ```typescript
+    calculate: {
+      name: 'calculate',
+      aliases: ['calc', 'math', 'compute'],
+      description: 'Perform calculations',
+      help: 'Use /calculate, /calc, /math, or /compute <expression>',
+      async handle(ctx, params) {
+        if (params.length === 0) {
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: '❌ Please provide an expression.\nExample: /calc 2 + 2'
+            }
+          })
+          return
+        }
+        
+        // Calculate logic...
+      }
+    }
+    ```
+    
+    Users can use `/calc`, `/math`, or `/compute`—all work identically. The parameters are parsed the same way regardless of which alias was used, making the command flexible and user-friendly.
+  </Accordion>
+</Accordions>
+
+---
+
+## Aliases vs Separate Commands
+
+Sometimes you might wonder: should I use aliases or create separate commands?
+
+**Use aliases when:**
+- Commands do exactly the same thing
+- You want to provide alternative names for convenience
+- Commands share the same logic
+
+**Create separate commands when:**
+- Commands have different behavior
+- Commands need different parameters
+- Commands should have different help text
+
+### Example: When to Use Separate Commands
+
+```typescript
+// ❌ Don't use aliases for different behaviors
+commands: {
+  start: {
+    name: 'start',
+    aliases: ['stop'], // These do different things!
+    // ...
+  }
+}
+
+// ✅ Use separate commands
+commands: {
+  start: {
+    name: 'start',
+    aliases: ['begin', 'go'],
+    // Start logic...
+  },
+  stop: {
+    name: 'stop',
+    aliases: ['end', 'quit'],
+    // Stop logic...
+  }
+}
+```
+
+---
+
+## Resolving Commands
+
+When a user sends a command, the bot resolves it like this:
+
+1. Check if it's a command name (case-insensitive)
+2. If not found, check if it's an alias (case-insensitive)
+3. If found, execute the handler
+4. If not found, emit an error event
+
+```typescript
+// User sends: /hello
+// Bot checks: 'hello' is an alias for 'greet'
+// Bot executes: greet handler
+
+// User sends: /unknown
+// Bot checks: 'unknown' is not a command or alias
+// Bot emits: COMMAND_NOT_FOUND error
+```
+
+---
+
+## Limitations
+
+Understanding the limitations of aliases helps you make informed decisions about when to use them and when to consider alternatives. These constraints exist by design—they keep the system simple and predictable, but they also mean aliases aren't a solution for every scenario.
+
+<Accordions>
+  <Accordion title="Aliases share the same handler">
+    You can't have different logic for aliases. All aliases for a command execute the exact same handler function, so if you need different behavior for different names, you'll need separate commands instead.
+  </Accordion>
+  
+  <Accordion title="Case-insensitive resolution">
+    `/HELLO` and `/hello` are treated the same. The bot converts all command names and aliases to lowercase before matching, so case variations automatically work as aliases.
+  </Accordion>
+  
+  <Accordion title="No nested aliases">
+    Aliases can't point to other aliases. Each alias must directly reference a command name, not another alias. This keeps the resolution logic simple and prevents circular references.
+  </Accordion>
+</Accordions>
+
+---
+
+## Best Practices
+
+Following these practices helps you create aliases that genuinely improve user experience rather than adding confusion. Good aliases feel natural and predictable, while bad aliases can make your bot harder to use.
+
+<Accordions>
+  <Accordion title="Keep aliases intuitive">
+    Users should be able to guess common aliases. If you have a `/list` command, `/ls` is intuitive. If you have a `/help` command, `/h` is intuitive. Avoid obscure abbreviations that users won't discover naturally.
+  </Accordion>
+  
+  <Accordion title="Document aliases in help">
+    Include aliases in command descriptions and help text. When users see `/help`, they should know that `/h` and `/?` also work. This improves discoverability and reduces support requests.
+  </Accordion>
+  
+  <Accordion title="Don't overuse">
+    Too many aliases can be confusing. Having 10 different ways to trigger the same command doesn't help users—it just makes your command list harder to remember. Aim for 2-4 aliases per command maximum.
+  </Accordion>
+  
+  <Accordion title="Use consistent patterns">
+    Apply similar aliases across related commands. If `/list` has `/ls` as an alias, consider giving `/delete` the `/rm` alias. Consistency helps users learn your bot's patterns faster.
+  </Accordion>
+</Accordions>
+
+---
+
+

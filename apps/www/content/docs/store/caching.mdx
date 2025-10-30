@@ -1,0 +1,530 @@
+---
+title: Caching
+description: Learn how to use the Store for high-performance caching. Store and retrieve data, manage TTL, check key existence, and implement cache patterns.
+---
+
+## Overview
+
+Caching is one of the primary use cases for the Store adapter. It allows you to store frequently accessed data in Redis, dramatically improving response times and reducing load on your database or external APIs. Effective caching can transform slow, database-heavy applications into fast, responsive systems that scale effortlessly.
+
+The Store adapter automatically handles JSON serialization and deserialization, so you can cache complex objects without manual conversion. This makes it easy to cache API responses, database query results, computed values, and any data that's expensive to generate but doesn't change frequently.
+
+---
+
+## Basic Operations
+
+The Store adapter provides four essential operations for caching: storing values, retrieving values, checking key existence, and deleting keys. Understanding these operations forms the foundation of effective caching strategies. Each operation serves a specific purpose in managing your cache effectively.
+
+These basic operations are simple but powerful—they enable you to implement sophisticated caching patterns without complex infrastructure. The adapter handles all the serialization and connection management, so you can focus on what to cache and when.
+
+<Accordions>
+  <Accordion title="Storing Values">
+    Use `set()` to store values in the cache. You can store any serializable value, from simple strings to complex objects. The adapter automatically serializes complex objects to JSON, making it easy to cache structured data.
+    
+    ```typescript
+    handler: async ({ context }) => {
+      // Store a simple value
+      await igniter.store.set('user:123', { name: 'John Doe', email: 'john@example.com' });
+      
+      // Store with TTL (time-to-live) in seconds
+      await igniter.store.set('user:123', userData, { ttl: 3600 }); // Expires in 1 hour
+      
+      return response.success({ message: 'User cached' });
+    }
+    ```
+    
+    Setting values with TTL ensures your cache stays fresh by automatically expiring stale data. Choose TTL values based on how often your data changes—frequently changing data needs shorter TTLs, while stable data can use longer TTLs.
+  </Accordion>
+  
+  <Accordion title="Retrieving Values">
+    Use `get<T>()` to retrieve cached values with automatic deserialization. TypeScript's type inference ensures you get type-safe access to cached data, improving code quality and preventing runtime errors.
+    
+    ```typescript
+    handler: async ({ context, response }) => {
+      // Get with type inference
+      const user = await igniter.store.get<User>('user:123');
+      
+      if (user) {
+        return response.success({ user, source: 'cache' });
+      }
+      
+      // Fetch from database if not cached
+      const userData = await context.db.user.findUnique({ where: { id: '123' } });
+      
+      // Cache for future requests
+      await igniter.store.set('user:123', userData, { ttl: 3600 });
+      
+      return response.success({ user: userData, source: 'database' });
+    }
+    ```
+    
+    Retrieving values is fast—typically under 1ms for cached data. This makes caching perfect for hot paths in your application where every millisecond counts.
+  </Accordion>
+  
+  <Accordion title="Checking Key Existence">
+    Use `has()` to check if a key exists without retrieving its value. This is more efficient than retrieving the value when you only need to know if something is cached. It's useful for conditional caching logic and cache warming strategies.
+    
+    ```typescript
+    handler: async ({ context }) => {
+      const exists = await igniter.store.has('user:123');
+      
+      if (!exists) {
+        // Key doesn't exist, fetch and cache
+        const user = await fetchUser();
+        await igniter.store.set('user:123', user, { ttl: 3600 });
+      }
+    }
+    ```
+    
+    Checking key existence is faster than retrieving values since it doesn't transfer data. Use this when you need to know if something is cached but don't need the actual value yet.
+  </Accordion>
+  
+  <Accordion title="Deleting Keys">
+    Use `delete()` to remove cached entries. Cache invalidation is essential for maintaining data consistency—when source data changes, you need to invalidate related cache entries to prevent serving stale data.
+    
+    ```typescript
+    handler: async ({ context }) => {
+      // Delete a single key
+      await igniter.store.delete('user:123');
+      
+      // Delete after updating data
+      await context.db.user.update({ where: { id: '123' }, data: newData });
+      await igniter.store.delete('user:123'); // Invalidate cache
+    }
+    ```
+    
+    Deleting keys is immediate and essential for cache invalidation strategies. Always invalidate related cache entries when updating source data to prevent serving stale information to users.
+  </Accordion>
+</Accordions>
+
+---
+
+## Cache Patterns
+
+Understanding different caching patterns helps you choose the right approach for your use case. Each pattern has trade-offs between consistency, performance, and complexity. The most common patterns are cache-aside, write-through, and write-behind—each serves different needs in modern applications.
+
+Cache patterns determine when data is written to and read from the cache relative to the source of truth (like your database). Choosing the right pattern ensures your cache improves performance without introducing data consistency issues.
+
+<Accordions>
+  <Accordion title="Cache-Aside Pattern">
+    The most common caching pattern where your application code manages cache operations explicitly. Check cache first, then fetch from source if needed. This pattern gives you full control over caching logic and is easy to understand and debug.
+    
+    ```typescript
+    const getUser = async (id: string, context: AppContext) => {
+      // 1. Check cache
+      const cached = await igniter.store.get<User>(`user:${id}`);
+      if (cached) {
+        return cached;
+      }
+      
+      // 2. Fetch from database
+      const user = await context.db.user.findUnique({ where: { id } });
+      if (!user) {
+        return null;
+      }
+      
+      // 3. Store in cache
+      await igniter.store.set(`user:${id}`, user, { ttl: 3600 });
+      
+      return user;
+    };
+    ```
+    
+    Cache-aside is perfect for read-heavy applications where you want explicit control over caching. It's simple, predictable, and works well for most use cases.
+  </Accordion>
+  
+  <Accordion title="Write-Through Pattern">
+    Write to both cache and database simultaneously, ensuring they're always in sync. This pattern guarantees consistency but requires more coordination between cache and database operations.
+    
+    ```typescript
+    const updateUser = async (id: string, data: Partial<User>, context: AppContext) => {
+      // Update database
+      const user = await context.db.user.update({
+        where: { id },
+        data,
+      });
+      
+      // Update cache
+      await igniter.store.set(`user:${id}`, user, { ttl: 3600 });
+      
+      return user;
+    };
+    ```
+    
+    Write-through is ideal when data consistency is critical and you need the cache to always reflect the latest database state. It ensures cache and database stay synchronized.
+  </Accordion>
+  
+  <Accordion title="Write-Behind Pattern">
+    Write to cache immediately, then asynchronously persist to database. This pattern prioritizes performance over immediate consistency, making writes appear instant to users while background processes handle persistence.
+    
+    ```typescript
+    const createUser = async (data: UserInput, context: AppContext) => {
+      // Create user
+      const user = await context.db.user.create({ data });
+      
+      // Cache immediately
+      await igniter.store.set(`user:${user.id}`, user, { ttl: 3600 });
+      
+      // Async: Schedule background sync (if needed)
+      await igniter.jobs.users.schedule({
+        task: 'syncToSecondary',
+        input: { userId: user.id },
+      });
+      
+      return user;
+    };
+    ```
+    
+    Write-behind is perfect for high-throughput scenarios where write performance is critical. It makes writes appear instant while background jobs handle persistence to secondary systems.
+  </Accordion>
+</Accordions>
+
+---
+
+## TTL Management
+
+Time-to-live (TTL) management is crucial for maintaining fresh cache data. The Store adapter makes it easy to set expiration times when storing values and to update TTL on existing keys. Understanding TTL management helps you balance cache freshness with performance.
+
+TTL ensures your cache doesn't serve stale data indefinitely. Setting appropriate TTL values based on how often your data changes ensures your cache improves performance without sacrificing data accuracy.
+
+### Setting TTL on Set
+
+Set expiration time when storing values:
+
+```typescript
+// Cache for 1 hour
+await igniter.store.set('key', value, { ttl: 3600 });
+
+// Cache for 30 minutes
+await igniter.store.set('key', value, { ttl: 1800 });
+
+// Cache for 1 day
+await igniter.store.set('key', value, { ttl: 86400 });
+```
+
+### Updating TTL
+
+Use `expire()` to update or set TTL on existing keys:
+
+```typescript
+// Set TTL on existing key
+await igniter.store.set('user:123', userData);
+await igniter.store.expire('user:123', 3600); // Extend to 1 hour
+
+// Refresh TTL after access
+const user = await igniter.store.get<User>('user:123');
+if (user) {
+  await igniter.store.expire('user:123', 3600); // Refresh expiration
+}
+```
+
+---
+
+## Key Naming Conventions
+
+Use consistent naming patterns for better organization:
+
+```typescript
+// Entity patterns
+`user:${userId}`                    // Single user
+`users:list`                        // List of users
+`users:list:page:${pageNumber}`    // Paginated list
+
+// Feature-specific patterns
+`session:${sessionId}`              // User session
+`rate:limit:${userId}`              // Rate limiting
+`api:response:${endpoint}`          // API response cache
+
+// Scoped patterns
+`tenant:${tenantId}:user:${userId}` // Multi-tenant
+`env:${env}:key:${key}`             // Environment-specific
+```
+
+<Callout type="info" title="Best Practice">
+  Use colons (`:`) to create hierarchical key names. This makes it easier to identify and manage related keys.
+</Callout>
+
+---
+
+## Advanced Caching Strategies
+
+Advanced caching strategies help you optimize cache performance and efficiency. These strategies address common challenges like cache warming, invalidation, and conditional caching. Understanding these patterns helps you build production-ready caching systems that scale well.
+
+These strategies go beyond basic caching operations to address real-world challenges like cold starts, cache consistency, and performance optimization. They're essential for building high-performance applications that rely heavily on caching.
+
+<Accordions>
+  <Accordion title="Cache Warming">
+    Pre-populate cache on application startup to avoid cold start delays. Cache warming loads frequently accessed data into the cache before users request it, ensuring fast response times from the moment your application starts.
+    
+    ```typescript
+    // On application startup
+    const warmCache = async (context: AppContext) => {
+      const popularUsers = await context.db.user.findMany({
+        where: { isPopular: true },
+        take: 100,
+      });
+      
+      await Promise.all(
+        popularUsers.map(user =>
+          igniter.store.set(`user:${user.id}`, user, { ttl: 3600 })
+        )
+      );
+    };
+    ```
+    
+    Cache warming is especially important for applications with predictable traffic patterns. It ensures your cache is ready before users start making requests, eliminating cold start delays.
+  </Accordion>
+  
+  <Accordion title="Cache Invalidation">
+    Invalidate related cache entries when data changes to maintain consistency. Cache invalidation ensures stale data doesn't persist in your cache after source data updates. This is critical for maintaining data accuracy and user trust.
+    
+    ```typescript
+    const invalidateUserCache = async (userId: string, context: AppContext) => {
+      // Delete specific user cache
+      await igniter.store.delete(`user:${userId}`);
+      
+      // Delete related caches
+      await igniter.store.delete('users:list');
+      await igniter.store.delete(`user:${userId}:posts`);
+      await igniter.store.delete(`user:${userId}:profile`);
+    };
+    ```
+    
+    Cache invalidation is essential for maintaining data consistency. When updating data, always invalidate related cache entries to prevent serving stale information to users.
+  </Accordion>
+  
+  <Accordion title="Conditional Caching">
+    Only cache when conditions are met, such as successful responses or specific data states. Conditional caching helps you avoid caching errors, invalid data, or results that shouldn't be cached.
+    
+    ```typescript
+    const getExpensiveData = async (params: QueryParams, context: AppContext) => {
+      const cacheKey = `data:${JSON.stringify(params)}`;
+      
+      // Check cache
+      const cached = await igniter.store.get<Data>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+      
+      // Fetch expensive data
+      const data = await expensiveOperation(params);
+      
+      // Only cache successful responses
+      if (data.status === 'success') {
+        await igniter.store.set(cacheKey, data, { ttl: 300 });
+      }
+      
+      return data;
+    };
+    ```
+    
+    Conditional caching prevents caching errors or invalid data. Only cache successful results or data that meets your quality criteria to ensure your cache contains useful, accurate information.
+  </Accordion>
+</Accordions>
+
+---
+
+## Data Serialization
+
+The Store adapter automatically handles JSON serialization and deserialization for complex objects. This means you can cache nested objects, arrays, and complex data structures without manual conversion. The adapter handles all the serialization details, making caching straightforward.
+
+Understanding serialization helps you cache complex data structures effectively. While most JavaScript types serialize well, some types like `Date`, `Map`, and `Set` require special handling.
+
+The Store adapter automatically handles JSON serialization:
+
+```typescript
+// Complex objects are automatically serialized
+const complexData = {
+  user: {
+    id: '123',
+    name: 'John',
+    metadata: {
+      preferences: ['theme-dark', 'notifications-on'],
+      lastLogin: new Date(),
+    },
+  },
+  nested: {
+    array: [1, 2, 3],
+    map: new Map([['key', 'value']]),
+  },
+};
+
+// Stored as JSON string in Redis
+await igniter.store.set('complex:data', complexData, { ttl: 3600 });
+
+// Retrieved and automatically parsed
+const retrieved = await igniter.store.get<typeof complexData>('complex:data');
+```
+
+<Callout type="warn" title="Limitations">
+  Some JavaScript types (like `Date`, `Map`, `Set`) need special handling. Consider serializing them manually or using a library like `superjson` for complex types.
+</Callout>
+
+---
+
+## Error Handling
+
+Cache errors shouldn't break your application. Handle cache errors gracefully by falling back to the source of truth (like your database) when cache operations fail. This ensures your application remains functional even when Redis is temporarily unavailable.
+
+Good error handling prevents cache failures from affecting user experience. Always have fallback strategies that allow your application to continue functioning when cache operations fail.
+
+Handle cache errors gracefully:
+
+```typescript
+const getCachedUser = async (id: string, context: AppContext) => {
+  try {
+    const cached = await igniter.store.get<User>(`user:${id}`);
+    if (cached) {
+      return cached;
+    }
+  } catch (error) {
+    // Log error but don't fail - fall back to database
+    context.logger.warn('Cache read failed', { error, key: `user:${id}` });
+  }
+  
+  // Fallback to database
+  return await context.db.user.findUnique({ where: { id } });
+};
+```
+
+---
+
+## Performance Tips
+
+Optimizing cache performance involves choosing appropriate TTL values, using batch operations efficiently, and managing memory carefully. These tips help you get the most out of your cache while avoiding common performance pitfalls.
+
+Good cache performance comes from understanding your data access patterns and optimizing accordingly. These tips address common performance concerns and help you build efficient caching systems.
+
+<Accordions>
+  <Accordion title="Batch Operations">
+    For multiple keys, use parallel requests with `Promise.all()` instead of sequential requests. Parallel requests reduce latency significantly when fetching multiple cached values, making your application more responsive.
+    
+    ```typescript
+    // ❌ Slow: Multiple round trips
+    const user1 = await igniter.store.get('user:1');
+    const user2 = await igniter.store.get('user:2');
+    const user3 = await igniter.store.get('user:3');
+    
+    // ✅ Fast: Use Promise.all (parallel requests)
+    const [user1, user2, user3] = await Promise.all([
+      igniter.store.get('user:1'),
+      igniter.store.get('user:2'),
+      igniter.store.get('user:3'),
+    ]);
+    ```
+    
+    Batch operations dramatically improve performance when fetching multiple cached values. Parallel requests reduce total latency from the sum of individual requests to the longest single request.
+  </Accordion>
+  
+  <Accordion title="Appropriate TTL Values">
+    Choose TTL based on data volatility—frequently changing data needs shorter TTLs, while stable data can use longer TTLs. Matching TTL to data volatility ensures your cache stays fresh without excessive invalidation overhead.
+    
+    ```typescript
+    // Highly volatile data: Short TTL
+    await igniter.store.set('stock:price', price, { ttl: 60 }); // 1 minute
+    
+    // Moderately volatile: Medium TTL
+    await igniter.store.set('user:profile', profile, { ttl: 3600 }); // 1 hour
+    
+    // Stable data: Long TTL
+    await igniter.store.set('config:app', config, { ttl: 86400 }); // 1 day
+    ```
+    
+    Appropriate TTL values balance freshness and performance. Too short TTLs increase database load, while too long TTLs serve stale data. Choose TTL values based on how often your data changes and how fresh it needs to be.
+  </Accordion>
+  
+  <Accordion title="Memory Considerations">
+    Monitor cache size and implement eviction strategies to prevent memory issues. Large cached objects consume significant memory, so use shorter TTLs for large data and implement cleanup strategies for old cache entries.
+    
+    ```typescript
+    // Use shorter TTLs for large objects
+    await igniter.store.set('large:data', largeData, { ttl: 300 }); // 5 minutes
+    
+    // Delete old cache entries periodically
+    const cleanupOldCache = async () => {
+      // Implementation depends on your key naming pattern
+      // Consider using Redis SCAN for pattern-based deletion
+    };
+    ```
+    
+    Memory management is crucial for production caching systems. Monitor cache size, use appropriate TTLs for large objects, and implement cleanup strategies to prevent memory issues.
+  </Accordion>
+</Accordions>
+
+---
+
+## Real-World Examples
+
+These real-world examples demonstrate practical caching patterns you can use in production applications. They show how to cache API responses, manage user sessions, and implement common caching use cases effectively.
+
+Real-world examples help you understand how caching fits into actual applications. These patterns address common scenarios and provide production-ready solutions you can adapt for your own use cases.
+
+<Accordions>
+  <Accordion title="API Response Caching">
+    Cache expensive external API calls to improve response times and reduce load on external services. This pattern checks the cache first, returning cached data when available, and only making external API calls when necessary.
+    
+    ```typescript
+    export const apiController = igniter.controller({
+      path: '/api',
+      actions: {
+        fetchData: igniter.query({
+          handler: async ({ request, context, response }) => {
+            const { endpoint, params } = request.query;
+            const cacheKey = `api:${endpoint}:${JSON.stringify(params)}`;
+            
+            // Check cache
+            const cached = await igniter.store.get<ApiResponse>(cacheKey);
+            if (cached) {
+              return response.success(cached);
+            }
+            
+            // Fetch from external API
+            const data = await fetchExternalApi(endpoint, params);
+            
+            // Cache successful responses
+            if (data.status === 'success') {
+              await igniter.store.set(cacheKey, data, { ttl: 600 });
+            }
+            
+            return response.success(data);
+          },
+        }),
+      },
+    });
+    ```
+    
+    API response caching reduces latency and protects external services from excessive load. It's perfect for data that doesn't change frequently but is expensive to fetch.
+  </Accordion>
+  
+  <Accordion title="Session Management">
+    Store user sessions with automatic expiration. Sessions need to persist across requests but should expire after a period of inactivity. The Store adapter's TTL feature makes session management straightforward.
+    
+    ```typescript
+    const createSession = async (userId: string, context: AppContext) => {
+      const sessionId = generateSessionId();
+      const sessionData = {
+        userId,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 86400000), // 24 hours
+      };
+      
+      await igniter.store.set(`session:${sessionId}`, sessionData, { ttl: 86400 });
+      return sessionId;
+    };
+    
+    const getSession = async (sessionId: string, context: AppContext) => {
+      return await igniter.store.get<SessionData>(`session:${sessionId}`);
+    };
+    
+    const deleteSession = async (sessionId: string, context: AppContext) => {
+      await igniter.store.delete(`session:${sessionId}`);
+    };
+    ```
+    
+    Session management with automatic expiration ensures user sessions don't persist indefinitely. TTL handles expiration automatically, simplifying session lifecycle management.
+  </Accordion>
+</Accordions>
+
+---
+
+

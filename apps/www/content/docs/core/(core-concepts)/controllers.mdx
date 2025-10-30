@@ -1,0 +1,764 @@
+---
+title: Controllers
+description: Learn how to organize actions into logical controllers with shared paths, group related endpoints, and build modular APIs with Igniter.js.
+---
+
+## Overview
+
+**Controllers** group related actions together under a common path prefix. They help you organize your API into logical modules, making it easier to maintain and understand.
+
+```typescript
+import { igniter } from '@/igniter';
+
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    list: igniter.query({ path: '/', handler: ... }),
+    getById: igniter.query({ path: '/:id', handler: ... }),
+    create: igniter.mutation({ path: '/', method: 'POST', handler: ... }),
+    update: igniter.mutation({ path: '/:id', method: 'PUT', handler: ... }),
+    delete: igniter.mutation({ path: '/:id', method: 'DELETE', handler: ... })
+  }
+});
+```
+
+<Callout type="info" title="What is a Controller?">
+  A controller is a collection of **related actions** that share a common **path prefix**. All actions inside a controller automatically inherit the controller's path.
+</Callout>
+
+---
+
+## Creating a Controller
+
+### Basic Controller
+
+```typescript
+import { igniter } from '@/igniter';
+
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    list: igniter.query({
+      path: '/',
+      handler: async ({ context, response }) => {
+        const users = await context.db.users.findMany();
+        return response.success({ users });
+      }
+    })
+  }
+});
+
+// Creates endpoint: GET /users/
+```
+
+### Controller with Multiple Actions
+
+```typescript
+import { igniter } from '@/igniter';
+import { z } from 'zod';
+
+const CreateUserSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email()
+});
+
+const UpdateUserSchema = CreateUserSchema.partial();
+
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    // GET /users/
+    list: igniter.query({
+      path: '/',
+      handler: async ({ context, response }) => {
+        const users = await context.db.users.findMany();
+        return response.success({ users });
+      }
+    }),
+    
+    // GET /users/:id
+    getById: igniter.query({
+      path: '/:id',
+      handler: async ({ request, context, response }) => {
+        const user = await context.db.users.findUnique({
+          where: { id: request.params.id }
+        });
+        
+        if (!user) {
+          return response.notFound({ message: 'User not found' });
+        }
+        
+        return response.success({ user });
+      }
+    }),
+    
+    // POST /users/
+    create: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: CreateUserSchema,
+      handler: async ({ request, context, response }) => {
+        const user = await context.db.users.create({
+          data: request.body
+        });
+        return response.created({ user });
+      }
+    }),
+    
+    // PUT /users/:id
+    update: igniter.mutation({
+      path: '/:id',
+      method: 'PUT',
+      body: UpdateUserSchema,
+      handler: async ({ request, context, response }) => {
+        const user = await context.db.users.update({
+          where: { id: request.params.id },
+          data: request.body
+        });
+        return response.success({ user });
+      }
+    }),
+    
+    // DELETE /users/:id
+    delete: igniter.mutation({
+      path: '/:id',
+      method: 'DELETE',
+      handler: async ({ request, context, response }) => {
+        await context.db.users.delete({
+          where: { id: request.params.id }
+        });
+        return response.success({ message: 'User deleted' });
+      }
+    })
+  }
+});
+```
+
+---
+
+## Controller Configuration
+
+### Path Prefix
+
+The `path` property sets the base path for all actions in the controller:
+
+```typescript
+const postController = igniter.controller({
+  path: '/posts',  // ← Base path
+  actions: {
+    list: igniter.query({ path: '/', ... }),        // → GET /posts/
+    getById: igniter.query({ path: '/:id', ... }),  // → GET /posts/:id
+    create: igniter.mutation({ path: '/', ... })    // → POST /posts/
+  }
+});
+```
+
+<Callout type="success" title="Automatic Path Combination">
+  Controller path (`/posts`) + Action path (`/:id`) = Full route (`/posts/:id`)
+</Callout>
+
+### Name and Description
+
+Add metadata for documentation:
+
+```typescript
+const userController = igniter.controller({
+  name: 'Users',
+  path: '/users',
+  description: 'User management endpoints for authentication and profile data',
+  actions: {
+    // ...
+  }
+});
+```
+
+<TypeTable type={{
+  name: {
+    type: 'string',
+    description: 'Display name for documentation',
+    required: false
+  },
+  path: {
+    type: 'string',
+    description: 'Base path prefix for all actions (e.g., "/users")',
+    required: true
+  },
+  description: {
+    type: 'string',
+    description: 'Controller description for documentation',
+    required: false
+  },
+  actions: {
+    type: 'Record<string, IgniterAction>',
+    description: 'Map of action name to action configuration',
+    required: true
+  }
+}} />
+
+---
+
+## Organizing Controllers
+
+### Feature-Based Organization
+
+Group controllers by feature or domain:
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="features" defaultOpen>
+      <Folder name="users">
+        <File name="user.controller.ts" />
+        <File name="user.service.ts" />
+        <File name="user.schema.ts" />
+      </Folder>
+      <Folder name="posts">
+        <File name="post.controller.ts" />
+        <File name="post.service.ts" />
+        <File name="post.schema.ts" />
+      </Folder>
+      <Folder name="comments">
+        <File name="comment.controller.ts" />
+        <File name="comment.service.ts" />
+        <File name="comment.schema.ts" />
+      </Folder>
+    </Folder>
+    <File name="igniter.ts" />
+    <File name="igniter.router.ts" />
+  </Folder>
+</Files>
+
+```typescript
+// features/users/user.controller.ts
+export const userController = igniter.controller({
+  path: '/users',
+  actions: { /* ... */ }
+});
+
+// features/posts/post.controller.ts
+export const postController = igniter.controller({
+  path: '/posts',
+  actions: { /* ... */ }
+});
+
+// igniter.router.ts
+import { userController } from '@/features/users/user.controller';
+import { postController } from '@/features/posts/post.controller';
+
+export const AppRouter = igniter.router({
+  controllers: {
+    users: userController,
+    posts: postController
+  }
+});
+```
+
+### Nested Paths
+
+Create hierarchical APIs with nested paths:
+
+```typescript
+const postCommentController = igniter.controller({
+  path: '/posts/:postId/comments',
+  actions: {
+    // GET /posts/:postId/comments/
+    list: igniter.query({
+      path: '/',
+      handler: async ({ request, context, response }) => {
+        const comments = await context.db.comments.findMany({
+          where: { postId: request.params.postId }
+        });
+        return response.success({ comments });
+      }
+    }),
+    
+    // POST /posts/:postId/comments/
+    create: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: CreateCommentSchema,
+      handler: async ({ request, context, response }) => {
+        const comment = await context.db.comments.create({
+          data: {
+            ...request.body,
+            postId: request.params.postId
+          }
+        });
+        return response.created({ comment });
+      }
+    }),
+    
+    // GET /posts/:postId/comments/:id
+    getById: igniter.query({
+      path: '/:id',
+      handler: async ({ request, context, response }) => {
+        const comment = await context.db.comments.findUnique({
+          where: { 
+            id: request.params.id,
+            postId: request.params.postId 
+          }
+        });
+        
+        if (!comment) {
+          return response.notFound({ message: 'Comment not found' });
+        }
+        
+        return response.success({ comment });
+      }
+    })
+  }
+});
+```
+
+---
+
+## Common Patterns
+
+### CRUD Controller
+
+A complete CRUD (Create, Read, Update, Delete) controller:
+
+```typescript
+import { igniter } from '@/igniter';
+import { z } from 'zod';
+
+const CreateSchema = z.object({
+  name: z.string(),
+  description: z.string()
+});
+
+const UpdateSchema = CreateSchema.partial();
+
+function createCrudController<T extends string>(resource: T) {
+  return igniter.controller({
+    path: `/${resource}`,
+    actions: {
+      // List all
+      list: igniter.query({
+        path: '/',
+        handler: async ({ context, response }) => {
+          const items = await context.db[resource].findMany();
+          return response.success({ [resource]: items });
+        }
+      }),
+      
+      // Get one by ID
+      getById: igniter.query({
+        path: '/:id',
+        handler: async ({ request, context, response }) => {
+          const item = await context.db[resource].findUnique({
+            where: { id: request.params.id }
+          });
+          
+          if (!item) {
+            return response.notFound({ message: `${resource} not found` });
+          }
+          
+          return response.success({ [resource]: item });
+        }
+      }),
+      
+      // Create new
+      create: igniter.mutation({
+        path: '/',
+        method: 'POST',
+        body: CreateSchema,
+        handler: async ({ request, context, response }) => {
+          const item = await context.db[resource].create({
+            data: request.body
+          });
+          return response.created({ [resource]: item });
+        }
+      }),
+      
+      // Update existing
+      update: igniter.mutation({
+        path: '/:id',
+        method: 'PUT',
+        body: UpdateSchema,
+        handler: async ({ request, context, response }) => {
+          const item = await context.db[resource].update({
+            where: { id: request.params.id },
+            data: request.body
+          });
+          return response.success({ [resource]: item });
+        }
+      }),
+      
+      // Delete
+      delete: igniter.mutation({
+        path: '/:id',
+        method: 'DELETE',
+        handler: async ({ request, context, response }) => {
+          await context.db[resource].delete({
+            where: { id: request.params.id }
+          });
+          return response.success({ message: `${resource} deleted` });
+        }
+      })
+    }
+  });
+}
+
+// Usage
+const productController = createCrudController('products');
+const categoryController = createCrudController('categories');
+```
+
+### Search & Filter Controller
+
+```typescript
+const SearchSchema = z.object({
+  q: z.string().min(1),
+  category: z.string().optional(),
+  minPrice: z.coerce.number().optional(),
+  maxPrice: z.coerce.number().optional(),
+  sortBy: z.enum(['price', 'date', 'name']).default('date'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20)
+});
+
+const productController = igniter.controller({
+  path: '/products',
+  actions: {
+    search: igniter.query({
+      path: '/search',
+      query: SearchSchema,
+      handler: async ({ request, context, response }) => {
+        const { q, category, minPrice, maxPrice, sortBy, order, page, limit } = request.query;
+        const skip = (page - 1) * limit;
+        
+        const [products, total] = await Promise.all([
+          context.db.products.findMany({
+            where: {
+              name: { contains: q, mode: 'insensitive' },
+              category: category,
+              price: {
+                gte: minPrice,
+                lte: maxPrice
+              }
+            },
+            orderBy: { [sortBy]: order },
+            skip,
+            take: limit
+          }),
+          context.db.products.count({
+            where: {
+              name: { contains: q, mode: 'insensitive' },
+              category: category
+            }
+          })
+        ]);
+        
+        return response.success({
+          products,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit)
+          }
+        });
+      }
+    })
+  }
+});
+```
+
+### Protected Controller
+
+Apply authentication to all actions in a controller:
+
+```typescript
+const authProcedure = igniter.procedure({
+  handler: async ({ context, request }) => {
+    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+    
+    const user = await verifyToken(token);
+    
+    return {
+      currentUser: user
+    };
+  }
+});
+
+const protectedController = igniter.controller({
+  path: '/protected',
+  actions: {
+    getData: igniter.query({
+      path: '/data',
+      use: [authProcedure],
+      handler: async ({ context, response }) => {
+        return response.success({
+          message: `Hello, ${context.currentUser.name}`
+        });
+      }
+    }),
+    
+    getSettings: igniter.query({
+      path: '/settings',
+      use: [authProcedure],
+      handler: async ({ context, response }) => {
+        const settings = await context.db.settings.findUnique({
+          where: { userId: context.currentUser.id }
+        });
+        return response.success({ settings });
+      }
+    })
+  }
+});
+```
+
+---
+
+## Versioned Controllers
+
+Create multiple versions of the same controller:
+
+```typescript
+// v1/user.controller.ts
+export const userControllerV1 = igniter.controller({
+  path: '/v1/users',
+  actions: {
+    list: igniter.query({
+      path: '/',
+      handler: async ({ context, response }) => {
+        // Old implementation
+        const users = await context.db.users.findMany({
+          select: { id: true, name: true, email: true }
+        });
+        return response.success({ users });
+      }
+    })
+  }
+});
+
+// v2/user.controller.ts
+export const userControllerV2 = igniter.controller({
+  path: '/v2/users',
+  actions: {
+    list: igniter.query({
+      path: '/',
+      handler: async ({ context, response }) => {
+        // New implementation with additional fields
+        const users = await context.db.users.findMany({
+          select: { 
+            id: true, 
+            name: true, 
+            email: true,
+            avatar: true,        // ← New field
+            createdAt: true,     // ← New field
+            role: true           // ← New field
+          }
+        });
+        return response.success({ users });
+      }
+    })
+  }
+});
+
+// Router
+export const AppRouter = igniter.router({
+  controllers: {
+    usersV1: userControllerV1,  // /v1/users
+    usersV2: userControllerV2   // /v2/users
+  }
+});
+```
+
+---
+
+## Best Practices
+
+### 1. Group by Domain
+
+Organize controllers by business domain, not technical layers:
+
+```typescript
+// ✅ Good - Domain-based
+const userController = igniter.controller({ path: '/users', ... });
+const postController = igniter.controller({ path: '/posts', ... });
+const commentController = igniter.controller({ path: '/comments', ... });
+
+// ❌ Bad - Layer-based
+const readController = igniter.controller({ path: '/read', ... });
+const writeController = igniter.controller({ path: '/write', ... });
+```
+
+### 2. Keep Controllers Focused
+
+Each controller should handle one resource or feature:
+
+```typescript
+// ✅ Good - Single responsibility
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    list: ...,
+    getById: ...,
+    create: ...,
+    update: ...,
+    delete: ...
+  }
+});
+
+// ❌ Bad - Mixed responsibilities
+const apiController = igniter.controller({
+  path: '/api',
+  actions: {
+    getUsers: ...,
+    getPosts: ...,
+    getComments: ...,
+    createUser: ...,
+    createPost: ...
+  }
+});
+```
+
+### 3. Use Consistent Naming
+
+Follow RESTful conventions for action names:
+
+```typescript
+const resourceController = igniter.controller({
+  path: '/resources',
+  actions: {
+    list: igniter.query({ path: '/', ... }),           // GET /resources
+    getById: igniter.query({ path: '/:id', ... }),     // GET /resources/:id
+    create: igniter.mutation({ method: 'POST', ... }), // POST /resources
+    update: igniter.mutation({ method: 'PUT', ... }),  // PUT /resources/:id
+    delete: igniter.mutation({ method: 'DELETE', ... }) // DELETE /resources/:id
+  }
+});
+```
+
+### 4. Extract Shared Logic
+
+Use procedures for shared validation or authorization:
+
+```typescript
+const adminOnlyProcedure = igniter.procedure({
+  handler: async ({ context }) => {
+    if (!context.user?.isAdmin) {
+      throw new Error('Admin access required');
+    }
+    return {};
+  }
+});
+
+const adminController = igniter.controller({
+  path: '/admin',
+  actions: {
+    getUsers: igniter.query({
+      use: [adminOnlyProcedure],
+      handler: ...
+    }),
+    deleteUser: igniter.mutation({
+      use: [adminOnlyProcedure],
+      handler: ...
+    })
+  }
+});
+```
+
+---
+
+## Testing Controllers
+
+### Unit Tests
+
+Test individual actions:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { AppRouter } from '@/igniter.router';
+
+describe('User Controller', () => {
+  it('should list all users', async () => {
+    const result = await AppRouter.caller.users.list.query();
+    
+    expect(result.data.users).toBeInstanceOf(Array);
+  });
+
+  it('should get user by ID', async () => {
+    const result = await AppRouter.caller.users.getById.query({ id: '1' });
+    
+    expect(result.data.user).toBeDefined();
+    expect(result.data.user.id).toBe('1');
+  });
+
+  it('should create a user', async () => {
+    const result = await AppRouter.caller.users.create.mutate({
+      body: {
+        name: 'Test User',
+        email: 'test@example.com'
+      }
+    });
+    
+    expect(result.data.user.name).toBe('Test User');
+  });
+});
+```
+
+### Integration Tests
+
+Test full request flow:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+
+describe('User API Integration', () => {
+  it('should handle user lifecycle', async () => {
+    // Create
+    const created = await AppRouter.caller.users.create.mutate({
+      body: { name: 'John', email: 'john@example.com' }
+    });
+    const userId = created.data.user.id;
+    
+    // Read
+    const read = await AppRouter.caller.users.getById.query({ id: userId });
+    expect(read.data.user.name).toBe('John');
+    
+    // Update
+    const updated = await AppRouter.caller.users.update.mutate({
+      params: { id: userId },
+      body: { name: 'Jane' }
+    });
+    expect(updated.data.user.name).toBe('Jane');
+    
+    // Delete
+    await AppRouter.caller.users.delete.mutate({ params: { id: userId } });
+    
+    // Verify deletion
+    await expect(
+      AppRouter.caller.users.getById.query({ id: userId })
+    ).rejects.toThrow();
+  });
+});
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Actions" href="/docs/actions">
+    Deep dive into queries and mutations
+  </Card>
+  
+  <Card title="Procedures" href="/docs/procedures">
+    Add middleware to your actions
+  </Card>
+  
+  <Card title="Validation" href="/docs/validation">
+    Master schema validation
+  </Card>
+  
+  <Card title="Router" href="/docs/router">
+    Assemble controllers into a router
+  </Card>
+</Cards>

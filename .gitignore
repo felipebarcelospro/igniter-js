@@ -77,6 +77,7 @@ web_modules/
 
 # Yarn Integrity file
 .yarn-integrity
+.playwright-mcp
 
 # dotenv environment variable files
 .env

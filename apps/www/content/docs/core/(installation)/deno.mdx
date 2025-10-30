@@ -1,0 +1,440 @@
+---
+title: Deno
+description: Build secure, type-safe APIs with Igniter.js and Deno, the modern JavaScript runtime built for security and productivity.
+---
+
+Deno is a modern JavaScript runtime that prioritizes security, developer experience, and web standards. When combined with Igniter.js, you get a secure-by-default environment with native TypeScript support, built-in testing, and automatic code formatting—all without configuration.
+
+This guide shows you how to build production-ready APIs with Deno and Igniter.js. You'll experience Deno's security model with granular permissions, standard library utilities, and native TypeScript execution, all while maintaining Igniter.js's type-safe controllers and automatic API documentation.
+
+<Callout type="info" title="Secure by Default">
+  Deno + Igniter.js provides security-first development. Deno requires explicit permissions for file system, network, and environment access—perfect for production deployments.
+</Callout>
+
+---
+
+## Quick Start
+
+The fastest way to start is using Deno's native TypeScript support:
+
+```bash
+# Clone the starter template
+git clone https://github.com/igniter-js/starter-deno-rest-api my-app
+cd my-app
+
+# Install dependencies (if using npm packages)
+deno install
+
+# Run with development permissions
+deno task dev
+```
+
+Your API runs at `http://localhost:8000/api/v1`, and interactive docs at `http://localhost:8000/api/v1/docs` 🚀
+
+---
+
+## Manual Setup
+
+Follow this guide to add Igniter.js to an existing Deno project or understand how everything works.
+
+### Prerequisites
+
+Before you begin, ensure you have:
+- **Deno** 1.40+ ([install here](https://deno.land))
+- Basic knowledge of TypeScript
+
+### Step 1: Initialize Deno Project
+
+Create a new directory and initialize with `deno.json`:
+
+```json title="deno.json"
+{
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env --allow-read --watch src/index.ts",
+    "start": "deno run --allow-net --allow-env --allow-read src/index.ts"
+  },
+  "compilerOptions": {
+    "lib": ["deno.window"],
+    "strict": true
+  },
+  "imports": {
+    "@/": "./src/",
+    "@igniter-js/core": "npm:@igniter-js/core@latest",
+    "zod": "npm:zod@latest"
+  }
+}
+```
+
+Deno's import map allows you to use npm packages seamlessly with native Deno modules.
+
+### Step 2: Define Application Context
+
+The context defines dependencies available throughout your API. Create `src/igniter.context.ts`:
+
+```typescript title="src/igniter.context.ts"
+/**
+ * Application Context Type
+ * Defines what dependencies are available to all API handlers
+ */
+export interface AppContext {
+  // Add your dependencies here, e.g.:
+  // db: Database
+  // cache: KvStore
+}
+
+/**
+ * Context Factory
+ * Creates the context instance passed to handlers
+ */
+export function createIgniterAppContext(): AppContext {
+  return {
+    // Initialize dependencies here
+  }
+}
+```
+
+### Step 3: Initialize Igniter.js
+
+Create the main Igniter instance. Create `src/igniter.ts`:
+
+```typescript title="src/igniter.ts"
+import { Igniter } from '@igniter-js/core'
+import { createIgniterAppContext } from './igniter.context.ts'
+
+export const igniter = Igniter
+  .context(createIgniterAppContext())
+  .config({
+    baseURL: Deno.env.get('IGNITER_API_URL') || 'http://localhost:8000',
+    basePATH: Deno.env.get('IGNITER_API_BASE_PATH') || '/api/v1',
+  })
+  .docs({
+    info: {
+      title: 'My Deno API',
+      version: '1.0.0',
+      description: 'Secure API built with Deno and Igniter.js',
+    }
+  })
+  .create()
+```
+
+Note: Deno uses `Deno.env.get()` for environment variables with explicit `--allow-env` permission.
+
+### Step 4: Create Your First Controller
+
+Controllers group related endpoints. Create `src/features/example/controllers/example.controller.ts`:
+
+```typescript title="src/features/example/controllers/example.controller.ts"
+import { igniter } from '@/igniter.ts'
+
+export const exampleController = igniter.controller({
+  name: 'Example',
+  path: '/example',
+  actions: {
+    hello: igniter.query({
+      path: '/hello',
+      handler: async ({ response }) => {
+        return response.success({ 
+          message: 'Hello from Igniter.js with Deno! 🦕',
+          timestamp: new Date().toISOString(),
+          runtime: 'Deno',
+          version: Deno.version.deno
+        })
+      },
+    }),
+  },
+})
+```
+
+Create barrel export at `src/features/example/index.ts`:
+
+```typescript title="src/features/example/index.ts"
+export * from './controllers/example.controller.ts'
+```
+
+This creates `GET /api/v1/example/hello` with fully typed responses.
+
+### Step 5: Create Application Router
+
+The router assembles all controllers. Create `src/igniter.router.ts`:
+
+```typescript title="src/igniter.router.ts"
+import { igniter } from './igniter.ts'
+import { exampleController } from './features/example/index.ts'
+
+export const AppRouter = igniter.router({
+  controllers: {
+    example: exampleController
+  }
+})
+
+export type AppRouterType = typeof AppRouter
+```
+
+### Step 6: Set Up Deno Server
+
+Deno has a built-in HTTP server based on web standards. Create `src/index.ts`:
+
+```typescript title="src/index.ts"
+import { serve } from 'https://deno.land/std@0.203.0/http/server.ts'
+import { AppRouter } from './igniter.router.ts'
+
+const handler = (req: Request) => {
+  const url = new URL(req.url)
+  const IGNITER_API_BASE_PATH = Deno.env.get('IGNITER_API_BASE_PATH') || '/api/v1'
+
+  // Route to Igniter.js
+  if (url.pathname.startsWith(IGNITER_API_BASE_PATH)) {
+    return AppRouter.handler(req)
+  }
+
+  return new Response('Not Found', { status: 404 })
+}
+
+const port = 8000
+
+serve(handler, { port })
+
+console.log(`🚀 Server running at http://localhost:${port}/`)
+```
+
+Deno's `serve` function uses the standard `Request` and `Response` APIs—no framework needed!
+
+### Step 7: Run with Permissions
+
+Deno requires explicit permissions. Run your server:
+
+```bash
+# Development with auto-reload
+deno task dev
+
+# Or run directly
+deno run --allow-net --allow-env --allow-read --watch src/index.ts
+```
+
+Permissions explained:
+- `--allow-net`: Network access for HTTP server
+- `--allow-env`: Read environment variables
+- `--allow-read`: Read files (for static assets, configs)
+- `--watch`: Auto-reload on file changes
+
+---
+
+## Deno-Specific Features
+
+### Native TypeScript
+
+Deno runs TypeScript natively—no build step required. File extensions are mandatory:
+
+```typescript
+// Always include .ts extension
+import { igniter } from './igniter.ts'
+import type { User } from './types.ts'
+```
+
+### Environment Variables
+
+Create `.env` file and load with `--env` flag:
+
+```bash title=".env"
+IGNITER_API_BASE_PATH=/api/v1
+IGNITER_API_URL=http://localhost:8000
+DATABASE_URL=postgresql://localhost/mydb
+```
+
+Access via `Deno.env.get()`:
+
+```typescript
+const dbUrl = Deno.env.get('DATABASE_URL')
+```
+
+Or use the `--env` flag:
+
+```bash
+deno run --env --allow-net --allow-env src/index.ts
+```
+
+### Deno KV (Built-in Database)
+
+Deno includes a built-in key-value database:
+
+```typescript title="src/igniter.context.ts"
+export async function createIgniterAppContext() {
+  const kv = await Deno.openKv()
+  
+  return {
+    db: kv
+  }
+}
+```
+
+Use it in controllers:
+
+```typescript
+const result = await context.db.get(['users', userId])
+await context.db.set(['users', userId], userData)
+```
+
+### Standard Library
+
+Deno's standard library provides utilities without npm:
+
+```typescript
+// File system
+import { ensureDir } from 'https://deno.land/std@0.203.0/fs/mod.ts'
+
+// HTTP server
+import { serve } from 'https://deno.land/std@0.203.0/http/server.ts'
+
+// Testing
+import { assertEquals } from 'https://deno.land/std@0.203.0/assert/mod.ts'
+```
+
+---
+
+## Type-Safe Client
+
+Create a type-safe client for consuming your API. Create `src/igniter.client.ts`:
+
+```typescript title="src/igniter.client.ts"
+import { createIgniterClient } from '@igniter-js/core/client'
+import type { AppRouterType } from './igniter.router.ts'
+
+export const api = createIgniterClient<AppRouterType>({
+  baseURL: Deno.env.get('IGNITER_API_URL') || 'http://localhost:8000',
+  basePATH: Deno.env.get('IGNITER_API_BASE_PATH') || '/api/v1',
+  router: () => {
+    // Dynamic import for Deno
+    return import('./igniter.router.ts').then(m => m.AppRouter)
+  },
+})
+
+export type ApiClient = typeof api
+```
+
+Use it anywhere:
+
+```typescript
+// Fully typed, secure by default
+const { message, version } = await api.example.hello.query()
+```
+
+---
+
+## Testing with Deno
+
+Deno has built-in testing—no additional packages needed:
+
+```typescript title="src/features/example/example.test.ts"
+import { assertEquals } from 'https://deno.land/std@0.203.0/assert/mod.ts'
+import { api } from '@/igniter.client.ts'
+
+Deno.test('Example controller returns hello message', async () => {
+  const result = await api.example.hello.query()
+  
+  assertEquals(result.runtime, 'Deno')
+  assertEquals(typeof result.version, 'string')
+})
+```
+
+Run tests:
+
+```bash
+deno test --allow-net --allow-env
+```
+
+---
+
+## Igniter Studio (API Playground)
+
+Igniter.js includes an interactive API playground called **Igniter Studio**. It's automatically available at `/api/v1/docs` when you configure the `.docs()` method.
+
+To access it:
+
+1. Start your dev server: `deno task dev`
+2. Navigate to `http://localhost:8000/api/v1/docs`
+3. You'll see an interactive interface where you can:
+   - Browse all API endpoints
+   - View request/response schemas
+   - Test endpoints directly
+   - See auto-generated examples
+
+The playground updates automatically as you add endpoints.
+
+---
+
+## Production Deployment
+
+### Deno Deploy
+
+Deploy to Deno's edge network with zero configuration:
+
+```bash
+# Install Deno Deploy CLI
+deno install --allow-all --no-check -r -f https://deno.land/x/deploy/deployctl.ts
+
+# Deploy your project
+deployctl deploy --project=my-api src/index.ts
+```
+
+### Docker
+
+Create a `Dockerfile`:
+
+```dockerfile
+FROM denoland/deno:1.40.0
+
+WORKDIR /app
+COPY . .
+
+RUN deno cache src/index.ts
+
+EXPOSE 8000
+
+CMD ["deno", "run", "--allow-net", "--allow-env", "--allow-read", "src/index.ts"]
+```
+
+---
+
+## Project Structure
+
+Here's the recommended structure:
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="features">
+      <Folder name="example">
+        <Folder name="controllers">
+          <File name="example.controller.ts" />
+        </Folder>
+        <File name="index.ts" />
+      </Folder>
+    </Folder>
+    <Folder name="docs">
+      <File name="openapi.json" />
+    </Folder>
+    <File name="index.ts" />
+    <File name="igniter.ts" />
+    <File name="igniter.context.ts" />
+    <File name="igniter.router.ts" />
+    <File name="igniter.client.ts" />
+    <File name="igniter.schema.ts" />
+  </Folder>
+  <File name="deno.json" />
+  <File name=".env" />
+</Files>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Core Concepts" href="/docs/builder">
+    Learn about Builder, Router, and Controllers
+  </Card>
+  <Card title="Actions" href="/docs/actions">
+    Create queries and mutations with validation
+  </Card>
+  <Card title="Deno KV" href="/docs/storage">
+    Use Deno's built-in database
+  </Card>
+</Cards>

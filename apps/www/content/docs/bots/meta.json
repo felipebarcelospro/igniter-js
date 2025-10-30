@@ -1,0 +1,22 @@
+{
+  "title": "Bots",
+  "root": true,
+  "pages": [
+    "---Getting Started---",
+    "index",
+    "...(getting-started)",
+    "---Adapters---",
+    "...(adapters)",
+    "---Commands---",
+    "...(commands)",
+    "---Middleware---",
+    "...(middleware)",
+    "---Message Handling---",
+    "...(messages)",
+    "---Advanced---",
+    "...(advanced)",
+    "---API Reference---",
+    "api-reference",
+    "types"
+  ]
+}

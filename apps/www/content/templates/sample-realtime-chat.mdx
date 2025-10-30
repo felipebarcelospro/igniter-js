@@ -1,0 +1,172 @@
+---
+title: "Real-Time Chat App"
+description: "A full-featured real-time chat application built with Next.js and Prisma, showcasing Igniter.js's SSE-based real-time features for instant updates."
+framework: "Next.js"
+cover: "/templates/bun-base-template.png"
+demo: "https://igniter-js-sample-realtime-chat.vercel.app/"
+repository: "https://github.com/felipebarcelospro/igniter-js/tree/main/apps/sample-realtime-chat"
+stack: ["Next.js", "TypeScript", "Prisma", "PostgreSQL", "Tailwind CSS", "WebSockets"]
+useCases: ["Full-Stack", "Real-Time"]
+creator:
+  username: "felipebarcelospro"
+---
+
+## Overview
+
+This template provides a production-ready real-time chat application, demonstrating how to build interactive experiences with Igniter.js, Next.js, and Prisma. It's designed for developers looking to implement real-time features with end-to-end type safety.
+
+## Features
+
+- ✅ **Real-Time Chat**: Functional chat with instant message delivery.
+- ✅ **Next.js App Router**: Utilizes the latest Next.js conventions for modern web development.
+- ✅ **End-to-End Type Safety**: Ensures type consistency from frontend components to backend API with Igniter.js.
+- ✅ **Feature-Based Architecture**: Organizes code by business domain for scalability and maintainability.
+- ✅ **Database Ready**: Integrated with Prisma for seamless PostgreSQL database management.
+- ✅ **WebSockets**: Real-time communication powered by a simple WebSocket implementation.
+- ✅ **UI Components**: Includes `shadcn/ui` for a head start on building beautiful interfaces.
+
+## Project Structure
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="app">
+      <Folder name="api">
+        <Folder name="[[...all]]">
+          <File name="route.ts" />
+        </Folder>
+      </Folder>
+      <File name="layout.tsx" />
+    </Folder>
+    <Folder name="components" />
+    <Folder name="features">
+      <Folder name="message">
+        <Folder name="controllers" />
+        <Folder name="presentation" />
+      </Folder>
+    </Folder>
+    <Folder name="services" />
+    <File name="igniter.ts" />
+    <File name="igniter.client.ts" />
+    <File name="igniter.router.ts" />
+  </Folder>
+</Files>
+
+## Quick Start
+
+<Steps>
+  <Step>
+    ### Clone the Repository
+    ```bash
+    git clone https://github.com/felipebarcelospro/igniter-js.git
+    cd igniter-js/apps/sample-realtime-chat
+    ```
+  </Step>
+  
+  <Step>
+    ### Install Dependencies
+    <Tabs items={['bun', 'npm', 'pnpm', 'yarn']} groupId="package-manager">
+      <Tab value="bun">
+        ```bash
+        bun install
+        ```
+      </Tab>
+      <Tab value="npm">
+        ```bash
+        npm install
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm install
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn install
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step>
+    ### Configure Environment Variables
+    Create a `.env` file in the root of the project and add your database connection URL:
+    ```bash
+    # .env
+    DATABASE_URL="postgresql://user:password@localhost:5432/mydatabase?schema=public"
+    ```
+  </Step>
+  
+  <Step>
+    ### Run Database Migrations
+    ```bash
+    bun prisma db push
+    ```
+  </Step>
+  
+  <Step>
+    ### Run the Development Server
+    ```bash
+    bun dev
+    ```
+    Your application will be available at `http://localhost:3000`.
+  </Step>
+</Steps>
+
+<Callout type="info">
+  Ensure you have Node.js (v18 or higher) and Bun installed, and a PostgreSQL database running.
+</Callout>
+
+## Key Features Explained
+
+### Next.js API Route Handler
+
+The API entry point is `src/app/api/[[...all]]/route.ts`, which uses `nextRouteHandlerAdapter` from Igniter.js to expose the API.
+
+```typescript
+// src/app/api/[[...all]]/route.ts
+import { AppRouter } from '@/igniter.router'
+import { nextRouteHandlerAdapter } from '@igniter-js/core/adapters'
+
+export const { GET, POST, PUT, DELETE } = nextRouteHandlerAdapter(AppRouter)
+```
+
+### Igniter.js API Layer
+
+Backend logic is defined using Igniter.js:
+- **Initialization (`src/igniter.ts`)**: Core Igniter instance.
+- **Router (`src/igniter.router.ts`)**: Defines all API controllers.
+- **Controllers (`src/features/[feature]/controllers/`)**: Group related API actions (queries and mutations).
+
+### Type-Safe Client & React Hooks
+
+Igniter.js automatically generates a type-safe client (`src/igniter.client.ts`) for seamless interaction with your backend from both Server and Client Components.
+
+**Server Component Usage:**
+```tsx
+// app/some-server-page/page.tsx
+import { api } from '@/igniter.client';
+
+export default async function SomePage() {
+  const data = await api.example.health.query();
+  return <div>Status: {data.status}</div>;
+}
+```
+
+**Client Component Usage:**
+```tsx
+// components/SomeClientComponent.tsx
+'use client';
+import { api } from '@/igniter.client';
+
+export function SomeClientComponent() {
+  const { data, isLoading } = api.example.health.useQuery();
+
+  if (isLoading) return <div>Loading...</div>;
+  return <div>Status: {data?.status}</div>;
+}
+```
+
+## Deployment
+
+This template is designed for easy deployment to platforms like Vercel. Follow the quick start guide and then deploy your Next.js application.

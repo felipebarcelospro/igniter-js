@@ -1,0 +1,487 @@
+---
+title: API Reference
+description: Complete API reference for the Store adapter. Detailed documentation of all methods, types, and interfaces.
+---
+
+## Overview
+
+This document provides a complete reference for the Store adapter API. All methods are type-safe and return Promises for asynchronous operations.
+
+---
+
+## IgniterStoreAdapter Interface
+
+The Store adapter implements the `IgniterStoreAdapter` interface, which provides a unified API for various storage backends.
+
+```typescript
+interface IgniterStoreAdapter<TClient extends unknown = unknown> {
+  readonly client: TClient;
+  
+  // Key-Value Operations
+  get<T = any>(key: string): Promise<T | null>;
+  set(key: string, value: any, options?: KeyValueOptions): Promise<void>;
+  delete(key: string): Promise<void>;
+  has(key: string): Promise<boolean>;
+  
+  // Atomic Operations
+  increment(key: string): Promise<number>;
+  expire(key: string, ttl: number): Promise<void>;
+  
+  // Pub/Sub Operations
+  publish(channel: string, message: any): Promise<void>;
+  subscribe(channel: string, callback: EventCallback): Promise<void>;
+  unsubscribe(channel: string, callback?: EventCallback): Promise<void>;
+}
+```
+
+---
+
+## Key-Value Operations
+
+### `get<T>(key: string): Promise<T | null>`
+
+Retrieves a value from the store by its key. The value is automatically deserialized from JSON.
+
+**Parameters:**
+- `key` (string): The key to retrieve
+
+**Returns:** `Promise<T | null>` - The deserialized value, or `null` if the key doesn't exist
+
+**Example:**
+```typescript
+const user = await igniter.store.get<User>('user:123');
+if (user) {
+  console.log(user.name);
+}
+```
+
+**Type Safety:**
+```typescript
+// TypeScript infers the return type
+const user = await igniter.store.get<User>('user:123');
+// user is typed as User | null
+```
+
+---
+
+### `set(key: string, value: any, options?: KeyValueOptions): Promise<void>`
+
+Stores a value in the store. The value is automatically serialized to JSON.
+
+**Parameters:**
+- `key` (string): The key to store the value under
+- `value` (any): The value to store (must be JSON-serializable)
+- `options` (optional): Configuration options
+  - `ttl` (number): Time-to-live in seconds
+
+**Returns:** `Promise<void>`
+
+**Example:**
+```typescript
+// Store without TTL
+await igniter.store.set('user:123', { name: 'John', email: 'john@example.com' });
+
+// Store with TTL (expires in 1 hour)
+await igniter.store.set('user:123', userData, { ttl: 3600 });
+```
+
+**Serialization:**
+```typescript
+// Complex objects are automatically serialized
+const data = {
+  nested: { value: 123 },
+  array: [1, 2, 3],
+  date: new Date(), // Will be serialized as ISO string
+};
+
+await igniter.store.set('complex:data', data);
+```
+
+---
+
+### `delete(key: string): Promise<void>`
+
+Deletes a key from the store.
+
+**Parameters:**
+- `key` (string): The key to delete
+
+**Returns:** `Promise<void>`
+
+**Example:**
+```typescript
+await igniter.store.delete('user:123');
+```
+
+---
+
+### `has(key: string): Promise<boolean>`
+
+Checks if a key exists in the store without retrieving its value. More efficient than `get()` when you only need to check existence.
+
+**Parameters:**
+- `key` (string): The key to check
+
+**Returns:** `Promise<boolean>` - `true` if the key exists, `false` otherwise
+
+**Example:**
+```typescript
+const exists = await igniter.store.has('user:123');
+if (!exists) {
+  // Key doesn't exist, fetch and cache
+  const user = await fetchUser();
+  await igniter.store.set('user:123', user);
+}
+```
+
+---
+
+## Atomic Operations
+
+### `increment(key: string): Promise<number>`
+
+Atomically increments a numeric value stored at a key. If the key doesn't exist, it's initialized to 0 before incrementing.
+
+**Parameters:**
+- `key` (string): The key to increment
+
+**Returns:** `Promise<number>` - The new value after incrementing
+
+**Example:**
+```typescript
+// First call: returns 1 (key didn't exist, initialized to 0, then incremented)
+const count = await igniter.store.increment('page:views');
+
+// Second call: returns 2
+const newCount = await igniter.store.increment('page:views');
+```
+
+**Use Cases:**
+- Page view counters
+- Rate limiting
+- Request counting
+- Feature usage tracking
+
+---
+
+### `expire(key: string, ttl: number): Promise<void>`
+
+Sets or updates the time-to-live (TTL) on a key. If the key doesn't exist, the operation has no effect.
+
+**Parameters:**
+- `key` (string): The key to set expiration on
+- `ttl` (number): Time-to-live in seconds
+
+**Returns:** `Promise<void>`
+
+**Example:**
+```typescript
+// Set TTL on existing key
+await igniter.store.set('user:123', userData);
+await igniter.store.expire('user:123', 3600); // Expires in 1 hour
+
+// Update TTL
+await igniter.store.expire('user:123', 7200); // Extend to 2 hours
+```
+
+**Common Patterns:**
+```typescript
+// Set expiration on first increment
+const count = await igniter.store.increment('counter');
+if (count === 1) {
+  await igniter.store.expire('counter', 3600);
+}
+
+// Refresh expiration on access
+const value = await igniter.store.get('key');
+if (value) {
+  await igniter.store.expire('key', 3600); // Refresh TTL
+}
+```
+
+---
+
+## Pub/Sub Operations
+
+### `publish(channel: string, message: any): Promise<void>`
+
+Publishes a message to a specific channel. The message is automatically serialized to JSON.
+
+**Parameters:**
+- `channel` (string): The channel to publish the message to
+- `message` (any): The message to publish (must be JSON-serializable)
+
+**Returns:** `Promise<void>`
+
+**Example:**
+```typescript
+await igniter.store.publish('notifications', {
+  userId: '123',
+  message: 'You have a new notification',
+  timestamp: new Date().toISOString(),
+});
+```
+
+**Channel Naming:**
+```typescript
+// Use descriptive channel names
+await igniter.store.publish('user:created', userData);
+await igniter.store.publish('order:status:changed', orderData);
+await igniter.store.publish('tenant:123:events', eventData);
+```
+
+---
+
+### `subscribe(channel: string, callback: EventCallback): Promise<void>`
+
+Subscribes to a channel to receive messages. Multiple callbacks can be registered for the same channel.
+
+**Parameters:**
+- `channel` (string): The channel to subscribe to
+- `callback` (EventCallback): The function to execute when a message is received
+
+**Returns:** `Promise<void>`
+
+**EventCallback Type:**
+```typescript
+type EventCallback = (message: any) => void | Promise<void>;
+```
+
+**Example:**
+```typescript
+await igniter.store.subscribe('notifications', async (message) => {
+  console.log('Received notification:', message);
+  
+  // Process the notification
+  await processNotification(message);
+});
+```
+
+**Multiple Subscribers:**
+```typescript
+// Multiple callbacks can subscribe to the same channel
+await igniter.store.subscribe('events', callback1);
+await igniter.store.subscribe('events', callback2);
+await igniter.store.subscribe('events', callback3);
+
+// All callbacks will receive all messages published to 'events'
+```
+
+---
+
+### `unsubscribe(channel: string, callback?: EventCallback): Promise<void>`
+
+Unsubscribes from a channel. If a callback is provided, only that specific callback is removed. Otherwise, all callbacks for that channel are removed.
+
+**Parameters:**
+- `channel` (string): The channel to unsubscribe from
+- `callback` (optional): Specific callback to remove. If not provided, all callbacks are removed.
+
+**Returns:** `Promise<void>`
+
+**Example:**
+```typescript
+// Define callback
+const handleNotification = async (message: any) => {
+  await processNotification(message);
+};
+
+// Subscribe
+await igniter.store.subscribe('notifications', handleNotification);
+
+// Later, unsubscribe specific callback
+await igniter.store.unsubscribe('notifications', handleNotification);
+
+// Or unsubscribe all callbacks
+await igniter.store.unsubscribe('notifications');
+```
+
+---
+
+## Types and Interfaces
+
+### `KeyValueOptions`
+
+Options for setting a key-value pair.
+
+```typescript
+interface KeyValueOptions {
+  /**
+   * Time-to-live for the key, in seconds.
+   */
+  ttl?: number;
+}
+```
+
+**Example:**
+```typescript
+await igniter.store.set('key', value, { ttl: 3600 });
+```
+
+---
+
+### `EventCallback`
+
+Callback function for handling messages from subscribed channels.
+
+```typescript
+type EventCallback = (message: any) => void | Promise<void>;
+```
+
+**Example:**
+```typescript
+const callback: EventCallback = async (message) => {
+  console.log('Received:', message);
+  await processMessage(message);
+};
+
+await igniter.store.subscribe('channel', callback);
+```
+
+---
+
+## Client Access
+
+### `client: TClient`
+
+Access to the underlying client instance. Useful for advanced operations not covered by the adapter.
+
+**Example:**
+```typescript
+// Access the underlying Redis client
+const redis = igniter.store.client as Redis;
+
+// Use Redis-specific features
+await redis.hset('hash:key', 'field', 'value');
+await redis.sadd('set:key', 'member');
+await redis.zadd('sorted:set', 1, 'member');
+```
+
+<Callout type="warn">
+  Using the underlying client directly bypasses the adapter's serialization and may require manual JSON handling. Use with caution.
+</Callout>
+
+---
+
+## Error Handling
+
+All Store operations can throw errors. Common error scenarios:
+
+### Connection Errors
+
+```typescript
+try {
+  await igniter.store.get('key');
+} catch (error) {
+  if (error.code === 'ECONNREFUSED') {
+    // Redis connection refused
+  } else if (error.code === 'ETIMEDOUT') {
+    // Connection timeout
+  }
+}
+```
+
+### Serialization Errors
+
+```typescript
+try {
+  // Objects with circular references will fail
+  const circular = { self: null as any };
+  circular.self = circular;
+  
+  await igniter.store.set('key', circular);
+} catch (error) {
+  // JSON.stringify will fail
+  console.error('Serialization failed:', error);
+}
+```
+
+### Graceful Error Handling
+
+```typescript
+const getCached = async <T>(key: string, context: AppContext): Promise<T | null> => {
+  try {
+    return await igniter.store.get<T>(key);
+  } catch (error) {
+    // Log error but don't fail the request
+    context.logger.warn('Cache read failed', { error, key });
+    return null;
+  }
+};
+```
+
+---
+
+## Method Summary
+
+| Method | Description | Returns |
+|--------|-------------|---------|
+| `get<T>(key)` | Retrieve a value by key | `Promise<T \| null>` |
+| `set(key, value, options?)` | Store a value with optional TTL | `Promise<void>` |
+| `delete(key)` | Delete a key | `Promise<void>` |
+| `has(key)` | Check if key exists | `Promise<boolean>` |
+| `increment(key)` | Atomically increment a counter | `Promise<number>` |
+| `expire(key, ttl)` | Set/update key expiration | `Promise<void>` |
+| `publish(channel, message)` | Publish message to channel | `Promise<void>` |
+| `subscribe(channel, callback)` | Subscribe to channel | `Promise<void>` |
+| `unsubscribe(channel, callback?)` | Unsubscribe from channel | `Promise<void>` |
+
+---
+
+## Best Practices
+
+### 1. Use Type Inference
+
+```typescript
+// ✅ Good: Type inference
+const user = await igniter.store.get<User>('user:123');
+
+// ❌ Bad: No type safety
+const user = await igniter.store.get('user:123');
+```
+
+### 2. Handle Null Values
+
+```typescript
+// ✅ Good: Check for null
+const user = await igniter.store.get<User>('user:123');
+if (user) {
+  // Use user
+}
+
+// ❌ Bad: Assume value exists
+const user = await igniter.store.get<User>('user:123')!;
+// May cause runtime errors
+```
+
+### 3. Set Appropriate TTLs
+
+```typescript
+// ✅ Good: TTL matches data volatility
+await igniter.store.set('session', data, { ttl: 3600 }); // 1 hour
+await igniter.store.set('config', data, { ttl: 86400 }); // 1 day
+
+// ❌ Bad: Missing or inappropriate TTL
+await igniter.store.set('session', data); // Never expires
+await igniter.store.set('temp', data, { ttl: 31536000 }); // 1 year for temp data
+```
+
+### 4. Use Meaningful Key Names
+
+```typescript
+// ✅ Good: Clear and descriptive
+await igniter.store.set('user:123:profile', profileData);
+await igniter.store.set('order:456:status', statusData);
+
+// ❌ Bad: Vague or unclear
+await igniter.store.set('data', someData);
+await igniter.store.set('key1', value);
+```
+
+---
+
+- Learn about [caching operations](/docs/store/caching)
+- Explore [Pub/Sub messaging](/docs/store/pubsub)
+- Master [atomic operations](/docs/store/atomic-operations)
+- Check out [advanced usage patterns](/docs/store/advanced)
+

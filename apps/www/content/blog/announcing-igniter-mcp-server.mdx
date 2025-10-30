@@ -1,0 +1,318 @@
+---
+title: "Announcing Igniter.js MCP Server: Native AI Integration for Modern Development"
+description: "Transform your AI coding tools into framework experts with Igniter.js's MCP Server integration. Get instant project understanding, intelligent code generation, and specialized AI assistance built directly into Cursor, Claude Code, and more."
+tags: ["announcement", "ai", "mcp", "developer-tools"]
+---
+
+As AI-native development tools reshape how we build software, understanding project context and maintaining architectural consistency has become the new bottleneck. With **Igniter.js MCP Server**, your AI coding assistants can now deeply understand your project structure, execute development commands, and provide intelligent assistance that goes far beyond basic code completion.
+
+## The Evolution of AI-Assisted Development
+
+The rise of AI-native IDEs like Cursor, Windsurf, and Claude Code has enabled developers to write code at unprecedented speeds. But with this velocity comes a new challenge: **AI tools need context to be truly effective**.
+
+Without proper context, even the most advanced AI assistants struggle to:
+- Understand your project's architectural patterns
+- Follow your specific coding conventions
+- Execute project-specific commands correctly
+- Maintain consistency across feature implementations
+
+This is where the **Model Context Protocol (MCP)** becomes transformative.
+
+## What is MCP and Why Does It Matter?
+
+The [Model Context Protocol](https://modelcontextprotocol.io/introduction) is an open standard that enables Large Language Models to interact with external systems in a structured, type-safe manner. Think of it as a universal API that AI tools can use to:
+
+- Access your project's file structure and codebase
+- Execute development tasks and build commands
+- Query project-specific information
+- Leverage specialized tools designed for your framework
+
+For Igniter.js, this means your AI assistant becomes a framework expert that understands not just TypeScript, but the specific patterns, conventions, and architecture of your Igniter.js application.
+
+## Getting Started: Install in Under 2 Minutes
+
+Every Igniter.js starter template (v1.0.0+) comes with MCP Server support out of the box. Integration is as simple as adding a configuration file to your AI tool.
+
+<Callout type="success" title="Universal Compatibility">
+The Igniter.js MCP Server works with **any** AI coding tool that supports the Model Context Protocol, including Cursor, Windsurf, Claude Code, Claude Desktop, and VS Code Copilot.
+</Callout>
+
+### Quick Installation
+
+<Tabs items={['Cursor', 'Claude Code', 'VS Code Copilot', 'Windsurf']} groupId="ai-tool">
+  <Tab value="Cursor">
+    Create or edit `~/.cursor/mcp.json`:
+    ```json
+    {
+      "mcpServers": {
+        "Igniter": {
+          "command": "npx",
+          "args": ["@igniter-js/mcp-server"]
+        }
+      }
+    }
+    ```
+    Restart Cursor to activate the MCP Server.
+  </Tab>
+  
+  <Tab value="Claude Code">
+    ```bash
+    # Add the Igniter.js MCP Server
+    claude mcp add igniter npx @igniter-js/mcp-server
+
+    # Verify installation
+    claude mcp list
+    ```
+  </Tab>
+  
+  <Tab value="VS Code Copilot">
+    Create `.vscode/mcp.json` in your project root:
+    ```json
+    {
+      "servers": {
+        "Igniter": {
+          "command": "npx",
+          "args": ["@igniter-js/mcp-server"]
+        }
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab value="Windsurf">
+    Create or edit `~/.codeium/windsurf/mcp_config.json`:
+    ```json
+    {
+      "mcpServers": {
+        "Igniter": {
+          "command": "npx",
+          "args": ["@igniter-js/mcp-server"]
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## What Can the MCP Server Do?
+
+The Igniter.js MCP Server exposes a comprehensive set of tools that transform your AI assistant into a specialized Igniter.js developer:
+
+### Development Workflow Tools
+
+<Steps>
+  <Step>
+    ### Start Development Servers
+    Launch your application with live reloading and automatic client generation.
+    ```typescript
+    // AI can execute: start the dev server
+    // Runs: igniter dev --watch
+    ```
+  </Step>
+
+  <Step>
+    ### Build for Production
+    Compile and optimize your application for deployment.
+    ```typescript
+    // AI can execute: build the project
+    // Runs: igniter build
+    ```
+  </Step>
+
+  <Step>
+    ### Run Test Suites
+    Execute comprehensive tests with filtering and watch options.
+    ```typescript
+    // AI can execute: run tests for the auth feature
+    // Runs: npm test -- --filter auth
+    ```
+  </Step>
+</Steps>
+
+### Code Analysis and Generation
+
+- **Analyze Code Structure**: Identify architectural patterns and potential issues
+- **Generate Type-Safe Clients**: Auto-generate fully typed API clients from your router
+- **Create OpenAPI Documentation**: Generate interactive API documentation with Scalar UI
+- **Scaffold Features**: Create complete feature modules from your Prisma schema
+
+### AI-Powered Task Management
+
+The MCP Server integrates with specialized AI agents (Claude, Gemini, GPT, Perplexity) to handle complex development tasks:
+
+```typescript
+// Ask your AI: "Create a new authentication feature with JWT tokens"
+// The AI delegates to specialized agents who:
+// 1. Analyze your current architecture
+// 2. Generate the auth controller and procedures
+// 3. Create database migrations
+// 4. Write comprehensive tests
+// 5. Update documentation
+```
+
+## Meet Lia: Your AI Framework Specialist
+
+When you use an Igniter.js starter template, you're not just getting a codebase—you're getting **Lia**, a specialized AI agent trained specifically for Igniter.js development.
+
+### How Lia Transforms Your AI Assistant
+
+<Callout type="info" title="Before and After">
+**Before MCP Integration:**
+Your AI: "I see you have a Next.js project. Let me try to understand the structure..."
+
+**After MCP Integration:**
+Lia-Enhanced AI: "I can see this is an Igniter.js project with feature-based architecture. Your auth module is in `src/features/auth/`. I'll use the `generateController` tool to add the new endpoint following your established patterns."
+</Callout>
+
+### Lia's Capabilities
+
+**Contextual Understanding**: Every action starts with comprehensive analysis of your project structure, conventions, and existing patterns.
+
+**Tool Prioritization**: Instead of generic approaches, Lia automatically uses specialized Igniter.js tools for maximum accuracy and efficiency.
+
+**Pattern Replication**: Learns from your existing code to maintain consistency across your entire application.
+
+**Persistent Memory**: Stores architectural decisions and patterns, making future development faster and more consistent.
+
+## Real-World Development Workflow
+
+Here's a typical conversation with a Lia-enhanced AI assistant:
+
+<Steps>
+  <Step>
+    ### You Ask for a Feature
+    **You:** "Add user profile management to the auth feature"
+  </Step>
+
+  <Step>
+    ### Lia Analyzes Context
+    **AI:** "I'll analyze the current auth feature structure..."
+    
+    *Automatically runs analysis on the auth directory*
+  </Step>
+
+  <Step>
+    ### Intelligent Implementation
+    **AI:** "I can see you have a `user` controller with basic CRUD. I'll scaffold a `profile` controller following your patterns with Zod validation and the `ensure` plugin."
+    
+    *Uses `generateController` tool*
+  </Step>
+
+  <Step>
+    ### Testing and Validation
+    **AI:** "Now I'll test the implementation to ensure it integrates correctly..."
+    
+    *Runs validation using MCP Server tools*
+  </Step>
+
+  <Step>
+    ### Knowledge Persistence
+    **AI:** "Implementation complete! I've stored these patterns for future reference."
+  </Step>
+</Steps>
+
+## Why This Matters for Your Workflow
+
+### Before Igniter.js MCP Server
+
+❌ AI guesses at project structure  
+❌ Manual context switching between tools  
+❌ Inconsistent code patterns  
+❌ Repeated explanations of architecture  
+❌ Generic solutions that don't fit your app
+
+### After Igniter.js MCP Server
+
+✅ AI deeply understands your project  
+✅ Seamless tool integration  
+✅ Consistent, pattern-aware code  
+✅ Persistent architectural knowledge  
+✅ Framework-specific, optimized solutions
+
+## Advanced: Custom Rules for Maximum Productivity
+
+Every Igniter.js starter includes custom rules that transform your AI assistant's behavior. These rules create a specialized development environment where:
+
+- **File operations start with analysis** to understand context before making changes
+- **Specialized tools are prioritized** over generic approaches
+- **Architectural patterns are maintained** automatically across features
+- **Development workflows are optimized** for Igniter.js best practices
+
+<Callout type="tip" title="Continuous Learning">
+The more you work with Lia-enhanced AI, the smarter it becomes. Every decision, pattern, and insight is stored, creating a continuously improving development assistant that understands your specific project better than any generic AI could.
+</Callout>
+
+## Start Building with AI-Native Development
+
+Ready to experience the future of collaborative coding? Choose from our collection of official starter templates, each pre-configured with MCP Server support:
+
+<Steps>
+  <Step>
+    ### Choose Your Stack
+    Select from Next.js, TanStack Start, Bun, Express, or Deno starters
+  </Step>
+
+  <Step>
+    ### Install MCP Server
+    Add the configuration to your preferred AI tool (see tabs above)
+  </Step>
+
+  <Step>
+    ### Start Conversing
+    Begin with simple questions like:
+    - "What's the current health status of my project?"
+    - "Show me all API endpoints"
+    - "Analyze the auth feature for potential issues"
+  </Step>
+</Steps>
+
+## Integration Examples
+
+### Creating a Complete Feature
+
+```typescript
+// You: "Create a posts feature with CRUD operations and real-time updates"
+
+// Lia-enhanced AI automatically:
+// 1. Analyzes your Prisma schema
+// 2. Generates controller with type-safe actions
+// 3. Creates validation schemas with Zod
+// 4. Implements real-time SSE streaming
+// 5. Generates API client with React hooks
+// 6. Writes comprehensive tests
+// 7. Updates documentation
+```
+
+### Debugging with Context
+
+```typescript
+// You: "Why is the user creation endpoint failing?"
+
+// Lia-enhanced AI:
+// 1. Analyzes the user controller
+// 2. Checks validation schemas
+// 3. Reviews database schema
+// 4. Examines recent error logs
+// 5. Identifies the issue: missing required field
+// 6. Proposes and implements the fix
+// 7. Runs tests to verify the solution
+```
+
+## Community and Next Steps
+
+We're building the future of AI-native development, and we'd love to hear your experience!
+
+- **Share Your Projects**: What are you building with Igniter.js and AI? Let us know on [Twitter](https://twitter.com/igniterjs)
+- **Join the Discussion**: Connect with other developers in our [Discord community](https://discord.gg/igniterjs)
+- **Contribute**: Help improve the MCP Server on [GitHub](https://github.com/felipebarcelospro/igniter-js)
+
+## Resources
+
+- [MCP Server Documentation](/docs/mcp-server)
+- [Custom Rules Guide](/docs/ai-integration/custom-rules)
+- [Starter Templates](/templates)
+- [GitHub Repository](https://github.com/felipebarcelospro/igniter-js)
+
+---
+
+The world's most AI-native framework is ready for you. Start building smarter, faster, and with unprecedented collaboration between you and your AI coding assistant.

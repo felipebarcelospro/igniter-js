@@ -1,0 +1,417 @@
+---
+title: Your First Bot
+description: Build a complete bot from scratch with multiple commands and features.
+---
+
+In this tutorial, we'll build a **Todo Bot** that helps users manage their tasks via Telegram. By the end, you'll understand how to create commands, handle messages, and structure a real-world bot application.
+
+## What We're Building
+
+Our Todo Bot will:
+- ✅ Add todos with `/add <task>`
+- ✅ List all todos with `/list`
+- ✅ Mark todos as done with `/done <number>`
+- ✅ Delete todos with `/delete <number>`
+- ✅ Show help with `/help`
+
+<Steps>
+  <Step>
+    ### Project Setup
+    
+    Create a new file `src/bot/todo-bot.ts`:
+
+```typescript
+import { Bot, telegram, type BotCommand } from '@igniter-js/bot'
+
+// Simple in-memory storage (replace with database in production)
+const todos: Array<{ id: number; task: string; done: boolean }> = []
+let nextId = 1
+
+// Create the bot instance
+export const todoBot = Bot.create({
+  id: 'todo-bot',
+  name: 'Todo Bot',
+  adapters: {
+    telegram: telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      handle: '@your_todo_bot',
+      webhook: {
+        url: process.env.TELEGRAM_WEBHOOK_URL!,
+        secret: process.env.TELEGRAM_SECRET
+      }
+    })
+  },
+  commands: {
+    // We'll add commands here
+  }
+})
+    ```
+  </Step>
+  
+  <Step>
+    ### Set Up Shared Storage
+    
+    Since commands will be in separate files, we need a shared storage module. Create `src/bot/storage.ts`:
+    
+    ```typescript
+    // src/bot/storage.ts
+    export interface Todo {
+      id: number
+      task: string
+      done: boolean
+    }
+    
+    // Simple in-memory storage (replace with database in production)
+    export const todos: Todo[] = []
+    export let nextId = 1
+    
+    export function addTodo(task: string): Todo {
+      const todo: Todo = { id: nextId++, task, done: false }
+      todos.push(todo)
+      return todo
+    }
+    
+    export function getTodo(index: number): Todo | undefined {
+      return todos[index]
+    }
+    
+    export function markTodoDone(index: number): boolean {
+      if (index < 0 || index >= todos.length) return false
+      todos[index].done = true
+      return true
+    }
+    
+    export function deleteTodo(index: number): Todo | undefined {
+      if (index < 0 || index >= todos.length) return undefined
+      return todos.splice(index, 1)[0]
+    }
+    ```
+  </Step>
+  
+  <Step>
+    ### Create Commands in Separate Files
+    
+    For better organization, let's create commands in separate files using `Bot.command()`. This method provides validation and type safety, making it easier to maintain your bot as it grows.
+    
+    Create `src/bot/commands/add.ts`:
+    
+    ```typescript
+    // src/bot/commands/add.ts
+    import { Bot } from '@igniter-js/bot'
+    import { addTodo } from '../storage'
+    
+    export const addCommand = Bot.command({
+      name: 'add',
+      aliases: ['new', 'create'],
+      description: 'Add a new todo',
+      help: 'Usage: /add <task description>',
+      async handle(ctx, params) {
+        if (params.length === 0) {
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: '❌ Please provide a task description.\nUsage: /add <task>'
+            }
+          })
+          return
+        }
+    
+        const task = params.join(' ')
+        const todo = addTodo(task)
+    
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: `✅ Todo #${todo.id} added: "${task}"`
+          }
+        })
+      }
+    })
+    ```
+    
+    Create `src/bot/commands/list.ts`:
+    
+    ```typescript
+    // src/bot/commands/list.ts
+    import { Bot } from '@igniter-js/bot'
+    import { todos } from '../storage'
+    
+    export const listCommand = Bot.command({
+      name: 'list',
+      aliases: ['ls', 'todos'],
+      description: 'List all todos',
+      help: 'Use /list to see all your todos',
+      async handle(ctx) {
+        if (todos.length === 0) {
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: '📝 No todos yet. Use /add to create one!'
+            }
+          })
+          return
+        }
+    
+        const list = todos
+          .map((todo, index) => {
+            const status = todo.done ? '✅' : '⏳'
+            return `${status} ${index + 1}. ${todo.task}`
+          })
+          .join('\n')
+    
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: `📋 Your Todos:\n\n${list}`
+          }
+        })
+      }
+    })
+    ```
+    
+    Create `src/bot/commands/done.ts`:
+    
+    ```typescript
+    // src/bot/commands/done.ts
+    import { Bot } from '@igniter-js/bot'
+    import { markTodoDone, todos } from '../storage'
+    
+    export const doneCommand = Bot.command({
+      name: 'done',
+      aliases: ['complete', 'check'],
+      description: 'Mark a todo as done',
+      help: 'Usage: /done <number>',
+      async handle(ctx, params) {
+        if (params.length === 0) {
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: '❌ Please provide a todo number.\nUsage: /done <number>'
+            }
+          })
+          return
+        }
+    
+        const index = parseInt(params[0], 10) - 1
+    
+        if (isNaN(index) || !markTodoDone(index)) {
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: `❌ Invalid todo number. Use /list to see available todos.`
+            }
+          })
+          return
+        }
+    
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: `✅ Todo #${index + 1} marked as done!`
+          }
+        })
+      }
+    })
+    ```
+    
+    Create `src/bot/commands/delete.ts`:
+    
+    ```typescript
+    // src/bot/commands/delete.ts
+    import { Bot } from '@igniter-js/bot'
+    import { deleteTodo, todos } from '../storage'
+    
+    export const deleteCommand = Bot.command({
+      name: 'delete',
+      aliases: ['remove', 'rm'],
+      description: 'Delete a todo',
+      help: 'Usage: /delete <number>',
+      async handle(ctx, params) {
+        if (params.length === 0) {
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: '❌ Please provide a todo number.\nUsage: /delete <number>'
+            }
+          })
+          return
+        }
+    
+        const index = parseInt(params[0], 10) - 1
+        const deleted = deleteTodo(index)
+    
+        if (!deleted) {
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: `❌ Invalid todo number. Use /list to see available todos.`
+            }
+          })
+          return
+        }
+    
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: `🗑️ Todo deleted: "${deleted.task}"`
+          }
+        })
+      }
+    })
+    ```
+    
+    Create `src/bot/commands/help.ts`:
+    
+    ```typescript
+    // src/bot/commands/help.ts
+    import { Bot } from '@igniter-js/bot'
+    
+    export const helpCommand = Bot.command({
+      name: 'help',
+      aliases: ['?', 'commands'],
+      description: 'Show available commands',
+      help: 'Use /help to see all commands',
+      async handle(ctx) {
+        const helpText = `
+📚 Available Commands:
+
+/add <task> - Add a new todo
+/list - List all todos
+/done <number> - Mark todo as done
+/delete <number> - Delete a todo
+/help - Show this help message
+
+Examples:
+/add Buy groceries
+/done 1
+/delete 2
+        `.trim()
+    
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: helpText
+          }
+        })
+      }
+    })
+    ```
+  </Step>
+  
+  <Step>
+    ### Import Commands in Bot Configuration
+    
+    Now import all commands and register them in your bot:
+    
+    ```typescript
+    // src/bot/todo-bot.ts
+    import { Bot, telegram } from '@igniter-js/bot'
+    import { addCommand } from './commands/add'
+    import { listCommand } from './commands/list'
+    import { doneCommand } from './commands/done'
+    import { deleteCommand } from './commands/delete'
+    import { helpCommand } from './commands/help'
+    
+    export const todoBot = Bot.create({
+      id: 'todo-bot',
+      name: 'Todo Bot',
+      adapters: {
+        telegram: telegram({
+          token: process.env.TELEGRAM_TOKEN!,
+          handle: '@your_todo_bot',
+          webhook: {
+            url: process.env.TELEGRAM_WEBHOOK_URL!,
+            secret: process.env.TELEGRAM_SECRET
+          }
+        })
+      },
+      commands: {
+        add: addCommand,
+        list: listCommand,
+        done: doneCommand,
+        delete: deleteCommand,
+        help: helpCommand
+      }
+    })
+    
+    await todoBot.start()
+    ```
+  </Step>
+  
+  <Step>
+    ### Create Webhook Handler
+    
+    Create `src/app/api/telegram/route.ts`:
+    
+    ```typescript
+    import { todoBot } from '@/bot/todo-bot'
+    
+    export async function POST(req: Request) {
+      return todoBot.handle('telegram', req)
+    }
+    ```
+  </Step>
+  
+  <Step>
+    ### Test Your Bot
+    
+    1. Deploy your application or use ngrok for local testing
+    2. Update your webhook URL in environment variables
+    3. Send `/start` to your bot
+    4. Try adding todos: `/add Buy groceries`
+    5. List todos: `/list`
+    6. Mark one as done: `/done 1`
+    7. Delete a todo: `/delete 1`
+  </Step>
+</Steps>
+
+---
+
+## Key Concepts Learned
+
+Throughout this tutorial, you've learned several important concepts that form the foundation of building bots with Igniter.js. Let's review what each concept means and how it contributes to your bot's functionality:
+
+<Accordions>
+  <Accordion title="Commands">
+    Structured handlers for user input. Commands provide a clean, organized way to respond to specific user actions. Each command has a name, optional aliases, a description, help text, and a handler function that executes when the command is invoked.
+  </Accordion>
+  
+  <Accordion title="Parameters">
+    Command parameters allow users to pass data to commands. You access parameters via the `params` array in your command handler. Parameters are automatically parsed from the command message, making it easy to handle user input like `/add Buy groceries` where `"Buy groceries"` becomes the parameter.
+  </Accordion>
+  
+  <Accordion title="Command Aliases">
+    Multiple ways to trigger the same command. Aliases make your bot more user-friendly by allowing users to use shortcuts or alternative names. For example, `/add`, `/new`, and `/create` can all trigger the same command handler, improving discoverability and usability.
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    Validating input and providing helpful error messages is crucial for a good user experience. The bot includes built-in error handling, but you can also add custom validation in your command handlers to ensure users receive clear, actionable feedback when something goes wrong.
+  </Accordion>
+  
+  <Accordion title="Bot Response">
+    Sending messages back to users is done through the `ctx.bot.send()` method. This unified API works across all adapters, making it easy to respond to users regardless of which messaging platform they're using. The bot handles all the platform-specific details for you.
+  </Accordion>
+</Accordions>
+

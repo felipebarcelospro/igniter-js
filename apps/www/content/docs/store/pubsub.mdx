@@ -1,0 +1,790 @@
+---
+title: Pub/Sub Messaging
+description: Publish and subscribe to channels for event-driven communication. Build real-time features, microservices communication, and decoupled architectures using Pub/Sub.
+---
+
+## Overview
+
+Pub/Sub (Publish/Subscribe) messaging enables event-driven communication between different parts of your application or across microservices. The Store adapter provides a simple, type-safe interface for publishing messages to channels and subscribing to receive them. This pattern decouples components, making your application more scalable and maintainable.
+
+Pub/Sub is particularly powerful for building real-time features, decoupling services, and implementing event-driven architectures. Messages are automatically serialized as JSON, making it easy to send complex data structures across your application without worrying about serialization details.
+
+<Callout type="info">
+  Pub/Sub is particularly powerful for building real-time features, decoupling services, and implementing event-driven architectures. Messages are automatically serialized as JSON.
+</Callout>
+
+---
+
+## Core Concepts
+
+Understanding Pub/Sub concepts helps you use messaging effectively in your application. Channels, publishers, and subscribers work together to enable decoupled, event-driven communication between components. This architecture makes your application more flexible and easier to maintain.
+
+Pub/Sub enables loose coupling between components—publishers don't need to know who's listening, and subscribers don't need to know who's publishing. This separation of concerns makes your codebase more maintainable and scalable.
+
+<Accordions>
+  <Accordion title="Channels">
+    Channels are named topics where messages are published. Subscribers listen to specific channels to receive messages. Think of channels as broadcast frequencies—you tune into a channel to receive messages published to it.
+    
+    ```typescript
+    // Channel names can be any string
+    const channel = 'notifications';
+    const channel = 'user:123:events';
+    const channel = 'orders:updates';
+    ```
+    
+    Channel names are flexible—use hierarchical names like `user:123:events` to organize messages or simple names like `notifications` for broad categories. Choose names that make sense for your application's domain.
+  </Accordion>
+  
+  <Accordion title="Publishers">
+    Publishers send messages to channels. Any part of your application can publish messages—controllers, services, background jobs, or any code that needs to broadcast events. Publishing is fire-and-forget, so publishers don't wait for subscribers to process messages.
+    
+    Publishers are decoupled from subscribers—they don't need to know who's listening or how many subscribers exist. This makes it easy to add new subscribers without modifying publisher code.
+  </Accordion>
+  
+  <Accordion title="Subscribers">
+    Subscribers register callbacks to receive messages from channels. Multiple subscribers can listen to the same channel, enabling broadcast scenarios where one message triggers multiple actions. Subscribers process messages asynchronously, so they don't block publishers.
+    
+    Subscribers are independent—they can be added or removed without affecting publishers or other subscribers. This makes it easy to add new features or modify existing behavior without touching other parts of your application.
+  </Accordion>
+</Accordions>
+
+---
+
+## Basic Usage
+
+Getting started with Pub/Sub is straightforward—you publish messages to channels and subscribe to receive them. These operations form the foundation of event-driven communication in your application. Understanding basic usage helps you build more complex patterns later.
+
+Pub/Sub operations are simple but powerful. Publishing messages is fast and non-blocking, while subscriptions process messages asynchronously, ensuring your application remains responsive even when handling many events.
+
+<Accordions>
+  <Accordion title="Publishing Messages">
+    Use `publish()` to send messages to a channel. Publishing is fast and non-blocking—your code continues immediately after publishing, without waiting for subscribers to process the message. This makes Pub/Sub perfect for broadcasting events without slowing down your application.
+    
+    ```typescript
+    handler: async ({ context }) => {
+      // Publish a simple message
+      await igniter.store.publish('notifications', {
+        userId: '123',
+        message: 'You have a new notification',
+        timestamp: new Date().toISOString(),
+      });
+      
+      return response.success({ published: true });
+    }
+    ```
+    
+    Publishing messages is straightforward—just specify the channel and the message payload. Messages are automatically serialized as JSON, so you can send complex objects without manual conversion.
+  </Accordion>
+  
+  <Accordion title="Subscribing to Channels">
+    Use `subscribe()` to listen for messages on a channel. Subscriptions are typically set up during application startup or service initialization, ensuring your handlers are ready to receive messages as soon as they're published.
+    
+    ```typescript
+    // In your application startup or service initialization
+    const setupSubscriptions = async (context: AppContext) => {
+      await igniter.store.subscribe('notifications', async (message) => {
+        console.log('Notification received:', message);
+        
+        // Process the notification
+        await processNotification(message);
+      });
+    };
+    ```
+    
+    Subscriptions process messages asynchronously, so they don't block your application. Multiple subscribers can listen to the same channel, enabling broadcast scenarios where one message triggers multiple actions.
+  </Accordion>
+  
+  <Accordion title="Unsubscribing">
+    Use `unsubscribe()` to stop listening to channels. This is useful when cleaning up subscriptions, shutting down services, or dynamically managing subscriptions based on application state.
+    
+    ```typescript
+    // Remove a specific callback
+    const callback = async (message) => { /* ... */ };
+    await igniter.store.subscribe('notifications', callback);
+    
+    // Later, unsubscribe
+    await igniter.store.unsubscribe('notifications', callback);
+    
+    // Or unsubscribe all callbacks for a channel
+    await igniter.store.unsubscribe('notifications');
+    ```
+    
+    Unsubscribing is important for cleaning up resources and preventing memory leaks. Always unsubscribe when shutting down services or when subscriptions are no longer needed.
+  </Accordion>
+</Accordions>
+
+---
+
+## Common Patterns
+
+Pub/Sub messaging enables many powerful patterns for building event-driven applications. These patterns demonstrate common use cases like event broadcasting, real-time notifications, and cross-service communication. Understanding these patterns helps you apply Pub/Sub effectively in your own applications.
+
+Each pattern solves a specific problem—event broadcasting decouples components, real-time notifications improve user experience, and cross-service communication enables microservices architectures. Choose the pattern that fits your use case.
+
+<Accordions>
+  <Accordion title="Event Broadcasting">
+    Broadcast events to all subscribers when important actions occur. This pattern decouples event producers from consumers, making it easy to add new handlers without modifying existing code. Event broadcasting is perfect for updating search indexes, sending notifications, or tracking analytics.
+    
+    ```typescript
+    // Publisher: User action triggers event
+    export const usersController = igniter.controller({
+      path: '/users',
+      actions: {
+        update: igniter.mutation({
+          handler: async ({ request, context, response }) => {
+            const user = await context.db.user.update({
+              where: { id: request.params.id },
+              data: request.body,
+            });
+            
+            // Broadcast user update event
+            await igniter.store.publish('user:updated', {
+              userId: user.id,
+              changes: request.body,
+              timestamp: new Date().toISOString(),
+            });
+            
+            return response.success({ user });
+          },
+        }),
+      },
+    });
+    
+    // Subscriber: Listen for user updates
+    await igniter.store.subscribe('user:updated', async (event) => {
+      // Update search index
+      await updateSearchIndex(event.userId);
+      
+      // Send notification
+      await sendNotification(event.userId, 'Your profile was updated');
+      
+      // Update analytics
+      await trackEvent('user_updated', event);
+    });
+    ```
+    
+    Event broadcasting enables loose coupling between components. When a user updates their profile, multiple systems can react without the controller needing to know about all of them.
+  </Accordion>
+  
+  <Accordion title="Real-Time Notifications">
+    Build real-time notification systems that deliver messages instantly to users. This pattern uses user-specific channels to send targeted notifications, enabling personalized, real-time communication that improves user engagement.
+    
+    ```typescript
+    // Publisher: Send notification
+    const sendNotification = async (
+      userId: string,
+      message: string,
+      context: AppContext
+    ) => {
+      await igniter.store.publish(`notifications:${userId}`, {
+        userId,
+        message,
+        read: false,
+        createdAt: new Date().toISOString(),
+      });
+    };
+    
+    // Subscriber: Listen for user-specific notifications
+    const setupUserNotifications = async (userId: string, context: AppContext) => {
+      await igniter.store.subscribe(`notifications:${userId}`, async (notification) => {
+        // Send WebSocket message to user
+        await sendWebSocketMessage(userId, notification);
+        
+        // Store in database
+        await context.db.notification.create({
+          data: notification,
+        });
+      });
+    };
+    ```
+    
+    Real-time notifications improve user experience by delivering instant feedback. User-specific channels enable targeted messaging and make it easy to implement personalized notification systems.
+  </Accordion>
+  
+  <Accordion title="Cross-Service Communication">
+    Enable communication between microservices without tight coupling. This pattern allows services to communicate asynchronously through events, making it easy to build scalable, maintainable microservices architectures.
+    
+    ```typescript
+    // Service A: Publish order created event
+    await igniter.store.publish('order:created', {
+      orderId: '123',
+      userId: '456',
+      items: [...],
+      total: 99.99,
+    });
+    
+    // Service B: Process orders
+    await igniter.store.subscribe('order:created', async (order) => {
+      // Calculate shipping
+      const shipping = await calculateShipping(order);
+      
+      // Publish to next service
+      await igniter.store.publish('order:shipping:calculated', {
+        orderId: order.orderId,
+        shipping,
+      });
+    });
+    
+    // Service C: Send confirmation
+    await igniter.store.subscribe('order:shipping:calculated', async (data) => {
+      await sendOrderConfirmation(data.orderId);
+    });
+    ```
+    
+    Cross-service communication enables microservices architectures where services communicate through events. This pattern decouples services and makes it easy to add new services or modify existing ones without breaking others.
+  </Accordion>
+</Accordions>
+
+---
+
+## Advanced Patterns
+
+Advanced Pub/Sub patterns enable sophisticated event-driven architectures. These patterns solve complex problems like fan-out messaging, request-response communication, and message filtering. Understanding advanced patterns helps you build production-ready event-driven systems.
+
+These patterns build on basic Pub/Sub operations to solve real-world challenges. They enable complex architectures while maintaining the decoupling benefits of Pub/Sub messaging.
+
+<Accordions>
+  <Accordion title="Fan-Out Pattern">
+    Publish to multiple channels from a single event to enable different consumers to process events differently. This pattern allows you to broadcast events broadly while also sending targeted messages to specific channels.
+    
+    ```typescript
+    const publishUserEvent = async (event: UserEvent, context: AppContext) => {
+      // Publish to general channel
+      await igniter.store.publish('events:all', event);
+      
+      // Publish to user-specific channel
+      await igniter.store.publish(`events:user:${event.userId}`, event);
+      
+      // Publish to feature-specific channel
+      if (event.type === 'profile_updated') {
+        await igniter.store.publish('events:profile', event);
+      }
+    };
+    ```
+    
+    Fan-out patterns enable flexible event routing. You can publish to general channels for broad distribution and specific channels for targeted processing, giving you fine-grained control over who receives which events.
+  </Accordion>
+  
+  <Accordion title="Filtering and Routing">
+    Implement message filtering within subscribers to process only relevant messages. Filtering allows you to subscribe to broad channels while processing only events that match specific criteria.
+    
+    ```typescript
+    // Subscriber with filtering logic
+    await igniter.store.subscribe('events:all', async (event) => {
+      // Only process events for active users
+      if (event.userStatus === 'active') {
+        await processEvent(event);
+      }
+      
+      // Route to specific handlers based on type
+      switch (event.type) {
+        case 'user_created':
+          await handleUserCreated(event);
+          break;
+        case 'user_updated':
+          await handleUserUpdated(event);
+          break;
+        default:
+          await handleGenericEvent(event);
+      }
+    });
+    ```
+    
+    Filtering and routing enable sophisticated event processing without requiring separate channels for every filter criteria. This reduces channel proliferation while maintaining flexible event handling.
+  </Accordion>
+  
+  <Accordion title="Request-Response Pattern">
+    Implement request-response communication using correlation IDs. This pattern enables synchronous-like communication over asynchronous Pub/Sub channels, useful for querying services or requesting data from other parts of your application.
+    
+    ```typescript
+    // Requestor
+    const requestData = async (query: string, context: AppContext) => {
+      const correlationId = generateId();
+      
+      return new Promise((resolve) => {
+        // Subscribe to response channel
+        const responseCallback = async (response: any) => {
+          if (response.correlationId === correlationId) {
+            await igniter.store.unsubscribe(`response:${correlationId}`, responseCallback);
+            resolve(response.data);
+          }
+        };
+        
+        igniter.store.subscribe(`response:${correlationId}`, responseCallback);
+        
+        // Publish request
+        igniter.store.publish('requests:data', {
+          correlationId,
+          query,
+        });
+      });
+    };
+    
+    // Responder
+    await igniter.store.subscribe('requests:data', async (request) => {
+      const data = await fetchData(request.query);
+      
+      await igniter.store.publish(`response:${request.correlationId}`, {
+        correlationId: request.correlationId,
+        data,
+      });
+    });
+    ```
+    
+    Request-response patterns enable synchronous-like communication over Pub/Sub. Correlation IDs match requests with responses, making it possible to implement query patterns over asynchronous messaging.
+  </Accordion>
+</Accordions>
+
+---
+
+## Channel Naming Conventions
+
+Use consistent naming patterns for channels to improve organization and maintainability. Good channel naming makes it easy to identify what messages a channel carries and how channels relate to each other. Follow consistent patterns across your application to make Pub/Sub code easier to understand.
+
+Consistent naming conventions help developers understand channel purposes at a glance. Use hierarchical names to organize channels logically and make it easy to find related channels.
+
+<Accordions>
+  <Accordion title="Entity-Based Channels">
+    Use entity-based naming for channels that carry events related to specific entities like users, orders, or products. This pattern makes it easy to find all channels related to a particular entity type.
+    
+    ```typescript
+    `user:${userId}:events`           // User-specific events
+    `order:${orderId}:updates`         // Order updates
+    `product:${productId}:changes`     // Product changes
+    ```
+    
+    Entity-based channels group related events together and make it easy to subscribe to all events for a specific entity.
+  </Accordion>
+  
+  <Accordion title="Feature-Based Channels">
+    Use feature-based naming for channels that serve specific features or use cases. This pattern groups channels by functionality rather than by entity type.
+    
+    ```typescript
+    `notifications:${userId}`          // User notifications
+    `chat:${roomId}:messages`          // Chat messages
+    `analytics:events`                 // Analytics events
+    ```
+    
+    Feature-based channels make it easy to find all channels related to a specific feature or functionality.
+  </Accordion>
+  
+  <Accordion title="Service-Based Channels">
+    Use service-based naming for channels that enable communication between services or microservices. This pattern groups channels by the service that handles them.
+    
+    ```typescript
+    `email:send`                       // Email service
+    `payment:process`                  // Payment service
+    `inventory:update`                 // Inventory service
+    ```
+    
+    Service-based channels make it clear which service handles messages on each channel, improving communication clarity in microservices architectures.
+  </Accordion>
+  
+  <Accordion title="Pattern-Based Channels">
+    Use pattern-based naming for channels that follow specific architectural patterns like events, commands, or queries. This pattern provides consistency across different parts of your application.
+    
+    ```typescript
+    `events:${entityType}:${entityId}` // Generic event pattern
+    `commands:${commandType}`          // Command pattern
+    `queries:${queryType}`            // Query pattern
+    ```
+    
+    Pattern-based channels provide consistency and make it easy to understand the purpose of channels based on their naming pattern.
+  </Accordion>
+</Accordions>
+
+---
+
+## Error Handling
+
+Subscriber errors shouldn't break your Pub/Sub system. Handle errors gracefully within subscribers to ensure one failing subscriber doesn't prevent others from processing messages. Good error handling keeps your event-driven system resilient and maintainable.
+
+Error handling in Pub/Sub is critical because subscribers process messages asynchronously. Errors in one subscriber shouldn't affect others, and failed message processing should be logged and optionally retried.
+
+<Accordions>
+  <Accordion title="Basic Error Handling">
+    Handle errors in subscribers gracefully without breaking subscriptions. Wrap subscriber logic in try-catch blocks to prevent errors from propagating and breaking the subscription.
+    
+    ```typescript
+    await igniter.store.subscribe('orders:created', async (order) => {
+      try {
+        await processOrder(order);
+      } catch (error) {
+        // Log error but don't break the subscription
+        context.logger.error('Failed to process order', {
+          error,
+          orderId: order.id,
+        });
+        
+        // Optionally publish error event
+        await igniter.store.publish('errors:orders', {
+          orderId: order.id,
+          error: error.message,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
+    ```
+    
+    Basic error handling prevents subscription failures while logging errors for debugging. Always wrap subscriber logic in try-catch blocks to keep subscriptions resilient.
+  </Accordion>
+  
+  <Accordion title="Retry Logic">
+    Implement retry logic for critical messages that must be processed successfully. Retry logic helps handle transient failures and ensures important messages aren't lost due to temporary issues.
+    
+    ```typescript
+    const processWithRetry = async (
+      message: any,
+      maxRetries = 3
+    ): Promise<void> => {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          await processMessage(message);
+          return; // Success
+        } catch (error) {
+          if (attempt === maxRetries) {
+            throw error; // Final attempt failed
+          }
+          
+          // Wait before retry (exponential backoff)
+          await new Promise(resolve =>
+            setTimeout(resolve, Math.pow(2, attempt) * 1000)
+          );
+        }
+      }
+    };
+
+    await igniter.store.subscribe('critical:events', async (message) => {
+      await processWithRetry(message);
+    });
+    ```
+    
+    Retry logic with exponential backoff ensures critical messages are processed even when temporary failures occur. Use retry logic for important messages that must be processed successfully.
+  </Accordion>
+</Accordions>
+
+---
+
+## Lifecycle Management
+
+Proper lifecycle management ensures subscriptions are set up correctly during application startup and cleaned up gracefully during shutdown. This prevents resource leaks and ensures your Pub/Sub system starts and stops cleanly.
+
+Lifecycle management is essential for production applications where subscriptions need to persist across application restarts and be cleaned up properly during shutdown. Understanding how to manage subscription lifecycle helps you build robust Pub/Sub systems.
+
+<Accordions>
+  <Accordion title="Application Startup">
+    Initialize subscriptions on application startup to ensure they're ready to receive messages as soon as your application starts. Centralize subscription setup in a dedicated initialization function to keep your code organized.
+    
+    ```typescript
+    // src/services/subscriptions.ts
+    export const initializeSubscriptions = async (context: AppContext) => {
+      // User events
+      await igniter.store.subscribe('user:created', handleUserCreated);
+      await igniter.store.subscribe('user:updated', handleUserUpdated);
+      await igniter.store.subscribe('user:deleted', handleUserDeleted);
+      
+      // Order events
+      await igniter.store.subscribe('order:created', handleOrderCreated);
+      await igniter.store.subscribe('order:status:changed', handleOrderStatusChanged);
+      
+      // Notifications
+      await igniter.store.subscribe('notifications', handleNotification);
+      
+      console.log('✅ All subscriptions initialized');
+    };
+    ```
+    
+    Initialize subscriptions during application startup to ensure they're ready to receive messages immediately. Centralize subscription setup to keep your code organized and maintainable.
+  </Accordion>
+  
+  <Accordion title="Graceful Shutdown">
+    Clean up subscriptions on shutdown to prevent resource leaks and ensure clean application termination. Graceful shutdown ensures subscriptions are properly unsubscribed before the application exits.
+    
+    ```typescript
+    const cleanupSubscriptions = async (context: AppContext) => {
+      // Unsubscribe from all channels
+      await igniter.store.unsubscribe('user:created');
+      await igniter.store.unsubscribe('user:updated');
+      await igniter.store.unsubscribe('order:created');
+      // ... other subscriptions
+      
+      console.log('✅ All subscriptions cleaned up');
+    };
+
+    // In your shutdown handler
+    process.on('SIGTERM', async () => {
+      await cleanupSubscriptions(context);
+      process.exit(0);
+    });
+    ```
+    
+    Graceful shutdown prevents resource leaks and ensures clean application termination. Always unsubscribe from channels during shutdown to prevent memory leaks and ensure proper cleanup.
+  </Accordion>
+</Accordions>
+
+---
+
+## Real-World Examples
+
+These real-world examples demonstrate practical Pub/Sub patterns you can use in production applications. They show how to build activity feeds, implement cache invalidation, and handle multi-tenant scenarios using Pub/Sub messaging.
+
+Real-world examples help you understand how Pub/Sub fits into actual applications. These patterns address common scenarios and provide production-ready solutions you can adapt for your own use cases.
+
+<Accordions>
+  <Accordion title="Activity Feed">
+    Build an activity feed system that aggregates user activities and maintains a cached feed. This pattern uses Pub/Sub to update activity feeds in real-time while keeping a cached version for fast retrieval.
+    
+    ```typescript
+    // Publisher: User performs action
+    const recordActivity = async (
+      userId: string,
+      activity: Activity,
+      context: AppContext
+    ) => {
+      // Store in database
+      await context.db.activity.create({
+        data: { userId, ...activity },
+      });
+      
+      // Publish to activity feed
+      await igniter.store.publish(`feed:${userId}`, {
+        userId,
+        activity,
+        timestamp: new Date().toISOString(),
+      });
+      
+      // Also publish to global feed
+      await igniter.store.publish('feed:global', {
+        userId,
+        activity,
+        timestamp: new Date().toISOString(),
+      });
+    };
+
+    // Subscriber: Update activity feed cache
+    await igniter.store.subscribe('feed:global', async (activity) => {
+      // Update cached feed
+      const feed = await igniter.store.get<Activity[]>('feed:global:cached') || [];
+      feed.unshift(activity);
+      
+      // Keep only last 100 activities
+      const limitedFeed = feed.slice(0, 100);
+      await igniter.store.set('feed:global:cached', limitedFeed, { ttl: 3600 });
+    });
+    ```
+    
+    Activity feeds benefit from Pub/Sub's real-time capabilities while maintaining cached versions for performance. This pattern combines Pub/Sub messaging with caching for optimal performance.
+  </Accordion>
+  
+  <Accordion title="Cache Invalidation">
+    Invalidate cache when data changes using Pub/Sub messaging. This pattern decouples cache invalidation from data updates, allowing multiple systems to invalidate caches when data changes.
+    
+    ```typescript
+    // Publisher: Data updated
+    const updateProduct = async (
+      productId: string,
+      data: ProductData,
+      context: AppContext
+    ) => {
+      await context.db.product.update({
+        where: { id: productId },
+        data,
+      });
+      
+      // Publish cache invalidation event
+      await igniter.store.publish('cache:invalidate', {
+        keys: [
+          `product:${productId}`,
+          'products:list',
+          `product:${productId}:related`,
+        ],
+      });
+    };
+
+    // Subscriber: Invalidate cache
+    await igniter.store.subscribe('cache:invalidate', async (event) => {
+      await Promise.all(
+        event.keys.map(key => igniter.store.delete(key))
+      );
+    });
+    ```
+    
+    Cache invalidation via Pub/Sub ensures caches stay fresh across multiple services. This pattern decouples cache invalidation from data updates, making it easy to add new cache systems without modifying existing code.
+  </Accordion>
+  
+  <Accordion title="Multi-Tenant Events">
+    Handle multi-tenant scenarios using tenant-scoped channels. This pattern enables tenant isolation while sharing the same Pub/Sub infrastructure, making it easy to build SaaS applications with proper tenant separation.
+    
+    ```typescript
+    // Publisher: Tenant-scoped event
+    const publishTenantEvent = async (
+      tenantId: string,
+      event: Event,
+      context: AppContext
+    ) => {
+      await igniter.store.publish(`tenant:${tenantId}:events`, event);
+    };
+
+    // Subscriber: Tenant-specific handler
+    const setupTenantSubscriptions = async (
+      tenantId: string,
+      context: AppContext
+    ) => {
+      await igniter.store.subscribe(`tenant:${tenantId}:events`, async (event) => {
+        // Process tenant-specific event
+        await processTenantEvent(tenantId, event);
+      });
+    };
+    ```
+    
+    Multi-tenant events ensure tenant isolation while sharing Pub/Sub infrastructure. Tenant-scoped channels make it easy to build SaaS applications with proper data separation between tenants.
+  </Accordion>
+</Accordions>
+
+---
+
+## Best Practices
+
+Following Pub/Sub best practices ensures your event-driven system is maintainable, performant, and reliable. These practices cover channel naming, message structure, error handling, and performance optimization. Applying these practices helps you build production-ready Pub/Sub systems.
+
+Good practices prevent common pitfalls like unclear channel names, unstructured messages, and performance bottlenecks. They make your Pub/Sub code easier to understand, debug, and maintain.
+
+<Accordions>
+  <Accordion title="Use Meaningful Channel Names">
+    Use clear, descriptive channel names that indicate what type of messages they carry. Meaningful names make your code self-documenting and help developers understand the purpose of each channel without reading implementation details.
+    
+    ```typescript
+    // ✅ Good: Clear and descriptive
+    await igniter.store.publish('order:created', orderData);
+    await igniter.store.publish('user:profile:updated', profileData);
+    
+    // ❌ Bad: Vague or unclear
+    await igniter.store.publish('event', data);
+    await igniter.store.publish('update', data);
+    ```
+    
+    Meaningful channel names improve code readability and make it easier to understand message flow. Use hierarchical names like `order:created` or `user:profile:updated` to organize channels logically.
+  </Accordion>
+  
+  <Accordion title="Structure Your Messages">
+    Structure messages consistently with clear fields and metadata. Well-structured messages are easier to process, validate, and debug. Include timestamps, identifiers, and other metadata that helps subscribers process messages correctly.
+    
+    ```typescript
+    // ✅ Good: Well-structured message
+    await igniter.store.publish('order:created', {
+      orderId: '123',
+      userId: '456',
+      items: [...],
+      total: 99.99,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        source: 'api',
+        version: '1.0',
+      },
+    });
+    
+    // ❌ Bad: Unstructured or unclear
+    await igniter.store.publish('order:created', 'some data');
+    ```
+    
+    Structured messages make subscribers easier to write and maintain. Include all necessary fields and metadata that subscribers need to process messages correctly.
+  </Accordion>
+  
+  <Accordion title="Handle Errors Gracefully">
+    Handle errors in subscribers without breaking subscriptions. Errors in one subscriber shouldn't prevent other subscribers from processing messages or cause the entire Pub/Sub system to fail.
+    
+    ```typescript
+    // ✅ Good: Error handling
+    await igniter.store.subscribe('events', async (message) => {
+      try {
+        await processMessage(message);
+      } catch (error) {
+        context.logger.error('Failed to process message', { error, message });
+        // Don't throw - keep subscription alive
+      }
+    });
+    ```
+    
+    Graceful error handling keeps your Pub/Sub system resilient. Log errors for debugging but don't throw exceptions that could break subscriptions or prevent other subscribers from processing messages.
+  </Accordion>
+  
+  <Accordion title="Avoid Long-Running Operations">
+    Keep subscriber callbacks fast, or offload heavy work to background jobs. Long-running operations in subscribers block message processing and can cause message backlogs. Offload heavy work to background jobs to keep subscribers responsive.
+    
+    ```typescript
+    // ✅ Good: Offload heavy work
+    await igniter.store.subscribe('orders:created', async (order) => {
+      // Schedule job for heavy processing
+      await igniter.jobs.orders.schedule({
+        task: 'processOrder',
+        input: { orderId: order.id },
+      });
+    });
+    
+    // ❌ Bad: Heavy work in subscriber
+    await igniter.store.subscribe('orders:created', async (order) => {
+      await heavyProcessing(order); // Blocks other messages
+    });
+    ```
+    
+    Fast subscribers keep your Pub/Sub system responsive. Offload heavy operations to background jobs to prevent message processing delays and maintain system performance.
+  </Accordion>
+</Accordions>
+
+---
+
+## Troubleshooting
+
+When Pub/Sub isn't working as expected, these troubleshooting tips help you identify and fix common issues. Most Pub/Sub problems stem from subscription setup, channel name mismatches, or connection issues. Understanding these common problems helps you debug Pub/Sub issues quickly.
+
+Troubleshooting Pub/Sub requires checking subscription setup, verifying channel names match, and ensuring Redis connections are working correctly. These tips cover the most common issues developers encounter.
+
+<Accordions>
+  <Accordion title="Messages Not Received">
+    If subscribers aren't receiving messages, check subscription setup, channel name matching, and Redis connection. Subscribers must be set up before messages are published, and channel names must match exactly between publishers and subscribers.
+    
+    **1. Verify subscription is active:**
+    ```typescript
+    // Ensure subscription is set up before publishing
+    await igniter.store.subscribe('channel', callback);
+    await igniter.store.publish('channel', message);
+    ```
+    
+    **2. Check channel names match:**
+    ```typescript
+    // Publisher and subscriber must use exact same channel name
+    await igniter.store.publish('notifications', message);
+    await igniter.store.subscribe('notifications', callback); // ✅ Match
+    ```
+    
+    **3. Verify Redis connection:**
+    ```typescript
+    const redis = (igniter.store.client as Redis);
+    await redis.ping(); // Should return 'PONG'
+    ```
+    
+    Messages not being received usually means subscriptions aren't set up correctly or channel names don't match. Verify subscriptions are active and channel names are identical.
+  </Accordion>
+  
+  <Accordion title="Duplicate Messages">
+    If messages are received multiple times, this is expected behavior—each subscriber receives all messages. Use idempotency keys to handle duplicates and ensure idempotent message processing.
+    
+    ```typescript
+    const processedIds = new Set<string>();
+    
+    await igniter.store.subscribe('events', async (message) => {
+      if (processedIds.has(message.id)) {
+        return; // Already processed
+      }
+      
+      processedIds.add(message.id);
+      await processMessage(message);
+    });
+    ```
+    
+    Duplicate messages are normal in Pub/Sub systems where multiple subscribers process the same message. Use idempotency keys to ensure messages are processed only once even if received multiple times.
+  </Accordion>
+</Accordions>
+
+---
+

@@ -1,0 +1,327 @@
+---
+title: Introduction
+description: The first AI-native TypeScript framework with built-in training for 15+ Code Agents. Built for Code Agents, perfected for developers.
+---
+
+Igniter.js is **the first AI-native TypeScript framework** designed from the ground up for the future of software development—where humans and AI collaborate seamlessly. It provides end-to-end type safety, real-time capabilities, background jobs, and a predictable architecture that both developers and AI agents can easily understand and modify.
+
+## Built for Code Agents, Perfected for Developers
+
+Unlike traditional frameworks that treat AI integration as an afterthought, Igniter.js was architected from day one with **AI-first principles**. Every design decision—from the feature-sliced architecture to the explicit type system—creates a **low-entropy environment** that makes it dramatically easier for Code Agents like Cursor, Claude Code, GitHub Copilot, and Gemini CLI to understand, navigate, and modify your codebase.
+
+The framework eliminates common sources of confusion for AI agents: implicit behaviors, magic conventions, scattered configuration, and complex inheritance hierarchies. Instead, it embraces **explicit over implicit**, **composition over inheritance**, and **feature-based organization** that mirrors how humans naturally think about business logic.
+
+What does this mean in practice? When you ask Claude Code to "add authentication to the users endpoint," it doesn't need to hunt through multiple files, decipher framework magic, or guess at conventions. It sees a clear, predictable structure where every feature is self-contained, every dependency is explicit, and every type is precisely defined. The AI can confidently make changes knowing exactly what will break and what won't.
+
+But being AI-native doesn't mean sacrificing developer experience. In fact, the same principles that make code easy for AI to understand—clarity, explicitness, and strong typing—make it a joy for humans to work with too. You get exceptional IntelliSense, instant error detection, and a framework that guides you toward best practices naturally.
+
+```typescript
+// Crystal-clear structure that both humans and AI understand instantly
+export const users = igniter.controller({
+  path: '/users',
+  actions: {
+    getById: igniter.query({
+      path: '/:id',
+      handler: async ({ params }) => {
+        const user = await db.users.findUnique({ where: { id: params.id } })
+        return response.success({ user })
+      }
+    })
+  }
+})
+
+// Client code is automatically type-safe—no configuration needed
+const { user } = await api.users.getById.query({ id: '123' })
+//     ^? User - TypeScript knows the exact type!
+```
+
+## Why Igniter.js?
+
+<Accordions>
+  <Accordion title="AI-Native Architecture">
+    Built from the ground up for Code Agents with a low-entropy, predictable structure. Every file, every pattern, every convention is designed to be instantly understandable by both humans and AI.
+    
+    **What makes it AI-friendly?**
+    - **Feature-Sliced Architecture** - Business logic organized by features, not technical layers
+    - **Explicit Type System** - Zero magic, everything is typed and traceable
+    - **Self-Contained Modules** - Each feature includes its routes, controllers, and types
+    - **Predictable Patterns** - Consistent conventions across the entire codebase
+    - **Low Coupling** - Changes are localized and AI can reason about impact
+    
+    When you ask Cursor to "add rate limiting to the auth endpoint," it knows exactly where to look, what to modify, and what tests to update—no guessing required.
+  </Accordion>
+
+  <Accordion title="End-to-End Type Safety">
+    Every request and response is fully typed from server to client. No code generation, no manual type definitions, no runtime overhead—just pure TypeScript inference.
+    
+    ```typescript
+    // Change the server response
+    return response.success({ user, posts }) // Added posts!
+    
+    // TypeScript immediately updates the client
+    const data = await api.users.getById.query({ id: '123' })
+    //    ^? { user: User, posts: Post[] } ✅
+    ```
+    
+    If you change an endpoint's return type, add a parameter, or modify validation rules, TypeScript catches breaking changes instantly across your entire codebase. Your IDE becomes a safety net that prevents runtime errors before they happen.
+  </Accordion>
+
+  <Accordion title="Framework Agnostic">
+    Built on Web Standards (Request/Response) to work anywhere TypeScript runs:
+    
+    - **Next.js** - Full-stack React with SSR and API routes
+    - **Express** - Traditional Node.js web framework
+    - **Hono** - Ultrafast edge runtime framework
+    - **Bun** - All-in-one JavaScript runtime
+    - **Deno** - Secure-by-default runtime
+    
+    Same code, same types, different runtime. Choose what works best for your deployment target and switch later if needed—your business logic stays unchanged.
+  </Accordion>
+
+  <Accordion title="Production Ready">
+    Everything you need to build production applications:
+    
+    - **Real-time Updates** - Built-in SSE and WebSocket support
+    - **Background Jobs** - BullMQ integration for async processing
+    - **Caching** - Redis adapter for high-performance caching
+    - **Observability** - OpenTelemetry integration out of the box
+    - **API Documentation** - Auto-generated OpenAPI specs
+    - **Testing** - Server-side caller for fast, type-safe tests
+    
+    Start with the core and add features as you scale. No need to retrofit critical functionality later.
+  </Accordion>
+</Accordions>
+
+## Get Started
+
+Choose your framework to start building:
+
+<Cards>
+  <Card
+    title="Next.js"
+    description="Full-stack React framework with SSR and API routes"
+    href="/docs/installation/nextjs"
+    icon={<NextJsIcon className="size-6" />}
+  />
+  <Card
+    title="Vite"
+    description="Lightning-fast build tool for modern web projects"
+    href="/docs/installation/vite"
+    icon={<ViteIcon className="size-6" />}
+  />
+  <Card
+    title="Express"
+    description="Fast, unopinionated web framework for Node.js"
+    href="/docs/installation/express"
+    icon={<ExpressIcon className="size-6" />}
+  />
+  <Card
+    title="Bun"
+    description="Fast all-in-one JavaScript runtime and toolkit"
+    href="/docs/installation/bun"
+    icon={<BunIcon className="size-6" />}
+  />
+  <Card
+    title="Deno"
+    description="Secure runtime for JavaScript and TypeScript"
+    href="/docs/installation/deno"
+    icon={<DenoIcon className="size-6" />}
+  />
+</Cards>
+
+Or use the CLI for a guided setup:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest init
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="info" title="Comparing Frameworks?">
+  See how Igniter.js compares to tRPC, Next.js Server Actions, and other frameworks.
+  
+  [→ Framework Comparison](/docs/comparison)
+</Callout>
+
+---
+
+## AI Tooling
+
+Igniter.js provides a complete AI development ecosystem that transforms how you build applications.
+
+### Lia - Your AI Development Partner
+
+**Lia** is a specialized Code Agent trained exclusively for the Igniter.js ecosystem. Unlike generic AI assistants that struggle with framework-specific patterns, Lia is purpose-built to understand every aspect of Igniter.js—from architecture decisions to testing strategies.
+
+When you install Lia in your project, she replaces the default behavior of Code Agents like Cursor, Claude Code, or GitHub Copilot with deep knowledge of:
+
+- **Igniter.js Architecture** - Feature-based design, controller patterns, and type-safe APIs
+- **Development Workflows** - From scaffolding to deployment, following best practices
+- **Testing Strategies** - Unit tests, integration tests, and E2E testing patterns
+- **Debugging Techniques** - Advanced diagnostics using MCP Server tools
+
+What makes Lia special is her ability to not just write code, but to **validate, debug, and test** what she creates. She can:
+
+- Scaffold complete features following Igniter.js conventions
+- Debug type errors and suggest fixes with context-aware solutions
+- Run and analyze test results to ensure quality
+- Investigate code using AST parsing and semantic search
+- Create GitHub issues and explore library source code
+- Manage tasks with built-in project management tools
+
+[→ Learn more about Lia](/docs/ai/lia)
+
+### MCP Server - Lia's Toolbox
+
+The **Igniter.js MCP Server** is what powers Lia's advanced capabilities. It's a collection of specialized tools that transform your API into an AI-accessible workspace, enabling Lia to perform complex development tasks autonomously.
+
+<Accordions>
+  <Accordion title="Development Tools">
+    These tools enable Lia to scaffold and build features following Igniter.js conventions. She can generate complete, production-ready code structures without requiring manual boilerplate.
+    
+    - Scaffold controllers, actions, and procedures
+    - Add adapters (Redis, BullMQ, OpenTelemetry)
+    - Generate type-safe clients and schemas
+    - Create middleware and custom procedures
+  </Accordion>
+
+  <Accordion title="Debugging & Analysis">
+    Lia uses these tools to understand your codebase deeply and diagnose issues with precision. She can analyze dependencies, parse TypeScript AST, and validate type safety across your entire API.
+    
+    - Validate API endpoints and type safety
+    - Analyze file dependencies and imports
+    - Parse TypeScript AST for code understanding
+    - Execute CLI commands and capture output
+  </Accordion>
+
+  <Accordion title="Testing & Quality">
+    Quality assurance tools that allow Lia to not just write code, but verify it works correctly. She can run tests, analyze coverage, and explain failures with detailed context.
+    
+    - Run unit and integration tests
+    - Analyze test coverage and results
+    - Diagnose failures with detailed context
+    - Generate test cases for new features
+  </Accordion>
+
+  <Accordion title="Project Management">
+    These tools help Lia manage the entire development lifecycle, from planning to documentation. She can track tasks, create issues, and explore external codebases to understand dependencies.
+    
+    - Create and manage tasks
+    - Track progress and blockers
+    - Generate documentation
+    - Integrate with GitHub (issues, PRs, code exploration)
+  </Accordion>
+
+  <Accordion title="Memory & Context">
+    Lia's learning system that enables her to improve over time. She stores insights, recalls past decisions, and builds a knowledge base specific to your project.
+    
+    - Store insights and learnings
+    - Recall past decisions and patterns
+    - Build knowledge base over time
+    - Share context across development sessions
+  </Accordion>
+</Accordions>
+
+[→ Explore MCP Server tools](/docs/ai/mcp-server)
+
+### Getting Started with Lia
+
+Installing Lia is simple. Use the Igniter.js CLI to set up Lia in your preferred Code Agent:
+
+<Tabs items={['Cursor', 'Claude Desktop', 'GitHub Copilot']}>
+  <Tab value="Cursor">
+    ```bash
+    npx @igniter-js/cli@latest lia --cursor
+    ```
+    
+    This configures Lia in Cursor by:
+    1. Adding the MCP Server to your Cursor settings
+    2. Installing Code Agent training files (`.cursor/rules/`)
+    3. Creating the `AGENTS.md` file with Lia's identity
+    
+    Restart Cursor and Lia will be active, ready to help you build.
+  </Tab>
+  
+  <Tab value="Claude Desktop">
+    ```bash
+    npx @igniter-js/cli@latest lia --claude
+    ```
+    
+    Adds Lia's MCP Server to Claude Desktop configuration. After restarting Claude, you can ask Lia to scaffold features, debug issues, or analyze your codebase.
+  </Tab>
+  
+  <Tab value="GitHub Copilot">
+    ```bash
+    npx @igniter-js/cli@latest lia --copilot
+    ```
+    
+    Configures Lia for GitHub Copilot with training files and MCP integration. Enhances Copilot's understanding of Igniter.js patterns.
+  </Tab>
+</Tabs>
+
+### Using Lia in Your Project
+
+Once installed, Lia becomes your intelligent pair programmer. Here are examples of what you can ask:
+
+<Accordions>
+  <Accordion title="Feature Development">
+    Lia can scaffold complete features with all necessary components—controllers, actions, types, and tests—following Igniter.js best practices.
+    
+    **Examples:**
+    - "Create a users controller with CRUD operations and authentication"
+    - "Add Redis caching to the posts endpoint"
+    - "Set up background jobs for email notifications"
+  </Accordion>
+
+  <Accordion title="Debugging & Analysis">
+    When you encounter errors or need to understand your codebase better, Lia can analyze dependencies, trace types, and explain issues with full context.
+    
+    **Examples:**
+    - "Why is this type error happening in my controller?"
+    - "Analyze the dependencies of the auth feature"
+    - "Show me all actions that use the database context"
+  </Accordion>
+
+  <Accordion title="Testing & Quality">
+    Lia can write tests, run them, and explain failures. She understands your testing strategy and generates tests that match your project's conventions.
+    
+    **Examples:**
+    - "Run tests for the users controller and explain any failures"
+    - "Generate integration tests for the authentication flow"
+    - "Check if all endpoints have proper error handling"
+  </Accordion>
+
+  <Accordion title="Project Management">
+    Beyond coding, Lia helps with planning and organization. She can create issues, explore external libraries, and manage your development workflow.
+    
+    **Examples:**
+    - "Create a GitHub issue for adding rate limiting"
+    - "Show me the implementation of `igniter.query` in the core package"
+    - "What are the current tasks and their status?"
+  </Accordion>
+</Accordions>
+
+Lia understands the full context of your project and delivers production-ready code that follows Igniter.js best practices.
+
+### LLMs.txt
+
+For AI models that don't support MCP, Igniter.js exposes an `llms.txt` file—a machine-readable documentation format that helps AI understand your API structure and how to interact with it.
+
+View it at [https://igniterjs.com/llms.txt](https://igniterjs.com/llms.txt).
