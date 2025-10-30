@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import React, { useMemo, useRef } from "react";
-import * as THREE from "node_modules/@types/three";
+import * as THREE from "three";
 
 // Theme constants
 const THEMES = {
