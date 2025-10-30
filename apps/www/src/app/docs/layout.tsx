@@ -1,6 +1,5 @@
 import { source } from "@/app/docs/source";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
-import { docsOptions } from "@/lib/docs.shared";
 import {
   BotIcon,
   BoxIcon,

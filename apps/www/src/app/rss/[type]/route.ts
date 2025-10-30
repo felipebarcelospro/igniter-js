@@ -8,11 +8,19 @@ export const revalidate = false;
  */
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ type: ContentType }> }
+  { params }: { params: Promise<{ type: string }> }
 ) {
   const resolvedParams = await params;
+  
+  // Validate that type is a valid ContentType
+  const validTypes: ContentType[] = ['blog', 'docs', 'changelog', 'learn', 'showcase', 'templates'];
+  
+  if (!validTypes.includes(resolvedParams.type as ContentType)) {
+    return new Response('Content type not found', { status: 404 });
+  }
+  
   try {
-    const feed = await generateRSSFeedForType(resolvedParams.type);
+    const feed = await generateRSSFeedForType(resolvedParams.type as ContentType);
     
     return new Response(feed, {
       headers: {
