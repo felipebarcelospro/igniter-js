@@ -1,4 +1,7 @@
 ---
+alwaysApply: true
+---
+---
 applyTo: '**'
 ---
 # Writing Guidelines for Humans and LLMs
@@ -90,18 +93,51 @@ Always use these components from `mdx-components.tsx` when appropriate:
 
 ---
 
+## 🔍 CRITICAL: Always Verify Implementation Before Documenting
+
+**NEVER assume how Igniter.js APIs work. ALWAYS verify the actual implementation.**
+
+Before documenting any feature, API, or pattern:
+
+1. **Search the codebase** for the actual implementation in `packages/`
+2. **Read the source code** to understand:
+   - Function signatures and parameters
+   - Return types and structures
+   - Available methods and properties
+   - Type definitions in `.d.ts` files
+3. **Check interfaces** (`interface` and `type` definitions) to understand contracts
+4. **Review existing examples** in the codebase for correct usage patterns
+5. **Test your understanding** by looking at how it's used elsewhere
+
+### Why This Matters
+
+- **Type Safety**: Incorrect API usage breaks TypeScript inference
+- **Developer Trust**: Wrong documentation causes frustration and bugs
+- **Code Consistency**: Ensures all examples match the actual implementation
+- **Framework Evolution**: APIs change, and documentation must reflect current state
+
+### Verification Checklist
+
+- [ ] Found the implementation in `packages/`
+- [ ] Read the source code and interfaces
+- [ ] Verified all imports and exports
+- [ ] Checked type definitions
+- [ ] Reviewed how it's used in existing code/docs
+- [ ] Ensured code examples compile and work correctly
+
 ## For LLM Content Generation
 
 ### Formatting Instructions
 
 When generating content with an LLM, ensure the following:
 
-1. **Structured Data**: Present information in well-defined structures like tables, numbered lists, and hierarchical headings
-2. **Explicit Examples**: Always include contrastive examples (good vs. bad)
-3. **Clear Boundaries**: Use explicit section markers and consistent formatting patterns
-4. **Context-Awareness**: Begin with the most critical information for the document type
-5. **Pattern Consistency**: Maintain consistent patterns throughout similar sections
-6. **Component Usage**: Use Fumadocs components appropriately for the content type
+1. **Verify Implementation First**: Always check `packages/` before documenting any API
+2. **Structured Data**: Present information in well-defined structures like tables, numbered lists, and hierarchical headings
+3. **Explicit Examples**: Always include contrastive examples (good vs. bad)
+4. **Clear Boundaries**: Use explicit section markers and consistent formatting patterns
+5. **Context-Awareness**: Begin with the most critical information for the document type
+6. **Pattern Consistency**: Maintain consistent patterns throughout similar sections
+7. **Component Usage**: Use Fumadocs components appropriately for the content type
 
 ### LLM Content Templates
 
@@ -379,6 +415,132 @@ Code example showing the feature.
 Instructions for deploying to production.
 ```
 
+### Learn Course (Tutorial Chapters)
+
+**Purpose**: Step-by-step tutorial chapters for building applications with Igniter.js
+**Location**: `apps/www/content/learn/`
+
+#### Frontmatter Schema
+```yaml
+---
+title: "XX: Chapter Title"
+description: "What you'll learn in this chapter"
+---
+```
+
+#### Course-Specific Components
+
+These components are available only in the learn course:
+
+- **`<ChapterObjectives />`** - Lists learning objectives at the start of each chapter
+- **`<ChapterNav />`** - Navigation between chapters at the end
+- **`<Quiz />`** - Interactive quizzes to test understanding
+
+#### Writing Rules for Course Chapters
+
+- **Start with Objectives**: Use `<ChapterObjectives>` to list what students will learn
+- **Explain Before Showing**: Always explain concepts before diving into code
+- **Complete Code Examples**: Every code block must be complete, runnable, and tested
+- **Business Logic Comments**: Use `// Business Rule:` and `// Observation:` comments to explain code logic
+- **"Understanding..." Sections**: Include sections like "Understanding the Controller" to deepen knowledge
+- **Show Real APIs**: Always use actual Igniter.js APIs from `packages/` - verify before writing
+- **Include Quiz Questions**: Add `<Quiz>` components to reinforce key concepts
+- **Chapter Navigation**: Always end with `<ChapterNav>` linking to next chapter
+- **File Paths**: Use `<Files>` component to show project structure frequently
+- **Callouts for Tips**: Use `<Callout type="info">` for tips and `<Callout type="success">` for achievements
+
+#### Code Comment Patterns
+
+When writing code examples for the course, use these comment patterns:
+
+```typescript
+// Business Rule: Explains why a business decision was made
+// This helps students understand not just what, but why
+
+// Observation: Explains what's happening or what to notice
+// Useful for highlighting important patterns or behaviors
+```
+
+#### Structure Template for Course Chapters
+
+```mdx
+---
+title: "03: Your First Feature"
+description: "Generate and understand your first Igniter.js feature"
+---
+
+<ChapterObjectives
+  objectives={[
+    { text: 'Use the CLI to generate a feature' },
+    { text: 'Understand the feature structure' },
+    { text: 'Learn how controllers handle HTTP requests' }
+  ]}
+/>
+
+## Introduction
+
+Brief context about what we're building and why.
+
+## Step-by-Step Instructions
+
+Detailed instructions with complete code examples.
+
+```typescript
+// Business Rule: Why we do this
+import { igniter } from "@/igniter";
+
+export const myController = igniter.controller({
+  // Complete implementation
+});
+```
+
+### Understanding the Code
+
+Deep dive into what the code does and why it works this way.
+
+<Callout type="info" title="Key Concept">
+  Important insight about the pattern we just used.
+</Callout>
+
+## Testing Your Implementation
+
+How to verify everything works.
+
+<Quiz
+  question="What does this pattern accomplish?"
+  options={[
+    { label: 'Option 1', value: 'a' },
+    { label: 'Correct option', value: 'b', isCorrect: true }
+  ]}
+  explanation="Why this is the correct answer."
+/>
+
+<ChapterNav
+  current={{
+    number: 3,
+    title: "Your First Feature"
+  }}
+  next={{
+    number: 4,
+    title: "Authentication",
+    description: "Build a complete authentication system",
+    href: "/learn/04-authentication"
+  }}
+/>
+```
+
+#### Example Chapter Structure Pattern
+
+Every chapter should follow this flow:
+
+1. **ChapterObjectives** - What students will learn
+2. **Introduction** - Context and overview
+3. **Step-by-Step Instructions** - Complete, verified code examples
+4. **Understanding Sections** - Deep dives into concepts
+5. **Testing** - How to verify it works
+6. **Quiz** - Reinforce key concepts
+7. **ChapterNav** - Link to next chapter
+
 ### Updates (Changelog)
 
 **Purpose**: Version updates and changelog entries
@@ -494,6 +656,277 @@ When writing documentation that will be processed by LLMs, follow these addition
 
 ---
 
+## Visual Structure & DX Best Practices
+
+Optimize documentation for scanning, understanding, and action. These patterns improve developer experience significantly.
+
+### Content Hierarchy Patterns
+
+**1. Progressive Disclosure**
+- Start with **what** → then **why** → then **how**
+- Use overview sections before diving into details
+- Place advanced topics after basic ones
+
+```mdx
+## Overview
+High-level explanation of what this feature does.
+
+## Quick Start
+Get something working immediately.
+
+## Understanding the Concepts
+Deeper explanation after hands-on experience.
+
+## Advanced Usage
+More complex scenarios and edge cases.
+```
+
+**2. Section Naming Conventions**
+- **"Understanding..."** - Use after showing code to explain concepts
+- **"Key Concepts"** - Summary of important ideas
+- **"Testing..."** - How to verify something works
+- **"Why...?"** - Explains decisions and trade-offs
+- **"Common Patterns"** - Frequently used approaches
+
+**3. Visual Breathing Room**
+- Add horizontal rules (`---`) between major sections
+- Use spacing to separate concepts, not just headings
+- Group related content with consistent patterns
+
+### Code Example Patterns
+
+**1. Complete vs. Snippets**
+- **Complete examples**: For tutorials, course, getting started
+- **Snippets**: For reference docs showing specific patterns
+- Always include necessary imports in complete examples
+
+**2. Progressive Code Examples**
+```mdx
+### Basic Example
+```typescript
+// Simple, minimal working example
+```
+
+### Adding Features
+```typescript
+// Builds on basic example
+```
+
+### Production Ready
+```typescript
+// Complete example with error handling, etc.
+```
+```
+
+**3. Before/After Comparisons**
+Use `<Tabs>` to show different approaches:
+
+```mdx
+<Tabs items={['Without Feature', 'With Feature']}>
+  <Tab value="Without Feature">
+    ```typescript
+    // Old way
+    ```
+  </Tab>
+  <Tab value="With Feature">
+    ```typescript
+    // New way - better!
+    ```
+  </Tab>
+</Tabs>
+```
+
+### Comparison Tables
+
+Use tables for feature comparisons, API differences, etc.:
+
+```mdx
+| Feature | Option A | Option B |
+|---------|----------|----------|
+| Type Safety | ✅ Full | ⚠️ Partial |
+| Performance | ⚡ Fast | ⚡⚡ Faster |
+```
+
+**When to use tables:**
+- Comparing multiple options/features
+- Showing configuration differences
+- Listing pros/cons side-by-side
+- API parameter comparisons
+
+### Callout Strategy
+
+**Strategic use of callouts:**
+- `<Callout type="info">` - Context, prerequisites, background
+- `<Callout type="warn">` - Potential issues, breaking changes
+- `<Callout type="success">` - Achievements, checkpoints, wins
+- `<Callout type="error">` - Critical errors, things that will break
+
+**Callout placement:**
+- **Before code**: Warnings, prerequisites
+- **After code**: Success messages, next steps
+- **Standalone**: Important context, tips
+
+### Lists and Formatting
+
+**1. Bullet Lists** - Use for:
+- Features
+- Steps without strict order
+- Options to choose from
+- Benefits/consequences
+
+**2. Numbered Lists** - Use for:
+- Sequential steps
+- Ordered priorities
+- Step-by-step instructions
+
+**3. Bold Text** - Use for:
+- Key concepts (first mention)
+- Important terms
+- Emphasis on critical information
+
+**4. Inline Code** - Use for:
+- Function names: `igniter.controller()`
+- File paths: `src/features/user/`
+- Config values: `"production"`
+- API endpoints: `/api/v1/users`
+
+### Cross-References and Links
+
+**1. Internal Links**
+- Link to related concepts: `[See Controllers](/docs/controllers)`
+- Use descriptive link text, not "click here"
+- Include context: "To learn more, see [Authentication](/docs/auth)"
+
+**2. Related Sections**
+Use callouts to guide readers:
+
+```mdx
+<Callout type="info" title="Related">
+  This builds on concepts from [Procedures](/docs/procedures). 
+  Make sure you understand those first.
+</Callout>
+```
+
+**3. Next Steps**
+Always guide readers forward:
+
+```mdx
+## Next Steps
+
+- Try building [Feature X](/docs/feature-x)
+- Read about [Concept Y](/docs/concept-y)
+- Explore [Advanced Patterns](/docs/advanced)
+```
+
+### Common Patterns
+
+**1. "Understanding..." Sections**
+After showing code, explain it:
+
+```mdx
+```typescript
+// Code example here
+```
+
+### Understanding the Code
+
+Break down what the code does and why it works.
+```
+
+**2. Key Concepts Recap**
+After complex sections:
+
+```mdx
+## Key Concepts Review
+
+**1. Concept Name**: Brief explanation
+**2. Another Concept**: Brief explanation
+```
+
+**3. Testing Patterns**
+Always show how to verify:
+
+```mdx
+## Testing Your Implementation
+
+1. Run the dev server
+2. Navigate to `/your-endpoint`
+3. You should see...
+```
+
+**4. Error Prevention**
+Highlight common mistakes:
+
+```mdx
+<Callout type="warn" title="Common Mistake">
+  Don't forget to... Many developers miss this step!
+</Callout>
+```
+
+### Visual Organization Rules
+
+**1. Section Length**
+- Keep sections focused (200-400 words ideal)
+- Break long sections into subsections
+- Use visual breaks (hrules, callouts) for separation
+
+**2. Heading Depth**
+- H2 for major sections
+- H3 for subsections
+- H4 sparingly (only when truly needed)
+- Never skip heading levels
+
+**3. Code Block Context**
+Always provide context before code:
+
+```mdx
+## Creating a Controller
+
+To create a controller, follow this pattern:
+
+```typescript
+// Code here
+```
+
+This pattern ensures type safety...
+```
+
+**4. Emphasis Hierarchy**
+- **Bold** for important concepts/terms
+- *Italic* for emphasis within sentences
+- `Code` for technical terms
+- **Bold + Code** for highlighting API usage: **`igniter.controller()`**
+
+### Tables of Contents (ToC)
+
+For longer documents, consider structured ToC:
+
+```mdx
+## In This Chapter
+
+- [Setting Up](#setting-up)
+- [Configuration](#configuration)
+- [Usage Examples](#usage-examples)
+- [Troubleshooting](#troubleshooting)
+```
+
+### Visual Aids
+
+**1. Diagrams** - Use Mermaid for:
+- Architecture diagrams
+- Data flow
+- Component relationships
+
+**2. Screenshots** - When helpful:
+- UI components
+- CLI output
+- IDE configurations
+
+**3. Animated Gifs/Videos** - For:
+- Complex workflows
+- Tool demonstrations
+- Multi-step processes
+
 ## Content Quality Checklist
 
 ### For All Content Types
@@ -505,6 +938,9 @@ When writing documentation that will be processed by LLMs, follow these addition
 - [ ] Links are valid and properly formatted
 - [ ] Images have alt text
 - [ ] Terminology is consistent throughout
+- [ ] Visual hierarchy is clear (proper heading levels)
+- [ ] Callouts used strategically, not excessively
+- [ ] Related content cross-referenced appropriately
 
 ### For Documentation
 
@@ -792,246 +1228,69 @@ How to verify it works.
 
 ---
 
-## Advanced Documentation Patterns
+## AI Agent Guidelines
 
-This section covers advanced patterns and conventions developed specifically for Igniter.js documentation. These patterns ensure consistent, high-quality documentation with excellent developer experience.
+When generating content as an AI agent:
 
-### Conversational Introduction Paragraphs
+1. **Verify Implementation First**: Before writing any code example, search `packages/` and read the actual implementation
+2. **Always read the relevant instruction file first** (this file)
+3. **Match the document type** to the appropriate section above
+4. **Use exact frontmatter schemas** as defined
+5. **Implement Fumadocs components** where appropriate
+6. **Follow formatting patterns** consistently
+7. **Include complete code examples** that users can copy-paste and that match the real API
+8. **Verify API usage** by checking interfaces, types, and existing examples
+9. **Test all links** before submitting
+10. **Use consistent terminology** from the Igniter.js docs
+11. **Add helpful callouts** strategically (not excessively)
+12. **Structure content** for easy scanning using visual hierarchy principles
+13. **For course chapters**: Use `<ChapterObjectives>`, `<Quiz>`, and `<ChapterNav>` components
+14. **Apply DX best practices**: Progressive disclosure, visual breathing room, clear cross-references
+15. **Review visual structure**: Ensure content is scannable and well-organized
 
-**Always include detailed, conversational introduction paragraphs** at the beginning of major sections. These paragraphs should:
+### Content Generation Workflow
 
-- Explain **what** the section covers
-- Explain **why** it matters and when to use it
-- Provide context about **how** it fits into the broader picture
-- Use a conversational, friendly tone as if talking to a colleague
-
-**Example:**
-
-```mdx
-## Pre-Process Hooks
-
-Pre-process hooks run **before** middleware, making them perfect for enriching the context with data that your middleware or command handlers need. These hooks execute at the very start of the processing pipeline, allowing you to load user sessions, fetch permissions, gather channel metadata, or perform any other context enrichment before any middleware runs.
-
-Understanding when to use pre-process hooks versus middleware is important. Pre-process hooks are ideal for data loading that doesn't need to block processing—if the data load fails, you might want to continue with default values. They're also perfect for operations that should happen regardless of middleware logic, ensuring context is always enriched consistently.
+```
+1. Identify content type (docs/blog/template/update/learn)
+2. VERIFY IMPLEMENTATION: Search packages/ and read source code
+3. Read relevant schema and rules from this file
+4. Create frontmatter with all required fields
+5. Structure content using appropriate pattern
+6. Add Fumadocs components for better UX
+7. Include code examples that match the verified implementation
+8. Review against quality checklist
+9. Ensure all links and references are valid
+10. For course: Add ChapterObjectives, Quiz, and ChapterNav
 ```
 
-### Using Accordions for Lists
+### Verification Workflow for Code Examples
 
-**Convert lists into Accordions** when the list items:
-- Have multiple items (3+)
-- Contain detailed explanations
-- Represent distinct concepts or patterns
-- Appear in sections like "Best Practices", "Limitations", "Common Use Cases", "Examples"
+When including code examples, follow this process:
 
-**Pattern:**
-
-```mdx
-## Best Practices
-
-Following these practices ensures your middleware integrates smoothly with the bot core and performs reliably. Good middleware is predictable, efficient, and resilient to errors. It enhances your bot's functionality without introducing complexity or bugs.
-
-<Accordions>
-  <Accordion title="Always call next()">
-    Unless blocking intentionally, always call `next()` to continue the middleware chain. Skipping `next()` stops processing, which is only appropriate when you're intentionally blocking a request (like authentication failures). For most middleware, you want to process the request and then continue to the next handler.
-  </Accordion>
-  
-  <Accordion title="Handle errors gracefully">
-    Don't let middleware errors crash the bot. Wrap risky operations in try-catch blocks and handle errors appropriately. If middleware fails, the bot should continue functioning—consider logging the error and calling `next()` to allow other handlers to process the request.
-  </Accordion>
-</Accordions>
-```
-
-**Each Accordion item should include:**
-- A clear, descriptive title
-- A detailed explanation (2-4 sentences)
-- Context about when and why to follow the practice
-- Practical considerations or examples when helpful
-
-### Steps Component Patterns
-
-**When using `<Steps>` component:**
-
-1. **Wrap Steps in Cards for better visual organization** when the steps represent a complete tutorial or guide:
-   ```mdx
-   <Card title="Quick Start Guide">
-     <Steps>
-       <Step>
-         ### Step Title
-         Content here
-       </Step>
-     </Steps>
-   </Card>
+1. **Find the Implementation**
+   ```bash
+   # Search for the function/class/interface in packages/
+   grep -r "igniter.controller" packages/
    ```
 
-2. **Include detailed introductory paragraphs** before the Steps component explaining what the guide accomplishes and what concepts it demonstrates.
+2. **Read the Source**
+   - Open the file where it's defined
+   - Check function signatures
+   - Read JSDoc comments
+   - Review type definitions
 
-3. **Add context paragraphs** within each Step when the step needs explanation beyond just instructions.
+3. **Check Usage Examples**
+   - Look for tests in `packages/*/tests/`
+   - Check existing documentation
+   - Review examples in `apps/` directories
 
-### Complete Example Sections
+4. **Verify Your Example**
+   - Ensure imports are correct
+   - Check parameter names match the interface
+   - Verify return types
+   - Confirm method names are accurate
 
-**Always expand "Complete Example" sections** with:
-
-1. **An introductory paragraph** that explains:
-   - What the example demonstrates
-   - When you would use this pattern
-   - What concepts it showcases
-   - List of key points the example demonstrates
-
-2. **Example format:**
-   ```mdx
-   ## Complete Example
-   
-   Here's a complete example that demonstrates dynamic command loading from a directory. This pattern is ideal for production bots where you want to organize commands in separate files and load them automatically. The example shows how to scan a commands directory, import each command module, and register them dynamically.
-   
-   This example demonstrates:
-   - **Dynamic Loading**: Scanning a directory and loading commands automatically
-   - **Command Organization**: Keeping commands in separate files for better maintainability
-   - **Initialization Pattern**: Loading commands before starting the bot
-   
-   ```typescript
-   // Code example here
-   ```
-   ```
-
-### Removing "Next Steps" Sections
-
-**DO NOT include "Next Steps" sections** in documentation articles. Instead:
-
-- Link to related concepts naturally within the content
-- Use `<Callout>` components to guide readers to related documentation
-- End articles with the most important information, not navigation links
-
-**Exception:** Blog posts and tutorials may include "Next Steps" or "What's Next" sections as they serve a different purpose (calls-to-action, future plans).
-
-### Using Cards for Visual Organization
-
-**Use `<Card>` components** to:
-- Wrap `<Steps>` components for tutorials (with `title` prop)
-- Group related content visually
-- Create visual separation between major sections
-
-**Example:**
-```mdx
-<Card title="Quick Start Guide">
-  <Steps>
-    <!-- Steps here -->
-  </Steps>
-</Card>
-```
-
-### Common Use Cases and Patterns in Accordions
-
-**When documenting common patterns, use cases, or examples:**
-
-1. **Add an introductory paragraph** explaining:
-   - What these patterns/use cases are
-   - When you would use them
-   - Why they're valuable
-
-2. **Convert each pattern into an Accordion** with:
-   - Descriptive title
-   - Introduction paragraph explaining the pattern
-   - Complete code example
-   - Concluding paragraph with benefits and considerations
-
-**Example:**
-```mdx
-## Common Use Cases
-
-Here are common middleware patterns you'll use in production bots. Each example uses `Bot.middleware()` for validation and type safety. Understanding these patterns helps you build robust, production-ready bots with proper authentication, logging, rate limiting, and more:
-
-<Accordions>
-  <Accordion title="Authentication">
-    Restrict commands to authorized users by checking permissions before allowing requests to proceed. This middleware runs early in the pipeline, blocking unauthorized users before any command logic executes. It's essential for bots that handle sensitive operations or provide different features to different user tiers.
-    
-    ```typescript
-    // Code example
-    ```
-    
-    Authentication middleware should typically be placed early in your middleware array—ideally first or second—so unauthorized users are blocked before expensive operations run. This improves security and reduces unnecessary processing.
-  </Accordion>
-</Accordions>
-```
-
-### Section Introduction Best Practices
-
-**Every major section (H2) should have:**
-
-1. **A conversational introduction paragraph** (2-4 sentences) that:
-   - Explains what the section covers
-   - Provides context about why it matters
-   - Connects it to the broader topic
-
-2. **Additional context paragraphs** when needed to explain:
-   - When to use the feature/concept
-   - How it fits into the larger picture
-   - Important considerations or trade-offs
-
-**Example:**
-```mdx
-## Error Handling
-
-Understanding how errors work in hooks is crucial for building robust bots. Pre-process hooks have different error behavior than post-process hooks, and knowing these differences helps you write hooks that fail gracefully without breaking your bot.
-
-**Pre-process hooks**: Errors thrown in pre-process hooks stop the entire processing pipeline and emit an error event. This means if a pre-process hook throws, middleware and command handlers never run. Use this behavior intentionally—if loading critical data fails, you might want to stop processing.
-
-**Post-process hooks**: Only run if processing succeeded (no errors thrown). If any middleware or command handler throws an error, post-process hooks are skipped entirely. This ensures you don't save state or send analytics for failed operations.
-```
-
-### Platform-Specific or Variant Sections
-
-**When documenting multiple platforms or variants** (e.g., Telegram vs WhatsApp, Simple vs Advanced):
-
-1. **Use Accordions** to organize each platform/variant
-2. **Include detailed setup instructions** within each Accordion
-3. **Add platform-specific notes** or limitations within each Accordion
-
-**Example:**
-```mdx
-## Platform-Specific Setup
-
-Each messaging platform has unique requirements and setup procedures. Choose the platform(s) you want to support and follow the instructions below:
-
-<Accordions>
-  <Accordion title="Telegram">
-    Telegram bots require a bot token obtained from BotFather. The setup process is straightforward and only takes a few minutes.
-    
-    **Setup Steps:**
-    1. Message @BotFather on Telegram
-    2. Use `/newbot` command
-    3. Follow the prompts
-    
-    **Environment Variables:**
-    ```bash
-    TELEGRAM_TOKEN=your_bot_token_here
-    ```
-    
-    **Notes:** Telegram supports webhooks and polling. Webhooks are recommended for production.
-  </Accordion>
-  
-  <Accordion title="WhatsApp Cloud API">
-    WhatsApp Cloud API requires a Meta Business account and app. The setup is more complex but provides enterprise-grade messaging capabilities.
-    
-    <!-- Detailed instructions -->
-  </Accordion>
-</Accordions>
-```
-
----
-
-## AI Agent Documentation Checklist
-
-When creating or updating documentation articles, ensure:
-
-- [ ] Every major section (H2) has a conversational introduction paragraph
-- [ ] Lists in "Best Practices" or "Limitations" sections are converted to Accordions
-- [ ] "Common Use Cases" or "Examples" sections use Accordions
-- [ ] "Complete Example" sections have expanded introductory paragraphs
-- [ ] No "Next Steps" sections in documentation articles (only in blog posts/tutorials)
-- [ ] Steps components are wrapped in Cards when representing complete guides
-- [ ] Code examples are complete and runnable
-- [ ] Introduction paragraphs explain the "what", "why", and "how" of each section
-- [ ] Platform-specific content is organized in Accordions
-- [ ] Visual hierarchy is clear with proper use of Cards, Accordions, and Callouts
-
----
+5. **Test Compilation**
+   - Ensure TypeScript types are correct
+   - Verify the code would compile
+   - Check for missing dependencies
