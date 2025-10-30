@@ -1,12 +1,12 @@
-import { generateAllLLMSFullTxt } from '@/lib/llms';
+import { generateLLMSTxt } from '@/lib/llms';
 
 export const revalidate = false;
 
 /**
- * Full content route for all content types
+ * Main llms.txt route
  */
 export async function GET() {
-  const content = await generateAllLLMSFullTxt();
+  const content = await generateLLMSTxt();
   
   return new Response(content, {
     headers: {
@@ -15,3 +15,4 @@ export async function GET() {
     },
   });
 }
+

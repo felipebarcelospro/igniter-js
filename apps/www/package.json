@@ -10,8 +10,8 @@
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
-    "@next/third-parties": "^16.0.1",
     "@hookform/resolvers": "^5.2.2",
+    "@next/third-parties": "^16.0.1",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.7",
@@ -44,6 +44,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
+    "feed": "^5.1.0",
     "framer-motion": "^12.23.24",
     "fumadocs-core": "16.0.2",
     "fumadocs-mdx": "13.0.0",
