@@ -25,7 +25,7 @@ export function HeroSection() {
               Announcing Igniter.js MCP Server.
             </span>
             <a
-              href="/blog/announcements/announcing-igniter-mcp-server"
+              href="/blog/announcing-igniter-mcp-server"
               className="flex items-center text-primary hover:text-primary/80 transition-colors text-xs sm:text-sm whitespace-nowrap"
             >
               Read the announcement{" "}
@@ -49,7 +49,7 @@ export function HeroSection() {
               className="px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
               asChild
             >
-              <a href="/docs" className="flex items-center">
+              <a href="/docs/core" className="flex items-center">
                 Get Started
                 <ArrowUpRight className="size-3 ml-2" />
               </a>

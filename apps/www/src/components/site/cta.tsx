@@ -83,7 +83,7 @@ export function CTASection({ className }: { className?: string }) {
 
               <div className="flex justify-center gap-4 mt-8">
                 <Button className="rounded-full" asChild>
-                  <Link href="/docs/getting-started/quick-start-guide" className="flex items-center gap-2">
+                  <Link href="/docs/core" className="flex items-center gap-2">
                     Read the docs
                   </Link>
                 </Button>
