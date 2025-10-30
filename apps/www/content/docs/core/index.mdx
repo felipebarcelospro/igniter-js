@@ -322,6 +322,44 @@ Lia understands the full context of your project and delivers production-ready c
 
 ### LLMs.txt
 
-For AI models that don't support MCP, Igniter.js exposes an `llms.txt` file—a machine-readable documentation format that helps AI understand your API structure and how to interact with it.
+Igniter.js website exposes multiple llms-readable documentation formats that help AI understand your API structure and how to interact with it.
 
-View it at [https://igniterjs.com/llms.txt](https://igniterjs.com/llms.txt).
+#### Main Entry Point
+
+**`/llms.txt`** - A comprehensive index that provides:
+- Overview of the Igniter.js framework
+- Site structure and content organization
+- Links to all available content types
+- Instructions on how to access individual pages
+
+Visit [https://igniterjs.com/llms.txt](https://igniterjs.com/llms.txt) to see the complete index.
+
+#### Full Content Files
+
+For AI models that need complete documentation in a single file:
+
+- **`/llms-full.txt`** - Complete documentation from all content types (blog, docs, learn, templates, showcase, changelog)
+- **`/llms/blog/full.txt`** - All blog posts and articles
+- **`/llms/docs/full.txt`** - Complete framework documentation
+- **`/llms/learn/full.txt`** - All learn course chapters
+- **`/llms/templates/full.txt`** - All starter templates
+- **`/llms/showcase/full.txt`** - All showcase projects
+- **`/llms/changelog/full.txt`** - All version updates and release notes
+
+#### Individual Pages
+
+Any page can be accessed in markdown format by appending `.mdx` to the URL:
+
+- `/docs/core/quick-start.mdx` - Documentation page as markdown
+- `/blog/introducing-igniter-js.mdx` - Blog post as markdown
+- `/learn/course/01-creating-your-project.mdx` - Learn chapter as markdown
+
+This allows AI models to fetch specific pages on-demand, reducing token usage while maintaining full context when needed.
+
+#### Other Formats
+
+- **`/rss`** - RSS feed with all content types
+- **`/rss/[type]`** - RSS feed for specific content type (blog, docs, learn, etc.)
+- **`/sitemap.xml`** - XML sitemap with all pages
+
+All these formats are designed to make Igniter.js documentation easily accessible to AI models, enabling better code generation, documentation understanding, and API interaction.
