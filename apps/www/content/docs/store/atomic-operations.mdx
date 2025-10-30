@@ -5,7 +5,9 @@ description: Perform atomic operations on numeric values and manage key expirati
 
 ## Overview
 
-Atomic operations are fundamental for building reliable distributed systems. The Store adapter provides atomic operations that are guaranteed to execute without interference from concurrent operations, making them perfect for counters, rate limiting, and expiration management.
+Atomic operations are fundamental for building reliable distributed systems. The Store adapter provides atomic operations that are guaranteed to execute without interference from concurrent operations, making them perfect for counters, rate limiting, and expiration management. These operations ensure data consistency across multiple processes without requiring locks or complex synchronization mechanisms.
+
+In distributed systems, multiple processes might modify the same key simultaneously. Atomic operations eliminate race conditions by guaranteeing that operations complete entirely or not at all. This makes them essential for building reliable, scalable applications that handle concurrent access correctly.
 
 <Callout type="info">
   Atomic operations are essential in distributed systems where multiple processes might modify the same key simultaneously. They ensure data consistency without locks.
@@ -15,9 +17,13 @@ Atomic operations are fundamental for building reliable distributed systems. The
 
 ## Increment Operation
 
-The `increment()` method atomically increments a numeric value stored at a key. If the key doesn't exist, it's initialized to 0 before incrementing.
+The `increment()` method atomically increments a numeric value stored at a key. If the key doesn't exist, it's initialized to 0 before incrementing. This atomic behavior ensures that even when multiple processes increment the same counter simultaneously, each increment is counted correctly without race conditions.
+
+Atomic increments are perfect for building counters, tracking usage, and implementing rate limiting. They eliminate the need for locks or complex synchronization, making your code simpler and more reliable. Understanding how to use increments effectively helps you build robust distributed systems.
 
 ### Basic Usage
+
+The `increment()` method is simple to use—just provide a key and it returns the new value after incrementing. If the key doesn't exist, it's automatically initialized to 0 before incrementing, so the first call returns 1.
 
 ```typescript
 handler: async ({ context }) => {
@@ -32,63 +38,83 @@ handler: async ({ context }) => {
 
 ### Counter Patterns
 
-#### Page Views Counter
+Understanding common counter patterns helps you use atomic increments effectively in real-world scenarios. These patterns demonstrate how to track page views, monitor user activity, and implement distributed counters that work correctly across multiple instances of your application.
 
-```typescript
-const trackPageView = async (pageId: string, context: AppContext) => {
-  const views = await igniter.store.increment(`page:${pageId}:views`);
+<Accordions>
+  <Accordion title="Page Views Counter">
+    Track page views with automatic expiration to reset counters daily. This pattern combines atomic increments with expiration to create counters that automatically reset at the end of each day.
+    
+    ```typescript
+    const trackPageView = async (pageId: string, context: AppContext) => {
+      const views = await igniter.store.increment(`page:${pageId}:views`);
+      
+      // Set expiration on first view
+      if (views === 1) {
+        await igniter.store.expire(`page:${pageId}:views`, 86400); // 24 hours
+      }
+      
+      return views;
+    };
+    ```
+    
+    Page view counters automatically reset daily by setting expiration on the first increment. This ensures fresh metrics each day without manual cleanup.
+  </Accordion>
   
-  // Set expiration on first view
-  if (views === 1) {
-    await igniter.store.expire(`page:${pageId}:views`, 86400); // 24 hours
- ADN  }
+  <Accordion title="User Activity Counter">
+    Track user activity with daily resets. This pattern creates counters that reset at midnight, making it easy to track daily activity limits or usage quotas.
+    
+    ```typescript
+    const trackUserActivity = async (userId: string, context: AppContext) => {
+      const today = new Date().toISOString().split('T')[0];
+      const key = `user:${userId}:activity:${today}`;
+      
+      const count = await igniter.store.increment(key);
+      
+      // Reset daily
+      if (count === 1) {
+        await igniter.store.expire(key, 86400); // Expires at midnight
+      }
+      
+      return count;
+    };
+    ```
+    
+    User activity counters reset daily, making it easy to track daily limits or quotas. The expiration ensures counters automatically reset at midnight without manual intervention.
+  </Accordion>
   
-  return views;
-};
-```
+  <Accordion title="Distributed Counter">
+    Create global counters that work correctly across multiple application instances. Atomic increments ensure accurate counting even when multiple instances increment the same counter simultaneously.
+    
+    ```typescript
+    const incrementGlobalCounter = async (
+      counterName: string,
+      context: AppContext
+    ) => {
+      // Atomic increment across all instances
+      const value = await igniter.store.increment(`counter:${counterName}`);
+      
+      return value;
+    };
 
-#### User Activity Counter
-
-```typescript
-const trackUserActivity = async (userId: string, context: AppContext) => {
-  const today = new Date().toISOString().split('T')[0];
-  const key = `user:${userId}:activity:${today}`;
-  
-  const count = await igniter.store.increment(key);
-  
-  // Reset daily
-  if (count === 1) {
-    await igniter.store.expire(key, 86400); // Expires at midnight
-  }
-  
-  return count;
-};
-```
-
-#### Distributed Counter
-
-```typescript
-const incrementGlobalCounter = async (
-  counterName: string,
-  context: AppContext
-) => {
-  // Atomic increment across all instances
-  const value = await igniter.store.increment(`counter:${counterName}`);
-  
-  return value;
-};
-
-// Multiple instances can safely call this simultaneously
-await incrementGlobalCounter('total-requests', context);
-```
+    // Multiple instances can safely call this simultaneously
+    await incrementGlobalCounter('total-requests', context);
+    ```
+    
+    Distributed counters work correctly across multiple instances because atomic operations eliminate race conditions. This makes them perfect for tracking global metrics in distributed systems.
+  </Accordion>
+</Accordions>
 
 ---
 
 ## Expire Operation
 
-The `expire()` method sets or updates the time-to-live (TTL) of a key. This is useful for managing cache expiration and cleaning up temporary data.
+The `expire()` method sets or updates the time-to-live (TTL) of a key. This is useful for managing cache expiration and cleaning up temporary data. Expiration ensures that data doesn't persist indefinitely, helping you manage memory and keep data fresh.
+
+Understanding expiration patterns helps you implement automatic cleanup, session management, and temporary data storage. The `expire()` operation works independently of the `set()` operation, allowing you to update expiration times without modifying cached values.
 
 ### Basic Usage
+
+Set TTL on existing keys or update expiration times independently. This flexibility makes it easy to manage data lifecycle without recreating cached values.
 
 ```typescript
 handler: async ({ context }) => {
@@ -105,335 +131,391 @@ handler: async ({ context }) => {
 
 ### Expiration Patterns
 
-#### Auto-Expiring Sessions
+Common expiration patterns help you manage data lifecycle effectively. These patterns demonstrate how to implement auto-expiring sessions, temporary data cleanup, and expiration refresh on access. Understanding these patterns helps you build robust data management systems.
 
-```typescript
-const createSession = async (userId: string, context: AppContext) => {
-  const sessionId = generateSessionId();
-  const sessionData = {
-    userId,
-    createdAt: new Date().toISOString(),
-  };
-  
-  // Store session
-  await igniter.store.set(`session:${sessionId}`, sessionData);
-  
-  // Auto-expire after 24 hours
-  await igniter.store.expire(`session:${sessionId}`, 86400);
-  
-  return sessionId;
-};
+<Accordions>
+  <Accordion title="Auto-Expiring Sessions">
+    Implement session management with automatic expiration. Sessions automatically expire after a period of inactivity, improving security and reducing memory usage. This pattern combines session storage with expiration to create secure, self-cleaning session systems.
+    
+    ```typescript
+    const createSession = async (userId: string, context: AppContext) => {
+      const sessionId = generateSessionId();
+      const sessionData = {
+        userId,
+        createdAt: new Date().toISOString(),
+      };
+      
+      // Store session
+      await igniter.store.set(`session:${sessionId}`, sessionData);
+      
+      // Auto-expire after 24 hours
+      await igniter.store.expire(`session:${sessionId}`, 86400);
+      
+      return sessionId;
+    };
 
-const refreshSession = async (sessionId: string, context: AppContext) => {
-  const session = await igniter.store.get<SessionData>(`session:${sessionId}`);
+    const refreshSession = async (sessionId: string, context: AppContext) => {
+      const session = await igniter.store.get<SessionData>(`session:${sessionId}`);
+      
+      if (session) {
+        // Refresh expiration
+        await igniter.store.expire(`session:${sessionId}`, 86400);
+        return session;
+      }
+      
+      return null;
+    };
+    ```
+    
+    Auto-expiring sessions improve security by ensuring sessions don't persist indefinitely. Refresh expiration on access to extend session lifetime for active users.
+  </Accordion>
   
-  if (session) {
-    // Refresh expiration
-    await igniter.store.expire(`session:${sessionId}`, 86400);
-    return session;
-  }
+  <Accordion title="Temporary Data Cleanup">
+    Store temporary data with automatic cleanup. Temporary data needs to persist for a short period but should be automatically deleted after a timeout. This pattern ensures temporary data doesn't accumulate and consume memory.
+    
+    ```typescript
+    const storeTemporaryData = async (
+      key: string,
+      data: any,
+      ttl: number,
+      context: AppContext
+    ) => {
+      await igniter.store.set(key, data);
+      await igniter.store.expire(key, ttl);
+      
+      // Data will automatically expire after TTL
+    };
+    ```
+    
+    Temporary data cleanup ensures data doesn't accumulate unnecessarily. Set appropriate TTL values based on how long temporary data needs to persist.
+  </Accordion>
   
-  return null;
-};
-```
-
-#### Temporary Data Cleanup
-
-```typescript
-const storeTemporaryData = async (
-  key: string,
-  data: any,
-  ttl: number,
-  context: AppContext
-) => {
-  await igniter.store.set(key, data);
-  await igniter.store.expire(key, ttl);
-  
-  // Data will automatically expire after TTL
-};
-```
-
-#### Refresh Expiration on Access
-
-```typescript
-const getWithRefresh = async <T>(
-  key: string,
-  ttl: number,
-  context: AppContext
-): Promise<T | null> => {
-  const value = await igniter.store.get<T>(key);
-  
-  if (value) {
-    // Refresh expiration when accessed
-    await igniter.store.expire(key, ttl);
-  }
-  
-  return value;
-};
-```
+  <Accordion title="Refresh Expiration on Access">
+    Refresh expiration when data is accessed to extend its lifetime. This pattern keeps frequently accessed data in cache longer while allowing infrequently accessed data to expire naturally.
+    
+    ```typescript
+    const getWithRefresh = async <T>(
+      key: string,
+      ttl: number,
+      context: AppContext
+    ): Promise<T | null> => {
+      const value = await igniter.store.get<T>(key);
+      
+      if (value) {
+        // Refresh expiration when accessed
+        await igniter.store.expire(key, ttl);
+      }
+      
+      return value;
+    };
+    ```
+    
+    Refreshing expiration on access keeps frequently used data in cache longer. This pattern optimizes cache performance by keeping hot data available while allowing cold data to expire.
+  </Accordion>
+</Accordions>
 
 ---
 
 ## Combined Operations
 
-### Rate Limiting
+Combining atomic operations enables powerful patterns like rate limiting, distributed locks, and request counting. These patterns combine increments and expiration to solve complex distributed systems problems reliably. Understanding how to combine operations effectively helps you build robust, scalable applications.
 
-Implement rate limiting using atomic increment and expiration:
+Atomic operations work together seamlessly—you can increment counters and set expiration atomically, ensuring consistent behavior even under high concurrency. These combined operations eliminate race conditions and make distributed systems programming straightforward.
 
-```typescript
-const checkRateLimit = async (
-  identifier: string,
-  limit: number,
-  windowSeconds: number,
-  context: AppContext
-): Promise<{ allowed: boolean; remaining: number }> => {
-  const key = `rate:limit:${identifier}`;
-  
-  // Increment counter
-  const count = await igniter.store.increment(key);
-  
-  // Set expiration on first request
-  if (count === 1) {
-    await igniter.store.expire(key, windowSeconds);
-  }
-  
-  // Check if limit exceeded
-  if (count > limit) {
-    return {
-      allowed: false,
-      remaining: 0,
+<Accordions>
+  <Accordion title="Rate Limiting">
+    Implement rate limiting using atomic increment and expiration. Rate limiting protects your API from being overwhelmed by limiting the number of requests per time window. This pattern combines increments with expiration to create time-window-based rate limits.
+    
+    ```typescript
+    const checkRateLimit = async (
+      identifier: string,
+      limit: number,
+      windowSeconds: number,
+      context: AppContext
+    ): Promise<{ allowed: boolean; remaining: number }> => {
+      const key = `rate:limit:${identifier}`;
+      
+      // Increment counter
+      const count = await igniter.store.increment(key);
+      
+      // Set expiration on first request
+      if (count === 1) {
+        await igniter.store.expire(key, windowSeconds);
+      }
+      
+      // Check if limit exceeded
+      if (count > limit) {
+        return {
+          allowed: false,
+          remaining: 0,
+        };
+      }
+      
+      return {
+        allowed: true,
+        remaining: limit - count,
+      };
     };
-  }
-  
-  return {
-    allowed: true,
-    remaining: limit - count,
-  };
-};
 
-// Usage
-const rateLimitMiddleware = async (request: Request, context: AppContext) => {
-  const { allowed, remaining } = await checkRateLimit(
-    request.ip,
-    100, // 100 requests
-    60,   // per 60 seconds
-    context
-  );
-  
-  if (!allowed) {
-    throw new Error('Rate limit exceeded');
-  }
-  
-  // Set rate limit headers
-  response.headers.set('X-RateLimit-Remaining', remaining.toString());
-};
-```
-
-### Sliding Window Rate Limiting
-
-More sophisticated rate limiting with sliding windows:
-
-```typescript
-const slidingWindowRateLimit = async (
-  identifier: string,
-  limit: number,
-  windowSeconds: number,
-  context: AppContext
-): Promise<{ allowed: boolean; remaining: number; resetAt: Date }> => {
-  const now = Date.now();
-  const windowStart = Math.floor(now / (windowSeconds * 1000));
-  const key = `rate:sliding:${identifier}:${windowStart}`;
-  
-  const count = await igniter.store.increment(key);
-  
-  // Set expiration
-  if (count === 1) {
-    await igniter.store.expire(key, windowSeconds * 2); // Keep 2 windows
-  }
-  
-  // Check all windows in current period
-  const currentWindow = windowStart;
-  const previousWindow = currentWindow - 1;
-  
-  const [currentCount, previousCount] = await Promise.all([
-    igniter.store.get<number>(`rate:sliding:${identifier}:${currentWindow}`) || 0,
-    igniter.store.get<number>(`rate:sliding:${identifier}:${previousWindow}`) || 0,
-  ]);
-  
-  // Calculate weighted count (prorate previous window)
-  const weight = (now % (windowSeconds * 1000)) / (windowSeconds * 1000);
-  const totalCount = currentCount + previousCount * (1 - weight);
-  
-  if (totalCount >= limit) {
-    return {
-      allowed: false,
-      remaining: 0,
-      resetAt: new Date((currentWindow + 1) * windowSeconds * 1000),
+    // Usage
+    const rateLimitMiddleware = async (request: Request, context: AppContext) => {
+      const { allowed, remaining } = await checkRateLimit(
+        request.ip,
+        100, // 100 requests
+        60,   // per 60 seconds
+        context
+      );
+      
+      if (!allowed) {
+        throw new Error('Rate limit exceeded');
+      }
+      
+      // Set rate limit headers
+      response.headers.set('X-RateLimit-Remaining', remaining.toString());
     };
-  }
+    ```
+    
+    Rate limiting protects your API from abuse while ensuring legitimate users can access your services. Atomic operations ensure accurate counting even when multiple requests arrive simultaneously.
+  </Accordion>
   
-  return {
-    allowed: true,
-    remaining: Math.floor(limit - totalCount),
-    resetAt: new Date((currentWindow + 1) * windowSeconds * 1000),
-  };
-};
-```
+  <Accordion title="Sliding Window Rate Limiting">
+    Implement sophisticated rate limiting with sliding windows. Sliding window rate limiting provides smoother rate limiting by calculating counts across overlapping time windows, eliminating the abrupt reset behavior of fixed windows.
+    
+    ```typescript
+    const slidingWindowRateLimit = async (
+      identifier: string,
+      limit: number,
+      windowSeconds: number,
+      context: AppContext
+    ): Promise<{ allowed: boolean; remaining: number; resetAt: Date }> => {
+      const now = Date.now();
+      const windowStart = Math.floor(now / (windowSeconds * 1000));
+      const key = `rate:sliding:${identifier}:${windowStart}`;
+      
+      const count = await igniter.store.increment(key);
+      
+      // Set expiration
+      if (count === 1) {
+        await igniter.store.expire(key, windowSeconds * 2); // Keep 2 windows
+      }
+      
+      // Check all windows in current period
+      const currentWindow = windowStart;
+      const previousWindow = currentWindow - 1;
+      
+      const [currentCount, previousCount] = await Promise.all([
+        igniter.store.get<number>(`rate:sliding:${identifier}:${currentWindow}`) || 0,
+        igniter.store.get<number>(`rate:sliding:${identifier}:${previousWindow}`) || 0,
+      ]);
+      
+      // Calculate weighted count (prorate previous window)
+      const weight = (now % (windowSeconds * 1000)) / (windowSeconds * 1000);
+      const totalCount = currentCount + previousCount * (1 - weight);
+      
+      if (totalCount >= limit) {
+        return {
+          allowed: false,
+          remaining: 0,
+          resetAt: new Date((currentWindow + 1) * windowSeconds * 1000),
+        };
+      }
+      
+      return {
+        allowed: true,
+        remaining: Math.floor(limit - totalCount),
+        resetAt: new Date((currentWindow + 1) * windowSeconds * 1000),
+      };
+    };
+    ```
+    
+    Sliding window rate limiting provides smoother rate limiting by calculating counts across overlapping windows. This eliminates the abrupt reset behavior of fixed windows and provides better user experience.
+  </Accordion>
+  
+  <Accordion title="Distributed Locks">
+    Implement distributed locks using increment and expiration. Distributed locks ensure only one process can execute a critical section at a time, even across multiple application instances. This pattern is essential for preventing race conditions in distributed systems.
+    
+    ```typescript
+    const acquireLock = async (
+      lockName: string,
+      ttl: number,
+      context: AppContext
+    ): Promise<{ acquired: boolean; lockId?: string }> => {
+      const lockId = generateLockId();
+      const key = `lock:${lockName}`;
+      
+      // Try to set lock (only if doesn't exist)
+      const exists = await igniter.store.has(key);
+      if (exists) {
+        return { acquired: false };
+      }
+      
+      // Set lock with expiration
+      await igniter.store.set(key, lockId);
+      await igniter.store.expire(key, ttl);
+      
+      return { acquired: true, lockId };
+    };
 
-### Distributed Locks
+    const releaseLock = async (
+      lockName: string,
+      lockId: string,
+      context: AppContext
+    ): Promise<boolean> => {
+      const key = `lock:${lockName}`;
+      const storedLockId = await igniter.store.get<string>(key);
+      
+      if (storedLockId === lockId) {
+        await igniter.store.delete(key);
+        return true;
+      }
+      
+      return false;
+    };
 
-Implement distributed locks using increment and expiration:
-
-```typescript
-const acquireLock = async (
-  lockName: string,
-  ttl: number,
-  context: AppContext
-): Promise<{ acquired: boolean; lockId?: string }> => {
-  const lockId = generateLockId();
-  const key = `lock:${lockName}`;
+    // Usage
+    const performWithLock = async (
+      taskName: string,
+      task: () => Promise<void>,
+      context: AppContext
+    ) => {
+      const { acquired, lockId } = await acquireLock(taskName, 60, context);
+      
+      if (!acquired) {
+        throw new Error('Could not acquire lock');
+      }
+      
+      try {
+        await task();
+      } finally {
+        if (lockId) {
+          await releaseLock(taskName, lockId, context);
+        }
+      }
+    };
+    ```
+    
+    Distributed locks ensure only one process executes critical sections at a time. Lock expiration prevents deadlocks by automatically releasing locks if processes crash or hang.
+  </Accordion>
   
-  // Try to set lock (only if doesn't exist)
-  const exists = await igniter.store.has(key);
-  if (exists) {
-    return { acquired: false };
-  }
-  
-  // Set lock with expiration
-  await igniter.store.set(key, lockId);
-  await igniter.store.expire(key, ttl);
-  
-  return { acquired: true, lockId };
-};
-
-const releaseLock = async (
-  lockName: string,
-  lockId: string,
-  context: AppContext
-): Promise<boolean> => {
-  const key = `lock:${lockName}`;
-  const storedLockId = await igniter.store.get<string>(key);
-  
-  if (storedLockId === lockId) {
-    await igniter.store.delete(key);
-    return true;
-  }
-  
-  return false;
-};
-
-// Usage
-const performWithLock = async (
-  taskName: string,
-  task: () => Promise<void>,
-  context: AppContext
-) => {
-  const { acquired, lockId } = await acquireLock(taskName, 60, context);
-  
-  if (!acquired) {
-    throw new Error('Could not acquire lock');
-  }
-  
-  try {
-    await task();
-  } finally {
-    if (lockId) {
-      await releaseLock(taskName, lockId, context);
-    }
-  }
-};
-```
-
-### Request Counting
-
-Track requests with automatic expiration:
-
-```typescript
-const trackRequest = async (
-  endpoint: string,
-  context: AppContext
-): Promise<number> => {
-  const today = new Date().toISOString().split('T')[0];
-  const key = `requests:${endpoint}:${today}`;
-  
-  const count = await igniter.store.increment(key);
-  
-  // Set expiration to end of day
-  if (count === 1) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    const secondsUntilMidnight = Math.floor(
-      (tomorrow.getTime() - Date.now()) / 1000
-    );
-    await igniter.store.expire(key, secondsUntilMidnight);
-  }
-  
-  return count;
-};
-```
+  <Accordion title="Request Counting">
+    Track requests with automatic expiration. This pattern counts requests per endpoint and automatically resets counters at the end of each day. Combining increments with expiration ensures counters reset automatically without manual cleanup.
+    
+    ```typescript
+    const trackRequest = async (
+      endpoint: string,
+      context: AppContext
+    ): Promise<number> => {
+      const today = new Date().toISOString().split('T')[0];
+      const key = `requests:${endpoint}:${today}`;
+      
+      const count = await igniter.store.increment(key);
+      
+      // Set expiration to end of day
+      if (count === 1) {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(0, 0, 0, 0);
+        const secondsUntilMidnight = Math.floor(
+          (tomorrow.getTime() - Date.now()) / 1000
+        );
+        await igniter.store.expire(key, secondsUntilMidnight);
+      }
+      
+      return count;
+    };
+    ```
+    
+    Request counting with automatic expiration provides daily metrics without manual cleanup. Counters reset automatically at midnight, ensuring fresh metrics each day.
+  </Accordion>
+</Accordions>
 
 ---
 
 ## Best Practices
 
-### 1. Initialize Counters Properly
+Following best practices ensures your atomic operations work correctly and efficiently. These practices cover counter initialization, expiration management, TTL values, and race condition prevention. Applying these practices helps you build reliable distributed systems.
 
-```typescript
-// ✅ Good: Let increment initialize to 0
-const count = await igniter.store.increment('counter');
-// First call returns 1
+Best practices prevent common mistakes like manual counter initialization, forgotten expiration settings, and inappropriate TTL values. They ensure your atomic operations work correctly even under high concurrency and help you build robust distributed systems.
 
-// ❌ Bad: Manual initialization (race condition)
-if (!(await igniter.store.has('counter'))) {
-  await igniter.store.set('counter', 0);
-}
-const count = await igniter.store.increment('counter');
-```
+<Accordions>
+  <Accordion title="Initialize Counters Properly">
+    Let `increment()` initialize counters automatically instead of manually checking and setting. Manual initialization creates race conditions where multiple processes might initialize simultaneously, leading to incorrect counts.
+    
+    ```typescript
+    // ✅ Good: Let increment initialize to 0
+    const count = await igniter.store.increment('counter');
+    // First call returns 1
+    
+    // ❌ Bad: Manual initialization (race condition)
+    if (!(await igniter.store.has('counter'))) {
+      await igniter.store.set('counter', 0);
+    }
+    const count = await igniter.store.increment('counter');
+    ```
+    
+    Always let `increment()` handle initialization automatically. This eliminates race conditions and ensures counters start correctly even under concurrent access.
+  </Accordion>
+  
+  <Accordion title="Set Expiration on First Increment">
+    Set expiration immediately after the first increment to ensure counters expire properly. Checking if the count is 1 after incrementing ensures expiration is set exactly once, preventing race conditions.
+    
+    ```typescript
+    // ✅ Good: Set expiration on first increment
+    const count = await igniter.store.increment('counter');
+    if (count === 1) {
+      await igniter.store.expire('counter', 3600);
+    }
 
-### 2. Set Expiration on First Increment
+    // ❌ Bad: May forget to set expiration
+    const count = await igniter.store.increment('counter');
+    // Missing expiration = counter never expires
+    ```
+    
+    Always set expiration on the first increment to ensure counters expire automatically. This prevents counters from persisting indefinitely and consuming memory.
+  </Accordion>
+  
+  <Accordion title="Use Appropriate TTL Values">
+    Choose TTL values that match your use case. Session data needs longer TTLs than rate limit counters, while cache data needs TTLs based on how often it changes. Matching TTL to use case ensures optimal performance and data freshness.
+    
+    ```typescript
+    // ✅ Good: TTL matches use case
+    await igniter.store.expire('session:123', 86400); // 24 hours for sessions
+    await igniter.store.expire('rate:limit:ip', 60);  // 1 minute for rate limits
+    await igniter.store.expire('cache:data', 3600);   // 1 hour for cache
 
-```typescript
-// ✅ Good: Set expiration on first increment
-const count = await igniter.store.increment('counter');
-if (count === 1) {
-  await igniter.store.expire('counter', 3600);
-}
+    // ❌ Bad: Inappropriate TTL
+    await igniter.store.expire('session:123', 31536000); // 1 year for session (too long)
+    await igniter.store.expire('rate:limit:ip', 86400);  // 1 day for rate limit (too long)
+    ```
+    
+    Appropriate TTL values ensure data expires at the right time—not too soon (causing unnecessary re-fetching) and not too late (serving stale data). Match TTL values to your data's volatility and freshness requirements.
+  </Accordion>
+  
+  <Accordion title="Handle Race Conditions">
+    Use atomic operations to prevent race conditions. Atomic operations eliminate race conditions by guaranteeing operations complete entirely or not at all, making concurrent access safe without locks.
+    
+    ```typescript
+    // ✅ Good: Atomic operations prevent race conditions
+    const count = await igniter.store.increment('counter');
+    // Safe even with concurrent requests
 
-// ❌ Bad: May forget to set expiration
-const count = await igniter.store.increment('counter');
-// Missing expiration = counter never expires
-```
-
-### 3. Use Appropriate TTL Values
-
-```typescript
-// ✅ Good: TTL matches use case
-await igniter.store.expire('session:123', 86400); // 24 hours for sessions
-await igniter.store.expire('rate:limit:ip', 60);  // 1 minute for rate limits
-await igniter.store.expire('cache:data', 3600);   // 1 hour for cache
-
-// ❌ Bad: Inappropriate TTL
-await igniter.store.expire('session:123', 31536000); // 1 year for session (too long)
-await igniter.store.expire('rate:limit:ip', 86400);  // 1 day for rate limit (too long)
-```
-
-### 4. Handle Race Conditions
-
-```typescript
-// ✅ Good: Atomic operations prevent race conditions
-const count = await igniter.store.increment('counter');
-// Safe even with concurrent requests
-
-// ❌ Bad: Non-atomic operations
-const current = await igniter.store.get<number>('counter') || 0;
-await igniter.store.set('counter', current + 1);
-// Race condition: two requests might both read same value
-```
+    // ❌ Bad: Non-atomic operations
+    const current = await igniter.store.get<number>('counter') || 0;
+    await igniter.store.set('counter', current + 1);
+    // Race condition: two requests might both read same value
+    ```
+    
+    Always use atomic operations for counters and shared state. Non-atomic operations create race conditions that can lead to incorrect counts and data corruption.
+  </Accordion>
+</Accordions>
 
 ---
 
 ## Error Handling
+
+Atomic operations can fail due to network issues, Redis unavailability, or other transient errors. Handle errors gracefully to ensure your application continues functioning even when atomic operations fail. Good error handling prevents atomic operation failures from breaking your application.
+
+Error handling for atomic operations requires balancing reliability with performance. Always have fallback strategies that allow your application to continue functioning when atomic operations fail temporarily.
 
 Handle errors gracefully:
 
@@ -469,103 +551,124 @@ const safeExpire = async (
 
 ## Performance Considerations
 
-### Batch Operations
+Optimizing atomic operation performance involves understanding when to batch operations, how to monitor operations, and how to minimize Redis round trips. These considerations help you build high-performance applications that use atomic operations efficiently.
 
-When possible, batch operations:
+Performance optimization for atomic operations ensures your application scales well and remains responsive under load. Understanding these considerations helps you build efficient distributed systems.
 
-```typescript
-// ✅ Good: Single increment
-const count = await igniter.store.increment('counter');
+<Accordions>
+  <Accordion title="Batch Operations">
+    Minimize Redis round trips by combining operations when possible. While atomic operations are fast individually, reducing round trips improves overall performance, especially when performing many operations.
+    
+    ```typescript
+    // ✅ Good: Single increment
+    const count = await igniter.store.increment('counter');
 
-// ❌ Bad: Multiple operations (if increment + expire can be combined)
-await igniter.store.increment('counter');
-await igniter.store.expire('counter', 3600);
-```
-
-### Monitoring Atomic Operations
-
-High-frequency atomic operations can be monitored:
-
-```typescript
-const incrementWithMetrics = async (
-  key: string,
-  context: AppContext
-): Promise<number> => {
-  const start = Date.now();
-  const value = await igniter.store.increment(key);
-  const duration = Date.now() - start;
+    // ❌ Bad: Multiple operations (if increment + expire can be combined)
+    await igniter.store.increment('counter');
+    await igniter.store.expire('counter', 3600);
+    ```
+    
+    Batch operations reduce latency by minimizing Redis round trips. While increment and expire are separate operations, understanding when operations are necessary helps optimize performance.
+  </Accordion>
   
-  // Log metrics
-  context.logger.debug('Increment operation', {
-    key,
-    value,
-    duration,
-  });
-  
-  return value;
-};
-```
+  <Accordion title="Monitoring Atomic Operations">
+    Monitor atomic operations to understand performance and identify bottlenecks. High-frequency atomic operations can impact Redis performance, so monitoring helps you optimize operation patterns and identify issues early.
+    
+    ```typescript
+    const incrementWithMetrics = async (
+      key: string,
+      context: AppContext
+    ): Promise<number> => {
+      const start = Date.now();
+      const value = await igniter.store.increment(key);
+      const duration = Date.now() - start;
+      
+      // Log metrics
+      context.logger.debug('Increment operation', {
+        key,
+        value,
+        duration,
+      });
+      
+      return value;
+    };
+    ```
+    
+    Monitoring atomic operations helps you understand performance characteristics and identify optimization opportunities. Track operation duration, frequency, and error rates to optimize your usage patterns.
+  </Accordion>
+</Accordions>
 
 ---
 
 ## Real-World Examples
 
-### API Usage Tracking
+These real-world examples demonstrate practical atomic operation patterns you can use in production applications. They show how to track API usage, implement feature flags with usage limits, and build production-ready systems using atomic operations.
 
-```typescript
-const trackApiUsage = async (
-  apiKey: string,
-  endpoint: string,
-  context: AppContext
-) => {
-  const month = new Date().toISOString().slice(0, 7); // YYYY-MM
-  const key = `api:usage:${apiKey}:${month}`;
-  
-  const count = await igniter.store.increment(key);
-  
-  // Set expiration to end of month
-  if (count === 1) {
-    const nextMonth = new Date();
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-    nextMonth.setDate(1);
-    nextMonth.setHours(0, 0, 0, 0);
-    const secondsUntilNextMonth = Math.floor(
-      (nextMonth.getTime() - Date.now()) / 1000
-    );
-    await igniter.store.expire(key, secondsUntilNextMonth);
-  }
-  
-  return count;
-};
-```
+Real-world examples help you understand how atomic operations fit into actual applications. These patterns address common scenarios and provide production-ready solutions you can adapt for your own use cases.
 
-### Feature Flags with Usage Limits
-
-```typescript
-const checkFeatureUsage = async (
-  userId: string,
-  featureName: string,
-  limit: number,
-  context: AppContext
-): Promise<{ allowed: boolean; usage: number }> => {
-  const key = `feature:usage:${userId}:${featureName}`;
-  const usage = await igniter.store.increment(key);
+<Accordions>
+  <Accordion title="API Usage Tracking">
+    Track API usage per API key with monthly resets. This pattern combines increments with expiration to track usage quotas and automatically reset counters at the beginning of each month.
+    
+    ```typescript
+    const trackApiUsage = async (
+      apiKey: string,
+      endpoint: string,
+      context: AppContext
+    ) => {
+      const month = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const key = `api:usage:${apiKey}:${month}`;
+      
+      const count = await igniter.store.increment(key);
+      
+      // Set expiration to end of month
+      if (count === 1) {
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        nextMonth.setDate(1);
+        nextMonth.setHours(0, 0, 0, 0);
+        const secondsUntilNextMonth = Math.floor(
+          (nextMonth.getTime() - Date.now()) / 1000
+        );
+        await igniter.store.expire(key, secondsUntilNextMonth);
+      }
+      
+      return count;
+    };
+    ```
+    
+    API usage tracking automatically resets monthly, making it easy to manage usage quotas and billing cycles. The expiration ensures counters reset at the beginning of each month.
+  </Accordion>
   
-  // Set daily expiration
-  if (usage === 1) {
-    await igniter.store.expire(key, 86400);
-  }
-  
-  return {
-    allowed: usage <= limit,
-    usage,
-  };
-};
-```
+  <Accordion title="Feature Flags with Usage Limits">
+    Implement feature flags with usage limits to control feature access based on usage counts. This pattern combines increments with expiration to implement daily usage limits for features.
+    
+    ```typescript
+    const checkFeatureUsage = async (
+      userId: string,
+      featureName: string,
+      limit: number,
+      context: AppContext
+    ): Promise<{ allowed: boolean; usage: number }> => {
+      const key = `feature:usage:${userId}:${featureName}`;
+      const usage = await igniter.store.increment(key);
+      
+      // Set daily expiration
+      if (usage === 1) {
+        await igniter.store.expire(key, 86400);
+      }
+      
+      return {
+        allowed: usage <= limit,
+        usage,
+      };
+    };
+    ```
+    
+    Feature flags with usage limits enable freemium models and usage-based access control. Daily expiration ensures limits reset each day, allowing users to access features again after the reset period.
+  </Accordion>
+</Accordions>
 
 ---
 
-- Learn about [caching operations](/docs/store/caching) for storing data
-- Explore [Pub/Sub messaging](/docs/store/pubsub) for event-driven communication
-- Check out [advanced usage patterns](/docs/store/advanced)
 
