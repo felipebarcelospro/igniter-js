@@ -15,7 +15,7 @@ const highlighter = await getHighlighter('js', {
 });
 
 export async function CodeBlock({ code, lang, wrapper }: CodeBlockProps) {
-  await highlighter.loadLanguage(lang as BundledLanguage);
+  await highlighter.loadLanguage(lang as any);
   
   const hast = highlighter.codeToHast(code, {
     lang,

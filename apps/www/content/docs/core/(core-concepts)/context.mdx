@@ -10,8 +10,20 @@ description: Master application context in Igniter.js with static and dynamic pa
 ```typescript
 import { Igniter } from '@igniter-js/core';
 
+// Define context factory function in src/igniter.context.ts
+export function createIgniterAppContext(): AppContext {
+  return {
+    db: new Database(),
+    config: loadAppConfig(),
+    services: {
+      email: new EmailService(),
+      storage: new StorageService()
+    }
+  };
+}
+
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .create();
 ```
 
@@ -34,6 +46,7 @@ A **fixed object** that remains the same for all requests. Best for:
 - ✅ Shared utilities
 
 ```typescript
+// src/igniter.context.ts
 interface AppContext {
   db: Database;
   config: AppConfig;
@@ -43,8 +56,20 @@ interface AppContext {
   };
 }
 
+export function createIgniterAppContext(): AppContext {
+  return {
+    db: new Database(),
+    config: loadAppConfig(),
+    services: {
+      email: new EmailService(),
+      storage: new StorageService()
+    }
+  };
+}
+
+// src/igniter.ts
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .create();
 ```
 
@@ -100,7 +125,7 @@ interface AppContext {
 }
 
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .create();
 ```
 
@@ -160,7 +185,7 @@ interface AppContext {
 }
 
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .create();
 ```
 

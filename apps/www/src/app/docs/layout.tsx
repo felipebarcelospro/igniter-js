@@ -27,12 +27,6 @@ export default function Layout({ children }: LayoutProps<"/docs">) {
             icon: <BoxIcon className="size-3 mt-1 text-orange-500" />,
           },
           {
-            title: "CLI",
-            description: "Command-line tool for project scaffolding.",
-            url: "/docs/cli",
-            icon: <TerminalIcon className="size-3 mt-1 text-orange-500" />,
-          },
-          {
             title: "Store",
             description: "Redis-based adapter for caching and Pub/Sub.",
             url: "/docs/store",
@@ -55,12 +49,6 @@ export default function Layout({ children }: LayoutProps<"/docs">) {
             description: "Create bots easily for Telegram, Whatsapp and eg.",
             url: "/docs/bots",
             icon: <BotIcon className="size-3 mt-1 text-orange-500" />,
-          },
-          {
-            title: "Telemetry",
-            description: "Telemetry provider for tracing and metrics.",
-            url: "/docs/telemetry",
-            icon: <ChartBarIcon className="size-3 mt-1 text-orange-500" />,
           },
         ],
       }}

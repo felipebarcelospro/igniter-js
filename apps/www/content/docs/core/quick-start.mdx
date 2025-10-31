@@ -22,74 +22,98 @@ Before starting, ensure you have:
 - Basic TypeScript knowledge
 - A code editor with TypeScript support
 
-## Step 1: Create Your First Router
+## Quick Start Tutorial
 
-Let's start by creating the core Igniter instance. This is where you configure your application's context and settings.
+<Card title="Complete Igniter.js Setup Guide">
+  <Steps>
+    <Step>
+      ### Create Your First Router
 
-Create `src/igniter.ts`:
+      Let's start by creating the core Igniter instance. This is where you configure your application's context and settings.
 
-```typescript
-import { Igniter } from '@igniter-js/core';
+      Create `src/igniter.ts`:
 
-// Define your application context type
-export interface AppContext {
-  db: {
-    users: Array<{ id: string; name: string; email: string }>;
-  };
-}
+      ```typescript
+      import { Igniter } from '@igniter-js/core';
 
-// Create and configure your Igniter instance
-export const igniter = Igniter
-  .context<AppContext>()
-  .config({
-    baseURL: 'http://localhost:3000',
-    basePATH: '/api/v1'
-  })
-  .create();
-```
+      // Define your application context type
+      export interface AppContext {
+        db: {
+          users: Array<{ id: string; name: string; email: string }>;
+        };
+      }
 
-<Callout type="info" title="What's Happening Here?">
-  - **`Igniter.context<AppContext>()`** - Defines the shape of your application's global context
-  - **`.config()`** - Sets the base URL and path for your API
-  - **`.create()`** - Creates the configured Igniter instance with all methods available
-</Callout>
+      // Create context factory function
+      export function createIgniterAppContext(): AppContext {
+        return {
+          db: {
+            users: [] // In a real app, this would be your database connection
+          }
+        };
+      }
 
-## Step 2: Define a Controller
+      // Create and configure your Igniter instance
+      export const igniter = Igniter
+        .context(createIgniterAppContext())
+        .config({
+          baseURL: 'http://localhost:3000',
+          basePATH: '/api/v1'
+        })
+        .create();
+      ```
 
-Controllers group related actions together. Let's create a user controller.
+      <Callout type="info" title="What's Happening Here?">
+        - **`Igniter.context(createIgniterAppContext())`** - Passes the context factory function to define your application's global context
+        - **`.config()`** - Sets the base URL and path for your API
+        - **`.create()`** - Creates the configured Igniter instance with all methods available
+      </Callout>
+    </Step>
 
-Create `src/features/user/user.controller.ts`:
+    <Step>
+      ### Define a Controller
 
-```typescript
-import { igniter } from '@/igniter';
-import { z } from 'zod';
+      Controllers group related actions together. Let's create a user controller.
 
-// Define validation schemas
-const UserSchema = z.object({
-  id: z.string(),
-  name: z.string().min(2),
-  email: z.string().email()
-});
+      Create `src/features/user/user.controller.ts`:
 
-const CreateUserSchema = z.object({
-  name: z.string().min(2),
-  email: z.string().email()
-});
+      ```typescript
+      import { igniter } from '@/igniter';
+      import { z } from 'zod';
 
-// Create the controller
-export const userController = igniter.controller({
-  path: '/users',
-  actions: {
-    // We'll add actions in the next step
-  }
-});
-```
+      // Define validation schemas
+      const UserSchema = z.object({
+        id: z.string(),
+        name: z.string().min(2),
+        email: z.string().email()
+      });
 
-<Callout type="info">
-  Controllers use the `path` property to prefix all their actions. All actions inside `/users` controller will be prefixed with `/users`.
-</Callout>
+      const CreateUserSchema = z.object({
+        name: z.string().min(2),
+        email: z.string().email()
+      });
 
-## Step 3: Create Actions
+      // Create the controller
+      export const userController = igniter.controller({
+        name: 'Users',
+        description: 'Manage user accounts and profiles',
+        path: '/users',
+        actions: {
+          // We'll add actions in the next step
+        }
+      });
+      ```
+
+      <Callout type="info">
+        Controllers use the `path` property to prefix all their actions. All actions inside `/users` controller will be prefixed with `/users`.
+      </Callout>
+
+      <Callout type="success" title="OpenAPI Documentation">
+        The `name` and `description` properties are crucial for generating comprehensive OpenAPI specifications for your API. They enable the CLI to create detailed documentation that powers **Igniter Studio** (our interactive API playground), making your API much more discoverable and user-friendly.
+      </Callout>
+    </Step>
+
+    <Step>
+      ### Create Actions
 
 Actions are the actual API endpoints. Igniter.js has two types:
 
@@ -105,11 +129,13 @@ export const userController = igniter.controller({
   path: '/users',
   actions: {
     list: igniter.query({
+      name: 'List Users',
+      description: 'Retrieve a list of all users',
       path: '/',
       handler: async ({ context, response }) => {
         // Access your context (typed automatically!)
         const users = context.db.users;
-        
+
         // Return a success response
         return response.success({ users });
       }
@@ -135,6 +161,8 @@ export const userController = igniter.controller({
     }),
     
     create: igniter.mutation({
+      name: 'Create User',
+      description: 'Create a new user account',
       path: '/',
       method: 'POST',
       body: CreateUserSchema, // ← Validation schema
@@ -166,7 +194,9 @@ Let's add an action to get a single user by ID:
 
 ```typescript
 getById: igniter.query({
-  path: '/:id', // ← Path parameter
+  name: 'Get User by ID',
+  description: 'Retrieve a specific user by their ID',
+  path: '/:id' as const, // ← Path parameter with 'as const' for proper type inference
   handler: async ({ request, context, response }) => {
     // request.params.id is automatically typed as string
     const user = context.db.users.find(u => u.id === request.params.id);
@@ -186,6 +216,8 @@ Add a search action with query parameters:
 
 ```typescript
 search: igniter.query({
+  name: 'Search Users',
+  description: 'Search users by name with optional limit',
   path: '/search',
   query: z.object({
     q: z.string().min(1),
@@ -202,30 +234,34 @@ search: igniter.query({
     return response.success({ users: results, query: q });
   }
 }),
-```
+      ```
+    </Step>
 
-## Step 4: Set Up the Client
+    <Step>
+      ### Set Up the Client
 
-Now let's create a type-safe client to call your API from the frontend.
+      Now let's create a type-safe client to call your API from the frontend.
 
-Create `src/lib/api-client.ts`:
+      Create `src/lib/api-client.ts`:
 
-```typescript
-import { createIgniterClient } from '@igniter-js/core/client';
-import { AppRouter } from '@/igniter.router';
+      ```typescript
+      import { createIgniterClient } from '@igniter-js/core/client';
+      import { AppRouter } from '@/igniter.router';
 
-export const client = createIgniterClient<typeof AppRouter>({
-  baseURL: 'http://localhost:3000',
-  basePATH: '/api/v1',
-  router: AppRouter
-});
-```
+      export const client = createIgniterClient<typeof AppRouter>({
+        baseURL: 'http://localhost:3000',
+        basePATH: '/api/v1',
+        router: AppRouter
+      });
+      ```
 
-<Callout type="info" title="Type Inference Magic">
-  The `createIgniterClient` function infers all your API types automatically. You don't need to manually define any types!
-</Callout>
+      <Callout type="info" title="Type Inference Magic">
+        The `createIgniterClient` function infers all your API types automatically. You don't need to manually define any types!
+      </Callout>
+    </Step>
 
-## Step 5: Make Your First Request
+    <Step>
+      ### Make Your First Request
 
 ### Server-Side (Using Caller)
 
@@ -321,7 +357,10 @@ export function CreateUserForm() {
     </form>
   );
 }
-```
+      ```
+    </Step>
+  </Steps>
+</Card>
 
 ## Complete Example
 
@@ -343,19 +382,25 @@ Here's the full user controller with all CRUD operations:
     const UpdateUserSchema = CreateUserSchema.partial();
 
     export const userController = igniter.controller({
+      name: 'Users',
+      description: 'Manage user accounts and profiles',
       path: '/users',
       actions: {
         // List all users
         list: igniter.query({
+          name: 'List Users',
+          description: 'Retrieve a list of all users',
           path: '/',
           handler: async ({ context, response }) => {
             return response.success({ users: context.db.users });
           }
         }),
-        
+
         // Get user by ID
         getById: igniter.query({
-          path: '/:id',
+          name: 'Get User by ID',
+          description: 'Retrieve a specific user by their ID',
+          path: '/:id' as const,
           handler: async ({ request, context, response }) => {
             const user = context.db.users.find(u => u.id === request.params.id);
             
@@ -369,6 +414,8 @@ Here's the full user controller with all CRUD operations:
         
         // Search users
         search: igniter.query({
+          name: 'Search Users',
+          description: 'Search users by name with optional limit',
           path: '/search',
           query: z.object({
             q: z.string().min(1),
@@ -387,6 +434,8 @@ Here's the full user controller with all CRUD operations:
         
         // Create user
         create: igniter.mutation({
+          name: 'Create User',
+          description: 'Create a new user account',
           path: '/',
           method: 'POST',
           body: CreateUserSchema,
@@ -403,7 +452,9 @@ Here's the full user controller with all CRUD operations:
         
         // Update user
         update: igniter.mutation({
-          path: '/:id',
+          name: 'Update User',
+          description: 'Update an existing user by ID',
+          path: '/:id' as const,
           method: 'PUT',
           body: UpdateUserSchema,
           handler: async ({ request, context, response }) => {
@@ -426,7 +477,9 @@ Here's the full user controller with all CRUD operations:
         
         // Delete user
         delete: igniter.mutation({
-          path: '/:id',
+          name: 'Delete User',
+          description: 'Delete a user by ID',
+          path: '/:id' as const,
           method: 'DELETE',
           handler: async ({ request, context, response }) => {
             const userIndex = context.db.users.findIndex(
@@ -457,6 +510,87 @@ Congratulations! You've built your first Igniter.js API. You now understand:
 ✅ **Validation** - How to use Zod schemas for type-safe input  
 ✅ **Client** - How to consume your API with full type safety  
 ✅ **React Hooks** - How to use `useQuery` and `useMutation`
+
+---
+
+## Development Workflow
+
+### Required Steps for Full-Stack Development
+
+<Callout type="error">
+  **Development Workflow:** When building full-stack applications, follow this sequence:
+  1. **Create/Modify API** (controllers, actions)
+  2. **Generate Schema** (required for client to work)
+  3. **Use Client** in frontend components
+</Callout>
+
+### When to Generate Schema
+
+<Callout type="error">
+  **Critical:** You MUST run schema generation BEFORE using the client in your frontend. The client depends on the generated schema to function correctly.
+</Callout>
+
+<Callout type="info">
+  Run this command whenever you modify your API structure (add/remove/modify controllers or actions) OR before using the client for the first time.
+</Callout>
+
+When you add a new controller, action, or modify existing ones:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="maintenance-schema">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+</Tabs>
+
+This regenerates:
+- `src/igniter.schema.ts` - Updated type definitions for your client
+- `src/docs/openapi.json` - Updated OpenAPI specification
+
+### Generate Documentation
+
+To update your API documentation and playground:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="maintenance-docs">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+</Tabs>
+
+---
 
 ## Next Steps
 

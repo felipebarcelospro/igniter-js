@@ -15,19 +15,30 @@ This guide shows you how to build production-ready APIs with Deno and Igniter.js
 
 ## Quick Start
 
-The fastest way to start is using Deno's native TypeScript support:
+The fastest way to start is using the official CLI with Deno's native TypeScript support:
 
-```bash
-# Clone the starter template
-git clone https://github.com/igniter-js/starter-deno-rest-api my-app
-cd my-app
-
-# Install dependencies (if using npm packages)
-deno install
-
-# Run with development permissions
-deno task dev
-```
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest init
+    ```
+  </Tab>
+</Tabs>
 
 Your API runs at `http://localhost:8000/api/v1`, and interactive docs at `http://localhost:8000/api/v1/docs` 🚀
 
@@ -35,15 +46,18 @@ Your API runs at `http://localhost:8000/api/v1`, and interactive docs at `http:/
 
 ## Manual Setup
 
-Follow this guide to add Igniter.js to an existing Deno project or understand how everything works.
+<Card title="Complete Deno Setup Guide">
+  <Steps>
+    <Step>
+      ### Prerequisites
 
-### Prerequisites
+      Before you begin, ensure you have:
+      - **Deno** 1.40+ ([install here](https://deno.land))
+      - Basic knowledge of TypeScript
+    </Step>
 
-Before you begin, ensure you have:
-- **Deno** 1.40+ ([install here](https://deno.land))
-- Basic knowledge of TypeScript
-
-### Step 1: Initialize Deno Project
+    <Step>
+      ### Initialize Deno Project
 
 Create a new directory and initialize with `deno.json`:
 
@@ -65,9 +79,11 @@ Create a new directory and initialize with `deno.json`:
 }
 ```
 
-Deno's import map allows you to use npm packages seamlessly with native Deno modules.
+      Deno's import map allows you to use npm packages seamlessly with native Deno modules.
+    </Step>
 
-### Step 2: Define Application Context
+    <Step>
+      ### Define Application Context
 
 The context defines dependencies available throughout your API. Create `src/igniter.context.ts`:
 
@@ -91,9 +107,11 @@ export function createIgniterAppContext(): AppContext {
     // Initialize dependencies here
   }
 }
-```
+      ```
+    </Step>
 
-### Step 3: Initialize Igniter.js
+    <Step>
+      ### Initialize Igniter.js
 
 Create the main Igniter instance. Create `src/igniter.ts`:
 
@@ -115,11 +133,13 @@ export const igniter = Igniter
     }
   })
   .create()
-```
+      ```
 
-Note: Deno uses `Deno.env.get()` for environment variables with explicit `--allow-env` permission.
+      Note: Deno uses `Deno.env.get()` for environment variables with explicit `--allow-env` permission.
+    </Step>
 
-### Step 4: Create Your First Controller
+    <Step>
+      ### Create Your First Controller
 
 Controllers group related endpoints. Create `src/features/example/controllers/example.controller.ts`:
 
@@ -151,9 +171,11 @@ Create barrel export at `src/features/example/index.ts`:
 export * from './controllers/example.controller.ts'
 ```
 
-This creates `GET /api/v1/example/hello` with fully typed responses.
+      This creates `GET /api/v1/example/hello` with fully typed responses.
+    </Step>
 
-### Step 5: Create Application Router
+    <Step>
+      ### Create Application Router
 
 The router assembles all controllers. Create `src/igniter.router.ts`:
 
@@ -167,10 +189,12 @@ export const AppRouter = igniter.router({
   }
 })
 
-export type AppRouterType = typeof AppRouter
-```
+      export type AppRouterType = typeof AppRouter
+      ```
+    </Step>
 
-### Step 6: Set Up Deno Server
+    <Step>
+      ### Set Up Deno Server
 
 Deno has a built-in HTTP server based on web standards. Create `src/index.ts`:
 
@@ -211,13 +235,14 @@ deno task dev
 deno run --allow-net --allow-env --allow-read --watch src/index.ts
 ```
 
-Permissions explained:
-- `--allow-net`: Network access for HTTP server
-- `--allow-env`: Read environment variables
-- `--allow-read`: Read files (for static assets, configs)
-- `--watch`: Auto-reload on file changes
-
----
+      Permissions explained:
+      - `--allow-net`: Network access for HTTP server
+      - `--allow-env`: Read environment variables
+      - `--allow-read`: Read files (for static assets, configs)
+      - `--watch`: Auto-reload on file changes
+    </Step>
+  </Steps>
+</Card>
 
 ## Deno-Specific Features
 

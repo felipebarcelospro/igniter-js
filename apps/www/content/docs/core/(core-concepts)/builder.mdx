@@ -11,7 +11,7 @@ The **Igniter Builder** is the foundation of your application. It provides a flu
 import { Igniter } from '@igniter-js/core';
 
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .config({ baseURL: 'https://api.example.com' })
   .store(redisAdapter)
   .jobs(bullmqAdapter)
@@ -73,8 +73,20 @@ interface AppContext {
   };
 }
 
+// Create context factory function
+export function createIgniterAppContext(): AppContext {
+  return {
+    db: new Database(),
+    config: loadAppConfig(),
+    services: {
+      email: new EmailService(),
+      storage: new StorageService()
+    }
+  };
+}
+
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .create();
 ```
 
@@ -134,7 +146,7 @@ Configures **router-level settings** like base URL and path prefix.
 
 ```typescript
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .config({
     baseURL: 'https://api.example.com',
     basePATH: '/api/v1'
@@ -189,7 +201,7 @@ const redisStore = createRedisStoreAdapter({
 });
 
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .store(redisStore)
   .create();
 ```
@@ -241,7 +253,7 @@ const logger = createConsoleLogger({
 });
 
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .logger(logger)
   .create();
 ```
@@ -294,7 +306,7 @@ const jobsAdapter = createBullMQAdapter({
 });
 
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .store(redisStore)
   .jobs(jobsAdapter)
   .create();
@@ -363,7 +375,7 @@ const telemetry = createOpenTelemetryProvider({
 });
 
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .telemetry(telemetry)
   .create();
 ```
@@ -416,7 +428,7 @@ import { createAuthPlugin } from './plugins/auth';
 import { createEmailPlugin } from './plugins/email';
 
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .plugins({
     audit: createAuditPlugin(),
     auth: createAuthPlugin(),
@@ -475,7 +487,7 @@ Configures **API documentation** and interactive playground using OpenAPI specif
 
 ```typescript
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .docs({
     openapi: '3.1.0',
     info: {
@@ -537,7 +549,7 @@ Finalizes the builder and returns the **fully configured Igniter instance** with
 
 ```typescript
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .config({ baseURL: 'https://api.example.com' })
   .store(redisStore)
   .jobs(jobsAdapter)
@@ -579,7 +591,7 @@ interface AppContext {
 }
 
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .create();
 
 // Ready to create actions!
@@ -666,7 +678,7 @@ import { authPlugin } from './plugins/auth';
 import { emailPlugin } from './plugins/email';
 
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .store(redisStore)
   .plugins({
     audit: auditPlugin,
@@ -726,7 +738,7 @@ After calling `.create()`, all configured adapters are available directly on the
 
 ```typescript
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .store(redisStore)
   .jobs(jobsAdapter)
   .telemetry(telemetry)
@@ -756,7 +768,7 @@ Create **one Igniter instance** per application and export it:
 ```typescript
 // src/igniter.ts
 export const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .config({ baseURL: process.env.API_URL })
   .create();
 ```
@@ -774,7 +786,7 @@ Use environment variables for different environments:
 
 ```typescript
 const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .config({
     baseURL: process.env.NODE_ENV === 'production' 
       ? 'https://api.example.com' 
@@ -816,7 +828,7 @@ const igniter = Igniter
 Only add adapters when needed:
 
 ```typescript
-let builder = Igniter.context<AppContext>();
+let builder = Igniter.context(createIgniterAppContext());
 
 // Only add telemetry in production
 if (process.env.NODE_ENV === 'production') {

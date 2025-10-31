@@ -7,7 +7,7 @@ import { Fragment } from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import * as Base from 'fumadocs-ui/components/codeblock';
 import { cn } from '@/lib/utils';
-import type { BundledLanguage } from 'shiki';
+import type { BundledLanguage, LanguageInput, SpecialLanguage } from 'shiki';
 
 type CodeBlockClientProps = {
   code: string;
@@ -32,7 +32,7 @@ export const CodeBlockClient = ({ code, lang, wrapper, ...rest }: CodeBlockClien
           themes: ['vesper', 'github-light'],
         });
 
-        await highlighter.loadLanguage(lang as BundledLanguage);
+        await highlighter.loadLanguage(lang as any);
         
         const hast = highlighter.codeToHast(code, {
           lang,

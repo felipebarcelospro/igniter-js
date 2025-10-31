@@ -20,56 +20,76 @@ The fastest way to start is using the official CLI, which scaffolds a complete a
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
   <Tab value="npm">
     ```bash
-    npx create-igniter-app@latest my-app --template nextjs
-    cd my-app
-    npm install
-    npm run dev
+    npx @igniter-js/cli@latest init
     ```
   </Tab>
   <Tab value="pnpm">
     ```bash
-    pnpm create igniter-app my-app --template nextjs
-    cd my-app
-    pnpm install
-    pnpm dev
+    pnpm dlx @igniter-js/cli@latest init
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn create igniter-app my-app --template nextjs
-    cd my-app
-    yarn install
-    yarn dev
+    yarn dlx @igniter-js/cli@latest init
     ```
   </Tab>
   <Tab value="bun">
     ```bash
-    bunx create-igniter-app my-app --template nextjs
-    cd my-app
-    bun install
-    bun dev
+    bunx @igniter-js/cli@latest init
     ```
   </Tab>
 </Tabs>
 
 Your app runs at `http://localhost:3000`. API is at `http://localhost:3000/api/v1`, and interactive docs at `http://localhost:3000/api/v1/docs` 🚀
 
+### Direct Command
+
+If you prefer to skip the interactive prompts, you can specify your project name and framework directly:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="direct-command">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest init my-nextjs-app --framework nextjs
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest init my-nextjs-app --framework nextjs
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest init my-nextjs-app --framework nextjs
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest init my-nextjs-app --framework nextjs
+    ```
+  </Tab>
+</Tabs>
+
+This command will create a Next.js project with all Igniter.js features pre-configured.
+
 ---
 
 ## Manual Setup
 
-Follow this guide to add Igniter.js to an existing Next.js project or understand how everything works.
+<Card title="Complete Next.js Setup Guide">
+  <Steps>
+    <Step>
+      ### Prerequisites
 
-### Prerequisites
+      Before you begin, ensure you have:
+      - **Node.js** 22.0+
+      - **Next.js** 15.0+ with App Router
+      - **TypeScript** 5.0+
+    </Step>
 
-Before you begin, ensure you have:
-- **Node.js** 18.0+ (20.0+ recommended)
-- **Next.js** 15.0+ with App Router
-- **TypeScript** 5.0+
+    <Step>
+      ### Install Core Package
 
-### Step 1: Install Core Package
-
-Install Igniter.js and Zod for schema validation:
+      Install Igniter.js and Zod for schema validation:
 
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
   <Tab value="npm">
@@ -91,12 +111,14 @@ Install Igniter.js and Zod for schema validation:
     ```bash
     bun add @igniter-js/core zod
     ```
-  </Tab>
-</Tabs>
+      </Tab>
+    </Tabs>
 
-Zod provides excellent TypeScript inference and runtime validation, making it the recommended choice for Igniter.js projects.
+      Zod provides excellent TypeScript inference and runtime validation, making it the recommended choice for Igniter.js projects.
+    </Step>
 
-### Step 2: Define Application Context
+    <Step>
+      ### Define Application Context
 
 The context defines dependencies available throughout your API (database, services, etc.). Create `src/igniter.context.ts`:
 
@@ -120,9 +142,11 @@ export function createIgniterAppContext(): AppContext {
     // Initialize dependencies here
   }
 }
-```
+      ```
+    </Step>
 
-### Step 3: Initialize Igniter.js
+    <Step>
+      ### Initialize Igniter.js
 
 Create the main Igniter instance with configuration. Create `src/igniter.ts`:
 
@@ -144,11 +168,13 @@ export const igniter = Igniter
     }
   })
   .create()
-```
+      ```
 
-The builder pattern makes it easy to add features later like `.store()` (Redis), `.jobs()` (background tasks), `.logger()`, and `.telemetry()`.
+      The builder pattern makes it easy to add features later like `.store()` (Redis), `.jobs()` (background tasks), `.logger()`, and `.telemetry()`.
+    </Step>
 
-### Step 4: Create Your First Controller
+    <Step>
+      ### Create Your First Controller
 
 Controllers group related endpoints. Create `src/features/example/controllers/example.controller.ts`:
 
@@ -175,12 +201,14 @@ export const exampleController = igniter.controller({
 Create barrel export at `src/features/example/index.ts`:
 
 ```typescript title="src/features/example/index.ts"
-export * from './controllers/example.controller'
-```
+      export * from './controllers/example.controller'
+      ```
 
-This creates `GET /api/v1/example/hello` with fully typed responses.
+      This creates `GET /api/v1/example/hello` with fully typed responses.
+    </Step>
 
-### Step 5: Create Application Router
+    <Step>
+      ### Create Application Router
 
 The router assembles all controllers. Create `src/igniter.router.ts`:
 
@@ -194,12 +222,14 @@ export const AppRouter = igniter.router({
   }
 })
 
-export type AppRouterType = typeof AppRouter
-```
+      export type AppRouterType = typeof AppRouter
+      ```
 
-The type export enables the type-safe client without exposing server implementation.
+      The type export enables the type-safe client without exposing server implementation.
+    </Step>
 
-### Step 6: Create Next.js API Route
+    <Step>
+      ### Create Next.js API Route
 
 Connect the router to Next.js using the adapter. Create `src/app/api/v1/[[...all]]/route.ts`:
 
@@ -234,9 +264,10 @@ export const api = createIgniterClient<AppRouterType>({
 export type ApiClient = typeof api
 ```
 
-This client works in both Server and Client Components with full type safety.
-
----
+      This client works in both Server and Client Components with full type safety.
+    </Step>
+  </Steps>
+</Card>
 
 ## Usage in Components
 
@@ -279,42 +310,73 @@ export function ExampleComponent() {
 
 Igniter.js can automatically generate OpenAPI schemas and TypeScript types for your API.
 
-### Install CLI (Optional)
+### When to Generate Schema
 
-<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+<Callout type="error">
+  **Critical:** You MUST run schema generation BEFORE using the client in your frontend. The client depends on the generated schema to function correctly.
+</Callout>
+
+<Callout type="info">
+  Run this command whenever you modify your API structure (add/remove/modify controllers or actions) OR before using the client for the first time.
+</Callout>
+
+### Generate Schema
+
+Run this command whenever you make changes to your API structure:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-schema">
   <Tab value="npm">
     ```bash
-    npm install -D @igniter-js/cli
+    npx @igniter-js/cli@latest generate schema
     ```
   </Tab>
   <Tab value="pnpm">
     ```bash
-    pnpm add -D @igniter-js/cli
+    pnpm dlx @igniter-js/cli@latest generate schema
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn add -D @igniter-js/cli
+    yarn dlx @igniter-js/cli@latest generate schema
     ```
   </Tab>
   <Tab value="bun">
     ```bash
-    bun add -D @igniter-js/cli
+    bunx @igniter-js/cli@latest generate schema
     ```
   </Tab>
 </Tabs>
 
-### Generate Schema
-
-Run the CLI to generate `igniter.schema.ts` and OpenAPI documentation:
-
-```bash
-npx igniter-cli generate
-```
-
 This creates:
 - `src/igniter.schema.ts` - Type-safe schema for client-side usage
 - `src/docs/openapi.json` - OpenAPI 3.0 specification
+
+### Generate OpenAPI Documentation
+
+To generate or update the OpenAPI specification and interactive documentation:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-docs">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+</Tabs>
 
 ### Update Igniter Config
 

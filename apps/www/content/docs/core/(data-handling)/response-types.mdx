@@ -12,7 +12,7 @@ const userController = igniter.controller({
   path: '/users',
   actions: {
     getUser: igniter.query({
-      path: '/:id',
+      path: '/:id' as const,
       handler: async ({ request, response, context }) => {
         const user = await context.db.users.findUnique({
           where: { id: request.params.id }
@@ -85,7 +85,7 @@ Returns a `204 No Content` response (commonly used for DELETE operations):
 
 ```typescript
 const deleteUser = igniter.mutation({
-  path: '/users/:id',
+  path: '/users/:id' as const,
   method: 'DELETE',
   handler: async ({ request, response, context }) => {
     await context.db.users.delete({
@@ -168,7 +168,7 @@ Returns `403 Forbidden` (authenticated but not allowed):
 
 ```typescript
 const deletePost = igniter.mutation({
-  path: '/posts/:id',
+  path: '/posts/:id' as const,
   method: 'DELETE',
   handler: async ({ request, context, response }) => {
     const post = await context.db.posts.findUnique({
@@ -192,7 +192,7 @@ Returns `404 Not Found`:
 
 ```typescript
 const getUser = igniter.query({
-  path: '/users/:id',
+  path: '/users/:id' as const,
   handler: async ({ request, response, context }) => {
     const user = await context.db.users.findUnique({
       where: { id: request.params.id }
@@ -473,7 +473,7 @@ const createPost = igniter.mutation({
 **With Scoped Revalidation:**
 ```typescript
 const updatePost = igniter.mutation({
-  path: '/posts/:id',
+  path: '/posts/:id' as const,
   method: 'PATCH',
   handler: async ({ request, response, context }) => {
     const post = await context.db.posts.update({
@@ -529,7 +529,7 @@ const action = igniter.mutation({
 
 ```typescript
 const getPost = igniter.query({
-  path: '/posts/:id',
+  path: '/posts/:id' as const,
   handler: async ({ request, response, context }) => {
     const post = await context.db.posts.findUnique({
       where: { id: request.params.id }
@@ -669,7 +669,7 @@ const postController = igniter.controller({
     
     // Get
     get: igniter.query({
-      path: '/:id',
+      path: '/:id' as const,
       handler: async ({ request, response }) => {
         const post = await db.posts.findUnique({
           where: { id: request.params.id }
@@ -692,7 +692,7 @@ const postController = igniter.controller({
     
     // Update
     update: igniter.mutation({
-      path: '/:id',
+      path: '/:id' as const,
       method: 'PATCH',
       body: UpdatePostSchema,
       handler: async ({ request, response }) => {
@@ -706,7 +706,7 @@ const postController = igniter.controller({
     
     // Delete
     delete: igniter.mutation({
-      path: '/:id',
+      path: '/:id' as const,
       method: 'DELETE',
       handler: async ({ request, response }) => {
         await db.posts.delete({ where: { id: request.params.id } });

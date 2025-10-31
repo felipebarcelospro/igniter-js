@@ -7,7 +7,7 @@ description: Install and configure the Redis adapter for Store. Set up Redis con
 
 Before installing the Store adapter, ensure you have:
 
-- **Node.js** 18+ or Bun runtime
+- **Node.js** 22+ or Bun runtime
 - **Redis** server running (local or remote)
 - An Igniter.js project initialized
 
@@ -177,10 +177,11 @@ Register the store adapter in your main Igniter configuration:
 ```typescript
 // src/igniter.ts
 import { Igniter } from '@igniter-js/core';
+import { createIgniterAppContext } from '@/igniter.context';
 import { store } from './services/store';
 
 export const igniter = Igniter
-  .context<AppContext>()
+  .context(createIgniterAppContext())
   .store(store)
   .create();
 ```
@@ -300,9 +301,14 @@ Add health check endpoints to monitor Redis connectivity:
 
 ```typescript
 export const healthController = igniter.controller({
+  name: 'Health',
+  description: 'Monitor application health and service connectivity',
   path: '/health',
   actions: {
     check: igniter.query({
+      name: 'Health Check',
+      description: 'Check the health status of all services including Redis',
+      path: '/',
       handler: async ({ context, response }) => {
         try {
           // Test Redis connection

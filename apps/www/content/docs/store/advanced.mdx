@@ -370,9 +370,14 @@ Good monitoring provides visibility into cache performance, error rates, and lat
 
     // Health check endpoint
     export const healthController = igniter.controller({
+      name: 'Health',
+      description: 'Monitor application health and service connectivity',
       path: '/health',
       actions: {
         check: igniter.query({
+          name: 'Health Check',
+          description: 'Check the health status of all services including Redis',
+          path: '/',
           handler: async ({ context, response }) => {
             const storeHealth = await checkStoreHealth(context);
             

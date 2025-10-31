@@ -18,10 +18,14 @@ But being AI-native doesn't mean sacrificing developer experience. In fact, the 
 ```typescript
 // Crystal-clear structure that both humans and AI understand instantly
 export const users = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: {
     getById: igniter.query({
-      path: '/:id',
+      name: 'Get User by ID',
+      description: 'Retrieve a specific user by their ID',
+      path: '/:id' as const,
       handler: async ({ params }) => {
         const user = await db.users.findUnique({ where: { id: params.id } })
         return response.success({ user })

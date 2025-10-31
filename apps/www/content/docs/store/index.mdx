@@ -1,5 +1,5 @@
 ---
-title: Store
+title: Introduction
 description: High-performance caching and Pub/Sub messaging with Redis. Store provides a unified interface for key-value caching, atomic operations, and event-driven communication.
 ---
 
@@ -106,10 +106,11 @@ Get started with the Store adapter in minutes. This quick start guide shows you 
     ```typescript
     // src/igniter.ts
     import { Igniter } from '@igniter-js/core';
+    import { createIgniterAppContext } from '@/igniter.context';
     import { store } from './services/store';
-    
+
     export const igniter = Igniter
-      .context<AppContext>()
+      .context(createIgniterAppContext())
       .store(store)
       .create();
     ```
@@ -122,9 +123,14 @@ Get started with the Store adapter in minutes. This quick start guide shows you 
     
     ```typescript
     export const usersController = igniter.controller({
+      name: 'Users',
+      description: 'Manage user accounts and data',
       path: '/users',
       actions: {
         list: igniter.query({
+          name: 'List Users',
+          description: 'Retrieve a list of all users with caching',
+          path: '/',
           handler: async ({ context, response }) => {
             // Check cache first
             const cached = await igniter.store.get<User[]>('users:list');

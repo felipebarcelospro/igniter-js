@@ -2,8 +2,8 @@
   "title": "Store",
   "root": true,
   "pages": [
-    "index",
     "---Getting Started---",
+    "index",
     "installation",
     "---Core Concepts---",
     "caching",

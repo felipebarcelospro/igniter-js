@@ -6,6 +6,7 @@ import {
   Copy,
   ExternalLinkIcon,
   MessageCircleIcon,
+  MessageCircleQuestionIcon,
 } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { useCopyButton } from 'fumadocs-ui/utils/use-copy-button';
@@ -16,6 +17,8 @@ import {
   PopoverTrigger,
 } from 'fumadocs-ui/components/ui/popover';
 import { cva } from 'class-variance-authority';
+import { useChatActions } from '@ai-sdk-tools/store';
+import { generateId } from 'ai';
 
 const cache = new Map<string, string>();
 
@@ -86,6 +89,34 @@ export function ViewOptions({
    */
   githubUrl: string;
 }) {
+  const { setNewChat, sendMessage } = useChatActions();
+
+  const handleAskLia = async () => {
+    // Open the chat sidebar if not already open
+    // We can dispatch a custom event that the chat sidebar can listen to
+    window.dispatchEvent(new CustomEvent('openChatSidebar'));
+
+    // Delay the execution of the function by 1000ms with promise
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Create a new chat with an initial message asking about the current page
+    const newChatId = generateId();
+
+    // Read the markdown file and ask questions about it
+    setNewChat(newChatId, []);
+
+    // Read the markdown file and ask questions about it
+    sendMessage({
+      role: 'user',
+      parts: [
+        {
+          type: 'text',
+          text: `Read ${markdownUrl.replace('.mdx', '')}, I want to ask questions about it.`,
+        }
+      ]
+    });
+  };
+
   const items = useMemo(() => {
     const fullMarkdownUrl =
       typeof window !== 'undefined'
@@ -94,6 +125,13 @@ export function ViewOptions({
     const q = `Read ${fullMarkdownUrl}, I want to ask questions about it.`;
 
     return [
+      {
+        title: 'Ask Lia',
+        onClick: handleAskLia,
+        icon: (
+          <MessageCircleQuestionIcon className="size-4" />
+        ),
+      },
       {
         title: 'Open in GitHub',
         href: githubUrl,
@@ -228,19 +266,34 @@ export function ViewOptions({
         <ChevronDown className="size-3.5 text-fd-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent className="flex flex-col">
-        {items.map((item) => (
-          <a
-            key={item.href}
-            href={item.href}
-            rel="noreferrer noopener"
-            target="_blank"
-            className={cn(optionVariants())}
-          >
-            {item.icon}
-            {item.title}
-            <ExternalLinkIcon className="text-fd-muted-foreground size-3.5 ms-auto" />
-          </a>
-        ))}
+        {items.map((item) => {
+          if (item.onClick) {
+            return (
+              <button
+                key={item.title}
+                onClick={item.onClick}
+                className={cn(optionVariants())}
+              >
+                {item.icon}
+                {item.title}
+              </button>
+            );
+          }
+
+          return (
+            <a
+              key={item.href}
+              href={item.href}
+              rel="noreferrer noopener"
+              target="_blank"
+              className={cn(optionVariants())}
+            >
+              {item.icon}
+              {item.title}
+              <ExternalLinkIcon className="text-fd-muted-foreground size-3.5 ms-auto" />
+            </a>
+          );
+        })}
       </PopoverContent>
     </Popover>
   );

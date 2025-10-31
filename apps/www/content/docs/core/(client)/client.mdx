@@ -477,6 +477,10 @@ When using `response.revalidate()` on the server, connected clients are automati
 ```typescript
 // Server-side
 const createPost = igniter.mutation({
+  name: 'Create Post',
+  description: 'Create a new post',
+  path: '/',
+  method: 'POST',
   handler: async ({ response }) => {
     const post = await db.posts.create({ data: {...} });
     
@@ -669,6 +673,49 @@ return <Content data={data} />;
 // ❌ Bad - No feedback
 return <Content data={data} />;
 ```
+
+---
+
+## Client Maintenance
+
+### Schema Synchronization
+
+<Callout type="error">
+  **Critical:** You MUST run schema generation BEFORE using the client. The client depends entirely on the generated schema to function.
+</Callout>
+
+<Callout type="info">
+  The client types are automatically derived from your server-side controllers and actions. Without the generated schema, the client will not work.
+</Callout>
+
+When your API changes (new controllers, actions, or modified signatures), update the client:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="client-maintenance">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+</Tabs>
+
+This regenerates:
+- `src/igniter.schema.ts` - Updated type definitions for full IntelliSense
+- Client method signatures that stay in sync with your API
 
 ---
 

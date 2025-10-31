@@ -17,31 +17,79 @@ This guide focuses on integrating Igniter.js as an API backend within a Vite pro
 
 For a complete full-stack setup, we recommend using **TanStack Start** (Vite-powered React framework):
 
-```bash
-npx create-igniter-app@latest my-app --template tanstack-start
-cd my-app
-npm install
-npm run dev
-```
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest init
+    ```
+  </Tab>
+</Tabs>
 
 Your app runs at `http://localhost:3000`, API at `http://localhost:3000/api/v1`, and docs at `http://localhost:3000/api/v1/docs` 🚀
+
+### Direct Command
+
+If you prefer to skip the interactive prompts, you can specify your project name and framework directly:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="direct-command">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest init my-vite-app --framework tanstack-start
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest init my-vite-app --framework tanstack-start
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest init my-vite-app --framework tanstack-start
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest init my-vite-app --framework tanstack-start
+    ```
+  </Tab>
+</Tabs>
+
+This command will create a TanStack Start project with all Igniter.js features pre-configured.
 
 ---
 
 ## Manual Setup with Vite
 
-Follow this guide to add Igniter.js to an existing Vite project.
+<Card title="Complete Vite Setup Guide">
+  <Steps>
+    <Step>
+      ### Prerequisites
 
-### Prerequisites
+      Before you begin, ensure you have:
+      - **Node.js** 22.0+
+      - **Vite** 5.0+
+      - A Vite project (React, Vue, Svelte, etc.)
+    </Step>
 
-Before you begin, ensure you have:
-- **Node.js** 18.0+ (20.0+ recommended)
-- **Vite** 5.0+
-- A Vite project (React, Vue, Svelte, etc.)
+    <Step>
+      ### Install Dependencies
 
-### Step 1: Install Dependencies
-
-Add Igniter.js to your Vite project:
+      Add Igniter.js to your Vite project:
 
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
   <Tab value="npm">
@@ -63,10 +111,12 @@ Add Igniter.js to your Vite project:
     ```bash
     bun add @igniter-js/core zod
     ```
-  </Tab>
-</Tabs>
+      </Tab>
+    </Tabs>
+    </Step>
 
-### Step 2: Configure Vite for API Routes
+    <Step>
+      ### Configure Vite for API Routes
 
 Update your `vite.config.ts` to proxy API requests during development:
 
@@ -87,11 +137,13 @@ export default defineConfig({
     },
   },
 })
-```
+      ```
 
-This configuration proxies `/api/*` requests to your Igniter.js server during development.
+      This configuration proxies `/api/*` requests to your Igniter.js server during development.
+    </Step>
 
-### Step 3: Define Application Context
+    <Step>
+      ### Define Application Context
 
 Create the context for your API. Create `src/igniter.context.ts`:
 
@@ -115,9 +167,11 @@ export function createIgniterAppContext(): AppContext {
     // Initialize dependencies here
   }
 }
-```
+      ```
+    </Step>
 
-### Step 4: Initialize Igniter.js
+    <Step>
+      ### Initialize Igniter.js
 
 Create the main Igniter instance. Create `src/igniter.ts`:
 
@@ -139,11 +193,13 @@ export const igniter = Igniter
     }
   })
   .create()
-```
+      ```
 
-Note: Vite uses `import.meta.env` for environment variables, not `process.env`.
+      Note: Vite uses `import.meta.env` for environment variables, not `process.env`.
+    </Step>
 
-### Step 5: Create Your First Controller
+    <Step>
+      ### Create Your First Controller
 
 Controllers group related endpoints. Create `src/features/example/controllers/example.controller.ts`:
 
@@ -170,10 +226,12 @@ export const exampleController = igniter.controller({
 Create barrel export at `src/features/example/index.ts`:
 
 ```typescript title="src/features/example/index.ts"
-export * from './controllers/example.controller'
-```
+      export * from './controllers/example.controller'
+      ```
+    </Step>
 
-### Step 6: Create Application Router
+    <Step>
+      ### Create Application Router
 
 The router assembles all controllers. Create `src/igniter.router.ts`:
 
@@ -187,10 +245,12 @@ export const AppRouter = igniter.router({
   }
 })
 
-export type AppRouterType = typeof AppRouter
-```
+      export type AppRouterType = typeof AppRouter
+      ```
+    </Step>
 
-### Step 7: Create Separate API Server
+    <Step>
+      ### Create Separate API Server
 
 For Vite projects, run the API as a separate Node.js server. Create `server/index.ts`:
 
@@ -227,10 +287,11 @@ Add to `package.json`:
 Install `concurrently`:
 
 ```bash
-npm install -D concurrently tsx
-```
-
----
+      npm install -D concurrently tsx
+      ```
+    </Step>
+  </Steps>
+</Card>
 
 ## Using in React Components
 
@@ -251,46 +312,98 @@ export const api = createIgniterClient<AppRouterType>({
 export type ApiClient = typeof api
 ```
 
-### Using React Query
+### Using Client Components
 
-For optimal React integration, use TanStack Query:
-
-```bash
-npm install @tanstack/react-query
-```
-
-Set up the provider:
-
-```tsx title="src/main.tsx"
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-
-const queryClient = new QueryClient()
-
-createRoot(document.getElementById('root')!).render(
-  <QueryClientProvider client={queryClient}>
-    <App />
-  </QueryClientProvider>
-)
-```
-
-Use in components:
+Use React hooks for automatic loading/error states:
 
 ```tsx title="src/components/Example.tsx"
-import { useQuery } from '@tanstack/react-query'
+'use client'
+
 import { api } from '@/igniter.client'
 
 export function Example() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['hello'],
-    queryFn: () => api.example.hello.query(),
-  })
-  
+  const { data, isLoading, error } = api.example.hello.useQuery()
+
   if (isLoading) return <div>Loading...</div>
   if (error) return <div>Error: {error.message}</div>
-  
+
   return <div>Message: {data.message}</div>
 }
 ```
+
+---
+
+## Generating Schema and Docs
+
+Since TanStack Start is a full-stack framework, you'll need to generate the client schema whenever you modify your API.
+
+### When to Generate Schema
+
+<Callout type="error">
+  **Critical:** You MUST run schema generation BEFORE using the client in your frontend. The client depends on the generated schema to function correctly.
+</Callout>
+
+<Callout type="info">
+  Run this command whenever you modify your API structure (add/remove/modify controllers or actions) OR before using the client for the first time.
+</Callout>
+
+### Generate Schema
+
+Run this command whenever you make changes to your API structure:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-schema">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+</Tabs>
+
+This creates:
+- `src/igniter.schema.ts` - Type-safe schema for client-side usage
+- `src/docs/openapi.json` - OpenAPI 3.0 specification
+
+### Generate OpenAPI Documentation
+
+To generate or update the OpenAPI specification and interactive documentation:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-docs">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+</Tabs>
 
 ---
 
@@ -391,7 +504,7 @@ See the [TanStack Start guide](/docs/installation/tanstack-start) for details.
   <Card title="TanStack Start" href="/docs/installation/tanstack-start">
     Full-stack framework with built-in API routes
   </Card>
-  <Card title="React Query" href="/docs/client">
+  <Card title="Client" href="/docs/client">
     Type-safe client with React hooks
   </Card>
   <Card title="Actions" href="/docs/actions">

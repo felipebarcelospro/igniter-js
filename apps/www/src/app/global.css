@@ -80,6 +80,14 @@
   --fd-banner-height: 3.5rem;
 }
 
+.chat-open {
+  --chat-sidebar-width: 480px; /* Adjust as needed */
+
+  /* Override Fumadocs variables when chat is open */
+  --fd-toc-width: calc(var(--fd-toc-width) - var(--chat-sidebar-width));
+  --fd-page-width: calc(var(--fd-page-width) - var(--chat-sidebar-width));
+}
+
 .dark {
   --background: oklch(0.15 0.01 1);
   --foreground: oklch(0.985 0 0);
@@ -134,6 +142,46 @@
   @apply bg-secondary;
 }
 
+#nd-toc {
+  @apply fixed bottom-0 pt-12 pb-2 pr-(--removed-body-scroll-bar-size,0) xl:on-root:[--fd-toc-width:286px] max-xl:hidden;
+  right: var(--chat-sidebar-width);
+}
+
+.chat-open #nd-toc {
+  display: none; /* Hide default desktop ToC when chat is open */
+}
+
+.chat-open .fd-toc-menu-nav {
+  @apply fixed bottom-0 pt-12 pb-2 text-sm max-xl:block; /* Ensure it's visible on desktop */
+  top: calc(var(--fd-banner-height) + var(--fd-nav-height) + 1rem); /* Position below the chat/header */
+  left: max(var(--fd-layout-offset), calc(50vw - var(--fd-sidebar-width)/2 - var(--fd-page-width)/2));
+  right: var(--chat-sidebar-width);
+  z-index: 40; /* Ensure it's below the chat (z-50) but above content */
+  width: calc(var(--fd-page-width)); /* Adjust width to fit content area */
+}
+
+.chat-open .fd-toc-menu-nav > button {
+  width: 100%;
+  justify-content: space-between;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--background);
+}
+
+.chat-open .fd-toc-menu-nav button[data-state="open"] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.chat-open .fd-article-content {
+  margin-inline-start: auto; /* Centralize article when chat is open */
+  margin-inline-end: auto;   /* Centralize article when chat is open */
+}
+
+.chat-open #nd-docs-layout {
+  margin-inline-end: auto;   /* Centralize article when chat is open */
+}
+
 /* .max-w-fd-container > * {
   @apply !max-w-6xl;
 } */
@@ -146,4 +194,9 @@
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
+}
+
+/* Custom styles for Response component */
+.response-content pre {
+  background: var(--secondary) !important;
 }

@@ -11,13 +11,15 @@ description: Learn how to organize actions into logical controllers with shared 
 import { igniter } from '@/igniter';
 
 const userController = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: {
-    list: igniter.query({ path: '/', handler: ... }),
-    getById: igniter.query({ path: '/:id', handler: ... }),
-    create: igniter.mutation({ path: '/', method: 'POST', handler: ... }),
-    update: igniter.mutation({ path: '/:id', method: 'PUT', handler: ... }),
-    delete: igniter.mutation({ path: '/:id', method: 'DELETE', handler: ... })
+    list: igniter.query({ name: 'List Users', path: '/', handler: ... }),
+    getById: igniter.query({ name: 'Get User', path: '/:id' as const, handler: ... }),
+    create: igniter.mutation({ name: 'Create User', path: '/', method: 'POST', handler: ... }),
+    update: igniter.mutation({ name: 'Update User', path: '/:id' as const, method: 'PUT', handler: ... }),
+    delete: igniter.mutation({ name: 'Delete User', path: '/:id' as const, method: 'DELETE', handler: ... })
   }
 });
 ```
@@ -36,9 +38,13 @@ const userController = igniter.controller({
 import { igniter } from '@/igniter';
 
 const userController = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: {
     list: igniter.query({
+      name: 'List Users',
+      description: 'Retrieve all users',
       path: '/',
       handler: async ({ context, response }) => {
         const users = await context.db.users.findMany();
@@ -65,20 +71,26 @@ const CreateUserSchema = z.object({
 const UpdateUserSchema = CreateUserSchema.partial();
 
 const userController = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: {
     // GET /users/
     list: igniter.query({
+      name: 'List Users',
+      description: 'Retrieve all users',
       path: '/',
       handler: async ({ context, response }) => {
         const users = await context.db.users.findMany();
         return response.success({ users });
       }
     }),
-    
+
     // GET /users/:id
     getById: igniter.query({
-      path: '/:id',
+      name: 'Get User by ID',
+      description: 'Retrieve a specific user by their ID',
+      path: '/:id' as const,
       handler: async ({ request, context, response }) => {
         const user = await context.db.users.findUnique({
           where: { id: request.params.id }
@@ -94,6 +106,8 @@ const userController = igniter.controller({
     
     // POST /users/
     create: igniter.mutation({
+      name: 'Create User',
+      description: 'Create a new user account',
       path: '/',
       method: 'POST',
       body: CreateUserSchema,
@@ -104,10 +118,12 @@ const userController = igniter.controller({
         return response.created({ user });
       }
     }),
-    
+
     // PUT /users/:id
     update: igniter.mutation({
-      path: '/:id',
+      name: 'Update User',
+      description: 'Update an existing user by ID',
+      path: '/:id' as const,
       method: 'PUT',
       body: UpdateUserSchema,
       handler: async ({ request, context, response }) => {
@@ -118,10 +134,12 @@ const userController = igniter.controller({
         return response.success({ user });
       }
     }),
-    
+
     // DELETE /users/:id
     delete: igniter.mutation({
-      path: '/:id',
+      name: 'Delete User',
+      description: 'Delete a user by ID',
+      path: '/:id' as const,
       method: 'DELETE',
       handler: async ({ request, context, response }) => {
         await context.db.users.delete({
@@ -144,11 +162,13 @@ The `path` property sets the base path for all actions in the controller:
 
 ```typescript
 const postController = igniter.controller({
+  name: 'Posts',
+  description: 'Manage blog posts and articles',
   path: '/posts',  // ← Base path
   actions: {
-    list: igniter.query({ path: '/', ... }),        // → GET /posts/
-    getById: igniter.query({ path: '/:id', ... }),  // → GET /posts/:id
-    create: igniter.mutation({ path: '/', ... })    // → POST /posts/
+    list: igniter.query({ name: 'List Posts', path: '/', ... }),        // → GET /posts/
+    getById: igniter.query({ name: 'Get Post', path: '/:id' as const, ... }),  // → GET /posts/:id
+    create: igniter.mutation({ name: 'Create Post', path: '/', ... })    // → POST /posts/
   }
 });
 ```
@@ -159,7 +179,7 @@ const postController = igniter.controller({
 
 ### Name and Description
 
-Add metadata for documentation:
+Add metadata for documentation and OpenAPI generation:
 
 ```typescript
 const userController = igniter.controller({
@@ -171,6 +191,10 @@ const userController = igniter.controller({
   }
 });
 ```
+
+<Callout type="success" title="OpenAPI Documentation">
+  The `name` and `description` properties are crucial for generating comprehensive OpenAPI specifications. They enable the CLI to create detailed documentation that powers **Igniter Studio** (our interactive API playground), making your API much more discoverable and user-friendly.
+</Callout>
 
 <TypeTable type={{
   name: {
@@ -230,12 +254,16 @@ Group controllers by feature or domain:
 ```typescript
 // features/users/user.controller.ts
 export const userController = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: { /* ... */ }
 });
 
 // features/posts/post.controller.ts
 export const postController = igniter.controller({
+  name: 'Posts',
+  description: 'Manage blog posts and articles',
   path: '/posts',
   actions: { /* ... */ }
 });
@@ -258,10 +286,14 @@ Create hierarchical APIs with nested paths:
 
 ```typescript
 const postCommentController = igniter.controller({
-  path: '/posts/:postId/comments',
+  name: 'Post Comments',
+  description: 'Manage comments on blog posts',
+  path: '/posts/:postId/comments' as const,
   actions: {
     // GET /posts/:postId/comments/
     list: igniter.query({
+      name: 'List Post Comments',
+      description: 'Get all comments for a specific post',
       path: '/',
       handler: async ({ request, context, response }) => {
         const comments = await context.db.comments.findMany({
@@ -270,9 +302,11 @@ const postCommentController = igniter.controller({
         return response.success({ comments });
       }
     }),
-    
+
     // POST /posts/:postId/comments/
     create: igniter.mutation({
+      name: 'Create Comment',
+      description: 'Add a new comment to a post',
       path: '/',
       method: 'POST',
       body: CreateCommentSchema,
@@ -289,7 +323,9 @@ const postCommentController = igniter.controller({
     
     // GET /posts/:postId/comments/:id
     getById: igniter.query({
-      path: '/:id',
+      name: 'Get Comment',
+      description: 'Retrieve a specific comment by ID',
+      path: '/:id' as const,
       handler: async ({ request, context, response }) => {
         const comment = await context.db.comments.findUnique({
           where: { 
@@ -329,21 +365,29 @@ const CreateSchema = z.object({
 const UpdateSchema = CreateSchema.partial();
 
 function createCrudController<T extends string>(resource: T) {
+  const capitalizedResource = resource.charAt(0).toUpperCase() + resource.slice(1);
+
   return igniter.controller({
+    name: `${capitalizedResource}`,
+    description: `Manage ${resource} resources`,
     path: `/${resource}`,
     actions: {
       // List all
       list: igniter.query({
+        name: `List ${capitalizedResource}`,
+        description: `Retrieve all ${resource}`,
         path: '/',
         handler: async ({ context, response }) => {
           const items = await context.db[resource].findMany();
           return response.success({ [resource]: items });
         }
       }),
-      
+
       // Get one by ID
       getById: igniter.query({
-        path: '/:id',
+        name: `Get ${capitalizedResource}`,
+        description: `Retrieve a specific ${resource} by ID`,
+        path: '/:id' as const,
         handler: async ({ request, context, response }) => {
           const item = await context.db[resource].findUnique({
             where: { id: request.params.id }
@@ -359,6 +403,8 @@ function createCrudController<T extends string>(resource: T) {
       
       // Create new
       create: igniter.mutation({
+        name: `Create ${capitalizedResource}`,
+        description: `Create a new ${resource}`,
         path: '/',
         method: 'POST',
         body: CreateSchema,
@@ -369,10 +415,12 @@ function createCrudController<T extends string>(resource: T) {
           return response.created({ [resource]: item });
         }
       }),
-      
+
       // Update existing
       update: igniter.mutation({
-        path: '/:id',
+        name: `Update ${capitalizedResource}`,
+        description: `Update an existing ${resource} by ID`,
+        path: '/:id' as const,
         method: 'PUT',
         body: UpdateSchema,
         handler: async ({ request, context, response }) => {
@@ -383,10 +431,12 @@ function createCrudController<T extends string>(resource: T) {
           return response.success({ [resource]: item });
         }
       }),
-      
+
       // Delete
       delete: igniter.mutation({
-        path: '/:id',
+        name: `Delete ${capitalizedResource}`,
+        description: `Delete a ${resource} by ID`,
+        path: '/:id' as const,
         method: 'DELETE',
         handler: async ({ request, context, response }) => {
           await context.db[resource].delete({
@@ -419,9 +469,13 @@ const SearchSchema = z.object({
 });
 
 const productController = igniter.controller({
+  name: 'Products',
+  description: 'Manage product catalog with search and filtering',
   path: '/products',
   actions: {
     search: igniter.query({
+      name: 'Search Products',
+      description: 'Search and filter products with pagination',
       path: '/search',
       query: SearchSchema,
       handler: async ({ request, context, response }) => {
@@ -487,9 +541,13 @@ const authProcedure = igniter.procedure({
 });
 
 const protectedController = igniter.controller({
+  name: 'Protected',
+  description: 'Protected endpoints requiring authentication',
   path: '/protected',
   actions: {
     getData: igniter.query({
+      name: 'Get Protected Data',
+      description: 'Retrieve user-specific protected data',
       path: '/data',
       use: [authProcedure],
       handler: async ({ context, response }) => {
@@ -498,8 +556,10 @@ const protectedController = igniter.controller({
         });
       }
     }),
-    
+
     getSettings: igniter.query({
+      name: 'Get User Settings',
+      description: 'Retrieve user settings and preferences',
       path: '/settings',
       use: [authProcedure],
       handler: async ({ context, response }) => {
@@ -522,9 +582,13 @@ Create multiple versions of the same controller:
 ```typescript
 // v1/user.controller.ts
 export const userControllerV1 = igniter.controller({
+  name: 'Users API v1',
+  description: 'Legacy user management API',
   path: '/v1/users',
   actions: {
     list: igniter.query({
+      name: 'List Users v1',
+      description: 'Retrieve users (legacy format)',
       path: '/',
       handler: async ({ context, response }) => {
         // Old implementation
@@ -539,16 +603,20 @@ export const userControllerV1 = igniter.controller({
 
 // v2/user.controller.ts
 export const userControllerV2 = igniter.controller({
+  name: 'Users API v2',
+  description: 'Enhanced user management API',
   path: '/v2/users',
   actions: {
     list: igniter.query({
+      name: 'List Users v2',
+      description: 'Retrieve users with extended information',
       path: '/',
       handler: async ({ context, response }) => {
         // New implementation with additional fields
         const users = await context.db.users.findMany({
-          select: { 
-            id: true, 
-            name: true, 
+          select: {
+            id: true,
+            name: true,
             email: true,
             avatar: true,        // ← New field
             createdAt: true,     // ← New field
@@ -625,13 +693,35 @@ Follow RESTful conventions for action names:
 
 ```typescript
 const resourceController = igniter.controller({
+  name: 'Resources',
+  description: 'Generic resource management',
   path: '/resources',
   actions: {
-    list: igniter.query({ path: '/', ... }),           // GET /resources
-    getById: igniter.query({ path: '/:id', ... }),     // GET /resources/:id
-    create: igniter.mutation({ method: 'POST', ... }), // POST /resources
-    update: igniter.mutation({ method: 'PUT', ... }),  // PUT /resources/:id
-    delete: igniter.mutation({ method: 'DELETE', ... }) // DELETE /resources/:id
+    list: igniter.query({
+      name: 'List Resources',
+      description: 'Retrieve all resources',
+      path: '/', ...
+    }),           // GET /resources
+    getById: igniter.query({
+      name: 'Get Resource',
+      description: 'Retrieve a specific resource by ID',
+      path: '/:id' as const, ...
+    }),     // GET /resources/:id
+    create: igniter.mutation({
+      name: 'Create Resource',
+      description: 'Create a new resource',
+      method: 'POST', ...
+    }), // POST /resources
+    update: igniter.mutation({
+      name: 'Update Resource',
+      description: 'Update an existing resource',
+      method: 'PUT', ...
+    }),  // PUT /resources/:id
+    delete: igniter.mutation({
+      name: 'Delete Resource',
+      description: 'Delete a resource by ID',
+      method: 'DELETE', ...
+    }) // DELETE /resources/:id
   }
 });
 ```
@@ -740,6 +830,49 @@ describe('User API Integration', () => {
   });
 });
 ```
+
+---
+
+## Maintaining Controllers
+
+### Schema Generation After Changes
+
+<Callout type="error">
+  **Critical:** You MUST run schema generation BEFORE using the client in your frontend. The client depends on the generated schema to function correctly.
+</Callout>
+
+<Callout type="info">
+  Run this command whenever you add, modify, or remove controllers. This is required before using the client in your frontend.
+</Callout>
+
+When you add a new controller or modify existing ones, regenerate the client schema:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="controllers-maintenance">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+</Tabs>
+
+This updates:
+- `src/igniter.schema.ts` - Type definitions for your client
+- `src/docs/openapi.json` - OpenAPI specification
 
 ---
 

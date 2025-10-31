@@ -60,18 +60,25 @@ Both provide **end-to-end type safety** without code generation. If you like tRP
     ```typescript
     // Define API with standard HTTP
     const userController = igniter.controller({
+      name: 'Users',
+      description: 'Manage user accounts and profiles',
       path: '/users',
       actions: {
         getById: igniter.query({
-          path: '/:id',
+          name: 'Get User by ID',
+          description: 'Retrieve a specific user by their ID',
+          path: '/:id' as const,
           handler: async ({ request, response }) => {
-            const user = await db.users.findUnique({ 
-              where: { id: request.params.id } 
+            const user = await db.users.findUnique({
+              where: { id: request.params.id }
             });
             return response.success({ user });
           }
         }),
         create: igniter.mutation({
+          name: 'Create User',
+          description: 'Create a new user account',
+          path: '/',
           method: 'POST',
           body: z.object({
             name: z.string(),
@@ -446,7 +453,9 @@ Fastify is the fastest Node.js framework, optimized for performance. Igniter.js 
     ```typescript
     // Automatic type inference
     const getUser = igniter.query({
-      path: '/users/:id',
+      name: 'Get User',
+      description: 'Retrieve a specific user by ID',
+      path: '/users/:id' as const,
       handler: async ({ request, response }) => {
         // ✅ request.params.id is automatically typed
         const user = await db.users.findUnique({ 

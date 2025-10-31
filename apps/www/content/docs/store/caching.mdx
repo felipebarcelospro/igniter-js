@@ -465,9 +465,14 @@ Real-world examples help you understand how caching fits into actual application
     
     ```typescript
     export const apiController = igniter.controller({
+      name: 'API Proxy',
+      description: 'Proxy external API requests with intelligent caching',
       path: '/api',
       actions: {
         fetchData: igniter.query({
+          name: 'Fetch Data',
+          description: 'Fetch data from external APIs with caching support',
+          path: '/',
           handler: async ({ request, context, response }) => {
             const { endpoint, params } = request.query;
             const cacheKey = `api:${endpoint}:${JSON.stringify(params)}`;

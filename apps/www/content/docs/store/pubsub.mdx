@@ -128,9 +128,15 @@ Each pattern solves a specific problem—event broadcasting decouples components
     ```typescript
     // Publisher: User action triggers event
     export const usersController = igniter.controller({
+      name: 'Users',
+      description: 'Manage user accounts and profiles',
       path: '/users',
       actions: {
         update: igniter.mutation({
+          name: 'Update User',
+          description: 'Update user information and broadcast changes',
+          path: '/:id',
+          method: 'PUT',
           handler: async ({ request, context, response }) => {
             const user = await context.db.user.update({
               where: { id: request.params.id },

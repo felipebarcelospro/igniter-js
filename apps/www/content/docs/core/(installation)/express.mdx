@@ -58,18 +58,21 @@ Your API runs at `http://localhost:3000/api/v1`, and interactive docs at `http:/
 
 ## Manual Setup
 
-Follow this guide to add Igniter.js to an existing Express project or understand how everything works.
+<Card title="Complete Express Setup Guide">
+  <Steps>
+    <Step>
+      ### Prerequisites
 
-### Prerequisites
+      Before you begin, ensure you have:
+      - **Node.js** 18.0+ (20.0+ recommended)
+      - **Express** 4.0+
+      - **TypeScript** 5.0+
+    </Step>
 
-Before you begin, ensure you have:
-- **Node.js** 18.0+ (20.0+ recommended)
-- **Express** 4.0+
-- **TypeScript** 5.0+
+    <Step>
+      ### Install Dependencies
 
-### Step 1: Install Dependencies
-
-Install Igniter.js, Express, and Zod for schema validation:
+      Install Igniter.js, Express, and Zod for schema validation:
 
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
   <Tab value="npm">
@@ -95,12 +98,14 @@ Install Igniter.js, Express, and Zod for schema validation:
     bun add @igniter-js/core express zod
     bun add -D @types/express
     ```
-  </Tab>
-</Tabs>
+      </Tab>
+    </Tabs>
 
-The `tsx` package enables running TypeScript directly during development without a build step.
+      The `tsx` package enables running TypeScript directly during development without a build step.
+    </Step>
 
-### Step 2: Define Application Context
+    <Step>
+      ### Define Application Context
 
 The context defines dependencies available throughout your API. Create `src/igniter.context.ts`:
 
@@ -124,9 +129,11 @@ export function createIgniterAppContext(): AppContext {
     // Initialize dependencies here
   }
 }
-```
+      ```
+    </Step>
 
-### Step 3: Initialize Igniter.js
+    <Step>
+      ### Initialize Igniter.js
 
 Create the main Igniter instance. Create `src/igniter.ts`:
 
@@ -148,9 +155,11 @@ export const igniter = Igniter
     }
   })
   .create()
-```
+      ```
+    </Step>
 
-### Step 4: Create Your First Controller
+    <Step>
+      ### Create Your First Controller
 
 Controllers group related endpoints. Create `src/features/example/controllers/example.controller.ts`:
 
@@ -180,9 +189,11 @@ Create barrel export at `src/features/example/index.ts`:
 export * from './controllers/example.controller'
 ```
 
-This creates `GET /api/v1/example/hello` with fully typed responses.
+      This creates `GET /api/v1/example/hello` with fully typed responses.
+    </Step>
 
-### Step 5: Create Application Router
+    <Step>
+      ### Create Application Router
 
 The router assembles all controllers. Create `src/igniter.router.ts`:
 
@@ -196,10 +207,12 @@ export const AppRouter = igniter.router({
   }
 })
 
-export type AppRouterType = typeof AppRouter
-```
+      export type AppRouterType = typeof AppRouter
+      ```
+    </Step>
 
-### Step 6: Set Up Express Server
+    <Step>
+      ### Set Up Express Server
 
 Connect the router to Express using the adapter. Create `src/index.ts`:
 
@@ -238,9 +251,10 @@ Update your `package.json`:
 }
 ```
 
-Now run `npm run dev` to start the development server with hot reload!
-
----
+      Now run `npm run dev` to start the development server with hot reload!
+    </Step>
+  </Steps>
+</Card>
 
 ## Using Express Middleware
 

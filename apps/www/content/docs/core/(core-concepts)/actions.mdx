@@ -14,19 +14,25 @@ description: Master queries and mutations in Igniter.js to create type-safe API 
 import { igniter } from '@/igniter';
 
 const userController = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: {
     // Query action
     list: igniter.query({
+      name: 'List Users',
+      description: 'Retrieve a list of all users',
       path: '/',
       handler: async ({ context, response }) => {
         const users = await context.db.users.findMany();
         return response.success({ users });
       }
     }),
-    
+
     // Mutation action
     create: igniter.mutation({
+      name: 'Create User',
+      description: 'Create a new user account',
       path: '/',
       method: 'POST',
       body: CreateUserSchema,
@@ -49,9 +55,13 @@ Query actions are for **reading data**. They use the `GET` HTTP method and shoul
 
 ```typescript
 const userController = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: {
     list: igniter.query({
+      name: 'List Users',
+      description: 'Retrieve a list of all users',
       path: '/',
       handler: async ({ context, response }) => {
         const users = await context.db.users.findMany();
@@ -68,20 +78,24 @@ const userController = igniter.controller({
 
 ```typescript
 const userController = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: {
     getById: igniter.query({
+      name: 'Get User by ID',
+      description: 'Retrieve a specific user by their ID',
       path: '/:id' as const, // add 'as const' to ensure type inference
       handler: async ({ request, context, response }) => {
         // ✅ request.params.id is automatically typed as string
         const user = await context.db.users.findUnique({
           where: { id: request.params.id }
         });
-        
+
         if (!user) {
           return response.notFound({ message: 'User not found' });
         }
-        
+
         return response.success({ user });
       }
     })
@@ -103,9 +117,13 @@ Use Zod schemas to validate and type query parameters:
 import { z } from 'zod';
 
 const userController = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: {
     search: igniter.query({
+      name: 'Search Users',
+      description: 'Search users by name with pagination',
       path: '/search',
       query: z.object({
         q: z.string().min(1),
@@ -115,7 +133,7 @@ const userController = igniter.controller({
       handler: async ({ request, context, response }) => {
         // ✅ request.query is fully typed and validated
         const { q, limit, offset } = request.query;
-        
+
         const users = await context.db.users.findMany({
           where: {
             name: { contains: q, mode: 'insensitive' }
@@ -123,7 +141,7 @@ const userController = igniter.controller({
           take: limit,
           skip: offset
         });
-        
+
         return response.success({ users, query: q, limit, offset });
       }
     })
@@ -172,6 +190,10 @@ const userController = igniter.controller({
   }
 }} />
 
+<Callout type="success" title="OpenAPI Documentation">
+  The `name` and `description` properties are crucial for generating comprehensive OpenAPI specifications for your API. They enable the CLI to create detailed documentation that powers **Igniter Studio** (our interactive API playground), making your API much more discoverable and user-friendly.
+</Callout>
+
 ---
 
 ## Mutation Actions
@@ -184,9 +206,13 @@ Mutation actions are for **modifying data**. They support POST, PUT, PATCH, and 
 import { z } from 'zod';
 
 const userController = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: {
     create: igniter.mutation({
+      name: 'Create User',
+      description: 'Create a new user account',
       path: '/',
       method: 'POST',
       body: z.object({
@@ -199,7 +225,7 @@ const userController = igniter.controller({
         const user = await context.db.users.create({
           data: request.body
         });
-        
+
         return response.created({ user });
       }
     })
@@ -213,9 +239,13 @@ const userController = igniter.controller({
 
 ```typescript
 const userController = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: {
     update: igniter.mutation({
+      name: 'Update User',
+      description: 'Update an existing user by ID',
       path: '/:id' as const,
       method: 'PUT',
       body: z.object({
@@ -230,7 +260,7 @@ const userController = igniter.controller({
           where: { id: request.params.id },
           data: request.body
         });
-        
+
         return response.success({ user });
       }
     })
@@ -244,16 +274,20 @@ const userController = igniter.controller({
 
 ```typescript
 const userController = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: {
     delete: igniter.mutation({
+      name: 'Delete User',
+      description: 'Delete a user by ID',
       path: '/:id' as const,
       method: 'DELETE',
       handler: async ({ request, context, response }) => {
         await context.db.users.delete({
           where: { id: request.params.id }
         });
-        
+
         return response.success({ message: 'User deleted successfully' });
       }
     })
@@ -267,10 +301,14 @@ const userController = igniter.controller({
 
 ```typescript
 const userController = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: {
     patch: igniter.mutation({
-      path: '/:id',
+      name: 'Patch User',
+      description: 'Partially update a user by ID',
+      path: '/:id' as const,
       method: 'PATCH',
       body: z.object({
         name: z.string().min(2),
@@ -281,7 +319,7 @@ const userController = igniter.controller({
           where: { id: request.params.id },
           data: request.body
         });
-        
+
         return response.success({ user });
       }
     })
@@ -476,9 +514,13 @@ handler: async ({ plugins, response }) => {
 
 ```typescript
 const postController = igniter.controller({
+  name: 'Posts',
+  description: 'Manage blog posts and articles',
   path: '/posts',
   actions: {
     create: igniter.mutation({
+      name: 'Create Post',
+      description: 'Create a new blog post',
       path: '/',
       method: 'POST',
       body: z.object({
@@ -492,7 +534,7 @@ const postController = igniter.controller({
         const post = await db.posts.create({
           data: request.body
         });
-        
+
         return response.created({ post });
       }
     })
@@ -557,9 +599,13 @@ You can validate both body and query parameters:
 
 ```typescript
 const userController = igniter.controller({
+  name: 'Users',
+  description: 'Manage user accounts and profiles',
   path: '/users',
   actions: {
     createWithInvite: igniter.mutation({
+      name: 'Create User with Invite',
+      description: 'Create a new user account using an invite code',
       path: '/',
       method: 'POST',
       body: z.object({
@@ -573,19 +619,19 @@ const userController = igniter.controller({
         // ✅ Both request.body and request.query are typed
         const { name, email } = request.body;
         const { inviteCode } = request.query;
-        
+
         // Verify invite
         const invite = await db.invites.findUnique({
           where: { code: inviteCode }
         });
-        
+
         if (!invite) {
           return response.badRequest({ message: 'Invalid invite code' });
         }
-        
+
         // Create user
         const user = await db.users.create({ data: { name, email } });
-        
+
         return response.created({ user });
       }
     })
@@ -791,6 +837,49 @@ const postController = igniter.controller({
   }
 });
 ```
+
+---
+
+## Maintaining Actions
+
+### Schema Generation After Changes
+
+<Callout type="error">
+  **Critical:** You MUST run schema generation BEFORE using the client in your frontend. The client depends on the generated schema to function correctly.
+</Callout>
+
+<Callout type="info">
+  Run this command whenever you add, modify, or remove actions. This is required before using the client in your frontend.
+</Callout>
+
+When you add a new action or modify existing ones, regenerate the client schema:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="actions-maintenance">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+</Tabs>
+
+This updates:
+- `src/igniter.schema.ts` - Type definitions for your client
+- `src/docs/openapi.json` - OpenAPI specification
 
 ---
 

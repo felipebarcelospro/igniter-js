@@ -17,38 +17,113 @@ This guide shows you how to build production-ready APIs with Bun and Igniter.js.
 
 The fastest way to start is using the official CLI with Bun's native speed:
 
-```bash
-bunx create-igniter-app@latest my-app --template bun
-cd my-app
-bun install
-bun dev
-```
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest init
+    ```
+  </Tab>
+</Tabs>
 
 Your API runs at `http://localhost:3000/api/v1`, and interactive docs at `http://localhost:3000/api/v1/docs` 🚀
+
+### Direct Command
+
+If you prefer to skip the interactive prompts, you can specify your project name and framework directly:
+
+#### For REST API
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="direct-command-rest">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest init my-bun-api --framework bun-rest-api
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest init my-bun-api --framework bun-rest-api
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest init my-bun-api --framework bun-rest-api
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest init my-bun-api --framework bun-rest-api
+    ```
+  </Tab>
+</Tabs>
+
+#### For Fullstack React App
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="direct-command-react">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest init my-bun-app --framework bun-react-app
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest init my-bun-app --framework bun-react-app
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest init my-bun-app --framework bun-react-app
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest init my-bun-app --framework bun-react-app
+    ```
+  </Tab>
+</Tabs>
+
+These commands will create Bun projects with all Igniter.js features pre-configured.
 
 ---
 
 ## Manual Setup
 
-Follow this guide to add Igniter.js to an existing Bun project or understand how everything works.
+<Card title="Complete Bun Setup Guide">
+  <Steps>
+    <Step>
+      ### Prerequisites
 
-### Prerequisites
+      Before you begin, ensure you have:
+      - **Bun** 1.0+ ([install here](https://bun.sh))
+      - Basic knowledge of TypeScript
+    </Step>
 
-Before you begin, ensure you have:
-- **Bun** 1.0+ ([install here](https://bun.sh))
-- Basic knowledge of TypeScript
+    <Step>
+      ### Install Dependencies
 
-### Step 1: Install Dependencies
+      Install Igniter.js and Zod for schema validation:
 
-Install Igniter.js and Zod for schema validation:
+      ```bash
+      bun add @igniter-js/core zod
+      ```
 
-```bash
-bun add @igniter-js/core zod
-```
+      Bun has native TypeScript support—no additional type packages or build tools needed!
+    </Step>
 
-Bun has native TypeScript support—no additional type packages or build tools needed!
-
-### Step 2: Define Application Context
+    <Step>
+      ### Define Application Context
 
 The context defines dependencies available throughout your API. Create `src/igniter.context.ts`:
 
@@ -72,11 +147,13 @@ export function createIgniterAppContext(): AppContext {
     // Initialize dependencies here
   }
 }
-```
+      ```
+    </Step>
 
-### Step 3: Initialize Igniter.js
+    <Step>
+      ### Initialize Igniter.js
 
-Create the main Igniter instance. Create `src/igniter.ts`:
+      Create the main Igniter instance. Create `src/igniter.ts`:
 
 ```typescript title="src/igniter.ts"
 import { Igniter } from '@igniter-js/core'
@@ -96,9 +173,11 @@ export const igniter = Igniter
     }
   })
   .create()
-```
+      ```
+    </Step>
 
-### Step 4: Create Your First Controller
+    <Step>
+      ### Create Your First Controller
 
 Controllers group related endpoints. Create `src/features/example/controllers/example.controller.ts`:
 
@@ -129,9 +208,11 @@ Create barrel export at `src/features/example/index.ts`:
 export * from './controllers/example.controller'
 ```
 
-This creates `GET /api/v1/example/hello` with fully typed responses.
+      This creates `GET /api/v1/example/hello` with fully typed responses.
+    </Step>
 
-### Step 5: Create Application Router
+    <Step>
+      ### Create Application Router
 
 The router assembles all controllers. Create `src/igniter.router.ts`:
 
@@ -145,10 +226,12 @@ export const AppRouter = igniter.router({
   }
 })
 
-export type AppRouterType = typeof AppRouter
-```
+      export type AppRouterType = typeof AppRouter
+      ```
+    </Step>
 
-### Step 6: Set Up Bun Server
+    <Step>
+      ### Set Up Bun Server
 
 Bun has a built-in HTTP server that's incredibly fast. Create `src/index.ts`:
 
@@ -183,9 +266,10 @@ Update your `package.json`:
 }
 ```
 
-Now run `bun dev` for instant hot reload! Changes apply in milliseconds.
-
----
+      Now run `bun dev` for instant hot reload! Changes apply in milliseconds.
+    </Step>
+  </Steps>
+</Card>
 
 ## Bun-Specific Features
 
@@ -292,6 +376,80 @@ const { message, runtime } = await api.example.hello.query()
 
 ---
 
+## Generating Schema and Docs
+
+For full-stack Bun projects (Bun + React), you'll need to generate the client schema whenever you modify your API.
+
+### When to Generate Schema
+
+<Callout type="error">
+  **Critical:** You MUST run schema generation BEFORE using the client in your frontend. The client depends on the generated schema to function correctly.
+</Callout>
+
+<Callout type="info">
+  Run this command whenever you modify your API structure (add/remove/modify controllers or actions) OR before using the client for the first time.
+</Callout>
+
+### Generate Schema
+
+Run this command whenever you make changes to your API structure:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-schema">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+</Tabs>
+
+This creates:
+- `src/igniter.schema.ts` - Type-safe schema for client-side usage
+- `src/docs/openapi.json` - OpenAPI 3.0 specification
+
+### Generate OpenAPI Documentation
+
+To generate or update the OpenAPI specification and interactive documentation:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-docs">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+</Tabs>
+
+---
+
 ## Igniter Studio (API Playground)
 
 Igniter.js includes an interactive API playground called **Igniter Studio**. It's automatically available at `/api/v1/docs` when you configure the `.docs()` method.
@@ -330,16 +488,11 @@ const secret = Bun.env.SECRET_KEY
 
 ### Database with Bun
 
-Bun works great with popular ORMs:
+Bun works great with Prisma, the recommended ORM for Igniter.js:
 
 ```typescript
-// Prisma
 import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
-
-// Drizzle (recommended for Bun)
-import { drizzle } from 'drizzle-orm/bun-sqlite'
-const db = drizzle(Database.open('db.sqlite'))
 ```
 
 ---

@@ -11,7 +11,7 @@ description: Master error handling in Igniter.js with IgniterError, IgniterRespo
 import { IgniterError, IgniterResponseError } from '@igniter-js/core';
 
 const getUser = igniter.query({
-  path: '/users/:id',
+  path: '/users/:id' as const,
   handler: async ({ request, response, context }) => {
     const user = await context.db.users.findUnique({
       where: { id: request.params.id }
@@ -446,7 +446,7 @@ export const createUserError = (
 
 // Usage in actions
 const getUser = igniter.query({
-  path: '/users/:id',
+  path: '/users/:id' as const,
   handler: async ({ request, response, context }) => {
     const user = await context.db.users.findUnique({
       where: { id: request.params.id }
@@ -597,7 +597,7 @@ throw new Error('Redis failed');
 
 ```typescript
 const getResource = igniter.query({
-  path: '/:id',
+  path: '/:id' as const,
   handler: async ({ request, response, context }) => {
     const resource = await context.db.resources.findUnique({
       where: { id: request.params.id }
@@ -616,7 +616,7 @@ const getResource = igniter.query({
 
 ```typescript
 const deletePost = igniter.mutation({
-  path: '/posts/:id',
+  path: '/posts/:id' as const,
   method: 'DELETE',
   handler: async ({ request, context, response }) => {
     const post = await context.db.posts.findUnique({
