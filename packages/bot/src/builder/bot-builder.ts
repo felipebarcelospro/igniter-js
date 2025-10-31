@@ -262,12 +262,12 @@ export class IgniterBotBuilder<
    * })
    * ```
    */
-  addCommand<K extends string, C extends BotCommand>(
+  addCommand<K extends string, C extends BotCommand<TContext>>(
     name: K,
     command: C
   ): IgniterBotBuilder<TAdapters, TCommands & Record<K, C>, TContext> {
     const newConfig = { ...this.config }
-    newConfig.commands = { ...newConfig.commands, [name]: command }
+    newConfig.commands = { ...newConfig.commands, [name]: command as any }
     return new IgniterBotBuilder<TAdapters, TCommands & Record<K, C>, TContext>(newConfig)
   }
 
@@ -283,11 +283,11 @@ export class IgniterBotBuilder<
    * })
    * ```
    */
-  addCommands<C extends Record<string, BotCommand>>(
+  addCommands<C extends Record<string, BotCommand<TContext>>>(
     commands: C
   ): IgniterBotBuilder<TAdapters, TCommands & C, TContext> {
     const newConfig = { ...this.config }
-    newConfig.commands = { ...newConfig.commands, ...commands }
+    newConfig.commands = { ...newConfig.commands, ...(commands as any) }
     return new IgniterBotBuilder<TAdapters, TCommands & C, TContext>(newConfig)
   }
 
@@ -304,7 +304,7 @@ export class IgniterBotBuilder<
    * })
    * ```
    */
-  addCommandGroup<C extends Record<string, BotCommand>>(
+  addCommandGroup<C extends Record<string, BotCommand<TContext>>>(
     prefix: string,
     commands: C
   ): IgniterBotBuilder<TAdapters, TCommands, TContext> {
@@ -314,7 +314,7 @@ export class IgniterBotBuilder<
       newConfig.commands = {
         ...newConfig.commands,
         [prefixedKey]: {
-          ...command,
+          ...(command as any),
           name: `${prefix}_${command.name}`,
         },
       }
@@ -393,10 +393,10 @@ export class IgniterBotBuilder<
     // Register plugin hooks
     if (plugin.hooks) {
       if (plugin.hooks.onMessage) {
-        this.config.listeners.message.push(plugin.hooks.onMessage)
+        this.config.listeners.message.push(plugin.hooks.onMessage as any)
       }
       if (plugin.hooks.onError) {
-        this.config.listeners.error.push(plugin.hooks.onError)
+        this.config.listeners.error.push(plugin.hooks.onError as any)
       }
       if (plugin.hooks.onStart) {
         this.config.listeners.start.push(plugin.hooks.onStart)
@@ -417,8 +417,8 @@ export class IgniterBotBuilder<
    * })
    * ```
    */
-  onMessage(handler: BotEventHandler): this {
-    this.config.listeners.message.push(handler)
+  onMessage(handler: BotEventHandler<TContext>): this {
+    this.config.listeners.message.push(handler as any)
     return this
   }
 
@@ -433,8 +433,8 @@ export class IgniterBotBuilder<
    * })
    * ```
    */
-  onError(handler: BotErrorHandler): this {
-    this.config.listeners.error.push(handler)
+  onError(handler: BotErrorHandler<TContext>): this {
+    this.config.listeners.error.push(handler as any)
     return this
   }
 
@@ -449,8 +449,8 @@ export class IgniterBotBuilder<
    * })
    * ```
    */
-  onCommand(handler: BotEventHandler): this {
-    this.config.listeners.command.push(handler)
+  onCommand(handler: BotEventHandler<TContext>): this {
+    this.config.listeners.command.push(handler as any)
     return this
   }
 

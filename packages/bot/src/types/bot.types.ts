@@ -190,7 +190,7 @@ export type BotSendParams<TConfig extends Record<string, any>> = {
  * Represents a command that can be handled by the bot.
  * Extended with Zod validation support for type-safe arguments.
  */
-export interface BotCommand<TArgs = any> {
+export interface BotCommand<TContext extends BotContext = BotContext, TArgs = any> {
   /** The command name (without the slash). */
   name: string
   /** Alternative names for the command. */
@@ -202,9 +202,9 @@ export interface BotCommand<TArgs = any> {
   /** Optional Zod schema for validating and typing command arguments */
   args?: ZodType<TArgs>
   /** Handler function to execute the command logic. */
-  handle: (ctx: BotContext, params: TArgs) => Promise<void>
+  handle: (ctx: TContext, params: TArgs) => Promise<void>
   /** Optional subcommands for nested command structures */
-  subcommands?: Record<string, Omit<BotCommand, 'name' | 'aliases'>>
+  subcommands?: Record<string, Omit<BotCommand<TContext>, 'name' | 'aliases'>>
 }
 
 /**

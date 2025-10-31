@@ -26,12 +26,16 @@ export interface BotOptions {
 /**
  * Event handler type for lifecycle events
  */
-export type BotEventHandler = (ctx: BotContext) => Promise<void> | void
+export type BotEventHandler<TContext extends BotContext = BotContext> = (
+  ctx: TContext,
+) => Promise<void> | void
 
 /**
  * Error event handler type
  */
-export type BotErrorHandler = (ctx: BotContext & { error: BotError }) => Promise<void> | void
+export type BotErrorHandler<TContext extends BotContext = BotContext> = (
+  ctx: TContext & { error: BotError },
+) => Promise<void> | void
 
 /**
  * Start hook handler type
