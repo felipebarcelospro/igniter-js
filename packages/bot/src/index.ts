@@ -79,6 +79,11 @@ export * from './stores'
 export * from './middlewares'
 
 // -----------------------------
+// Official Plugins
+// -----------------------------
+export * from './plugins'
+
+// -----------------------------
 // Adapters (first-party)
 // -----------------------------
 export * from './adapters/telegram'
