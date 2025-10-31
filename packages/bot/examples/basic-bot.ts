@@ -4,7 +4,12 @@
  * The simplest possible bot using the Builder Pattern.
  */
 
+// You can import from main package
 import { IgniterBot, telegram } from '@igniter-js/bot'
+
+// Or use organized imports
+// import { IgniterBot } from '@igniter-js/bot'
+// import { telegram } from '@igniter-js/bot/adapters'
 
 const bot = IgniterBot
   .create()

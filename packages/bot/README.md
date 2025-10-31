@@ -63,6 +63,28 @@ bun add @igniter-js/bot zod
 - TypeScript >= 5.0
 - Zod >= 3.0
 
+### Import Paths
+
+The package provides organized imports for better code organization and tree-shaking:
+
+```typescript
+// Main exports (everything in one import)
+import { IgniterBot, telegram, memoryStore, rateLimitMiddleware } from '@igniter-js/bot'
+
+// Organized imports (recommended for large projects)
+import { telegram, whatsapp } from '@igniter-js/bot/adapters'
+import { rateLimitMiddleware, authMiddleware, loggingMiddleware } from '@igniter-js/bot/middlewares'
+import { analyticsPlugin } from '@igniter-js/bot/plugins'
+import { memoryStore } from '@igniter-js/bot/stores'
+import type { BotContext, BotCommand } from '@igniter-js/bot/types'
+```
+
+**Why use organized imports?**
+- 📦 **Better tree-shaking** - Only import what you need
+- 🗂️ **Clearer code** - Explicit about where things come from
+- 🔍 **Easier to find** - Know exactly which module exports what
+- 🎯 **Better autocomplete** - IDE shows only relevant exports
+
 ---
 
 ## Quick Start
@@ -176,7 +198,15 @@ const bot = IgniterBot
 ### Adding Middlewares
 
 ```typescript
+// Import from main package
 import { rateLimitMiddleware, authMiddleware, loggingMiddleware } from '@igniter-js/bot'
+
+// Or use organized imports (recommended)
+import {
+  rateLimitMiddleware,
+  authMiddleware,
+  loggingMiddleware
+} from '@igniter-js/bot/middlewares'
 
 .addMiddleware(loggingMiddleware({ logCommands: true }))
 .addMiddleware(rateLimitMiddleware({ maxRequests: 10, windowMs: 60000 }))
@@ -209,7 +239,11 @@ import { rateLimitMiddleware, authMiddleware, loggingMiddleware } from '@igniter
 ### Using Plugins
 
 ```typescript
+// Import from main package
 import { analyticsPlugin } from '@igniter-js/bot'
+
+// Or use organized imports (recommended)
+import { analyticsPlugin } from '@igniter-js/bot/plugins'
 
 .usePlugin(analyticsPlugin({
   trackMessages: true,
@@ -379,7 +413,11 @@ import { z } from 'zod'
 Manage stateful conversations across messages:
 
 ```typescript
+// Import from main package
 import { memoryStore } from '@igniter-js/bot'
+
+// Or use organized imports (recommended)
+import { memoryStore } from '@igniter-js/bot/stores'
 
 const bot = IgniterBot
   .create()
@@ -428,7 +466,11 @@ const bot = IgniterBot
 #### Rate Limiting
 
 ```typescript
+// Import from main package
 import { rateLimitMiddleware, rateLimitPresets } from '@igniter-js/bot'
+
+// Or use organized imports (recommended)
+import { rateLimitMiddleware, rateLimitPresets } from '@igniter-js/bot/middlewares'
 
 // Custom configuration
 .addMiddleware(rateLimitMiddleware({
@@ -447,7 +489,8 @@ import { rateLimitMiddleware, rateLimitPresets } from '@igniter-js/bot'
 #### Authentication
 
 ```typescript
-import { authMiddleware, authPresets } from '@igniter-js/bot'
+// Organized imports (recommended)
+import { authMiddleware, authPresets } from '@igniter-js/bot/middlewares'
 
 // Whitelist users
 .addMiddleware(authMiddleware({
@@ -464,7 +507,8 @@ import { authMiddleware, authPresets } from '@igniter-js/bot'
 #### Logging
 
 ```typescript
-import { loggingMiddleware, loggingPresets } from '@igniter-js/bot'
+// Organized imports (recommended)
+import { loggingMiddleware, loggingPresets } from '@igniter-js/bot/middlewares'
 
 // Custom logging
 .addMiddleware(loggingMiddleware({
@@ -499,7 +543,11 @@ const myMiddleware: Middleware = async (ctx, next) => {
 Plugins package commands, middlewares, and hooks into reusable modules:
 
 ```typescript
+// Import from main package
 import { analyticsPlugin } from '@igniter-js/bot'
+
+// Or use organized imports (recommended)
+import { analyticsPlugin } from '@igniter-js/bot/plugins'
 
 .usePlugin(analyticsPlugin({
   trackEvent: async (event, properties) => {

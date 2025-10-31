@@ -63,43 +63,97 @@ applyTo: "**"
 
 ## 3. Public API Surface
 
-### Main Exports
+### Import Paths
 
-Via `@igniter-js/bot`:
+The package provides organized imports for better code organization:
+
+#### Via `@igniter-js/bot` (Main - Everything)
 
 **Builder API:**
 - `IgniterBot` / `IgniterBotBuilder` - Main builder class
 
 **Core:**
 - `Bot` - Internal bot class (used by builder)
-- `BotError`, `BotErrorCodes` - Error handling
+- `BotError`, `BotErrorCodes`, `BotErrorCode` - Error handling
 
 **Adapters:**
-- `telegram` - Telegram adapter factory
-- `whatsapp` - WhatsApp adapter factory
-- `adapters` - Namespace with all adapters
+- `telegram`, `whatsapp`, `adapters` namespace
 
 **Middlewares:**
-- `rateLimitMiddleware`, `rateLimitPresets`
-- `authMiddleware`, `authPresets`, `roleMiddleware`
-- `loggingMiddleware`, `loggingPresets`, `commandLoggingMiddleware`
-- `memoryRateLimitStore`
+- All middleware functions and presets
 
 **Stores:**
-- `memoryStore` - Memory session store factory
-- `MemorySessionStore` - Memory store class
+- `memoryStore`, `MemorySessionStore`
 
 **Plugins:**
-- `analyticsPlugin` - Analytics plugin factory
+- `analyticsPlugin`
 
 **Types:**
-- All types from `./types` (BotContext, BotCommand, etc)
-
-Via `@igniter-js/bot/types`:
 - All type definitions
 
-Via `@igniter-js/bot/adapters`:
-- `telegram`, `whatsapp`, `builtinAdapters`
+#### Via `@igniter-js/bot/adapters` (Organized)
+
+```typescript
+import { telegram, whatsapp, builtinAdapters } from '@igniter-js/bot/adapters'
+```
+
+- `telegram` - Telegram adapter factory
+- `whatsapp` - WhatsApp adapter factory
+- `builtinAdapters` - Namespace with all adapters
+- `BuiltinAdapterName` - Type helper
+
+#### Via `@igniter-js/bot/middlewares` (Organized)
+
+```typescript
+import {
+  rateLimitMiddleware,
+  rateLimitPresets,
+  authMiddleware,
+  authPresets,
+  roleMiddleware,
+  loggingMiddleware,
+  loggingPresets,
+  commandLoggingMiddleware,
+  memoryRateLimitStore
+} from '@igniter-js/bot/middlewares'
+```
+
+#### Via `@igniter-js/bot/plugins` (Organized)
+
+```typescript
+import { analyticsPlugin } from '@igniter-js/bot/plugins'
+```
+
+#### Via `@igniter-js/bot/stores` (Organized)
+
+```typescript
+import { memoryStore, MemorySessionStore } from '@igniter-js/bot/stores'
+```
+
+#### Via `@igniter-js/bot/types` (Organized)
+
+```typescript
+import type {
+  BotContext,
+  BotCommand,
+  BotAdapter,
+  Middleware,
+  BotPlugin,
+  BotSession,
+  // ... all other types
+} from '@igniter-js/bot/types'
+```
+
+### Quick Reference Table
+
+| What You Need | Import Path | Example |
+|---------------|-------------|---------|
+| Everything | `@igniter-js/bot` | `import { IgniterBot, telegram } from '@igniter-js/bot'` |
+| Adapters only | `@igniter-js/bot/adapters` | `import { telegram, whatsapp } from '@igniter-js/bot/adapters'` |
+| Middlewares only | `@igniter-js/bot/middlewares` | `import { rateLimitMiddleware } from '@igniter-js/bot/middlewares'` |
+| Plugins only | `@igniter-js/bot/plugins` | `import { analyticsPlugin } from '@igniter-js/bot/plugins'` |
+| Stores only | `@igniter-js/bot/stores` | `import { memoryStore } from '@igniter-js/bot/stores'` |
+| Types only | `@igniter-js/bot/types` | `import type { BotContext } from '@igniter-js/bot/types'` |
 
 ---
 

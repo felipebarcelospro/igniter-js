@@ -11,17 +11,13 @@
  * - Helper methods (reply, replyWithButtons, etc)
  */
 
-import {
-  IgniterBot,
-  telegram,
-  whatsapp,
-  memoryStore,
-  authMiddleware,
-  rateLimitMiddleware,
-  loggingMiddleware,
-  analyticsPlugin,
-  type BotContext,
-} from '@igniter-js/bot'
+// Organized imports (recommended)
+import { IgniterBot } from '@igniter-js/bot'
+import { telegram, whatsapp } from '@igniter-js/bot/adapters'
+import { authMiddleware, rateLimitMiddleware, loggingMiddleware } from '@igniter-js/bot/middlewares'
+import { analyticsPlugin } from '@igniter-js/bot/plugins'
+import { memoryStore } from '@igniter-js/bot/stores'
+import type { BotContext } from '@igniter-js/bot/types'
 import { z } from 'zod'
 
 /**

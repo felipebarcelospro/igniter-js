@@ -4,7 +4,10 @@
  * Demonstrates how to use sessions for stateful conversations.
  */
 
-import { IgniterBot, telegram, memoryStore } from '@igniter-js/bot'
+// Organized imports (recommended)
+import { IgniterBot } from '@igniter-js/bot'
+import { telegram } from '@igniter-js/bot/adapters'
+import { memoryStore } from '@igniter-js/bot/stores'
 
 const bot = IgniterBot
   .create()
