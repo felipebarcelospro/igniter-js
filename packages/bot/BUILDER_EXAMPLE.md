@@ -565,6 +565,72 @@ bot.addCommand('ban', {
 
 ---
 
+## Type-Safe Context Enrichment (Advanced)
+
+Middlewares can enrich the `ctx` object in a type-safe way. Each middleware can add properties that become available to subsequent middlewares and handlers.
+
+```typescript
+import { IgniterBot, telegram } from '@igniter-js/bot'
+
+interface User {
+  id: string
+  name: string
+  role: 'admin' | 'user'
+}
+
+interface Tenant {
+  id: string
+  name: string
+  plan: 'free' | 'pro'
+}
+
+// 1. Define a middleware that adds 'user' to the context
+const addUserMiddleware = async (ctx, next) => {
+  await next()
+  const user: User | null = await getUserFromDb(ctx.message.author.id)
+  return { user }
+}
+
+// 2. Define a middleware that adds 'tenant' and uses 'user'
+const addTenantMiddleware = async (ctx, next) => {
+  await next()
+  // ctx.user is available and fully typed here!
+  const tenant: Tenant | null = ctx.user ? await getTenantFromDb(ctx.user.tenantId) : null
+  return { tenant }
+}
+
+const bot = IgniterBot
+  .create()
+  .withHandle('@mybot')
+  .addAdapter('telegram', telegram({ token: '...' }))
+  
+  // 3. Chain the middlewares
+  .addMiddleware(addUserMiddleware)
+  .addMiddleware(addTenantMiddleware)
+  
+  .addCommand('profile', {
+    name: 'profile',
+    description: 'Show user and tenant info',
+    async handle(ctx) {
+      // 4. ctx.user and ctx.tenant are available and fully typed!
+      if (ctx.user && ctx.tenant) {
+        await ctx.reply(
+          `User: ${ctx.user.name} (${ctx.user.role})\n` +
+          `Tenant: ${ctx.tenant.name} (${ctx.tenant.plan} plan)`
+        )
+      } else {
+        await ctx.reply('Could not find user or tenant info.')
+      }
+    }
+  })
+  .build()
+
+// The final type of ctx in the command handler will be:
+// BotContext & { user: User | null } & { tenant: Tenant | null }
+```
+
+---
+
 ## Next Steps
 
 - Read the [full documentation](https://igniterjs.com/docs/bot)
