@@ -28,6 +28,42 @@ import {
 export const telegram = Bot.adapter({
   name: 'telegram',
   parameters: TelegramAdapterParams,
+  capabilities: {
+    content: {
+      text: true,
+      image: true,
+      video: true,
+      audio: true,
+      document: true,
+      sticker: true,
+      location: true,
+      contact: true,
+      poll: true,
+      interactive: true, // Telegram supports inline keyboards
+    },
+    actions: {
+      edit: true,
+      delete: true,
+      react: false, // Telegram doesn't support reactions (only in channels)
+      pin: true,
+      thread: false, // Telegram doesn't support threads in the same way
+    },
+    features: {
+      webhooks: true,
+      longPolling: true,
+      commands: true,
+      mentions: true,
+      groups: true,
+      channels: true,
+      users: true,
+      files: true,
+    },
+    limits: {
+      maxMessageLength: 4096,
+      maxFileSize: 50 * 1024 * 1024, // 50MB
+      maxButtonsPerMessage: 8,
+    },
+  },
   /**
    * Initializes the adapter: cleans previous webhook, registers commands, sets new webhook.
    */

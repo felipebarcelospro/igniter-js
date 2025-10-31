@@ -9,7 +9,26 @@
 import { TypeOf, ZodObject, ZodType } from 'zod'
 import type { BotAdapterCapabilities } from './capabilities'
 import type { BotSessionHelper } from './session'
-import type { BotOutboundContent, BotSendOptions } from './content'
+import type {
+  BotOutboundContent,
+  BotSendOptions,
+  BotTextContent,
+  BotImageContent,
+  BotAudioContent,
+  BotDocumentContent,
+  BotCommandContent,
+  BotContent,
+} from './content'
+
+// Re-export content types for backward compatibility
+export type {
+  BotTextContent,
+  BotImageContent,
+  BotAudioContent,
+  BotDocumentContent,
+  BotCommandContent,
+  BotContent,
+}
 
 /**
  * Logger interface used across the bot core and adapters for structured logging.
@@ -42,83 +61,6 @@ export interface BotAttachmentContent {
   /** The content of the attachment, can be a string (URL/base64) or File object. */
   content: string
 }
-
-/**
- * Represents a plain text message content.
- */
-export interface BotTextContent {
-  /** The type of content, always 'text'. */
-  type: 'text'
-  /** The text content. */
-  content: string
-  /** The raw representation of the text message. */
-  raw: string
-}
-
-/**
- * Represents an image message content.
- * Used when the bot receives or sends an image.
- */
-export interface BotImageContent {
-  /** The type of content, always 'image'. */
-  type: 'image'
-  /** The image content, typically a URL or base64 string. */
-  content: string
-  /** The image file object. */
-  file: File
-  /** Caption of image */
-  caption?: string
-}
-
-/**
- * Represents a document message content.
- * Used when the bot receives or sends a document file (PDF, DOCX, etc).
- */
-export interface BotDocumentContent {
-  /** The type of content, always 'document'. */
-  type: 'document'
-  /** The document content, typically a URL or base64 string. */
-  content: string
-  /** The document file object. */
-  file: File
-}
-
-/**
- * Represents an audio message content.
- * Used when the bot receives or sends an audio file or recording.
- */
-export interface BotAudioContent {
-  /** The type of content, always 'audio'. */
-  type: 'audio'
-  /** The audio content, typically a URL or base64 string. */
-  content: string
-  /** The audio file object. */
-  file: File
-}
-
-/**
- * Represents a command message content, such as "/help" or "/start".
- */
-export interface BotCommandContent {
-  /** The type of content, always 'command'. */
-  type: 'command'
-  /** The command name (without the slash). */
-  command: string
-  /** The parameters passed to the command. */
-  params: string[]
-  /** The raw representation of the command message. */
-  raw: string
-}
-
-/**
- * Union type for all possible message content types handled by the bot.
- */
-export type BotContent =
-  | BotTextContent
-  | BotCommandContent
-  | BotImageContent
-  | BotAudioContent
-  | BotDocumentContent
 
 /**
  * Represents the context of a bot event, including message, channel, and author information.

@@ -28,6 +28,42 @@ import { tryCatch } from '../../utils/try-catch'
 export const whatsapp = Bot.adapter({
   name: 'whatsapp',
   parameters: WhatsAppAdapterParams,
+  capabilities: {
+    content: {
+      text: true,
+      image: true,
+      video: true,
+      audio: true,
+      document: true,
+      sticker: true,
+      location: true,
+      contact: true,
+      poll: false, // WhatsApp doesn't support polls via Cloud API yet
+      interactive: true, // WhatsApp supports buttons and lists
+    },
+    actions: {
+      edit: false, // WhatsApp doesn't support editing messages
+      delete: false, // WhatsApp doesn't support deleting via API
+      react: true, // WhatsApp supports reactions
+      pin: false,
+      thread: false,
+    },
+    features: {
+      webhooks: true,
+      longPolling: false,
+      commands: false, // WhatsApp doesn't have built-in commands
+      mentions: true,
+      groups: true,
+      channels: false,
+      users: true,
+      files: true,
+    },
+    limits: {
+      maxMessageLength: 4096,
+      maxFileSize: 100 * 1024 * 1024, // 100MB
+      maxButtonsPerMessage: 3, // WhatsApp limits to 3 buttons
+    },
+  },
 
   /**
    * Initialization hook (noop for now). Kept for parity with other adapters.

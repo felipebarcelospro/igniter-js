@@ -147,12 +147,13 @@ export function analyticsPlugin(options: AnalyticsOptions = {}): BotPlugin {
         stats.errors++
 
         if (trackErrors) {
+          // Type assertion for error context
+          const errorCtx = ctx as typeof ctx & { error?: { message: string; code?: string } }
+          
           const properties: Record<string, any> = {
             provider: ctx.provider,
-            // @ts-expect-error - error field added dynamically
-            errorMessage: ctx.error?.message,
-            // @ts-expect-error - error field added dynamically
-            errorCode: ctx.error?.code,
+            errorMessage: errorCtx.error?.message,
+            errorCode: errorCtx.error?.code,
             timestamp: new Date().toISOString(),
           }
 

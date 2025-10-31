@@ -200,17 +200,24 @@ export class Bot<
   /**
    * Adapter factory helper (legacy static name kept for backwards compatibility).
    * Now logger-aware: logger will be injected at call sites (init/send/handle).
+   * Extended with capabilities support.
    */
   static adapter<TConfig extends ZodObject<any>>(adapter: {
     name: string
     parameters: TConfig
+    capabilities: import('./types/capabilities').BotAdapterCapabilities
+    verify?: (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger }) => Promise<Response | null>
     init: (params: { config: TypeOf<TConfig>; commands: BotCommand[]; logger?: BotLogger }) => Promise<void>
     send: (params: BotSendParams<TypeOf<TConfig>> & { logger?: BotLogger }) => Promise<void>
-    handle: (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger }) => Promise<Omit<BotContext, 'bot'> | null>
+    handle: (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger }) => Promise<Omit<BotContext, 'bot' | 'session' | 'reply' | 'replyWithButtons' | 'replyWithImage' | 'replyWithDocument'> | null>
   }): (config: TypeOf<TConfig>) => IBotAdapter<TConfig> {
     return (config: TypeOf<TConfig>) => ({
       name: adapter.name,
       parameters: adapter.parameters,
+      capabilities: adapter.capabilities,
+      verify: adapter.verify ? async (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger }) => {
+        return adapter.verify!({ ...params, config, logger: params.logger })
+      } : undefined,
       async send(params: BotSendParams<TConfig> & { logger?: BotLogger }) {
         return adapter.send({ ...params, config, logger: params.logger })
       },
