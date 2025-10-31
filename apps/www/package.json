@@ -10,10 +10,10 @@
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
-    "@ai-sdk-tools/agents": "^0.20.0",
-    "@ai-sdk-tools/devtools": "^0.20.0",
-    "@ai-sdk-tools/memory": "^0.20.0",
-    "@ai-sdk-tools/store": "^0.20.0",
+    "@ai-sdk-tools/agents": "1.0.0 ",
+    "@ai-sdk-tools/devtools": "1.0.0 ",
+    "@ai-sdk-tools/memory": "1.0.0 ",
+    "@ai-sdk-tools/store": "1.0.0 ",
     "@ai-sdk/google": "^2.0.25",
     "@hookform/resolvers": "^5.2.2",
     "@next/third-parties": "^16.0.1",
