@@ -2,201 +2,320 @@
 applyTo: "**"
 ---
 
-# @igniter-js/bot – Agent Manual (Alpha)
+# @igniter-js/bot – Agent Manual
 
-> Status: `alpha` – Public API may still evolve. Maintain backward compatibility where reasonable, but correctness and DX improvements are prioritized during alpha.
+> Status: `alpha` – API is stabilizing. Focus on correctness, type safety, and excellent DX.
 
-## 1. Purpose
+---
 
-`@igniter-js/bot` fornece uma fundação moderna, extensível e totalmente tipada para criação de bots multi‑plataforma dentro do ecossistema Igniter.js.  
-Focado em:
-- Adaptadores pluggables (Telegram, WhatsApp, futuros: Discord, Slack, Matrix)
-- Middleware chain express‑like
-- Sistema de comandos com aliases e help
-- Hooks de pré e pós processamento
-- Logging opcional e padronizado
-- Tipagem forte com Zod + TypeScript
-- Contratos previsíveis para AI Agents
+## 1. Purpose & Vision
 
-## 2. Princípios Arquiteturais
+`@igniter-js/bot` is a modern, type-safe, multi-platform bot framework within the Igniter.js ecosystem.
 
-1. **Pureza dos Adaptadores**: Nenhum side effect em top‑level; inicialização apenas via `init()`.
-2. **Contratos Explícitos**: `IBotAdapter.handle` retorna contexto ou `null` (ignorado). Nada de retornos híbridos (`Response`) dentro do adapter.
-3. **Ergonomia DX**: Imports centrais (`import { Bot, telegram } from '@igniter-js/bot'`).
-4. **Extensibilidade Horizontal**: Registro dinâmico de adapters, middlewares e comandos.
-5. **Falhas Observáveis**: Erros encapsulados em `BotError` com `code` semântico.
-6. **Tree-Shaking Friendly**: Exports planos, sem side effects; adapters isolados.
-7. **AI-Friendly**: Código altamente comentado, nomenclatura consistente, indexação clara de comandos.
+**Core Goals:**
+- **Platform Freedom**: Build bots for any messaging platform with unified API
+- **Type Safety First**: Full TypeScript inference, Zod validation, compile-time checks
+- **Excellent DX**: Fluent Builder Pattern, autocomplete, helpful errors
+- **Extensibility**: Adapters, middlewares, plugins, session stores all pluggable
+- **Production Ready**: Built-in rate limiting, auth, logging, error handling
 
-## 3. Superfície Pública (Exports)
+---
+
+## 2. Architectural Principles
+
+1. **Builder Pattern Over Configuration Objects**
+   - Fluent API for readability and discoverability
+   - Type inference throughout the chain
+   - Validation at build time, not runtime
+
+2. **Capabilities-First Design**
+   - Adapters declare what they support
+   - Framework validates before execution
+   - Graceful degradation for unsupported features
+
+3. **Session-Aware by Default**
+   - Every context has session access
+   - Pluggable storage backends (Memory, Redis, Prisma)
+   - Automatic cleanup and expiration
+
+4. **Middleware Pipeline**
+   - Express-like middleware chain
+   - Clear execution order (pre → middleware → listeners → commands → post)
+   - Error boundaries at each stage
+
+5. **Type Safety Everywhere**
+   - Zod schemas for adapter configs and command args
+   - TypeScript inference for all APIs
+   - No `any` types in public surface
+
+6. **Pure Exports, No Side Effects**
+   - All imports are side-effect free
+   - Initialization happens explicitly via `.start()`
+   - Tree-shakeable by default
+
+7. **AI-Friendly Code**
+   - Comprehensive JSDoc comments
+   - Consistent naming conventions
+   - Clear separation of concerns
+   - Self-documenting APIs
+
+---
+
+## 3. Public API Surface
+
+### Main Exports
 
 Via `@igniter-js/bot`:
-- `Bot` (classe principal + `Bot.create`)
-- `BotError`, `BotErrorCodes`
-- Tipos: `BotContext`, `BotCommand`, `Middleware`, `IBotAdapter`, `BotEvent`, `BotContent` etc.
-- Adapters: `telegram`, `whatsapp`
-- Namespace `adapters` (atalho): `adapters.telegram`, `adapters.whatsapp`
-- `VERSION`
 
-Via `@igniter-js/bot/adapters`:
-- `telegram`, `whatsapp`, `builtinAdapters`, `BuiltinAdapterName`
+**Builder API:**
+- `IgniterBot` / `IgniterBotBuilder` - Main builder class
+
+**Core:**
+- `Bot` - Internal bot class (used by builder)
+- `BotError`, `BotErrorCodes` - Error handling
+
+**Adapters:**
+- `telegram` - Telegram adapter factory
+- `whatsapp` - WhatsApp adapter factory
+- `adapters` - Namespace with all adapters
+
+**Middlewares:**
+- `rateLimitMiddleware`, `rateLimitPresets`
+- `authMiddleware`, `authPresets`, `roleMiddleware`
+- `loggingMiddleware`, `loggingPresets`, `commandLoggingMiddleware`
+- `memoryRateLimitStore`
+
+**Stores:**
+- `memoryStore` - Memory session store factory
+- `MemorySessionStore` - Memory store class
+
+**Plugins:**
+- `analyticsPlugin` - Analytics plugin factory
+
+**Types:**
+- All types from `./types` (BotContext, BotCommand, etc)
 
 Via `@igniter-js/bot/types`:
-- Todos os tipos reexportados (`bot.types.ts`)
+- All type definitions
 
-## 4. Estrutura Interna
+Via `@igniter-js/bot/adapters`:
+- `telegram`, `whatsapp`, `builtinAdapters`
+
+---
+
+## 4. File Structure
 
 ```
 src/
-  bot.provider.ts        # Classe Bot + runtime registration APIs + errors
-  index.ts               # Barrel principal
+  builder/
+    bot-builder.ts       # IgniterBotBuilder class (fluent API)
+    index.ts             # Builder exports
+  
+  core/                  # (Reserved for future Bot refactor)
+  
+  types/
+    bot.types.ts         # Core types (BotContext, IBotAdapter, etc)
+    capabilities.ts      # Capability system types
+    content.ts           # Content types (text, media, interactive)
+    session.ts           # Session management types
+    plugins.ts           # Plugin system types
+    builder.ts           # Builder-specific types
+    index.ts             # Type barrel
+  
   adapters/
     telegram/
-      telegram.adapter.ts
-      telegram.helpers.ts
-      telegram.schemas.ts
+      telegram.adapter.ts   # Telegram Bot API adapter
+      telegram.helpers.ts   # Parsing & escaping utilities
+      telegram.schemas.ts   # Zod schemas
       index.ts
     whatsapp/
-      whatsapp.adapter.ts
-      whatsapp.helpers.ts
-      whatsapp.schemas.ts
+      whatsapp.adapter.ts   # WhatsApp Cloud API adapter
+      whatsapp.helpers.ts   # Parsing utilities
+      whatsapp.schemas.ts   # Zod schemas
       index.ts
-    index.ts             # Barrel de adapters
-  types/
-    bot.types.ts
+    index.ts             # Adapter barrel
+  
+  middlewares/
+    rate-limit.ts        # Rate limiting middleware + store
+    auth.ts              # Authentication middleware + presets
+    logging.ts           # Logging middleware + presets
     index.ts
+  
+  stores/
+    memory.ts            # In-memory session store
+    index.ts
+  
+  plugins/
+    analytics.ts         # Analytics plugin example
+    index.ts
+  
   utils/
-    try-catch.ts         # Helper utilitário
+    try-catch.ts         # Error handling utilities
+  
+  bot.provider.ts        # Bot class + adapter factory + errors
+  index.ts               # Main barrel export
 ```
 
-## 5. Classe `Bot` (API Resumida)
+---
 
-### 5.1 Construção
+## 5. IgniterBot Builder API
 
-```ts
-const bot = Bot.create({
-  id: 'my-bot',
-  name: 'My Bot',
-  adapters: {
-    telegram: telegram({ token, webhook: { url, secret } }),
-    whatsapp: whatsapp({ token: waToken, phone: phoneNumberId })
-  },
-  middlewares: [authMw, metricsMw],
-  commands: {
-    start: {...},
-    help: {...}
-  },
-  on: {
-    message: async (ctx) => { /* ... */ },
-    error: async (ctx) => { /* ctx.error? */ }
-  },
-  logger: customLogger // opcional
-})
+### 5.1 Builder Construction
+
+```typescript
+const bot = IgniterBot
+  .create()                                  // Create builder
+  .withId('bot-id')                          // Required
+  .withName('Bot Name')                      // Required
+  .withLogger(logger)                        // Optional
+  .withSessionStore(memoryStore())           // Optional
+  .withOptions({ timeout: 30000 })           // Optional
+  .addAdapter('telegram', telegram({ ... })) // At least one required
+  .addCommand('start', { ... })              // Optional
+  .addMiddleware(middleware)                 // Optional
+  .usePlugin(plugin)                         // Optional
+  .onMessage(handler)                        // Optional
+  .build()                                   // Required - creates Bot instance
 ```
 
-### 5.2 Métodos Principais
+### 5.2 Builder Methods
 
-| Método | Descrição |
-|--------|-----------|
-| `start()` | Inicializa todos os adapters (webhooks, comandos remotos) |
-| `handle(provider, request)` | Processa um webhook HTTP e retorna `Response` |
-| `send({ provider, channel, content })` | Envia mensagem |
-| `on(event, handler)` | Registra listener (`start`, `message`, `error`) |
-| `emit(event, ctx)` | Emite evento manualmente |
-| `use(middleware)` | Adiciona middleware dinamicamente |
-| `registerCommand(name, command)` | Adiciona comando após instância criada |
-| `registerAdapter(key, adapter)` | Adiciona adapter dinamicamente |
-| `onPreProcess(hook)` | Hook antes do pipeline de middleware |
-| `onPostProcess(hook)` | Hook após sucesso de processamento |
+| Method | Purpose | Required |
+|--------|---------|----------|
+| `withId(id)` | Set bot unique ID | Yes |
+| `withName(name)` | Set bot display name | Yes |
+| `withLogger(logger)` | Inject logger | No |
+| `withSessionStore(store)` | Configure sessions | No |
+| `withOptions(options)` | Advanced config | No |
+| `addAdapter(key, adapter)` | Add platform adapter | Yes (≥1) |
+| `addAdapters(adapters)` | Add multiple adapters | Yes (≥1) |
+| `addCommand(name, cmd)` | Register command | No |
+| `addCommands(commands)` | Register multiple | No |
+| `addCommandGroup(prefix, cmds)` | Prefixed commands | No |
+| `addMiddleware(mw)` | Add to pipeline | No |
+| `addMiddlewares(mws)` | Add multiple | No |
+| `usePlugin(plugin)` | Load plugin | No |
+| `onMessage(handler)` | Message listener | No |
+| `onError(handler)` | Error listener | No |
+| `onCommand(handler)` | Command listener | No |
+| `onStart(handler)` | Start hook | No |
+| `build()` | Create Bot instance | Yes |
 
-### 5.3 Pipeline de Processamento
+---
 
-1. `preProcessHooks`
-2. `middlewares` (sequencial)
-3. `listeners` do evento
-4. Execução de comando (se `message` + `content.type === 'command'`)
-5. `postProcessHooks`
+## 6. Bot Instance API
 
-Erros de middleware ou comando disparam evento `error`.
+After calling `.build()`, you get an immutable `Bot` instance:
 
-### 5.4 Sistema de Comandos
+### 6.1 Core Methods
 
-Cada comando:
-```ts
-const startCommand: BotCommand = {
-  name: 'start',
-  aliases: ['hello', 'hi'],
-  description: 'Saudação inicial',
-  help: 'Use /start para iniciar.',
-  async handle(ctx, params) {
-    await ctx.bot.send({
-      provider: ctx.provider,
-      channel: ctx.channel.id,
-      content: { type: 'text', content: '👋 Olá!' }
-    })
-  }
+| Method | Purpose |
+|--------|---------|
+| `start()` | Initialize adapters (webhooks, command registration) |
+| `handle(provider, request)` | Process webhook HTTP request |
+| `send({ provider, channel, content })` | Send message via adapter |
+
+### 6.2 Runtime Extension (Advanced)
+
+| Method | Purpose |
+|--------|---------|
+| `registerAdapter(key, adapter)` | Add adapter after build |
+| `registerCommand(name, command)` | Add command after build |
+| `use(middleware)` | Add middleware after build |
+| `on(event, handler)` | Subscribe to event after build |
+| `emit(event, ctx)` | Manually emit event |
+| `onPreProcess(hook)` | Hook before pipeline |
+| `onPostProcess(hook)` | Hook after pipeline |
+
+---
+
+## 7. Adapter Contract
+
+### 7.1 IBotAdapter Interface
+
+```typescript
+interface IBotAdapter<TConfig extends ZodObject<any>> {
+  name: string                        // Adapter identifier
+  parameters: TConfig                 // Zod schema for config
+  capabilities: BotAdapterCapabilities // What this adapter supports
+  
+  verify?: (params: {                // Optional webhook verification
+    request: Request
+    config: TypeOf<TConfig>
+    logger?: BotLogger
+  }) => Promise<Response | null>
+  
+  init: (params: {                   // Initialize adapter
+    config: TypeOf<TConfig>
+    commands: BotCommand[]
+    logger?: BotLogger
+  }) => Promise<void>
+  
+  send: (params: {                   // Send message
+    provider: string
+    channel: string
+    content: { type: 'text'; content: string }
+    config: TConfig
+    logger?: BotLogger
+  }) => Promise<void>
+  
+  handle: (params: {                 // Parse webhook
+    request: Request
+    config: TypeOf<TConfig>
+    logger?: BotLogger
+  }) => Promise<Omit<BotContext, 'bot' | 'session' | 'reply' | ...> | null>
 }
 ```
-Index interno garante resolução O(1) por alias (case-insensitive).
 
-### 5.5 Eventos
+### 7.2 Adapter Creation
 
-| Evento | Quando |
-|--------|--------|
-| `start` | (Reservado para futura emissão manual) |
-| `message` | Mensagem válida interpretada por adapter |
-| `error` | Erro em middleware, comando ou execução |
-
-## 6. Adaptadores
-
-### 6.1 Contrato `IBotAdapter<TConfig>`
-
-```ts
-{
-  name: string
-  parameters: ZodObject<any>
-  init(params: { config: TypeOf<TConfig>; commands: BotCommand[] }): Promise<void>
-  send(params: BotSendParams<TypeOf<TConfig>>): Promise<void>
-  handle(params: { request: Request; config: TypeOf<TConfig> }): Promise<Omit<BotContext,'bot'> | null>
-}
-```
-
-### 6.2 Regras de Implementação
-
-1. **Nunca** retornar `Response` em `handle` – retornar `null` para ignorar update ou contexto válido.
-2. Sincronizar comandos remotos (quando a plataforma suportar) dentro de `init`.
-3. Validar payloads com Zod (`*.schemas.ts`).
-4. Operações HTTP com `fetch` interno; se falhar, lançar erro sem engolir stack.
-5. Nenhum side effect em `import` top-level (somente dentro de funções).
-
-### 6.3 Exemplo Simplificado de Adapter Customizado
-
-```ts
-const MyAdapterParams = z.object({ apiKey: z.string() })
-
-export const myPlatform = Bot.adapter({
+```typescript
+export const myAdapter = Bot.adapter({
   name: 'my-platform',
-  parameters: MyAdapterParams,
-  async init({ config, commands }) {
-    // Opcional: registrar comandos remotamente
+  parameters: z.object({
+    token: z.string(),
+    handle: z.string()
+  }),
+  capabilities: {
+    content: {
+      text: true,
+      image: true,
+      video: false,
+      // ... all other content types
+    },
+    actions: {
+      edit: true,
+      delete: false,
+      // ... all other actions
+    },
+    features: {
+      webhooks: true,
+      commands: true,
+      // ... all other features
+    },
+    limits: {
+      maxMessageLength: 4096,
+      maxFileSize: 50 * 1024 * 1024,
+      maxButtonsPerMessage: 5
+    }
   },
-  async send({ channel, content, config }) {
-    await fetch('https://api.example.com/send', {
-      method: 'POST',
-      headers: { 'X-API-Key': config.apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel, text: content.content })
-    })
+  async init({ config, commands, logger }) {
+    // Register webhooks, sync commands, etc
   },
-  async handle({ request, config }) {
+  async send({ channel, content, config, logger }) {
+    // Call platform API to send message
+  },
+  async handle({ request, config, logger }) {
     const body = await request.json()
-    if (!body.message) return null
+    
+    // Parse and return context, or null to ignore
     return {
       event: 'message',
       provider: 'my-platform',
-      channel: { id: body.channelId, name: body.channelName, isGroup: body.isGroup },
+      channel: { id: '...', name: '...', isGroup: false },
       message: {
-        content: { type: 'text', content: body.message, raw: body.message },
-        author: { id: body.userId, name: body.userName, username: body.userHandle },
+        content: { type: 'text', content: '...', raw: '...' },
+        author: { id: '...', name: '...', username: '...' },
         isMentioned: true
       }
     }
@@ -204,264 +323,669 @@ export const myPlatform = Bot.adapter({
 })
 ```
 
-## 7. Middleware
+### 7.3 Adapter Rules
 
-Assinatura:
-```ts
-type Middleware = (ctx: BotContext, next: () => Promise<void>) => Promise<void>
-```
+1. **No side effects** at module top-level
+2. **Validate** all inputs with Zod
+3. **Return null** from `handle()` to ignore updates
+4. **Never return Response** from `handle()` - framework handles HTTP
+5. **Use logger** instead of console
+6. **Declare capabilities** accurately
+7. **Handle errors** gracefully (throw or log)
 
-Boas práticas:
-- Sempre `await next()` salvo em casos de bloqueio intencional.
-- Tratar erros locais e permitir emissão de logs.
-- Nunca modificar estrutura base de `ctx` de forma destrutiva.
+---
 
-Exemplo:
-```ts
-const metricsMw: Middleware = async (ctx, next) => {
-  const t0 = Date.now()
-  await next()
-  console.log('[metrics] event=%s latency=%dms', ctx.event, Date.now() - t0)
+## 8. Command System
+
+### 8.1 Command Structure
+
+```typescript
+interface BotCommand<TArgs = any> {
+  name: string                          // Command name (no slash)
+  aliases: string[]                     // Alternative names
+  description: string                   // Short description
+  help: string                          // Help text
+  args?: ZodType<TArgs>                // Optional Zod schema
+  handle: (ctx, params: TArgs) => Promise<void>
+  subcommands?: Record<string, BotCommand> // Nested commands
 }
 ```
 
-## 8. Hooks
+### 8.2 Command Registration
 
-| Hook | Uso |
-|------|-----|
-| `onPreProcess(cb)` | Carregar sessão / enrich antes do pipeline |
-| `onPostProcess(cb)` | Auditar / persistir estado após execução normal |
+```typescript
+// Single command
+.addCommand('ping', {
+  name: 'ping',
+  aliases: [],
+  description: 'Ping pong',
+  help: 'Use /ping',
+  async handle(ctx) {
+    await ctx.reply('Pong!')
+  }
+})
 
-## 9. Erros
+// With validation
+.addCommand('ban', {
+  name: 'ban',
+  args: z.object({
+    userId: z.string(),
+    reason: z.string().optional()
+  }),
+  async handle(ctx, args) {
+    // args is typed!
+  }
+})
 
-### 9.1 Tipos
-
-`BotError` expõe:
-- `code`: valor de `BotErrorCodes`
-- `message`
-- `meta` (opcional)
-
-### 9.2 Códigos
-
-| Código | Significado |
-|--------|-------------|
-| `PROVIDER_NOT_FOUND` | Adapter ausente |
-| `COMMAND_NOT_FOUND` | Comando/alias inexistente |
-| `INVALID_COMMAND_PARAMETERS` | Falha na execução do comando (parâmetros inválidos) |
-| `ADAPTER_HANDLE_RETURNED_NULL` | (Uso interno para diagnósticos futuros) |
-
-### 9.3 Tratamento
-
-Escutar evento `error`:
-```ts
-bot.on('error', async (ctx) => {
-  // @ts-expect-error - campo 'error' injetado internamente
-  const err = ctx.error
-  console.warn('[bot-error]', err?.code || err?.message)
+// With subcommands
+.addCommand('config', {
+  name: 'config',
+  subcommands: {
+    set: { ... },
+    get: { ... }
+  }
 })
 ```
 
-## 10. Utilitário `tryCatch`
+### 8.3 Command Resolution
 
-Arquivo: `src/utils/try-catch.ts`
+- Case-insensitive lookup
+- O(1) resolution via internal index
+- Aliases work exactly like primary name
+- Help text shown on validation error
 
-Fornece:
-- `tryCatch(promise|fn)`
-- `unwrapOrThrow(result)`
-- `withFallback(result, fallback)`
-- `mapSuccess(result, mapper)`
-- `andThen(result, next)`
-- `normalizeError(err)`
+---
 
-Uso:
-```ts
-const { data, error } = await tryCatch(fetch(...))
-if (error) { /* ... */ }
+## 9. Middleware System
+
+### 9.1 Middleware Signature
+
+```typescript
+type Middleware = (
+  ctx: BotContext,
+  next: () => Promise<void>
+) => Promise<void>
 ```
 
-## 11. Pads para AI Agents
+### 9.2 Execution Order
 
-1. Antes de criar novo adapter → estudar `telegram.adapter.ts` como referência.
-2. Antes de adicionar novo tipo de conteúdo → atualizar `BotContent` + todos os adapters (garantir coerência).
-3. Modificações na assinatura de `Bot` → Verificar impactos no README + testes (quando adicionados).
-4. Evitar duplicar lógica de parsing → centralizar helpers por adapter.
-5. Adicionar sempre JSDoc em métodos públicos novos.
+1. `preProcessHooks` (if registered via `bot.onPreProcess()`)
+2. `middlewares` (in registration order)
+3. Event `listeners` (all listeners for event run in parallel)
+4. Command `handler` (if message is a command)
+5. `postProcessHooks` (if registered via `bot.onPostProcess()`)
 
-## 12. Checklist para Contribuições
+Errors in middleware/command trigger `error` event.
 
-| Item | OK? |
-|------|-----|
-| `adapter` sem side effects top-level | |
-| Zod schemas criados | |
-| `handle` retorna contexto ou `null` | |
-| Comandos sincronizados (se aplicável) | |
-| Ajuda (`help`) em comandos complexos | |
-| Middleware testado localmente | |
-| Erros envoltos em `BotError` quando apropriado | |
-| README atualizado se API pública mudou | |
-| Barrel exports revisados | |
+### 9.3 Built-in Middlewares
 
-## 13. Roadmap (Alpha)
+**Rate Limiting:**
+```typescript
+rateLimitMiddleware({
+  maxRequests: 10,
+  windowMs: 60000,
+  store: memoryRateLimitStore(),
+  message: 'Too many requests',
+  skip: (ctx) => isAdmin(ctx.message.author.id)
+})
+```
 
-| Feature | Status |
-|---------|--------|
-| Discord adapter | Planned |
-| Slack adapter | Planned |
-| Session storage interface | Planned |
-| Rate limiting middleware oficial | Planned |
-| Scheduled tasks / cron plugin | Research |
-| Interactive components (buttons) | Research |
-| Test coverage oficial | Pending |
+**Authentication:**
+```typescript
+authMiddleware({
+  allowedUsers: ['user1'],
+  blockedUsers: ['spammer'],
+  checkFn: async (ctx) => await isAuthorized(ctx),
+  unauthorizedMessage: 'Access denied'
+})
+```
 
-## 14. Exemplos de Uso Rápido
+**Logging:**
+```typescript
+loggingMiddleware({
+  logMessages: true,
+  logCommands: true,
+  logMetrics: true,
+  includeUserInfo: true,
+  includeContent: false // Privacy
+})
+```
 
-### 14.1 Bot Básico
+---
 
-```ts
-import { Bot, telegram } from '@igniter-js/bot'
+## 10. Session Management
 
-const bot = Bot.create({
-  id: 'demo',
-  name: 'Demo Bot',
-  adapters: {
-    telegram: telegram({
-      token: process.env.TELEGRAM_TOKEN!,
-      webhook: { url: process.env.TELEGRAM_WEBHOOK_URL!, secret: process.env.TELEGRAM_SECRET }
-    })
-  },
+### 10.1 Session Store Interface
+
+```typescript
+interface BotSessionStore {
+  get(userId: string, channelId: string): Promise<BotSession | null>
+  set(userId: string, channelId: string, session: BotSession): Promise<void>
+  delete(userId: string, channelId: string): Promise<void>
+  clear(userId: string): Promise<void>
+}
+```
+
+### 10.2 Built-in Stores
+
+**Memory Store:**
+```typescript
+.withSessionStore(memoryStore({
+  cleanupIntervalMs: 60000 // Clean expired every minute
+}))
+```
+
+**Future Stores:**
+- `redisStore(client)` - Redis-backed sessions
+- `prismaStore(prisma)` - Database-backed sessions
+
+### 10.3 Session Usage
+
+```typescript
+.addCommand('survey', {
+  name: 'survey',
+  async handle(ctx) {
+    // Access session
+    const session = ctx.session
+    
+    // Read data
+    const step = session.data.step || 0
+    
+    // Write data
+    session.data.step = step + 1
+    session.data.answers = { ... }
+    
+    // Persist
+    await session.save()
+    
+    // Or delete
+    await session.delete()
+  }
+})
+```
+
+---
+
+## 11. Plugin System
+
+### 11.1 Plugin Interface
+
+```typescript
+interface BotPlugin {
+  name: string
+  version: string
+  description?: string
+  commands?: Record<string, BotCommand>
+  middlewares?: Middleware[]
+  adapters?: Record<string, IBotAdapter<any>>
+  hooks?: {
+    onStart?: () => Promise<void>
+    onMessage?: (ctx: BotContext) => Promise<void>
+    onError?: (ctx: BotContext & { error: BotError }) => Promise<void>
+    onStop?: () => Promise<void>
+  }
+  config?: Record<string, any>
+}
+```
+
+### 11.2 Creating Plugins
+
+```typescript
+export const myPlugin: BotPlugin = {
+  name: 'my-plugin',
+  version: '1.0.0',
+  
   commands: {
-    ping: {
-      name: 'ping',
-      aliases: [],
-      description: 'Latency check',
-      help: 'Use /ping para medir latência',
-      async handle(ctx) {
-        await ctx.bot.send({
-          provider: ctx.provider,
-          channel: ctx.channel.id,
-          content: { type: 'text', content: 'pong 🏓' }
-        })
-      }
-    }
+    plugincmd: { ... }
   },
-  on: {
-    message: async (ctx) => {
-      if (ctx.message.content?.type === 'text') {
-        console.log('Texto recebido:', ctx.message.content.content)
-      }
+  
+  middlewares: [
+    async (ctx, next) => {
+      // Plugin middleware
+      await next()
+    }
+  ],
+  
+  hooks: {
+    onStart: async () => {
+      console.log('Plugin started')
+    }
+  }
+}
+
+// Usage
+.usePlugin(myPlugin)
+```
+
+---
+
+## 12. Capabilities System
+
+### 12.1 Capability Declaration
+
+Every adapter must declare:
+
+```typescript
+capabilities: {
+  content: {
+    text: boolean
+    image: boolean
+    video: boolean
+    audio: boolean
+    document: boolean
+    sticker: boolean
+    location: boolean
+    contact: boolean
+    poll: boolean
+    interactive: boolean
+  },
+  actions: {
+    edit: boolean
+    delete: boolean
+    react: boolean
+    pin: boolean
+    thread: boolean
+  },
+  features: {
+    webhooks: boolean
+    longPolling: boolean
+    commands: boolean
+    mentions: boolean
+    groups: boolean
+    channels: boolean
+    users: boolean
+    files: boolean
+  },
+  limits: {
+    maxMessageLength: number
+    maxFileSize: number
+    maxButtonsPerMessage: number
+  }
+}
+```
+
+### 12.2 Checking Capabilities
+
+```typescript
+.addCommand('feature', {
+  name: 'feature',
+  async handle(ctx) {
+    const adapter = ctx.bot.getAdapter?.(ctx.provider)
+    
+    if (!adapter?.capabilities.actions.edit) {
+      await ctx.reply('Edit not supported on this platform')
+      return
+    }
+    
+    await ctx.editMessage?.('msg_id', { ... })
+  }
+})
+```
+
+---
+
+## 13. Context Object
+
+### 13.1 Context Structure
+
+```typescript
+interface BotContext {
+  event: 'message' | 'error' | 'start'
+  provider: string
+  bot: {
+    id: string
+    name: string
+    send: (params) => Promise<void>
+    getAdapter?: (provider) => IBotAdapter | undefined
+    getAdapters?: () => Record<string, IBotAdapter>
+  }
+  channel: {
+    id: string
+    name: string
+    isGroup: boolean
+  }
+  message: {
+    id?: string
+    content?: BotContent
+    attachments?: BotAttachmentContent[]
+    author: {
+      id: string
+      name: string
+      username: string
+    }
+    isMentioned: boolean
+  }
+  session: BotSessionHelper
+  
+  // Helper methods
+  reply(content, options?): Promise<void>
+  replyWithButtons(text, buttons, options?): Promise<void>
+  replyWithImage(image, caption?, options?): Promise<void>
+  replyWithDocument(file, caption?, options?): Promise<void>
+  editMessage?(messageId, content): Promise<void>
+  deleteMessage?(messageId): Promise<void>
+  react?(emoji, messageId?): Promise<void>
+}
+```
+
+### 13.2 Helper Methods
+
+Framework injects these into context automatically:
+
+- `reply()` - Simple text/content reply
+- `replyWithButtons()` - Interactive message
+- `replyWithImage()` - Image with caption
+- `replyWithDocument()` - File with caption
+- `editMessage()` - Edit existing message (if supported)
+- `deleteMessage()` - Delete message (if supported)
+- `react()` - React with emoji (if supported)
+
+Adapters should NOT implement these - they're added by the framework.
+
+---
+
+## 14. Content Types
+
+### 14.1 Inbound Content
+
+Content received from users:
+
+- `BotTextContent` - Plain text
+- `BotCommandContent` - Commands (starting with `/`)
+- `BotImageContent` - Images
+- `BotVideoContent` - Videos
+- `BotAudioContent` - Audio/voice
+- `BotDocumentContent` - Files
+- `BotStickerContent` - Stickers
+- `BotLocationContent` - GPS locations
+- `BotContactContent` - Contact cards
+- `BotPollContent` - Polls
+- `BotCallbackContent` - Button presses
+
+### 14.2 Outbound Content
+
+Content sent by bot (extends inbound):
+
+- All inbound types, plus:
+- `BotInteractiveContent` - Buttons, keyboards, menus
+- `BotReplyContent` - Thread/reply to specific message
+
+---
+
+## 15. Error Handling
+
+### 15.1 Error Codes
+
+```typescript
+export const BotErrorCodes = {
+  PROVIDER_NOT_FOUND: 'PROVIDER_NOT_FOUND',
+  COMMAND_NOT_FOUND: 'COMMAND_NOT_FOUND',
+  INVALID_COMMAND_PARAMETERS: 'INVALID_COMMAND_PARAMETERS',
+  ADAPTER_HANDLE_RETURNED_NULL: 'ADAPTER_HANDLE_RETURNED_NULL',
+}
+```
+
+### 15.2 Error Handling
+
+```typescript
+.onError(async (ctx) => {
+  const errorCtx = ctx as typeof ctx & { error?: BotError }
+  
+  if (errorCtx.error?.code === BotErrorCodes.COMMAND_NOT_FOUND) {
+    await ctx.reply('Unknown command. Use /help')
+  } else {
+    await ctx.reply('Something went wrong. Please try again.')
+  }
+})
+```
+
+---
+
+## 16. Testing Guidelines
+
+### 16.1 Unit Tests
+
+Test individual components:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { IgniterBot, telegram } from '@igniter-js/bot'
+
+describe('Bot Builder', () => {
+  it('should build valid bot', () => {
+    const bot = IgniterBot
+      .create()
+      .withId('test')
+      .withName('Test')
+      .addAdapter('telegram', telegram({ token: 'test', handle: '@test' }))
+      .build()
+    
+    expect(bot).toBeDefined()
+  })
+  
+  it('should throw without ID', () => {
+    expect(() => {
+      IgniterBot.create().withName('Test').build()
+    }).toThrow('Bot ID is required')
+  })
+})
+```
+
+### 16.2 Adapter Tests
+
+Mock HTTP calls:
+
+```typescript
+describe('Telegram Adapter', () => {
+  it('should parse text message', async () => {
+    const adapter = telegram({ token: 'test', handle: '@test' })
+    const request = new Request('https://example.com', {
+      method: 'POST',
+      body: JSON.stringify({ message: { text: 'Hello' } })
+    })
+    
+    const context = await adapter.handle({ request, config: { ... } })
+    expect(context?.message.content?.type).toBe('text')
+  })
+})
+```
+
+---
+
+## 17. Best Practices for AI Agents
+
+### 17.1 Before Creating New Adapters
+
+1. Study existing adapters (`telegram.adapter.ts`, `whatsapp.adapter.ts`)
+2. Understand the platform's webhook/API structure
+3. Review the `IBotAdapter` contract
+4. Check capabilities you can support
+5. Plan error handling strategy
+
+### 17.2 Before Adding Features
+
+1. Check if it should be a middleware, plugin, or core feature
+2. Consider type safety implications
+3. Add Zod schemas for validation
+4. Update relevant type definitions
+5. Add JSDoc comments
+
+### 17.3 When Modifying Types
+
+1. Check impact on adapters (they must return valid context)
+2. Update `BotContext` carefully (it's widely used)
+3. Maintain backward compatibility when possible
+4. Update examples and documentation
+5. Run `npm run build` to verify types
+
+### 17.4 Code Quality
+
+- **No `any` types** in public API
+- **Always use logger** (never `console.*` directly)
+- **Add JSDoc** to all public methods
+- **Use Zod** for runtime validation
+- **Write examples** for new features
+- **Update AGENT.md** when architecture changes
+
+---
+
+## 18. Common Patterns
+
+### 18.1 Admin-Only Commands
+
+```typescript
+.addMiddleware(async (ctx, next) => {
+  const isCommand = ctx.message.content?.type === 'command'
+  const command = ctx.message.content?.type === 'command' 
+    ? ctx.message.content.command 
+    : null
+  
+  if (isCommand && ['admin', 'ban'].includes(command!)) {
+    if (!ADMIN_IDS.includes(ctx.message.author.id)) {
+      await ctx.reply('Admin only')
+      return
+    }
+  }
+  
+  await next()
+})
+```
+
+### 18.2 Conversation Flow
+
+```typescript
+.onMessage(async (ctx) => {
+  const session = ctx.session
+  
+  if (session.data.waitingForInput) {
+    const input = ctx.message.content?.content
+    session.data.lastInput = input
+    session.data.waitingForInput = false
+    await session.save()
+    
+    await ctx.reply(`Got it: ${input}`)
+  }
+})
+```
+
+### 18.3 Platform-Specific Behavior
+
+```typescript
+.addCommand('media', {
+  name: 'media',
+  async handle(ctx) {
+    const adapter = ctx.bot.getAdapter?.(ctx.provider)
+    
+    if (adapter?.capabilities.content.video) {
+      // Send video
+    } else {
+      await ctx.reply('Video not supported, sending image instead')
+      // Send image
     }
   }
 })
-
-await bot.start() // registra webhook / comandos
-
-export async function POST(req: Request) {
-  return bot.handle('telegram', req)
-}
 ```
-
-### 14.2 Registro Dinâmico Pós-Criação
-
-```ts
-bot.registerCommand('echo', {
-  name: 'echo',
-  aliases: ['repeat'],
-  description: 'Repete a mensagem',
-  help: '/echo <texto>',
-  async handle(ctx, params) {
-    await ctx.bot.send({
-      provider: ctx.provider,
-      channel: ctx.channel.id,
-      content: { type: 'text', content: params.join(' ') || '(vazio)' }
-    })
-  }
-})
-```
-
-## 15. Padrões de Logging
-
-Logger injetado deve seguir interface leve:
-```ts
-{
-  debug?: (...args:any[]) => void
-  info?: (...args:any[]) => void
-  warn?: (...args:any[]) => void
-  error?: (...args:any[]) => void
-}
-```
-Não forçamos dependência externa.
-
-## 16. Boas Práticas de Segurança
-
-| Área | Prática |
-|------|---------|
-| Tokens | Nunca versionar valores reais |
-| Webhooks | Validar `secret` (Telegram) / verify token (WhatsApp) |
-| Sanitização | Escapar MarkdownV2 no Telegram (`escapeMarkdownV2`) |
-| Rate limiting | Implementar via middleware (futuro pacote oficial) |
-| Logs | Evitar imprimir tokens / segredos |
-
-## 17. Extensões Futuras
-
-- Plugin system baseado em composição (ex: `bot.use(plugin())`)
-- Persistência de sessões / contexto conversacional
-- Integrador com Prometheus / OpenTelemetry (telemetria de eventos)
-- Adaptação para fluxos interativos (botões / menus inline)
-
-## 18. Convenções de Código
-
-| Elemento | Convenção |
-|----------|-----------|
-| Nomes de adapters | `lowercase` |
-| Arquivos adapter | `{platform}.adapter.ts` |
-| Helpers por plataforma | `{platform}.helpers.ts` |
-| Schemas | `{platform}.schemas.ts` |
-| Exports públicos | Barrel central (`index.ts`) |
-| Comentários | JSDoc em API pública / blocos complexos |
-| Tipos internos | Evitar exportar acidentalmente via wildcard |
-
-## 19. Processo de Evolução
-
-1. Criar issue descrevendo mudança (se pública).
-2. Atualizar `bot.provider.ts` ou adapter alvo.
-3. Revisar impactos nos exports / README.
-4. Gerar build local e inspecionar `dist/`.
-5. (Quando testes existirem) rodar `npm test --filter @igniter-js/bot`.
-
-## 20. Referência Rápida de Import Paths
-
-| Objetivo | Import |
-|----------|--------|
-| Tudo principal | `@igniter-js/bot` |
-| Apenas tipos | `@igniter-js/bot/types` |
-| Todos adapters | `@igniter-js/bot/adapters` |
-| Adapter Telegram direto | `@igniter-js/bot/adapters/telegram` |
-| Adapter WhatsApp direto | `@igniter-js/bot/adapters/whatsapp` |
-
-## 21. Perguntas Frequentes (FAQ)
-
-**Q:** Posso retornar `Response` em `handle`?  
-**A:** Não. Retorne contexto ou `null`. O `Bot.handle` encapsula a resposta HTTP.
-
-**Q:** Como ignoro um update silenciosamente?  
-**A:** Retorne `null` em `handle`.
-
-**Q:** Como diferenciar comandos de texto normal?  
-**A:** Adapter já faz parsing (`/prefix`). Conteúdo virá como `BotCommandContent`.
-
-**Q:** Posso modificar `ctx.message.content` em middleware?  
-**A:** Pode, mas preserve a forma tipada e não elimine campos críticos usados por downstream.
 
 ---
 
-## 22. Contato / Suporte
+## 19. Troubleshooting
 
-- Website: https://igniterjs.com
-- Issues: GitHub (monorepo principal)
-- Canal futuro: Discord / Telegram comunidade
+### 19.1 Common Issues
+
+**Build fails:**
+- Run `npm run build` to see TypeScript errors
+- Check that all imports are from correct paths
+- Verify Zod schemas are properly defined
+
+**Bot doesn't respond:**
+- Check webhook is configured correctly
+- Verify token is valid
+- Check logs with `.withLogger(console)`
+- Use `.addMiddleware(loggingPresets.debug())`
+
+**Type errors:**
+- Ensure `zod` is installed
+- Check TypeScript version (>= 5.0 required)
+- Verify imports are correct
+
+**Session not persisting:**
+- Call `await session.save()` after modifying data
+- Check session store is configured
+- Verify expiration settings
 
 ---
 
-Mantenha este arquivo sincronizado com mudanças públicas para facilitar colaboração de agentes e humanos.
+## 20. Roadmap
 
-> Fim do documento.
+| Feature | Status | Priority |
+|---------|--------|----------|
+| Builder Pattern API | ✅ Complete | - |
+| Session Management | ✅ Complete | - |
+| Plugin System | ✅ Complete | - |
+| Official Middlewares | ✅ Complete | - |
+| Capabilities System | ✅ Complete | - |
+| Discord Adapter | 🚧 In Progress | High |
+| Slack Adapter | 📋 Planned | High |
+| Redis Session Store | 📋 Planned | High |
+| Prisma Session Store | 📋 Planned | Medium |
+| Test Utilities | 📋 Planned | High |
+| Interactive Components | 📋 Planned | Medium |
+| Long Polling Support | 📋 Planned | Low |
+| CLI Scaffolding | 📋 Planned | Low |
+
+---
+
+## 21. Contributing
+
+We welcome contributions! Please follow these guidelines:
+
+1. **Read** [AGENT.md](./AGENT.md) for architecture details
+2. **Follow** existing patterns and conventions
+3. **Test** locally with `npm run build` and `npm run typecheck`
+4. **Document** new features with JSDoc and examples
+5. **Update** README.md and AGENT.md if needed
+
+### Contribution Checklist
+
+- [ ] Adapter has no top-level side effects
+- [ ] Zod schemas created for configs
+- [ ] `handle` returns context or null (never Response)
+- [ ] Capabilities declared accurately
+- [ ] Errors wrapped in BotError when appropriate
+- [ ] Help text provided for commands
+- [ ] JSDoc added to public APIs
+- [ ] Examples updated if API changed
+- [ ] Build passes (`npm run build`)
+- [ ] No lint errors (`npm run lint`)
+
+---
+
+## 22. Resources
+
+- 📖 **Full Documentation:** https://igniterjs.com/docs/bots
+- 💡 **Examples:** [examples/](./examples/)
+- 📘 **Builder Examples:** [BUILDER_EXAMPLE.md](./BUILDER_EXAMPLE.md)
+- 📗 **Migration Guide:** [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md)
+- 📙 **Implementation Details:** [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)
+- 🐛 **Report Issues:** https://github.com/felipebarcelospro/igniter-js/issues
+- 💬 **Discussions:** https://github.com/felipebarcelospro/igniter-js/discussions
+
+---
+
+## 23. License
+
+MIT © Felipe Barcelos & Igniter.js Contributors
+
+---
+
+## 24. Acknowledgments
+
+Built with ❤️ by the Igniter.js team.
+
+Special thanks to all contributors and early adopters!
+
+This package is part of the [Igniter.js](https://igniterjs.com) ecosystem - a modern, type-safe framework for building scalable TypeScript applications.
+
+---
+
+**Ready to build your bot? Check out the [examples](./examples/) or read the [Quick Start guide](https://igniterjs.com/docs/bots/quick-start)!**

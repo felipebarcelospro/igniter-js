@@ -4,8 +4,11 @@
  * Public entry-point (barrel file).
  *
  * This file re-exports:
- *  - Core Bot provider & factory helpers
+ *  - Builder Pattern API (IgniterBot) - Recommended
  *  - All public type definitions
+ *  - Session stores (memory, and interfaces for Redis/Prisma)
+ *  - Official middlewares (rate-limit, auth, logging)
+ *  - Official plugins (analytics, etc)
  *  - All first‑party adapters (telegram, whatsapp)
  *
  * Goals:
@@ -13,43 +16,42 @@
  *  - Tree-shake friendly: pure re-exports; no side effects executed here.
  *  - Extensibility: adapters also remain individually importable if desired.
  *
- * Example:
- *  import { Bot, telegram, whatsapp, type BotContext } from '@igniter-js/bot'
+ * Example (Builder Pattern - Recommended):
+ *  import { IgniterBot, telegram, whatsapp, memoryStore } from '@igniter-js/bot'
  *
- *  const bot = Bot.create({
- *    id: 'demo',
- *    name: 'DemoBot',
- *    adapters: {
- *      telegram: telegram({ token: process.env.TELEGRAM_TOKEN!, webhook: { url: process.env.TELEGRAM_WEBHOOK! } }),
+ *  const bot = IgniterBot
+ *    .create()
+ *    .withId('demo-bot')
+ *    .withName('Demo Bot')
+ *    .withSessionStore(memoryStore())
+ *    .addAdapters({
+ *      telegram: telegram({ token: process.env.TELEGRAM_TOKEN!, handle: '@demo' }),
  *      whatsapp: whatsapp({ token: process.env.WHATSAPP_TOKEN!, phone: process.env.WHATSAPP_PHONE! })
- *    },
- *    commands: {
- *      start: {
- *        name: 'start',
- *        aliases: ['hello'],
- *        description: 'Greets the user',
- *        help: 'Use /start to receive a greeting',
- *        async handle(ctx) {
- *          await ctx.bot.send({
- *            provider: ctx.provider,
- *            channel: ctx.channel.id,
- *            content: { type: 'text', content: '👋 Hello from Igniter Bot!' }
- *          })
- *        }
+ *    })
+ *    .addCommand('start', {
+ *      name: 'start',
+ *      aliases: ['hello'],
+ *      description: 'Greets the user',
+ *      help: 'Use /start to receive a greeting',
+ *      async handle(ctx) {
+ *        await ctx.reply('👋 Hello from Igniter Bot!')
  *      }
- *    }
- *  })
+ *    })
+ *    .build()
  *
- *  // In a route / serverless handler:
+ *  await bot.start()
+ *
+ *  // In a Next.js API route:
  *  export async function POST(req: Request) {
  *    return bot.handle('telegram', req)
  *  }
  */
 
 // -----------------------------
-// Core Provider
+// Core Provider (Internal - Bot class used by builder)
 // -----------------------------
-export * from './bot.provider'
+export { Bot, BotError, BotErrorCodes } from './bot.provider'
+export type { BotErrorCode } from './bot.provider'
 
 // -----------------------------
 // Builder Pattern API (Recommended)

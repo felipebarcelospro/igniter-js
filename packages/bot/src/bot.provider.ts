@@ -334,7 +334,10 @@ export class Bot<
   }
 
   /**
-   * Factory for constructing a Bot with strong typing.
+   * Internal factory for constructing a Bot with strong typing.
+   * 
+   * @deprecated Use IgniterBot builder pattern instead.
+   * @internal This is used by the builder and should not be called directly.
    */
   static create<
     TAdapters extends Record<string, IBotAdapter<any>>,
