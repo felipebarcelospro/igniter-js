@@ -68,7 +68,7 @@ export const whatsapp = Bot.adapter({
   /**
    * Initialization hook (noop for now). Kept for parity with other adapters.
    */
-  init: async ({ logger }) => {
+  init: async ({ logger, botHandle }) => {
     logger?.info?.('[whatsapp] adapter initialized (manual webhook management)')
   },
 
@@ -125,7 +125,7 @@ export const whatsapp = Bot.adapter({
    *
    * @returns BotContext without the bot field, or null to ignore update
    */
-  handle: async ({ request, config, logger }) => {
+  handle: async ({ request, config, logger, botHandle }) => {
     const updateData = await tryCatch(request.json())
     if (updateData.error) {
       logger?.warn?.('[whatsapp] failed to parse JSON body', { error: updateData.error })
@@ -160,10 +160,10 @@ export const whatsapp = Bot.adapter({
     }
 
     if (isGroup) {
-      const botKeywords = [config.handle]
-      isMentioned = botKeywords.some((keyword) =>
-        messageText.toLowerCase().includes(keyword.toLowerCase()),
-      )
+      // Use adapter handle or fallback to bot handle
+      const handle = config.handle || botHandle || ''
+      const cleanHandle = handle.replace('@', '')
+      isMentioned = messageText.toLowerCase().includes(cleanHandle.toLowerCase())
     } else {
       isMentioned = true
     }

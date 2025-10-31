@@ -24,7 +24,10 @@ export const TelegramAdapterParams = z
       .string()
       .min(1, 'Telegram Bot Token is required.')
       .describe('Telegram Bot API token'),
-    handle: z.string().describe('Use @your_bot_username to call bot on groups.'),
+    handle: z
+      .string()
+      .optional()
+      .describe('Bot username for mention detection in groups (e.g., @your_bot). If not provided, uses global bot handle.'),
     webhook: z
       .object({
         url: z

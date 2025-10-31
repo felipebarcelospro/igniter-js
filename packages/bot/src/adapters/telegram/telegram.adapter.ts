@@ -67,7 +67,7 @@ export const telegram = Bot.adapter({
   /**
    * Initializes the adapter: cleans previous webhook, registers commands, sets new webhook.
    */
-  init: async ({ config, commands, logger }) => {
+  init: async ({ config, commands, logger, botHandle }) => {
     if (config.webhook?.url) {
       try {
         const body: { url: string; secret_token?: string } = { url: config.webhook.url }
@@ -155,7 +155,7 @@ export const telegram = Bot.adapter({
     }
   },
   // Handle Telegram webhook: return bot context or null if unhandled
-  handle: async ({ request, config, logger }) => {
+  handle: async ({ request, config, logger, botHandle }) => {
     // 1. Verify Secret Token (if configured)
     if (config.webhook?.secret) {
       const secretTokenHeader = request.headers.get(
@@ -199,8 +199,9 @@ export const telegram = Bot.adapter({
       const messageText = msg.text || msg.caption || ''
 
       if (isGroup) {
-        // Default bot username (could be made configurable)
-        const botUsername = config.handle?.replace('@', '') || ''
+        // Use adapter handle or fallback to bot handle
+        const handle = config.handle || botHandle || ''
+        const botUsername = handle.replace('@', '')
         isMentioned =
           messageText.includes(`@${botUsername}`) || messageText.startsWith('/')
       } else {

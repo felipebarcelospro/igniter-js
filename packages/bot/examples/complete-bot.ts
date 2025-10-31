@@ -49,8 +49,8 @@ const bot = IgniterBot
   .create()
   
   // Core configuration
-  .withId('ecommerce-bot')
-  .withName('E-commerce Assistant')
+  .withHandle('@shop_bot')     // Global handle for all platforms
+  .withName('E-commerce Assistant') // Override auto-generated name
   .withLogger(console)
   
   // Session management
@@ -58,11 +58,11 @@ const bot = IgniterBot
     cleanupIntervalMs: 300000, // 5 minutes
   }))
   
-  // Multi-platform adapters
+  // Multi-platform adapters (both inherit @shop_bot handle)
   .addAdapters({
     telegram: telegram({
       token: process.env.TELEGRAM_TOKEN!,
-      handle: '@shop_bot',
+      // handle: '@shop_bot' ← Inherited from global
       webhook: {
         url: process.env.TELEGRAM_WEBHOOK_URL!,
         secret: process.env.TELEGRAM_WEBHOOK_SECRET,
@@ -71,7 +71,7 @@ const bot = IgniterBot
     whatsapp: whatsapp({
       token: process.env.WHATSAPP_TOKEN!,
       phone: process.env.WHATSAPP_PHONE!,
-      handle: 'shop',
+      // handle: 'shop_bot' ← Inherited from global (without @)
     }),
   })
   

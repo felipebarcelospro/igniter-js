@@ -88,7 +88,42 @@ export class IgniterBotBuilder<
   }
 
   /**
+   * Sets the bot handle (used for mentions in groups).
+   * This is the primary identifier for your bot.
+   * 
+   * If not set, each adapter must provide its own handle.
+   * If id or name are not provided, they will be derived from the handle.
+   * 
+   * @param handle - Bot handle (e.g., '@mybot' for Telegram, 'mybot' for WhatsApp)
+   * @example
+   * ```typescript
+   * builder.withHandle('@mybot')
+   * ```
+   */
+  withHandle(handle: string): this {
+    this.config.handle = handle
+    
+    // Auto-generate ID from handle if not already set
+    if (!this.config.id) {
+      this.config.id = handle.replace(/^@/, '')
+    }
+    
+    // Auto-generate name from handle if not already set
+    if (!this.config.name) {
+      const cleanHandle = handle.replace(/^@/, '')
+      this.config.name = cleanHandle
+        .split(/[-_]/)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ')
+    }
+    
+    return this
+  }
+
+  /**
    * Sets the unique identifier for this bot.
+   * 
+   * Optional - if not provided, will be derived from handle.
    * 
    * @param id - Unique bot identifier
    * @example
@@ -103,6 +138,8 @@ export class IgniterBotBuilder<
 
   /**
    * Sets the display name for this bot.
+   * 
+   * Optional - if not provided, will be derived from handle.
    * 
    * @param name - Bot display name
    * @example
@@ -430,6 +467,8 @@ export class IgniterBotBuilder<
    * Builds the final Bot instance.
    * Validates configuration and returns an immutable bot.
    * 
+   * Auto-generates id and name from handle if not provided.
+   * 
    * @throws {Error} If required configuration is missing
    * @example
    * ```typescript
@@ -438,21 +477,56 @@ export class IgniterBotBuilder<
    * ```
    */
   build(): Bot<TAdapters, Middleware[], TCommands> {
-    // Validation
-    if (!this.config.id) {
-      throw new Error('Bot ID is required. Use withId() to set it.')
-    }
-    if (!this.config.name) {
-      throw new Error('Bot name is required. Use withName() to set it.')
-    }
+    // Validate at least one adapter
     if (Object.keys(this.config.adapters).length === 0) {
       throw new Error('At least one adapter is required. Use addAdapter() to add one.')
+    }
+
+    // Validate that we have a handle (either global or in all adapters)
+    const hasGlobalHandle = !!this.config.handle
+    const allAdaptersHaveHandle = Object.values(this.config.adapters).every(
+      adapter => {
+        // Check if adapter config has handle property
+        const config = (adapter as any)._config || {}
+        return !!config.handle
+      }
+    )
+
+    if (!hasGlobalHandle && !allAdaptersHaveHandle) {
+      throw new Error(
+        'Bot handle is required. Use withHandle() for a global handle, ' +
+        'or ensure each adapter has its own handle configured.'
+      )
+    }
+
+    // Auto-generate ID from handle if not provided
+    if (!this.config.id) {
+      if (this.config.handle) {
+        this.config.id = this.config.handle.replace(/^@/, '')
+      } else {
+        // Generate from timestamp if no handle
+        this.config.id = `bot-${Date.now()}`
+      }
+    }
+
+    // Auto-generate name from handle if not provided
+    if (!this.config.name) {
+      if (this.config.handle) {
+        const cleanHandle = this.config.handle.replace(/^@/, '')
+        this.config.name = cleanHandle
+          .split(/[-_]/)
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ')
+      } else {
+        this.config.name = this.config.id
+      }
     }
 
     // Create bot using old API (for now, will be refactored)
     const bot = Bot.create({
       id: this.config.id,
       name: this.config.name,
+      handle: this.config.handle,
       adapters: this.config.adapters as TAdapters,
       commands: this.config.commands as TCommands,
       middlewares: this.config.middlewares as Middleware[],

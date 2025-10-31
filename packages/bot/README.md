@@ -96,11 +96,10 @@ import { IgniterBot, telegram } from '@igniter-js/bot'
 
 const bot = IgniterBot
   .create()
-  .withId('my-first-bot')
-  .withName('My First Bot')
+  .withHandle('@mybot')  // ← Your bot's handle (ID and name auto-derived)
   .addAdapter('telegram', telegram({
     token: process.env.TELEGRAM_TOKEN!,
-    handle: '@mybot'
+    // handle inherited from global
   }))
   .addCommand('start', {
     name: 'start',
@@ -133,8 +132,9 @@ The `IgniterBot` builder provides a fluent API for configuring your bot:
 ```typescript
 const bot = IgniterBot
   .create()
-  .withId('unique-bot-id')           // Required: Unique identifier
-  .withName('Display Name')          // Required: Bot display name
+  .withHandle('@mybot')              // Recommended: Bot handle (ID/name auto-derived)
+  .withId('custom-id')               // Optional: Override auto-generated ID
+  .withName('Custom Name')           // Optional: Override auto-generated name
   .withLogger(console)               // Optional: Logger instance
   .withOptions({                     // Optional: Advanced options
     timeout: 30000,
@@ -144,20 +144,32 @@ const bot = IgniterBot
   .withSessionStore(memoryStore())   // Optional: Session storage
 ```
 
+**Handle Benefits:**
+- 🎯 One handle for all platforms (DRY principle)
+- 🤖 Auto-generates `id` and `name` from handle
+- 🔄 Each adapter can override if needed
+- 📝 Simpler configuration
+
 ### Adding Adapters
 
 ```typescript
-// Single adapter
+// Single adapter (inherits global handle)
 .addAdapter('telegram', telegram({
   token: '...',
-  handle: '@mybot'
+  // handle: '@custom' ← Optional override
 }))
 
-// Multiple adapters
+// Multiple adapters (both inherit global handle)
 .addAdapters({
-  telegram: telegram({ ... }),
-  whatsapp: whatsapp({ ... })
+  telegram: telegram({ token: '...' }),
+  whatsapp: whatsapp({ token: '...', phone: '...' })
 })
+
+// Override handle for specific adapter
+.addAdapter('telegram', telegram({
+  token: '...',
+  handle: '@custom_telegram_handle' // ← Platform-specific override
+}))
 ```
 
 ### Adding Commands
@@ -266,15 +278,26 @@ import { analyticsPlugin } from '@igniter-js/bot/plugins'
 Full-featured Telegram Bot API adapter with webhook support:
 
 ```typescript
-import { telegram } from '@igniter-js/bot'
+import { telegram } from '@igniter-js/bot/adapters'
 
+// Minimal (uses global bot handle)
+.addAdapter('telegram', telegram({
+  token: 'your_bot_token'
+}))
+
+// With webhook
 .addAdapter('telegram', telegram({
   token: 'your_bot_token',
-  handle: '@your_bot_username', // For group mention detection
   webhook: {
     url: 'https://example.com/api/telegram',
     secret: 'webhook_secret'
   }
+}))
+
+// Override global handle for this platform
+.addAdapter('telegram', telegram({
+  token: 'your_bot_token',
+  handle: '@custom_telegram_bot' // ← Override
 }))
 ```
 
@@ -292,12 +315,19 @@ import { telegram } from '@igniter-js/bot'
 WhatsApp Cloud API adapter:
 
 ```typescript
-import { whatsapp } from '@igniter-js/bot'
+import { whatsapp } from '@igniter-js/bot/adapters'
 
+// Minimal (uses global bot handle)
+.addAdapter('whatsapp', whatsapp({
+  token: 'your_whatsapp_token',
+  phone: 'phone_number_id'
+}))
+
+// Override global handle for this platform
 .addAdapter('whatsapp', whatsapp({
   token: 'your_whatsapp_token',
   phone: 'phone_number_id',
-  handle: 'keyword' // For group mention detection
+  handle: 'custom_keyword' // ← Override for WhatsApp-specific keyword
 }))
 ```
 

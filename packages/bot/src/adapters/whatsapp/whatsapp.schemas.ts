@@ -21,10 +21,14 @@ import { z } from 'zod'
  * Schema for WhatsApp Adapter configuration parameters.
  * - token: WhatsApp API access token (required).
  * - phone: WhatsApp phone number ID (required).
+ * - handle: Bot keyword for group mention detection (optional, uses global bot handle if not provided).
  */
 export const WhatsAppAdapterParams = z
   .object({
-    handle: z.string().describe('Telegram Bot Username for Group handlers. Use @your_bot_username to call bot on groups.'),
+    handle: z
+      .string()
+      .optional()
+      .describe('Bot keyword for mention detection in groups (e.g., "bot" or "@bot"). If not provided, uses global bot handle.'),
     token: z
       .string()
       .min(1, 'WhatsApp API Token is required.')

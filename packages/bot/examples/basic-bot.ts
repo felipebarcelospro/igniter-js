@@ -13,11 +13,12 @@ import { IgniterBot, telegram } from '@igniter-js/bot'
 
 const bot = IgniterBot
   .create()
-  .withId('basic-bot')
-  .withName('Basic Bot')
+  .withHandle('@basic_bot') // ← Global handle (used by all adapters)
+  // .withId('basic-bot')    // ← Optional (auto-derived from handle)
+  // .withName('Basic Bot')  // ← Optional (auto-derived from handle)
   .addAdapter('telegram', telegram({
     token: process.env.TELEGRAM_TOKEN!,
-    handle: '@basic_bot',
+    // handle is optional now - uses global @basic_bot
   }))
   .addCommand('start', {
     name: 'start',

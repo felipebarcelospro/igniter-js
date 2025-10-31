@@ -220,7 +220,7 @@ export type BotHandleParams<TConfig extends Record<string, any>> = {
 
 /**
  * Interface for a bot adapter, which connects the bot to a specific provider/platform.
- * Extended with capabilities declaration and verification hook.
+ * Extended with capabilities declaration, verification hook, and global handle support.
  * @template TConfig Adapter configuration type (Zod schema).
  */
 export interface IBotAdapter<TConfig extends ZodObject<any>> {
@@ -232,16 +232,17 @@ export interface IBotAdapter<TConfig extends ZodObject<any>> {
   capabilities: BotAdapterCapabilities
   /** Optional webhook verification hook (for GET requests, challenges, etc) */
   verify?: (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger }) => Promise<Response | null>
-  /** Initializes the adapter with configuration, available commands and optional logger. */
+  /** Initializes the adapter with configuration, available commands, optional logger, and global bot handle. */
   init: (params: {
     config: TypeOf<TConfig>
     commands: BotCommand[]
     logger?: BotLogger
+    botHandle?: string
   }) => Promise<void>
   /** Sends a message using the adapter (logger provided for structured emission). */
   send: (params: BotSendParams<TConfig> & { logger?: BotLogger }) => Promise<void>
-  /** Handles an incoming request (logger available) and returns the bot context or null to ignore the update. */
-  handle: (params: BotHandleParams<TConfig> & { logger?: BotLogger }) => Promise<Omit<BotContext, 'bot' | 'session' | 'reply' | 'replyWithButtons' | 'replyWithImage' | 'replyWithDocument'> | null>
+  /** Handles an incoming request (logger available, global handle available) and returns the bot context or null to ignore the update. */
+  handle: (params: BotHandleParams<TConfig> & { logger?: BotLogger; botHandle?: string }) => Promise<Omit<BotContext, 'bot' | 'session' | 'reply' | 'replyWithButtons' | 'replyWithImage' | 'replyWithDocument'> | null>
 }
 
 /**

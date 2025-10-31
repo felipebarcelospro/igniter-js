@@ -11,12 +11,11 @@ import { memoryStore } from '@igniter-js/bot/stores'
 
 const bot = IgniterBot
   .create()
-  .withId('session-bot')
-  .withName('Session Bot')
+  .withHandle('@session_bot') // Global handle
   .withSessionStore(memoryStore())
   .addAdapter('telegram', telegram({
     token: process.env.TELEGRAM_TOKEN!,
-    handle: '@session_bot',
+    // handle inherited from global
   }))
   .addCommand('survey', {
     name: 'survey',

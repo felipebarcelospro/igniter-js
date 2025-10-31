@@ -65,6 +65,8 @@ export class Bot<
   public id: string
   /** Bot name (display) */
   public name: string
+  /** Bot handle (for mentions in groups) */
+  public botHandle?: string
   /** Registered adapters (keyed by provider name) */
   private adapters: TAdapters
   /** Registered middlewares (ordered pipeline) */
@@ -95,6 +97,7 @@ export class Bot<
   constructor(config: {
     id: string
     name: string
+    handle?: string
     adapters: TAdapters
     middlewares?: TMiddlewares
     commands?: TCommands
@@ -103,6 +106,7 @@ export class Bot<
   }) {
     this.id = config.id
     this.name = config.name
+    this.botHandle = config.handle
     this.adapters = config.adapters
     this.middlewares = (config.middlewares || []) as TMiddlewares
     this.commands = (config.commands || {}) as TCommands
@@ -200,38 +204,44 @@ export class Bot<
   /**
    * Adapter factory helper (legacy static name kept for backwards compatibility).
    * Now logger-aware: logger will be injected at call sites (init/send/handle).
-   * Extended with capabilities support.
+   * Extended with capabilities support and global handle fallback.
    */
   static adapter<TConfig extends ZodObject<any>>(adapter: {
     name: string
     parameters: TConfig
     capabilities: import('./types/capabilities').BotAdapterCapabilities
     verify?: (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger }) => Promise<Response | null>
-    init: (params: { config: TypeOf<TConfig>; commands: BotCommand[]; logger?: BotLogger }) => Promise<void>
+    init: (params: { config: TypeOf<TConfig>; commands: BotCommand[]; logger?: BotLogger; botHandle?: string }) => Promise<void>
     send: (params: BotSendParams<TypeOf<TConfig>> & { logger?: BotLogger }) => Promise<void>
-    handle: (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger }) => Promise<Omit<BotContext, 'bot' | 'session' | 'reply' | 'replyWithButtons' | 'replyWithImage' | 'replyWithDocument'> | null>
+    handle: (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger; botHandle?: string }) => Promise<Omit<BotContext, 'bot' | 'session' | 'reply' | 'replyWithButtons' | 'replyWithImage' | 'replyWithDocument'> | null>
   }): (config: TypeOf<TConfig>) => IBotAdapter<TConfig> {
-    return (config: TypeOf<TConfig>) => ({
-      name: adapter.name,
-      parameters: adapter.parameters,
-      capabilities: adapter.capabilities,
-      verify: adapter.verify ? async (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger }) => {
-        return adapter.verify!({ ...params, config, logger: params.logger })
-      } : undefined,
-      async send(params: BotSendParams<TConfig> & { logger?: BotLogger }) {
-        return adapter.send({ ...params, config, logger: params.logger })
-      },
-      async handle(params: BotHandleParams<TConfig> & { logger?: BotLogger }) {
-        return adapter.handle({ ...params, config, logger: params.logger }) as any
-      },
-      async init(options?: { commands: BotCommand[]; logger?: BotLogger }) {
-        await adapter.init({
-          config,
-          commands: options?.commands || [],
-          logger: options?.logger,
-        })
-      },
-    })
+    return (config: TypeOf<TConfig>) => {
+      // Store config for validation in builder
+      const adapterInstance: any = {
+        name: adapter.name,
+        parameters: adapter.parameters,
+        capabilities: adapter.capabilities,
+        _config: config, // Store for builder validation
+        verify: adapter.verify ? async (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger }) => {
+          return adapter.verify!({ ...params, config, logger: params.logger })
+        } : undefined,
+        async send(params: BotSendParams<TConfig> & { logger?: BotLogger }) {
+          return adapter.send({ ...params, config, logger: params.logger })
+        },
+        async handle(params: BotHandleParams<TConfig> & { logger?: BotLogger; botHandle?: string }) {
+          return adapter.handle({ ...params, config, logger: params.logger, botHandle: params.botHandle }) as any
+        },
+        async init(options?: { commands: BotCommand[]; logger?: BotLogger; botHandle?: string }) {
+          await adapter.init({
+            config,
+            commands: options?.commands || [],
+            logger: options?.logger,
+            botHandle: options?.botHandle,
+          })
+        },
+      }
+      return adapterInstance
+    }
   }
 
   /**
@@ -346,6 +356,7 @@ export class Bot<
   >(config: {
     id: string
     name: string
+    handle?: string
     adapters: TAdapters
     middlewares?: TMiddlewares
     commands?: TCommands
@@ -507,7 +518,11 @@ export class Bot<
       throw err
     }
 
-    const rawContext = await (selectedAdapter as any).handle({ request, logger: this.logger })
+    const rawContext = await (selectedAdapter as any).handle({ 
+      request, 
+      logger: this.logger,
+      botHandle: this.botHandle 
+    })
     if (!rawContext) {
       this.logger?.debug?.(
         `Adapter '${String(adapter)}' returned null (ignored update)`,
@@ -540,7 +555,7 @@ export class Bot<
 
   /**
    * Initialize all adapters (idempotent at adapter level).
-   * Passes current command list so adapters can perform platform-side registration (webhooks/commands).
+   * Passes current command list and bot handle so adapters can perform platform-side registration (webhooks/commands).
    */
   async start(): Promise<void> {
     const commandArray = Object.values(this.commands || {})
@@ -549,7 +564,11 @@ export class Bot<
         `Initializing adapter '${adapter.name}'`,
         `Bot:${this.name}#${this.id}`,
       )
-      await (adapter as any).init({ commands: commandArray, logger: this.logger })
+      await (adapter as any).init({ 
+        commands: commandArray, 
+        logger: this.logger,
+        botHandle: this.botHandle 
+      })
       this.logger?.debug?.(
         `Adapter '${adapter.name}' initialized`,
         `Bot:${this.name}#${this.id}`,

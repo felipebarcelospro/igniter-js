@@ -43,6 +43,7 @@ export type BotStartHandler = () => Promise<void> | void
  * Used internally to track builder state
  */
 export interface BotBuilderConfig {
+  handle?: string
   id?: string
   name?: string
   logger?: BotLogger

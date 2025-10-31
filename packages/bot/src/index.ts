@@ -21,11 +21,10 @@
  *
  *  const bot = IgniterBot
  *    .create()
- *    .withId('demo-bot')
- *    .withName('Demo Bot')
+ *    .withHandle('@demo_bot')  // Global handle (ID and name auto-derived)
  *    .withSessionStore(memoryStore())
  *    .addAdapters({
- *      telegram: telegram({ token: process.env.TELEGRAM_TOKEN!, handle: '@demo' }),
+ *      telegram: telegram({ token: process.env.TELEGRAM_TOKEN! }),
  *      whatsapp: whatsapp({ token: process.env.WHATSAPP_TOKEN!, phone: process.env.WHATSAPP_PHONE! })
  *    })
  *    .addCommand('start', {
