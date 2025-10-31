@@ -52,11 +52,26 @@
 export * from './bot.provider'
 
 // -----------------------------
+// Builder Pattern API (Recommended)
+// -----------------------------
+export * from './builder'
+
+// -----------------------------
 // Types
 // (Keep explicit to avoid accidental re-export of internals
 // if more files are added under ./types in the future.)
 // -----------------------------
 export * from './types/bot.types'
+export * from './types/capabilities'
+export * from './types/content'
+export * from './types/session'
+export * from './types/plugins'
+export * from './types/builder'
+
+// -----------------------------
+// Session Stores
+// -----------------------------
+export * from './stores'
 
 // -----------------------------
 // Adapters (first-party)

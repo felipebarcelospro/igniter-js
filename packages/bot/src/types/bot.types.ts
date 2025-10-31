@@ -6,7 +6,10 @@
  *
  * @module bot.types
  */
-import { TypeOf, ZodObject } from 'zod'
+import { TypeOf, ZodObject, ZodType } from 'zod'
+import type { BotAdapterCapabilities } from './capabilities'
+import type { BotSessionHelper } from './session'
+import type { BotOutboundContent, BotSendOptions } from './content'
 
 /**
  * Logger interface used across the bot core and adapters for structured logging.
@@ -119,6 +122,7 @@ export type BotContent =
 
 /**
  * Represents the context of a bot event, including message, channel, and author information.
+ * Extended with helper methods for easier interaction.
  */
 export interface BotContext {
   /** The event type (start, message, error, etc). */
@@ -133,6 +137,10 @@ export interface BotContext {
     name: string
     /** Method to send a message from this bot. */
     send: (params: Omit<BotSendParams<any>, 'config'>) => Promise<void>
+    /** Get adapter for a specific provider */
+    getAdapter?: (provider: string) => IBotAdapter<any> | undefined
+    /** Get all registered adapters */
+    getAdapters?: () => Record<string, IBotAdapter<any>>
   }
   /** Channel information where the event/message occurred. */
   channel: {
@@ -145,6 +153,8 @@ export interface BotContext {
   }
   /** Message details, including content, attachments, and author. */
   message: {
+    /** Message ID (if available) */
+    id?: string
     /** The content of the message (text, command, etc). */
     content?: BotContent
     /** Any attachments sent with the message. */
@@ -161,6 +171,62 @@ export interface BotContext {
     /** Whether the bot was mentioned in this message. */
     isMentioned: boolean
   }
+  
+  /** Session helper for managing conversational state */
+  session: BotSessionHelper
+  
+  // Helper methods for sending messages
+  
+  /** 
+   * Reply to the current message with text or content
+   * @param content - Text string or structured content
+   * @param options - Optional send options
+   */
+  reply(content: BotOutboundContent | string, options?: BotSendOptions): Promise<void>
+  
+  /**
+   * Reply with an interactive message containing buttons
+   * @param text - Message text
+   * @param buttons - Array of buttons
+   * @param options - Optional send options
+   */
+  replyWithButtons(text: string, buttons: any[], options?: BotSendOptions): Promise<void>
+  
+  /**
+   * Reply with an image
+   * @param image - Image URL, base64, or File
+   * @param caption - Optional caption
+   * @param options - Optional send options
+   */
+  replyWithImage(image: string | File, caption?: string, options?: BotSendOptions): Promise<void>
+  
+  /**
+   * Reply with a document/file
+   * @param file - File to send
+   * @param caption - Optional caption
+   * @param options - Optional send options
+   */
+  replyWithDocument(file: File, caption?: string, options?: BotSendOptions): Promise<void>
+  
+  /**
+   * Edit an existing message
+   * @param messageId - ID of message to edit
+   * @param content - New content
+   */
+  editMessage?(messageId: string, content: BotOutboundContent): Promise<void>
+  
+  /**
+   * Delete a message
+   * @param messageId - ID of message to delete
+   */
+  deleteMessage?(messageId: string): Promise<void>
+  
+  /**
+   * React to a message with an emoji
+   * @param emoji - Emoji to react with
+   * @param messageId - Optional message ID (defaults to current message)
+   */
+  react?(emoji: string, messageId?: string): Promise<void>
 }
 
 /**
@@ -180,8 +246,9 @@ export type BotSendParams<TConfig extends Record<string, any>> = {
 
 /**
  * Represents a command that can be handled by the bot.
+ * Extended with Zod validation support for type-safe arguments.
  */
-export interface BotCommand {
+export interface BotCommand<TArgs = any> {
   /** The command name (without the slash). */
   name: string
   /** Alternative names for the command. */
@@ -190,8 +257,12 @@ export interface BotCommand {
   description: string
   /** Help text to be shown if the command fails or is used incorrectly. */
   help: string
+  /** Optional Zod schema for validating and typing command arguments */
+  args?: ZodType<TArgs>
   /** Handler function to execute the command logic. */
-  handle: (ctx: BotContext, params: any) => Promise<void>
+  handle: (ctx: BotContext, params: TArgs) => Promise<void>
+  /** Optional subcommands for nested command structures */
+  subcommands?: Record<string, Omit<BotCommand, 'name' | 'aliases'>>
 }
 
 /**
@@ -207,6 +278,7 @@ export type BotHandleParams<TConfig extends Record<string, any>> = {
 
 /**
  * Interface for a bot adapter, which connects the bot to a specific provider/platform.
+ * Extended with capabilities declaration and verification hook.
  * @template TConfig Adapter configuration type (Zod schema).
  */
 export interface IBotAdapter<TConfig extends ZodObject<any>> {
@@ -214,6 +286,10 @@ export interface IBotAdapter<TConfig extends ZodObject<any>> {
   name: string
   /** Adapter configuration schema (Zod). */
   parameters: TConfig
+  /** Capabilities declaration - what this adapter can do */
+  capabilities: BotAdapterCapabilities
+  /** Optional webhook verification hook (for GET requests, challenges, etc) */
+  verify?: (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger }) => Promise<Response | null>
   /** Initializes the adapter with configuration, available commands and optional logger. */
   init: (params: {
     config: TypeOf<TConfig>
@@ -223,7 +299,7 @@ export interface IBotAdapter<TConfig extends ZodObject<any>> {
   /** Sends a message using the adapter (logger provided for structured emission). */
   send: (params: BotSendParams<TConfig> & { logger?: BotLogger }) => Promise<void>
   /** Handles an incoming request (logger available) and returns the bot context or null to ignore the update. */
-  handle: (params: BotHandleParams<TConfig> & { logger?: BotLogger }) => Promise<Omit<BotContext, 'bot'> | null>
+  handle: (params: BotHandleParams<TConfig> & { logger?: BotLogger }) => Promise<Omit<BotContext, 'bot' | 'session' | 'reply' | 'replyWithButtons' | 'replyWithImage' | 'replyWithDocument'> | null>
 }
 
 /**
