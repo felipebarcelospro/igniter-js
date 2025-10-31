@@ -74,6 +74,11 @@ export * from './types/builder'
 export * from './stores'
 
 // -----------------------------
+// Official Middlewares
+// -----------------------------
+export * from './middlewares'
+
+// -----------------------------
 // Adapters (first-party)
 // -----------------------------
 export * from './adapters/telegram'
