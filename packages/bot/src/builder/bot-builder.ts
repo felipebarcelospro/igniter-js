@@ -52,10 +52,12 @@ import { Bot } from '../bot.provider'
  * 
  * @template TAdapters - Record of registered adapters
  * @template TCommands - Record of registered commands
+ * @template TContext - The current, possibly extended, bot context type
  */
 export class IgniterBotBuilder<
   TAdapters extends Record<string, IBotAdapter<any>> = Record<string, never>,
-  TCommands extends Record<string, BotCommand> = Record<string, never>
+  TCommands extends Record<string, BotCommand> = Record<string, never>,
+  TContext extends BotContext = BotContext
 > {
   private config: BotBuilderConfig
 
@@ -216,10 +218,10 @@ export class IgniterBotBuilder<
   addAdapter<K extends string, A extends IBotAdapter<any>>(
     key: K,
     adapter: A
-  ): IgniterBotBuilder<TAdapters & Record<K, A>, TCommands> {
+  ): IgniterBotBuilder<TAdapters & Record<K, A>, TCommands, TContext> {
     const newConfig = { ...this.config }
     newConfig.adapters = { ...newConfig.adapters, [key]: adapter }
-    return new IgniterBotBuilder<TAdapters & Record<K, A>, TCommands>(newConfig)
+    return new IgniterBotBuilder<TAdapters & Record<K, A>, TCommands, TContext>(newConfig)
   }
 
   /**
@@ -236,10 +238,10 @@ export class IgniterBotBuilder<
    */
   addAdapters<A extends Record<string, IBotAdapter<any>>>(
     adapters: A
-  ): IgniterBotBuilder<TAdapters & A, TCommands> {
+  ): IgniterBotBuilder<TAdapters & A, TCommands, TContext> {
     const newConfig = { ...this.config }
     newConfig.adapters = { ...newConfig.adapters, ...adapters }
-    return new IgniterBotBuilder<TAdapters & A, TCommands>(newConfig)
+    return new IgniterBotBuilder<TAdapters & A, TCommands, TContext>(newConfig)
   }
 
   /**
@@ -263,10 +265,10 @@ export class IgniterBotBuilder<
   addCommand<K extends string, C extends BotCommand>(
     name: K,
     command: C
-  ): IgniterBotBuilder<TAdapters, TCommands & Record<K, C>> {
+  ): IgniterBotBuilder<TAdapters, TCommands & Record<K, C>, TContext> {
     const newConfig = { ...this.config }
     newConfig.commands = { ...newConfig.commands, [name]: command }
-    return new IgniterBotBuilder<TAdapters, TCommands & Record<K, C>>(newConfig)
+    return new IgniterBotBuilder<TAdapters, TCommands & Record<K, C>, TContext>(newConfig)
   }
 
   /**
@@ -283,10 +285,10 @@ export class IgniterBotBuilder<
    */
   addCommands<C extends Record<string, BotCommand>>(
     commands: C
-  ): IgniterBotBuilder<TAdapters, TCommands & C> {
+  ): IgniterBotBuilder<TAdapters, TCommands & C, TContext> {
     const newConfig = { ...this.config }
     newConfig.commands = { ...newConfig.commands, ...commands }
-    return new IgniterBotBuilder<TAdapters, TCommands & C>(newConfig)
+    return new IgniterBotBuilder<TAdapters, TCommands & C, TContext>(newConfig)
   }
 
   /**
@@ -305,7 +307,7 @@ export class IgniterBotBuilder<
   addCommandGroup<C extends Record<string, BotCommand>>(
     prefix: string,
     commands: C
-  ): IgniterBotBuilder<TAdapters, TCommands> {
+  ): IgniterBotBuilder<TAdapters, TCommands, TContext> {
     const newConfig = { ...this.config }
     for (const [key, command] of Object.entries(commands)) {
       const prefixedKey = `${prefix}_${key}`
@@ -317,7 +319,7 @@ export class IgniterBotBuilder<
         },
       }
     }
-    return new IgniterBotBuilder<TAdapters, TCommands>(newConfig)
+    return new IgniterBotBuilder<TAdapters, TCommands, TContext>(newConfig)
   }
 
   /**
@@ -333,9 +335,12 @@ export class IgniterBotBuilder<
    * })
    * ```
    */
-  addMiddleware(middleware: Middleware): this {
-    this.config.middlewares.push(middleware)
-    return this
+  addMiddleware<TContextAdditions>(
+    middleware: Middleware<TContext, TContextAdditions>
+  ): IgniterBotBuilder<TAdapters, TCommands, TContext & TContextAdditions> {
+    const newConfig = { ...this.config }
+    newConfig.middlewares.push(middleware as any)
+    return new IgniterBotBuilder<TAdapters, TCommands, TContext & TContextAdditions>(newConfig)
   }
 
   /**
@@ -351,8 +356,10 @@ export class IgniterBotBuilder<
    * ])
    * ```
    */
-  addMiddlewares(middlewares: Middleware[]): this {
-    this.config.middlewares.push(...middlewares)
+  addMiddlewares(
+    middlewares: Middleware<TContext, any>[]
+  ): IgniterBotBuilder<TAdapters, TCommands, TContext> {
+    this.config.middlewares.push(...(middlewares as any))
     return this
   }
 

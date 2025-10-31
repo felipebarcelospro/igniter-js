@@ -417,43 +417,46 @@ export class Bot<
    *  5. postProcess hooks
    */
   async process(ctx: BotContext): Promise<void> {
+    let currentCtx = ctx
+
     // Pre-process hooks
     for (const hook of this.preProcessHooks) {
-      await hook(ctx)
+      await hook(currentCtx)
     }
 
     // Middleware chain
-    let index = 0
-    const runner = async (): Promise<void> => {
-      if (index < this.middlewares.length) {
-        const current = this.middlewares[index++]
-        try {
-          await current(ctx, runner)
-        } catch (err) {
-          this.logger?.warn?.(
-            `Middleware error at position ${index - 1}: ${(err as any)?.message || err}`,
-            `Bot:${this.name}#${this.id}`,
-          )
-          // Emit error event
-          await this.emit('error', {
-            ...ctx,
-            // @ts-expect-error extension (not public on type)
-            error: err,
-          })
-        }
+    const runner = async (index: number, context: BotContext): Promise<BotContext> => {
+      if (index >= this.middlewares.length) {
+        return context
       }
+      
+      const current = this.middlewares[index]
+      let nextContext = context
+
+      const next = async () => {
+        nextContext = await runner(index + 1, context)
+      }
+
+      const additions = await current(context, next as any)
+      
+      if (additions && typeof additions === 'object') {
+        nextContext = { ...nextContext, ...additions }
+      }
+      
+      return nextContext
     }
-    await runner()
+    currentCtx = await runner(0, currentCtx)
+
 
     // Listeners
-    const listeners = this.listeners[ctx.event]
+    const listeners = this.listeners[currentCtx.event]
     if (listeners?.length) {
-      await Promise.all(listeners.map((l) => l(ctx)))
+      await Promise.all(listeners.map((l) => l(currentCtx)))
     }
 
     // Command execution
-    if (ctx.event === 'message' && ctx.message.content?.type === 'command') {
-      const cmdToken = ctx.message.content.command
+    if (currentCtx.event === 'message' && currentCtx.message.content?.type === 'command') {
+      const cmdToken = currentCtx.message.content.command
       const entry = this.resolveCommand(cmdToken)
       if (!entry) {
         this.logger?.warn?.(
@@ -461,13 +464,13 @@ export class Bot<
           `Bot:${this.name}#${this.id}`,
         )
         await this.emit('error', {
-          ...ctx,
+          ...currentCtx,
           // @ts-expect-error augment error
           error: new BotError(BotErrorCodes.COMMAND_NOT_FOUND, `Command '${cmdToken}' not registered`),
         })
       } else {
         try {
-          await entry.command.handle(ctx, ctx.message.content.params)
+          await entry.command.handle(currentCtx, currentCtx.message.content.params)
           this.logger?.debug?.(
             `Command executed '${entry.name}' (alias used: ${cmdToken !== entry.name ? cmdToken : 'no'})`,
             `Bot:${this.name}#${this.id}`,
@@ -479,13 +482,13 @@ export class Bot<
           )
           if (entry.command.help) {
             await this.send({
-              provider: ctx.provider,
-              channel: ctx.channel.id,
+              provider: currentCtx.provider,
+              channel: currentCtx.channel.id,
               content: { type: 'text', content: entry.command.help },
             })
           }
           await this.emit('error', {
-            ...ctx,
+            ...currentCtx,
             // @ts-expect-error augment
             error: new BotError(
               BotErrorCodes.INVALID_COMMAND_PARAMETERS,
@@ -498,7 +501,7 @@ export class Bot<
 
     // Post-process hooks (only if we reached here without throw)
     for (const hook of this.postProcessHooks) {
-      await hook(ctx)
+      await hook(currentCtx)
     }
   }
 

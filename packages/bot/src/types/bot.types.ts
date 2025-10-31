@@ -246,10 +246,9 @@ export interface IBotAdapter<TConfig extends ZodObject<any>> {
 }
 
 /**
- * Middleware function type for processing bot context before/after main logic.
- * Receives the context and a next function to continue the chain.
+ * Middlewares can enrich the context for subsequent steps in the pipeline.
  */
-export type Middleware = (
-  ctx: BotContext,
+export type Middleware<TContextIn = BotContext, TContextAdditions = {}> = (
+  ctx: TContextIn,
   next: () => Promise<void>,
-) => Promise<void>
+) => Promise<void | TContextAdditions>

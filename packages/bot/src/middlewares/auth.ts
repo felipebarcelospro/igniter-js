@@ -9,7 +9,7 @@ import type { Middleware, BotContext } from '../types/bot.types'
 /**
  * Authentication configuration options
  */
-export interface AuthOptions {
+export interface AuthOptions<TContext extends BotContext> {
   /**
    * List of allowed user IDs
    * If provided, only these users can access the bot
@@ -38,22 +38,22 @@ export interface AuthOptions {
    * Custom authorization function
    * Return true to allow, false to deny
    */
-  checkFn?: (ctx: BotContext) => boolean | Promise<boolean>
+  checkFn?: (ctx: TContext) => boolean | Promise<boolean>
 
   /**
    * Message to send when access is denied
    */
-  unauthorizedMessage?: string | ((ctx: BotContext) => string)
+  unauthorizedMessage?: string | ((ctx: TContext) => string)
 
   /**
    * Skip authorization for certain conditions
    */
-  skip?: (ctx: BotContext) => boolean | Promise<boolean>
+  skip?: (ctx: TContext) => boolean | Promise<boolean>
 
   /**
    * Handler called when unauthorized access is attempted
    */
-  onUnauthorized?: (ctx: BotContext) => void | Promise<void>
+  onUnauthorized?: (ctx: TContext) => void | Promise<void>
 }
 
 /**
@@ -89,7 +89,9 @@ export interface AuthOptions {
  *   .build()
  * ```
  */
-export function authMiddleware(options: AuthOptions): Middleware {
+export function authMiddleware<TContext extends BotContext>(
+  options: AuthOptions<TContext>
+): Middleware<TContext, {}> {
   const {
     allowedUsers,
     allowedChannels,
@@ -101,7 +103,7 @@ export function authMiddleware(options: AuthOptions): Middleware {
     onUnauthorized,
   } = options
 
-  return async (ctx: BotContext, next: () => Promise<void>) => {
+  return async (ctx: TContext, next: () => Promise<void>) => {
     // Skip auth if condition is met
     if (skip && (await skip(ctx))) {
       await next()
@@ -149,10 +151,10 @@ export function authMiddleware(options: AuthOptions): Middleware {
 /**
  * Helper function to handle unauthorized access
  */
-async function handleUnauthorized(
-  ctx: BotContext,
-  message: string | ((ctx: BotContext) => string),
-  onUnauthorized?: (ctx: BotContext) => void | Promise<void>
+async function handleUnauthorized<TContext extends BotContext>(
+  ctx: TContext,
+  message: string | ((ctx: TContext) => string),
+  onUnauthorized?: (ctx: TContext) => void | Promise<void>
 ): Promise<void> {
   // Call onUnauthorized handler if provided
   if (onUnauthorized) {
@@ -171,7 +173,7 @@ export const authPresets = {
   /**
    * Allow only admins (requires admin user IDs)
    */
-  adminsOnly: (adminIds: string[]): Middleware =>
+  adminsOnly: <TContext extends BotContext>(adminIds: string[]): Middleware<TContext, {}> =>
     authMiddleware({
       allowedUsers: adminIds,
       unauthorizedMessage: '🔒 This bot is restricted to administrators only.',
@@ -180,7 +182,7 @@ export const authPresets = {
   /**
    * Allow only in private chats (no groups)
    */
-  privateOnly: (): Middleware =>
+  privateOnly: <TContext extends BotContext>(): Middleware<TContext, {}> =>
     authMiddleware({
       checkFn: (ctx) => !ctx.channel.isGroup,
       unauthorizedMessage: '🚫 This bot only works in private chats.',
@@ -189,7 +191,7 @@ export const authPresets = {
   /**
    * Allow only in groups (no private chats)
    */
-  groupsOnly: (): Middleware =>
+  groupsOnly: <TContext extends BotContext>(): Middleware<TContext, {}> =>
     authMiddleware({
       checkFn: (ctx) => ctx.channel.isGroup,
       unauthorizedMessage: '👥 This bot only works in group chats.',
@@ -198,7 +200,7 @@ export const authPresets = {
   /**
    * Whitelist specific users
    */
-  whitelist: (userIds: string[]): Middleware =>
+  whitelist: <TContext extends BotContext>(userIds: string[]): Middleware<TContext, {}> =>
     authMiddleware({
       allowedUsers: userIds,
       unauthorizedMessage: '⛔ You are not on the whitelist.',
@@ -207,7 +209,7 @@ export const authPresets = {
   /**
    * Blacklist specific users
    */
-  blacklist: (userIds: string[]): Middleware =>
+  blacklist: <TContext extends BotContext>(userIds: string[]): Middleware<TContext, {}> =>
     authMiddleware({
       blockedUsers: userIds,
       unauthorizedMessage: '🚫 You have been blocked from using this bot.',
@@ -217,11 +219,11 @@ export const authPresets = {
 /**
  * Role-based authentication middleware
  */
-export interface RoleOptions {
+export interface RoleOptions<TContext extends BotContext> {
   /**
    * Function to get user roles
    */
-  getRoles: (userId: string) => string[] | Promise<string[]>
+  getRoles: (userId: string, ctx: TContext) => string[] | Promise<string[]>
 
   /**
    * Required roles (user must have at least one)
@@ -255,7 +257,9 @@ export interface RoleOptions {
  *   .build()
  * ```
  */
-export function roleMiddleware(options: RoleOptions): Middleware {
+export function roleMiddleware<TContext extends BotContext>(
+  options: RoleOptions<TContext>
+): Middleware<TContext, {}> {
   const {
     getRoles,
     requiredRoles,
@@ -265,7 +269,7 @@ export function roleMiddleware(options: RoleOptions): Middleware {
   return authMiddleware({
     checkFn: async (ctx) => {
       const userId = ctx.message.author.id
-      const userRoles = await getRoles(userId)
+      const userRoles = await getRoles(userId, ctx)
       
       // Check if user has at least one required role
       return requiredRoles.some((role) => userRoles.includes(role))

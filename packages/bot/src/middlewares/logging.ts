@@ -93,7 +93,9 @@ export interface LoggingOptions {
  *   .build()
  * ```
  */
-export function loggingMiddleware(options: LoggingOptions = {}): Middleware {
+export function loggingMiddleware<TContext extends BotContext>(
+  options: LoggingOptions = {}
+): Middleware<TContext, {}> {
   const {
     logger = console,
     logMessages = true,
@@ -106,7 +108,7 @@ export function loggingMiddleware(options: LoggingOptions = {}): Middleware {
     skip,
   } = options
 
-  return async (ctx: BotContext, next: () => Promise<void>) => {
+  return async (ctx: TContext, next: () => Promise<void>) => {
     // Skip logging if condition is met
     if (skip && skip(ctx)) {
       await next()
@@ -235,7 +237,7 @@ export const loggingPresets = {
   /**
    * Minimal logging: only errors
    */
-  minimal: (): Middleware =>
+  minimal: <TContext extends BotContext>(): Middleware<TContext, {}> =>
     loggingMiddleware({
       logMessages: false,
       logCommands: false,
@@ -246,7 +248,7 @@ export const loggingPresets = {
   /**
    * Standard logging: messages, commands, and errors
    */
-  standard: (): Middleware =>
+  standard: <TContext extends BotContext>(): Middleware<TContext, {}> =>
     loggingMiddleware({
       logMessages: true,
       logCommands: true,
@@ -259,7 +261,7 @@ export const loggingPresets = {
   /**
    * Verbose logging: everything including metrics and content
    */
-  verbose: (): Middleware =>
+  verbose: <TContext extends BotContext>(): Middleware<TContext, {}> =>
     loggingMiddleware({
       logMessages: true,
       logCommands: true,
@@ -272,7 +274,7 @@ export const loggingPresets = {
   /**
    * Debug logging: maximum detail for troubleshooting
    */
-  debug: (): Middleware =>
+  debug: <TContext extends BotContext>(): Middleware<TContext, {}> =>
     loggingMiddleware({
       logMessages: true,
       logCommands: true,
@@ -288,7 +290,7 @@ export const loggingPresets = {
   /**
    * Production logging: standard without sensitive content
    */
-  production: (): Middleware =>
+  production: <TContext extends BotContext>(): Middleware<TContext, {}> =>
     loggingMiddleware({
       logMessages: true,
       logCommands: true,
@@ -302,13 +304,13 @@ export const loggingPresets = {
 /**
  * Command-specific logging middleware
  */
-export function commandLoggingMiddleware(options: {
+export function commandLoggingMiddleware<TContext extends BotContext>(options: {
   logger?: BotLogger
   includeParams?: boolean
-}): Middleware {
+}): Middleware<TContext, {}> {
   const { logger = console, includeParams = false } = options
 
-  return async (ctx: BotContext, next: () => Promise<void>) => {
+  return async (ctx: TContext, next: () => Promise<void>) => {
     const isCommand = ctx.message.content?.type === 'command'
 
     if (!isCommand) {

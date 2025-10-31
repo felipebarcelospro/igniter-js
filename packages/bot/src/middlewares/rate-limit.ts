@@ -153,7 +153,9 @@ export interface RateLimitOptions {
  *   .build()
  * ```
  */
-export function rateLimitMiddleware(options: RateLimitOptions): Middleware {
+export function rateLimitMiddleware<TContext extends BotContext>(
+  options: RateLimitOptions
+): Middleware<TContext, {}> {
   const {
     maxRequests,
     windowMs,
@@ -164,7 +166,7 @@ export function rateLimitMiddleware(options: RateLimitOptions): Middleware {
     onLimitReached,
   } = options
 
-  return async (ctx: BotContext, next: () => Promise<void>) => {
+  return async (ctx: TContext, next: () => Promise<void>) => {
     // Skip rate limiting if condition is met
     if (skip && (await skip(ctx))) {
       await next()
@@ -209,7 +211,7 @@ export const rateLimitPresets = {
   /**
    * Strict rate limit: 5 requests per minute
    */
-  strict: (): Middleware =>
+  strict: <TContext extends BotContext>(): Middleware<TContext, {}> =>
     rateLimitMiddleware({
       maxRequests: 5,
       windowMs: 60000,
@@ -219,7 +221,7 @@ export const rateLimitPresets = {
   /**
    * Moderate rate limit: 10 requests per minute
    */
-  moderate: (): Middleware =>
+  moderate: <TContext extends BotContext>(): Middleware<TContext, {}> =>
     rateLimitMiddleware({
       maxRequests: 10,
       windowMs: 60000,
@@ -229,7 +231,7 @@ export const rateLimitPresets = {
   /**
    * Lenient rate limit: 20 requests per minute
    */
-  lenient: (): Middleware =>
+  lenient: <TContext extends BotContext>(): Middleware<TContext, {}> =>
     rateLimitMiddleware({
       maxRequests: 20,
       windowMs: 60000,
@@ -239,7 +241,7 @@ export const rateLimitPresets = {
   /**
    * Per-command rate limit: 3 requests per 10 seconds
    */
-  perCommand: (): Middleware =>
+  perCommand: <TContext extends BotContext>(): Middleware<TContext, {}> =>
     rateLimitMiddleware({
       maxRequests: 3,
       windowMs: 10000,
