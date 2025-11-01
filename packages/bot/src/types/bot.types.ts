@@ -19,6 +19,9 @@ import type {
   BotCommandContent,
   BotContent,
 } from './content'
+import type { AdapterClient, IBotAdapter } from './adapter'
+// Re-export adapter types
+export type { IBotAdapter, AdapterClient } from './adapter'
 
 // Re-export content types for backward compatibility
 export type {
@@ -169,6 +172,12 @@ export interface BotContext {
    * @param messageId - Optional message ID (defaults to current message)
    */
   react?(emoji: string, messageId?: string): Promise<void>
+  
+  /**
+   * Show typing indicator to the user
+   * This indicates that the bot is processing and will send a message soon
+   */
+  sendTyping?(): Promise<void>
 }
 
 /**
@@ -180,10 +189,12 @@ export type BotSendParams<TConfig extends Record<string, any>> = {
   provider: string
   /** The channel identifier to send the message to. */
   channel: string
-  /** The message content (only text supported for now). */
-  content: { type: 'text'; content: string }
+  /** The message content (text, image, document, etc). */
+  content: BotOutboundContent
   /** Adapter-specific configuration. */
   config: TConfig
+  /** Optional send options (reply, parse mode, etc). */
+  options?: BotSendOptions
 }
 
 /**
@@ -216,39 +227,17 @@ export type BotHandleParams<TConfig extends Record<string, any>> = {
   request: Request
   /** Adapter-specific configuration. */
   config: TConfig
+  /** The client object. */
+  client?: AdapterClient<TConfig>
+  
 }
 
-/**
- * Interface for a bot adapter, which connects the bot to a specific provider/platform.
- * Extended with capabilities declaration, verification hook, and global handle support.
- * @template TConfig Adapter configuration type (Zod schema).
- */
-export interface IBotAdapter<TConfig extends ZodObject<any>> {
-  /** Adapter name (e.g., 'telegram', 'discord'). */
-  name: string
-  /** Adapter configuration schema (Zod). */
-  parameters: TConfig
-  /** Capabilities declaration - what this adapter can do */
-  capabilities: BotAdapterCapabilities
-  /** Optional webhook verification hook (for GET requests, challenges, etc) */
-  verify?: (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger }) => Promise<Response | null>
-  /** Initializes the adapter with configuration, available commands, optional logger, and global bot handle. */
-  init: (params: {
-    config: TypeOf<TConfig>
-    commands: BotCommand[]
-    logger?: BotLogger
-    botHandle?: string
-  }) => Promise<void>
-  /** Sends a message using the adapter (logger provided for structured emission). */
-  send: (params: BotSendParams<TConfig> & { logger?: BotLogger }) => Promise<void>
-  /** Handles an incoming request (logger available, global handle available) and returns the bot context or null to ignore the update. */
-  handle: (params: BotHandleParams<TConfig> & { logger?: BotLogger; botHandle?: string }) => Promise<Omit<BotContext, 'bot' | 'session' | 'reply' | 'replyWithButtons' | 'replyWithImage' | 'replyWithDocument'> | null>
-}
 
 /**
  * Middlewares can enrich the context for subsequent steps in the pipeline.
+ * They can return an object with properties to add to the context.
  */
-export type Middleware<TContextIn = BotContext, TContextAdditions = {}> = (
+export type Middleware<TContextIn = BotContext, TContextOut = TContextIn> = (
   ctx: TContextIn,
   next: () => Promise<void>,
-) => Promise<void | TContextAdditions>
+) => Promise<void | Partial<TContextOut>>

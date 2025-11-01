@@ -26,7 +26,7 @@ export interface BotPlugin {
   commands?: Record<string, BotCommand>
   
   /** Middlewares to add to the pipeline when plugin is loaded */
-  middlewares?: Middleware[]
+  middlewares?: Middleware<any, any>[]
   
   /** Platform adapters provided by the plugin */
   adapters?: Record<string, IBotAdapter<any>>

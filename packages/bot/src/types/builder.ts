@@ -53,7 +53,7 @@ export interface BotBuilderConfig {
   logger?: BotLogger
   adapters: Record<string, IBotAdapter<any>>
   commands: Record<string, BotCommand>
-  middlewares: Middleware[]
+  middlewares: Middleware<any, any>[]
   sessionStore?: BotSessionStore
   plugins: BotPlugin[]
   options?: BotOptions

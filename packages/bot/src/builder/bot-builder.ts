@@ -337,10 +337,10 @@ export class IgniterBotBuilder<
    */
   addMiddleware<TContextAdditions>(
     middleware: Middleware<TContext, TContextAdditions>
-  ): IgniterBotBuilder<TAdapters, TCommands, TContext & TContextAdditions> {
+  ): IgniterBotBuilder<TAdapters, TCommands, TContext & Awaited<TContextAdditions>> {
     const newConfig = { ...this.config }
     newConfig.middlewares.push(middleware as any)
-    return new IgniterBotBuilder<TAdapters, TCommands, TContext & TContextAdditions>(newConfig)
+    return new IgniterBotBuilder<TAdapters, TCommands, TContext & Awaited<TContextAdditions>>(newConfig)
   }
 
   /**
@@ -483,7 +483,7 @@ export class IgniterBotBuilder<
    * await bot.start()
    * ```
    */
-  build(): Bot<TAdapters, Middleware[], TCommands> {
+  build(): Bot<TAdapters, Middleware<TContext, any>[], TCommands> {
     // Validate at least one adapter
     if (Object.keys(this.config.adapters).length === 0) {
       throw new Error('At least one adapter is required. Use addAdapter() to add one.')
@@ -536,8 +536,9 @@ export class IgniterBotBuilder<
       handle: this.config.handle,
       adapters: this.config.adapters as TAdapters,
       commands: this.config.commands as TCommands,
-      middlewares: this.config.middlewares as Middleware[],
+      middlewares: this.config.middlewares as Middleware<TContext, any>[],
       logger: this.config.logger,
+      sessionStore: this.config.sessionStore,
       on: {
         message: async (ctx) => {
           for (const handler of this.config.listeners.message) {

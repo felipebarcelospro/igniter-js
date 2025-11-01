@@ -33,6 +33,9 @@ export * from './plugins'
 // Builder pattern types
 export * from './builder'
 
+// Adapter types
+export * from './adapter'
+
 /**
  * Versioned typing note:
  *  The exported surface here is considered semver‑governed.
