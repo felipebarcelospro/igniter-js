@@ -18,6 +18,7 @@ import { memoryStore } from '../src/stores'
 const createMockAdapter = () => {
   const mockSend = vi.fn()
   const mockHandle = vi.fn()
+  const mockSendText = vi.fn()
   
   return {
     name: 'mock',
@@ -29,14 +30,15 @@ const createMockAdapter = () => {
       limits: {},
     },
     async init() {},
-    async send(params: any) {
-      mockSend(params)
+    async sendText(params: any) {
+      mockSendText(params)
     },
     async handle(params: any) {
       return mockHandle(params)
     },
     mockSend,
     mockHandle,
+    mockSendText,
   }
 }
 

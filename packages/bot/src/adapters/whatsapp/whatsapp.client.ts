@@ -114,6 +114,10 @@ export function createWhatsAppClient(
       return request<T>({ method: 'PUT', endpoint, body })
     },
     
+    async patch<T = any>(endpoint: string, body?: Record<string, any>): Promise<T> {
+      return request<T>({ method: 'PATCH', endpoint, body })
+    },
+    
     async delete<T = any>(endpoint: string, params?: Record<string, any>): Promise<T> {
       return request<T>({ method: 'DELETE', endpoint, params })
     },
