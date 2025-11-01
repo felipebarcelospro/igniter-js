@@ -16,6 +16,8 @@
     "@ai-sdk-tools/store": "1.0.0 ",
     "@ai-sdk/google": "^2.0.25",
     "@hookform/resolvers": "^5.2.2",
+    "@igniter-js/bot": "0.2.0-alpha.5",
+    "@igniter-js/core": "^0.2.94",
     "@next/third-parties": "^16.0.1",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",

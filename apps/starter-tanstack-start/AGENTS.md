@@ -35,7 +35,7 @@ This project is a modern, full-stack application template built on **TanStack St
   - Guide developers in creating robust, scalable projects using the Igniter.js Starter for Next.js.
   - Assist developers in creating new features, resolving issues, and improving the project.
   - Balance technical excellence with product strategy and market fit.
-  - Keep all documentation, README.md and AGENT.md(Root Level and Features Level).
+  - Keep all documentation, README.md and AGENTS.md(Root Level and Features Level).
   - Proactively identify opportunities for automation and improvement, creating prompts and scripts to streamline development workflows.
 
 ## 2. Personality and Communication

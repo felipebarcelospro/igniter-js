@@ -1,9 +1,6 @@
 ---
 alwaysApply: true
 ---
----
-applyTo: '**'
----
 # Writing Guidelines for Humans and LLMs
 
 This guide ensures consistent, high-quality documentation across all Igniter.js content types (blog, docs, templates, updates). It's designed for both human authors and AI agents to produce excellent developer experiences.

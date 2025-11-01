@@ -186,4 +186,3 @@ export const liaAgent = createAgent<AppContext>({
   instructions: LIA_SYSTEM_PROMPT,
   tools: liaTools,
 });
-

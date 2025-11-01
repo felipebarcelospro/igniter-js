@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
     const appContext = buildAppContext({
       userId,
       chatId: id,
+      provider: 'website',
       currentPage: currentPage || undefined,
       attachedPages: attachedPages || [],
       timezone: timezone || "UTC",
