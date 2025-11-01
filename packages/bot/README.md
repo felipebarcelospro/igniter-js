@@ -3,7 +3,7 @@
 [![NPM Version](https://img.shields.io/npm/v/@igniter-js/bot.svg)](https://www.npmjs.com/package/@igniter-js/bot)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A modern, type-safe, multi-platform bot framework for the Igniter.js ecosystem. Build sophisticated chatbots for **Telegram**, **WhatsApp**, and other platforms with a clean, fluent API, powerful middleware system, session management, and extensive TypeScript support.
+A modern, type-safe, multi-platform bot framework for the Igniter.js ecosystem. Build sophisticated chatbots for **Telegram**, **WhatsApp**, **Discord**, and other platforms with a clean, fluent API, powerful middleware system, session management, and extensive TypeScript support.
 
 > **Status:** Alpha - API is stabilizing. Breaking changes are minimized but may occur before v1.0.0.
 
@@ -32,7 +32,7 @@ A modern, type-safe, multi-platform bot framework for the Igniter.js ecosystem. 
 ## Key Features
 
 - 🎯 **Builder Pattern** - Fluent, chainable API inspired by modern frameworks
-- 🚀 **Multi-Platform** - Telegram, WhatsApp, Discord (coming soon), and more
+- 🚀 **Multi-Platform** - Telegram, WhatsApp, Discord, and more
 - 🧩 **Type-Safe** - Full TypeScript support with end-to-end type inference
 - ⚡ **Zod Validation** - Validate command arguments with Zod schemas
 - 💾 **Session Management** - Stateful conversations with pluggable storage
@@ -72,7 +72,7 @@ The package provides organized imports for better code organization and tree-sha
 import { IgniterBot, telegram, memoryStore, rateLimitMiddleware } from '@igniter-js/bot'
 
 // Organized imports (recommended for large projects)
-import { telegram, whatsapp } from '@igniter-js/bot/adapters'
+import { telegram, whatsapp, discord } from '@igniter-js/bot/adapters'
 import { rateLimitMiddleware, authMiddleware, loggingMiddleware } from '@igniter-js/bot/middlewares'
 import { analyticsPlugin } from '@igniter-js/bot/plugins'
 import { memoryStore } from '@igniter-js/bot/stores'
@@ -159,10 +159,11 @@ const bot = IgniterBot
   // handle: '@custom' ← Optional override
 }))
 
-// Multiple adapters (both inherit global handle)
+// Multiple adapters (all inherit global handle)
 .addAdapters({
   telegram: telegram({ token: '...' }),
-  whatsapp: whatsapp({ token: '...', phone: '...' })
+  whatsapp: whatsapp({ token: '...', phone: '...' }),
+  discord: discord({ token: '...', applicationId: '...' })
 })
 
 // Override handle for specific adapter
@@ -338,6 +339,40 @@ import { whatsapp } from '@igniter-js/bot/adapters'
 - ✅ Message reactions
 - ❌ No edit/delete via API
 - **Limits:** 4096 chars, 100MB files, 3 buttons
+
+### Discord
+
+Discord Interactions API adapter with slash commands support:
+
+```typescript
+import { discord } from '@igniter-js/bot/adapters'
+
+// Minimal (uses global bot handle)
+.addAdapter('discord', discord({
+  token: 'your_discord_token',
+  applicationId: 'your_application_id',
+  publicKey: 'your_public_key' // Optional but recommended for signature verification
+}))
+
+// Override global handle for this platform
+.addAdapter('discord', discord({
+  token: 'your_discord_token',
+  applicationId: 'your_application_id',
+  publicKey: 'your_public_key',
+  handle: '@custom_discord_bot' // ← Override
+}))
+```
+
+**Capabilities:**
+- ✅ Text, images, videos, audio, documents
+- ✅ Interactive buttons and message components
+- ✅ Edit and delete messages
+- ✅ Message reactions
+- ✅ Slash commands (APPLICATION_COMMAND)
+- ✅ Message components (MESSAGE_COMPONENT - button clicks)
+- ✅ Ed25519 signature verification
+- ❌ No stickers, location, contact, or polls via API
+- **Limits:** 2000 chars, 25MB files (100MB for verified bots), 5 buttons per row
 
 ### Creating Custom Adapters
 
@@ -717,7 +752,8 @@ const bot = IgniterBot
   .withName('Multi-Platform Bot')
   .addAdapters({
     telegram: telegram({ token: '...', handle: '@bot' }),
-    whatsapp: whatsapp({ token: '...', phone: '...' })
+    whatsapp: whatsapp({ token: '...', phone: '...' }),
+    discord: discord({ token: '...', applicationId: '...' })
 })
   .addCommand('broadcast', {
     name: 'broadcast',
@@ -900,7 +936,7 @@ describe('My Bot', () => {
 | ✅ Plugin System | Completed |
 | ✅ Official Middlewares | Completed |
 | ✅ Capabilities System | Completed |
-| 🚧 Discord Adapter | In Progress |
+| ✅ Discord Adapter | Completed |
 | 📋 Slack Adapter | Planned |
 | 📋 Redis Session Store | Planned |
 | 📋 Prisma Session Store | Planned |

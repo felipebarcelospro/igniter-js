@@ -1099,6 +1099,130 @@ describe('Telegram Adapter', () => {
 - **Check client existence** before using it in adapter methods
 - **Return next() directly** in middlewares (don't await separately)
 
+### 17.5 Documentation Maintenance
+
+**CRITICAL:** After every code change, you MUST:
+
+1. **Review README.md**
+   - Verify all examples still work with current API
+   - Check that new features are documented
+   - Ensure import paths are correct
+   - Update version numbers if changed
+   - Verify links and references are valid
+
+2. **Review AGENTS.md**
+   - Update architecture sections if APIs changed
+   - Add new patterns to "Common Patterns" section
+   - Update troubleshooting if new issues arise
+   - Document breaking changes in "Key Architecture Changes"
+   - Ensure all code examples match current implementation
+
+3. **Double-Check Before Updating**
+   - **NEVER overwrite** documentation without verifying current state
+   - **ALWAYS read** the current README.md and AGENTS.md files first
+   - **VERIFY** the actual package state matches what you're documenting
+   - **CHECK** package.json for current version and dependencies
+   - **REVIEW** all exported APIs from `src/index.ts`
+   - **TEST** examples in documentation actually work
+
+4. **Verification Checklist**
+   - [ ] Read current README.md fully
+   - [ ] Read current AGENTS.md fully
+   - [ ] Check package.json version and dependencies
+   - [ ] Verify all imports in examples are correct
+   - [ ] Test at least one example manually
+   - [ ] Ensure new features are documented
+   - [ ] Update related sections, not just one section
+   - [ ] Check for broken links or references
+
+### 17.6 Version Management and Publishing
+
+**Version Updates:**
+- **NEVER** update version in package.json without explicit user approval
+- **ALWAYS** suggest version options before changing
+- **USE** semantic versioning (MAJOR.MINOR.PATCH)
+- **CONSIDER** pre-release versions (alpha, beta, rc) for breaking changes
+
+**Before Suggesting Version Update:**
+1. Review current version in package.json
+2. Analyze changes made:
+   - Breaking changes → suggest MAJOR bump
+   - New features → suggest MINOR bump
+   - Bug fixes → suggest PATCH bump
+   - Pre-release → suggest alpha/beta/rc suffix
+3. Present options to user with reasoning
+4. Wait for explicit approval before changing
+
+**Example Version Update Flow:**
+```
+You: "I've added a new feature. Current version is 0.2.0-alpha.5. 
+     Should I update to:
+     - 0.2.0-alpha.6 (patch in alpha)
+     - 0.2.0-beta.0 (promote to beta)
+     - 0.3.0-alpha.0 (new minor version)"
+     
+User: "0.2.0-alpha.6"
+
+You: [Updates version, runs build, prepares for publish]
+```
+
+**Publishing Process:**
+1. Update version in package.json (after approval)
+2. Run `npm run build` to ensure everything compiles
+3. Run `npm run test` to ensure tests pass
+4. Run `npm run lint` to ensure code quality
+5. Ask user if they want to publish now or later
+6. If approved, run `npm publish` (or appropriate publish command)
+
+### 17.7 Git Commit Management
+
+**Commit Responsibilities:**
+- **MUST** create commits following Conventional Commits specification
+- **SHOULD** group related changes into logical commits
+- **MUST** write clear, descriptive commit messages
+- **SHOULD** reference issues/PRs when applicable
+
+**Conventional Commits Format:**
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+**Common Types:**
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `style`: Code style changes (formatting, etc.)
+- `refactor`: Code refactoring
+- `perf`: Performance improvements
+- `test`: Adding or updating tests
+- `chore`: Maintenance tasks (deps, build, etc.)
+- `build`: Build system changes
+- `ci`: CI/CD changes
+
+**Examples:**
+```
+feat(bot): add PATCH method to AdapterClient interface
+
+fix(telegram): handle missing client in sendTyping
+
+docs: update README with new adapter examples
+
+refactor(builder): improve type inference for middleware chain
+
+chore: update dependencies to latest versions
+```
+
+**Commit Best Practices:**
+- One logical change per commit
+- Write commit message in present tense ("add feature" not "added feature")
+- Keep first line under 72 characters
+- Use body for detailed explanations
+- Reference related issues/PRs in footer
+
 ---
 
 ## 18. Common Patterns
@@ -1196,7 +1320,7 @@ describe('Telegram Adapter', () => {
 | Plugin System | ✅ Complete | - |
 | Official Middlewares | ✅ Complete | - |
 | Capabilities System | ✅ Complete | - |
-| Discord Adapter | 🚧 In Progress | High |
+| Discord Adapter | ✅ Complete | - |
 | Slack Adapter | 📋 Planned | High |
 | Redis Session Store | 📋 Planned | High |
 | Prisma Session Store | 📋 Planned | Medium |
@@ -1215,7 +1339,10 @@ We welcome contributions! Please follow these guidelines:
 2. **Follow** existing patterns and conventions
 3. **Test** locally with `npm run build` and `npm run typecheck`
 4. **Document** new features with JSDoc and examples
-5. **Update** README.md and AGENT.md if needed
+5. **Update** README.md and AGENTS.md if needed
+6. **Review** documentation after every change (see Section 17.5)
+7. **Follow** Conventional Commits for commit messages (see Section 17.7)
+8. **Ask** before updating version numbers (see Section 17.6)
 
 ### Contribution Checklist
 
@@ -1232,6 +1359,9 @@ We welcome contributions! Please follow these guidelines:
 - [ ] Tests pass (`npm test`)
 - [ ] Client factory implemented if adapter needs HTTP client
 - [ ] All send methods implemented for declared capabilities
+- [ ] README.md reviewed and updated if needed
+- [ ] AGENTS.md reviewed and updated if needed
+- [ ] Commit messages follow Conventional Commits format
 
 ---
 
