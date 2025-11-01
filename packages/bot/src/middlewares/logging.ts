@@ -108,11 +108,10 @@ export function loggingMiddleware<TContext extends BotContext>(
     skip,
   } = options
 
-  return async (ctx: TContext, next: () => Promise<void>) => {
+  return async (ctx, next) => {
     // Skip logging if condition is met
     if (skip && skip(ctx)) {
-      await next()
-      return
+      return next()
     }
 
     const startTime = Date.now()
@@ -310,12 +309,11 @@ export function commandLoggingMiddleware<TContext extends BotContext>(options: {
 }): Middleware<TContext, {}> {
   const { logger = console, includeParams = false } = options
 
-  return async (ctx: TContext, next: () => Promise<void>) => {
+  return async (ctx, next) => {
     const isCommand = ctx.message.content?.type === 'command'
 
     if (!isCommand) {
-      await next()
-      return
+      return next()
     }
 
     const command = ctx.message.content?.type === 'command' ? ctx.message.content.command : 'unknown'

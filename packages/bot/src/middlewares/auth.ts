@@ -103,11 +103,10 @@ export function authMiddleware<TContext extends BotContext>(
     onUnauthorized,
   } = options
 
-  return async (ctx: TContext, next: () => Promise<void>) => {
+  return async (ctx, next) => {
     // Skip auth if condition is met
     if (skip && (await skip(ctx))) {
-      await next()
-      return
+      return next()
     }
 
     const userId = ctx.message.author.id
@@ -115,36 +114,31 @@ export function authMiddleware<TContext extends BotContext>(
 
     // Check blocked users
     if (blockedUsers?.includes(userId)) {
-      await handleUnauthorized(ctx, unauthorizedMessage, onUnauthorized)
-      return
+      return handleUnauthorized(ctx, unauthorizedMessage, onUnauthorized)
     }
 
     // Check blocked channels
     if (blockedChannels?.includes(channelId)) {
-      await handleUnauthorized(ctx, unauthorizedMessage, onUnauthorized)
-      return
+      return handleUnauthorized(ctx, unauthorizedMessage, onUnauthorized)
     }
 
     // Check allowed users
     if (allowedUsers && !allowedUsers.includes(userId)) {
-      await handleUnauthorized(ctx, unauthorizedMessage, onUnauthorized)
-      return
+      return handleUnauthorized(ctx, unauthorizedMessage, onUnauthorized)
     }
 
     // Check allowed channels
     if (allowedChannels && !allowedChannels.includes(channelId)) {
-      await handleUnauthorized(ctx, unauthorizedMessage, onUnauthorized)
-      return
+      return handleUnauthorized(ctx, unauthorizedMessage, onUnauthorized)
     }
 
     // Custom check function
     if (checkFn && !(await checkFn(ctx))) {
-      await handleUnauthorized(ctx, unauthorizedMessage, onUnauthorized)
-      return
+      return handleUnauthorized(ctx, unauthorizedMessage, onUnauthorized)
     }
 
     // Authorized, proceed
-    await next()
+    return next()
   }
 }
 

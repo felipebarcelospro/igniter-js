@@ -166,11 +166,10 @@ export function rateLimitMiddleware<TContext extends BotContext>(
     onLimitReached,
   } = options
 
-  return async (ctx: TContext, next: () => Promise<void>) => {
+  return async (ctx, next) => {
     // Skip rate limiting if condition is met
     if (skip && (await skip(ctx))) {
-      await next()
-      return
+      return next()
     }
 
     const key = keyGenerator(ctx)
@@ -182,18 +181,17 @@ export function rateLimitMiddleware<TContext extends BotContext>(
 
       // Call onLimitReached handler if provided
       if (onLimitReached) {
-        await onLimitReached(ctx, retryAfter)
+        return onLimitReached(ctx, retryAfter)
       }
 
       // Send rate limit message
       const rateLimitMessage =
         typeof message === 'function' ? message(ctx, retryAfter) : message
 
-      await ctx.reply(rateLimitMessage)
-      return // Block the request
+      return ctx.reply(rateLimitMessage)
     }
 
-    await next()
+    return next()
   }
 }
 
