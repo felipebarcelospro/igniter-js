@@ -165,28 +165,30 @@ src/
     bot-builder.ts       # IgniterBotBuilder class (fluent API)
     index.ts             # Builder exports
   
-  core/                  # (Reserved for future Bot refactor)
-  
   types/
-    bot.types.ts         # Core types (BotContext, IBotAdapter, etc)
+    bot.types.ts         # Core types (BotContext, BotSendParams, etc)
+    adapter.ts           # IBotAdapter interface and adapter parameter types
     capabilities.ts      # Capability system types
     content.ts           # Content types (text, media, interactive)
     session.ts           # Session management types
     plugins.ts           # Plugin system types
     builder.ts           # Builder-specific types
+    utils.interface.ts   # Utility type helpers (Input, Prettify, Path, etc)
     index.ts             # Type barrel
   
   adapters/
     telegram/
-      telegram.adapter.ts   # Telegram Bot API adapter
+      telegram.adapter.ts   # Telegram Bot API adapter (implements IBotAdapter)
+      telegram.client.ts    # HTTP client factory for Telegram API
       telegram.helpers.ts   # Parsing & escaping utilities
-      telegram.schemas.ts   # Zod schemas
-      index.ts
+      telegram.schemas.ts   # Zod schemas for Telegram config
+      index.ts              # Exports adapter factory
     whatsapp/
-      whatsapp.adapter.ts   # WhatsApp Cloud API adapter
+      whatsapp.adapter.ts   # WhatsApp Cloud API adapter (implements IBotAdapter)
+      whatsapp.client.ts    # HTTP client factory for WhatsApp Cloud API
       whatsapp.helpers.ts   # Parsing utilities
-      whatsapp.schemas.ts   # Zod schemas
-      index.ts
+      whatsapp.schemas.ts   # Zod schemas for WhatsApp config
+      index.ts              # Exports adapter factory
     index.ts             # Adapter barrel
   
   middlewares/
@@ -204,11 +206,53 @@ src/
     index.ts
   
   utils/
-    try-catch.ts         # Error handling utilities
+    try-catch.ts         # Error handling utilities (tryCatch, isTryCatchError)
   
-  bot.provider.ts        # Bot class + adapter factory + errors
+  bot.provider.ts        # Bot class + adapter factory + errors + context helpers
   index.ts               # Main barrel export
 ```
+
+### File Responsibilities
+
+**Core Files:**
+- `bot.provider.ts`: Contains the `Bot` class, `Bot.adapter()` factory, error handling (`BotError`, `BotErrorCodes`), and context helper creation (`createContextHelpers()`)
+- `index.ts`: Main barrel export - re-exports everything from the package
+
+**Types (`types/`):**
+- `bot.types.ts`: Core runtime types (`BotContext`, `BotSendParams`, `BotHandleParams`, `BotCommand`, `Middleware`, `BotLogger`, etc.)
+- `adapter.ts`: **NEW** - Complete `IBotAdapter` interface definition, all adapter parameter types (`AdapterInitParams`, `AdapterSendTextParams`, etc.), and `AdapterClient` interface
+- `capabilities.ts`: `BotAdapterCapabilities` type and related capability declarations
+- `content.ts`: All content types (`BotTextContent`, `BotImageContent`, `BotOutboundContent`, `BotSendOptions`, etc.)
+- `session.ts`: Session-related types (`BotSession`, `BotSessionStore`, `BotSessionHelper`)
+- `plugins.ts`: Plugin system types (`BotPlugin`)
+- `builder.ts`: Builder-specific types (`BotBuilderConfig`, etc.)
+- `utils.interface.ts`: **NEW** - Utility type helpers for advanced TypeScript patterns (`Input`, `Prettify`, `Path`, `FieldType`, etc.)
+
+**Adapters (`adapters/`):**
+- Each adapter directory contains:
+  - `*.adapter.ts`: Main adapter implementation implementing `IBotAdapter`
+  - `*.client.ts`: **NEW** - HTTP client factory (`createTelegramClient`, `createWhatsAppClient`) that returns pre-configured `AdapterClient` instances
+  - `*.helpers.ts`: Platform-specific parsing and utility functions
+  - `*.schemas.ts`: Zod schemas for adapter configuration (supports environment variable defaults)
+  - `index.ts`: Exports the adapter factory function
+
+**Builder (`builder/`):**
+- `bot-builder.ts`: `IgniterBotBuilder` class implementing the fluent Builder Pattern API
+- `index.ts`: Exports builder API
+
+**Middlewares (`middlewares/`):**
+- Each middleware file exports factory functions that return `Middleware` functions
+- Middlewares now return `next()` directly instead of awaiting it separately (improved return value handling)
+
+**Stores (`stores/`):**
+- `memory.ts`: In-memory session store implementation
+- Future: Redis and Prisma stores will be added here
+
+**Plugins (`plugins/`):**
+- Example plugins demonstrating the plugin system
+
+**Utils (`utils/`):**
+- `try-catch.ts`: Error handling utilities (`tryCatch`, `isTryCatchError`) for safe async operations
 
 ---
 
@@ -267,7 +311,23 @@ After calling `.build()`, you get an immutable `Bot` instance:
 |--------|---------|
 | `start()` | Initialize adapters (webhooks, command registration) |
 | `handle(provider, request)` | Process webhook HTTP request |
-| `send({ provider, channel, content })` | Send message via adapter |
+| `send({ provider, channel, content, options? })` | Send message via adapter - routes to adapter-specific methods based on content type |
+
+**Bot.send() Routing:**
+The `Bot.send()` method automatically routes to the appropriate adapter method based on the content type:
+- `content.type === 'text'` → calls `adapter.sendText()`
+- `content.type === 'image'` → calls `adapter.sendImage()`
+- `content.type === 'video'` → calls `adapter.sendVideo()`
+- `content.type === 'audio'` → calls `adapter.sendAudio()`
+- `content.type === 'document'` → calls `adapter.sendDocument()`
+- `content.type === 'sticker'` → calls `adapter.sendSticker()`
+- `content.type === 'location'` → calls `adapter.sendLocation()`
+- `content.type === 'contact'` → calls `adapter.sendContact()`
+- `content.type === 'poll'` → calls `adapter.sendPoll()`
+- `content.type === 'interactive'` → calls `adapter.sendInteractive()`
+- `content.type === 'reply'` → recursively calls `send()` with nested content and reply options
+
+If an adapter doesn't implement the required method, a `BotError` with code `CONTENT_TYPE_NOT_SUPPORTED` is thrown.
 
 ### 6.2 Runtime Extension (Advanced)
 
@@ -287,65 +347,136 @@ After calling `.build()`, you get an immutable `Bot` instance:
 
 ### 7.1 IBotAdapter Interface
 
+**BREAKING CHANGE:** Adapters no longer use a single `send()` method. Instead, they implement specific methods based on their declared capabilities.
+
 ```typescript
 interface IBotAdapter<TConfig extends ZodObject<any>> {
   name: string                        // Adapter identifier
   parameters: TConfig                 // Zod schema for config
   capabilities: BotAdapterCapabilities // What this adapter supports
+  _config?: TypeOf<TConfig>          // Internal: stored parsed config
   
-  verify?: (params: {                // Optional webhook verification
-    request: Request
-    config: TypeOf<TConfig>
-    logger?: BotLogger
-  }) => Promise<Response | null>
+  // ===== REQUIRED METHODS =====
   
-  init: (params: {                   // Initialize adapter
-    config: TypeOf<TConfig>
-    commands: BotCommand[]
-    logger?: BotLogger
-  }) => Promise<void>
+  init: (params: AdapterInitParams<TypeOf<TConfig>>) => Promise<void>
+  handle: (params: AdapterHandleParams<TypeOf<TConfig>>) => Promise<
+    Omit<BotContext, 'bot' | 'session' | 'reply' | 'replyWithButtons' | 'replyWithImage' | 'replyWithDocument' | 'sendTyping'> | null
+  >
   
-  send: (params: {                   // Send message
-    provider: string
-    channel: string
-    content: { type: 'text'; content: string }
-    config: TConfig
-    logger?: BotLogger
-  }) => Promise<void>
+  // ===== OPTIONAL METHODS =====
   
-  handle: (params: {                 // Parse webhook
-    request: Request
-    config: TypeOf<TConfig>
-    logger?: BotLogger
-  }) => Promise<Omit<BotContext, 'bot' | 'session' | 'reply' | ...> | null>
+  verify?: (params: AdapterVerifyParams<TypeOf<TConfig>>) => Promise<Response | null>
+  sendTyping?: (params: AdapterSendTypingParams<TypeOf<TConfig>>) => Promise<void>
+  
+  // ===== HTTP CLIENT =====
+  
+  /**
+   * Optional factory function that returns a pre-configured HTTP client.
+   * Similar to axios.create() - comes with token, base URL, headers pre-configured.
+   */
+  client?: (config: TypeOf<TConfig>, logger?: BotLogger) => AdapterClient<TypeOf<TConfig>>
+  
+  // ===== SEND METHODS (based on capabilities) =====
+  // These methods are required if the corresponding capability is true
+  
+  sendText?: (params: AdapterSendTextParams<TypeOf<TConfig>>) => Promise<void>
+  sendImage?: (params: AdapterSendImageParams<TypeOf<TConfig>>) => Promise<void>
+  sendVideo?: (params: AdapterSendVideoParams<TypeOf<TConfig>>) => Promise<void>
+  sendAudio?: (params: AdapterSendAudioParams<TypeOf<TConfig>>) => Promise<void>
+  sendDocument?: (params: AdapterSendDocumentParams<TypeOf<TConfig>>) => Promise<void>
+  sendSticker?: (params: AdapterSendStickerParams<TypeOf<TConfig>>) => Promise<void>
+  sendLocation?: (params: AdapterSendLocationParams<TypeOf<TConfig>>) => Promise<void>
+  sendContact?: (params: AdapterSendContactParams<TypeOf<TConfig>>) => Promise<void>
+  sendPoll?: (params: AdapterSendPollParams<TypeOf<TConfig>>) => Promise<void>
+  sendInteractive?: (params: AdapterSendInteractiveParams<TypeOf<TConfig>>) => Promise<void>
+  
+  // ===== ACTION METHODS (based on capabilities.actions) =====
+  
+  editMessage?: (params: AdapterEditMessageParams<TypeOf<TConfig>>) => Promise<void>
+  deleteMessage?: (params: AdapterDeleteMessageParams<TypeOf<TConfig>>) => Promise<void>
 }
 ```
 
-### 7.2 Adapter Creation
+### 7.2 AdapterClient Interface
+
+Adapters can optionally provide an HTTP client factory that returns a pre-configured client:
+
+```typescript
+interface AdapterClient<TConfig extends Record<string, any>> {
+  get<T = any>(endpoint: string, params?: Record<string, any>): Promise<T>
+  post<T = any>(endpoint: string, body?: Record<string, any>): Promise<T>
+  put<T = any>(endpoint: string, body?: Record<string, any>): Promise<T>
+  delete<T = any>(endpoint: string, params?: Record<string, any>): Promise<T>
+  request<T = any>(options: {
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+    endpoint: string
+    body?: Record<string, any>
+    params?: Record<string, any>
+    headers?: Record<string, string>
+  }): Promise<T>
+}
+```
+
+**Usage Example:**
+```typescript
+const adapter = telegram({ token: '123' })
+const client = adapter.client
+
+// Make API requests
+const me = await client?.get('/getMe')
+await client?.post('/sendMessage', { chat_id: '123', text: 'Hello' })
+```
+
+### 7.3 Adapter Parameter Types
+
+All adapter methods use typed parameter interfaces defined in `types/adapter.ts`:
+
+- `AdapterInitParams` - For `init()` method
+- `AdapterHandleParams` - For `handle()` method
+- `AdapterVerifyParams` - For `verify()` method
+- `AdapterSendTextParams`, `AdapterSendImageParams`, etc. - For each send method
+- `AdapterEditMessageParams`, `AdapterDeleteMessageParams` - For action methods
+
+All parameters include: `client?`, `config`, `logger?`, and method-specific fields.
+
+### 7.4 Adapter Creation
 
 ```typescript
 export const myAdapter = Bot.adapter({
   name: 'my-platform',
   parameters: z.object({
-    token: z.string(),
-    handle: z.string()
+    token: z.string().optional().default(process.env.MY_PLATFORM_TOKEN || ''),
+    handle: z.string().optional()
   }),
   capabilities: {
     content: {
       text: true,
       image: true,
       video: false,
-      // ... all other content types
+      audio: false,
+      document: true,
+      sticker: false,
+      location: false,
+      contact: false,
+      poll: false,
+      interactive: true,
     },
     actions: {
       edit: true,
-      delete: false,
-      // ... all other actions
+      delete: true,
+      react: false,
+      pin: false,
+      thread: false,
     },
     features: {
       webhooks: true,
+      longPolling: false,
       commands: true,
-      // ... all other features
+      mentions: true,
+      groups: true,
+      channels: false,
+      users: true,
+      files: true,
     },
     limits: {
       maxMessageLength: 4096,
@@ -353,13 +484,66 @@ export const myAdapter = Bot.adapter({
       maxButtonsPerMessage: 5
     }
   },
-  async init({ config, commands, logger }) {
-    // Register webhooks, sync commands, etc
+  
+  // Optional: HTTP client factory
+  client: (config, logger) => {
+    return createMyPlatformClient(config.token, logger)
   },
-  async send({ channel, content, config, logger }) {
-    // Call platform API to send message
+  
+  async init({ client, config, commands, logger }) {
+    // Use client for API calls
+    if (client) {
+      await client.post('/registerWebhook', { url: config.webhookUrl })
+      await client.post('/setCommands', { commands })
+    }
   },
-  async handle({ request, config, logger }) {
+  
+  // Send methods - implement based on capabilities declared above
+  async sendText({ client, channel, text, options, config, logger }) {
+    if (!client) throw new Error('Client not provided')
+    await client.post('/sendMessage', {
+      chat_id: channel,
+      text,
+      ...options
+    })
+  },
+  
+  async sendImage({ client, channel, image, caption, options, config, logger }) {
+    if (!client) throw new Error('Client not provided')
+    await client.post('/sendPhoto', {
+      chat_id: channel,
+      photo: image,
+      caption
+    })
+  },
+  
+  async sendInteractive({ client, channel, text, inlineKeyboard, options, config, logger }) {
+    if (!client) throw new Error('Client not provided')
+    await client.post('/sendMessage', {
+      chat_id: channel,
+      text,
+      reply_markup: { inline_keyboard: inlineKeyboard }
+    })
+  },
+  
+  async editMessage({ client, channel, messageId, content, options, config, logger }) {
+    if (!client) throw new Error('Client not provided')
+    await client.post('/editMessage', {
+      chat_id: channel,
+      message_id: messageId,
+      text: content.content
+    })
+  },
+  
+  async deleteMessage({ client, channel, messageId, config, logger }) {
+    if (!client) throw new Error('Client not provided')
+    await client.post('/deleteMessage', {
+      chat_id: channel,
+      message_id: messageId
+    })
+  },
+  
+  async handle({ client, request, config, logger }) {
     const body = await request.json()
     
     // Parse and return context, or null to ignore
@@ -377,15 +561,25 @@ export const myAdapter = Bot.adapter({
 })
 ```
 
-### 7.3 Adapter Rules
+**Key Points:**
+- Adapters can optionally provide a `client()` factory function
+- All send methods receive `client` as a parameter (injected by the framework)
+- Configuration schema can use `.optional().default()` to support environment variables
+- Each send method is only required if the corresponding capability is `true`
+- The framework automatically wraps methods with config and client injection
+
+### 7.5 Adapter Rules
 
 1. **No side effects** at module top-level
-2. **Validate** all inputs with Zod
+2. **Validate** all inputs with Zod (schemas can use `.optional().default()` for env vars)
 3. **Return null** from `handle()` to ignore updates
-4. **Never return Response** from `handle()` - framework handles HTTP
+4. **Never return Response** from `handle()` - framework handles HTTP (except `verify()` which can return Response)
 5. **Use logger** instead of console
-6. **Declare capabilities** accurately
-7. **Handle errors** gracefully (throw or log)
+6. **Declare capabilities** accurately - only implement methods for capabilities you declare as `true`
+7. **Handle errors** gracefully (throw or log) - use `BotError` with `BotErrorCodes` when appropriate
+8. **Implement client factory** - Adapters should provide a `client()` function that returns an `AdapterClient` instance
+9. **Use injected client** - All adapter methods receive `client` as a parameter - use it for API calls
+10. **Check client exists** - Always check if `client` is provided before using it (framework provides it, but type safety requires checks)
 
 ---
 
@@ -455,10 +649,22 @@ interface BotCommand<TArgs = any> {
 ### 9.1 Middleware Signature
 
 ```typescript
-type Middleware = (
-  ctx: BotContext,
+type Middleware<TContextIn = BotContext, TContextOut = TContextIn> = (
+  ctx: TContextIn,
   next: () => Promise<void>
-) => Promise<void>
+) => Promise<void | Partial<TContextOut>>
+```
+
+**Important:** Middlewares should return `next()` directly instead of awaiting it separately. This improves control flow and type inference.
+
+**Example:**
+```typescript
+// ✅ Correct - return next() directly
+return next()
+
+// ❌ Incorrect - don't await next() separately
+await next()
+return
 ```
 
 ### 9.2 Execution Order
@@ -772,12 +978,20 @@ Content sent by bot (extends inbound):
 
 ```typescript
 export const BotErrorCodes = {
+  CLIENT_NOT_PROVIDED: 'CLIENT_NOT_PROVIDED',
   PROVIDER_NOT_FOUND: 'PROVIDER_NOT_FOUND',
   COMMAND_NOT_FOUND: 'COMMAND_NOT_FOUND',
   INVALID_COMMAND_PARAMETERS: 'INVALID_COMMAND_PARAMETERS',
   ADAPTER_HANDLE_RETURNED_NULL: 'ADAPTER_HANDLE_RETURNED_NULL',
+  CONTENT_TYPE_NOT_SUPPORTED: 'CONTENT_TYPE_NOT_SUPPORTED',
+  INVALID_CONTENT: 'INVALID_CONTENT',
 }
 ```
+
+**New Error Codes:**
+- `CLIENT_NOT_PROVIDED`: Adapter method called but client was not provided
+- `CONTENT_TYPE_NOT_SUPPORTED`: Attempted to send content type that adapter doesn't support
+- `INVALID_CONTENT`: Content validation failed (e.g., document without File object)
 
 ### 15.2 Error Handling
 
@@ -877,9 +1091,13 @@ describe('Telegram Adapter', () => {
 - **No `any` types** in public API
 - **Always use logger** (never `console.*` directly)
 - **Add JSDoc** to all public methods
-- **Use Zod** for runtime validation
+- **Use Zod** for runtime validation (with `.optional().default()` for env vars)
 - **Write examples** for new features
-- **Update AGENT.md** when architecture changes
+- **Update AGENTS.md** when architecture changes
+- **Use tryCatch utility** for safe async operations (`tryCatch`, `isTryCatchError`)
+- **Implement client factories** for adapters that need HTTP clients
+- **Check client existence** before using it in adapter methods
+- **Return next() directly** in middlewares (don't await separately)
 
 ---
 
@@ -993,7 +1211,7 @@ describe('Telegram Adapter', () => {
 
 We welcome contributions! Please follow these guidelines:
 
-1. **Read** [AGENT.md](./AGENT.md) for architecture details
+1. **Read** [AGENTS.md](./AGENTS.md) for architecture details
 2. **Follow** existing patterns and conventions
 3. **Test** locally with `npm run build` and `npm run typecheck`
 4. **Document** new features with JSDoc and examples
@@ -1011,16 +1229,16 @@ We welcome contributions! Please follow these guidelines:
 - [ ] Examples updated if API changed
 - [ ] Build passes (`npm run build`)
 - [ ] No lint errors (`npm run lint`)
+- [ ] Tests pass (`npm test`)
+- [ ] Client factory implemented if adapter needs HTTP client
+- [ ] All send methods implemented for declared capabilities
 
 ---
 
 ## 22. Resources
 
 - 📖 **Full Documentation:** https://igniterjs.com/docs/bots
-- 💡 **Examples:** [examples/](./examples/)
-- 📘 **Builder Examples:** [BUILDER_EXAMPLE.md](./BUILDER_EXAMPLE.md)
-- 📗 **Migration Guide:** [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md)
-- 📙 **Implementation Details:** [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)
+- 🧪 **Tests:** [tests/](./tests/) - Comprehensive test suite using Vitest
 - 🐛 **Report Issues:** https://github.com/felipebarcelospro/igniter-js/issues
 - 💬 **Discussions:** https://github.com/felipebarcelospro/igniter-js/discussions
 
@@ -1042,4 +1260,51 @@ This package is part of the [Igniter.js](https://igniterjs.com) ecosystem - a mo
 
 ---
 
-**Ready to build your bot? Check out the [examples](./examples/) or read the [Quick Start guide](https://igniterjs.com/docs/bots/quick-start)!**
+**Ready to build your bot? Check out the [tests](./tests/) for examples or read the [Quick Start guide](https://igniterjs.com/docs/bots/quick-start)!**
+
+---
+
+## 25. Key Architecture Changes (v0.2.0-alpha.5)
+
+### Adapter Architecture Overhaul
+
+**Before:** Adapters had a single `send()` method that handled all content types.
+
+**After:** Adapters implement specific methods based on capabilities:
+- `sendText()`, `sendImage()`, `sendVideo()`, etc.
+- `editMessage()`, `deleteMessage()` for actions
+- `sendTyping()` for typing indicators
+- Optional `client()` factory for HTTP client access
+
+### HTTP Client Integration
+
+- Adapters can provide a `client()` factory function
+- Clients are pre-configured with tokens, base URLs, and headers
+- All adapter methods receive `client` as an injected parameter
+- Framework handles client creation and injection automatically
+
+### Content Type Routing
+
+- `Bot.send()` automatically routes to appropriate adapter method
+- Content type is determined from `content.type` field
+- Framework validates adapter supports the content type before routing
+- Errors thrown if adapter doesn't implement required method
+
+### Environment Variable Support
+
+- Adapter schemas can use `.optional().default(process.env.VAR || '')`
+- Configuration merging happens automatically in adapter factory
+- Supports: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_URL`, `WHATSAPP_TOKEN`, etc.
+
+### Middleware Improvements
+
+- Middlewares return `next()` directly for better control flow
+- Improved type inference with `TContextOut` parameter
+- Context enrichment handled more reliably
+
+### Type System Enhancements
+
+- New `types/adapter.ts` with complete adapter type definitions
+- New `types/utils.interface.ts` with utility type helpers
+- Better separation of concerns in type definitions
+- Improved type inference throughout the framework
