@@ -28,6 +28,7 @@ export default defineConfig({
     // Individual adapters (for @igniter-js/bot/adapters/*)
     'adapters/telegram/index': 'src/adapters/telegram/index.ts',
     'adapters/whatsapp/index': 'src/adapters/whatsapp/index.ts',
+    'adapters/discord/index': 'src/adapters/discord/index.ts',
 
     // Middlewares barrel (for @igniter-js/bot/middlewares)
     'middlewares/index': 'src/middlewares/index.ts',

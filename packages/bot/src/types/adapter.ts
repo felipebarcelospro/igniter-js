@@ -237,6 +237,11 @@ export interface AdapterClient<TConfig extends Record<string, any>> {
   put<T = any>(endpoint: string, body?: Record<string, any>): Promise<T>
   
   /**
+   * Makes a PATCH request to the provider API
+   */
+  patch<T = any>(endpoint: string, body?: Record<string, any>): Promise<T>
+  
+  /**
    * Makes a DELETE request to the provider API
    */
   delete<T = any>(endpoint: string, params?: Record<string, any>): Promise<T>

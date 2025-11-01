@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/bot",
-  "version": "0.2.0-alpha.5",
+  "version": "0.2.0-alpha.6",
   "description": "A modern, type-safe multi-platform bot framework for the Igniter.js ecosystem (adapters, middleware, commands, rich content).",
   "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
   "license": "MIT",
@@ -107,6 +107,7 @@
       "adapters/index": "src/adapters/index.ts",
       "adapters/telegram/index": "src/adapters/telegram/index.ts",
       "adapters/whatsapp/index": "src/adapters/whatsapp/index.ts",
+      "adapters/discord/index": "src/adapters/discord/index.ts",
       "middlewares/index": "src/middlewares/index.ts",
       "plugins/index": "src/plugins/index.ts",
       "stores/index": "src/stores/index.ts",

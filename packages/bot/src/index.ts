@@ -9,7 +9,7 @@
  *  - Session stores (memory, and interfaces for Redis/Prisma)
  *  - Official middlewares (rate-limit, auth, logging)
  *  - Official plugins (analytics, etc)
- *  - All first‑party adapters (telegram, whatsapp)
+ *  - All first‑party adapters (telegram, whatsapp, discord)
  *
  * Goals:
  *  - Excellent DX: a single import surface for 90%+ of use cases.
@@ -17,7 +17,7 @@
  *  - Extensibility: adapters also remain individually importable if desired.
  *
  * Example (Builder Pattern - Recommended):
- *  import { IgniterBot, telegram, whatsapp, memoryStore } from '@igniter-js/bot'
+ *  import { IgniterBot, telegram, whatsapp, discord, memoryStore } from '@igniter-js/bot'
  *
  *  const bot = IgniterBot
  *    .create()
@@ -25,7 +25,8 @@
  *    .withSessionStore(memoryStore())
  *    .addAdapters({
  *      telegram: telegram({ token: process.env.TELEGRAM_TOKEN! }),
- *      whatsapp: whatsapp({ token: process.env.WHATSAPP_TOKEN!, phone: process.env.WHATSAPP_PHONE! })
+ *      whatsapp: whatsapp({ token: process.env.WHATSAPP_TOKEN!, phone: process.env.WHATSAPP_PHONE! }),
+ *      discord: discord({ token: process.env.DISCORD_TOKEN!, applicationId: process.env.DISCORD_APPLICATION_ID! })
  *    })
  *    .addCommand('start', {
  *      name: 'start',
@@ -89,12 +90,14 @@ export * from './plugins'
 // -----------------------------
 export * from './adapters/telegram'
 export * from './adapters/whatsapp'
+export * from './adapters/discord'
 
 // Optionally provide a convenience namespace for ergonomic adapter access.
 // This does not impede tree-shaking because the individual adapter factories
 // are still pure functions and fully side‑effect free.
 import { telegram } from './adapters/telegram'
 import { whatsapp } from './adapters/whatsapp'
+import { discord } from './adapters/discord'
 
 /**
  * Convenience collection of built-in adapter factories.
@@ -110,6 +113,7 @@ import { whatsapp } from './adapters/whatsapp'
 export const adapters = {
   telegram,
   whatsapp,
+  discord,
 } as const
 
 /**
