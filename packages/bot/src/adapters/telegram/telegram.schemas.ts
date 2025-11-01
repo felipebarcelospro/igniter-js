@@ -22,30 +22,30 @@ export const TelegramAdapterParams = z
   .object({
     token: z
       .string()
-      .min(1, 'Telegram Bot Token is required.')
-      .describe('Telegram Bot API token'),
+      .optional()
+      .default(process.env.TELEGRAM_TOKEN || '')
+      .describe('Telegram Bot API token (defaults to TELEGRAM_BOT_TOKEN env var if not provided)'),
     handle: z
       .string()
       .optional()
-      .describe('Bot username for mention detection in groups (e.g., @your_bot). If not provided, uses global bot handle.'),
+      .describe('Bot username for mention detection in groups (e.g., @your_bot). If not provided, uses global bot handle or TELEGRAM_BOT_HANDLE env var.'),
     webhook: z
       .object({
         url: z
           .string()
-          .url('Webhook URL must be a valid URL.')
           .optional()
-          .describe('Public HTTPS endpoint for Telegram to POST updates'),
+          .default(process.env.TELEGRAM_WEBHOOK_URL || '')
+          .describe('Public HTTPS endpoint for Telegram to POST updates (defaults to TELEGRAM_WEBHOOK_URL env var if not provided)'),
         secret: z
           .string()
-          .min(1)
-          .max(100)
           .optional()
-          .describe('Optional secret token to validate webhook authenticity'),
+          .default(process.env.TELEGRAM_WEBHOOK_SECRET || '')
+          .describe('Optional secret token to validate webhook authenticity (defaults to TELEGRAM_WEBHOOK_SECRET env var if not provided)'),
       })
       .optional()
       .describe('Optional webhook configuration'),
   })
-  .describe('Configuration parameters for the Telegram adapter')
+  .describe('Configuration parameters for the Telegram adapter. Supports environment variables: TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_HANDLE, TELEGRAM_WEBHOOK_URL, TELEGRAM_WEBHOOK_SECRET')
 
 export const TelegramUpdateSchema = z
   .object({

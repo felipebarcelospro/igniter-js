@@ -28,17 +28,20 @@ export const WhatsAppAdapterParams = z
     handle: z
       .string()
       .optional()
-      .describe('Bot keyword for mention detection in groups (e.g., "bot" or "@bot"). If not provided, uses global bot handle.'),
+      .default(process.env.WHATSAPP_BOT_HANDLE || '')
+      .describe('Bot keyword for mention detection in groups (e.g., "bot" or "@bot"). If not provided, uses global bot handle or WHATSAPP_BOT_HANDLE env var.'),
     token: z
       .string()
-      .min(1, 'WhatsApp API Token is required.')
-      .describe('WhatsApp Cloud API access token'),
+      .optional()
+      .default(process.env.WHATSAPP_BOT_TOKEN || '')
+      .describe('WhatsApp Cloud API access token (defaults to WHATSAPP_BOT_TOKEN env var if not provided)'),
     phone: z
       .string()
-      .min(1, 'Phone is required.')
-      .describe('WhatsApp phone number ID (phone_number_id)'),
+      .optional()
+      .default(process.env.WHATSAPP_PHONE_NUMBER_ID || '')
+      .describe('WhatsApp phone number ID (phone_number_id) (defaults to WHATSAPP_PHONE_NUMBER_ID env var if not provided)'),
   })
-  .describe('Adapter configuration for WhatsApp integration')
+  .describe('Adapter configuration for WhatsApp integration. Supports environment variables: WHATSAPP_BOT_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_BOT_HANDLE')
 
 /**
  * Schema for WhatsApp contact information.
