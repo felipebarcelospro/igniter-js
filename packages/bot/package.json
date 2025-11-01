@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/bot",
-  "version": "0.1.0-alpha.3",
+  "version": "0.2.0-alpha.5",
   "description": "A modern, type-safe multi-platform bot framework for the Igniter.js ecosystem (adapters, middleware, commands, rich content).",
   "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
   "license": "MIT",
@@ -83,6 +83,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepublishOnly": "npm run clean && npm run build && npm run typecheck"
   },
   "dependencies": {

@@ -98,17 +98,17 @@ const bot = IgniterBot
   .create()
   .withHandle('@mybot')  // ← Your bot's handle (ID and name auto-derived)
   .addAdapter('telegram', telegram({
-    token: process.env.TELEGRAM_TOKEN!,
+      token: process.env.TELEGRAM_TOKEN!,
     // handle inherited from global
   }))
   .addCommand('start', {
-    name: 'start',
-    aliases: ['hello'],
+      name: 'start',
+      aliases: ['hello'],
     description: 'Start the bot',
     help: 'Use /start to begin',
-    async handle(ctx) {
+      async handle(ctx) {
       await ctx.reply('👋 Welcome! I am your bot.')
-    }
+      }
   })
   .build()
 
@@ -424,7 +424,7 @@ import { z } from 'zod'
       args: z.object({ key: z.string(), value: z.string() }),
       async handle(ctx, args) {
         await ctx.reply(`Set ${args.key} = ${args.value}`)
-      }
+  }
     },
     get: {
       args: z.object({ key: z.string() }),
@@ -718,7 +718,7 @@ const bot = IgniterBot
   .addAdapters({
     telegram: telegram({ token: '...', handle: '@bot' }),
     whatsapp: whatsapp({ token: '...', phone: '...' })
-  })
+})
   .addCommand('broadcast', {
     name: 'broadcast',
     description: 'Send to all platforms',
