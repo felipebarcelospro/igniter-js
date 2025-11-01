@@ -9,15 +9,40 @@ import {
   Middleware,
 } from './types/bot.types'
 import type { BotLogger } from './types/bot.types'
+import type { BotSessionStore, BotSessionHelper } from './types/session'
+import type { BotOutboundContent, BotSendOptions } from './types/content'
+import type {
+  AdapterInitParams,
+  AdapterHandleParams,
+  AdapterVerifyParams,
+  AdapterSendTypingParams,
+  AdapterSendTextParams,
+  AdapterSendImageParams,
+  AdapterSendVideoParams,
+  AdapterSendAudioParams,
+  AdapterSendDocumentParams,
+  AdapterSendStickerParams,
+  AdapterSendLocationParams,
+  AdapterSendContactParams,
+  AdapterSendPollParams,
+  AdapterSendInteractiveParams,
+  AdapterEditMessageParams,
+  AdapterDeleteMessageParams,
+  AdapterClient,
+} from './types/adapter'
+import { memoryStore } from './stores/memory'
 
 /**
  * Error code constants – centralized for consistency & future i18n / mapping.
  */
 export const BotErrorCodes = {
+  CLIENT_NOT_PROVIDED: 'CLIENT_NOT_PROVIDED',
   PROVIDER_NOT_FOUND: 'PROVIDER_NOT_FOUND',
   COMMAND_NOT_FOUND: 'COMMAND_NOT_FOUND',
   INVALID_COMMAND_PARAMETERS: 'INVALID_COMMAND_PARAMETERS',
   ADAPTER_HANDLE_RETURNED_NULL: 'ADAPTER_HANDLE_RETURNED_NULL',
+  CONTENT_TYPE_NOT_SUPPORTED: 'CONTENT_TYPE_NOT_SUPPORTED',
+  INVALID_CONTENT: 'INVALID_CONTENT',
 } as const
 export type BotErrorCode = (typeof BotErrorCodes)[keyof typeof BotErrorCodes]
 
@@ -58,7 +83,7 @@ interface CommandIndexEntry {
  */
 export class Bot<
   TAdapters extends Record<string, IBotAdapter<any>>,
-  TMiddlewares extends Middleware[],
+  TMiddlewares extends Middleware<any, any>[],
   TCommands extends Record<string, BotCommand>,
 > {
   /** Unique bot identifier */
@@ -77,6 +102,8 @@ export class Bot<
   private commandIndex: Map<string, CommandIndexEntry> = new Map()
   /** Optional logger */
   private logger?: BotLogger
+  /** Session store for managing conversational state */
+  private sessionStore?: BotSessionStore
   /** Event listeners */
   private listeners: Partial<Record<BotEvent, ((ctx: BotContext) => Promise<void>)[]>> = {}
 
@@ -103,6 +130,7 @@ export class Bot<
     commands?: TCommands
     on?: Partial<Record<BotEvent, (ctx: BotContext) => Promise<void>>>
     logger?: BotLogger
+    sessionStore?: BotSessionStore
   }) {
     this.id = config.id
     this.name = config.name
@@ -111,6 +139,7 @@ export class Bot<
     this.middlewares = (config.middlewares || []) as TMiddlewares
     this.commands = (config.commands || {}) as TCommands
     this.logger = config.logger
+    this.sessionStore = config.sessionStore || memoryStore()
 
     // Register listeners
     if (config.on) {
@@ -159,7 +188,7 @@ export class Bot<
   /**
    * Dynamically register a middleware (appended to the chain).
    */
-  use(mw: Middleware): this {
+  use(mw: Middleware<any, any>): this {
     this.middlewares.push(mw)
     this.logger?.debug?.(`Middleware registered (#${this.middlewares.length})`, `Bot:${this.name}#${this.id}`)
     return this
@@ -204,41 +233,95 @@ export class Bot<
   /**
    * Adapter factory helper (legacy static name kept for backwards compatibility).
    * Now logger-aware: logger will be injected at call sites (init/send/handle).
-   * Extended with capabilities support and global handle fallback.
+   * Extended with capabilities support, global handle fallback, and specific send methods.
    */
   static adapter<TConfig extends ZodObject<any>>(adapter: {
     name: string
     parameters: TConfig
     capabilities: import('./types/capabilities').BotAdapterCapabilities
-    verify?: (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger }) => Promise<Response | null>
-    init: (params: { config: TypeOf<TConfig>; commands: BotCommand[]; logger?: BotLogger; botHandle?: string }) => Promise<void>
-    send: (params: BotSendParams<TypeOf<TConfig>> & { logger?: BotLogger }) => Promise<void>
-    handle: (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger; botHandle?: string }) => Promise<Omit<BotContext, 'bot' | 'session' | 'reply' | 'replyWithButtons' | 'replyWithImage' | 'replyWithDocument'> | null>
-  }): (config: TypeOf<TConfig>) => IBotAdapter<TConfig> {
-    return (config: TypeOf<TConfig>) => {
+    verify?: (params: AdapterVerifyParams<TypeOf<TConfig>>) => Promise<Response | null>
+    init: (params: AdapterInitParams<TypeOf<TConfig>>) => Promise<void>
+    handle: (params: AdapterHandleParams<TypeOf<TConfig>>) => Promise<Omit<BotContext, 'bot' | 'session' | 'reply' | 'replyWithButtons' | 'replyWithImage' | 'replyWithDocument' | 'sendTyping'> | null>
+    sendTyping?: (params: AdapterSendTypingParams<TypeOf<TConfig>>) => Promise<void>
+    client?: (config: TypeOf<TConfig>, logger?: BotLogger) => AdapterClient<TypeOf<TConfig>>
+    // Send methods (based on capabilities)
+    sendText?: (params: AdapterSendTextParams<TypeOf<TConfig>>) => Promise<void>
+    sendImage?: (params: AdapterSendImageParams<TypeOf<TConfig>>) => Promise<void>
+    sendVideo?: (params: AdapterSendVideoParams<TypeOf<TConfig>>) => Promise<void>
+    sendAudio?: (params: AdapterSendAudioParams<TypeOf<TConfig>>) => Promise<void>
+    sendDocument?: (params: AdapterSendDocumentParams<TypeOf<TConfig>>) => Promise<void>
+    sendSticker?: (params: AdapterSendStickerParams<TypeOf<TConfig>>) => Promise<void>
+    sendLocation?: (params: AdapterSendLocationParams<TypeOf<TConfig>>) => Promise<void>
+    sendContact?: (params: AdapterSendContactParams<TypeOf<TConfig>>) => Promise<void>
+    sendPoll?: (params: AdapterSendPollParams<TypeOf<TConfig>>) => Promise<void>
+    sendInteractive?: (params: AdapterSendInteractiveParams<TypeOf<TConfig>>) => Promise<void>
+    editMessage?: (params: AdapterEditMessageParams<TypeOf<TConfig>>) => Promise<void>
+    deleteMessage?: (params: AdapterDeleteMessageParams<TypeOf<TConfig>>) => Promise<void>
+  }): (config?: Partial<TypeOf<TConfig>>) => IBotAdapter<TConfig> {
+    return (config?: Partial<TypeOf<TConfig>>) => {
+      // Merge with ENV vars - parse empty config first to get defaults
+      const parsedConfig = adapter.parameters.parse(config || {}) as TypeOf<TConfig>
+      
+      // Helper to wrap methods with config injection
+      const wrapMethod = <T extends (...args: any[]) => any>(
+        method?: T
+      ): T | undefined => {
+        if (!method) return undefined
+        return ((params: any) => {
+          return method({ ...params, config: parsedConfig, logger: params.logger, client: adapter.client ? adapter.client(parsedConfig, params.logger) : undefined })
+        }) as T
+      }
+
       // Store config for validation in builder
-      const adapterInstance: any = {
+      const adapterInstance: IBotAdapter<TConfig> = {
         name: adapter.name,
         parameters: adapter.parameters,
         capabilities: adapter.capabilities,
-        _config: config, // Store for builder validation
-        verify: adapter.verify ? async (params: { request: Request; config: TypeOf<TConfig>; logger?: BotLogger }) => {
-          return adapter.verify!({ ...params, config, logger: params.logger })
-        } : undefined,
-        async send(params: BotSendParams<TConfig> & { logger?: BotLogger }) {
-          return adapter.send({ ...params, config, logger: params.logger })
-        },
-        async handle(params: BotHandleParams<TConfig> & { logger?: BotLogger; botHandle?: string }) {
-          return adapter.handle({ ...params, config, logger: params.logger, botHandle: params.botHandle }) as any
-        },
+        _config: parsedConfig, // Store for builder validation
+        
+        verify: adapter.verify ? wrapMethod(adapter.verify) : undefined,
+        
         async init(options?: { commands: BotCommand[]; logger?: BotLogger; botHandle?: string }) {
           await adapter.init({
-            config,
+            client: adapter.client ? adapter.client(parsedConfig, options?.logger) : undefined,
+            config: parsedConfig,
             commands: options?.commands || [],
             logger: options?.logger,
             botHandle: options?.botHandle,
           })
         },
+        
+        // @ts-expect-error augmenting generic type
+        async handle(params: BotHandleParams<TConfig> & { logger?: BotLogger; botHandle?: string }) {
+          return adapter.handle({ 
+            ...params, 
+            config: parsedConfig, 
+            logger: params.logger, 
+            botHandle: params.botHandle,
+            client: adapter.client ? adapter.client(parsedConfig, params.logger) : undefined,
+          }) as any
+        },
+        
+        
+        // Send methods
+        sendTyping: adapter.sendTyping ? wrapMethod(adapter.sendTyping) : undefined,
+        sendText: adapter.sendText ? wrapMethod(adapter.sendText) : undefined,
+        sendImage: adapter.sendImage ? wrapMethod(adapter.sendImage) : undefined,
+        sendVideo: adapter.sendVideo ? wrapMethod(adapter.sendVideo) : undefined,
+        sendAudio: adapter.sendAudio ? wrapMethod(adapter.sendAudio) : undefined,
+        sendDocument: adapter.sendDocument ? wrapMethod(adapter.sendDocument) : undefined,
+        sendSticker: adapter.sendSticker ? wrapMethod(adapter.sendSticker) : undefined,
+        sendLocation: adapter.sendLocation ? wrapMethod(adapter.sendLocation) : undefined,
+        sendContact: adapter.sendContact ? wrapMethod(adapter.sendContact) : undefined,
+        sendPoll: adapter.sendPoll ? wrapMethod(adapter.sendPoll) : undefined,
+        sendInteractive: adapter.sendInteractive ? wrapMethod(adapter.sendInteractive) : undefined,
+        
+        // Action methods
+        editMessage: adapter.editMessage ? wrapMethod(adapter.editMessage) : undefined,
+        deleteMessage: adapter.deleteMessage ? wrapMethod(adapter.deleteMessage) : undefined,
+        
+        // Client
+        client: adapter.client ? adapter.client(parsedConfig, undefined) : undefined,
       }
       return adapterInstance
     }
@@ -270,7 +353,7 @@ export class Bot<
    * })
    * ```
    */
-  static command(command: BotCommand): BotCommand {
+  static command<TContext extends BotContext, TContextAdditions>(command: BotCommand<TContext, TContextAdditions>): BotCommand<TContext, TContextAdditions> {
     // Validate required fields
     if (!command.name || typeof command.name !== 'string') {
       throw new Error('Command must have a valid name (string)')
@@ -330,7 +413,7 @@ export class Bot<
    * })
    * ```
    */
-  static middleware(middleware: Middleware): Middleware {
+  static middleware<TContext extends BotContext, TContextAdditions>(middleware: Middleware<TContext, TContextAdditions>): Middleware<TContext, TContextAdditions> {
     if (typeof middleware !== 'function') {
       throw new Error('Middleware must be a function')
     }
@@ -351,7 +434,7 @@ export class Bot<
    */
   static create<
     TAdapters extends Record<string, IBotAdapter<any>>,
-    TMiddlewares extends Middleware[] = [],
+    TMiddlewares extends Middleware<any, any>[] = [],
     TCommands extends Record<string, BotCommand> = {},
   >(config: {
     id: string
@@ -362,6 +445,7 @@ export class Bot<
     commands?: TCommands
     on?: Partial<Record<BotEvent, (ctx: BotContext) => Promise<void>>>
     logger?: BotLogger
+    sessionStore?: BotSessionStore
   }): Bot<TAdapters, TMiddlewares, TCommands> {
     return new Bot(config)
   }
@@ -386,8 +470,9 @@ export class Bot<
 
   /**
    * Sends a message (provider abstraction).
+   * Routes to specific adapter methods based on content type.
    */
-  async send(params: Omit<BotSendParams<any>, 'config'>): Promise<void> {
+  async send(params: Omit<BotSendParams<any>, 'config'> & { options?: BotSendOptions }): Promise<void> {
     const adapter = this.adapters[params.provider]
     if (!adapter) {
       const err = new BotError(BotErrorCodes.PROVIDER_NOT_FOUND, `Provider ${params.provider} not found`, {
@@ -396,14 +481,219 @@ export class Bot<
       this.logger?.error?.(err.message, `Bot:${this.name}#${this.id}`, err.meta)
       throw err
     }
-    await (adapter as any).send({
-      provider: params.provider,
-      channel: params.channel,
-      content: params.content,
-      logger: this.logger,
-    })
+
+    const config = (adapter as any)._config || {}
+    const logger = this.logger
+    const commonParams = { 
+      channel: params.channel, 
+      config, 
+      logger, 
+      options: params.options 
+    }
+
+    const content = params.content
+
+    // Route to specific method based on content type
+    switch (content.type) {
+      case 'text': {
+        if (!adapter.sendText) {
+          throw new BotError(
+            'CONTENT_TYPE_NOT_SUPPORTED',
+            `Text content not supported by adapter '${params.provider}'`,
+            { provider: params.provider, contentType: 'text' }
+          )
+        }
+        await adapter.sendText({ ...commonParams, text: content.content })
+        break
+      }
+
+      case 'image': {
+        if (!adapter.sendImage) {
+          throw new BotError(
+            'CONTENT_TYPE_NOT_SUPPORTED',
+            `Image content not supported by adapter '${params.provider}'`,
+            { provider: params.provider, contentType: 'image' }
+          )
+        }
+        await adapter.sendImage({
+          ...commonParams,
+          image: content.file || content.content,
+          caption: content.caption,
+        })
+        break
+      }
+
+      case 'video': {
+        if (!adapter.sendVideo) {
+          throw new BotError(
+            'CONTENT_TYPE_NOT_SUPPORTED',
+            `Video content not supported by adapter '${params.provider}'`,
+            { provider: params.provider, contentType: 'video' }
+          )
+        }
+        await adapter.sendVideo({
+          ...commonParams,
+          video: content.file || content.content,
+          caption: content.caption,
+        })
+        break
+      }
+
+      case 'audio': {
+        if (!adapter.sendAudio) {
+          throw new BotError(
+            'CONTENT_TYPE_NOT_SUPPORTED',
+            `Audio content not supported by adapter '${params.provider}'`,
+            { provider: params.provider, contentType: 'audio' }
+          )
+        }
+        await adapter.sendAudio({
+          ...commonParams,
+          audio: content.file || content.content,
+        })
+        break
+      }
+
+      case 'document': {
+        if (!adapter.sendDocument) {
+          throw new BotError(
+            'CONTENT_TYPE_NOT_SUPPORTED',
+            `Document content not supported by adapter '${params.provider}'`,
+            { provider: params.provider, contentType: 'document' }
+          )
+        }
+        if (!content.file) {
+          throw new BotError(
+            'INVALID_CONTENT',
+            'Document content requires a File object',
+            { contentType: 'document' }
+          )
+        }
+        await adapter.sendDocument({
+          ...commonParams,
+          file: content.file,
+          filename: content.filename,
+          caption: content.caption,
+        })
+        break
+      }
+
+      case 'sticker': {
+        if (!adapter.sendSticker) {
+          throw new BotError(
+            'CONTENT_TYPE_NOT_SUPPORTED',
+            `Sticker content not supported by adapter '${params.provider}'`,
+            { provider: params.provider, contentType: 'sticker' }
+          )
+        }
+        await adapter.sendSticker({
+          ...commonParams,
+          sticker: content.file || content.content,
+        })
+        break
+      }
+
+      case 'location': {
+        if (!adapter.sendLocation) {
+          throw new BotError(
+            'CONTENT_TYPE_NOT_SUPPORTED',
+            `Location content not supported by adapter '${params.provider}'`,
+            { provider: params.provider, contentType: 'location' }
+          )
+        }
+        await adapter.sendLocation({
+          ...commonParams,
+          latitude: content.latitude,
+          longitude: content.longitude,
+          name: content.name,
+          address: content.address,
+        })
+        break
+      }
+
+      case 'contact': {
+        if (!adapter.sendContact) {
+          throw new BotError(
+            'CONTENT_TYPE_NOT_SUPPORTED',
+            `Contact content not supported by adapter '${params.provider}'`,
+            { provider: params.provider, contentType: 'contact' }
+          )
+        }
+        await adapter.sendContact({
+          ...commonParams,
+          phoneNumber: content.phoneNumber,
+          firstName: content.firstName,
+          lastName: content.lastName,
+          userId: content.userId,
+        })
+        break
+      }
+
+      case 'poll': {
+        if (!adapter.sendPoll) {
+          throw new BotError(
+            'CONTENT_TYPE_NOT_SUPPORTED',
+            `Poll content not supported by adapter '${params.provider}'`,
+            { provider: params.provider, contentType: 'poll' }
+          )
+        }
+        await adapter.sendPoll({
+          ...commonParams,
+          question: content.question,
+          options: content.options,
+          allowsMultipleAnswers: content.allowsMultipleAnswers,
+          isAnonymous: content.isAnonymous,
+          correctOptionId: content.correctOptionId,
+          sendOptions: params.options,
+        })
+        break
+      }
+
+      case 'interactive': {
+        if (!adapter.sendInteractive) {
+          throw new BotError(
+            'CONTENT_TYPE_NOT_SUPPORTED',
+            `Interactive content not supported by adapter '${params.provider}'`,
+            { provider: params.provider, contentType: 'interactive' }
+          )
+        }
+        await adapter.sendInteractive({
+          ...commonParams,
+          text: content.text,
+          buttons: content.buttons,
+          inlineKeyboard: content.inlineKeyboard,
+        })
+        break
+      }
+
+      case 'reply': {
+        // Reply messages: extract nested content and send it with reply options
+        const nestedContent = content.content
+        const mergedOptions = {
+          ...params.options,
+          replyToMessageId: content.messageId,
+        }
+        // Recursively call send with nested content
+        await this.send({
+          ...params,
+          content: nestedContent,
+          options: mergedOptions,
+        })
+        return
+      }
+
+      default: {
+        const contentType = (content as any).type
+        throw new BotError(
+          'CONTENT_TYPE_NOT_SUPPORTED',
+          `Content type '${contentType}' not supported`,
+          { provider: params.provider, contentType }
+        )
+      }
+    }
+
     this.logger?.debug?.(
-      `Message sent {provider=${params.provider}, channel=${params.channel}}`,
+      `Message sent {provider=${params.provider}, channel=${params.channel}, type=${content.type}}`,
       `Bot:${this.name}#${this.id}`,
     )
   }
@@ -431,19 +721,38 @@ export class Bot<
       }
       
       const current = this.middlewares[index]
-      let nextContext = context
-
+      
+      let enrichedContext = context
+      let nextCalled = false
+      let nextResult: BotContext = context
+      
       const next = async () => {
-        nextContext = await runner(index + 1, context)
+        if (!nextCalled) {
+          nextCalled = true
+          nextResult = await runner(index + 1, enrichedContext)
+        }
       }
 
-      const additions = await current(context, next as any)
+      const additions = await current(context, next)
       
       if (additions && typeof additions === 'object') {
-        nextContext = { ...nextContext, ...additions }
+        enrichedContext = { ...context, ...additions }
+        // If next wasn't called yet, call it with enriched context
+        if (!nextCalled) {
+          nextResult = await runner(index + 1, enrichedContext)
+        } else {
+          // Re-run with enriched context if next was already called
+          nextResult = await runner(index + 1, enrichedContext)
+        }
+        return nextResult
       }
       
-      return nextContext
+      // If next wasn't called, ensure we call it
+      if (!nextCalled) {
+        await next()
+      }
+      
+      return nextResult
     }
     currentCtx = await runner(0, currentCtx)
 
@@ -484,7 +793,7 @@ export class Bot<
             await this.send({
               provider: currentCtx.provider,
               channel: currentCtx.channel.id,
-              content: { type: 'text', content: entry.command.help },
+              content: { type: 'text', content: entry.command.help, raw: entry.command.help },
             })
           }
           await this.emit('error', {
@@ -503,6 +812,203 @@ export class Bot<
     for (const hook of this.postProcessHooks) {
       await hook(currentCtx)
     }
+  }
+
+  /**
+   * Creates helper methods for the context (reply, session, etc.)
+   * This function enriches the raw context from adapters with convenient methods.
+   */
+  private createContextHelpers(
+    rawCtx: Omit<BotContext, 'bot' | 'session' | 'reply' | 'replyWithButtons' | 'replyWithImage' | 'replyWithDocument'>,
+    provider: string
+  ): BotContext {
+    const userId = rawCtx.message.author.id
+    const channelId = rawCtx.channel.id
+
+    // Get or create session
+    const sessionStore = this.sessionStore!
+    let sessionData: BotSessionHelper | null = null
+
+    // Helper to get/create session
+    const getSession = async (): Promise<BotSessionHelper> => {
+      if (sessionData) return sessionData
+
+      let session = await sessionStore.get(userId, channelId)
+      
+      if (!session) {
+        const now = new Date()
+        session = {
+          userId,
+          channelId,
+          data: {},
+          createdAt: now,
+          updatedAt: now,
+        }
+        await sessionStore.set(userId, channelId, session)
+      }
+
+      sessionData = {
+        ...session,
+        async save() {
+          await sessionStore.set(userId, channelId, sessionData!)
+        },
+        async delete() {
+          await sessionStore.delete(userId, channelId)
+        },
+        async update(data: Partial<Record<string, any>>) {
+          sessionData!.data = { ...sessionData!.data, ...data }
+          await sessionData!.save()
+        },
+      }
+
+      return sessionData
+    }
+
+    // Create full context with helpers
+    const ctx: BotContext = {
+      ...rawCtx,
+      bot: {
+        id: this.id,
+        name: this.name,
+        send: async (params) => this.send(params),
+        getAdapter: (p: string) => this.adapters[p as keyof TAdapters] as IBotAdapter<any> | undefined,
+        getAdapters: () => this.adapters as Record<string, IBotAdapter<any>>,
+      },
+      session: {
+        userId,
+        channelId,
+        data: {},
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        async save() {
+          const s = await getSession()
+          await s.save()
+        },
+        async delete() {
+          await sessionStore.delete(userId, channelId)
+        },
+        async update(data: Partial<Record<string, any>>) {
+          const s = await getSession()
+          await s.update(data)
+        },
+      },
+      async reply(content: BotOutboundContent | string, options?: BotSendOptions) {
+        const contentObj: BotOutboundContent = typeof content === 'string'
+          ? { type: 'text', content, raw: content }
+          : content
+
+        await ctx.bot.send({
+          provider,
+          channel: channelId,
+          content: contentObj,
+          options,
+        })
+      },
+      async replyWithButtons(text: string, buttons: any[], options?: BotSendOptions) {
+        await ctx.bot.send({
+          provider,
+          channel: channelId,
+          content: {
+            type: 'interactive',
+            text,
+            buttons,
+          },
+          options,
+        })
+      },
+      async replyWithImage(image: string | File, caption?: string, options?: BotSendOptions) {
+        const content: BotOutboundContent = {
+          type: 'image',
+          content: typeof image === 'string' ? image : '',
+          file: typeof image === 'object' ? image : undefined,
+          caption,
+        }
+        await ctx.bot.send({
+          provider,
+          channel: channelId,
+          content,
+          options,
+        })
+      },
+      async replyWithDocument(file: File, caption?: string, options?: BotSendOptions) {
+        await ctx.bot.send({
+          provider,
+          channel: channelId,
+          content: {
+            type: 'document',
+            content: '',
+            file,
+            caption,
+          },
+          options,
+        })
+      },
+    }
+
+    // Load session data asynchronously (non-blocking)
+    getSession().then(s => {
+      if (sessionData) {
+        Object.assign(ctx.session, {
+          data: s.data,
+          createdAt: s.createdAt,
+          updatedAt: s.updatedAt,
+          expiresAt: s.expiresAt,
+        })
+      }
+    }).catch(() => {
+      // Ignore errors - session will be created on next access
+    })
+
+    // Add optional adapter-specific methods if adapter supports them
+    const adapter = this.adapters[provider as keyof TAdapters]
+    if (adapter) {
+      // Check if adapter supports editing
+      if (adapter.capabilities.actions.edit && adapter.editMessage) {
+        ctx.editMessage = async (messageId: string, content: BotOutboundContent) => {
+          await adapter.editMessage!({
+            channel: channelId,
+            messageId,
+            content,
+            config: (adapter as any)._config,
+            logger: this.logger,
+          })
+        }
+      }
+
+      // Check if adapter supports deleting
+      if (adapter.capabilities.actions.delete && adapter.deleteMessage) {
+        ctx.deleteMessage = async (messageId: string) => {
+          await adapter.deleteMessage!({
+            channel: channelId,
+            messageId,
+            config: (adapter as any)._config,
+            logger: this.logger,
+          })
+        }
+      }
+
+      // Check if adapter supports reactions
+      // Note: Telegram doesn't support reactions via API, but we keep the interface for other adapters
+      if (adapter.capabilities.actions.react) {
+        ctx.react = async (emoji: string, messageId?: string) => {
+          // This would need to be implemented by each adapter that supports reactions
+          this.logger?.warn?.('react not yet implemented', `Bot:${this.name}#${this.id}`)
+        }
+      }
+
+      // Check if adapter supports typing indicator
+      if (adapter.sendTyping) {
+        ctx.sendTyping = async () => {
+          await adapter.sendTyping!({
+            channel: channelId,
+            config: (adapter as any)._config,
+            logger: this.logger,
+          })
+        }
+      }
+    }
+
+    return ctx
   }
 
   /**
@@ -534,14 +1040,8 @@ export class Bot<
       return new Response(null, { status: 204 })
     }
 
-    const ctx: BotContext = {
-      ...rawContext,
-      bot: {
-        id: this.id,
-        name: this.name,
-        send: async (params) => this.send(params),
-      },
-    }
+    // Create full context with helper methods
+    const ctx = this.createContextHelpers(rawContext, String(adapter))
 
     this.logger?.debug?.(
       `Inbound event '${ctx.event}' from '${String(adapter)}'`,
