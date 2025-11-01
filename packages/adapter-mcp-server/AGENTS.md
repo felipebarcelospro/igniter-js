@@ -174,7 +174,7 @@ This section provides explicit, step-by-step instructions for performing common 
 
 4.  **Update Documentation**:
     - Add example to README.md
-    - Document the new method in AGENT.md
+    - Document the new method in AGENTS.md
 
 ### Task 2: Add Support for a New Action Property in Tool Definitions
 

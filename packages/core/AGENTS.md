@@ -829,7 +829,7 @@ logger.debug('[RouteResolver] Matched route: GET /api/users -> getUsersAction');
 - Finally, add advanced features (filtering, formatting)
 
 **3. Documentation-Driven Development:**
-- Update `AGENT.md` with new patterns as they emerge
+- Update `AGENTS.md` with new patterns as they emerge
 - Document anti-patterns to prevent regression
 - Provide clear examples for future contributors
 
@@ -881,7 +881,7 @@ timer.end(); // Automatically logs duration
    - [ ] Error handling follows established patterns
    - [ ] Log messages include relevant context
    - [ ] Tests cover logging behavior
-   - [ ] Documentation updated in `AGENT.md`
+   - [ ] Documentation updated in `AGENTS.md`
 
 3. **Performance Considerations:**
    - Use appropriate log levels (DEBUG for detailed info, INFO for significant events)
@@ -1070,7 +1070,7 @@ When updating older code to follow current patterns:
 3. **Update Dependencies:** Ensure the code uses centralized utilities (`resolveLogLevel`, `createLoggerContext`)
 4. **Standardize Patterns:** Apply consistent logging, error handling, and type safety patterns
 5. **Test Thoroughly:** Verify that refactored code maintains the same functionality
-6. **Update Documentation:** Reflect changes in `AGENT.md` and inline comments
+6. **Update Documentation:** Reflect changes in `AGENTS.md` and inline comments
 
 **Refactoring Checklist:**
 - [ ] Replace `console.*` with centralized logger
@@ -1131,7 +1131,7 @@ The Igniter.js framework has evolved significantly, particularly in its logging 
 
 ### 10.3. Knowledge Preservation
 
-This `AGENT.md` document serves as a living knowledge base that should be continuously updated as the framework evolves. Key principles for maintaining this knowledge:
+This `AGENTS.md` document serves as a living knowledge base that should be continuously updated as the framework evolves. Key principles for maintaining this knowledge:
 
 **Documentation Principles:**
 - Document patterns as they emerge

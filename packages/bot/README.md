@@ -952,7 +952,7 @@ We welcome contributions! Please:
 
 1. Fork the repository
 2. Create a feature branch: `feat/bot-<feature>`
-3. Follow the [AGENT.md](./AGENT.md) guidelines
+3. Follow the [AGENTS.md](./AGENTS.md) guidelines
 4. Run `npm run build` and `npm run typecheck`
 5. Submit a PR with clear description
 
@@ -964,7 +964,7 @@ We welcome contributions! Please:
 - 📘 [Builder Pattern Examples](./BUILDER_EXAMPLE.md)
 - 📗 [Migration Guide](./MIGRATION_GUIDE.md)
 - 📙 [Implementation Summary](./IMPLEMENTATION_SUMMARY.md)
-- 📕 [Agent Manual](./AGENT.md)
+- 📕 [Agent Manual](./AGENTS.md)
 - 💡 [Code Examples](./examples/)
 
 ---
