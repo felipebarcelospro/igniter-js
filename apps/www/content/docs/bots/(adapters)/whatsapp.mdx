@@ -1,0 +1,325 @@
+---
+title: WhatsApp Adapter
+description: Integrate your bot with WhatsApp using the WhatsApp Cloud API adapter.
+---
+
+The WhatsApp adapter connects your bot to WhatsApp's massive user base through Meta's WhatsApp Cloud API. Unlike Telegram, WhatsApp requires a bit more setup—you'll need to configure webhooks manually in Meta's dashboard and handle verification requests. But once it's set up, you can reach billions of WhatsApp users with the same bot code you use for Telegram.
+
+---
+
+## Configuration
+
+Before you can start sending and receiving WhatsApp messages, you need to set up your credentials with Meta's WhatsApp Cloud API. This involves creating a Meta Developer account, setting up a WhatsApp app, and getting your access token and phone number ID. Once you have these, configuration is straightforward:
+
+```typescript
+import { whatsapp } from '@igniter-js/bot'
+
+const whatsappAdapter = whatsapp({
+  token: process.env.WHATSAPP_TOKEN!,
+  phone: process.env.WHATSAPP_PHONE_ID!,
+  handle: 'mybot' // Keyword for mention detection in groups
+})
+```
+
+### Configuration Options
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `token` | Yes | WhatsApp Cloud API access token |
+| `phone` | Yes | Phone number ID (phone_number_id) from Meta dashboard |
+| `handle` | Yes | Keyword used for mention detection in group chats |
+
+<Callout type="info" title="Getting WhatsApp Credentials">
+  To get WhatsApp credentials:
+  1. Create a Meta Developer account at [developers.facebook.com](https://developers.facebook.com/)
+  2. Create a WhatsApp app in the Meta for Developers dashboard
+  3. Generate a temporary or permanent access token
+  4. Note your phone number ID from the app dashboard
+</Callout>
+
+---
+
+## Webhook Setup
+
+WhatsApp's webhook setup is different from Telegram—you need to configure it manually in Meta's dashboard. This is because WhatsApp requires webhook verification, where Meta sends a challenge request that your endpoint must respond to correctly. While this adds an extra step, it provides better security and control over your webhook configuration.
+
+When you're ready to set up webhooks, follow these steps in Meta's dashboard:
+
+<Steps>
+  <Step>
+    ### Access Your WhatsApp App
+    
+    Go to your WhatsApp app in the Meta for Developers dashboard.
+  </Step>
+  
+  <Step>
+    ### Navigate to Webhook Configuration
+    
+    Open **Configuration** → **Webhook** in your app settings.
+  </Step>
+  
+  <Step>
+    ### Configure the Webhook URL
+    
+    Set the callback URL to your webhook endpoint (e.g., `https://your-domain.com/api/whatsapp`).
+  </Step>
+  
+  <Step>
+    ### Set the Verify Token
+    
+    Set the verify token (use the same value in your route handler). This token is used to verify that webhook requests are coming from Meta.
+  </Step>
+  
+  <Step>
+    ### Subscribe to Events
+    
+    Subscribe to `messages` events so WhatsApp sends you incoming messages.
+  </Step>
+</Steps>
+
+### Webhook Verification
+
+Your webhook endpoint must handle verification requests:
+
+```typescript
+// Next.js App Router example
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url)
+  const mode = searchParams.get('hub.mode')
+  const token = searchParams.get('hub.verify_token')
+  const challenge = searchParams.get('hub.challenge')
+
+  if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    return new Response(challenge, { status: 200 })
+  }
+
+  return new Response('Forbidden', { status: 403 })
+}
+```
+
+---
+
+## Message Types Supported
+
+The WhatsApp adapter handles various message types that users can send through WhatsApp. Each type is normalized into Igniter.js's unified message format, making it easy to process different content types without worrying about WhatsApp-specific structures. This unified interface means your bot code works the same way regardless of whether messages come from WhatsApp or other platforms.
+
+<Accordions>
+  <Accordion title="Text Messages">
+    Plain text messages are the most common type in WhatsApp. They're straightforward to handle and work in both private chats and groups:
+    
+    ```typescript
+    // Incoming text messages
+    if (ctx.message.content?.type === 'text') {
+      const text = ctx.message.content.content
+      // Process text...
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Images">
+    WhatsApp users frequently send images, and the adapter extracts all the important details including the image URL, file object, and optional caption:
+    
+    ```typescript
+    if (ctx.message.content?.type === 'image') {
+      const imageUrl = ctx.message.content.content
+      const file = ctx.message.content.file
+      const caption = ctx.message.content.caption
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Documents">
+    Documents like PDFs, Word files, and spreadsheets are received as document messages. The adapter provides both the file URL and file object for easy access:
+    
+    ```typescript
+    if (ctx.message.content?.type === 'document') {
+      const fileUrl = ctx.message.content.content
+      const file = ctx.message.content.file
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Audio/Voice">
+    Voice messages and audio files are handled as audio messages. You can access the audio URL and file object to process or save audio content:
+    
+    ```typescript
+    if (ctx.message.content?.type === 'audio') {
+      const audioUrl = ctx.message.content.content
+      const file = ctx.message.content.file
+    }
+    ```
+  </Accordion>
+</Accordions>
+
+---
+
+## Sending Messages
+
+Send text messages using the bot's `send` method:
+
+```typescript
+await ctx.bot.send({
+  provider: 'whatsapp',
+  channel: ctx.channel.id, // WhatsApp phone number
+  content: {
+    type: 'text',
+    content: 'Hello from WhatsApp!'
+  }
+})
+```
+
+<Callout type="info" title="Channel ID Format">
+  The `channel` parameter should be the recipient's WhatsApp phone number in international format (e.g., `5511999999999`).
+</Callout>
+
+---
+
+## Group Mentions
+
+In WhatsApp group chats, mention detection works differently than Telegram. The `handle` option specifies a keyword that triggers the bot:
+
+```typescript
+whatsapp({
+  handle: 'mybot', // Bot responds when this keyword appears in group messages
+  // ...
+})
+```
+
+**In private chats**: The bot always responds.
+
+**In group chats**: The bot responds when the `handle` keyword appears in the message (case-insensitive).
+
+```typescript
+bot.on('message', async (ctx) => {
+  if (ctx.message.isMentioned) {
+    // Bot was mentioned (keyword detected in group chat)
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: 'Hey! You mentioned me!'
+      }
+    })
+  }
+})
+```
+
+---
+
+## Complete Example
+
+Here's a complete example that brings together everything we've covered: configuration, webhook setup, command handling, and message processing. This example shows how all the pieces fit together in a real-world WhatsApp bot. You can use this as a starting point for your own WhatsApp integration, adapting it to your specific needs.
+
+This example demonstrates:
+- **Adapter Configuration**: Setting up the WhatsApp adapter with token, phone number ID, and handle
+- **Webhook Handling**: Implementing both GET (verification) and POST (messages) endpoints
+- **Command Handling**: Creating commands that work seamlessly with WhatsApp
+- **Message Processing**: Reacting to incoming messages and sending responses
+
+**Bot Configuration:**
+
+```typescript
+import { Bot, whatsapp } from '@igniter-js/bot'
+
+const bot = Bot.create({
+  id: 'whatsapp-bot',
+  name: 'WhatsApp Bot',
+  adapters: {
+    whatsapp: whatsapp({
+      token: process.env.WHATSAPP_TOKEN!,
+      phone: process.env.WHATSAPP_PHONE_ID!,
+      handle: 'mybot'
+    })
+  },
+  commands: {
+    start: {
+      name: 'start',
+      aliases: ['hello'],
+      description: 'Start the bot',
+      help: 'Use /start to begin',
+      async handle(ctx) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: `👋 Hello! Welcome to ${ctx.bot.name}`
+          }
+        })
+      }
+    }
+  },
+  on: {
+    message: async (ctx) => {
+      // Log all text messages
+      if (ctx.message.content?.type === 'text') {
+        console.log(`Text from ${ctx.message.author.name}: ${ctx.message.content.content}`)
+      }
+    }
+  }
+})
+
+await bot.start()
+```
+
+**Webhook Handler:**
+
+```typescript
+// src/app/api/whatsapp/route.ts
+import { bot } from '@/bot'
+
+export async function GET(req: Request) {
+  // Handle webhook verification
+  const { searchParams } = new URL(req.url)
+  const mode = searchParams.get('hub.mode')
+  const token = searchParams.get('hub.verify_token')
+  const challenge = searchParams.get('hub.challenge')
+
+  if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    return new Response(challenge, { status: 200 })
+  }
+
+  return new Response('Forbidden', { status: 403 })
+}
+
+export async function POST(req: Request) {
+  return bot.handle('whatsapp', req)
+}
+```
+
+---
+
+## Differences from Telegram
+
+| Feature | Telegram | WhatsApp |
+|---------|----------|----------|
+| Webhook Setup | Automatic | Manual (Meta dashboard) |
+| Command Sync | Automatic | Not supported |
+| Mention Detection | `@username` | Keyword-based |
+| Media Support | Full | Limited (Cloud API) |
+| Message Format | MarkdownV2 | Plain text |
+
+---
+
+## Limitations
+
+The WhatsApp adapter is continuously improving, but it currently has some limitations compared to what WhatsApp's Cloud API offers. Understanding these limitations helps you plan your bot's features and set realistic expectations for what's possible today.
+
+<Accordions>
+  <Accordion title="Media sending">
+    Currently only text messages are supported for sending. While the adapter can receive images, documents, and audio messages, sending these types requires direct API calls to WhatsApp's Cloud API. Media sending support may be added in future versions.
+  </Accordion>
+  
+  <Accordion title="Interactive components">
+    Buttons and interactive elements are not yet supported. WhatsApp supports rich interactive components like buttons, quick replies, and lists, but these require platform-specific formatting. The adapter currently focuses on text-based messaging.
+  </Accordion>
+  
+  <Accordion title="Message templates">
+    Template messages require separate API calls. WhatsApp requires template messages for initial outbound messages (outside the 24-hour window). These templates must be approved by Meta and sent using direct API calls—the adapter doesn't handle template creation or approval.
+  </Accordion>
+</Accordions>
+
+---
+
+

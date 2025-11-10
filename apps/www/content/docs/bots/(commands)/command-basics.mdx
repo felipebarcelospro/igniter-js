@@ -1,0 +1,394 @@
+---
+title: Command Basics
+description: Learn how to create and handle commands in your bot.
+---
+
+Commands are the primary way users interact with your bot. They're triggered by messages starting with `/` (like `/start` or `/help`) and provide a structured way to handle user input. Think of commands as the API endpoints of your bot—they're the predictable, documented ways users can trigger specific actions.
+
+Understanding commands is fundamental to building bots. They give you a clean separation between user input and bot logic, making your code easier to reason about and test. When a user sends `/start`, you know exactly what code will run, and you can see at a glance all the ways users can interact with your bot.
+
+---
+
+## What Are Commands?
+
+Commands are structured handlers that respond to specific user inputs. When a user sends `/start`, your bot can execute a predefined action. This is different from handling all messages—commands give you explicit control over which messages trigger which handlers, making your bot's behavior predictable and easy to understand.
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+
+const bot = Bot.create({
+  adapters: {
+    telegram: telegram({ /* ... */ })
+  },
+  commands: {
+    start: {
+      name: 'start',
+      aliases: [],
+      description: 'Start the bot',
+      help: 'Use /start to begin',
+      async handle(ctx) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: '👋 Welcome!'
+          }
+        })
+      }
+    }
+  }
+})
+```
+
+---
+
+## Command Structure
+
+Every command has five required fields that define its behavior and metadata. Understanding each field helps you create commands that are discoverable, helpful, and easy to use:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `string` | The command name (without the `/`) |
+| `aliases` | `string[]` | Alternative names for the command |
+| `description` | `string` | Short description (shown in command menus) |
+| `help` | `string` | Help text shown when command fails |
+| `handle` | `function` | Handler function that executes the command |
+
+---
+
+## Creating Commands in Separate Files
+
+The `Bot.command()` static method helps you create commands with validation and type safety. This is especially useful when organizing commands in separate files—it ensures your commands follow the correct interface and catches errors early.
+
+Using `Bot.command()` provides several benefits:
+- **Type safety**: TypeScript will enforce the correct command interface
+- **Runtime validation**: Catches invalid commands at creation time, not runtime
+- **Better organization**: Keep commands in separate files for better maintainability
+- **IDE support**: Better autocomplete and error detection
+
+Here's how to create a command in a separate file:
+
+```typescript
+// src/bot/commands/start.ts
+import { Bot } from '@igniter-js/bot'
+
+export const startCommand = Bot.command({
+  name: 'start',
+  aliases: ['hello'],
+  description: 'Greets the user',
+  help: 'Use /start to receive a welcome message',
+  async handle(ctx) {
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: '👋 Welcome!'
+      }
+    })
+  }
+})
+```
+
+Then import and use it in your bot configuration:
+
+```typescript
+// src/bot.ts
+import { Bot, telegram } from '@igniter-js/bot'
+import { startCommand } from './commands/start'
+
+const bot = Bot.create({
+  adapters: {
+    telegram: telegram({ /* ... */ })
+  },
+  commands: {
+    start: startCommand
+  }
+})
+```
+
+The `Bot.command()` method validates that:
+- All required fields are present (`name`, `aliases`, `description`, `help`, `handle`)
+- Command names don't contain slashes or spaces
+- Aliases are properly formatted
+- The handler function is provided
+
+If validation fails, you'll get a clear error message at command creation time, making debugging much easier.
+
+---
+
+The `handle` function is where your command logic lives. It receives two parameters that give you everything you need to process the command and respond to the user. Understanding these parameters is crucial—they're your gateway to accessing message context, channel information, and user data.
+
+1. **`ctx`**: The `BotContext` with message, channel, and author information
+2. **`params`**: Array of command parameters (everything after the command name)
+
+```typescript
+ping: {
+  name: 'ping',
+  aliases: [],
+  description: 'Check bot latency',
+  help: 'Use /ping to check latency',
+  async handle(ctx, params) {
+    // ctx contains all context about the message
+    // params is [''] if no parameters, or ['arg1', 'arg2'] if provided
+    
+    const startTime = Date.now()
+    
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: '🏓 pong!'
+      }
+    })
+  }
+}
+```
+
+---
+
+## Command Parameters
+
+Parameters are automatically parsed from the command message—everything after the command name gets split into an array. This parsing happens before your handler runs, so you can focus on your business logic instead of string manipulation. The parsing is smart enough to handle quotes and preserve spacing when needed.
+
+```typescript
+// User sends: /echo Hello World
+// params = ['Hello', 'World']
+
+echo: {
+  name: 'echo',
+  aliases: [],
+  description: 'Echo your message',
+  help: 'Usage: /echo <text>',
+  async handle(ctx, params) {
+    if (params.length === 0) {
+      await ctx.bot.send({
+        provider: ctx.provider,
+        channel: ctx.channel.id,
+        content: {
+          type: 'text',
+          content: '❌ Please provide text to echo.\nUsage: /echo <text>'
+        }
+      })
+      return
+    }
+    
+    const text = params.join(' ') // 'Hello World'
+    
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: text
+      }
+    })
+  }
+}
+```
+
+---
+
+## Context Information
+
+The `ctx` parameter provides rich information about the message, channel, author, and bot instance. This context object is your window into the entire conversation—it tells you who sent the message, where it came from, what the bot knows about itself, and how to respond. Understanding what's available in the context helps you build more sophisticated bots that can personalize responses and make decisions based on conversation state.
+
+```typescript
+async handle(ctx, params) {
+  // Bot information
+  ctx.bot.id      // 'my-bot'
+  ctx.bot.name    // 'My Bot'
+  ctx.bot.send()  // Send messages
+  
+  // Channel information
+  ctx.channel.id      // Channel/chat ID
+  ctx.channel.name    // Channel name
+  ctx.channel.isGroup // true if group chat
+  
+  // Message author
+  ctx.message.author.id       // User ID
+  ctx.message.author.name     // Display name
+  ctx.message.author.username // Username
+  
+  // Message content
+  ctx.message.content?.type   // 'text' | 'command' | 'image' | etc.
+  ctx.message.isMentioned     // true if bot was mentioned
+  
+  // Provider
+  ctx.provider // 'telegram' | 'whatsapp' | etc.
+}
+```
+
+---
+
+## Complete Example
+
+Here's a complete example with multiple commands:
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+
+const bot = Bot.create({
+  id: 'example-bot',
+  name: 'Example Bot',
+  adapters: {
+    telegram: telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      handle: '@example_bot',
+      webhook: {
+        url: process.env.TELEGRAM_WEBHOOK_URL!
+      }
+    })
+  },
+  commands: {
+    start: {
+      name: 'start',
+      aliases: ['hello'],
+      description: 'Start the bot',
+      help: 'Use /start to begin',
+      async handle(ctx) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: `👋 Welcome, ${ctx.message.author.name}!`
+          }
+        })
+      }
+    },
+    
+    info: {
+      name: 'info',
+      aliases: ['about'],
+      description: 'Show bot information',
+      help: 'Use /info to see bot details',
+      async handle(ctx) {
+        const info = `
+🤖 Bot Information
+
+Name: ${ctx.bot.name}
+ID: ${ctx.bot.id}
+Provider: ${ctx.provider}
+Channel: ${ctx.channel.name}
+        `.trim()
+        
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: info
+          }
+        })
+      }
+    },
+    
+    echo: {
+      name: 'echo',
+      aliases: [],
+      description: 'Echo your message',
+      help: 'Usage: /echo <text>',
+      async handle(ctx, params) {
+        if (params.length === 0) {
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: '❌ Please provide text.\nUsage: /echo <text>'
+            }
+          })
+          return
+        }
+        
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: params.join(' ')
+          }
+        })
+      }
+    }
+  }
+})
+
+await bot.start()
+```
+
+---
+
+## Error Handling
+
+When a command handler throws an error, the bot automatically handles it gracefully. This isn't just about preventing crashes—it's about providing a good user experience even when things go wrong. The bot logs the error, emits an error event (so you can track it), and optionally sends helpful feedback to the user.
+
+1. Logs the error
+2. Emits an `error` event
+3. Optionally sends the command's `help` text to the user
+
+```typescript
+risky: {
+  name: 'risky',
+  aliases: [],
+  description: 'A command that might fail',
+  help: 'Use /risky (may fail)',
+  async handle(ctx, params) {
+    if (params[0] === 'fail') {
+      throw new Error('Intentional failure')
+    }
+    
+    // Bot will send help text if error is thrown
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: '✅ Success!'
+      }
+    })
+  }
+}
+```
+
+Listen to errors:
+
+```typescript
+bot.on('error', async (ctx) => {
+  // @ts-expect-error - error injected internally
+  const err = ctx.error
+  console.error('Command error:', err.code, err.message)
+})
+```
+
+---
+
+## Best Practices
+
+Following these practices ensures your commands are reliable, user-friendly, and maintainable. Good commands are predictable, helpful, and resilient to user mistakes. They guide users toward success rather than frustrating them with cryptic errors.
+
+<Accordions>
+  <Accordion title="Validate Parameters">
+    Always check if required parameters are provided before processing—don't assume users will use commands correctly. Users might forget parameters, provide wrong types, or include extra arguments. Validate early and provide clear feedback about what's expected.
+  </Accordion>
+  
+  <Accordion title="Provide Helpful Errors">
+    Include usage examples in error messages—users need to know how to fix their mistakes. When validation fails, show users exactly what went wrong and how to fix it. A good error message includes: what was wrong, what was expected, and an example of correct usage.
+  </Accordion>
+  
+  <Accordion title="Use Descriptive Names">
+    Command names should be clear and intuitive—users shouldn't have to guess what a command does. A command like `/listTodos` is better than `/lt` because it's self-documenting. If users can't guess what a command does from its name, consider renaming it or adding aliases.
+  </Accordion>
+  
+  <Accordion title="Keep Handlers Focused">
+    Each command should do one thing well—if you need multiple actions, create multiple commands. A command that does too much is harder to understand, test, and maintain. If you find yourself adding multiple responsibilities to a command, split it into separate commands.
+  </Accordion>
+  
+  <Accordion title="Handle Edge Cases">
+    Consider empty parameters, invalid input, and edge cases—think about all the ways users might misuse your commands. What happens if someone sends `/delete` without a number? What if they send `/add` with a 1000-character task? Anticipate edge cases and handle them gracefully.
+  </Accordion>
+</Accordions>
+

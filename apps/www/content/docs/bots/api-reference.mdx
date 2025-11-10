@@ -1,0 +1,367 @@
+---
+title: API Reference
+description: Complete API reference for the Bots package.
+---
+
+Complete reference for all public APIs in the Bots package.
+
+---
+
+## Bot Class
+
+### `Bot.create(options)`
+
+Creates a new bot instance.
+
+**Parameters:**
+
+```typescript
+{
+  id: string
+  name: string
+  adapters: Record<string, IBotAdapter<any>>
+  middlewares?: Middleware[]
+  commands?: Record<string, BotCommand>
+  on?: Partial<Record<BotEvent, (ctx: BotContext) => Promise<void>>>
+  logger?: BotLogger
+}
+```
+
+**Returns:** `Bot` instance
+
+**Example:**
+
+```typescript
+const bot = Bot.create({
+  id: 'my-bot',
+  name: 'My Bot',
+  adapters: {
+    telegram: telegram({ /* ... */ })
+  }
+})
+```
+
+---
+
+### Instance Methods
+
+#### `bot.start()`
+
+Initializes all adapters (webhooks, command sync).
+
+**Returns:** `Promise<void>`
+
+**Example:**
+
+```typescript
+await bot.start()
+```
+
+---
+
+#### `bot.handle(provider, request)`
+
+Processes an incoming webhook request.
+
+**Parameters:**
+- `provider`: `string` - Adapter name (e.g., `'telegram'`)
+- `request`: `Request` - HTTP request object
+
+**Returns:** `Promise<Response>`
+
+**Example:**
+
+```typescript
+export async function POST(req: Request) {
+  return bot.handle('telegram', req)
+}
+```
+
+---
+
+#### `bot.send(params)`
+
+Sends a message via the specified adapter.
+
+**Parameters:**
+
+```typescript
+{
+  provider: string
+  channel: string
+  content: { type: 'text'; content: string }
+}
+```
+
+**Returns:** `Promise<void>`
+
+**Example:**
+
+```typescript
+await bot.send({
+  provider: 'telegram',
+  channel: ctx.channel.id,
+  content: {
+    type: 'text',
+    content: 'Hello!'
+  }
+})
+```
+
+---
+
+#### `bot.use(middleware)`
+
+Adds middleware dynamically.
+
+**Parameters:**
+- `middleware`: `Middleware`
+
+**Returns:** `Bot` instance (chainable)
+
+**Example:**
+
+```typescript
+bot.use(async (ctx, next) => {
+  console.log('Middleware')
+  await next()
+})
+```
+
+---
+
+#### `bot.registerCommand(name, command)`
+
+Registers a command dynamically.
+
+**Parameters:**
+- `name`: `string` - Command name
+- `command`: `BotCommand` - Command definition
+
+**Returns:** `Bot` instance (chainable)
+
+**Example:**
+
+```typescript
+bot.registerCommand('echo', {
+  name: 'echo',
+  aliases: [],
+  description: 'Echo command',
+  help: 'Usage: /echo <text>',
+  async handle(ctx, params) {
+    // ...
+  }
+})
+```
+
+---
+
+#### `bot.registerAdapter(key, adapter)`
+
+Registers an adapter dynamically.
+
+**Parameters:**
+- `key`: `string` - Adapter key
+- `adapter`: `IBotAdapter<any>` - Adapter instance
+
+**Returns:** `Bot` instance (chainable)
+
+**Example:**
+
+```typescript
+bot.registerAdapter('custom', customAdapter({ /* ... */ }))
+```
+
+---
+
+#### `bot.on(event, handler)`
+
+Subscribes to an event.
+
+**Parameters:**
+- `event`: `BotEvent` - Event name (`'message'`, `'error'`, `'start'`)
+- `handler`: `(ctx: BotContext) => Promise<void>` - Event handler
+
+**Returns:** `void`
+
+**Example:**
+
+```typescript
+bot.on('message', async (ctx) => {
+  console.log('Message received')
+})
+```
+
+---
+
+#### `bot.emit(event, ctx)`
+
+Manually emits an event.
+
+**Parameters:**
+- `event`: `BotEvent` - Event name
+- `ctx`: `BotContext` - Context object
+
+**Returns:** `Promise<void>`
+
+**Example:**
+
+```typescript
+await bot.emit('message', mockContext)
+```
+
+---
+
+#### `bot.onPreProcess(hook)`
+
+Adds a pre-process hook.
+
+**Parameters:**
+- `hook`: `(ctx: BotContext) => Promise<void> | void`
+
+**Returns:** `Bot` instance (chainable)
+
+**Example:**
+
+```typescript
+bot.onPreProcess(async (ctx) => {
+  // Load session
+})
+```
+
+---
+
+#### `bot.onPostProcess(hook)`
+
+Adds a post-process hook.
+
+**Parameters:**
+- `hook`: `(ctx: BotContext) => Promise<void> | void`
+
+**Returns:** `Bot` instance (chainable)
+
+**Example:**
+
+```typescript
+bot.onPostProcess(async (ctx) => {
+  // Save session
+})
+```
+
+---
+
+### Static Methods
+
+#### `Bot.adapter<TConfig>(adapter)`
+
+Creates an adapter factory.
+
+**Parameters:**
+
+```typescript
+{
+  name: string
+  parameters: ZodObject<TConfig>
+  init: (params: { config: TypeOf<TConfig>; commands: BotCommand[]; logger?: BotLogger }) => Promise<void>
+  send: (params: BotSendParams<TConfig> & { logger?: BotLogger }) => Promise<void>
+  handle: (params: BotHandleParams<TConfig> & { logger?: BotLogger }) => Promise<Omit<BotContext, 'bot'> | null>
+}
+```
+
+**Returns:** `(config: TypeOf<TConfig>) => IBotAdapter<TConfig>`
+
+**Example:**
+
+```typescript
+const myAdapter = Bot.adapter({
+  name: 'my-platform',
+  parameters: z.object({ apiKey: z.string() }),
+  // ...
+})
+```
+
+---
+
+## Adapters
+
+### `telegram(config)`
+
+Creates a Telegram adapter.
+
+**Parameters:**
+
+```typescript
+{
+  token: string
+  handle: string
+  webhook?: {
+    url: string
+    secret?: string
+  }
+}
+```
+
+**Returns:** `IBotAdapter`
+
+---
+
+### `whatsapp(config)`
+
+Creates a WhatsApp adapter.
+
+**Parameters:**
+
+```typescript
+{
+  token: string
+  phone: string
+  handle: string
+}
+```
+
+**Returns:** `IBotAdapter`
+
+---
+
+## Errors
+
+### `BotError`
+
+Error class for bot errors.
+
+**Properties:**
+- `code`: `BotErrorCode` - Error code
+- `message`: `string` - Error message
+- `meta?`: `Record<string, unknown>` - Additional metadata
+
+**Example:**
+
+```typescript
+throw new BotError(BotErrorCodes.COMMAND_NOT_FOUND, 'Command not found')
+```
+
+---
+
+### `BotErrorCodes`
+
+Error code constants:
+
+- `PROVIDER_NOT_FOUND`
+- `COMMAND_NOT_FOUND`
+- `INVALID_COMMAND_PARAMETERS`
+- `ADAPTER_HANDLE_RETURNED_NULL`
+
+---
+
+## Types
+
+See the [Types](/docs/bots/types) documentation for complete type definitions.
+
+---
+
+## Next Steps
+
+- **[Types](/docs/bots/types)** - Complete type definitions
+- **[Getting Started](/docs/bots/installation)** - Setup guide
+- **[Best Practices](/docs/bots/best-practices)** - Production patterns
+

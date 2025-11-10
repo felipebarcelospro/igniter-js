@@ -1,0 +1,377 @@
+---
+title: "Building AI Agents with AI SDK"
+description: "A simple guide to creating a conversational AI agent for WhatsApp and Telegram using Igniter.js Bot and the AI SDK."
+---
+
+In this guide, you'll learn how to build a simple, conversational AI agent. We'll use the official AI SDK to connect to a large language model (LLM) and the Igniter.js Bot framework to handle multi-platform communication.
+
+## What You'll Build
+
+An AI-powered bot that:
+- Connects to an LLM provider (like Google Gemini).
+- Responds to any message on WhatsApp and Telegram.
+- Manages conversation history for context.
+- Uses `generateText` for a simple, non-streaming response.
+
+<Callout type="info">
+  This guide focuses on simplicity. For more advanced features like streaming or function calling, check out the official [AI SDK documentation](https://sdk.vercel.ai/docs).
+</Callout>
+
+---
+
+## Prerequisites
+
+1.  **Igniter.js Bot Project**: A working project with `@igniter-js/bot` installed.
+2.  **AI SDK**: Install the necessary packages.
+3.  **LLM Provider API Key**: An API key from a provider like Google.
+
+### Install AI SDK Packages
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install ai @ai-sdk/google
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add ai @ai-sdk/google
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add ai @ai-sdk/google
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add ai @ai-sdk/google
+    ```
+  </Tab>
+</Tabs>
+
+### Configure Environment Variables
+
+Add your API keys to your `.env` file.
+
+```bash
+# .env
+GOOGLE_API_KEY="your_google_api_key_here"
+
+# Your bot tokens
+TELEGRAM_TOKEN="your_telegram_token"
+WHATSAPP_TOKEN="your_whatsapp_token"
+WHATSAPP_PHONE_ID="your_whatsapp_phone_id"
+WHATSAPP_VERIFY_TOKEN="your_whatsapp_verify_token"
+```
+
+---
+
+## Step 1: Integrate the AI Agent
+
+We'll place all the logic directly inside our bot definition file for maximum simplicity.
+
+In `src/bot/index.ts`, set up the bot and the `onMessage` handler.
+
+```typescript
+// src/bot/index.ts
+import { IgniterBot } from '@igniter-js/bot';
+import { telegram, whatsapp } from '@igniter-js/bot/adapters'
+import { google } from '@ai-sdk/google';
+import { CoreMessage, generateText } from 'ai';
+
+// 1. In-memory conversation history
+const conversationHistory = new Map<string, CoreMessage[]>();
+
+export const bot = IgniterBot.create()
+  .withHandle('@my-ai-bot')
+  .addAdapter(
+    'telegram',
+    telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      webhook: { url: process.env.TELEGRAM_WEBHOOK_URL! },
+    }),
+  )
+  .addAdapter(
+    'whatsapp',
+    whatsapp({
+      token: process.env.WHATSAPP_TOKEN!,
+      phone: process.env.WHATSAPP_PHONE_ID!,
+      verifyToken: process.env.WHATSAPP_VERIFY_TOKEN!,
+    }),
+  )
+  .onMessage(async (ctx) => {
+    // Ignore messages that are not text
+    if (ctx.message.content?.type !== 'text') return;
+
+    // Ignore commands
+    if (ctx.message.content.content.startsWith('/')) return;
+
+    try {
+      const userId = ctx.message.author.id;
+      const prompt = ctx.message.content.content;
+      const history = conversationHistory.get(userId) ?? [];
+      
+      // Show a "typing..." indicator
+      await ctx.sendTyping?.();
+
+      const { text } = await generateText({
+        model: google('models/gemini-pro'),
+        system: `You are a helpful AI assistant. Keep responses concise.`,
+        messages: [...history, { role: 'user', content: prompt }],
+      });
+
+      // Update history
+      const newHistory: CoreMessage[] = [
+        ...history,
+        { role: 'user', content: prompt },
+        { role: 'assistant', content: text },
+      ];
+      conversationHistory.set(userId, newHistory);
+
+      // Send the response
+      await ctx.reply(text);
+
+    } catch (error) {
+      console.error('AI Agent Error:', error);
+      await ctx.reply('Sorry, I encountered an error. Please try again.');
+    }
+  })
+  .build();
+
+await bot.start();
+```
+
+### Understanding the Logic
+
+1.  **History**: We use a simple `Map` for conversation history.
+2.  **`onMessage` Handler**: This is the core of our bot, listening to every message.
+3.  **Guards**: We ignore non-text messages and commands.
+4.  **`sendTyping`**: Shows a typing indicator for better UX.
+5.  **`generateText`**: This function from the AI SDK waits for the complete response from the LLM and returns it as a single string.
+6.  **History Update**: We update the history map with the new prompt and response.
+7.  **`ctx.reply(text)`**: We send the complete AI-generated response back to the user.
+
+---
+
+## Step 2: Set Up Webhook Handlers
+
+Your webhook handlers are the bridge between the messaging platforms and your bot. When a user sends a message, the platform sends an HTTP request to your webhook URL. The `bot.handle()` method processes this request, runs your `onMessage` logic, and sends back the appropriate response.
+
+<Callout type="info">
+  The bot framework is framework-agnostic. While the examples below show different frameworks, the core `bot.handle()` and `bot.verify()` methods work with any environment that supports the standard Request and Response Web APIs.
+</Callout>
+
+### Telegram
+
+<Tabs items={['Next.js', 'Express', 'Bun', 'Deno']}>
+  <Tab value="Next.js">
+    ```typescript
+    // src/app/api/telegram/route.ts
+    import { bot } from '@/bot';
+
+    export async function POST(req: Request) {
+      return bot.handle('telegram', req);
+    }
+    ```
+  </Tab>
+  <Tab value="Express">
+    ```typescript
+    // src/server.ts
+    import express from 'express';
+    import { bot } from './bot';
+
+    const app = express();
+    app.use(express.json());
+
+    app.post('/api/telegram', async (req, res) => {
+      const request = new Request(`http://${req.headers.host}${req.url}`, {
+        method: req.method,
+        headers: req.headers as HeadersInit,
+        body: JSON.stringify(req.body)
+      });
+      const response = await bot.handle('telegram', request);
+      res.status(response.status).send(await response.text());
+    });
+
+    app.listen(3000);
+    ```
+  </Tab>
+  <Tab value="Bun">
+    ```typescript
+    // src/index.ts
+    import { bot } from './bot';
+
+    Bun.serve({
+      port: 3000,
+      async fetch(req) {
+        if (new URL(req.url).pathname === '/api/telegram') {
+          return bot.handle('telegram', req);
+        }
+        return new Response('Not Found', { status: 404 });
+      },
+    });
+    ```
+  </Tab>
+  <Tab value="Deno">
+    ```typescript
+    // main.ts
+    import { bot } from './bot/index.ts';
+
+    Deno.serve({ port: 3000 }, async (req) => {
+      if (new URL(req.url).pathname === '/api/telegram') {
+        return bot.handle('telegram', req);
+      }
+      return new Response('Not Found', { status: 404 });
+    });
+    ```
+  </Tab>
+</Tabs>
+
+
+### WhatsApp
+
+The `bot.verify()` method simplifies the webhook verification required by WhatsApp.
+
+<Tabs items={['Next.js', 'Express', 'Bun', 'Deno']}>
+  <Tab value="Next.js">
+    ```typescript
+    // src/app/api/whatsapp/route.ts
+    import { bot } from '@/bot';
+
+    // Handles webhook verification
+    export async function GET(req: Request) {
+      return bot.verify('whatsapp', req);
+    }
+
+    // Handles incoming messages
+    export async function POST(req: Request) {
+      return bot.handle('whatsapp', req);
+    }
+    ```
+  </Tab>
+  <Tab value="Express">
+    ```typescript
+    // src/server.ts
+    import express from 'express';
+    import { bot } from './bot';
+
+    const app = express();
+    app.use(express.json());
+    
+    app.get('/api/whatsapp', async (req, res) => {
+      const request = new Request(`http://${req.headers.host}${req.url}`, {
+        method: req.method,
+        headers: req.headers as HeadersInit,
+      });
+      const response = await bot.verify('whatsapp', request);
+      res.status(response.status).send(await response.text());
+    });
+
+    app.post('/api/whatsapp', async (req, res) => {
+      const request = new Request(`http://${req.headers.host}${req.url}`, {
+        method: req.method,
+        headers: req.headers as HeadersInit,
+        body: JSON.stringify(req.body)
+      });
+      const response = await bot.handle('whatsapp', request);
+      res.status(response.status).send(await response.text());
+    });
+
+    app.listen(3000);
+    ```
+  </Tab>
+  <Tab value="Bun">
+    ```typescript
+    // src/index.ts
+    import { bot } from './bot';
+
+    Bun.serve({
+      port: 3000,
+      async fetch(req) {
+        const url = new URL(req.url);
+        if (url.pathname === '/api/whatsapp') {
+          if (req.method === 'GET') {
+            return bot.verify('whatsapp', req);
+          }
+          if (req.method === 'POST') {
+            return bot.handle('whatsapp', req);
+          }
+        }
+        return new Response('Not Found', { status: 404 });
+      },
+    });
+    ```
+  </Tab>
+  <Tab value="Deno">
+    ```typescript
+    // main.ts
+    import { bot } from './bot/index.ts';
+
+    Deno.serve({ port: 3000 }, async (req) => {
+      const url = new URL(req.url);
+      if (url.pathname === '/api/whatsapp') {
+        if (req.method === 'GET') {
+          return bot.verify('whatsapp', req);
+        }
+        if (req.method === 'POST') {
+          return bot.handle('whatsapp', req);
+        }
+      }
+      return new Response('Not Found', { status: 404 });
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Testing Your AI Agent
+
+Deploy your application and start a conversation with your bot on WhatsApp or Telegram.
+
+**Try sending:**
+`"Hello, how are you?"`
+`"What is Igniter.js?"`
+`"Can you explain what the AI SDK does?"`
+
+The bot will respond to each message with a complete answer generated by the AI, and it will remember the context of your conversation.
+
+---
+
+## Troubleshooting
+
+<Accordions>
+  <Accordion title="API Key Not Working">
+    **Problem**: You get authentication errors from the LLM provider.
+    
+    **Solutions**:
+    - Verify that your API key is correct in your `.env` file.
+    - Ensure the environment variable name matches the one used in the code (e.g., `GOOGLE_API_KEY`).
+    - Check if your API key has expired or if you have enough credits in your provider account.
+    - Make sure the `.env` file is being loaded correctly by your framework.
+  </Accordion>
+  
+  <Accordion title="Bot Doesn't Respond to Messages">
+    **Problem**: The bot receives messages but the AI agent doesn't trigger.
+    
+    **Solutions**:
+    - Check the guards in your `onMessage` handler. Is it possible you're accidentally ignoring the message (e.g., because it looks like a command)?
+    - Add `console.log` statements inside your `onMessage` handler to see if it's being triggered.
+    - Look for errors in your server console. The `try...catch` block should log any errors from the AI SDK.
+  </Accordion>
+
+  <Accordion title="Conversation History is Not Remembered">
+    **Problem**: The bot responds but doesn't remember the context of previous messages.
+    
+    **Solution**:
+    - This guide uses an in-memory `Map` for history, which resets every time your server restarts. For development, this is fine. For production, you must replace the `Map` with a persistent storage solution like **Redis**, **Vercel KV**, or a **SQL database**.
+  </Accordion>
+
+  <Accordion title="Slow Responses">
+    **Problem**: The bot takes a long time to respond.
+    
+    **Solution**:
+    - `generateText` waits for the full response. If the LLM is generating a long text, this can take time. Consider switching to `streamText` and implementing the streaming pattern shown in the previous version of this guide to provide a better user experience for longer responses.
+  </Accordion>
+</Accordions>

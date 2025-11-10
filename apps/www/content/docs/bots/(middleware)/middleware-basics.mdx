@@ -1,0 +1,493 @@
+---
+title: Middleware Basics
+description: Learn how to use middleware to add cross-cutting concerns to your bot.
+---
+
+Middleware functions run before your command handlers and event listeners. They're perfect for authentication, logging, rate limiting, and other cross-cutting concerns that apply to multiple commands.
+
+---
+
+## What Is Middleware?
+
+Middleware is a function that runs in the processing pipeline before your command handlers. It receives the bot context and a `next` function to continue the chain. Think of middleware as a series of filters or processing steps that each request must pass through before reaching your command handlers.
+
+The middleware pattern allows you to separate cross-cutting concerns (like authentication, logging, rate limiting) from your business logic. Instead of adding this code to every command handler, you write it once as middleware and apply it to all requests. This makes your code more maintainable and easier to test.
+
+```typescript
+type Middleware = (
+  ctx: BotContext,
+  next: () => Promise<void>
+) => Promise<void>
+```
+
+---
+
+## Creating Middleware in Separate Files
+
+The `Bot.middleware()` static method helps you create middleware with validation and type safety. This is especially useful when organizing middleware in separate files—it ensures your middleware follows the correct signature and catches errors early.
+
+Using `Bot.middleware()` provides several benefits:
+- **Type safety**: TypeScript will enforce the correct middleware signature
+- **Runtime validation**: Catches invalid middleware at creation time, not runtime
+- **Better organization**: Keep middleware in separate files for better maintainability
+- **IDE support**: Better autocomplete and error detection
+
+Here's how to create middleware in a separate file:
+
+```typescript
+// src/bot/middleware/auth.ts
+import { Bot } from '@igniter-js/bot'
+
+export const authMiddleware = Bot.middleware(async (ctx, next) => {
+  if (!isAuthorized(ctx.message.author.id)) {
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: '❌ Unauthorized'
+      }
+    })
+    return // Block request
+  }
+  await next() // Continue to next middleware/handler
+})
+```
+
+Then import and use it in your bot configuration:
+
+```typescript
+// src/bot.ts
+import { Bot, telegram } from '@igniter-js/bot'
+import { authMiddleware } from './middleware/auth'
+
+const bot = Bot.create({
+  adapters: {
+    telegram: telegram({ /* ... */ })
+  },
+  middlewares: [authMiddleware],
+  commands: {
+    // ...
+  }
+})
+```
+
+The `Bot.middleware()` method validates that:
+- The middleware is a function
+- The function accepts exactly 2 parameters (`ctx` and `next`)
+
+If validation fails, you'll get a clear error message at middleware creation time, making debugging much easier.
+
+---
+
+## Basic Middleware
+
+Here's a simple logging middleware created using `Bot.middleware()`:
+
+```typescript
+// src/bot/middleware/logging.ts
+import { Bot } from '@igniter-js/bot'
+
+export const loggingMiddleware = Bot.middleware(async (ctx, next) => {
+  console.log(`[${ctx.event}] Message from ${ctx.message.author.name}`)
+  await next() // Continue to next middleware/handler
+})
+```
+
+Use it in your bot:
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+import { loggingMiddleware } from './middleware/logging'
+
+const bot = Bot.create({
+  adapters: {
+    telegram: telegram({ /* ... */ })
+  },
+  middlewares: [loggingMiddleware],
+  commands: {
+    // ...
+  }
+})
+```
+
+---
+
+## Calling `next()`
+
+**Always call `await next()`** unless you want to stop processing. The `next()` function passes control to the next middleware in the chain (or the command handler if no more middleware exists). Calling `next()` is how middleware "continues" the request pipeline—without it, processing stops and the command handler never runs.
+
+Understanding when to call `next()` and when to skip it is crucial for middleware development. Most middleware should call `next()` to allow the request to continue, but authentication middleware might skip it to block unauthorized users. Here are examples of both patterns:
+
+```typescript
+// ✅ Good - calls next()
+const middleware: Middleware = async (ctx, next) => {
+  console.log('Before')
+  await next() // Continue processing
+  console.log('After')
+}
+
+// ✅ Good - blocks processing intentionally
+const authMiddleware: Middleware = async (ctx, next) => {
+  if (!isAuthorized(ctx.message.author.id)) {
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: '❌ Unauthorized'
+      }
+    })
+    return // Don't call next() - block processing
+  }
+  await next() // Authorized - continue
+}
+
+// ❌ Bad - forgets to call next()
+const badMiddleware: Middleware = async (ctx, next) => {
+  console.log('Processing')
+  // Missing await next() - processing stops here!
+}
+```
+
+---
+
+## Middleware Execution Order
+
+Middleware runs in the order it's registered in your `middlewares` array. When you create middleware using `Bot.middleware()`, they're validated immediately, ensuring they're properly structured before registration. This validation catches errors early and provides clear error messages if something is wrong.
+
+The execution order matters because middleware can modify the context or block requests. For example, you want authentication middleware to run before expensive operations, and logging middleware typically runs first to capture all requests. Understanding execution order helps you compose middleware effectively.
+
+```typescript
+// src/bot/middleware/first.ts
+import { Bot } from '@igniter-js/bot'
+
+export const middleware1 = Bot.middleware(async (ctx, next) => {
+  console.log('1. Before')
+  await next()
+  console.log('1. After')
+})
+
+// src/bot/middleware/second.ts
+import { Bot } from '@igniter-js/bot'
+
+export const middleware2 = Bot.middleware(async (ctx, next) => {
+  console.log('2. Before')
+  await next()
+  console.log('2. After')
+})
+
+// src/bot.ts
+import { middleware1 } from './middleware/first'
+import { middleware2 } from './middleware/second'
+
+const bot = Bot.create({
+  middlewares: [middleware1, middleware2],
+  // ...
+})
+
+// Execution order:
+// 1. Before
+// 2. Before
+// Command handler runs
+// 2. After
+// 1. After
+```
+
+---
+
+## Common Use Cases
+
+Here are common middleware patterns you'll use in production bots. Each example uses `Bot.middleware()` for validation and type safety. Understanding these patterns helps you build robust, production-ready bots with proper authentication, logging, rate limiting, and more:
+
+<Accordions>
+  <Accordion title="Authentication">
+    Restrict commands to authorized users by checking permissions before allowing requests to proceed. This middleware runs early in the pipeline, blocking unauthorized users before any command logic executes. It's essential for bots that handle sensitive operations or provide different features to different user tiers.
+    
+    ```typescript
+    // src/bot/middleware/auth.ts
+    import { Bot } from '@igniter-js/bot'
+    
+    export const authMiddleware = Bot.middleware(async (ctx, next) => {
+      const userId = ctx.message.author.id
+      
+      // Check authorization
+      if (!isAuthorized(userId)) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: '❌ You are not authorized to use this bot.'
+          }
+        })
+        return // Stop processing
+      }
+      
+      await next() // User is authorized
+    })
+    ```
+    
+    Authentication middleware should typically be placed early in your middleware array—ideally first or second—so unauthorized users are blocked before expensive operations run. This improves security and reduces unnecessary processing.
+  </Accordion>
+  
+  <Accordion title="Rate Limiting">
+    Prevent spam and abuse by limiting how many requests each user can make within a time window. Rate limiting protects your bot from being overwhelmed and helps ensure fair usage across all users. This middleware tracks request timestamps per user and blocks requests that exceed the limit.
+    
+    ```typescript
+    // src/bot/middleware/rate-limit.ts
+    import { Bot } from '@igniter-js/bot'
+    
+    const rateLimiter = new Map<string, number[]>()
+    
+    export const rateLimitMiddleware = Bot.middleware(async (ctx, next) => {
+      const userId = ctx.message.author.id
+      const now = Date.now()
+      const windowMs = 60000 // 1 minute
+      const maxRequests = 5
+      
+      // Get user's recent requests
+      const requests = rateLimiter.get(userId) || []
+      
+      // Filter requests within the time window
+      const recentRequests = requests.filter(time => now - time < windowMs)
+      
+      if (recentRequests.length >= maxRequests) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: '⏳ Rate limit exceeded. Please try again later.'
+          }
+        })
+        return
+      }
+      
+      // Record this request
+      recentRequests.push(now)
+      rateLimiter.set(userId, recentRequests)
+      
+      await next()
+    })
+    ```
+    
+    For production applications, consider using Redis or another distributed cache instead of an in-memory Map. This ensures rate limiting works correctly across multiple bot instances and survives server restarts.
+  </Accordion>
+  
+  <Accordion title="Logging">
+    Log all incoming messages with structured format for debugging and monitoring. Logging middleware runs early in the pipeline to capture all requests, making it easier to troubleshoot issues and understand how users interact with your bot. Structured logs help you identify patterns and debug problems faster.
+    
+    ```typescript
+    // src/bot/middleware/logging.ts
+    import { Bot } from '@igniter-js/bot'
+    
+    export const loggingMiddleware = Bot.middleware(async (ctx, next) => {
+      const timestamp = new Date().toISOString()
+      const user = ctx.message.author.name
+      const channel = ctx.channel.name
+      const event = ctx.event
+      
+      console.log(`[${timestamp}] ${event} from ${user} in ${channel}`)
+      
+      await next()
+    })
+    ```
+    
+    In production, replace `console.log` with a proper logging library like Pino or Winston. These libraries provide log levels, structured output, and better performance than console logging.
+  </Accordion>
+  
+  <Accordion title="Metrics">
+    Track latency and success rates to monitor your bot's performance. Metrics middleware runs around the entire request lifecycle, measuring how long operations take and whether they succeed or fail. This data is invaluable for understanding performance bottlenecks and monitoring health in production.
+    
+    ```typescript
+    // src/bot/middleware/metrics.ts
+    import { Bot } from '@igniter-js/bot'
+    
+    export const metricsMiddleware = Bot.middleware(async (ctx, next) => {
+      const startTime = Date.now()
+      
+      try {
+        await next()
+        const duration = Date.now() - startTime
+        
+        // Record success metric
+        recordMetric('bot.request.success', {
+          provider: ctx.provider,
+          event: ctx.event,
+          duration
+        })
+      } catch (error) {
+        const duration = Date.now() - startTime
+        
+        // Record error metric
+        recordMetric('bot.request.error', {
+          provider: ctx.provider,
+          event: ctx.event,
+          duration,
+          error: error.message
+        })
+        
+        throw error // Re-throw to let error handlers catch it
+      }
+    })
+    ```
+    
+    Metrics middleware should always re-throw errors after recording them. This ensures error handling middleware can still catch and process the error while you maintain visibility into failures.
+  </Accordion>
+  
+  <Accordion title="Session Loading">
+    Load user session data from your database before processing requests. Session middleware loads user-specific data (like preferences, cached state, or subscription information) and attaches it to the context, making it available to all subsequent middleware and command handlers. This pattern centralizes data loading logic.
+    
+    ```typescript
+    // src/bot/middleware/session.ts
+    import { Bot } from '@igniter-js/bot'
+    
+    export const sessionMiddleware = Bot.middleware(async (ctx, next) => {
+      const userId = ctx.message.author.id
+      
+      // Load session from database
+      const session = await loadSession(userId)
+      
+      // Attach session to context (TypeScript will infer the type)
+      // @ts-expect-error - extending context
+      ctx.session = session
+      
+      await next()
+      
+      // Save session after processing
+      await saveSession(userId, session)
+    })
+    ```
+    
+    Session middleware runs code both before and after the request (`await next()`). This allows you to load data before processing and save changes after processing completes, ensuring data consistency throughout the request lifecycle.
+  </Accordion>
+</Accordions>
+
+---
+
+## Dynamic Middleware Registration
+
+Add middleware at runtime using `bot.use()`. This method allows you to register middleware after your bot has been created, which is useful for conditional middleware loading, plugin systems, or runtime configuration. Dynamic registration follows the same execution order rules as static middleware—it's added to the end of the middleware chain.
+
+```typescript
+const bot = Bot.create({
+  // ...
+})
+
+// Add middleware dynamically
+bot.use(async (ctx, next) => {
+  console.log('Dynamic middleware')
+  await next()
+})
+```
+
+---
+
+## Error Handling
+
+Handle errors in middleware to prevent crashes and provide graceful error recovery. Middleware can catch errors from downstream handlers (command handlers or other middleware) and handle them appropriately—logging errors, sending user-friendly messages, or re-throwing for further processing. This pattern ensures your bot remains stable even when unexpected errors occur.
+
+```typescript
+const errorHandlingMiddleware: Middleware = async (ctx, next) => {
+  try {
+    await next()
+  } catch (error) {
+    // Log error
+    console.error('Middleware error:', error)
+    
+    // Send error message to user
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: '❌ An error occurred. Please try again later.'
+      }
+    })
+    
+    // Re-throw to let bot's error handler catch it
+    throw error
+  }
+}
+```
+
+---
+
+## Best Practices
+
+Following these practices ensures your middleware integrates smoothly with the bot core and performs reliably. Good middleware is predictable, efficient, and resilient to errors. It enhances your bot's functionality without introducing complexity or bugs.
+
+<Accordions>
+  <Accordion title="Always call next()">
+    Unless blocking intentionally, always call `next()` to continue the middleware chain. Skipping `next()` stops processing, which is only appropriate when you're intentionally blocking a request (like authentication failures). For most middleware, you want to process the request and then continue to the next handler.
+  </Accordion>
+  
+  <Accordion title="Handle errors gracefully">
+    Don't let middleware errors crash the bot. Wrap risky operations in try-catch blocks and handle errors appropriately. If middleware fails, the bot should continue functioning—consider logging the error and calling `next()` to allow other handlers to process the request.
+  </Accordion>
+  
+  <Accordion title="Keep middleware focused">
+    Each middleware should do one thing. If you find yourself writing middleware that does multiple unrelated tasks, split it into separate middleware functions. Focused middleware is easier to test, debug, and reuse across different bots.
+  </Accordion>
+  
+  <Accordion title="Order matters">
+    Place authentication before command handlers. Middleware runs in the order it's registered, so critical middleware (like authentication) should come first. This ensures unauthorized users are blocked before expensive operations run.
+  </Accordion>
+  
+  <Accordion title="Use async/await">
+    Middleware is async, so use proper async patterns. Avoid mixing promises and callbacks—stick with async/await for consistency. This makes your middleware easier to read and debug, and it integrates better with the bot's async architecture.
+  </Accordion>
+</Accordions>
+
+---
+
+## Complete Example
+
+Here's a complete example that brings together multiple middleware functions to demonstrate how they work together in a production bot. This example shows the recommended middleware order and how each middleware contributes to the overall bot functionality. You can use this as a template for your own bots, adapting the middleware to your specific needs.
+
+This example demonstrates:
+- **Middleware Composition**: How multiple middleware functions work together
+- **Execution Order**: The importance of middleware ordering
+- **Separation of Concerns**: Each middleware handles a specific cross-cutting concern
+- **Production Patterns**: Real-world patterns you'll use in production bots
+
+**Example with Bot.middleware():**
+
+```typescript
+// src/bot.ts
+import { Bot, telegram } from '@igniter-js/bot'
+import { authMiddleware } from './middleware/auth'
+import { loggingMiddleware } from './middleware/logging'
+import { rateLimitMiddleware } from './middleware/rate-limit'
+
+const bot = Bot.create({
+  id: 'example-bot',
+  name: 'Example Bot',
+  adapters: {
+    telegram: telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      handle: '@example_bot',
+      webhook: {
+        url: process.env.TELEGRAM_WEBHOOK_URL!
+      }
+    })
+  },
+  middlewares: [
+    loggingMiddleware,    // Logs first
+    rateLimitMiddleware,  // Then rate limit
+    authMiddleware        // Then authenticate
+  ],
+  commands: {
+    // Commands here...
+  }
+})
+```
+
+**Execution Order:**
+1. `loggingMiddleware` logs the request
+2. `rateLimitMiddleware` checks rate limits
+3. `authMiddleware` verifies authorization
+4. Command handler executes (if authorized and within limits)
+5. Middleware cleanup runs in reverse order
+

@@ -1,0 +1,506 @@
+---
+title: Discord Adapter
+description: Build Discord bots with slash commands, interactions, and rich embeds using the official Discord adapter.
+---
+
+The Discord adapter integrates with the Discord Interactions API, supporting slash commands, message components (buttons), embeds, and Ed25519 signature verification. Perfect for building modern Discord bots with a great user experience.
+
+<Callout type="info">
+  Discord uses slash commands instead of traditional text commands. Users interact with your bot through Discord's native command interface.
+</Callout>
+
+---
+
+## Quick Start
+
+Add the Discord adapter to your bot:
+
+```typescript
+import { IgniterBot, discord } from '@igniter-js/bot'
+
+const bot = IgniterBot
+  .create()
+  .withHandle('@mybot')
+  .addAdapter('discord', discord({
+    token: process.env.DISCORD_TOKEN!,
+    applicationId: process.env.DISCORD_APPLICATION_ID!,
+    publicKey: process.env.DISCORD_PUBLIC_KEY!
+  }))
+  .build()
+
+await bot.start()
+```
+
+---
+
+## Setup Guide
+
+<Steps>
+  <Step>
+    ### Create Discord Application
+    
+    1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+    2. Click **New Application**
+    3. Give it a name (this will be your bot's name)
+    4. Navigate to the **Bot** section
+    5. Click **Add Bot** and confirm
+  </Step>
+  
+  <Step>
+    ### Get API Credentials
+    
+    You need three values from the Developer Portal:
+    
+    **Bot Token** (Bot section):
+    - Click **Reset Token** and copy it
+    - This is your `DISCORD_TOKEN`
+    
+    **Application ID** (General Information):
+    - Copy the **Application ID**
+    - This is your `DISCORD_APPLICATION_ID`
+    
+    **Public Key** (General Information):
+    - Copy the **Public Key**
+    - This is your `DISCORD_PUBLIC_KEY`
+    
+    Save to `.env`:
+    ```bash
+    DISCORD_TOKEN=your_bot_token
+    DISCORD_APPLICATION_ID=your_application_id
+    DISCORD_PUBLIC_KEY=your_public_key
+    ```
+  </Step>
+  
+  <Step>
+    ### Configure Interactions Endpoint
+    
+    In Discord Developer Portal → General Information:
+    
+    1. Set **Interactions Endpoint URL**: `https://your-domain.com/api/discord`
+    2. Discord will verify the endpoint (must be live when you save)
+    3. If verification fails, check logs for errors
+    
+    <Callout type="warn" title="Endpoint Must Be Live">
+      Discord verifies your endpoint when you save. Make sure your application is deployed and accessible before setting this URL.
+    </Callout>
+  </Step>
+  
+  <Step>
+    ### Invite Bot to Server
+    
+    1. Go to **OAuth2** → **URL Generator**
+    2. Select scopes: `bot`, `applications.commands`
+    3. Select bot permissions (e.g., Send Messages, Use Slash Commands)
+    4. Copy generated URL and open in browser
+    5. Select a server and authorize
+  </Step>
+</Steps>
+
+---
+
+## Configuration
+
+```typescript
+discord({
+  token: string,           // Required: Bot token
+  applicationId: string,   // Required: Application ID
+  publicKey: string,       // Required: Public key for signature verification
+  handle?: string          // Optional: Bot identifier
+})
+```
+
+### Environment Variables
+
+```bash
+DISCORD_TOKEN=your_bot_token_here
+DISCORD_APPLICATION_ID=your_app_id_here
+DISCORD_PUBLIC_KEY=your_public_key_here
+```
+
+---
+
+## Capabilities
+
+### Content Types
+
+| Type | Supported | Notes |
+|------|-----------|-------|
+| **Text** | ✅ | Up to 2000 characters |
+| **Image** | ✅ | Via embeds or attachments |
+| **Video** | ✅ | Via attachments |
+| **Audio** | ✅ | Via attachments |
+| **Document** | ✅ | Any file up to 25MB (100MB for nitro) |
+| **Sticker** | ❌ | Cannot send via API |
+| **Location** | ❌ | Not supported |
+| **Contact** | ❌ | Not supported |
+| **Poll** | ❌ | Not supported via bot API |
+| **Interactive** | ✅ | Buttons, select menus |
+
+### Actions
+
+| Action | Supported | Notes |
+|--------|-----------|-------|
+| **Edit Message** | ✅ | Bot's own messages only |
+| **Delete Message** | ✅ | Requires permission |
+| **React** | ✅ | Emoji reactions |
+| **Pin Message** | ❌ | Not implemented |
+| **Thread** | ❌ | Not implemented |
+
+### Interaction Types
+
+| Type | Supported | Description |
+|------|-----------|-------------|
+| **Slash Commands** | ✅ | `/command` style commands |
+| **Message Components** | ✅ | Button clicks, select menus |
+| **Modals** | ❌ | Not implemented yet |
+| **Auto Complete** | ❌ | Not implemented yet |
+
+### Limits
+
+| Limit | Value |
+|-------|-------|
+| **Max Message Length** | 2,000 characters |
+| **Max File Size** | 25 MB (100 MB for Nitro) |
+| **Max Buttons** | 5 per row, 25 total |
+| **Max Embed Fields** | 25 fields |
+| **Max Embeds** | 10 per message |
+
+---
+
+## Slash Commands
+
+Discord commands use the slash command interface.
+
+### Basic Command
+
+```typescript
+.addCommand('hello', {
+  name: 'hello',
+  description: 'Say hello',
+  async handle(ctx) {
+    await ctx.reply('Hello from Discord!')
+  }
+})
+```
+
+When registered, users see `/hello` in Discord's command picker.
+
+### Command with Options
+
+```typescript
+import { z } from 'zod'
+
+.addCommand('greet', {
+  name: 'greet',
+  description: 'Greet someone',
+  args: z.object({
+    name: z.string(),
+    loud: z.boolean().optional()
+  }),
+  async handle(ctx, args) {
+    const greeting = `Hello, ${args.name}!`
+    await ctx.reply(args.loud ? greeting.toUpperCase() : greeting)
+  }
+})
+```
+
+Users see: `/greet name:John loud:true`
+
+### Command Registration
+
+Commands are automatically registered with Discord when you call `bot.start()`:
+
+```typescript
+const bot = IgniterBot
+  .create()
+  .addAdapter('discord', discord({...}))
+  .addCommand('ping', {...})
+  .addCommand('help', {...})
+  .build()
+
+// Registers /ping and /help with Discord
+await bot.start()
+```
+
+<Callout type="info" title="Command Sync">
+  It may take up to 1 hour for global commands to sync across all servers. Use guild-specific commands for instant updates during development.
+</Callout>
+
+---
+
+## Sending Messages
+
+### Text Messages
+
+```typescript
+await ctx.reply('Hello, Discord!')
+
+// With formatting
+await ctx.reply('**Bold text** and *italic text*')
+```
+
+**Markdown Formatting:**
+- `**bold**` - Bold text
+- `*italic*` - Italic text
+- `__underline__` - Underline
+- `~~strikethrough~~` - Strikethrough
+- ` ```code``` ` - Code block
+
+### Rich Embeds
+
+Create beautiful rich embeds:
+
+```typescript
+await bot.send({
+  provider: 'discord',
+  channel: channelId,
+  content: {
+    type: 'text',
+    content: 'Check out this embed:',
+    embed: {
+      title: 'Embed Title',
+      description: 'This is a rich embed',
+      color: 0x00ff00, // Green
+      fields: [
+        { name: 'Field 1', value: 'Value 1', inline: true },
+        { name: 'Field 2', value: 'Value 2', inline: true }
+      ],
+      footer: { text: 'Footer text' },
+      timestamp: new Date().toISOString()
+    }
+  }
+})
+```
+
+### Images
+
+```typescript
+await ctx.replyWithImage(
+  'https://example.com/image.jpg',
+  'Image caption'
+)
+```
+
+### Files
+
+```typescript
+await ctx.replyWithDocument(
+  'https://example.com/document.pdf',
+  'Here is your file'
+)
+```
+
+---
+
+## Interactive Components
+
+Discord supports buttons and select menus.
+
+### Buttons
+
+```typescript
+await ctx.replyWithButtons('Choose an option:', [
+  { id: '1', label: 'Option 1', action: 'callback', data: 'opt1' },
+  { id: '2', label: 'Option 2', action: 'callback', data: 'opt2' },
+  { id: '3', label: 'Option 3', action: 'callback', data: 'opt3' }
+])
+```
+
+### Button Styles
+
+```typescript
+// With different styles
+await bot.send({
+  provider: 'discord',
+  channel: channelId,
+  content: {
+    type: 'interactive',
+    text: 'Choose:',
+    buttons: [
+      { id: '1', label: 'Primary', style: 'primary', data: '1' },
+      { id: '2', label: 'Success', style: 'success', data: '2' },
+      { id: '3', label: 'Danger', style: 'danger', data: '3' },
+      { id: '4', label: 'Link', style: 'link', url: 'https://example.com' }
+    ]
+  }
+})
+```
+
+**Button Styles:**
+- `primary` - Blue (blurple)
+- `secondary` - Gray
+- `success` - Green
+- `danger` - Red
+- `link` - URL button
+
+### Handling Interactions
+
+```typescript
+.onMessage(async (ctx) => {
+  // Button interactions come as messages
+  if (ctx.message.content?.type === 'text') {
+    const data = ctx.message.content.content
+    
+    if (data === 'opt1') {
+      await ctx.reply('You chose option 1!')
+    }
+  }
+})
+```
+
+---
+
+## Webhook Handler
+
+Create interaction endpoint:
+
+```typescript
+// src/app/api/discord/route.ts
+import { bot } from '@/bot'
+
+export async function POST(req: Request) {
+  return bot.handle('discord', req)
+}
+```
+
+The adapter automatically:
+1. Verifies Ed25519 signature
+2. Responds to ping (type 1)
+3. Processes interactions
+4. Returns proper responses
+
+<Callout type="success" title="Security Built-In">
+  The Discord adapter automatically verifies request signatures using your public key, protecting against forged requests.
+</Callout>
+
+---
+
+## Best Practices
+
+<Accordions>
+  <Accordion title="Deferred Responses">
+    For long-running commands, defer the response:
+    
+    ```typescript
+    async handle(ctx) {
+      // Defer response (shows "Bot is thinking...")
+      await ctx.deferReply()
+      
+      // Do expensive work
+      const result = await longOperation()
+      
+      // Follow up with actual response
+      await ctx.followUp(result)
+    }
+    ```
+    
+    Discord requires responses within 3 seconds. Use deferral for longer operations.
+  </Accordion>
+  
+  <Accordion title="Ephemeral Messages">
+    Send private messages only visible to the user:
+    
+    ```typescript
+    await ctx.reply('This is private!', { ephemeral: true })
+    ```
+    
+    Great for error messages and sensitive data.
+  </Accordion>
+  
+  <Accordion title="Guild vs Global Commands">
+    - **Global commands**: Available in all servers (up to 1 hour to sync)
+    - **Guild commands**: Server-specific (instant sync)
+    
+    Use guild commands for development:
+    
+    ```typescript
+    .addCommand('test', {
+      name: 'test',
+      guildId: 'your_test_server_id', // Guild-specific
+      async handle(ctx) {...}
+    })
+    ```
+  </Accordion>
+  
+  <Accordion title="Permissions">
+    Specify required permissions for commands:
+    
+    ```typescript
+    .addCommand('kick', {
+      name: 'kick',
+      description: 'Kick a user',
+      permissions: ['KICK_MEMBERS'], // Requires kick permission
+      async handle(ctx) {...}
+    })
+    ```
+  </Accordion>
+</Accordions>
+
+---
+
+## Troubleshooting
+
+<Accordions>
+  <Accordion title="Endpoint Verification Failed">
+    **Problem**: Cannot save interactions endpoint URL
+    
+    **Solutions**:
+    - Ensure endpoint is live and accessible
+    - Check public key is correct
+    - Verify signature verification is working
+    - Check logs for verification errors
+    - Use HTTPS (required by Discord)
+  </Accordion>
+  
+  <Accordion title="Commands Not Appearing">
+    **Problem**: Slash commands don't show up
+    
+    **Solutions**:
+    - Wait up to 1 hour for global command sync
+    - Use guild commands for instant updates
+    - Check bot has `applications.commands` scope
+    - Verify bot is in the server
+    - Try kicking and re-inviting bot
+  </Accordion>
+  
+  <Accordion title="Interaction Failed">
+    **Problem**: "This interaction failed" error
+    
+    **Solutions**:
+    - Respond within 3 seconds (use defer for long ops)
+    - Check response format is valid
+    - Verify bot has message permissions
+    - Check for errors in logs
+  </Accordion>
+</Accordions>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Telegram Adapter"
+    description="Learn about the Telegram adapter"
+    href="/docs/bots/telegram"
+  />
+  
+  <Card
+    title="WhatsApp Adapter"
+    description="Compare with WhatsApp integration"
+    href="/docs/bots/whatsapp"
+  />
+  
+  <Card
+    title="Interactive Components"
+    description="Build complex UIs with buttons and menus"
+    href="/docs/bots/interactive-messages"
+  />
+  
+  <Card
+    title="Best Practices"
+    description="Production patterns for Discord bots"
+    href="/docs/bots/best-practices"
+  />
+</Cards>
+

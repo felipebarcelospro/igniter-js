@@ -1,0 +1,344 @@
+---
+title: Sending Messages
+description: Send messages to users through your bot.
+---
+
+Sending messages is one of the core features of any bot. The Bots package provides a unified `send` method that works across all adapters.
+
+---
+
+## Basic Sending
+
+The `ctx.bot.send()` method is your primary way to send messages to users. It provides a unified interface that works across all adapters (Telegram, WhatsApp, etc.), so you don't need to worry about platform-specific APIs. The send method is async, so always use `await` to ensure messages are sent before your code continues.
+
+When you call `send()`, you specify the provider (which adapter to use), the target channel (where to send), and the content (what to send). The method handles all the platform-specific details for you, making it easy to write bot code that works across multiple messaging platforms.
+
+Use `ctx.bot.send()` to send messages:
+
+```typescript
+commands: {
+  hello: {
+    name: 'hello',
+    async handle(ctx) {
+      await ctx.bot.send({
+        provider: ctx.provider,
+        channel: ctx.channel.id,
+        content: {
+          type: 'text',
+          content: 'Hello, world!'
+        }
+      })
+    }
+  }
+}
+```
+
+---
+
+## Send Parameters
+
+The `send` method requires three essential parameters to successfully deliver a message. Understanding these parameters helps you send messages correctly across different platforms and scenarios. Each parameter plays a specific role in routing and formatting your message.
+
+The `send` method requires:
+
+- **`provider`**: The adapter name (e.g., `'telegram'`, `'whatsapp'`)
+- **`channel`**: The channel/chat ID where to send the message
+- **`content`**: The message content (currently only `text` is supported)
+
+```typescript
+await ctx.bot.send({
+  provider: 'telegram',           // Adapter name
+  channel: ctx.channel.id,        // Channel ID
+  content: {
+    type: 'text',                 // Content type
+    content: 'Your message here'  // Message text
+  }
+})
+```
+
+---
+
+## Sending from Commands
+
+Sending messages from command handlers is the most common pattern in bot development. Commands give users a clear way to interact with your bot, and responding with messages provides feedback and results. The command handler receives the context object, which contains all the information you need to send a reply.
+
+This pattern is perfect for interactive bots where users invoke commands and expect responses. The context object already contains the provider and channel information, making it straightforward to send replies.
+
+The most common place to send messages is from command handlers:
+
+```typescript
+commands: {
+  echo: {
+    name: 'echo',
+    async handle(ctx, params) {
+      const text = params.join(' ') || 'Hello!'
+      
+      await ctx.bot.send({
+        provider: ctx.provider,
+        channel: ctx.channel.id,
+        content: {
+          type: 'text',
+          content: text
+        }
+      })
+    }
+  }
+}
+```
+
+---
+
+## Sending from Event Listeners
+
+Event listeners allow you to respond to messages automatically, without requiring users to use commands. This is useful for bots that need to react to various events or provide automatic responses to certain triggers. Event listeners give you more flexibility than command handlers, allowing you to respond to any message type or event.
+
+You can send messages from event listeners to provide automatic responses, notifications, or reactive behavior based on incoming messages or other events.
+
+You can also send messages from event listeners:
+
+```typescript
+bot.on('message', async (ctx) => {
+  // Reply to every message
+  await ctx.bot.send({
+    provider: ctx.provider,
+    channel: ctx.channel.id,
+    content: {
+      type: 'text',
+      content: 'I received your message!'
+    }
+  })
+})
+```
+
+---
+
+## Sending to Different Channels
+
+While most bots respond to the channel that sent the message, you can send messages to any channel your bot has access to. This enables powerful patterns like broadcasting, notifications, and cross-channel communication. When sending to different channels, you specify the channel ID explicitly instead of using `ctx.channel.id`.
+
+This pattern is essential for admin bots, notification systems, and bots that need to coordinate messages across multiple channels. Always ensure your bot has permission to send messages to the target channels.
+
+You can send messages to any channel, not just the one that sent the message:
+
+```typescript
+commands: {
+  broadcast: {
+    name: 'broadcast',
+    async handle(ctx, params) {
+      const message = params.join(' ')
+      const adminChannels = ['channel1', 'channel2', 'channel3']
+      
+      // Send to multiple channels
+      for (const channelId of adminChannels) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: channelId,
+          content: {
+            type: 'text',
+            content: message
+          }
+        })
+      }
+    }
+  }
+}
+```
+
+---
+
+## Error Handling
+
+Message sending can fail for various reasons—network issues, rate limits, invalid recipients, or platform-specific errors. Proper error handling ensures your bot degrades gracefully and provides appropriate feedback when things go wrong. Always wrap send operations in try-catch blocks, especially in production code.
+
+Good error handling prevents your bot from crashing when message sending fails and allows you to implement retry logic, logging, or user notifications when appropriate. Don't let send failures break your bot's functionality.
+
+Handle errors when sending messages:
+
+```typescript
+try {
+  await ctx.bot.send({
+    provider: ctx.provider,
+    channel: ctx.channel.id,
+    content: {
+      type: 'text',
+      content: 'Message'
+    }
+  })
+} catch (error) {
+  console.error('Failed to send message:', error)
+  // Handle error (e.g., retry, notify admin)
+}
+```
+
+---
+
+## Sending After Async Operations
+
+Many bots need to perform async operations (like API calls, database queries, or file processing) before sending a response. This pattern shows how to send messages after completing async work, ensuring users receive responses only after operations complete successfully. This is essential for bots that fetch data, process files, or perform other time-consuming tasks.
+
+When performing async operations, remember to handle errors appropriately and provide user feedback if the operation fails. Users should always know what's happening, even if it takes a moment.
+
+Send messages after completing async operations:
+
+```typescript
+commands: {
+  fetch: {
+    name: 'fetch',
+    async handle(ctx, params) {
+      const url = params[0]
+      
+      if (!url) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: 'Usage: /fetch <url>'
+          }
+        })
+        return
+      }
+      
+      // Fetch data
+      const response = await fetch(url)
+      const data = await response.text()
+      
+      // Send result
+      await ctx.bot.send({
+        provider: ctx.provider,
+        channel: ctx.channel.id,
+        content: {
+          type: 'text',
+          content: `Fetched: ${data.substring(0, 100)}...`
+        }
+      })
+    }
+  }
+}
+```
+
+---
+
+## Formatting Messages
+
+Message formatting varies by platform, but currently all adapters support plain text messages. Text messages can include newlines and basic formatting, though advanced formatting (like Markdown or HTML) depends on platform support. Understanding formatting capabilities helps you create messages that are readable and well-formatted across different platforms.
+
+Different adapters support different formatting. Currently, only text messages are supported for sending:
+
+```typescript
+// Plain text
+await ctx.bot.send({
+  provider: ctx.provider,
+  channel: ctx.channel.id,
+  content: {
+    type: 'text',
+    content: 'Hello, world!'
+  }
+})
+
+// Multi-line text
+await ctx.bot.send({
+  provider: ctx.provider,
+  channel: ctx.channel.id,
+  content: {
+    type: 'text',
+    content: 'Line 1\nLine 2\nLine 3'
+  }
+})
+```
+
+<Callout type="info" title="Future Support">
+  Future versions will support sending images, documents, and interactive components (buttons, keyboards).
+</Callout>
+
+---
+
+## Best Practices
+
+Following these practices ensures your messages are sent reliably and don't cause issues with platform rate limits or message formatting. Good message sending is resilient, efficient, and respects platform constraints.
+
+<Accordions>
+  <Accordion title="Always await">
+    Use `await` when sending messages. The `send()` method is async, so you must await it to ensure messages are actually sent before continuing. Forgetting to await can cause race conditions and make error handling difficult.
+  </Accordion>
+  
+  <Accordion title="Handle errors">
+    Wrap send calls in try-catch for production. Message sending can fail for many reasons (network issues, rate limits, invalid recipients). Always handle these errors gracefully—log them and provide user feedback when appropriate.
+  </Accordion>
+  
+  <Accordion title="Use context">
+    Use `ctx.provider` and `ctx.channel.id` from context. Don't hardcode provider names or channel IDs—use the values from the context object. This makes your code more flexible and works correctly across different platforms.
+  </Accordion>
+  
+  <Accordion title="Keep messages concise">
+    Long messages may be truncated by platforms. Different platforms have different message length limits (Telegram allows up to 4096 characters). If you need to send long content, consider splitting it into multiple messages or using a different format (like documents).
+  </Accordion>
+  
+  <Accordion title="Rate limit">
+    Be mindful of platform rate limits. Sending too many messages too quickly can trigger rate limits and get your bot temporarily blocked. Implement rate limiting in your middleware or use delays between messages when sending bulk notifications.
+  </Accordion>
+</Accordions>
+
+---
+
+## Complete Example
+
+Here's a complete example that demonstrates a bot capable of sending messages through commands. This example shows how to validate user input, send error messages for invalid usage, and send success messages when commands execute correctly. It demonstrates the core patterns you'll use in production bots.
+
+This example demonstrates:
+- **Command-Based Sending**: Sending messages from command handlers
+- **Input Validation**: Checking for required parameters before processing
+- **Error Messaging**: Providing clear feedback for invalid commands
+- **Success Responses**: Confirming successful operations with messages
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+
+const bot = Bot.create({
+  id: 'send-bot',
+  name: 'Send Bot',
+  adapters: {
+    telegram: telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      handle: '@send_bot',
+      webhook: {
+        url: process.env.TELEGRAM_WEBHOOK_URL!
+      }
+    })
+  },
+  commands: {
+    send: {
+      name: 'send',
+      async handle(ctx, params) {
+        const message = params.join(' ')
+        
+        if (!message) {
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: 'Usage: /send <message>'
+            }
+          })
+          return
+        }
+        
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: `✅ Sent: ${message}`
+          }
+        })
+      }
+    }
+  }
+})
+
+await bot.start()
+```
+
+---
+

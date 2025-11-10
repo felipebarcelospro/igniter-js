@@ -1,0 +1,498 @@
+---
+title: Common Patterns
+description: Reusable middleware patterns for common bot functionality.
+---
+
+This guide shows common middleware patterns you can use in your bots. These patterns have been battle-tested in production and can be adapted to fit your specific needs. Each pattern includes working code examples you can copy and modify, along with explanations of when and why to use them.
+
+Whether you're building authentication, rate limiting, logging, or session management, these patterns provide a solid foundation. Understanding these common patterns helps you build robust bots faster and avoid common pitfalls.
+
+---
+
+## Authentication Pattern
+
+Restrict bot access to authorized users by checking permissions before allowing requests to proceed. Authentication middleware runs early in the middleware chain, blocking unauthorized users before any command logic executes. This pattern is essential for bots that need to control access or provide different features to different user tiers.
+
+You can implement authentication in several ways—using a simple set of authorized users, checking against a database, or integrating with external authentication systems. Choose the approach that fits your security requirements and scale.
+
+<Accordions>
+  <Accordion title="Simple User List">
+    For small bots or development, you can maintain a simple set of authorized user IDs. This approach is fast and requires no external dependencies, but it's not suitable for production bots that need dynamic user management.
+    
+    ```typescript
+    import type { Middleware } from '@igniter-js/bot'
+    
+    const authorizedUsers = new Set(['user123', 'user456'])
+    
+    export const authMiddleware: Middleware = async (ctx, next) => {
+      const userId = ctx.message.author.id
+      
+      if (!authorizedUsers.has(userId)) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: '❌ You are not authorized to use this bot.'
+          }
+        })
+        return // Block processing
+      }
+      
+      await next()
+    }
+    ```
+    
+    This pattern works well for bots with a fixed set of users or during development when you need quick access control. For production, consider using database-backed authentication instead.
+  </Accordion>
+  
+  <Accordion title="Database-Backed Authentication">
+    For production bots, check user authorization against a database or external service. This allows dynamic user management, support for roles and permissions, and integration with existing authentication systems. Database checks add latency, so consider caching results for frequently accessed users.
+    
+    ```typescript
+    export const authMiddleware: Middleware = async (ctx, next) => {
+      const userId = ctx.message.author.id
+      const isAuthorized = await checkUserAuthorization(userId)
+      
+      if (!isAuthorized) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: '❌ Unauthorized access.'
+          }
+        })
+        return
+      }
+      
+      await next()
+    }
+    ```
+    
+    Database-backed authentication provides flexibility and scalability, making it ideal for production bots. Consider adding caching layers to reduce database load and improve response times.
+  </Accordion>
+</Accordions>
+
+---
+
+## Rate Limiting Pattern
+
+Prevent spam and abuse by limiting how many requests each user can make within a time window. Rate limiting protects your bot from being overwhelmed and helps ensure fair usage across all users. This middleware tracks request timestamps per user and blocks requests that exceed the limit.
+
+Rate limiting is crucial for production bots, especially those that make external API calls or perform expensive operations. This pattern helps prevent abuse while maintaining a good user experience for legitimate users.
+
+```typescript
+const rateLimiter = new Map<string, { count: number; resetAt: number }>()
+
+export const rateLimitMiddleware: Middleware = async (ctx, next) => {
+  const userId = ctx.message.author.id
+  const now = Date.now()
+  const windowMs = 60000 // 1 minute
+  const maxRequests = 10
+  
+  let userLimit = rateLimiter.get(userId)
+  
+  // Reset if window expired
+  if (!userLimit || now > userLimit.resetAt) {
+    userLimit = { count: 0, resetAt: now + windowMs }
+  }
+  
+  // Check limit
+  if (userLimit.count >= maxRequests) {
+    const remainingSeconds = Math.ceil((userLimit.resetAt - now) / 1000)
+    
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: `⏳ Rate limit exceeded. Try again in ${remainingSeconds} seconds.`
+      }
+    })
+    return
+  }
+  
+  // Increment counter
+  userLimit.count++
+  rateLimiter.set(userId, userLimit)
+  
+  await next()
+}
+```
+
+---
+
+## Logging Pattern
+
+Log all bot activity to help with debugging, monitoring, and understanding how users interact with your bot. Logging middleware runs early in the pipeline, capturing all requests and their context. This makes it easier to troubleshoot issues and understand bot usage patterns.
+
+You can implement simple console logging or structured logging with libraries like Pino or Winston. Structured logging provides better searchability and integration with log aggregation services.
+
+<Accordions>
+  <Accordion title="Simple Console Logging">
+    Basic console logging is perfect for development and small bots. It's simple to implement and requires no external dependencies, but it's not suitable for production where you need structured logs and log aggregation.
+    
+    ```typescript
+    export const loggingMiddleware: Middleware = async (ctx, next) => {
+      const timestamp = new Date().toISOString()
+      const user = ctx.message.author.name
+      const channel = ctx.channel.name
+      const event = ctx.event
+      const content = ctx.message.content?.type === 'text' 
+        ? ctx.message.content.content 
+        : ctx.message.content?.type
+      
+      console.log(`[${timestamp}] ${event} | User: ${user} | Channel: ${channel} | Content: ${content}`)
+      
+      await next()
+    }
+    ```
+    
+    Console logging is fine for development, but consider upgrading to structured logging for production bots to enable better log analysis and monitoring.
+  </Accordion>
+  
+  <Accordion title="Structured Logging">
+    Structured logging provides better searchability, filtering, and integration with log aggregation services. Use a library like Pino or Winston to create structured logs that include all relevant context in a machine-readable format.
+    
+    ```typescript
+    import pino from 'pino'
+    
+    const logger = pino()
+    
+    export const loggingMiddleware: Middleware = async (ctx, next) => {
+      const logContext = {
+        event: ctx.event,
+        provider: ctx.provider,
+        userId: ctx.message.author.id,
+        userName: ctx.message.author.name,
+        channelId: ctx.channel.id,
+        channelName: ctx.channel.name,
+        isGroup: ctx.channel.isGroup,
+        contentType: ctx.message.content?.type
+      }
+      
+      logger.info(logContext, 'Bot message received')
+      
+      await next()
+    }
+    ```
+    
+    Structured logging is essential for production bots where you need to analyze logs, set up alerts, and integrate with monitoring systems. It makes debugging and understanding bot behavior much easier.
+  </Accordion>
+</Accordions>
+
+---
+
+## Metrics Pattern
+
+Track bot performance by measuring latency, success rates, and error rates. Metrics middleware runs around the entire request lifecycle, measuring how long operations take and whether they succeed or fail. This data is invaluable for understanding performance bottlenecks and monitoring health in production.
+
+Metrics help you identify slow commands, track error rates, and understand how your bot performs under load. Send metrics to services like Prometheus, Datadog, or CloudWatch for monitoring and alerting.
+
+```typescript
+export const metricsMiddleware: Middleware = async (ctx, next) => {
+  const startTime = Date.now()
+  
+  try {
+    await next()
+    
+    const duration = Date.now() - startTime
+    
+    // Record success metric
+    recordMetric('bot.request.success', {
+      provider: ctx.provider,
+      event: ctx.event,
+      duration,
+      channelType: ctx.channel.isGroup ? 'group' : 'private'
+    })
+  } catch (error) {
+    const duration = Date.now() - startTime
+    
+    // Record error metric
+    recordMetric('bot.request.error', {
+      provider: ctx.provider,
+      event: ctx.event,
+      duration,
+      error: error.message
+    })
+    
+    throw error // Re-throw for error handlers
+  }
+}
+```
+
+---
+
+## Session Pattern
+
+Load and save user sessions to maintain state across bot interactions. This pattern uses pre-process hooks to load sessions and post-process hooks to save them, ensuring session data persists between messages. Sessions are perfect for storing user preferences, temporary data, or conversation context.
+
+Sessions make your bot feel more intelligent and personalized by remembering previous interactions. This pattern is essential for bots that need to maintain state, such as multi-step workflows or bots that remember user preferences.
+
+```typescript
+// Pre-process hook
+bot.onPreProcess(async (ctx) => {
+  const userId = ctx.message.author.id
+  const session = await loadSession(userId)
+  ;(ctx as any).session = session || { userId, data: {} }
+})
+
+// Post-process hook
+bot.onPostProcess(async (ctx) => {
+  const session = (ctx as any).session
+  if (session) {
+    await saveSession(ctx.message.author.id, session)
+  }
+})
+
+// Use in commands
+commands: {
+  set: {
+    name: 'set',
+    async handle(ctx, params) {
+      const session = (ctx as any).session
+      const [key, value] = params
+      
+      if (!key || !value) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: 'Usage: /set <key> <value>'
+          }
+        })
+        return
+      }
+      
+      session.data[key] = value
+      
+      await ctx.bot.send({
+        provider: ctx.provider,
+        channel: ctx.channel.id,
+        content: {
+          type: 'text',
+          content: `✅ Set ${key} = ${value}`
+        }
+      })
+    }
+  }
+}
+```
+
+---
+
+## Cooldown Pattern
+
+Prevent users from spamming commands by enforcing a cooldown period between command executions. This pattern tracks when each user last used a command and blocks requests that occur too soon after the previous one. Cooldowns help prevent abuse and reduce server load from rapid-fire commands.
+
+Cooldowns are especially useful for commands that perform expensive operations or interact with external APIs. They give users clear feedback about when they can use a command again, improving the user experience.
+
+```typescript
+const cooldowns = new Map<string, number>()
+
+export const cooldownMiddleware: Middleware = async (ctx, next) => {
+  const userId = ctx.message.author.id
+  
+  // Only apply to commands
+  if (ctx.message.content?.type !== 'command') {
+    await next()
+    return
+  }
+  
+  const command = ctx.message.content.command
+  const cooldownKey = `${userId}:${command}`
+  const cooldownMs = 5000 // 5 seconds
+  const lastUsed = cooldowns.get(cooldownKey) || 0
+  const now = Date.now()
+  
+  if (now - lastUsed < cooldownMs) {
+    const remainingSeconds = Math.ceil((cooldownMs - (now - lastUsed)) / 1000)
+    
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: `⏳ Please wait ${remainingSeconds} seconds before using /${command} again.`
+      }
+    })
+    return
+  }
+  
+  cooldowns.set(cooldownKey, now)
+  await next()
+}
+```
+
+---
+
+## Group-Only Pattern
+
+Restrict commands to group chats by checking the channel type before allowing command execution. Some commands only make sense in group contexts, such as moderation commands or commands that affect multiple users. This pattern ensures these commands are only available where they're appropriate.
+
+You can apply group-only restrictions globally to all commands or selectively to specific commands. The pattern provides clear feedback to users who try to use group-only commands in private chats.
+
+```typescript
+export const groupOnlyMiddleware: Middleware = async (ctx, next) => {
+  if (!ctx.channel.isGroup) {
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: '❌ This command is only available in group chats.'
+      }
+    })
+    return
+  }
+  
+  await next()
+}
+
+// Apply to specific commands
+bot.use(async (ctx, next) => {
+  if (ctx.message.content?.type === 'command') {
+    const command = ctx.message.content.command
+    
+    if (['grouponly'].includes(command) && !ctx.channel.isGroup) {
+      await ctx.bot.send({
+        provider: ctx.provider,
+        channel: ctx.channel.id,
+        content: {
+          type: 'text',
+          content: '❌ Group-only command.'
+        }
+      })
+      return
+    }
+  }
+  
+  await next()
+})
+```
+
+---
+
+## Admin-Only Pattern
+
+Restrict commands to administrators by checking user permissions before allowing command execution. Admin-only commands are essential for bot management, moderation, and configuration. This pattern ensures sensitive operations are only available to authorized users.
+
+You can implement admin checks using a simple set of admin user IDs or by checking against a database or external permission system. Choose the approach that fits your security requirements.
+
+```typescript
+const admins = new Set(['admin123', 'admin456'])
+
+export const adminOnlyMiddleware: Middleware = async (ctx, next) => {
+  const userId = ctx.message.author.id
+  
+  if (!admins.has(userId)) {
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: '❌ Admin only command.'
+      }
+    })
+    return
+  }
+  
+  await next()
+}
+
+// Apply conditionally
+bot.use(async (ctx, next) => {
+  if (ctx.message.content?.type === 'command') {
+    const command = ctx.message.content.command
+    const adminCommands = ['ban', 'kick', 'mute']
+    
+    if (adminCommands.includes(command) && !admins.has(ctx.message.author.id)) {
+      await ctx.bot.send({
+        provider: ctx.provider,
+        channel: ctx.channel.id,
+        content: {
+          type: 'text',
+          content: '❌ Admin only.'
+        }
+      })
+      return
+    }
+  }
+  
+  await next()
+})
+```
+
+---
+
+## Error Recovery Pattern
+
+Handle errors gracefully by catching exceptions, logging them, and sending user-friendly error messages. Error recovery middleware wraps the entire request processing pipeline, ensuring errors don't crash your bot and users receive helpful feedback instead of cryptic error messages.
+
+This pattern is essential for production bots where errors are inevitable. Good error handling improves user experience and makes debugging easier by providing clear error logs.
+
+```typescript
+export const errorRecoveryMiddleware: Middleware = async (ctx, next) => {
+  try {
+    await next()
+  } catch (error) {
+    // Log error
+    console.error('Bot error:', error)
+    
+    // Send user-friendly message
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: '❌ Something went wrong. Please try again later.'
+      }
+    }).catch(() => {
+      // Ignore errors sending error message
+    })
+    
+    // Re-throw to let bot's error handler catch it
+    throw error
+  }
+}
+```
+
+---
+
+## Combining Patterns
+
+Combine multiple middleware patterns to build production-ready bots with comprehensive functionality. Real-world bots typically use several patterns together—logging, rate limiting, authentication, error handling, and session management all work together to create robust, secure bots.
+
+This example shows how to compose multiple patterns effectively. The order matters—logging typically comes first, then rate limiting, then authentication, and finally error recovery. This ensures you capture all requests, prevent abuse, verify authorization, and handle errors gracefully.
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+
+const bot = Bot.create({
+  adapters: {
+    telegram: telegram({ /* ... */ })
+  },
+  middlewares: [
+    loggingMiddleware,      // Log all requests
+    rateLimitMiddleware,    // Rate limit
+    authMiddleware,         // Authenticate
+    errorRecoveryMiddleware // Handle errors
+  ],
+  commands: {
+    // ...
+  }
+})
+
+bot.onPreProcess(async (ctx) => {
+  // Load session
+})
+
+bot.onPostProcess(async (ctx) => {
+  // Save session
+})
+```
+
+---
+

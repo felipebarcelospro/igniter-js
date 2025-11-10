@@ -1,0 +1,213 @@
+---
+title: Logging
+description: Use structured logging in your bot.
+---
+
+Structured logging helps you debug and monitor your bot. The Bots package supports pluggable loggers.
+
+---
+
+## Logger Interface
+
+The bot accepts a logger that implements a simple interface, allowing you to plug in any logging library you prefer. This pluggable logging system gives you flexibility to use your favorite logging library (Pino, Winston, etc.) or create a custom logger that fits your needs. The logger interface is minimal but covers all essential logging levels.
+
+Using a logger interface keeps the core bot package lightweight while giving you full control over how logs are formatted, stored, and processed. You can integrate with cloud logging services, local files, or any other logging infrastructure.
+
+The bot accepts a logger that implements:
+
+```typescript
+interface BotLogger {
+  debug?: (...args: any[]) => void
+  info?: (...args: any[]) => void
+  warn?: (...args: any[]) => void
+  error?: (...args: any[]) => void
+}
+```
+
+---
+
+## Basic Logging
+
+Console logging is the simplest way to get started with logging—it requires no setup and works immediately. This is perfect for development and small bots where you don't need structured logging or log aggregation. However, console logging has limitations for production use, so consider upgrading to structured logging as your bot grows.
+
+For quick prototypes or development, console logging gets you up and running fast. Just pass `console` as the logger and you'll see bot activity in your terminal.
+
+Use console as a simple logger:
+
+```typescript
+const bot = Bot.create({
+  logger: console,
+  // ...
+})
+```
+
+---
+
+## Structured Logging
+
+Structured logging libraries like Pino or Winston provide better log formatting, log levels, and integration with log aggregation services. Structured logging is essential for production bots where you need to search logs, set up alerts, and integrate with monitoring systems. These libraries format logs as JSON, making them easy to parse and analyze.
+
+Structured logging helps you understand bot behavior in production, debug issues faster, and monitor bot health effectively. The structured format makes logs searchable and filterable by log aggregation services.
+
+Use a proper logging library:
+
+```typescript
+import pino from 'pino'
+
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info'
+})
+
+const bot = Bot.create({
+  logger: {
+    debug: logger.debug.bind(logger),
+    info: logger.info.bind(logger),
+    warn: logger.warn.bind(logger),
+    error: logger.error.bind(logger)
+  },
+  // ...
+})
+```
+
+---
+
+## Custom Logger
+
+Creating a custom logger gives you complete control over how logs are formatted and where they're sent. Custom loggers are useful when you need special formatting, want to send logs to multiple destinations, or need to integrate with existing logging infrastructure. You can implement any logic you need—adding timestamps, filtering sensitive data, or routing logs to different services.
+
+Custom loggers are perfect for teams with existing logging standards or when you need specific log formatting that standard libraries don't provide.
+
+Create your own logger:
+
+```typescript
+const customLogger = {
+  debug: (...args: any[]) => {
+    console.log('[DEBUG]', ...args)
+  },
+  info: (...args: any[]) => {
+    console.log('[INFO]', ...args)
+  },
+  warn: (...args: any[]) => {
+    console.warn('[WARN]', ...args)
+  },
+  error: (...args: any[]) => {
+    console.error('[ERROR]', ...args)
+  }
+}
+
+const bot = Bot.create({
+  logger: customLogger,
+  // ...
+})
+```
+
+---
+
+## Logging Levels
+
+Understanding log levels helps you organize your logs effectively and filter them appropriately. Each level represents a different severity or purpose, allowing you to control what gets logged in different environments. In development, you might log everything at debug level, while in production you'd only log warnings and errors.
+
+Using appropriate log levels makes your logs more useful and prevents log storage from filling up with unnecessary information. It also helps you focus on what matters when debugging issues.
+
+Use different levels appropriately:
+
+- **debug**: Detailed information for debugging
+- **info**: General information about bot operation
+- **warn**: Warnings about potential issues
+- **error**: Error conditions
+
+---
+
+## Best Practices
+
+Good logging makes debugging easier and production monitoring more effective. These practices ensure your logs are useful, secure, and don't overwhelm your log storage or monitoring systems.
+
+<Accordions>
+  <Accordion title="Use structured logging">
+    Include context in logs. Instead of just logging "Error occurred", log "Error occurred: Command /delete failed for user 12345 in channel #support". Contextual logs help you understand what happened and why, making debugging much faster.
+  </Accordion>
+  
+  <Accordion title="Set appropriate levels">
+    Don't log everything at debug level. Use appropriate log levels: `error` for errors that need attention, `warn` for potential issues, `info` for important events, and `debug` for detailed troubleshooting. This helps you filter logs in production and focus on what matters.
+  </Accordion>
+  
+  <Accordion title="Log errors">
+    Always log errors with context. When an error occurs, include relevant information like user ID, channel, command, and error details. This context is crucial for debugging production issues where you can't reproduce the problem locally.
+  </Accordion>
+  
+  <Accordion title="Avoid sensitive data">
+    Don't log tokens or secrets. Logs might be stored in external systems, shared with team members, or exposed in error reports. Never log API tokens, passwords, or other sensitive information—even if logs are "private", they can leak.
+  </Accordion>
+</Accordions>
+
+---
+
+## Complete Example
+
+Here's a complete example that demonstrates structured logging with Pino in a production bot. This example shows how to configure a logger, integrate it with your bot, and use different log levels appropriately. It demonstrates the patterns you'll use to build production-ready bots with comprehensive logging.
+
+This example demonstrates:
+- **Logger Configuration**: Setting up Pino with appropriate log levels
+- **Logger Integration**: Connecting the logger to your bot instance
+- **Structured Logging**: Using structured logs for better searchability
+- **Production Patterns**: Logging patterns suitable for production environments
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+import pino from 'pino'
+
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info',
+  transport: {
+    target: 'pino-pretty',
+    options: {
+      colorize: true
+    }
+  }
+})
+
+const bot = Bot.create({
+  id: 'logging-bot',
+  name: 'Logging Bot',
+  logger: {
+    debug: logger.debug.bind(logger),
+    info: logger.info.bind(logger),
+    warn: logger.warn.bind(logger),
+    error: logger.error.bind(logger)
+  },
+  adapters: {
+    telegram: telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      handle: '@logging_bot',
+      webhook: {
+        url: process.env.TELEGRAM_WEBHOOK_URL!
+      }
+    })
+  },
+  commands: {
+    test: {
+      name: 'test',
+      async handle(ctx) {
+        logger.info({
+          userId: ctx.message.author.id,
+          command: 'test',
+          provider: ctx.provider
+        }, 'Command executed')
+        
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: '✅ Test command executed'
+          }
+        })
+      }
+    }
+  }
+})
+
+await bot.start()
+```
+
+---

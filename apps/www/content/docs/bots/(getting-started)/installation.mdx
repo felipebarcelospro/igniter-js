@@ -1,0 +1,142 @@
+---
+title: Installation
+description: Install and configure the Bots package in your Igniter.js application.
+---
+
+## Prerequisites
+
+Before installing the Bots package, make sure you have:
+
+- **Node.js** 18.0+ installed
+- An existing Igniter.js application (see [Installation](/docs/installation) guides)
+- Basic understanding of TypeScript
+- Access to messaging platform APIs (Telegram Bot API, WhatsApp Cloud API, etc.)
+
+---
+
+## Installation
+
+Install the Bots package using your preferred package manager:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/bot
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/bot
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/bot
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/bot
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  Peer requirements: TypeScript >= 5.x
+</Callout>
+
+---
+
+## Platform-Specific Setup
+
+Depending on which messaging platforms you want to support, you'll need to set up their APIs. Each platform has its own requirements and setup process. Expand the accordion below for the platform you're using:
+
+<Accordions>
+  <Accordion title="Telegram">
+    Setting up Telegram is straightforward. Follow these steps to get your bot token and configure webhooks:
+
+    1. **Create a Bot**: Talk to [@BotFather](https://t.me/BotFather) on Telegram
+    2. **Get Your Token**: Use `/newbot` command and follow the instructions
+    3. **Get Your Bot Username**: Note your bot's username (e.g., `@my_bot`)
+
+    **Environment Variables:**
+    ```bash
+    TELEGRAM_TOKEN=your_bot_token_here
+    TELEGRAM_WEBHOOK_URL=https://your-domain.com/api/telegram
+    TELEGRAM_SECRET=your_webhook_secret_here
+    ```
+
+    The Telegram adapter automatically sets up webhooks when you call `bot.start()`, so you don't need to configure them manually in the Telegram Bot API.
+  </Accordion>
+  
+  <Accordion title="WhatsApp Cloud API">
+    WhatsApp Cloud API requires a Meta Developer account and some additional setup steps:
+
+    1. **Set up Meta Developer Account**: Create an account at [Meta for Developers](https://developers.facebook.com/)
+    2. **Create a WhatsApp App**: Follow the setup wizard
+    3. **Get Access Token**: Generate a temporary or permanent access token
+    4. **Get Phone Number ID**: Note your phone number ID from the app dashboard
+
+    **Environment Variables:**
+    ```bash
+    WHATSAPP_TOKEN=your_access_token_here
+    WHATSAPP_PHONE_ID=your_phone_number_id_here
+    ```
+
+    <Callout type="warn" title="Manual Webhook Configuration">
+      WhatsApp Cloud API requires manual webhook configuration in the Meta dashboard. The adapter won't automatically set up webhooks like Telegram does. You'll need to configure the webhook URL and verify token in the Meta dashboard.
+    </Callout>
+  </Accordion>
+</Accordions>
+
+---
+
+## Project Structure
+
+After installation, you'll typically organize your bot code like this. The example below shows a Next.js App Router structure, but the Bots package works with any backend framework that can handle HTTP requests and responses:
+
+<Callout type="info" title="Framework Compatibility">
+  The Bots package is framework-agnostic. While this example uses Next.js App Router, you can use it with Express, Fastify, Hono, or any other framework that accepts `Request` and returns `Response` objects. The webhook handler pattern adapts to your framework's routing system.
+</Callout>
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="bot">
+      <File name="bot.ts" />
+      <Folder name="commands">
+        <File name="start.ts" />
+        <File name="help.ts" />
+      </Folder>
+      <Folder name="middleware">
+        <File name="auth.ts" />
+        <File name="logging.ts" />
+      </Folder>
+      <Folder name="handlers">
+        <File name="events.ts" />
+      </Folder>
+      <Folder name="storage">
+        <File name="index.ts" />
+      </Folder>
+    </Folder>
+    <Folder name="app">
+      <Folder name="api">
+        <Folder name="telegram">
+          <File name="route.ts" />
+        </Folder>
+        <Folder name="whatsapp">
+          <File name="route.ts" />
+        </Folder>
+      </Folder>
+    </Folder>
+  </Folder>
+</Files>
+
+**Key Organization Tips:**
+
+- **Commands**: Use `Bot.command()` to create commands in separate files (`src/bot/commands/`)
+- **Middleware**: Use `Bot.middleware()` to create middleware in separate files (`src/bot/middleware/`)
+- **Storage**: Keep shared state or database access in a dedicated module (`src/bot/storage/`)
+- **Handlers**: Event handlers can be organized separately (`src/bot/handlers/`)
+
+This structure keeps your bot code organized and maintainable as it grows.
+

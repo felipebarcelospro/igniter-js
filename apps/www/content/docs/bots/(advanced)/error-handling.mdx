@@ -1,0 +1,327 @@
+---
+title: Error Handling
+description: Handle errors gracefully in your bot.
+---
+
+Proper error handling ensures your bot continues working even when things go wrong. This guide shows you how to handle errors effectively.
+
+---
+
+## Error Events
+
+The bot emits an `error` event whenever an error occurs during message processing, command execution, or middleware execution. This event gives you a centralized place to handle all errors, regardless of where they originate. Listening to error events allows you to log errors, send user-friendly messages, and implement error recovery strategies.
+
+Error events are essential for production bots—they let you catch and handle errors that might otherwise crash your bot or leave users without feedback. The error context includes information about what went wrong and where it happened, making debugging easier.
+
+The bot emits an `error` event when errors occur:
+
+```typescript
+bot.on('error', async (ctx) => {
+  // @ts-expect-error - error injected internally
+  const err = ctx.error
+  
+  console.error('Bot error:', err.code, err.message)
+})
+```
+
+---
+
+## Error Codes
+
+The bot uses structured error codes to categorize different types of errors. These codes help you implement error-specific handling logic and provide appropriate responses to users. Understanding error codes helps you build more intelligent error handling that responds differently to different error types.
+
+Each error code represents a specific failure scenario. You can use these codes in switch statements or if conditions to provide targeted error handling and user feedback.
+
+The bot uses structured error codes:
+
+| Code | Meaning |
+|------|---------|
+| `PROVIDER_NOT_FOUND` | Adapter not registered |
+| `COMMAND_NOT_FOUND` | Command or alias doesn't exist |
+| `INVALID_COMMAND_PARAMETERS` | Command handler threw an error |
+| `ADAPTER_HANDLE_RETURNED_NULL` | Update was ignored |
+
+---
+
+## Handling Errors
+
+Error handling strategies vary depending on where errors occur and how critical they are. You can handle errors globally through error events, locally in command handlers, or through middleware. Each approach has its use cases—choose the one that fits your bot's architecture and error handling needs.
+
+Understanding different error handling patterns helps you build bots that degrade gracefully and provide helpful feedback even when things go wrong.
+
+<Accordions>
+  <Accordion title="Basic Error Handler">
+    A simple error handler catches all errors and sends user-friendly messages. This pattern is perfect for bots that need basic error handling without complex error-specific logic. It ensures users always receive feedback when errors occur.
+    
+    ```typescript
+    bot.on('error', async (ctx) => {
+      // @ts-expect-error
+      const err = ctx.error
+      
+      await ctx.bot.send({
+        provider: ctx.provider,
+        channel: ctx.channel.id,
+        content: {
+          type: 'text',
+          content: `❌ Error: ${err.message}`
+        }
+      })
+    })
+    ```
+    
+    Basic error handlers are a good starting point for new bots. They ensure errors don't go unnoticed and users receive feedback, even if the feedback is generic.
+  </Accordion>
+  
+  <Accordion title="Error-Specific Handling">
+    Handle different error types differently to provide more helpful and specific feedback. This pattern uses error codes to determine what went wrong and responds appropriately. Error-specific handling improves user experience by providing actionable error messages.
+    
+    ```typescript
+    bot.on('error', async (ctx) => {
+      // @ts-expect-error
+      const err = ctx.error
+      
+      switch (err.code) {
+        case 'COMMAND_NOT_FOUND':
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: '❌ Command not found. Use /help to see available commands.'
+            }
+          })
+          break
+          
+        case 'INVALID_COMMAND_PARAMETERS':
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: '❌ Invalid command usage. Please check the help text.'
+            }
+          })
+          break
+          
+        default:
+          console.error('Unknown error:', err)
+      }
+    })
+    ```
+    
+    Error-specific handling makes your bot feel more intelligent and helpful. Users get clear guidance on what went wrong and how to fix it, rather than generic error messages.
+  </Accordion>
+</Accordions>
+
+---
+
+## Error Handling in Commands
+
+Command handlers are where most business logic runs, making them a common source of errors. Handling errors directly in command handlers gives you fine-grained control over error responses and allows you to provide context-specific error messages. This pattern is perfect for commands that perform risky operations or need custom error handling.
+
+When handling errors in commands, you can provide specific feedback based on the command's context, making error messages more helpful and actionable for users.
+
+Handle errors in command handlers:
+
+```typescript
+commands: {
+  risky: {
+    name: 'risky',
+    async handle(ctx, params) {
+      try {
+        // Risky operation
+        const result = await riskyOperation(params[0])
+        
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: `✅ Result: ${result}`
+          }
+        })
+      } catch (error) {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: `❌ Error: ${error.message}`
+          }
+        })
+      }
+    }
+  }
+}
+```
+
+---
+
+## Error Middleware
+
+Error middleware provides a centralized way to handle errors across all commands and middleware. This pattern wraps the entire request processing pipeline, catching any errors that occur and handling them consistently. Error middleware is ideal for bots that need uniform error handling across all commands.
+
+Using middleware for error handling keeps your command handlers clean and focused on business logic, while ensuring all errors are caught and handled appropriately.
+
+Use middleware to handle errors globally:
+
+```typescript
+const errorMiddleware: Middleware = async (ctx, next) => {
+  try {
+    await next()
+  } catch (error) {
+    console.error('Middleware error:', error)
+    
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: '❌ An error occurred. Please try again later.'
+      }
+    }).catch(() => {
+      // Ignore errors sending error message
+    })
+    
+    throw error // Re-throw for error handlers
+  }
+}
+```
+
+---
+
+## Best Practices
+
+Effective error handling makes your bot resilient and user-friendly. These practices ensure errors are caught, logged, and handled gracefully without exposing internal details to users or crashing your bot.
+
+<Accordions>
+  <Accordion title="Always handle errors">
+    Don't let errors crash your bot. Wrap risky operations in try-catch blocks and provide fallback behavior. A bot that crashes on every error is unusable—even when things go wrong, users should get helpful feedback and the bot should continue functioning.
+  </Accordion>
+  
+  <Accordion title="Log errors">
+    Keep error logs for debugging. When errors occur, log them with context (user ID, channel, command, etc.) so you can debug issues later. Structured logging helps you identify patterns in errors and fix underlying issues quickly.
+  </Accordion>
+  
+  <Accordion title="User-friendly messages">
+    Don't expose internal errors to users. Technical error messages confuse users and potentially leak sensitive information. Instead, show friendly messages like "Something went wrong. Please try again later" while logging the full error details internally.
+  </Accordion>
+  
+  <Accordion title="Graceful degradation">
+    Handle partial failures gracefully. If one part of your bot fails, other parts should continue working. For example, if sending a message fails, don't crash the entire request—log the error and continue processing other commands or middleware.
+  </Accordion>
+</Accordions>
+
+---
+
+## Complete Example
+
+Here's a complete example that demonstrates comprehensive error handling in a production bot. This example shows how to handle errors at multiple levels—global error events, command-specific error handling, and middleware-based error recovery. It demonstrates the patterns you'll use to build resilient bots that handle errors gracefully.
+
+This example demonstrates:
+- **Global Error Handling**: Catching all errors through error events
+- **Error-Specific Responses**: Providing different messages for different error types
+- **Command-Level Error Handling**: Handling errors within command handlers
+- **Error Recovery**: Using middleware to catch and handle errors globally
+
+```typescript
+import { Bot, telegram, type Middleware } from '@igniter-js/bot'
+
+// Error recovery middleware
+const errorRecoveryMiddleware: Middleware = async (ctx, next) => {
+  try {
+    await next()
+  } catch (error) {
+    console.error('Middleware caught error:', error)
+    // Re-throw to let error handlers catch it
+    throw error
+  }
+}
+
+const bot = Bot.create({
+  id: 'error-bot',
+  name: 'Error Bot',
+  adapters: {
+    telegram: telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      handle: '@error_bot',
+      webhook: {
+        url: process.env.TELEGRAM_WEBHOOK_URL!
+      }
+    })
+  },
+  middlewares: [errorRecoveryMiddleware],
+  commands: {
+    risky: {
+      name: 'risky',
+      async handle(ctx, params) {
+        try {
+          // Risky operation that might fail
+          const result = await riskyOperation(params[0])
+          
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: `✅ Success: ${result}`
+            }
+          })
+        } catch (error) {
+          // Command-specific error handling
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: `❌ Command failed: ${error.message}`
+            }
+          })
+        }
+      }
+    }
+  }
+})
+
+// Global error handler
+bot.on('error', async (ctx) => {
+  // @ts-expect-error - error injected internally
+  const err = ctx.error
+  
+  // Log error with context
+  console.error('Bot error:', {
+    code: err.code,
+    message: err.message,
+    userId: ctx.message.author.id,
+    channel: ctx.channel.id
+  })
+  
+  // Send user-friendly error message
+  switch (err.code) {
+    case 'COMMAND_NOT_FOUND':
+      await ctx.bot.send({
+        provider: ctx.provider,
+        channel: ctx.channel.id,
+        content: {
+          type: 'text',
+          content: '❌ Command not found. Use /help to see available commands.'
+        }
+      })
+      break
+      
+    default:
+      await ctx.bot.send({
+        provider: ctx.provider,
+        channel: ctx.channel.id,
+        content: {
+          type: 'text',
+          content: '❌ Something went wrong. Please try again later.'
+        }
+      })
+  }
+})
+
+await bot.start()
+```
+
+---
