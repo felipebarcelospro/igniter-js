@@ -74,35 +74,48 @@ plugins/better-auth/
 
 ### Mapping Rules (v2.0)
 
-#### Function Endpoints
+#### Function Mapping
 ```typescript
 // Input: Direct function on auth.api
 auth.api.signUp = (input: SignUpInput) => Promise<SignUpResponse>
 
-// Output: POST action with inferred types
-controller.actions.signUp = {
-  $Infer: {
-    $Input: { body: SignUpInput },
-    $Output: SignUpResponse
+// Output: Igniter action (POST by default)
+controller.actions.signUp = createIgniterMutation({
+  name: 'signUp',
+  path: '/signUp',
+  method: 'POST', // or detected from fn.method
+  body: schemaOf<SignUpInput>(),
+  handler: async ({ request, response }) => {
+    const input = {
+      method: 'POST',
+      body: request.body,
+      query: request.query,
+      params: request.params,
+      headers: request.headers,
+      request: request.raw
+    }
+    const result = await auth.api.signUp(input)
+    return response.json(result)
   }
-}
+})
 ```
 
-#### HTTP Method Groups
+#### HTTP Method Detection
+Functions can specify their HTTP method via runtime metadata:
 ```typescript
-// Input: Method group object
-auth.api.user = {
-  get: (input: GetUserInput) => Promise<User>,
-  post: (input: CreateUserInput) => Promise<User>,
-  put: (input: UpdateUserInput) => Promise<User>,
-  delete: (input: DeleteUserInput) => Promise<void>
-}
+// Function with method metadata
+auth.api.getSession.method = 'GET' // or httpMethod, defaultMethod
 
-// Output: Multiple actions with method suffixes
-controller.actions.user_get = { /* GET action */ }
-controller.actions.user_post = { /* POST action */ }
-controller.actions.user_put = { /* PUT action */ }
-controller.actions.user_delete = { /* DELETE action */ }
+// Becomes GET query instead of POST mutation
+controller.actions.getSession = createIgniterQuery({
+  name: 'getSession',
+  path: '/getSession',
+  method: 'GET',
+  query: schemaOf<SessionQuery>(),
+  handler: async ({ request, response }) => {
+    // Similar input construction but for GET
+  }
+})
 ```
 
 ### Type System Integration
@@ -163,10 +176,24 @@ const plugin = {
 }
 ```
 
-### Controller Registration
-- Controllers are attached directly to the router (not via plugin paths)
+### Plugin Registration
+- Plugin is registered via `Igniter.plugins()` method
+- Controllers are embedded within the plugin and automatically available
 - Provides type-safe caller API: `router.caller.auth.signUp()`
 - HTTP endpoints: `/api/v1/auth/{action}`
+
+```typescript
+// Plugin registration pattern
+const igniter = Igniter
+  .create()
+  .plugins({
+    'better-auth': pluginInstance
+  })
+
+// Controllers automatically available via router.caller
+const router = igniter.router({ controllers: {} })
+router.caller.auth.signUp // Type-safe auth endpoint access
+```
 
 ## 🧪 Testing Strategy
 
@@ -186,19 +213,28 @@ describe('BetterAuth Plugin', () => {
     expect(controllers.auth.signIn).toBeDefined()
   })
 
-  it('maps method groups with suffixes', () => {
+  it('detects HTTP method from function metadata', () => {
     const mockAuth = {
       api: {
-        user: {
-          get: vi.fn(),
-          post: vi.fn()
-        }
+        getSession: Object.assign(vi.fn(), { method: 'GET' })
       }
     }
 
     const { controllers } = createBetterAuthPlugin(mockAuth)
-    expect(controllers.auth.user_get).toBeDefined()
-    expect(controllers.auth.user_post).toBeDefined()
+    expect(controllers.auth.getSession).toBeDefined()
+    // Action should be created as GET query, not POST mutation
+  })
+
+  it('falls back to POST for functions without method metadata', () => {
+    const mockAuth = {
+      api: {
+        signUp: vi.fn() // no method property
+      }
+    }
+
+    const { controllers } = createBetterAuthPlugin(mockAuth)
+    expect(controllers.auth.signUp).toBeDefined()
+    // Action should be created as POST mutation
   })
 })
 ```

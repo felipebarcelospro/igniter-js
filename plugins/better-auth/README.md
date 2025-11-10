@@ -56,7 +56,7 @@ export const auth = betterAuth({
 import { createBetterAuthPlugin } from '@igniter-js/plugin-better-auth'
 import { auth } from '../auth'
 
-export const { plugin, controllers } = createBetterAuthPlugin(auth)
+export const betterAuthPlugin = createBetterAuthPlugin(auth)
 ```
 
 ### 3. Register with Igniter
@@ -64,12 +64,13 @@ export const { plugin, controllers } = createBetterAuthPlugin(auth)
 ```typescript
 // app/igniter.ts
 import { Igniter } from '@igniter-js/core'
-import { plugin, controllers } from './lib/plugins/better-auth'
+import { betterAuthPlugin } from './lib/plugins/better-auth'
 
 export const igniter = Igniter
   .create()
-  .addPlugin('better-auth', plugin)
-  .addControllers(controllers) // This adds the typed 'auth' controller
+  .plugins({
+    'better-auth': betterAuthPlugin
+  })
 
 // Your router with full type safety
 export const router = igniter.router({
@@ -90,7 +91,7 @@ export type RouterCaller = typeof router.caller
 // In your API routes or controllers
 import { router } from './igniter'
 
-// Sign up a user
+// Sign up a user (POST /api/v1/auth/signUp)
 const result = await router.caller.auth.signUp({
   body: {
     email: "user@example.com",
@@ -99,7 +100,7 @@ const result = await router.caller.auth.signUp({
   }
 })
 
-// Sign in
+// Sign in (POST /api/v1/auth/signIn)
 const signInResult = await router.caller.auth.signIn({
   body: {
     email: "user@example.com",
@@ -107,58 +108,48 @@ const signInResult = await router.caller.auth.signIn({
   }
 })
 
-// Get session (protected route)
+// Get session (POST /api/v1/auth/getSession)
 const session = await router.caller.auth.getSession({
-  query: {
-    // session token from cookie/header
+  body: {
+    // session token or data
   }
 })
 ```
 
 ## 🎯 API Mapping
 
-The plugin automatically maps BetterAuth's `auth.api` to Igniter controller actions:
+The plugin automatically maps BetterAuth's `auth.api` functions to Igniter controller actions:
 
-### Function Endpoints
+### Function Mapping
 ```typescript
-// BetterAuth API
-auth.api.signUp // function
-auth.api.signIn // function
-auth.api.getSession // function
+// BetterAuth API - functions in auth.api
+auth.api.signUp = (input) => Promise<User>
+auth.api.signIn = (input) => Promise<Session>
+auth.api.getSession = (input) => Promise<Session | null>
 
-// Becomes Igniter actions
-router.caller.auth.signUp // POST /api/v1/auth/signUp
-router.caller.auth.signIn // POST /api/v1/auth/signIn
+// Becomes Igniter actions (all POST by default)
+router.caller.auth.signUp     // POST /api/v1/auth/signUp
+router.caller.auth.signIn     // POST /api/v1/auth/signIn
 router.caller.auth.getSession // POST /api/v1/auth/getSession
 ```
 
-### REST Method Groups
+### HTTP Method Detection
+Functions can specify their HTTP method via a `method` property:
 ```typescript
-// BetterAuth API with HTTP methods
-auth.api.user = {
-  get: (input) => { /* get user */ },
-  post: (input) => { /* create user */ },
-  put: (input) => { /* update user */ },
-  delete: (input) => { /* delete user */ }
-}
+// If BetterAuth function has method metadata
+auth.api.getSession.method = 'GET' // or httpMethod, defaultMethod
 
-// Becomes Igniter actions
-router.caller.auth.user_get // GET /api/v1/auth/user
-router.caller.auth.user_post // POST /api/v1/auth/user
-router.caller.auth.user_put // PUT /api/v1/auth/user
-router.caller.auth.user_delete // DELETE /api/v1/auth/user
+// Becomes GET action instead of POST
+router.caller.auth.getSession // GET /api/v1/auth/getSession
 ```
 
 ## 🔧 Configuration
 
-```typescript
-createBetterAuthPlugin(auth, {
-  // Optional: customize controller name (default: 'auth')
-  controllerName: 'authentication',
+The plugin is configured automatically based on your BetterAuth instance. The controller name is fixed as `auth` and the plugin name is `better-auth`. All configuration is derived from your BetterAuth setup.
 
-  // Optional: customize plugin name (default: 'better-auth')
-  pluginName: 'auth-plugin'
-})
+```typescript
+// The plugin configuration is automatic - just pass your auth instance
+const betterAuthPlugin = createBetterAuthPlugin(auth)
 ```
 
 ## 🏗️ Framework Integration
@@ -217,29 +208,31 @@ app.listen(3000)
 
 ## 🔐 Available Endpoints
 
-After setup, you'll have access to all BetterAuth endpoints as type-safe Igniter actions:
+After setup, you'll have access to all BetterAuth endpoints as type-safe Igniter actions. The exact endpoints depend on your BetterAuth configuration:
 
-### Authentication
-- `signUp` - Create new user account
-- `signIn` - Authenticate user
-- `signOut` - Sign out current user
-- `getSession` - Get current session info
+### Common Authentication Endpoints
+- `signUp` - Create new user account (POST)
+- `signIn` - Authenticate user (POST)
+- `signOut` - Sign out current user (POST)
+- `getSession` - Get current session info (POST, or GET if configured)
 
-### Social Auth
-- `signInWithGithub` - GitHub OAuth
-- `signInWithGoogle` - Google OAuth
-- `signInWithDiscord` - Discord OAuth
-- And more...
+### Social Authentication
+- `signInWithGithub` - GitHub OAuth (POST)
+- `signInWithGoogle` - Google OAuth (POST)
+- `signInWithDiscord` - Discord OAuth (POST)
+- And other social providers you configure...
 
-### User Management
-- `updateUser` - Update user profile
-- `changePassword` - Change user password
-- `deleteUser` - Delete user account
+### Account Management
+- `updateUser` - Update user profile (POST)
+- `changePassword` - Change user password (POST)
+- `deleteUser` - Delete user account (POST)
 
-### Email/Password
-- `forgetPassword` - Request password reset
-- `resetPassword` - Reset password with token
-- `verifyEmail` - Verify email address
+### Password Recovery
+- `forgetPassword` - Request password reset (POST)
+- `resetPassword` - Reset password with token (POST)
+- `verifyEmail` - Verify email address (POST)
+
+**Note:** All endpoints are POST by default unless the BetterAuth function specifies a different HTTP method via `method` property.
 
 ## 🛠️ Development
 
