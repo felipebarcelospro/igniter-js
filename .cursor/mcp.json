@@ -5,10 +5,8 @@
       "args": ["-y", "next-devtools-mcp@latest"]
     },
     "igniter": {
-      "command": "node",
-      "args": [
-        "/Users/felipebarcelospro/Sandbox/igniter-js/igniter-js/packages/mcp-server/dist"
-      ],
+      "command": "npx",
+      "args": ["@igniter-js/mcp-server@latest"],
       "env": {
         "GITHUB_TOKEN": "",
         "ENABLE_MEMORY_TOOLS": "false",
@@ -17,9 +15,9 @@
       }
     },
     "browser": {
-      "command": "npx @playwright/mcp@latest",
+      "command": "npx",
       "env": {},
-      "args": []
+      "args": ["-y", "@playwright/mcp@latest"]
     },
     "shadcn": {
       "command": "npx",
