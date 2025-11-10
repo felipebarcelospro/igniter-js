@@ -1,0 +1,411 @@
+# Feature Generation
+
+Feature generation is one of the most powerful capabilities of the Igniter.js CLI. It allows you to quickly scaffold complete CRUD operations from your database schema, significantly speeding up development while maintaining type safety and best practices.
+
+## Overview
+
+The `generate feature` command can create features in two ways:
+
+1. **Empty Feature**: A minimal feature with a basic controller and folder structure
+2. **Schema-based Feature**: A complete CRUD feature generated from your Prisma or Drizzle schema
+
+## Empty Feature Generation
+
+An empty feature provides a starting point with a simple "hello" endpoint and the proper folder structure.
+
+### Usage
+
+```bash
+igniter generate feature my-feature
+```
+
+### Generated Files
+
+```
+src/features/my-feature/
+├── controllers/
+│   └── my-feature.controller.ts   # Basic controller with hello endpoint
+├── procedures/
+│   └── (empty directory)
+├── my-feature.interfaces.ts        # Empty interfaces file
+└── index.ts                        # Exports the controller
+```
+
+### Example Output
+
+**my-feature.controller.ts**:
+```typescript
+import { igniter } from '@/igniter'
+import { z } from 'zod'
+
+export const myFeatureController = igniter.controller({
+  name: 'MyFeature',
+  path: '/my-feature',
+  actions: {
+    hello: igniter.query({
+      path: '/hello',
+      handler: async ({ response }) => {
+        return response.success({ message: 'Hello from my-feature!' })
+      },
+    }),
+  },
+})
+```
+
+## Schema-based Feature Generation
+
+Schema-based generation creates a complete CRUD feature by introspecting your database schema.
+
+### Supported ORMs
+
+- **Prisma**: Uses `@mrleebo/prisma-ast` to parse `schema.prisma`
+- **Drizzle**: Parses TypeScript schema files
+
+### Usage
+
+**From Prisma:**
+```bash
+igniter generate feature users --schema prisma:User
+```
+
+**From Drizzle:**
+```bash
+igniter generate feature products --schema drizzle:products
+```
+
+### Generated Files
+
+```
+src/features/users/
+├── controllers/
+│   └── users.controller.ts        # Full CRUD controller
+├── procedures/
+│   └── users.procedure.ts         # Repository procedure
+├── users.interfaces.ts             # Zod schemas and TypeScript types
+└── index.ts                        # Exports everything
+```
+
+## Generated Code Structure
+
+### Interfaces File
+
+The interfaces file contains Zod schemas for validation and TypeScript types.
+
+**Example** (`users.interfaces.ts`):
+
+```typescript
+import { z } from 'zod';
+
+// Generated from your 'User' Prisma model
+export const UserSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+// Schema for creating a new user
+export const CreateUserInputSchema = UserSchema.omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Schema for updating a user
+export const UpdateUserInputSchema = CreateUserInputSchema.partial();
+
+// Types
+export type User = z.infer<typeof UserSchema>;
+export type CreateUserInput = z.infer<typeof CreateUserInputSchema>;
+export type UpdateUserInput = z.infer<typeof UpdateUserInputSchema>;
+```
+
+### Procedure File
+
+The procedure file implements the repository pattern, centralizing database access logic.
+
+**Example** (`users.procedure.ts`):
+
+```typescript
+import { igniter } from '@/igniter';
+import type { CreateUserInput, UpdateUserInput } from '../users.interfaces';
+
+export const userProcedure = igniter.procedure({
+  name: 'user',
+  handler: async (_, { context }) => {
+    return {
+      userRepository: {
+        findAll: () => context.database.user.findMany(),
+        findById: (id: string) => context.database.user.findUnique({ where: { id } }),
+        create: (data: CreateUserInput) => context.database.user.create({ data }),
+        update: (id: string, data: UpdateUserInput) => 
+          context.database.user.update({ where: { id }, data }),
+        delete: (id: string) => context.database.user.delete({ where: { id } }),
+      }
+    };
+  }
+});
+```
+
+### Controller File
+
+The controller file defines RESTful endpoints with full CRUD operations.
+
+**Example** (`users.controller.ts`):
+
+```typescript
+import { igniter } from '@/igniter';
+import { z } from 'zod';
+import { userProcedure } from '../procedures/users.procedure'
+import { CreateUserInputSchema, UpdateUserInputSchema } from '../users.interfaces'
+
+export const userController = igniter.controller({
+  name: 'User',
+  description: 'Endpoints for Users',
+  path: '/users',
+  actions: {
+    list: igniter.query({
+      name: 'list',
+      description: 'List all Users',
+      path: '/',
+      use: [userProcedure()],
+      handler: async ({ context, response }) => {
+        const records = await context.userRepository.findAll()
+        return response.success(records)
+      },
+    }),
+
+    getById: igniter.query({
+      name: 'getById',
+      description: 'Get a User by ID',
+      path: '/:id' as const,
+      use: [userProcedure()],
+      handler: async ({ request, context, response }) => {
+        const record = await context.userRepository.findById(request.params.id)
+        if (!record) {
+          return response.notFound('User not found')
+        }
+        return response.success(record)
+      },
+    }),
+
+    create: igniter.mutation({
+      name: 'create',
+      description: 'Create a new User',
+      path: '/',
+      method: 'POST',
+      body: CreateUserInputSchema,
+      use: [userProcedure()],
+      handler: async ({ request, context, response }) => {
+        const newRecord = await context.userRepository.create(request.body)
+        return response.created(newRecord)
+      },
+    }),
+
+    update: igniter.mutation({
+      name: 'update',
+      description: 'Update a User by ID',
+      path: '/:id' as const,
+      method: 'PUT',
+      body: UpdateUserInputSchema,
+      use: [userProcedure()],
+      handler: async ({ request, context, response }) => {
+        const updatedRecord = await context.userRepository.update(
+          request.params.id, 
+          request.body
+        )
+        return response.success(updatedRecord)
+      },
+    }),
+
+    delete: igniter.mutation({
+      name: 'delete',
+      description: 'Delete a User by ID',
+      path: '/:id' as const,
+      method: 'DELETE',
+      use: [userProcedure()],
+      handler: async ({ request, context, response }) => {
+        await context.userRepository.delete(request.params.id)
+        return response.noContent()
+      },
+    }),
+  },
+})
+```
+
+## Interactive Mode
+
+When you run `generate feature` without arguments, the CLI launches an interactive wizard.
+
+### Features
+
+- **Automatic ORM Detection**: Detects if you have Prisma or Drizzle configured
+- **Model Selection**: Lists available models/tables from your schema
+- **Smart Defaults**: Suggests sensible defaults based on your project structure
+
+### Example Flow
+
+```bash
+$ igniter generate feature
+
+┌  Generate Feature
+│
+◇  What is the name of your feature?
+│  users
+│
+◇  Would you like to generate CRUD operations from a schema model?
+│  ● Yes, from a Prisma model
+│  ○ No, create an empty feature
+│
+◇  Which Prisma model would you like to use?
+│  ● User
+│  ○ Post
+│  ○ Comment
+│
+└  Feature 'users' scaffolded successfully!
+
+✅ Next step: Register the 'usersController' in 'src/igniter.router.ts'
+```
+
+## Best Practices
+
+### 1. Use Descriptive Feature Names
+
+```bash
+# Good
+igniter generate feature user-management
+igniter generate feature blog-posts
+igniter generate feature analytics
+
+# Avoid
+igniter generate feature data
+igniter generate feature stuff
+```
+
+### 2. Review Generated Code
+
+Always review and customize the generated code to match your business logic:
+
+- Add validation rules specific to your domain
+- Implement authorization checks
+- Add custom business logic in procedures
+- Adjust endpoint paths if needed
+
+### 3. Register Controllers
+
+After generating a feature, remember to register it in your router:
+
+```typescript
+// src/igniter.router.ts
+import { igniter } from './igniter'
+import { userController } from './features/users'
+import { productController } from './features/products'
+
+export const router = igniter.router({
+  controllers: [
+    userController,
+    productController,
+  ]
+})
+```
+
+### 4. Extend as Needed
+
+The generated code is a starting point. Common extensions include:
+
+- **Filtering and pagination** in list endpoints
+- **Search functionality** 
+- **Bulk operations**
+- **Custom business logic** in procedures
+- **Relationships** between resources
+
+## Prisma Schema Support
+
+### Supported Features
+
+- ✅ Basic types (String, Int, Float, Boolean, DateTime)
+- ✅ Optional fields
+- ✅ Default values
+- ✅ Auto-increment IDs
+- ✅ Unique constraints
+- ⚠️ Relations (recognized but skipped in CRUD)
+- ⚠️ Enums (treated as strings)
+
+### Example Prisma Model
+
+```prisma
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  posts     Post[]
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+```
+
+## Drizzle Schema Support
+
+### Supported Features
+
+- ✅ PostgreSQL, MySQL, and SQLite
+- ✅ Basic types (text, int, boolean, timestamp)
+- ✅ Primary keys
+- ✅ Not null constraints
+- ✅ Default values
+- ⚠️ Relations (recognized but skipped in CRUD)
+
+### Example Drizzle Schema
+
+```typescript
+import { pgTable, text, serial, timestamp } from 'drizzle-orm/pg-core';
+
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  email: text('email').notNull().unique(),
+  name: text('name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+```
+
+## Troubleshooting
+
+### "Model not found"
+
+**Cause**: The specified model doesn't exist in your schema or there's a typo.
+
+**Solution**: 
+- Check your schema file
+- Verify model name matches exactly (case-sensitive)
+- For Drizzle, use the table export name (e.g., `users`, not `User`)
+
+### "Feature already exists"
+
+**Cause**: A directory with the same name already exists.
+
+**Solution**:
+- Choose a different name
+- Delete the existing feature directory if no longer needed
+- Move the existing feature to a different location
+
+### "No schema provider found"
+
+**Cause**: Neither Prisma nor Drizzle schema files were detected.
+
+**Solution**:
+- Ensure `prisma/schema.prisma` exists for Prisma
+- For Drizzle, ensure schema file exists in `src/db/schema.ts` or similar location
+
+## Next Steps
+
+- Learn about [CLI extensibility](/docs/cli/extensibility)
+- Understand [project structure](/docs/getting-started/project-structure)
+- Explore [core concepts](/docs/core-concepts)

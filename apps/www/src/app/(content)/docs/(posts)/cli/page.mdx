@@ -1,0 +1,228 @@
+# Igniter.js CLI
+
+The Igniter.js Command Line Interface (CLI) is a powerful tool that streamlines the development workflow for building type-safe APIs with Igniter.js. It provides commands for project initialization, code generation, development mode, and more.
+
+## Overview
+
+The CLI is designed to automate repetitive tasks and enforce best practices, making it easier to:
+
+- **Initialize new projects** with the right structure and dependencies
+- **Generate features** from database schemas (Prisma or Drizzle)
+- **Run development servers** with automatic schema generation and hot reloading
+- **Generate OpenAPI documentation** automatically from your router
+- **Scaffold controllers and procedures** following the framework's patterns
+
+## Installation
+
+The CLI is included when you install `@igniter-js/cli`:
+
+```bash
+npm install -D @igniter-js/cli
+```
+
+Or use it directly with `npx`:
+
+```bash
+npx @igniter-js/cli@latest [command]
+```
+
+## Quick Start
+
+Initialize a new Igniter.js project:
+
+```bash
+npx @igniter-js/cli@latest init my-app
+```
+
+This will guide you through an interactive setup process where you can:
+
+- Choose your framework (Next.js, Express, Deno, Bun, etc.)
+- Select features (Redis Store, BullMQ Jobs, MCP Server, etc.)
+- Pick your database and ORM (PostgreSQL/MySQL/SQLite with Prisma or Drizzle)
+- Configure Docker Compose for local development
+
+## Core Commands
+
+### `init`
+
+Create a new Igniter.js project with interactive setup.
+
+```bash
+igniter init [project-name] [options]
+```
+
+**Options:**
+- `--force` - Skip confirmation prompts and overwrite existing files
+- `--pm, --package-manager <manager>` - Package manager to use (npm, yarn, pnpm, bun)
+- `--template <template>` - Use a specific template
+- `-f, --framework <framework>` - Target framework (nextjs, vite, etc.)
+- `--features <features>` - Comma-separated list of features (store,jobs,mcp,logging,telemetry)
+- `--database <database>` - Database provider (none, postgresql, mysql, sqlite)
+- `--orm <orm>` - ORM provider (prisma, drizzle)
+- `--no-git` - Skip git repository initialization
+- `--no-install` - Skip automatic dependency installation
+- `--no-docker` - Skip Docker Compose setup
+
+**Example:**
+
+```bash
+# Interactive setup
+igniter init my-api
+
+# With options
+igniter init my-api --framework nextjs --orm drizzle --database postgresql
+```
+
+### `dev`
+
+Start development mode with schema generation in watch mode alongside your framework server.
+
+```bash
+igniter dev [options]
+```
+
+**Options:**
+- `--framework <type>` - Framework type (auto-detected by default)
+- `--output <dir>` - Output directory for generated client files (default: `src/`)
+- `--port <number>` - Port for the dev server (default: `3000`)
+- `--cmd <command>` - Custom command to start dev server
+- `--no-framework` - Disable framework dev server (Igniter only)
+- `--docs-output <dir>` - Output directory for OpenAPI docs (default: `./src/docs`)
+
+**Example:**
+
+```bash
+# Auto-detect framework and start development
+igniter dev
+
+# Custom port
+igniter dev --port 4000
+
+# Only run Igniter (no framework server)
+igniter dev --no-framework
+```
+
+### `generate`
+
+The `generate` command is the parent for all scaffolding and generation subcommands.
+
+#### `generate schema`
+
+Generate client schema from your Igniter router for type-safe API clients.
+
+```bash
+igniter generate schema [options]
+```
+
+**Options:**
+- `--framework <type>` - Framework type
+- `--output <dir>` - Output directory (default: `src/`)
+- `--watch` - Watch for changes and regenerate automatically
+- `--docs` - Enable automatic OpenAPI documentation generation
+- `--docs-output <dir>` - Output directory for OpenAPI docs (default: `./src/docs`)
+
+**Example:**
+
+```bash
+# Generate schema once
+igniter generate schema
+
+# Watch mode with docs
+igniter generate schema --watch --docs
+```
+
+#### `generate docs`
+
+Generate OpenAPI specification and/or interactive API playground.
+
+```bash
+igniter generate docs [options]
+```
+
+**Options:**
+- `--output <dir>` - Output directory for the OpenAPI spec (default: `./src`)
+- `--ui` - Generate a self-contained HTML file with Scalar UI
+
+**Example:**
+
+```bash
+# Generate OpenAPI spec
+igniter generate docs
+
+# Generate spec with interactive UI
+igniter generate docs --ui
+```
+
+#### `generate feature`
+
+Scaffold a new feature module with controllers, procedures, and interfaces.
+
+```bash
+igniter generate feature [name] [options]
+```
+
+**Options:**
+- `--schema <value>` - Generate from a schema provider (e.g., `prisma:User` or `drizzle:users`)
+
+**Example:**
+
+```bash
+# Interactive mode
+igniter generate feature
+
+# Generate empty feature
+igniter generate feature users
+
+# Generate from Prisma model
+igniter generate feature users --schema prisma:User
+
+# Generate from Drizzle table
+igniter generate feature products --schema drizzle:products
+```
+
+#### `generate controller`
+
+Scaffold a new controller within a feature.
+
+```bash
+igniter generate controller <name> [options]
+```
+
+**Options:**
+- `-f, --feature <feature>` - The parent feature name
+
+**Example:**
+
+```bash
+igniter generate controller profile --feature users
+```
+
+#### `generate procedure`
+
+Scaffold a new procedure within a feature.
+
+```bash
+igniter generate procedure <name> [options]
+```
+
+**Options:**
+- `-f, --feature <feature>` - The parent feature name
+
+**Example:**
+
+```bash
+igniter generate procedure auth --feature users
+```
+
+## Global Options
+
+All commands support the following global option:
+
+- `--debug` - Enable debug mode for detailed logging
+
+## Next Steps
+
+- Learn about [project structure](/docs/getting-started/project-structure)
+- Explore [CLI commands in detail](/docs/cli/commands)
+- Understand [feature generation](/docs/cli/feature-generation)
+- Learn about [CLI extensibility](/docs/cli/extensibility)

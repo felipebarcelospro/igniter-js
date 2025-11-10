@@ -1,0 +1,331 @@
+# CLI Commands Reference
+
+This page provides detailed documentation for all Igniter.js CLI commands.
+
+## init
+
+The `init` command creates a new Igniter.js project with interactive setup or uses provided options.
+
+### Syntax
+
+```bash
+igniter init [project-name] [options]
+```
+
+### Arguments
+
+- `project-name` (optional) - Name of the project directory. If omitted, you'll be prompted to enter it.
+
+### Options
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `--force` | boolean | Skip confirmation prompts and overwrite existing files | false |
+| `--pm, --package-manager` | string | Package manager to use: npm, yarn, pnpm, or bun | auto-detected |
+| `--template` | string | Use a specific template (e.g., starter-nextjs) | - |
+| `-f, --framework` | string | Target framework | - |
+| `--features` | string | Comma-separated list of features | - |
+| `--database` | string | Database provider: none, postgresql, mysql, or sqlite | - |
+| `--orm` | string | ORM provider: prisma or drizzle | - |
+| `--no-git` | boolean | Skip git repository initialization | false |
+| `--no-install` | boolean | Skip automatic dependency installation | false |
+| `--no-docker` | boolean | Skip Docker Compose setup | false |
+
+### Examples
+
+**Interactive mode:**
+```bash
+igniter init my-api
+```
+
+**Non-interactive with options:**
+```bash
+igniter init my-api \
+  --framework nextjs \
+  --orm drizzle \
+  --database postgresql \
+  --features store,jobs \
+  --pm pnpm
+```
+
+**Initialize in current directory:**
+```bash
+igniter init . --framework express --orm prisma --database sqlite
+```
+
+---
+
+## dev
+
+The `dev` command starts development mode, running schema generation in watch mode alongside your framework's development server.
+
+### Syntax
+
+```bash
+igniter dev [options]
+```
+
+### Options
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `--framework` | string | Framework type | auto-detected |
+| `--output` | string | Output directory for generated client files | `src/` |
+| `--port` | number | Port for the dev server | `3000` |
+| `--cmd` | string | Custom command to start dev server | framework default |
+| `--no-framework` | boolean | Disable framework dev server | false |
+| `--docs-output` | string | Output directory for OpenAPI docs | `./src/docs` |
+
+### Behavior
+
+The `dev` command automatically:
+1. Detects your framework (Next.js, Express, Vite, etc.)
+2. Starts your framework's dev server on the specified port
+3. Runs `generate schema --watch` to keep your client types up-to-date
+4. Generates OpenAPI documentation automatically
+
+### Examples
+
+**Basic usage:**
+```bash
+igniter dev
+```
+
+**Custom port:**
+```bash
+igniter dev --port 4000
+```
+
+**Without framework server (Igniter only):**
+```bash
+igniter dev --no-framework
+```
+
+**Custom framework command:**
+```bash
+igniter dev --cmd "npm run start:dev"
+```
+
+---
+
+## generate schema
+
+Generates type-safe client schema from your Igniter router.
+
+### Syntax
+
+```bash
+igniter generate schema [options]
+```
+
+### Options
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `--framework` | string | Framework type | auto-detected |
+| `--output` | string | Output directory | `src/` |
+| `--watch` | boolean | Watch for changes and regenerate | false |
+| `--docs` | boolean | Enable OpenAPI documentation generation | false |
+| `--docs-output` | string | Output directory for OpenAPI docs | `./src/docs` |
+
+### Examples
+
+**One-time generation:**
+```bash
+igniter generate schema
+```
+
+**Watch mode:**
+```bash
+igniter generate schema --watch
+```
+
+**With documentation:**
+```bash
+igniter generate schema --docs --docs-output ./public/api-docs
+```
+
+---
+
+## generate docs
+
+Generates OpenAPI specification and optionally an interactive API playground.
+
+### Syntax
+
+```bash
+igniter generate docs [options]
+```
+
+### Options
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `--output` | string | Output directory for OpenAPI spec | `./src` |
+| `--ui` | boolean | Generate interactive HTML with Scalar UI | false |
+
+### Output
+
+- `docs/openapi.json` - OpenAPI 3.0 specification
+- `docs/index.html` - Interactive API playground (if `--ui` is specified)
+
+### Examples
+
+**Generate OpenAPI spec:**
+```bash
+igniter generate docs
+```
+
+**Generate with UI:**
+```bash
+igniter generate docs --ui
+```
+
+**Custom output directory:**
+```bash
+igniter generate docs --output ./public --ui
+```
+
+---
+
+## generate feature
+
+Scaffolds a new feature module with controllers, procedures, and type-safe interfaces.
+
+### Syntax
+
+```bash
+igniter generate feature [name] [options]
+```
+
+### Arguments
+
+- `name` (optional) - Name of the feature. If omitted, you'll be prompted interactively.
+
+### Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--schema` | string | Generate from schema: `prisma:ModelName` or `drizzle:tableName` |
+
+### Generated Structure
+
+When you generate a feature, the CLI creates:
+
+```
+src/features/[feature-name]/
+├── controllers/
+│   └── [feature-name].controller.ts
+├── procedures/
+│   └── [feature-name].procedure.ts
+├── [feature-name].interfaces.ts
+└── index.ts
+```
+
+### Schema-based Generation
+
+When using `--schema`, the CLI generates:
+- **Zod schemas** for validation
+- **CRUD procedures** with repository pattern
+- **RESTful controllers** with full CRUD operations
+- **TypeScript types** inferred from Zod schemas
+
+### Examples
+
+**Interactive mode:**
+```bash
+igniter generate feature
+```
+
+**Empty feature:**
+```bash
+igniter generate feature users
+```
+
+**From Prisma model:**
+```bash
+igniter generate feature users --schema prisma:User
+```
+
+**From Drizzle table:**
+```bash
+igniter generate feature products --schema drizzle:products
+```
+
+### Next Steps
+
+After generating a feature:
+1. Register the controller in your `src/igniter.router.ts`
+2. Implement any custom business logic in procedures
+3. Adjust validation schemas in the interfaces file as needed
+
+---
+
+## generate controller
+
+Scaffolds a new controller within an existing feature.
+
+### Syntax
+
+```bash
+igniter generate controller <name> [options]
+```
+
+### Arguments
+
+- `name` (required) - Name of the controller
+
+### Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `-f, --feature` | string | Parent feature name |
+
+### Example
+
+```bash
+igniter generate controller profile --feature users
+```
+
+---
+
+## generate procedure
+
+Scaffolds a new procedure within an existing feature.
+
+### Syntax
+
+```bash
+igniter generate procedure <name> [options]
+```
+
+### Arguments
+
+- `name` (required) - Name of the procedure
+
+### Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `-f, --feature` | string | Parent feature name |
+
+### Example
+
+```bash
+igniter generate procedure auth --feature users
+```
+
+---
+
+## Global Options
+
+All commands support:
+
+- `--debug` - Enable detailed logging for troubleshooting
+
+### Example
+
+```bash
+igniter dev --debug
+igniter generate feature users --schema prisma:User --debug
+```

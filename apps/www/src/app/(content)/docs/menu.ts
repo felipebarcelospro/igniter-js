@@ -100,6 +100,43 @@ export const menu: ContentSection[] = [
     ],
   },
   {
+    title: "CLI",
+    items: [
+      {
+        title: "CLI Overview",
+        type: "docs",
+        category: "cli",
+        date: new Date().toISOString(),
+        description: "Igniter.js Command Line Interface",
+        slug: "/docs/cli",
+      },
+      {
+        title: "Commands Reference",
+        type: "docs",
+        category: "cli-commands",
+        date: new Date().toISOString(),
+        description: "Complete CLI commands reference",
+        slug: "/docs/cli/commands",
+      },
+      {
+        title: "Feature Generation",
+        type: "docs",
+        category: "cli-feature-generation",
+        date: new Date().toISOString(),
+        description: "Generate features from database schemas",
+        slug: "/docs/cli/feature-generation",
+      },
+      {
+        title: "Extensibility",
+        type: "docs",
+        category: "cli-extensibility",
+        date: new Date().toISOString(),
+        description: "Extending and customizing the CLI",
+        slug: "/docs/cli/extensibility",
+      },
+    ],
+  },
+  {
     title: "Client-Side",
     items: [
       {
