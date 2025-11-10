@@ -1,0 +1,10 @@
+import { sampleBot } from '@/bots/sample-bot';
+import { nextRouteHandlerAdapter } from '@igniter-js/bot/adapters';
+
+/**
+ * @description Next.js route handler for Igniter.js Bots
+ * @see https://igniterjs.com/docs/bots
+ */
+export const { GET, POST } = nextRouteHandlerAdapter({
+  'sample-bot': sampleBot,
+});

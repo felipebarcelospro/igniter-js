@@ -1,0 +1,8 @@
+import { AppRouter } from '@/igniter.router'
+import { nextRouteHandlerAdapter } from '@igniter-js/core/adapters'
+
+/**
+ * @description Next.js route handler adapter for Igniter.js
+ * @see https://igniterjs.com/docs/core/nextjs
+ */
+export const { GET, POST, PUT, DELETE, PATCH } = nextRouteHandlerAdapter(AppRouter)

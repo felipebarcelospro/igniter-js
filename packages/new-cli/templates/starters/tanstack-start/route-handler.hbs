@@ -1,0 +1,13 @@
+import { createFileRoute } from '@tanstack/react-router'
+import { AppRouter } from '@/igniter.router'
+import { tanstackStartRouteHandlerAdapter } from '@igniter-js/core/adapters'
+
+/**
+ * @description TanStack Start route handler adapter for Igniter.js
+ * @see https://igniterjs.com/docs/core/tanstack-start
+ */
+export const Route = createFileRoute('/api/v1/$')({
+  server: {
+    handlers: tanstackStartRouteHandlerAdapter(AppRouter),
+  }
+})

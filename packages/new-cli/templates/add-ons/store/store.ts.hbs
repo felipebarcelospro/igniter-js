@@ -1,0 +1,12 @@
+import { createRedisStoreAdapter } from '@igniter-js/adapter-redis'
+import { redis } from './redis'
+
+/**
+ * Store adapter for data persistence.
+ *
+ * @remarks
+ * Provides a unified interface for data storage operations using Redis.
+ *
+ * @see https://igniterjs.com/docs/store
+ */
+export const store = createRedisStoreAdapter(redis)

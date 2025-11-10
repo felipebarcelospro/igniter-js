@@ -1,0 +1,37 @@
+import { betterAuth } from "better-auth"
+import { database } from "@/lib/database"
+{{#if (eq addOnOptions.database.orm "prisma")}}
+import { prismaAdapter } from "better-auth/adapters/prisma";
+{{/if}}
+{{#if (eq addOnOptions.database.orm "drizzle")}}
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+{{/if}}
+{{{generatePluginImports addOnOptions.auth.plugins}}}
+
+export const auth = betterAuth({
+    appName: process.env.IGNITER_APP_NAME,
+    appSecret: process.env.IGNITER_APP_SECRET,
+    baseURL: process.env.IGNITER_API_URL,
+    basePath: process.env.IGNITER_API_BASE_PATH,
+
+    {{#if addOnOptions.database.orm}}
+    // enable database adapter
+    database: {{#if (eq addOnOptions.database.orm "prisma")}}prismaAdapter{{/if}}{{#if (eq addOnOptions.database.orm "drizzle")}}drizzleAdapter{{/if}}(database, {
+        provider: "{{addOnOptions.database.provider}}", // or "mysql", "postgresql", ...etc
+    }),
+    {{/if}}
+
+    // enable email and password authentication
+    emailAndPassword: {
+        enabled: true,
+    },
+
+    {{#if addOnOptions.auth.plugins}}
+    // enable selected authentication plugins
+    plugins: [
+        {{#each addOnOptions.auth.plugins}}
+        {{camelCase this}}(){{#unless @last}},{{/unless}}
+        {{/each}}
+    ]
+    {{/if}}
+})

@@ -1,0 +1,15 @@
+import { createFileRoute } from '@tanstack/react-router'
+import { tanstackStartRouteHandlerAdapter } from '@igniter-js/bot/adapters'
+import { sampleBot } from '@/bots/sample-bot'
+
+/**
+ * @description TanStack Start route handler for Igniter.js Bots
+ * @see https://igniterjs.com/docs/bots
+ */
+export const Route = createFileRoute('/api/bots/$provider/$botId')({
+  server: {
+    handlers: tanstackStartRouteHandlerAdapter({
+      'sample-bot': sampleBot,
+    }),
+  },
+})

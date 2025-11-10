@@ -1,0 +1,19 @@
+import { createFileRoute } from '@tanstack/react-router';
+import { mcpServer } from '@/igniter.mcp';
+
+  /**
+   * @description TanStack Start route handler adapter for Igniter.js
+   * @see https://igniterjs.com/docs/core/tanstack-start
+   */
+  export const Route = createFileRoute('/mcp/$')({
+    server: {
+      handlers: {
+        GET: ({ request }) => mcpServer.handler(request),
+        POST: ({ request }) => mcpServer.handler(request),
+        PUT: ({ request }) => mcpServer.handler(request),
+        DELETE: ({ request }) => mcpServer.handler(request),
+        PATCH: ({ request }) => mcpServer.handler(request),
+      },
+    }
+  })
+  

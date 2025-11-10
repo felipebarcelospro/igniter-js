@@ -1,0 +1,14 @@
+import { igniter } from '@/igniter'
+import { ExampleController } from '@/features/example/controllers/example.controller'
+
+/**
+ * @description Main application router configuration
+ * @see https://igniterjs.com/docs/core/router
+ */
+export const AppRouter = igniter.router({
+  controllers: {
+    example: ExampleController
+  }
+})
+
+export type AppRouterType = typeof AppRouter

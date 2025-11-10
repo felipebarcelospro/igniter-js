@@ -1,0 +1,26 @@
+import { IgniterBot } from '@igniter-js/bot'
+import { telegram } from '@igniter-js/bot/adapters'
+
+/**
+ * Create the bot using IgniterBot.
+ * This provides full type inference and a fluent API.
+ *
+ * @see https://igniterjs.com/docs/bots
+ */
+export const sampleBot = IgniterBot
+  .create()
+  .withHandle('@my-bot')  // ← Your bot's handle (ID and name auto-derived)
+  .addAdapter('telegram', telegram())
+  .addCommand('start', {
+    name: 'start',
+    aliases: ['hello'],
+    description: 'Start the bot',
+    help: 'Use /start to begin',
+    async handle(ctx) {
+      await ctx.reply('👋 Welcome! I am your bot.')
+    }
+  })
+  .onMessage(async (ctx) => {
+    await ctx.reply('👋 Welcome! I am your bot.')
+  })
+  .build()

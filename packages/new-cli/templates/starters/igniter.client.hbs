@@ -1,0 +1,52 @@
+/* eslint-disable */
+/* prettier-ignore */
+/* biome-ignore */
+
+import { createIgniterClient, useIgniterQueryClient } from '@igniter-js/core/client'
+import type { AppRouterType } from './igniter.router'
+
+/**
+ * ⚠️ WARNING! ⚠️
+ * 
+ * This file is auto-generated. 
+ * DO NOT EDIT OR MODIFY THIS FILE DIRECTLY!
+ * Your changes will be lost if this file is regenerated.
+ * 
+ * Any manual changes should be made in your source router or schema files.
+ * For more information, visit:
+ * https://igniterjs.com/docs/core/client
+ */
+
+ 
+/**
+* Type-safe API client generated from your Igniter router
+*
+* Usage in Server Components:
+* const users = await api.users.list.query()
+*
+* Usage in Client Components:
+* const { data } = api.users.list.useQuery()
+*
+* Note: Adjust environment variable prefixes (e.g., NEXT_PUBLIC_, BUN_PUBLIC_, DENO_PUBLIC_, REACT_APP_)
+* @see https://igniterjs.com/docs/core/client
+*/
+export const api = createIgniterClient<AppRouterType>({
+  baseURL: process.env.IGNITER_API_URL || 'http://localhost:3000',
+  basePATH: process.env.IGNITER_API_BASE_PATH || '/api/v1',
+  router: () => {
+    if (typeof window === 'undefined') {
+      return require('./igniter.router').AppRouter
+    }
+
+    return require('./igniter.schema').AppRouterSchema
+  },
+})
+
+/**
+  * Type-safe query client generated from your Igniter router
+  *
+  * Usage in Client Components:
+  * const { invalidate } = useQueryClient()
+  * @see https://igniterjs.com/docs/core/client
+  */
+export const useQueryClient = useIgniterQueryClient<AppRouterType>;

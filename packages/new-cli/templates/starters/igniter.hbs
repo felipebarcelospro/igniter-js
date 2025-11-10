@@ -1,0 +1,43 @@
+import { Igniter } from '@igniter-js/core'
+import { createIgniterAppContext } from "./igniter.context"
+import openapi from './docs/openapi.json'
+{{#if (includes enabledAddOns "store") }}
+import { store } from "@/services/store"
+{{/if}}
+{{#if (includes enabledAddOns "jobs") }}
+import { REGISTERED_JOBS } from "@/services/jobs"
+{{/if}}
+{{#if (includes enabledAddOns "logger") }}
+import { logger } from "@/services/logger"
+{{/if}}
+{{#if (includes enabledAddOns "telemetry") }}
+import { telemetry } from "@/services/telemetry"
+{{/if}}
+
+/**
+ * @description Initialize the Igniter.js
+ * @see https://igniterjs.com/docs/core/builder
+ */
+export const igniter = Igniter
+  .context(createIgniterAppContext())
+  {{#if (includes enabledAddOns "store") }}
+  .store(store)
+  {{/if}}
+  {{#if (includes enabledAddOns "jobs") }}
+  .jobs(REGISTERED_JOBS)
+  {{/if}}
+  {{#if (includes enabledAddOns "logger") }}
+  .logger(logger)
+  {{/if}}
+  {{#if (includes enabledAddOns "telemetry") }}
+  .telemetry(telemetry)
+  {{/if}}
+  .docs({
+    openapi,
+    info: {
+      title: '{{capitalizeSlug projectName}}',
+      version: '1.0.0',
+      description: 'Just another Igniter.js REST API',
+    }
+  })
+  .create()

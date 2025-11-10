@@ -1,0 +1,23 @@
+import { igniter } from '@/igniter'
+import { ExampleProcedure } from '../procedures/example.procedure'
+
+/**
+ * @description Example controller demonstrating Igniter.js features
+ * @see https://igniterjs.com/docs/core/controllers
+ */
+export const ExampleController = igniter.controller({
+  name: 'Example',
+  path: '/example',
+  actions: {
+    // Health check action
+    health: igniter.query({
+      name: 'health',
+      description: 'Health check',
+      path: '/',
+      use: [ExampleProcedure()],
+      handler: async ({ request, response, context }) => {
+        return response.success(context.example.hello())
+      }
+    }),
+  }
+})

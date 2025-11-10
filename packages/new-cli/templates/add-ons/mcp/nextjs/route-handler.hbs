@@ -1,0 +1,11 @@
+import { mcpServer } from '@/igniter.mcp';
+
+/**
+ * Export the handler for Next.js to handle both GET and POST requests,
+ * which are used by different MCP transport methods (like SSE and WebSockets).
+ */
+export const GET = mcpServer.handler;
+export const POST = mcpServer.handler;
+export const PUT = mcpServer.handler;
+export const DELETE = mcpServer.handler;
+export const PATCH = mcpServer.handler;

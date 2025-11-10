@@ -1,0 +1,21 @@
+import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server';
+import { AppRouter } from '@/igniter.router';
+
+/**
+ * Create the MCP server using the builder pattern.
+ * This provides full type inference and a fluent API.
+ *
+ * @see https://igniterjs.com/docs/mcp-server
+ */
+export const mcpServer = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withServerInfo({
+    name: '{{capitalizeSlug projectName}} MCP Server',
+    version: '1.0.0',
+  })
+  .withAdapter({
+    redisUrl: process.env.REDIS_URL!,
+    basePath: process.env.IGNITER_MCP_SERVER_BASE_PATH || '/mcp'
+  })
+  .build();
