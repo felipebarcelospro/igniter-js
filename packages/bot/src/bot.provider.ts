@@ -1019,41 +1019,48 @@ export class Bot<
    *  - If adapter returns a context object, we process it and return 200.
    *  - Any error thrown bubbles up unless caught externally.
    */
-  async handle(adapter: keyof TAdapters, request: Request): Promise<Response> {
-    const selectedAdapter = this.adapters[adapter]
-    if (!selectedAdapter) {
-      const err = new BotError(BotErrorCodes.PROVIDER_NOT_FOUND, `No adapter '${String(adapter)}'`)
-      this.logger?.error?.(err.message, `Bot:${this.name}#${this.id}`)
-      throw err
-    }
+  handle(adapter: keyof TAdapters): (request: Request) => Promise<Response> {
+    return async (request: Request) => {
+      if (!adapter) return new Response("Not Found", { status: 404 });
+      const adapterInstance = this.adapters[adapter];
+      if (!adapterInstance) return new Response("Not Found", { status: 404 });
 
-    const rawContext = await (selectedAdapter as any).handle({ 
-      request, 
-      logger: this.logger,
-      botHandle: this.botHandle 
-    })
-    if (!rawContext) {
-      this.logger?.debug?.(
-        `Adapter '${String(adapter)}' returned null (ignored update)`,
-        `Bot:${this.name}#${this.id}`,
-      )
-      return new Response(null, { status: 204 })
-    }
+      if (request.method === "GET") {
+        if (adapterInstance.verify) {
+          const res = await adapterInstance.verify({
+            request,
+            config: (adapterInstance as any)._config || {},
+            logger: this.logger
+          });
+          return res || new Response("OK", { status: 200 });
+        }
+        return new Response("OK", { status: 200 });
+      }
 
-    // Create full context with helper methods
-    const ctx = this.createContextHelpers(rawContext, String(adapter))
+      if (request.method === "POST") {
+        const rawContext = await (adapterInstance as any).handle({
+          request,
+          logger: this.logger,
+          botHandle: this.botHandle
+        });
 
-    this.logger?.debug?.(
-      `Inbound event '${ctx.event}' from '${String(adapter)}'`,
-      `Bot:${this.name}#${this.id}`,
-    )
+        if (!rawContext) {
+          return new Response(null, { status: 204 });
+        }
 
-    await this.process(ctx)
+        // Create full context with helper methods
+        const ctx = this.createContextHelpers(rawContext, String(adapter));
 
-    return new Response('OK', {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
+        await this.process(ctx);
+
+        return new Response("OK", {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response("Not Found", { status: 404 });
+    };
   }
 
   /**
