@@ -13,13 +13,13 @@ import { createUseQuery, createUseMutation, createUseRealtime } from './igniter.
  * @param config Client configuration
  * @returns A typed client for calling server actions
  */
-export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any, any, any>>(
+export const createIgniterClient = <TRouter extends Omit<IgniterRouter<any, any, any, any, any>, 'caller'>>(
   {
     basePATH,
     baseURL,
     router,
-  }: ClientConfig<TRouter>
-): InferRouterCaller<TRouter> => {
+  }: ClientConfig<TRouter & { caller: any }>
+): InferRouterCaller<TRouter & { caller: any }> => {
   if (!router) {
     throw new Error('Router is required to create an Igniter client');
   }
@@ -29,7 +29,7 @@ export const createIgniterClient = <TRouter extends IgniterRouter<any, any, any,
   }
 
   // Browser-side: Use fetch-based client (zero server dependencies)
-  return createBrowserClient({ ...router, config: { basePATH, baseURL } }) as unknown as InferRouterCaller<TRouter>;
+  return createBrowserClient({ ...router, config: { basePATH, baseURL } }) as unknown as InferRouterCaller<TRouter & { caller: any }>;
 };
 
 /**
