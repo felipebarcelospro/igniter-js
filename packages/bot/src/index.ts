@@ -91,6 +91,8 @@ export * from './plugins'
 export * from './adapters/telegram'
 export * from './adapters/whatsapp'
 export * from './adapters/discord'
+export * from './adapters/nextjs'
+export * from './adapters/tanstack-start'
 
 // Optionally provide a convenience namespace for ergonomic adapter access.
 // This does not impede tree-shaking because the individual adapter factories
