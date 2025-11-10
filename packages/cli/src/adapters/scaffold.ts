@@ -87,6 +87,18 @@ async function writeFile(filePath: string, content: string): Promise<void> {
   await fs.writeFile(filePath, content, 'utf-8');
 }
 
+// --- Schema Provider Factory ---
+
+function getSchemaProvider(providerName: string): SchemaProvider {
+  if (providerName.toLowerCase() === 'prisma') {
+    return new PrismaProvider();
+  }
+  if (providerName.toLowerCase() === 'drizzle') {
+    return new DrizzleProvider();
+  }
+  throw new Error(`Unsupported schema provider: ${providerName}`);
+}
+
 
 // --- CRUD Template Generators (using Handlebars) ---
 

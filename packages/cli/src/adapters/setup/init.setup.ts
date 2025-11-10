@@ -46,10 +46,10 @@ export async function handleInitCommand(
     }
 
     // Run interactive prompts. It will need to be smart about the targetDir.
-    const config = await runSetupPrompts(targetDir);
+    const config = await runSetupPrompts(targetDir, isExistingProject);
 
     // The generator will also need to be smart about adding vs creating files.
-    await generateProject(config, targetDir);
+    await generateProject(config, targetDir, isExistingProject);
 
     logger.info('Project initialization completed successfully', {
       project: config.projectName,

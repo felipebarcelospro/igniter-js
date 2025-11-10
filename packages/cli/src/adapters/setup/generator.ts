@@ -233,13 +233,13 @@ export class ProjectGenerator {
       const allTemplates = generateAllTemplates(
         this.config,
         this.isExistingProject,
-        [...coreDependencies, ...featureDeps.dependencies, ...dbConfig.dependencies].map(
+        [...coreDependencies, ...featureDeps.dependencies, ...ormProductionDeps].map(
           d => `${d.name}@${d.version}`,
         ),
         [
           ...coreDevDependencies,
           ...(featureDeps.devDependencies || []),
-          ...(dbConfig.devDependencies || []),
+          ...ormDevDeps,
         ].map(d => `${d.name}@${d.version}`),
       )
 

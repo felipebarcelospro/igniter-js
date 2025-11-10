@@ -159,17 +159,38 @@ export async function runSetupPrompts(
             value: 'none'
           },
           {
-            title: `${chalk.blue('PostgreSQL + Prisma')} ${chalk.dim('- Production-ready')}`,
+            title: `${chalk.blue('PostgreSQL')} ${chalk.dim('- Production-ready')}`,
             value: 'postgresql'
           },
           {
-            title: `${chalk.blue('MySQL + Prisma')} ${chalk.dim('- Wide compatibility')}`,
+            title: `${chalk.blue('MySQL')} ${chalk.dim('- Wide compatibility')}`,
             value: 'mysql'
           },
           {
-            title: `${chalk.green('SQLite + Prisma')} ${chalk.dim('- Local development')}`,
+            title: `${chalk.green('SQLite')} ${chalk.dim('- Local development')}`,
             value: 'sqlite'
+          }
+        ],
+        initial: 0
+      },
+      {
+        type: (prev: any) => {
+          // Only show ORM choice if database was selected (not 'none')
+          if (cliOptions.orm) return null
+          if (cliOptions.database && cliOptions.database !== 'none') return 'select'
+          return prev !== 'none' ? 'select' : null
+        },
+        name: 'orm',
+        message: chalk.bold('• Choose your ORM:'),
+        choices: [
+          {
+            title: `${chalk.cyan('Prisma')} ${chalk.dim('- Most popular, great DX')}`,
+            value: 'prisma'
           },
+          {
+            title: `${chalk.magenta('Drizzle')} ${chalk.dim('- Type-safe, SQL-like')}`,
+            value: 'drizzle'
+          }
         ],
         initial: 0
       },
@@ -213,7 +234,7 @@ export async function runSetupPrompts(
             value: 'bun'
           }
         ],
-        initial: getPackageManagerChoiceIndex(cliOptions.packageManager || detectedPackageManager)
+        initial: getPackageManagerChoiceIndex((cliOptions.packageManager as PackageManager) || detectedPackageManager)
       },
       {
         type: (isExistingProject || cliOptions.git === false) ? null : 'confirm',
@@ -253,6 +274,7 @@ export async function runSetupPrompts(
       framework: cliOptions.template || answers.framework,
       features: featuresObj,
       database: { provider: (cliOptions.database as DatabaseProvider) || answers.database || 'none' },
+      orm: (cliOptions.orm as 'prisma' | 'drizzle') || answers.orm || 'prisma',
       packageManager: (cliOptions.packageManager as PackageManager) || answers.packageManager || detectedPackageManager,
       initGit: cliOptions.git !== false && (answers.initGit !== undefined ? answers.initGit : !isExistingProject),
       installDependencies: cliOptions.install !== false && (answers.installDependencies !== false),
