@@ -1,0 +1,18 @@
+import { igniter } from '@/igniter';
+import type { Create{{modelNamePascal}}Input, Update{{modelNamePascal}}Input } from '../{{featureName}}.interfaces';
+
+export const {{modelNameCamel}}Procedure = igniter.procedure({
+  name: '{{modelNameCamel}}',
+  handler: async (_, { context }) => {
+    // This procedure acts as a repository, centralizing database access logic.
+    return {
+      {{modelNameCamel}}Repository: {
+        findAll: () => context.database.{{modelNameCamel}}.findMany(),
+        findById: (id: {{idFieldType}}) => context.database.{{modelNameCamel}}.findUnique({ where: { id } }),
+        create: (data: Create{{modelNamePascal}}Input) => context.database.{{modelNameCamel}}.create({ data }),
+        update: (id: {{idFieldType}}, data: Update{{modelNamePascal}}Input) => context.database.{{modelNameCamel}}.update({ where: { id }, data }),
+        delete: (id: {{idFieldType}}) => context.database.{{modelNameCamel}}.delete({ where: { id } }),
+      }
+    };
+  }
+});

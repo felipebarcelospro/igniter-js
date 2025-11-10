@@ -1,0 +1,24 @@
+import { z } from 'zod';
+
+// Generated from your '{{modelName}}' {{providerName}} model
+export const {{modelNamePascal}}Schema = z.object({
+{{#each fields}}
+  {{this.name}}: {{this.zodType}},
+{{/each}}
+});
+
+// Schema for creating a new {{modelName}}.
+// Fields managed by the database (id, createdAt, etc.) are omitted.
+export const Create{{modelNamePascal}}InputSchema = {{modelNamePascal}}Schema.omit({
+{{#each omitFields}}
+  {{this}}: true,
+{{/each}}
+});
+
+// Schema for updating a {{modelName}}. All fields are optional.
+export const Update{{modelNamePascal}}InputSchema = Create{{modelNamePascal}}InputSchema.partial();
+
+// Exporting types for convenience
+export type {{modelNamePascal}} = z.infer<typeof {{modelNamePascal}}Schema>;
+export type Create{{modelNamePascal}}Input = z.infer<typeof Create{{modelNamePascal}}InputSchema>;
+export type Update{{modelNamePascal}}Input = z.infer<typeof Update{{modelNamePascal}}InputSchema>;

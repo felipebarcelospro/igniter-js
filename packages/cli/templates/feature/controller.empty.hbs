@@ -1,0 +1,15 @@
+import { igniter } from '@/igniter'
+import { z } from 'zod'
+
+export const {{controllerName}} = igniter.controller({
+  name: '{{featureName}}',
+  path: '/{{featureName}}',
+  actions: {
+    hello: igniter.query({
+      path: '/hello',
+      handler: async ({ response }) => {
+        return response.success({ message: 'Hello from {{featureName}}!' })
+      },
+    }),
+  },
+})

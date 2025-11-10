@@ -1,0 +1,74 @@
+import { igniter } from '@/igniter';
+import { z } from 'zod';
+import { {{modelNameCamel}}Procedure } from '../procedures/{{featureName}}.procedure'
+import { Create{{modelNamePascal}}InputSchema, Update{{modelNamePascal}}InputSchema } from '../{{featureName}}.interfaces'
+
+export const {{modelNameCamel}}Controller = igniter.controller({
+  name: '{{modelNamePascal}}',
+  description: 'Endpoints for {{modelNamePascal}}s',
+  path: '/{{modelNameCamel}}s',
+  actions: {
+    list: igniter.query({
+      name: 'list',
+      description: 'List all {{modelNamePascal}}s',
+      path: '/',
+      use: [{{modelNameCamel}}Procedure()],
+      handler: async ({ context, response }) => {
+        const records = await context.{{modelNameCamel}}Repository.findAll()
+        return response.success(records)
+      },
+    }),
+
+    getById: igniter.query({
+      name: 'getById',
+      description: 'Get a {{modelNamePascal}} by ID',
+      path: '/:id' as const,
+      use: [{{modelNameCamel}}Procedure()],
+      handler: async ({ request, context, response }) => {
+        const record = await context.{{modelNameCamel}}Repository.findById(request.params.id)
+        if (!record) {
+          return response.notFound('{{modelNamePascal}} not found')
+        }
+        return response.success(record)
+      },
+    }),
+
+    create: igniter.mutation({
+      name: 'create',
+      description: 'Create a new {{modelNamePascal}}',
+      path: '/',
+      method: 'POST',
+      body: Create{{modelNamePascal}}InputSchema,
+      use: [{{modelNameCamel}}Procedure()],
+      handler: async ({ request, context, response }) => {
+        const newRecord = await context.{{modelNameCamel}}Repository.create(request.body)
+        return response.created(newRecord)
+      },
+    }),
+
+    update: igniter.mutation({
+      name: 'update',
+      description: 'Update a {{modelNamePascal}} by ID',
+      path: '/:id' as const,
+      method: 'PUT',
+      body: Update{{modelNamePascal}}InputSchema,
+      use: [{{modelNameCamel}}Procedure()],
+      handler: async ({ request, context, response }) => {
+        const updatedRecord = await context.{{modelNameCamel}}Repository.update(request.params.id, request.body)
+        return response.success(updatedRecord)
+      },
+    }),
+
+    delete: igniter.mutation({
+      name: 'delete',
+      description: 'Delete a {{modelNamePascal}} by ID',
+      path: '/:id' as const,
+      method: 'DELETE',
+      use: [{{modelNameCamel}}Procedure()],
+      handler: async ({ request, context, response }) => {
+        await context.{{modelNameCamel}}Repository.delete(request.params.id)
+        return response.noContent()
+      },
+    }),
+  },
+})

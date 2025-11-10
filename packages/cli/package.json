@@ -8,7 +8,8 @@
   },
   "files": [
     "dist",
-    "bin"
+    "bin",
+    "templates"
   ],
   "scripts": {
     "build": "tsup",
@@ -30,6 +31,7 @@
   "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "@clack/prompts": "^0.7.0",
     "@igniter-js/core": "*",
     "@mrleebo/prisma-ast": "^0.5.0",
     "c12": "^3.0.4",
@@ -38,12 +40,14 @@
     "commander": "^11.0.0",
     "concurrently": "^7.6.0",
     "cross-spawn": "^7.0.3",
+    "drizzle-kit": "^0.29.0",
+    "drizzle-orm": "^0.39.0",
     "esbuild": "^0.23.0",
     "execa": "^8.0.1",
+    "handlebars": "^4.7.8",
     "is-binary-path": "^3.0.0",
     "ofetch": "^1.3.4",
     "ora": "^8.2.0",
-    "prompts": "^2.4.2",
     "tree-kill": "^1.2.2",
     "tsx": "^4.7.0"
   },
@@ -51,8 +55,8 @@
     "@igniter-js/eslint-config": "*",
     "@igniter-js/typescript-config": "*",
     "@types/cross-spawn": "^6.0.6",
+    "@types/handlebars": "^4.1.0",
     "@types/ioredis": "^4.28.10",
-    "@types/prompts": "^2.4.9",
     "eslint": "^8.57.0",
     "ioredis": "^5.6.1",
     "tsup": "^8.0.0",

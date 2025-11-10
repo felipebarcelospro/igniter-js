@@ -115,26 +115,27 @@ program
 // Dev command
 program
   .command("dev")
-  .description("Start development mode with framework and Igniter (interactive dashboard and OpenAPI docs by default)")
+  .description("Start development mode - runs schema generation in watch mode alongside framework server")
   .option("--framework <type>", `Framework type (${getFrameworkList()}, generic)`)
   .option("--output <dir>", "Output directory for generated client files", "src/")
   .option("--port <number>", "Port for the dev server", "3000")
   .option("--cmd <command>", "Custom command to start dev server")
   .option("--no-framework", "Disable framework dev server (Igniter only)")
-  .option("--no-interactive", "Disable interactive mode (use regular concurrent mode)")
   .option("--docs-output <dir>", "Output directory for OpenAPI docs", "./src/docs")
   .action(async (options) => {
-    // Liberar a porta antes de iniciar o servidor
+    // Free the port before starting the server
     const port = parseInt(options.port) || 3000;
     logger.info(`Checking and freeing port ${port}...`);
     await killProcessOnPort(port);
 
     const detectedFramework = detectFramework();
     const framework = options.framework ? (isFrameworkSupported(options.framework) ? options.framework : "generic") : detectedFramework;
-    const useInteractive = options.interactive !== false;
-    logger.info(`Starting ${useInteractive ? 'interactive' : 'concurrent'} development mode`, { framework });
-    const { runInteractiveProcesses, runConcurrentProcesses } = await import("./adapters/framework/concurrent-processes");
+    logger.info(`Starting development mode`, { framework });
+    
+    const { runConcurrentProcesses } = await import("./adapters/framework/concurrent-processes");
     const processes = [];
+    
+    // Add framework server if not disabled
     if (!options.noFramework && framework !== 'generic') {
       const frameworkCommands = {
         nextjs: "npm run dev",
@@ -157,19 +158,18 @@ program
         });
       }
     }
-    const docsFlags = ` --docs --docs-output ${options.docsOutput}`;
     
+    // Add Igniter schema generation in watch mode with docs
+    const docsFlags = ` --docs --docs-output ${options.docsOutput}`;
     processes.push({
       name: "Igniter",
       command: `npx @igniter-js/cli@latest generate schema --watch --framework ${framework} --output ${options.output}${docsFlags}`,
       color: "blue",
       cwd: process.cwd()
     });
-    if (useInteractive) {
-      await runInteractiveProcesses(processes);
-    } else {
-      await runConcurrentProcesses({ processes, killOthers: true });
-    }
+    
+    // Run in concurrent mode (non-interactive)
+    await runConcurrentProcesses({ processes, killOthers: true });
   });
 
 // Generate command (parent for subcommands)
