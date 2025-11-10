@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/mcp-server",
-  "version": "0.0.62",
+  "version": "0.0.63",
   "private": false,
   "description": "MCP Server for Igniter.js ecosystem interaction via STDIO.",
   "main": "dist/index.js",
@@ -11,7 +11,7 @@
   "files": [
     "dist",
     "README.md",
-    "AGENT.md"
+    "AGENTS.md"
   ],
   "scripts": {
     "build": "tsup",
