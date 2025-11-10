@@ -45,6 +45,7 @@ igniter-js/
 │   ├── bot/          # @igniter-js/bot - Multi-platform bot framework
 │   ├── cli/          # @igniter-js/cli - CLI for project scaffolding
 │   ├── mcp-server/   # @igniter-js/mcp-server - MCP server standalone
+│   ├── plugin-better-auth/     # @igniter-js/plugin-better-auth - BetterAuth integration
 │   ├── adapter-redis/           # Redis cache & pubsub adapter
 │   ├── adapter-bullmq/          # BullMQ job queue adapter
 │   ├── adapter-mcp-server/      # MCP server adapter for core
@@ -80,6 +81,12 @@ Each package has its own `AGENTS.md` with detailed instructions. **ALWAYS** read
 | `@igniter-js/bot` | Multi-platform bot framework (Telegram, WhatsApp, Discord) | `0.2.0-alpha.6` | `zod` |
 | `@igniter-js/cli` | CLI tool for project scaffolding | Latest | `commander`, `inquirer` |
 | `@igniter-js/mcp-server` | Standalone MCP server for AI agents | `0.0.63` | `@modelcontextprotocol/sdk` |
+
+### Plugin Packages
+
+| Package | Description | Version | Key Dependencies |
+|---------|-------------|---------|------------------|
+| `@igniter-js/plugin-better-auth` | BetterAuth authentication integration plugin | `0.0.3` | `better-auth` |
 
 ### Adapter Packages
 
