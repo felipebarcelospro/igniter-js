@@ -6,7 +6,8 @@ import chalk from 'chalk'
 import type { ProjectSetupConfig } from './types'
 import {
   getFeatureDependencies,
-  DATABASE_CONFIGS
+  DATABASE_CONFIGS,
+  getORMDependencies
 } from './features'
 import { generateAllTemplates } from './templates'
 import { createChildLogger } from '../logger'
@@ -204,7 +205,11 @@ export class ProjectGenerator {
           .filter(([_, enabled]) => enabled)
           .map(([key]) => key),
       )
-      const dbConfig = DATABASE_CONFIGS[this.config.database.provider]
+      
+      // Get ORM-specific dependencies
+      const ormDeps = getORMDependencies(this.config.database.provider, this.config.orm)
+      const ormProductionDeps = ormDeps.filter(d => !d.isDev)
+      const ormDevDeps = ormDeps.filter(d => d.isDev)
 
       const coreDependencies = [
         { name: '@igniter-js/core', version: '*' },
@@ -219,8 +224,8 @@ export class ProjectGenerator {
 
       // We only need the dependencies for updating an existing package.json
       if (this.isExistingProject) {
-        const deps = [...coreDependencies, ...featureDeps.dependencies, ...dbConfig.dependencies]
-        const devDeps = [...coreDevDependencies, ...(featureDeps.devDependencies || []), ...(dbConfig.devDependencies || [])]
+        const deps = [...coreDependencies, ...featureDeps.dependencies, ...ormProductionDeps]
+        const devDeps = [...coreDevDependencies, ...(featureDeps.devDependencies || []), ...ormDevDeps]
         await this.updatePackageJson(deps, devDeps)
       }
 

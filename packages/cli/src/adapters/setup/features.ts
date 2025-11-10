@@ -213,6 +213,51 @@ export const DATABASE_CONFIGS: Record<DatabaseProvider, {
 }
 
 /**
+ * Get ORM-specific dependencies for a database provider
+ */
+export function getORMDependencies(
+  provider: DatabaseProvider,
+  orm: 'prisma' | 'drizzle'
+): PackageDependency[] {
+  if (provider === 'none') {
+    return []
+  }
+
+  if (orm === 'drizzle') {
+    const deps: PackageDependency[] = [
+      { name: 'drizzle-orm', version: '^0.39.0' }
+    ]
+    
+    // Add database-specific drivers
+    if (provider === 'postgresql') {
+      deps.push({ name: 'postgres', version: '^3.4.0' })
+      deps.push({ name: 'drizzle-kit', version: '^0.29.0', isDev: true })
+    } else if (provider === 'mysql') {
+      deps.push({ name: 'mysql2', version: '^3.6.0' })
+      deps.push({ name: 'drizzle-kit', version: '^0.29.0', isDev: true })
+    } else if (provider === 'sqlite') {
+      deps.push({ name: 'better-sqlite3', version: '^9.0.0' })
+      deps.push({ name: '@types/better-sqlite3', version: '^7.6.0', isDev: true })
+      deps.push({ name: 'drizzle-kit', version: '^0.29.0', isDev: true })
+    }
+    
+    return deps
+  }
+
+  // Prisma (default)
+  const deps: PackageDependency[] = [
+    { name: 'prisma', version: '^6.0.0', isDev: true },
+    { name: '@prisma/client', version: '^6.0.0' }
+  ]
+
+  if (provider === 'mysql') {
+    deps.push({ name: 'mysql2', version: '^3.6.0' })
+  }
+
+  return deps
+}
+
+/**
  * Get all dependencies for enabled features
  */
 export function getFeatureDependencies(enabledFeatures: string[]): {
