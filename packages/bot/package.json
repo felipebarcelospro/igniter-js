@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/bot",
-  "version": "0.1.0-alpha.3",
+  "version": "0.2.0-alpha.6",
   "description": "A modern, type-safe multi-platform bot framework for the Igniter.js ecosystem (adapters, middleware, commands, rich content).",
   "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
   "license": "MIT",
@@ -48,6 +48,21 @@
       "import": "./dist/adapters/*.mjs",
       "require": "./dist/adapters/*.cjs"
     },
+    "./middlewares": {
+      "types": "./dist/middlewares/index.d.ts",
+      "import": "./dist/middlewares/index.mjs",
+      "require": "./dist/middlewares/index.cjs"
+    },
+    "./plugins": {
+      "types": "./dist/plugins/index.d.ts",
+      "import": "./dist/plugins/index.mjs",
+      "require": "./dist/plugins/index.cjs"
+    },
+    "./stores": {
+      "types": "./dist/stores/index.d.ts",
+      "import": "./dist/stores/index.mjs",
+      "require": "./dist/stores/index.cjs"
+    },
     "./types": {
       "types": "./dist/types/index.d.ts",
       "import": "./dist/types/index.mjs",
@@ -58,7 +73,7 @@
   "files": [
     "dist",
     "README.md",
-    "AGENT.md",
+    "AGENTS.md",
     "LICENSE"
   ],
   "scripts": {
@@ -68,6 +83,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepublishOnly": "npm run clean && npm run build && npm run typecheck"
   },
   "dependencies": {
@@ -90,6 +107,10 @@
       "adapters/index": "src/adapters/index.ts",
       "adapters/telegram/index": "src/adapters/telegram/index.ts",
       "adapters/whatsapp/index": "src/adapters/whatsapp/index.ts",
+      "adapters/discord/index": "src/adapters/discord/index.ts",
+      "middlewares/index": "src/middlewares/index.ts",
+      "plugins/index": "src/plugins/index.ts",
+      "stores/index": "src/stores/index.ts",
       "types/index": "src/types/index.ts"
     },
     "format": [
