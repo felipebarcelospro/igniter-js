@@ -1,0 +1,450 @@
+---
+title: Routers
+description: Organize jobs into logical groups using routers and namespaces for better code organization and type safety.
+---
+
+Routers help you organize related jobs into logical groups. They provide namespacing, shared configuration, and a clean API for invoking jobs. Think of routers as controllers for your background jobs.
+
+## What is a Router?
+
+A router groups related jobs under a namespace and provides a structured way to access them:
+
+```typescript
+// Without routers - flat structure
+const jobs = {
+  'emails.sendWelcome': sendWelcomeJob,
+  'emails.sendPasswordReset': sendPasswordResetJob,
+  'users.processSignup': processSignupJob,
+  'users.sendNotification': sendNotificationJob,
+};
+
+// With routers - organized structure
+const emailRouter = jobs.router({
+  namespace: 'emails',
+  jobs: {
+    sendWelcome: sendWelcomeJob,
+    sendPasswordReset: sendPasswordResetJob,
+  },
+});
+
+const userRouter = jobs.router({
+  namespace: 'users',
+  jobs: {
+    processSignup: processSignupJob,
+    sendNotification: sendNotificationJob,
+  },
+});
+```
+
+---
+
+## Creating a Router
+
+Use `jobs.router()` to create a router:
+
+```typescript
+import { jobs } from '@/services/jobs';
+import { z } from 'zod';
+
+const emailRouter = jobs.router({
+  namespace: 'emails',
+  jobs: {
+    sendWelcome: jobs.register({
+      name: 'Send Welcome Email',
+      input: z.object({ email: z.string().email() }),
+      handler: async ({ payload }) => {
+        // Handler logic
+      },
+    }),
+    
+    sendPasswordReset: jobs.register({
+      name: 'Send Password Reset',
+      input: z.object({ email: z.string().email(), token: z.string() }),
+      handler: async ({ payload }) => {
+        // Handler logic
+      },
+    }),
+  },
+});
+```
+
+### Router Configuration
+
+- **`namespace`**: A unique identifier for this group of jobs (required)
+- **`jobs`**: An object mapping job IDs to job definitions
+
+---
+
+## Merging Routers
+
+Combine multiple routers into a single configuration using `jobs.merge()`:
+
+```typescript
+const emailRouter = jobs.router({
+  namespace: 'emails',
+  jobs: {
+    sendWelcome: jobs.register({ /* ... */ }),
+  },
+});
+
+const userRouter = jobs.router({
+  namespace: 'users',
+  jobs: {
+    processSignup: jobs.register({ /* ... */ }),
+  },
+});
+
+const notificationRouter = jobs.router({
+  namespace: 'notifications',
+  jobs: {
+    sendPush: jobs.register({ /* ... */ }),
+  },
+});
+
+// Merge all routers
+export const REGISTERED_JOBS = jobs.merge({
+  emails: emailRouter,
+  users: userRouter,
+  notifications: notificationRouter,
+});
+```
+
+### Using Merged Routers
+
+After merging, register with Igniter and access jobs through namespaces:
+
+```typescript
+// Register with Igniter
+export const igniter = Igniter
+  .context<AppContext>()
+  .jobs(REGISTERED_JOBS)
+  .create();
+
+// Access jobs through namespaces
+await igniter.jobs.emails.schedule({
+  task: 'sendWelcome',
+  input: { email: 'user@example.com' },
+});
+
+await igniter.jobs.users.schedule({
+  task: 'processSignup',
+  input: { userId: '123' },
+});
+```
+
+<Callout type="info" title="Type Safety">
+  TypeScript infers the available namespaces and jobs from your router structure, providing autocomplete and type checking.
+</Callout>
+
+---
+
+## Router Default Options
+
+Apply default configuration to all jobs in a router:
+
+```typescript
+const emailRouter = jobs.router({
+  namespace: 'emails',
+  defaultOptions: {
+    queue: {
+      name: 'email-queue',
+      prefix: 'production',
+    },
+    attempts: 5,
+    removeOnComplete: 100,
+  },
+  jobs: {
+    sendWelcome: jobs.register({
+      // Inherits defaultOptions
+      input: z.object({ email: z.string().email() }),
+      handler: async ({ payload }) => {
+        // Job logic
+      },
+    }),
+  },
+});
+```
+
+### Overriding Default Options
+
+Individual jobs can override router defaults:
+
+```typescript
+const emailRouter = jobs.router({
+  namespace: 'emails',
+  defaultOptions: {
+    attempts: 3, // Default retry attempts
+    queue: { name: 'email-queue' },
+  },
+  jobs: {
+    sendWelcome: jobs.register({
+      attempts: 5, // Override: retry 5 times instead of 3
+      input: z.object({ email: z.string().email() }),
+      handler: async ({ payload }) => {
+        // Job logic
+      },
+    }),
+    
+    sendNewsletter: jobs.register({
+      // Uses default: attempts: 3
+      input: z.object({ newsletterId: z.string() }),
+      handler: async ({ payload }) => {
+        // Job logic
+      },
+    }),
+  },
+});
+```
+
+---
+
+## Organizing Routers by Feature
+
+A common pattern is to organize routers by application features:
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="features">
+      <Folder name="emails">
+        <File name="jobs.ts" />
+        <File name="actions.ts" />
+      </Folder>
+      <Folder name="users">
+        <File name="jobs.ts" />
+        <File name="actions.ts" />
+      </Folder>
+      <Folder name="notifications">
+        <File name="jobs.ts" />
+      </Folder>
+    </Folder>
+    <Folder name="services">
+      <File name="jobs.ts" />
+    </Folder>
+  </Folder>
+</Files>
+
+```typescript
+// src/features/emails/jobs.ts
+import { jobs } from '@/services/jobs';
+import { z } from 'zod';
+
+export const emailRouter = jobs.router({
+  namespace: 'emails',
+  jobs: {
+    sendWelcome: jobs.register({ /* ... */ }),
+    sendPasswordReset: jobs.register({ /* ... */ }),
+  },
+});
+
+// src/features/users/jobs.ts
+export const userRouter = jobs.router({
+  namespace: 'users',
+  jobs: {
+    processSignup: jobs.register({ /* ... */ }),
+    updateProfile: jobs.register({ /* ... */ }),
+  },
+});
+
+// src/services/jobs.ts
+import { emailRouter } from '@/features/emails/jobs';
+import { userRouter } from '@/features/users/jobs';
+
+export const REGISTERED_JOBS = jobs.merge({
+  emails: emailRouter,
+  users: userRouter,
+});
+```
+
+---
+
+## Router Patterns
+
+### Feature-Based Organization
+
+Group jobs by business domain:
+
+```typescript
+// Payments domain
+const paymentRouter = jobs.router({
+  namespace: 'payments',
+  jobs: {
+    processPayment: jobs.register({ /* ... */ }),
+    refundPayment: jobs.register({ /* ... */ }),
+    reconcileTransactions: jobs.register({ /* ... */ }),
+  },
+});
+
+// Analytics domain
+const analyticsRouter = jobs.router({
+  namespace: 'analytics',
+  jobs: {
+    trackEvent: jobs.register({ /* ... */ }),
+    generateReport: jobs.register({ /* ... */ }),
+  },
+});
+```
+
+### Priority-Based Organization
+
+Group jobs by priority level:
+
+```typescript
+const highPriorityRouter = jobs.router({
+  namespace: 'priority-high',
+  defaultOptions: {
+    priority: 10,
+    attempts: 5,
+  },
+  jobs: {
+    criticalTask: jobs.register({ /* ... */ }),
+  },
+});
+
+const lowPriorityRouter = jobs.router({
+  namespace: 'priority-low',
+  defaultOptions: {
+    priority: 1,
+    attempts: 1,
+  },
+  jobs: {
+    cleanupTask: jobs.register({ /* ... */ }),
+  },
+});
+```
+
+### Queue-Based Organization
+
+Group jobs by target queue:
+
+```typescript
+const fastQueueRouter = jobs.router({
+  namespace: 'fast',
+  defaultOptions: {
+    queue: { name: 'fast-queue' },
+  },
+  jobs: {
+    quickTask: jobs.register({ /* ... */ }),
+  },
+});
+
+const slowQueueRouter = jobs.router({
+  namespace: 'slow',
+  defaultOptions: {
+    queue: { name: 'slow-queue' },
+  },
+  jobs: {
+    heavyTask: jobs.register({ /* ... */ }),
+  },
+});
+```
+
+---
+
+## Invoking Jobs Through Routers
+
+After merging routers, access jobs through the namespace:
+
+```typescript
+// Schedule a job
+await igniter.jobs.emails.schedule({
+  task: 'sendWelcome',
+  input: { email: 'user@example.com' },
+});
+
+// Enqueue immediately
+await igniter.jobs.emails.enqueue({
+  task: 'sendPasswordReset',
+  input: { email: 'user@example.com', token: 'reset-token' },
+});
+
+// Bulk operations
+await igniter.jobs.emails.bulk([
+  {
+    jobId: 'sendWelcome',
+    input: { email: 'user1@example.com' },
+  },
+  {
+    jobId: 'sendWelcome',
+    input: { email: 'user2@example.com' },
+  },
+]);
+```
+
+### Type-Safe Job Access
+
+TypeScript provides autocomplete and type checking:
+
+```typescript
+// ✅ Valid - TypeScript knows this job exists
+await igniter.jobs.emails.schedule({
+  task: 'sendWelcome', // Autocomplete shows available tasks
+  input: {
+    email: 'user@example.com', // Type-checked against schema
+  },
+});
+
+// ❌ Invalid - TypeScript error
+await igniter.jobs.emails.schedule({
+  task: 'nonExistentJob', // Error: not in router
+  input: { wrongField: 'value' }, // Error: doesn't match schema
+});
+```
+
+---
+
+## Namespace Best Practices
+
+1. **Use Descriptive Names**: Namespaces should clearly indicate their purpose
+2. **Keep Related Jobs Together**: Group jobs that share context or domain
+3. **Avoid Deep Nesting**: Prefer flat namespaces like `emails`, `users`, not `app.emails.welcome`
+4. **Use Consistent Naming**: Follow a consistent pattern across your application
+5. **One Router Per Feature**: Create separate routers for each major feature or domain
+
+---
+
+## Common Patterns
+
+### Shared Context Across Jobs
+
+```typescript
+const emailRouter = jobs.router({
+  namespace: 'emails',
+  defaultOptions: {
+    queue: { name: 'email-queue' },
+    onStart: async ({ job }) => {
+      console.log(`Email job started: ${job.name}`);
+    },
+  },
+  jobs: {
+    // All jobs inherit the onStart hook
+    sendWelcome: jobs.register({ /* ... */ }),
+    sendPasswordReset: jobs.register({ /* ... */ }),
+  },
+});
+```
+
+### Environment-Specific Configuration
+
+```typescript
+const emailRouter = jobs.router({
+  namespace: 'emails',
+  defaultOptions: {
+    queue: {
+      name: 'email-queue',
+      prefix: process.env.NODE_ENV === 'production' ? 'prod' : 'dev',
+    },
+  },
+  jobs: {
+    sendWelcome: jobs.register({ /* ... */ }),
+  },
+});
+```
+
+---
+
+## Next Steps
+
+- **[Scheduling](/docs/jobs/scheduling)**: Learn how to schedule jobs for future execution
+- **[Workers](/docs/jobs/workers)**: Configure workers to process your jobs
+- **[Advanced Features](/docs/jobs/advanced-features)**: Explore advanced router patterns
+

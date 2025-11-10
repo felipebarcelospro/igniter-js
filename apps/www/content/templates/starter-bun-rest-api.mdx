@@ -1,0 +1,146 @@
+---
+title: "Bun REST API"
+description: "A high-performance REST API built with Bun runtime and Igniter.js for maximum speed and efficiency."
+framework: "Bun"
+cover: "/templates/bun-base-template.png"
+demo: "https://github.com/felipebarcelospro/igniter-js/tree/main/apps/starter-bun-rest-api"
+repository: "https://github.com/felipebarcelospro/igniter-js/tree/main/apps/starter-bun-rest-api"
+stack: ["Bun", "TypeScript", "Prisma", "PostgreSQL", "Redis", "BullMQ"]
+useCases: ["API"]
+creator:
+  username: "felipebarcelospro"
+---
+
+## Overview
+
+This template provides a robust and scalable foundation for building high-performance, type-safe REST APIs with Bun and Igniter.js. It's designed for developers who prioritize speed, efficiency, and a strongly-typed backend.
+
+## Features
+
+- ✅ **High-Performance API Server**: Built on Bun, one of the fastest JavaScript runtimes available.
+- ✅ **Type-Safe from the Ground Up**: Powered by Igniter.js, ensuring a strongly-typed codebase that is easy to maintain and refactor.
+- ✅ **Feature-Based Architecture**: A scalable project structure that organizes code by business domain, not technical layers.
+- ✅ **Ready-to-Use Services**: Pre-configured examples for:
+  - **Caching**: Integrated with Redis via `@igniter-js/adapter-redis`.
+  - **Background Jobs**: Asynchronous task processing with BullMQ via `@igniter-js/adapter-bullmq`.
+  - **Structured Logging**: Production-ready, context-aware logging.
+- ✅ **Database Ready**: Comes with Prisma set up for seamless PostgreSQL database integration.
+- ✅ **Auto-Generated Type-Safe Client**: Even as a REST API, you can generate a fully-typed client (`src/igniter.client.ts`) for consumption by other TypeScript services or a separate front-end application.
+
+## Project Structure
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="features">
+      <Folder name="example">
+        <Folder name="controllers" />
+      </Folder>
+    </Folder>
+    <Folder name="services" />
+    <File name="igniter.ts" />
+    <File name="igniter.client.ts" />
+    <File name="igniter.context.ts" />
+    <File name="igniter.router.ts" />
+    <File name="index.ts" />
+  </Folder>
+</Files>
+
+## Quick Start
+
+<Steps>
+  <Step>
+    ### Clone the Repository
+    ```bash
+    git clone https://github.com/felipebarcelospro/igniter-js.git
+    cd igniter-js/apps/starter-bun-rest-api
+    ```
+  </Step>
+  
+  <Step>
+    ### Install Dependencies
+    <Tabs items={['bun', 'npm', 'pnpm', 'yarn']} groupId="package-manager">
+      <Tab value="bun">
+        ```bash
+        bun install
+        ```
+      </Tab>
+      <Tab value="npm">
+        ```bash
+        npm install
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm install
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn install
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step>
+    ### Configure Environment Variables
+    Create a `.env` file in the root of this starter and add your database and Redis connection URLs:
+    ```bash
+    # .env
+    DATABASE_URL="postgresql://user:password@localhost:5432/mydatabase?schema=public"
+    REDIS_URL="redis://127.0.0.1:6379"
+    ```
+  </Step>
+  
+  <Step>
+    ### Run Database Migrations
+    ```bash
+    bunx prisma db push
+    ```
+  </Step>
+  
+  <Step>
+    ### Run the Development Server
+    ```bash
+    bun run dev
+    ```
+    Your API will be available at `http://localhost:3000/api/v1`.
+  </Step>
+</Steps>
+
+<Callout type="info">
+  Ensure you have Bun (v1.0 or higher) installed, a running Redis instance, and a PostgreSQL database.
+</Callout>
+
+## Example API Endpoints
+
+This starter includes an `example` controller to demonstrate key features.
+
+-   **Health Check**
+    ```bash
+    curl http://localhost:3000/api/v1/example/
+    ```
+
+-   **Cache Demonstration**
+    ```bash
+    # First request (live data)
+    curl http://localhost:3000/api/v1/example/cache/my-key
+    # Second request (cached data)
+    curl http://localhost:3000/api/v1/example/cache/my-key
+    ```
+
+-   **Schedule a Background Job**
+    ```bash
+    curl -X POST -H "Content-Type: application/json" \
+      -d '{"message": "Hello from curl"}' \
+      http://localhost:3000/api/v1/example/schedule-job
+    ```
+
+-   **List Jobs**
+    ```bash
+    curl http://localhost:3000/api/v1/example/jobs
+    ```
+
+## Deployment
+
+This template can be deployed to various platforms that support Bun applications. Follow the quick start guide to get your API running locally, then refer to Bun's deployment documentation for production environments.

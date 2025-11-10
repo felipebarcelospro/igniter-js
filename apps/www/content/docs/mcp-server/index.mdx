@@ -1,0 +1,159 @@
+---
+title: MCP Server
+description: Transform your Igniter.js API into an AI-native MCP server that exposes your endpoints as tools consumable by AI agents and applications.
+---
+
+## Overview
+
+The MCP Server adapter transforms your entire Igniter.js API into a **Model Context Protocol (MCP)** server, making your endpoints accessible as tools for AI agents and MCP-compatible applications. This enables powerful AI-native workflows where agents can understand and execute your API actions directly.
+
+<Callout type="info">
+  MCP is an open protocol developed by Anthropic that enables AI assistants to interact with external tools and data sources. By exposing your Igniter.js API as an MCP server, you make it accessible to AI agents in IDEs like Cursor, Claude Desktop, and other MCP-compatible clients.
+</Callout>
+
+### Key Features
+
+- **Automatic Tool Generation**: Every Igniter.js action becomes an MCP tool automatically
+- **Type-Safe APIs**: Full TypeScript inference for tools, prompts, and resources
+- **Two API Patterns**: Builder pattern (recommended) or function-based API
+- **Custom Tools**: Add custom tools beyond your router actions
+- **Prompts & Resources**: Expose prompts and resources for AI agents
+- **OAuth Support**: Secure your MCP server with OAuth authentication
+- **Event Hooks**: Monitor and log all MCP operations
+- **AI-Friendly**: Designed to be easily understood and used by AI agents
+
+---
+
+## Installation
+
+To use the MCP Server adapter, install it alongside `@igniter-js/core`:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/adapter-mcp-server @igniter-js/core
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/adapter-mcp-server @igniter-js/core
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/adapter-mcp-server @igniter-js/core
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/adapter-mcp-server @igniter-js/core
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Quick Start
+
+### 1. Create the MCP Route Handler
+
+Create a new API route in your Next.js application to handle MCP requests. For example: `src/app/api/mcp/[...transport]/route.ts`.
+
+**Using Builder Pattern (Recommended):**
+
+```typescript
+// src/app/api/mcp/[...transport]/route.ts
+import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server';
+import { AppRouter } from '@/igniter.router';
+
+/**
+ * Create the MCP server using the builder pattern.
+ * This provides full type inference and a fluent API.
+ */
+const { handler, auth } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withServerInfo({
+    name: 'Igniter.js MCP Server',
+    version: '1.0.0',
+  })
+  .withInstructions("Use the available tools to manage users and products in the Acme Corporation API.")
+  .build();
+
+/**
+ * Export the handler for Next.js to handle both GET and POST requests,
+ * which are used by different MCP transport methods (like SSE and WebSockets).
+ */
+export const GET = handler;
+export const POST = handler;
+```
+
+**Using Function API (Simple):**
+
+```typescript
+// src/app/api/mcp/[...transport]/route.ts
+import { createMcpAdapter } from '@igniter-js/adapter-mcp-server';
+import { AppRouter } from '@/igniter.router';
+
+const { server, auth } = createMcpAdapter({
+  router: AppRouter,
+  serverInfo: {
+    name: 'Igniter.js MCP Server',
+    version: '1.0.0',
+  },
+  instructions: "Use the available tools to manage users and products.",
+});
+
+export const GET = server;
+export const POST = server;
+```
+
+### 2. Connect from an MCP Client
+
+With this handler in place, your Igniter.js API is now an MCP server. You can connect to it from any MCP-compatible client.
+
+For example, in an AI-powered IDE like Cursor, you would configure your custom MCP server with the following URL:
+
+```
+http://localhost:3000/api/mcp/sse
+```
+
+The AI can now discover and call your API actions:
+
+**AI Prompt:**
+> "List the users in the system."
+
+The MCP adapter will translate this into a call to `users.list` on your backend, execute it, and return the result to the AI.
+
+---
+
+## How It Works
+
+### Automatic Tool Generation
+
+The adapter automatically inspects your Igniter.js router and transforms each action into an MCP tool:
+
+1. **Router Traversal**: The adapter iterates through all controllers and actions in your router
+2. **Action-to-Tool Mapping**: Each `IgniterAction` (from `igniter.query` or `igniter.mutation`) becomes an MCP tool
+3. **Schema Conversion**: Zod schemas from `body`, `query`, and `params` are converted to JSON Schema for MCP
+4. **Tool Registration**: Tools are registered with the MCP server with sanitized names and descriptions
+
+### Execution Flow
+
+When an AI agent calls a tool:
+
+1. **MCP Request**: The adapter receives an HTTP request with the tool name and arguments
+2. **Tool Resolution**: The adapter finds the corresponding Igniter.js action
+3. **Server-Side Invocation**: Uses `router.caller` for direct, type-safe execution (bypasses HTTP stack)
+4. **Result Formatting**: Formats the result into MCP-compliant response format
+5. **Response**: Returns the formatted result to the MCP client
+
+---
+
+## Next Steps
+
+- Learn how to [Get Started](/docs/mcp-server/getting-started) with basic usage
+- Explore the [Builder Pattern](/docs/mcp-server/builder-pattern) API for advanced configurations
+- Check out [Custom Tools](/docs/mcp-server/custom-tools) to extend your MCP server
+- See [OAuth](/docs/mcp-server/oauth) for securing your server
+

@@ -1,0 +1,96 @@
+---
+title: Quickstart with Lia
+description: Get Lia up and running in your local environment or IDE with step-by-step setup guides.
+---
+
+By the end of this guide, you'll have Lia configured and ready to work in your preferred development environment.
+
+## Configuring Lia with the CLI
+
+The easiest way to set up Lia is through the Igniter.js CLI. Even after initial project creation, you can configure or update Lia at any time.
+
+<Card title="Step-by-step">
+  <Steps>
+    <Step>
+    ### Run the Lia configuration command
+
+    ```bash
+    npx @igniter-js/cli@latest lia
+    ```
+
+    This launches an interactive menu for managing Lia configurations.
+    </Step>
+
+    <Step>
+    ### Choose your action
+
+    The main menu offers several options:
+
+    - **Initialize LIA on my Code Agents**: Set up Lia for your preferred development tools
+    - **Sync All Configurations**: Update all AI code agent settings across your environment
+    - **Update .gitignore**: Add Lia-specific patterns to your .gitignore file
+    - **Exit**: Close the menu
+    </Step>
+
+    <Step>
+    ### Configure code agents (if selected)
+
+    When initializing Lia, you'll see a multi-select list of supported code agents:
+
+    - GitHub Copilot
+    - Cursor
+    - Claude Code
+    - Codex CLI
+    - Gemini CLI
+    - OpenCode
+    - Cline
+    - Roo Code
+    - Qwen Code
+    - Kiro IDE
+    - Amazon Q Developer CLI
+    - JetBrains Junie
+    - AugmentCode
+    - Windsurf
+    - Warp
+
+    Select all the agents you use, then confirm to apply the configuration. This replaces their default training with Lia's specialized setup for the Igniter.js ecosystem.
+    </Step>
+
+    <Step>
+    ### Verify the setup
+
+    After configuration, Lia will be ready to work in your chosen agents. Test her by asking for help with a simple task, like creating a new page or controller.
+    </Step>
+  </Steps>
+</Card>
+
+## Troubleshooting
+
+<Accordions type="multiple">
+<Accordion title="Lia not responding in my code agent">
+**Problem:** Lia doesn't respond in your configured code agent.
+
+**Solution:**
+- Ensure you've run the CLI configuration for your specific agent
+- Check that the agent's configuration files point to the correct project directory
+- Verify that the project has the required `.mcp.json` and rule files
+</Accordion>
+
+<Accordion title="Configuration not applying">
+**Problem:** Changes to Lia's configuration aren't taking effect.
+
+**Solution:**
+- Try the "Sync All Configurations" option in the CLI menu
+- Check for permission problems or conflicting agent configurations
+- Restart your code agent after configuration changes
+</Accordion>
+
+<Accordion title="MCP tools not working">
+**Problem:** Lia can't access MCP server tools.
+
+**Solution:**
+- Verify that `.mcp.json` exists in your project root
+- Ensure all required packages are installed
+- Check for additional environment variables needed for authentication
+</Accordion>
+</Accordions>

@@ -1,0 +1,411 @@
+---
+title: "03: Your First Feature"
+description: "Generate and understand your first Igniter.js feature"
+---
+
+import { ChapterObjectives } from '@/components/learn/chapter-objectives'
+import { ChapterNav } from '@/components/learn/chapter-nav'
+import { Quiz } from '@/components/learn/quiz'
+
+<ChapterObjectives
+  objectives={[
+    { text: 'Use the CLI to generate a feature' },
+    { text: 'Understand the feature structure' },
+    { text: 'Learn how controllers handle HTTP requests' },
+    { text: 'Understand services and business logic encapsulation' },
+    { text: 'Test your feature in Igniter Studio' }
+  ]}
+/>
+
+Now that we have our database ready, let's create our first feature using the powerful Igniter.js CLI generator.
+
+## Generating the Feature
+
+The Igniter.js CLI has a powerful command that generates a complete feature structure based on your Prisma schema. This saves you from writing boilerplate code and ensures consistency across your application.
+
+Run this command:
+
+```bash
+igniter generate feature link --schema prisma:Link
+```
+
+This single command does a lot of heavy lifting:
+1. **Reads** the `Link` model from your `schema.prisma`
+2. **Creates** the entire folder structure
+3. **Generates** controllers with CRUD endpoints
+4. **Generates** services for database operations
+5. **Configures** end-to-end TypeScript types
+
+<Callout type="info">
+**What is a Feature?**  
+In Igniter.js, a "feature" is a self-contained module that groups all logic related to a specific entity or business domain. It includes controllers (HTTP endpoints), services (business logic and database access), procedures (middleware), and interfaces (types, schemas, and constants).
+</Callout>
+
+## Understanding the Generated Structure
+
+After running the command, you'll see this structure in `src/features/link/`:
+
+```
+src/features/link/
+├── controllers/
+│   └── link.controller.ts    # HTTP endpoints (GET, POST, PUT, DELETE)
+├── services/
+│   └── link.service.ts       # Business logic and database operations
+├── procedures/
+│   └── link.procedure.ts     # Service injection into context
+└── link.interfaces.ts        # Types, Zod schemas, and constants
+```
+
+Each file has a specific responsibility. Let's explore them one by one.
+
+## The Controller: Handling HTTP Requests
+
+Controllers are the entry point for HTTP requests. They handle request validation, call business logic, and format responses. Open `src/features/link/controllers/link.controller.ts`:
+
+```typescript
+import { igniter } from "@/igniter";
+import { z } from "zod";
+import { linkProcedure } from "../procedures/link.procedure";
+import { CreateLinkBodySchema, UpdateLinkBodySchema } from "../link.interfaces";
+
+export const linkController = igniter.controller({
+  name: "link",
+  path: "/link",
+  actions: {
+    // GET /link - List all links
+    list: igniter.action({
+      method: "GET",
+      path: "/",
+      use: [linkProcedure],
+      handler: async ({ context, response }) => {
+        const links = await context.link.service.link.findMany();
+        return response.success(links);
+      },
+    }),
+
+    // GET /link/:id - Get a specific link
+    get: igniter.action({
+      method: "GET",
+      path: "/:id" as const,
+      use: [linkProcedure],
+      handler: async ({ context, response, request }) => {
+        const link = await context.link.service.link.findUnique(
+          request.params.id
+        );
+        
+        if (!link) {
+          return response.notFound("Link not found");
+        }
+
+        return response.success(link);
+      },
+    }),
+
+    // POST /link - Create a new link
+    create: igniter.action({
+      method: "POST",
+      path: "/",
+      body: CreateLinkBodySchema,
+      use: [linkProcedure],
+      handler: async ({ context, response, request }) => {
+        const link = await context.link.service.link.create(request.body);
+        return response.created(link);
+      },
+    }),
+
+    // PUT /link/:id - Update a link
+    update: igniter.action({
+      method: "PUT",
+      path: "/:id" as const,
+      body: UpdateLinkBodySchema,
+      use: [linkProcedure],
+      handler: async ({ context, response, request }) => {
+        const link = await context.link.service.link.update(
+          request.params.id,
+          request.body
+        );
+
+        if (!link) {
+          return response.notFound("Link not found");
+        }
+
+        return response.success(link);
+      },
+    }),
+
+    // DELETE /link/:id - Delete a link
+    delete: igniter.action({
+      method: "DELETE",
+      path: "/:id" as const,
+      use: [linkProcedure],
+      handler: async ({ context, response, request }) => {
+        await context.link.service.link.delete(request.params.id);
+        return response.noContent();
+      },
+    }),
+  },
+});
+```
+
+### Key Concepts in Controllers
+
+**1. Controller Configuration**: The controller is configured with a `name` (for documentation) and a `path` (the base URL path for all actions).
+
+**2. Actions**: Each action is an HTTP endpoint. The `method` defines the HTTP verb (GET, POST, etc.), the `path` is the URL pattern, and `use` specifies the procedures (middleware) to run before the handler. Notice the `as const` on paths with parameters—this enables TypeScript to infer the correct types for `request.params`.
+
+**3. Request Validation**: The `body` property on `create` and `update` actions automatically validates incoming data using Zod schemas. If validation fails, the request is rejected with a clear error message.
+
+**4. Context Usage**: The handler accesses the service through `context.link.service.link`. This dependency was injected by the `linkProcedure`.
+
+**5. Response Methods**: Igniter.js provides semantic response methods like `response.success()`, `response.created()`, `response.notFound()`, and `response.noContent()`. These ensure correct HTTP status codes and consistent response formats.
+
+## The Service: Encapsulating Business Logic
+
+Services encapsulate all database operations and business logic for a feature. This keeps controllers thin and focused, while making the business logic reusable and testable.
+
+Open `src/features/link/services/link.service.ts`:
+
+```typescript
+import { PrismaClient, Link } from "@prisma/client";
+import { CreateLinkBody, UpdateLinkBody } from "../link.interfaces";
+
+/**
+ * Service responsible for Link entity business logic and data access
+ */
+export class LinkService {
+  constructor(private prisma: PrismaClient) {}
+
+  /**
+   * Find all links with related user data
+   */
+  async findMany() {
+    return this.prisma.link.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Find a single link by ID with full relations
+   */
+  async findUnique(id: string) {
+    return this.prisma.link.findUnique({
+      where: { id },
+      include: {
+        user: true,
+        clicks: true,
+      },
+    });
+  }
+
+  /**
+   * Create a new link
+   */
+  async create(data: CreateLinkBody) {
+    return this.prisma.link.create({
+      data,
+    });
+  }
+
+  /**
+   * Update an existing link
+   */
+  async update(id: string, data: UpdateLinkBody) {
+    return this.prisma.link.update({
+      where: { id },
+      data,
+    });
+  }
+
+  /**
+   * Delete a link
+   */
+  async delete(id: string) {
+    return this.prisma.link.delete({
+      where: { id },
+    });
+  }
+}
+```
+
+### Why Services Matter
+
+**Separation of Concerns**: Controllers handle HTTP. Services handle business logic. This separation makes code easier to test and maintain.
+
+**Reusability**: Service methods can be called from multiple controllers, background jobs, or even other services.
+
+**Business Logic**: Services can include validation rules, calculations, and complex queries beyond simple CRUD operations.
+
+**Type Safety**: The service class is fully typed, providing autocomplete and compile-time error checking.
+
+## The Procedure: Injecting Dependencies
+
+Procedures in Igniter.js are middleware that extend the request context. They're perfect for injecting services, validating authentication, or adding any shared functionality.
+
+Open `src/features/link/procedures/link.procedure.ts`:
+
+```typescript
+import { igniter } from "@/igniter";
+import { LinkService } from "../services/link.service";
+
+/**
+ * Procedure that injects LinkService into the request context
+ */
+export const linkProcedure = igniter.procedure({
+  name: "linkProcedure",
+  handler: async ({ context }) => {
+    return {
+      link: {
+        service: {
+          link: new LinkService(context.database),
+        },
+      },
+    };
+  },
+});
+```
+
+### Understanding Procedures
+
+**Context Extension**: The procedure returns an object that gets merged into the request context. This makes the service available to all downstream handlers.
+
+**Type Safety**: TypeScript automatically infers what's available in `context.link.service.link` based on the returned object.
+
+**Dependency Injection**: By instantiating the service here, we keep controllers clean and make it easy to swap implementations for testing.
+
+**Composition**: Multiple procedures can be chained in the `use` array at the action level. Each procedure runs in order, extending the context with its returned values. This builds up the context step by step before the handler executes.
+
+## The Interfaces: Centralizing Types
+
+All types, Zod schemas, and constants for a feature live in one place. Open `src/features/link/link.interfaces.ts`:
+
+```typescript
+import { z } from "zod";
+
+/**
+ * Schema for creating a new link
+ */
+export const CreateLinkBodySchema = z.object({
+  shortCode: z.string().min(3, "Short code must be at least 3 characters"),
+  url: z.string().url("Must be a valid URL"),
+  userId: z.string(),
+});
+
+/**
+ * Schema for updating a link
+ */
+export const UpdateLinkBodySchema = z.object({
+  shortCode: z.string().min(3, "Short code must be at least 3 characters").optional(),
+  url: z.string().url("Must be a valid URL").optional(),
+});
+
+/**
+ * Type for creating a new link
+ */
+export type CreateLinkBody = z.infer<typeof CreateLinkBodySchema>;
+
+/**
+ * Type for updating a link
+ */
+export type UpdateLinkBody = z.infer<typeof UpdateLinkBodySchema>;
+```
+
+Having all schemas in one file makes them easy to find, update, and reuse.
+
+## Testing with Igniter Studio
+
+Now for the magic. Instead of using `npm run dev`, use the Igniter.js CLI:
+
+```bash
+igniter dev
+```
+
+This command is more than just a dev server. It:
+1. **Starts** your Next.js application
+2. **Watches** for file changes
+3. **Auto-generates** the TypeScript client when controllers change
+4. **Auto-generates** API documentation
+5. **Provides** hot module reload
+
+<Callout type="success">
+**Why use `igniter dev`?**  
+The `igniter dev` command monitors your controllers and automatically regenerates the TypeScript client and documentation whenever you make changes. This keeps your frontend and backend perfectly synchronized with zero manual work!
+</Callout>
+
+Once running, navigate to `http://localhost:3000/api/igniter/studio`. You'll see:
+
+- **All your endpoints** listed and organized
+- **Interactive forms** to test each endpoint
+- **Real-time Zod validation** as you type
+- **Formatted responses** with syntax highlighting
+- **Automatic TypeScript types** generated from your schemas
+
+Try creating a link:
+
+1. Click on `POST /link` in the studio
+2. Fill in the test form:
+   ```json
+   {
+     "shortCode": "test",
+     "url": "https://example.com",
+     "userId": "<id-from-seed-data>"
+   }
+   ```
+3. Click "Send"
+
+You should see a `201 Created` response with your new link!
+
+## Making API Requests
+
+You can also test with `curl` or any HTTP client:
+
+```bash
+curl -X POST http://localhost:3000/api/link \
+  -H "Content-Type: application/json" \
+  -d '{
+    "shortCode": "docs",
+    "url": "https://igniterjs.com/docs",
+    "userId": "your-user-id-here"
+  }'
+```
+
+## Quiz
+
+<Quiz
+  question="What does the command `igniter generate feature` NOT create automatically?"
+  options={[
+    { label: 'Controllers with CRUD endpoints', value: 'controllers' },
+    { label: 'Services with database methods', value: 'services' },
+    { label: 'Automated test files', value: 'tests', isCorrect: true },
+    { label: 'Zod validation schemas', value: 'schemas' }
+  ]}
+  explanation="The generator creates controllers, services, and schemas, but you should write tests yourself. We'll cover testing in future chapters!"
+/>
+
+<Quiz
+  question="Why use `igniter dev` instead of `npm run dev`?"
+  options={[
+    { label: 'It is faster to start', value: 'faster' },
+    { label: 'It auto-generates client and docs', value: 'autogen', isCorrect: true },
+    { label: 'It has prettier terminal colors', value: 'colors' },
+    { label: 'It uses less memory', value: 'memory' }
+  ]}
+  explanation="The `igniter dev` command watches for changes and automatically regenerates the TypeScript client and documentation, keeping everything synchronized!"
+/>
+
+<ChapterNav
+  current={{ number: 3, title: 'Your First Feature' }}
+  next={{
+    number: 4,
+    title: 'Authentication',
+    description: 'Build a complete authentication system from scratch using JWT, bcrypt, and Igniter.js procedures to protect your routes.',
+    href: '/learn/04-authentication'
+  }}
+/>

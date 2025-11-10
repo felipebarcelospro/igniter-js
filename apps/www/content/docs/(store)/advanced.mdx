@@ -1,0 +1,705 @@
+---
+title: Advanced Usage
+description: Advanced patterns and techniques for using the Store adapter. Learn about error handling, performance optimization, monitoring, and production best practices.
+---
+
+## Overview
+
+This guide covers advanced patterns and techniques for using the Store adapter in production environments. Learn about error handling, performance optimization, monitoring, and architectural patterns.
+
+---
+
+## Error Handling Strategies
+
+### Circuit Breaker Pattern
+
+Implement a circuit breaker to prevent cascading failures:
+
+```typescript
+class StoreCircuitBreaker {
+  private failures = 0;
+  private lastFailureTime = 0;
+  private state: 'closed' | 'open' | 'half-open' = 'closed';
+  
+  constructor(
+    private threshold = 5,
+    private timeout = 60000 // 1 minute
+  ) {}
+  
+  async execute<T>(
+    operation: () => Promise<T>,
+    fallback?: () => Promise<T>
+  ): Promise<T> {
+    if (this.state === 'open') {
+      if (Date.now() - this.lastFailureTime > this.timeout) {
+        this.state = 'half-open';
+      } else {
+        if (fallback) return fallback();
+        throw new Error('Circuit breaker is open');
+      }
+    }
+    
+    try {
+      const result = await operation();
+      this.onSuccess();
+      return result;
+    } catch (error) {
+      this.onFailure();
+      if (fallback) return fallback();
+      throw error;
+    }
+  }
+  
+  private onSuccess() {
+    this.failures = 0;
+    this.state = 'closed';
+  }
+  
+  private onFailure() {
+    this.failures++;
+    this.lastFailureTime = Date.now();
+    
+    if (this.failures >= this.threshold) {
+      this.state = 'open';
+    }
+  }
+}
+
+// Usage
+const circuitBreaker = new StoreCircuitBreaker();
+
+const getCached = async (key: string, context: AppContext) => {
+  return circuitBreaker.execute(
+    () => context.store.get(key),
+    () => fetchFromDatabase(key) // Fallback
+  );
+};
+```
+
+### Retry with Exponential Backoff
+
+Implement retry logic for transient failures:
+
+```typescript
+const retryWithBackoff = async <T>(
+  operation: () => Promise<T>,
+  maxRetries = 3,
+  baseDelay = 1000
+): Promise<T> => {
+  let lastError: Error;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error as Error;
+      
+      if (attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw lastError!;
+};
+
+// Usage
+const getWithRetry = async (key: string, context: AppContext) => {
+  return retryWithBackoff(
+    () => context.store.get(key),
+    3,
+    1000
+  );
+};
+```
+
+### Fallback Strategies
+
+Implement fallback strategies when cache fails:
+
+```typescript
+const getWithFallback = async <T>(
+  key: string,
+  fetchFn: () => Promise<T>,
+  context: AppContext
+): Promise<T> => {
+  try {
+    // Try cache first
+    const cached = await context.store.get<T>(key);
+    if (cached) {
+      return cached;
+    }
+    
+    // Fetch from source
+    const data = await fetchFn();
+    
+    // Cache result
+    await context.store.set(key, data, { ttl: 3600 });
+    
+    return data;
+  } catch (cacheError) {
+    // Cache failed, fall back to source
+    context.logger.warn('Cache failed, using fallback', { error: cacheError });
+    return fetchFn();
+  }
+};
+```
+
+---
+
+## Performance Optimization
+
+### Connection Pooling
+
+Optimize Redis connection usage:
+
+```typescript
+import { Redis, Cluster } from 'ioredis';
+
+// Single instance with connection pool
+const redis = new Redis({
+  host: process.env.REDIS_HOST,
+  port: parseInt(process.env.REDIS_PORT || '6379'),
+  maxRetriesPerRequest: 3,
+  enableReadyCheck: true,
+  enableOfflineQueue: true,
+  
+  // Connection pool settings
+  connectTimeout: 10000,
+  lazyConnect: false,
+  
+  // Retry strategy
+  retryStrategy: (times) => {
+    if (times > 3) return null;
+    return Math.min(times * 50, 2000);
+  },
+});
+
+export const store = createRedisStoreAdapter(redis);
+```
+
+### Pipeline Operations
+
+Batch multiple operations using Redis pipelines:
+
+```typescript
+// Note: The adapter doesn't expose pipelines directly,
+// but you can access the client for advanced operations
+const batchGet = async (
+  keys: string[],
+  context: AppContext
+): Promise<(any | null)[]> => {
+  const redis = context.store.client as Redis;
+  const pipeline = redis.pipeline();
+  
+  keys.forEach(key => pipeline.get(key));
+  
+  const results = await pipeline.exec();
+  
+  return results!.map(([err, result]) => {
+    if (err) return null;
+    try {
+      return JSON.parse(result as string);
+    } catch {
+      return result;
+    }
+  });
+};
+```
+
+### Compression
+
+Compress large values before storing:
+
+```typescript
+import { gzip, gunzip } from 'zlib';
+import { promisify } from 'util';
+
+const gzipAsync = promisify(gzip);
+const gunzipAsync = promisify(gunzip);
+
+const setCompressed = async (
+  key: string,
+  value: any,
+  options?: { ttl?: number },
+  context: AppContext
+) => {
+  const serialized = JSON.stringify(value);
+  const compressed = await gzipAsync(serialized);
+  
+  await context.store.set(key, compressed.toString('base64'), options);
+};
+
+const getCompressed = async <T>(
+  key: string,
+  context: AppContext
+): Promise<T | null> => {
+  const compressed = await context.store.get<string>(key);
+  if (!compressed) return null;
+  
+  const buffer = Buffer.from(compressed, 'base64');
+  const decompressed = await gunzipAsync(buffer);
+  
+  return JSON.parse(decompressed.toString()) as T;
+};
+```
+
+---
+
+## Monitoring and Observability
+
+### Metrics Collection
+
+Collect metrics for monitoring:
+
+```typescript
+class StoreMetrics {
+  private cacheHits = 0;
+  private cacheMisses = 0;
+  private errors = 0;
+  
+  recordHit() {
+    this.cacheHits++;
+  }
+  
+  recordMiss() {
+    this.cacheMisses++;
+  }
+  
+  recordError() {
+    this.errors++;
+  }
+  
+  getStats() {
+    const total = this.cacheHits + this.cacheMisses;
+    const hitRate = total > 0 ? (this.cacheHits / total) * 100 : 0;
+    
+    return {
+      hits: this.cacheHits,
+      misses: this.cacheMisses,
+      errors: this.errors,
+      hitRate: `${hitRate.toFixed(2)}%`,
+    };
+  }
+}
+
+// Usage
+const metrics = new StoreMetrics();
+
+const getWithMetrics = async <T>(
+  key: string,
+  context: AppContext
+): Promise<T | null> => {
+  try {
+    const value = await context.store.get<T>(key);
+    
+    if (value) {
+      metrics.recordHit();
+    } else {
+      metrics.recordMiss();
+    }
+    
+    return value;
+  } catch (error) {
+    metrics.recordError();
+    throw error;
+  }
+};
+```
+
+### Health Checks
+
+Implement health checks for monitoring:
+
+```typescript
+const checkStoreHealth = async (
+  context: AppContext
+): Promise<{ healthy: boolean; latency?: number; error?: string }> => {
+  const start = Date.now();
+  
+  try {
+    // Simple ping operation
+    await context.store.has('health:check');
+    
+    const latency = Date.now() - start;
+    
+    return {
+      healthy: true,
+      latency,
+    };
+  } catch (error) {
+    return {
+      healthy: false,
+      error: (error as Error).message,
+    };
+  }
+};
+
+// Health check endpoint
+export const healthController = igniter.controller({
+  path: '/health',
+  actions: {
+    check: igniter.query({
+      handler: async ({ context, response }) => {
+        const storeHealth = await checkStoreHealth(context);
+        
+        return response.success({
+          status: storeHealth.healthy ? 'healthy' : 'unhealthy',
+          store: storeHealth,
+        });
+      },
+    }),
+  },
+});
+```
+
+---
+
+## Architectural Patterns
+
+### Repository Pattern with Caching
+
+Implement a repository pattern with automatic caching:
+
+```typescript
+class CachedRepository<T> {
+  constructor(
+    private store: IgniterStoreAdapter,
+    private fetchFn: (id: string) => Promise<T>,
+    private ttl = 3600
+  ) {}
+  
+  async findById(id: string): Promise<T | null> {
+    const cacheKey = `${this.getEntityName()}:${id}`;
+    
+    // Try cache first
+    const cached = await this.store.get<T>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+    
+    // Fetch from source
+    const entity = await this.fetchFn(id);
+    if (!entity) {
+      return null;
+    }
+  
+    // Cache result
+    await this.store.set(cacheKey, entity, { ttl: this.ttl });
+    
+    return entity;
+  }
+  
+  async invalidate(id: string): Promise<void> {
+    const cacheKey = `${this.getEntityName()}:${id}`;
+    await this.store.delete(cacheKey);
+  }
+  
+  private getEntityName(): string {
+    return this.constructor.name.toLowerCase().replace('repository', '');
+  }
+}
+
+// Usage
+class UserRepository extends CachedRepository<User> {
+  constructor(store: IgniterStoreAdapter, private db: Database) {
+    super(store, (id) => db.user.findUnique({ where: { id } }), 3600);
+  }
+}
+```
+
+### Cache-Aside with Write-Through
+
+Combine cache-aside reads with write-through writes:
+
+```typescript
+class CacheAsideWriteThrough<T> {
+  constructor(
+    private store: IgniterStoreAdapter,
+    private readFn: (id: string) => Promise<T | null>,
+    private writeFn: (id: string, data: T) => Promise<T>,
+    private ttl = 3600
+  ) {}
+  
+  async read(id: string): Promise<T | null> {
+    // Cache-aside: Check cache first
+    const cached = await this.store.get<T>(`entity:${id}`);
+    if (cached) {
+      return cached;
+    }
+    
+    // Fetch from source
+    const entity = await this.readFn(id);
+    if (!entity) {
+      return null;
+    }
+    
+    // Cache result
+    await this.store.set(`entity:${id}`, entity, { ttl: this.ttl });
+    
+    return entity;
+  }
+  
+  async write(id: string, data: T): Promise<T> {
+    // Write-through: Write to both cache and source
+    const [saved] = await Promise.all([
+      this.writeFn(id, data),
+      this.store.set(`entity:${id}`, data, { ttl: this.ttl }),
+    ]);
+    
+    return saved;
+  }
+  
+  async delete(id: string): Promise<void> {
+    // Delete from both cache and source
+    await Promise.all([
+      this.readFn(id).then(entity => entity && this.writeFn(id, entity as any)),
+      this.store.delete(`entity:${id}`),
+    ]);
+  }
+}
+```
+
+### Event Sourcing with Cache
+
+Use Pub/Sub for event sourcing:
+
+```typescript
+class EventStore {
+  constructor(private store: IgniterStoreAdapter) {}
+  
+  async publishEvent(event: Event): Promise<void> {
+    // Store event
+    const eventKey = `event:${event.id}`;
+    await this.store.set(eventKey, event, { ttl: 86400 * 7 }); // 7 days
+    
+    // Publish to channel
+    await this.store.publish(`events:${event.type}`, event);
+  }
+  
+  async subscribeToEvents(
+    eventType: string,
+    handler: (event: Event) => Promise<void>
+  ): Promise<void> {
+    await this.store.subscribe(`events:${eventType}`, handler);
+  }
+  
+  async replayEvents(
+    eventType: string,
+    fromDate: Date
+  ): Promise<Event[]> {
+    // This is a simplified example
+    // In production, you'd use a proper event store
+    const events: Event[] = [];
+    // Implementation depends on your event storage strategy
+    return events;
+  }
+}
+```
+
+---
+
+## Multi-Tenant Patterns
+
+### Tenant Isolation
+
+Implement tenant isolation using key prefixes:
+
+```typescript
+class TenantStore {
+  constructor(
+    private store: IgniterStoreAdapter,
+    private tenantId: string
+  ) {}
+  
+  private prefix(key: string): string {
+    return `tenant:${this.tenantId}:${key}`;
+  }
+  
+  async get<T>(key: string): Promise<T | null> {
+    return this.store.get<T>(this.prefix(key));
+  }
+  
+  async set(key: string, value: any, options?: { ttl?: number }): Promise<void> {
+    return this.store.set(this.prefix(key), value, options);
+  }
+  
+  async delete(key: string): Promise<void> {
+    return this.store.delete(this.prefix(key));
+  }
+  
+  async publish(channel: string, message: any): Promise<void> {
+    // Tenant-scoped channels
+    return this.store.publish(`tenant:${this.tenantId}:${channel}`, message);
+  }
+  
+  async subscribe(channel: string, callback: EventCallback): Promise<void> {
+    return this.store.subscribe(`tenant:${this.tenantId}:${channel}`, callback);
+  }
+}
+
+// Usage
+const tenantStore = new TenantStore(context.store, request.tenantId);
+const data = await tenantStore.get('user:123');
+```
+
+---
+
+## Testing Strategies
+
+### Mock Store for Testing
+
+Create a mock store for unit tests:
+
+```typescript
+class MockStore implements IgniterStoreAdapter {
+  private data = new Map<string, string>();
+  private ttl = new Map<string, number>();
+  
+  async get<T>(key: string): Promise<T | null> {
+    const value = this.data.get(key);
+    if (!value) return null;
+    
+    // Check TTL
+    const expiry = this.ttl.get(key);
+    if (expiry && Date.now() > expiry) {
+      this.data.delete(key);
+      this.ttl.delete(key);
+      return null;
+    }
+    
+    return JSON.parse(value) as T;
+  }
+  
+  async set(key: string, value: any, options?: { ttl?: number }): Promise<void> {
+    this.data.set(key, JSON.stringify(value));
+    
+    if (options?.ttl) {
+      this.ttl.set(key, Date.now() + options.ttl * 1000);
+    }
+  }
+  
+  async delete(key: string): Promise<void> {
+    this.data.delete(key);
+    this.ttl.delete(key);
+  }
+  
+  async has(key: string): Promise<boolean> {
+    return this.data.has(key);
+  }
+  
+  async increment(key: string): Promise<number> {
+    const current = (await this.get<number>(key)) || 0;
+    const next = current + 1;
+    await this.set(key, next);
+    return next;
+  }
+  
+  async expire(key: string, ttl: number): Promise<void> {
+    this.ttl.set(key, Date.now() + ttl * 1000);
+  }
+  
+  async publish(channel: string, message: any): Promise<void> {
+    // Mock implementation
+  }
+  
+  async subscribe(channel: string, callback: EventCallback): Promise<void> {
+    // Mock implementation
+  }
+  
+  async unsubscribe(channel: string, callback?: EventCallback): Promise<void> {
+    // Mock implementation
+  }
+  
+  get client() {
+    return {} as any;
+  }
+}
+```
+
+---
+
+## Production Best Practices
+
+### 1. Use Appropriate TTLs
+
+```typescript
+// ✅ Good: TTL matches data volatility
+await context.store.set('config:app', config, { ttl: 86400 }); // Stable data
+await context.store.set('user:session', session, { ttl: 3600 }); // Session data
+await context.store.set('api:rate', count, { ttl: 60 }); // Volatile data
+
+// ❌ Bad: Inappropriate TTLs
+await context.store.set('user:session', session, { ttl: 31536000 }); // Too long
+await context.store.set('config:app', config, { ttl: 60 }); // Too short
+```
+
+### 2. Monitor Cache Performance
+
+```typescript
+// Track cache hit/miss rates
+const getWithTracking = async <T>(
+  key: string,
+  context: AppContext
+): Promise<T | null> => {
+  const start = Date.now();
+  
+  try {
+    const value = await context.store.get<T>(key);
+    const duration = Date.now() - start;
+    
+    // Log metrics
+    context.logger.debug('Cache operation', {
+      key,
+      hit: value !== null,
+      duration,
+    });
+    
+    return value;
+  } catch (error) {
+    context.logger.error('Cache operation failed', { error, key });
+    throw error;
+  }
+};
+```
+
+### 3. Implement Graceful Degradation
+
+```typescript
+// Always have a fallback
+const getCachedOrFetch = async <T>(
+  key: string,
+  fetchFn: () => Promise<T>,
+  context: AppContext
+): Promise<T> => {
+  try {
+    const cached = await context.store.get<T>(key);
+    if (cached) return cached;
+  } catch (error) {
+    // Cache failed, but continue to source
+    context.logger.warn('Cache read failed, using source', { error });
+  }
+  
+  // Fetch from source
+  const data = await fetchFn();
+  
+  // Try to cache, but don't fail if it doesn't work
+  try {
+    await context.store.set(key, data, { ttl: 3600 });
+  } catch (error) {
+    context.logger.warn('Cache write failed', { error });
+  }
+  
+  return data;
+};
+```
+
+---
+
+## Next Steps
+
+- Review the complete [API reference](/docs/store/api-reference)
+- Learn about [caching operations](/docs/store/caching)
+- Explore [Pub/Sub messaging](/docs/store/pubsub)
+

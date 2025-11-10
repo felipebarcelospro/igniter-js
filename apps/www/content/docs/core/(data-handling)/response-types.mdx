@@ -1,0 +1,791 @@
+---
+title: Response Types
+description: Master all response types in Igniter.js including success, error, streaming, cookies, headers, and cache revalidation for building robust APIs.
+---
+
+## Overview
+
+**Response Types** in Igniter.js provide a comprehensive, type-safe API for constructing HTTP responses. The `response` object available in action handlers gives you full control over status codes, headers, cookies, body content, streaming, and client-side cache revalidation.
+
+```typescript
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    getUser: igniter.query({
+      path: '/:id' as const,
+      handler: async ({ request, response, context }) => {
+        const user = await context.db.users.findUnique({
+          where: { id: request.params.id }
+        });
+        
+        if (!user) {
+          return response.notFound('User not found');
+        }
+        
+        return response.success({ user });
+      }
+    })
+  }
+});
+```
+
+<Callout type="success" title="Fluent Interface">
+  All response methods are **chainable**, allowing you to build complex responses in a fluent, type-safe manner.
+</Callout>
+
+---
+
+## Success Responses
+
+### response.success()
+
+Returns a `200 OK` response with data:
+
+```typescript
+const action = igniter.query({
+  path: '/users',
+  handler: async ({ response, context }) => {
+    const users = await context.db.users.findMany();
+    
+    // ✅ Returns 200 OK with typed data
+    return response.success({ users });
+  }
+});
+```
+
+**TypeScript Inference:**
+```typescript
+const result = response.success({ users: [] });
+// result is typed as: IgniterResponse<{ users: User[] }>
+```
+
+### response.created()
+
+Returns a `201 Created` response, typically after creating a resource:
+
+```typescript
+const createUser = igniter.mutation({
+  path: '/users',
+  method: 'POST',
+  body: CreateUserSchema,
+  handler: async ({ request, response, context }) => {
+    const user = await context.db.users.create({
+      data: request.body
+    });
+    
+    // ✅ Returns 201 Created
+    return response.created({ user });
+  }
+});
+```
+
+### response.noContent()
+
+Returns a `204 No Content` response (commonly used for DELETE operations):
+
+```typescript
+const deleteUser = igniter.mutation({
+  path: '/users/:id' as const,
+  method: 'DELETE',
+  handler: async ({ request, response, context }) => {
+    await context.db.users.delete({
+      where: { id: request.params.id }
+    });
+    
+    // ✅ Returns 204 No Content (no body)
+    return response.noContent();
+  }
+});
+```
+
+<Callout type="info" title="RFC 7231 Compliance">
+  `response.noContent()` returns HTTP 204 with **no body** and **no Content-Type header**, compliant with RFC 7231.
+</Callout>
+
+### response.json()
+
+Generic JSON response (you can control status manually):
+
+```typescript
+const action = igniter.query({
+  handler: async ({ response }) => {
+    return response
+      .status(200)
+      .json({ message: 'Custom JSON response' });
+  }
+});
+```
+
+---
+
+## Error Responses
+
+### response.badRequest()
+
+Returns `400 Bad Request`:
+
+```typescript
+const action = igniter.mutation({
+  handler: async ({ request, response }) => {
+    if (!request.body.email) {
+      return response.badRequest('Email is required');
+    }
+    
+    // Continue...
+  }
+});
+```
+
+**With Additional Data:**
+```typescript
+return response.badRequest('Validation failed', {
+  fields: {
+    email: 'Invalid format',
+    password: 'Too short'
+  }
+});
+```
+
+### response.unauthorized()
+
+Returns `401 Unauthorized`:
+
+```typescript
+const protectedAction = igniter.query({
+  handler: async ({ context, response }) => {
+    if (!context.user) {
+      return response.unauthorized('Authentication required');
+    }
+    
+    // User is authenticated
+  }
+});
+```
+
+### response.forbidden()
+
+Returns `403 Forbidden` (authenticated but not allowed):
+
+```typescript
+const deletePost = igniter.mutation({
+  path: '/posts/:id' as const,
+  method: 'DELETE',
+  handler: async ({ request, context, response }) => {
+    const post = await context.db.posts.findUnique({
+      where: { id: request.params.id }
+    });
+    
+    if (post.authorId !== context.user.id) {
+      return response.forbidden('You can only delete your own posts');
+    }
+    
+    // User is authorized
+    await context.db.posts.delete({ where: { id: post.id } });
+    return response.noContent();
+  }
+});
+```
+
+### response.notFound()
+
+Returns `404 Not Found`:
+
+```typescript
+const getUser = igniter.query({
+  path: '/users/:id' as const,
+  handler: async ({ request, response, context }) => {
+    const user = await context.db.users.findUnique({
+      where: { id: request.params.id }
+    });
+    
+    if (!user) {
+      return response.notFound('User not found');
+    }
+    
+    return response.success({ user });
+  }
+});
+```
+
+### response.error()
+
+Generic error handler with custom error code:
+
+```typescript
+import { IgniterResponseError } from '@igniter-js/core';
+
+const action = igniter.mutation({
+  handler: async ({ response }) => {
+    const error = new IgniterResponseError({
+      code: 'ERR_CUSTOM',
+      message: 'Something went wrong',
+      data: { details: 'Additional error context' }
+    });
+    
+    return response
+      .status(500)
+      .error(error);
+  }
+});
+```
+
+---
+
+## Redirects
+
+### response.redirect()
+
+Creates a redirect response:
+
+```typescript
+const legacyRoute = igniter.query({
+  path: '/old-route',
+  handler: async ({ response }) => {
+    // ✅ Returns 302 redirect (default)
+    return response.redirect('/new-route', 'replace');
+  }
+});
+```
+
+**Redirect Types:**
+- `'replace'`: Replaces current URL (default, HTTP 302)
+- `'push'`: Adds to browser history (HTTP 302)
+
+**Custom Status:**
+```typescript
+return response
+  .status(301) // Permanent redirect
+  .redirect('/new-route', 'replace');
+```
+
+---
+
+## Headers and Cookies
+
+### response.setHeader()
+
+Set custom headers:
+
+```typescript
+const action = igniter.query({
+  handler: async ({ response }) => {
+    return response
+      .setHeader('Cache-Control', 'public, max-age=3600')
+      .setHeader('X-Custom-Header', 'value')
+      .success({ data: [] });
+  }
+});
+```
+
+### response.setCookie()
+
+Set cookies with full control:
+
+```typescript
+const login = igniter.mutation({
+  path: '/auth/login',
+  method: 'POST',
+  handler: async ({ response }) => {
+    const token = 'jwt-token-here';
+    
+    return response
+      .setCookie('session', token, {
+        httpOnly: true,      // ✅ Not accessible via JavaScript
+        secure: true,        // ✅ HTTPS only
+        sameSite: 'strict',  // ✅ CSRF protection
+        maxAge: 3600,        // ✅ 1 hour
+        path: '/',
+        domain: 'example.com'
+      })
+      .success({ message: 'Logged in' });
+  }
+});
+```
+
+**Cookie Options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `httpOnly` | `boolean` | Prevents JavaScript access (security) |
+| `secure` | `boolean` | HTTPS only |
+| `sameSite` | `'strict' \| 'lax' \| 'none'` | CSRF protection |
+| `maxAge` | `number` | Max age in seconds |
+| `expires` | `Date` | Absolute expiration date |
+| `path` | `string` | Cookie path |
+| `domain` | `string` | Cookie domain |
+| `partitioned` | `boolean` | CHIPS (partitioned cookies) |
+| `prefix` | `'secure' \| 'host'` | Cookie prefix (`__Secure-` or `__Host-`) |
+
+**Secure Cookie Prefixes:**
+```typescript
+// __Secure- prefix (requires HTTPS)
+response.setCookie('token', 'value', {
+  prefix: 'secure'  // ✅ Auto-sets secure: true
+});
+
+// __Host- prefix (requires HTTPS, path=/, no domain)
+response.setCookie('token', 'value', {
+  prefix: 'host'  // ✅ Auto-sets secure, path, removes domain
+});
+```
+
+<Callout type="warn" title="Cookie Prefix Enforcement">
+  Igniter.js **automatically enforces** security requirements for `__Secure-` and `__Host-` cookie prefixes according to RFC 6265bis.
+</Callout>
+
+---
+
+## Status Codes
+
+### response.status()
+
+Manually set HTTP status:
+
+```typescript
+const action = igniter.mutation({
+  handler: async ({ response }) => {
+    return response
+      .status(418)  // ✅ I'm a teapot
+      .json({ message: "I'm a teapot" });
+  }
+});
+```
+
+**Common Status Codes:**
+
+| Code | Method | Description |
+|------|--------|-------------|
+| 200 | `success()` | OK |
+| 201 | `created()` | Created |
+| 204 | `noContent()` | No Content |
+| 400 | `badRequest()` | Bad Request |
+| 401 | `unauthorized()` | Unauthorized |
+| 403 | `forbidden()` | Forbidden |
+| 404 | `notFound()` | Not Found |
+| 302 | `redirect()` | Redirect |
+
+---
+
+## Real-Time Streaming (SSE)
+
+### response.stream()
+
+Create Server-Sent Events streams for real-time updates:
+
+```typescript
+const liveNotifications = igniter.query({
+  path: '/notifications/live',
+  handler: async ({ response }) => {
+    return response.stream({
+      channelId: 'notifications:live',
+      
+      // Optional: send data immediately on connection
+      initialData: {
+        status: 'connected',
+        timestamp: new Date().toISOString()
+      },
+      
+      // Optional: filter messages
+      filter: (msg) => msg.data.priority === 'high',
+      
+      // Optional: transform messages before sending
+      transform: (msg) => ({
+        ...msg,
+        data: { ...msg.data, seen: false }
+      })
+    });
+  }
+});
+```
+
+**Publishing Events:**
+```typescript
+import { SSEProcessor } from '@igniter-js/core';
+
+// From anywhere in your app
+SSEProcessor.publishEvent({
+  channel: 'notifications:live',
+  type: 'notification',
+  data: {
+    id: '123',
+    message: 'New order received',
+    priority: 'high'
+  }
+});
+```
+
+**Client Connection:**
+```typescript
+// Client receives connection info
+const result = await client.notifications.live.query();
+
+// result.data contains:
+// {
+//   type: 'stream',
+//   channelId: 'notifications:live',
+//   connectionInfo: {
+//     endpoint: '/api/v1/sse/events',
+//     params: { channels: 'notifications:live' }
+//   }
+// }
+
+// Connect to SSE endpoint
+const eventSource = new EventSource(
+  `${result.data.connectionInfo.endpoint}?channels=${result.data.connectionInfo.params.channels}`
+);
+
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('New notification:', data);
+};
+```
+
+<Callout type="info" title="SSE Architecture">
+  Igniter.js uses a **centralized SSE endpoint** (`/api/v1/sse/events`) for all real-time streams. Actions return connection information instead of creating individual SSE endpoints.
+</Callout>
+
+---
+
+## Cache Revalidation
+
+### response.revalidate()
+
+Invalidate client-side cache for specific queries:
+
+```typescript
+const createPost = igniter.mutation({
+  path: '/posts',
+  method: 'POST',
+  body: CreatePostSchema,
+  handler: async ({ request, response, context }) => {
+    const post = await context.db.posts.create({
+      data: request.body
+    });
+    
+    // ✅ Invalidate 'posts' query on all clients
+    return response
+      .revalidate(['posts', 'dashboard'])
+      .created({ post });
+  }
+});
+```
+
+**With Scoped Revalidation:**
+```typescript
+const updatePost = igniter.mutation({
+  path: '/posts/:id' as const,
+  method: 'PATCH',
+  handler: async ({ request, response, context }) => {
+    const post = await context.db.posts.update({
+      where: { id: request.params.id },
+      data: request.body
+    });
+    
+    // ✅ Revalidate only for specific tenant
+    return response
+      .revalidate(['posts', 'user-posts'], async (ctx) => {
+        return [`tenant:${ctx.tenantId}`];
+      })
+      .success({ post });
+  }
+});
+```
+
+**Revalidation Options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `queryKeys` | `string \| string[]` | Query keys to invalidate |
+| `data` | `any` | Optional data to send with revalidation |
+| `broadcast` | `boolean` | Broadcast to all clients (default: `true`) |
+| `scopes` | `ScopeResolver` | Function returning scope IDs |
+
+<Callout type="success" title="Real-Time Cache Updates">
+  When you call `response.revalidate()`, Igniter.js automatically notifies all connected clients via SSE to refetch invalidated queries!
+</Callout>
+
+---
+
+## Advanced Response Patterns
+
+### Chaining Methods
+
+All response methods are chainable:
+
+```typescript
+const action = igniter.mutation({
+  handler: async ({ response }) => {
+    return response
+      .status(201)
+      .setHeader('X-Request-ID', 'abc123')
+      .setCookie('session', 'token', { httpOnly: true })
+      .revalidate(['users'])
+      .created({ user });
+  }
+});
+```
+
+### Conditional Responses
+
+```typescript
+const getPost = igniter.query({
+  path: '/posts/:id' as const,
+  handler: async ({ request, response, context }) => {
+    const post = await context.db.posts.findUnique({
+      where: { id: request.params.id }
+    });
+    
+    if (!post) {
+      return response.notFound('Post not found');
+    }
+    
+    if (post.published === false && post.authorId !== context.user?.id) {
+      return response.forbidden('This post is not published');
+    }
+    
+    return response.success({ post });
+  }
+});
+```
+
+### Multiple Cookies
+
+```typescript
+const login = igniter.mutation({
+  handler: async ({ response }) => {
+    return response
+      .setCookie('accessToken', 'token1', { maxAge: 900 })    // 15 min
+      .setCookie('refreshToken', 'token2', { maxAge: 604800 }) // 7 days
+      .setCookie('userPrefs', 'theme=dark', { maxAge: 31536000 }) // 1 year
+      .success({ message: 'Logged in' });
+  }
+});
+```
+
+---
+
+## Error Response Structure
+
+All error responses follow this structure:
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "ERR_NOT_FOUND",
+    "message": "User not found",
+    "data": {
+      "userId": "123"
+    }
+  }
+}
+```
+
+**Success Response Structure:**
+
+```json
+{
+  "data": {
+    "user": {
+      "id": "123",
+      "name": "John"
+    }
+  },
+  "error": null
+}
+```
+
+<Callout type="info" title="Discriminated Union">
+  The `IgniterResponse` type is a **discriminated union**: either `data` is present (and `error` is `null`), or `error` is present (and `data` is `null`). Never both!
+</Callout>
+
+---
+
+## Best Practices
+
+### 1. Use Semantic Response Methods
+
+```typescript
+// ✅ Good - Clear intent
+return response.created({ user });
+
+// ❌ Bad - Less clear
+return response.status(201).json({ user });
+```
+
+### 2. Set Cookies Securely
+
+```typescript
+// ✅ Good - Secure by default
+return response.setCookie('session', token, {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict'
+});
+
+// ❌ Bad - Insecure
+return response.setCookie('session', token);
+```
+
+### 3. Provide Meaningful Error Messages
+
+```typescript
+// ✅ Good - Helpful message
+return response.notFound(`User with ID "${request.params.id}" not found`);
+
+// ❌ Bad - Generic message
+return response.notFound();
+```
+
+### 4. Use Revalidation for Mutations
+
+```typescript
+// ✅ Good - Auto-update clients
+return response
+  .revalidate(['posts'])
+  .created({ post });
+
+// ❌ Bad - Clients don't know data changed
+return response.created({ post });
+```
+
+---
+
+## Common Patterns
+
+### CRUD Operations
+
+```typescript
+const postController = igniter.controller({
+  path: '/posts',
+  actions: {
+    // List
+    list: igniter.query({
+      handler: async ({ response }) => {
+        const posts = await db.posts.findMany();
+        return response.success({ posts });
+      }
+    }),
+    
+    // Get
+    get: igniter.query({
+      path: '/:id' as const,
+      handler: async ({ request, response }) => {
+        const post = await db.posts.findUnique({
+          where: { id: request.params.id }
+        });
+        
+        if (!post) return response.notFound();
+        return response.success({ post });
+      }
+    }),
+    
+    // Create
+    create: igniter.mutation({
+      method: 'POST',
+      body: CreatePostSchema,
+      handler: async ({ request, response }) => {
+        const post = await db.posts.create({ data: request.body });
+        return response.revalidate(['posts']).created({ post });
+      }
+    }),
+    
+    // Update
+    update: igniter.mutation({
+      path: '/:id' as const,
+      method: 'PATCH',
+      body: UpdatePostSchema,
+      handler: async ({ request, response }) => {
+        const post = await db.posts.update({
+          where: { id: request.params.id },
+          data: request.body
+        });
+        return response.revalidate(['posts']).success({ post });
+      }
+    }),
+    
+    // Delete
+    delete: igniter.mutation({
+      path: '/:id' as const,
+      method: 'DELETE',
+      handler: async ({ request, response }) => {
+        await db.posts.delete({ where: { id: request.params.id } });
+        return response.revalidate(['posts']).noContent();
+      }
+    })
+  }
+});
+```
+
+### Authentication Flow
+
+```typescript
+const authController = igniter.controller({
+  path: '/auth',
+  actions: {
+    login: igniter.mutation({
+      path: '/login',
+      method: 'POST',
+      body: LoginSchema,
+      handler: async ({ request, response }) => {
+        const { email, password } = request.body;
+        
+        const user = await db.users.findUnique({ where: { email } });
+        
+        if (!user) {
+          return response.unauthorized('Invalid credentials');
+        }
+        
+        const valid = await verifyPassword(password, user.passwordHash);
+        
+        if (!valid) {
+          return response.unauthorized('Invalid credentials');
+        }
+        
+        const token = generateToken(user);
+        
+        return response
+          .setCookie('session', token, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'strict',
+            maxAge: 3600
+          })
+          .success({ user: { id: user.id, name: user.name, email: user.email } });
+      }
+    }),
+    
+    logout: igniter.mutation({
+      path: '/logout',
+      method: 'POST',
+      handler: async ({ response }) => {
+        return response
+          .setCookie('session', '', { maxAge: 0 })
+          .success({ message: 'Logged out' });
+      }
+    })
+  }
+});
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Error Handling" href="/docs/error-handling">
+    Handle errors gracefully in actions
+  </Card>
+  
+  <Card title="Validation" href="/docs/validation">
+    Validate request data with schemas
+  </Card>
+  
+  <Card title="Client" href="/docs/client">
+    Use responses on the client-side
+  </Card>
+  
+  <Card title="Testing" href="/docs/testing">
+    Test response types
+  </Card>
+</Cards>

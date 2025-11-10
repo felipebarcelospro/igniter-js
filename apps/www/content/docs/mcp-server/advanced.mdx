@@ -1,0 +1,526 @@
+---
+title: Advanced Configuration
+description: Learn advanced configuration options for customizing tool generation, response transformation, and adapter behavior.
+---
+
+## Overview
+
+This guide covers advanced configuration options for fine-tuning your MCP server, including custom tool naming, filtering, transformation, response customization, and adapter-specific settings.
+
+---
+
+## Tool Configuration
+
+### Custom Naming Strategy
+
+Customize how router actions are named as MCP tools:
+
+```typescript
+// Builder Pattern
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withToolTransform((controller, action, actionConfig) => {
+    // Custom naming: controller.action instead of controller_action
+    return {
+      name: `${controller}.${action}`,
+      description: actionConfig.description || `Execute ${controller} ${action}`,
+      schema: actionConfig.body || actionConfig.query || {},
+    };
+  })
+  .build();
+
+// Function API
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  tools: {
+    naming: (controller, action) => `${controller}.${action}`,
+  }
+});
+```
+
+---
+
+### Filtering Tools
+
+Control which actions are exposed as tools:
+
+```typescript
+// Builder Pattern
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withToolTransform((controller, action, actionConfig) => {
+    // Only expose actions with 'mcp-enabled' tag
+    if (!actionConfig.tags?.includes('mcp-enabled')) {
+      return null; // Filter out this tool
+    }
+    
+    return {
+      name: `${controller}_${action}`,
+      description: actionConfig.description,
+      schema: actionConfig.body || actionConfig.query || {},
+    };
+  })
+  .build();
+
+// Function API
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  tools: {
+    filter: (controller, action, actionConfig) => {
+      // Only expose public actions
+      return actionConfig.tags?.includes('public') ?? false;
+    }
+  }
+});
+```
+
+---
+
+### Tool Transformation
+
+Transform tool configurations before registration:
+
+```typescript
+// Builder Pattern
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withToolTransform((controller, action, actionConfig) => {
+    return {
+      name: `${controller}_${action}`,
+      // Use summary if available, fallback to description
+      description: actionConfig.summary || 
+                   actionConfig.description || 
+                   `Execute ${controller} ${action}`,
+      schema: actionConfig.body || actionConfig.query || {},
+      tags: [
+        ...(actionConfig.tags || []),
+        controller,
+        actionConfig.method?.toLowerCase(),
+      ].filter(Boolean),
+    };
+  })
+  .build();
+
+// Function API
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  tools: {
+    transform: (controller, action, actionConfig) => {
+      return {
+        name: `${controller}_${action}`,
+        description: actionConfig.summary || actionConfig.description,
+        schema: actionConfig.body || actionConfig.query || {},
+        tags: actionConfig.tags || [],
+      };
+    }
+  }
+});
+```
+
+---
+
+### Disabling Auto-Mapping
+
+Disable automatic mapping of router actions:
+
+```typescript
+// Function API
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  tools: {
+    autoMap: false, // Only custom tools will be registered
+    custom: [
+      { /* custom tool 1 */ },
+      { /* custom tool 2 */ },
+    ]
+  }
+});
+```
+
+---
+
+## Response Transformation
+
+### Custom Response Format
+
+Transform Igniter.js responses to MCP format:
+
+```typescript
+// Builder Pattern
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withResponse({
+    transform: async (igniterResponse, toolName, context) => {
+      // Customize response format
+      if (igniterResponse.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              data: igniterResponse.data,
+              timestamp: new Date().toISOString(),
+            }, null, 2)
+          }]
+        };
+      } else {
+        return {
+          content: [{
+            type: 'text',
+            text: `Error: ${igniterResponse.error}`
+          }],
+          isError: true
+        };
+      }
+    }
+  })
+  .build();
+
+// Function API
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  response: {
+    transform: async (igniterResponse, toolName, context) => {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify(igniterResponse, null, 2)
+        }]
+      };
+    }
+  }
+});
+```
+
+---
+
+### Custom Error Handling
+
+Handle errors with custom formatting:
+
+```typescript
+// Builder Pattern
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withResponse({
+    onError: async (error, toolName, context) => {
+      // Custom error formatting
+      const errorInfo = {
+        tool: toolName,
+        error: error.message,
+        type: error.constructor.name,
+        timestamp: new Date().toISOString(),
+      };
+      
+      // Log to error tracking
+      await errorTracking.log(errorInfo);
+      
+      // Return user-friendly error
+      return {
+        content: [{
+          type: 'text',
+          text: `An error occurred while executing ${toolName}: ${error.message}`
+        }],
+        isError: true
+      };
+    }
+  })
+  .build();
+
+// Function API
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  response: {
+    onError: async (error, toolName, context) => {
+      return {
+        content: [{
+          type: 'text',
+          text: `Error in ${toolName}: ${error.message}`
+        }],
+        isError: true
+      };
+    }
+  }
+});
+```
+
+---
+
+## Adapter Configuration
+
+### Base Path
+
+Configure the base path for MCP endpoints:
+
+```typescript
+// Function API
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  adapter: {
+    basePath: '/api/mcp', // All MCP routes under this path
+  }
+});
+```
+
+---
+
+### Max Duration
+
+Set maximum execution duration:
+
+```typescript
+// Function API
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  adapter: {
+    maxDuration: 60, // 60 seconds max execution time
+  }
+});
+```
+
+---
+
+### Verbose Logging
+
+Enable verbose logging for debugging:
+
+```typescript
+// Function API
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  adapter: {
+    verboseLogs: true, // Enable detailed logging
+  }
+});
+```
+
+---
+
+### Redis Configuration
+
+Configure Redis for adapter features (if needed):
+
+```typescript
+// Function API
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  adapter: {
+    redis: {
+      url: process.env.REDIS_URL,
+    }
+  }
+});
+```
+
+---
+
+## Logger Configuration
+
+### Custom Logger
+
+Configure custom logging:
+
+```typescript
+// Builder Pattern
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withLogger({
+    log: (message) => console.log(`[MCP] ${message}`),
+    error: (message) => console.error(`[MCP ERROR] ${message}`),
+    warn: (message) => console.warn(`[MCP WARN] ${message}`),
+    debug: (message) => console.debug(`[MCP DEBUG] ${message}`),
+  })
+  .build();
+
+// Function API with logger (if supported)
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  logger: {
+    log: (message) => console.log(`[MCP] ${message}`),
+    error: (message) => console.error(`[MCP ERROR] ${message}`),
+    warn: (message) => console.warn(`[MCP WARN] ${message}`),
+    debug: (message) => console.debug(`[MCP DEBUG] ${message}`),
+  }
+});
+```
+
+---
+
+## Server Capabilities
+
+Configure server capabilities to advertise:
+
+```typescript
+// Builder Pattern
+import { ServerCapabilities } from '@modelcontextprotocol/sdk/types';
+
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withCapabilities({
+    tools: {
+      listChanged: true, // Support tool list changes
+    },
+    prompts: {
+      listChanged: true, // Support prompt list changes
+    },
+    resources: {
+      subscribe: true, // Support resource subscriptions
+      listChanged: true, // Support resource list changes
+    },
+  })
+  .build();
+```
+
+---
+
+## Complete Advanced Example
+
+Here's a complete example combining multiple advanced features:
+
+```typescript
+import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server';
+import { ServerCapabilities } from '@modelcontextprotocol/sdk/types';
+
+const { handler, auth } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withServerInfo({
+    name: 'Advanced MCP Server',
+    version: '1.0.0',
+  })
+  .withInstructions(
+    "This server provides advanced tools for managing resources. " +
+    "Use appropriate tools based on your needs."
+  )
+  .withCapabilities({
+    tools: { listChanged: true },
+    resources: { subscribe: true },
+  })
+  .withToolTransform((controller, action, actionConfig) => {
+    // Only expose public actions
+    if (!actionConfig.tags?.includes('public')) {
+      return null;
+    }
+    
+    // Custom naming and description
+    return {
+      name: `${controller}_${action}`,
+      description: actionConfig.summary || actionConfig.description || `Execute ${action}`,
+      schema: actionConfig.body || actionConfig.query || {},
+      tags: [controller, actionConfig.method?.toLowerCase()].filter(Boolean),
+    };
+  })
+  .withResponse({
+    transform: async (igniterResponse, toolName, context) => {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify(igniterResponse, null, 2)
+        }]
+      };
+    },
+    onError: async (error, toolName, context) => {
+      return {
+        content: [{
+          type: 'text',
+          text: `Error in ${toolName}: ${error.message}`
+        }],
+        isError: true
+      };
+    }
+  })
+  .withLogger({
+    log: (message) => console.log(`[MCP] ${message}`),
+    error: (message) => console.error(`[MCP ERROR] ${message}`),
+    warn: (message) => console.warn(`[MCP WARN] ${message}`),
+    debug: (message) => console.debug(`[MCP DEBUG] ${message}`),
+  })
+  .withEvents({
+    onToolCall: async (toolName, args, context) => {
+      console.log(`Tool called: ${toolName}`);
+    },
+    onToolError: async (toolName, error, context) => {
+      console.error(`Tool error: ${toolName}`, error);
+    }
+  })
+  .build();
+
+export const GET = handler;
+export const POST = handler;
+```
+
+---
+
+## Best Practices
+
+### 1. Consistent Naming
+
+Use consistent naming strategies across your tools:
+
+```typescript
+// ✅ Good - Consistent format
+naming: (controller, action) => `${controller}_${action}`
+
+// ❌ Bad - Inconsistent formats
+naming: (controller, action) => {
+  if (controller === 'users') return `get${action}`;
+  return `${controller}_${action}`;
+}
+```
+
+### 2. Selective Exposure
+
+Only expose tools that should be accessible:
+
+```typescript
+filter: (controller, action, actionConfig) => {
+  // Only expose public or mcp-enabled actions
+  return actionConfig.tags?.includes('public') || 
+         actionConfig.tags?.includes('mcp-enabled');
+}
+```
+
+### 3. Comprehensive Error Handling
+
+Always provide user-friendly error messages:
+
+```typescript
+onError: async (error, toolName, context) => {
+  return {
+    content: [{
+      type: 'text',
+      text: `An error occurred: ${error.message}. Please try again or contact support.`
+    }],
+    isError: true
+  };
+}
+```
+
+### 4. Structured Logging
+
+Use structured logging for better observability:
+
+```typescript
+withLogger({
+  log: (message) => logger.info({ component: 'mcp', message }),
+  error: (message) => logger.error({ component: 'mcp', message }),
+  warn: (message) => logger.warn({ component: 'mcp', message }),
+  debug: (message) => logger.debug({ component: 'mcp', message }),
+})
+```
+
+---
+
+## Next Steps
+
+- Check out [Best Practices](/docs/mcp-server/best-practices) for production recommendations
+- Learn about [Event Handlers](/docs/mcp-server/events) for monitoring
+- Explore [OAuth](/docs/mcp-server/oauth) for securing your server
+

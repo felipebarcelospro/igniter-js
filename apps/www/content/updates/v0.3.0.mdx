@@ -1,0 +1,99 @@
+---
+title: "v0.3.0 - Breaking Changes & Major Improvements"
+description: "Major release introducing breaking changes, MCP adapter refactoring, new Bot package, and significant improvements to type safety and developer experience."
+---
+
+Released on October 22, 2025
+
+## Major Features
+
+### MCP Adapter API Refactoring
+
+The MCP adapter has been completely refactored for better type safety and developer experience:
+
+- **New Function Signature**: Changed from `createMcpAdapter(router, options)` to `createMcpAdapter(options)` where `router` is now a required property in the options object
+- **Automatic Context Inference**: The `context` function option has been removed. Context is now automatically inferred from the router's built-in context
+- **Custom Prompts**: Register prompts that AI agents can use to guide interactions
+- **Custom Resources**: Expose resources that AI agents can read
+- **OAuth Authorization**: First-class support for OAuth-based authorization with automatic Bearer token verification
+
+### New Bot Package
+
+Introducing `@igniter-js/bot` - a comprehensive package for building chatbots with adapters for Telegram and WhatsApp:
+
+- Type-safe bot adapters
+- Command handling system
+- Message types and middleware support
+- Comprehensive documentation and examples
+
+### Core Improvements
+
+- **Improved Type Inference**: Enhanced type inference for server caller with `InferServerRouterCaller`
+- **Builder Pattern API**: Updated API to use builder pattern consistently
+- **Request Raw Access**: Added `request.raw` access in controller actions
+- **Caller Property**: Added `caller` property to router (replacing `$caller`)
+- **Procedure Context**: Improved procedure context with better type inference
+
+## Breaking Changes
+
+### MCP Adapter Migration
+
+If you're using the MCP adapter, you'll need to update your code:
+
+```typescript
+// Before (v0.2.x)
+const handler = createMcpAdapter(AppRouter, {
+  serverInfo: { name: 'My Server', version: '1.0.0' },
+  context: (req) => ({
+    context: { user: 'test' },
+    tools: [],
+    request: req,
+    timestamp: Date.now()
+  })
+});
+
+// After (v0.3.x)
+const handler = createMcpAdapter({
+  router: AppRouter,
+  serverInfo: { name: 'My Server', version: '1.0.0' },
+  // context is automatically inferred!
+});
+```
+
+### Caller Property Rename
+
+The `$caller` property has been renamed to `caller`:
+
+```typescript
+// Before
+const result = await router.$caller({}).action();
+
+// After
+const result = await router.caller({}).action();
+```
+
+### Middleware Removal
+
+Middlewares have been removed from the Igniter Builder. Use procedures with middleware instead.
+
+## Bug Fixes
+
+- Fixed CLI schema generation errors by externalizing dependencies
+- Fixed ESM require errors in CLI bin file
+- Fixed `noContent()` to return HTTP 204 with empty body per RFC 7231
+- Fixed TypeScript type errors in adapter-mcp-server
+- Fixed duplicate type intersections in `InferServerRouterCallerAction`
+- Fixed args property naming and ZodRawShape format
+
+## Documentation
+
+- Updated README and AGENT.md to reflect new builder pattern API
+- Added comprehensive MCP Adapter documentation
+- Updated client usage documentation
+- Added Bot package documentation
+
+## Links
+
+- [MCP Adapter Docs](/docs/mcp-server)
+- [Bot Package Docs](/docs/bots)
+

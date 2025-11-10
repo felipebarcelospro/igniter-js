@@ -1,0 +1,3 @@
+{
+  "pages": ["core", "cli", "store", "jobs", "mcp-server", "bots", "telemetry"]
+}

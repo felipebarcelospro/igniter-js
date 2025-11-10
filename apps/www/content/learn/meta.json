@@ -1,0 +1,16 @@
+{
+  "title": "Learn Igniter.js",
+  "description": "Build a production-ready SaaS application with Igniter.js",
+  "pages": [
+    "index",
+    "01-creating-your-project",
+    "02-designing-your-database",
+    "03-first-feature",
+    "04-authentication",
+    "05-frontend-setup",
+    "06-link-management-ui",
+    "07-click-tracking-analytics.mdx",
+    "08-mcp-integration",
+    "09-deployment"
+  ]
+}

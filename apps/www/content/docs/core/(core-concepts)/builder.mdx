@@ -1,0 +1,868 @@
+---
+title: Builder
+description: Learn how to configure and initialize your Igniter.js application using the powerful builder pattern with full type safety and IntelliSense.
+---
+
+## Overview
+
+The **Igniter Builder** is the foundation of your application. It provides a fluent, chainable API for configuring context, adapters, middleware, and creating fully typed API components.
+
+```typescript
+import { Igniter } from '@igniter-js/core';
+
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .config({ baseURL: 'https://api.example.com' })
+  .store(redisAdapter)
+  .jobs(bullmqAdapter)
+  .create();
+```
+
+<Callout type="info" title="Immutable Pattern">
+  The builder uses an **immutable chaining pattern**. Each method returns a new instance with updated configuration, ensuring type safety throughout the entire chain.
+</Callout>
+
+---
+
+## Core Concepts
+
+### The Builder Pattern
+
+Igniter.js uses the builder pattern to provide:
+
+- ✅ **Progressive Type Enhancement** - Types become more specific as you configure
+- ✅ **IntelliSense at Every Step** - Full autocomplete for all methods
+- ✅ **Compile-Time Validation** - TypeScript catches configuration errors early
+- ✅ **Flexible Configuration** - Add only what your application needs
+
+### Configuration Flow
+
+<Mermaid
+  chart="
+graph LR
+    A[Igniter] --> B[.context<T>]
+    B --> C[.config]
+    C --> D[.store]
+    D --> E[.jobs]
+    E --> F[.telemetry]
+    F --> G[.plugins]
+    G --> H[.create]
+    H --> I[Fully Typed API]
+"
+/>
+
+---
+
+## Builder Methods
+
+### `.context<TContext>()`
+
+Defines the **application-wide context type** that will be available in all actions, procedures, and middleware.
+
+#### Static Context
+
+Use a static object when your context doesn't depend on the request:
+
+```typescript
+interface AppContext {
+  db: Database;
+  config: AppConfig;
+  services: {
+    email: EmailService;
+    storage: StorageService;
+  };
+}
+
+// Create context factory function
+export function createIgniterAppContext(): AppContext {
+  return {
+    db: new Database(),
+    config: loadAppConfig(),
+    services: {
+      email: new EmailService(),
+      storage: new StorageService()
+    }
+  };
+}
+
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .create();
+```
+
+#### Dynamic Context (Callback)
+
+Use a callback function when context depends on the incoming request:
+
+```typescript
+type ContextCallback = (req: Request) => Promise<AppContext> | AppContext;
+
+const igniter = Igniter
+  .context(async (req: Request) => {
+    const session = await getSession(req);
+    const user = session ? await db.users.findById(session.userId) : null;
+    
+    return {
+      db,
+      user,
+      session,
+      requestId: crypto.randomUUID(),
+      ip: req.headers.get('x-forwarded-for') || 'unknown'
+    };
+  })
+  .create();
+```
+
+<Callout type="success" title="Type Inference">
+  When using a callback, TypeScript automatically infers the context type from the return value. No manual type annotations needed!
+</Callout>
+
+#### Accessing Context in Actions
+
+```typescript
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    me: igniter.query({
+      path: '/me',
+      handler: async ({ context, response }) => {
+        // ✅ context.user is fully typed
+        if (!context.user) {
+          return response.unauthorized({ message: 'Not authenticated' });
+        }
+        
+        return response.success({ user: context.user });
+      }
+    })
+  }
+});
+```
+
+---
+
+### `.config()`
+
+Configures **router-level settings** like base URL and path prefix.
+
+```typescript
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .config({
+    baseURL: 'https://api.example.com',
+    basePATH: '/api/v1'
+  })
+  .create();
+```
+
+#### Configuration Options
+
+<TypeTable type={{
+  baseURL: {
+    type: 'string',
+    description: 'The base URL for your API (used by client)',
+    required: false
+  },
+  basePATH: {
+    type: 'string',
+    description: 'Path prefix for all routes (e.g., "/api/v1")',
+    required: false
+  }
+}} />
+
+#### Usage Example
+
+```typescript
+// With this config:
+.config({
+  baseURL: 'https://api.example.com',
+  basePATH: '/api/v1'
+})
+
+// A controller with path '/users'
+igniter.controller({ path: '/users', ... })
+
+// Creates routes at:
+// https://api.example.com/api/v1/users
+```
+
+---
+
+### `.store(adapter)`
+
+Configures a **store adapter** for caching, key-value storage, and pub/sub messaging.
+
+```typescript
+import { createRedisStoreAdapter } from '@igniter-js/adapter-redis';
+
+const redisStore = createRedisStoreAdapter({
+  host: 'localhost',
+  port: 6379,
+  password: process.env.REDIS_PASSWORD
+});
+
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .store(redisStore)
+  .create();
+```
+
+#### Using the Store
+
+```typescript
+const userController = igniter.controller({
+  actions: {
+    getCached: igniter.query({
+      handler: async ({ context, response }) => {
+        // ✅ Store is automatically available
+        const cached = await igniter.store.get('users:list');
+        
+        if (cached) {
+          return response.success({ users: JSON.parse(cached) });
+        }
+        
+        const users = await context.db.users.findMany();
+        await igniter.store.set('users:list', JSON.stringify(users), { ttl: 300 });
+        
+        return response.success({ users });
+      }
+    })
+  }
+});
+```
+
+<Callout type="info">
+  Adding a store adapter also **automatically enables real-time capabilities** via the `.realtime` service.
+</Callout>
+
+---
+
+### `.logger(adapter)`
+
+Configures a **logger adapter** for structured logging.
+
+```typescript
+import { createConsoleLogger } from '@igniter-js/logger-console';
+
+const logger = createConsoleLogger({
+  level: 'info',
+  colorize: true,
+  context: { 
+    service: 'api', 
+    version: '1.0.0' 
+  }
+});
+
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .logger(logger)
+  .create();
+```
+
+#### Using the Logger
+
+```typescript
+const userController = igniter.controller({
+  actions: {
+    create: igniter.mutation({
+      handler: async ({ request, response }) => {
+        igniter.logger.info('Creating user', { 
+          email: request.body.email 
+        });
+        
+        try {
+          const user = await db.users.create(request.body);
+          igniter.logger.info('User created', { userId: user.id });
+          return response.created({ user });
+        } catch (error) {
+          igniter.logger.error('Failed to create user', { error });
+          return response.error({ message: 'Creation failed' });
+        }
+      }
+    })
+  }
+});
+```
+
+---
+
+### `.jobs(adapter)`
+
+Configures a **job queue adapter** for background processing and scheduled tasks.
+
+```typescript
+import { createBullMQAdapter } from '@igniter-js/adapter-bullmq';
+
+const jobsAdapter = createBullMQAdapter({
+  store: redisStore,
+  defaultJobOptions: {
+    removeOnComplete: 10,
+    removeOnFail: 50,
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 1000
+    }
+  }
+});
+
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .store(redisStore)
+  .jobs(jobsAdapter)
+  .create();
+```
+
+#### Defining Jobs
+
+```typescript
+// Define your jobs with full type safety
+const jobs = jobsAdapter.create({
+  sendEmail: {
+    handler: async (payload: { to: string; subject: string; body: string }) => {
+      await emailService.send(payload);
+    }
+  },
+  processOrder: {
+    handler: async (payload: { orderId: string }) => {
+      const order = await db.orders.findById(payload.orderId);
+      await processOrderLogic(order);
+    }
+  }
+});
+```
+
+#### Using Jobs in Actions
+
+```typescript
+const orderController = igniter.controller({
+  actions: {
+    create: igniter.mutation({
+      handler: async ({ request, response }) => {
+        const order = await db.orders.create(request.body);
+        
+        // ✅ Queue a background job
+        await igniter.jobs.processOrder.add({ orderId: order.id });
+        
+        return response.created({ order });
+      }
+    })
+  }
+});
+```
+
+---
+
+### `.telemetry(provider)`
+
+Configures a **telemetry provider** for distributed tracing, metrics, and observability.
+
+```typescript
+import { createOpenTelemetryProvider } from '@igniter-js/adapter-opentelemetry';
+
+const telemetry = createOpenTelemetryProvider({
+  serviceName: 'igniter-api',
+  serviceVersion: '1.0.0',
+  tracing: {
+    enabled: true,
+    exporter: 'jaeger',
+    endpoint: 'http://localhost:14268/api/traces'
+  },
+  metrics: {
+    enabled: true,
+    exporter: 'prometheus',
+    port: 9464
+  }
+});
+
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .telemetry(telemetry)
+  .create();
+```
+
+#### Automatic Instrumentation
+
+Telemetry automatically traces:
+- ✅ HTTP requests and responses
+- ✅ Action execution times
+- ✅ Procedure (middleware) execution
+- ✅ Database queries (if using supported ORMs)
+- ✅ External API calls
+
+#### Manual Spans
+
+```typescript
+const userController = igniter.controller({
+  actions: {
+    create: igniter.mutation({
+      handler: async ({ request, response }) => {
+        // Create custom span for specific operation
+        const span = igniter.telemetry.startSpan('validate-user-data');
+        
+        try {
+          await validateUserData(request.body);
+          span.end();
+        } catch (error) {
+          span.recordException(error);
+          span.end();
+          throw error;
+        }
+        
+        const user = await db.users.create(request.body);
+        return response.created({ user });
+      }
+    })
+  }
+});
+```
+
+---
+
+### `.plugins(pluginsRecord)`
+
+Registers **plugins** to extend functionality with reusable, self-contained modules.
+
+```typescript
+import { createAuditPlugin } from './plugins/audit';
+import { createAuthPlugin } from './plugins/auth';
+import { createEmailPlugin } from './plugins/email';
+
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .plugins({
+    audit: createAuditPlugin(),
+    auth: createAuthPlugin(),
+    email: createEmailPlugin()
+  })
+  .create();
+```
+
+#### Using Plugins in Actions
+
+```typescript
+const userController = igniter.controller({
+  actions: {
+    create: igniter.mutation({
+      handler: async ({ request, context, plugins, response }) => {
+        // ✅ Full type safety for plugin actions
+        const isValid = await plugins.auth.actions.validateToken({
+          token: request.headers.get('authorization')
+        });
+        
+        if (!isValid) {
+          return response.unauthorized({ message: 'Invalid token' });
+        }
+        
+        const user = await context.db.users.create(request.body);
+        
+        // ✅ Log to audit trail
+        await plugins.audit.actions.create({
+          action: 'user:created',
+          userId: user.id,
+          metadata: { email: user.email }
+        });
+        
+        // ✅ Send welcome email
+        await plugins.email.actions.sendWelcome({
+          to: user.email,
+          name: user.name
+        });
+        
+        return response.created({ user });
+      }
+    })
+  }
+});
+```
+
+<Callout type="success" title="Plugin Type Safety">
+  All plugin actions are fully typed! IntelliSense shows available actions, required parameters, and return types.
+</Callout>
+
+---
+
+### `.docs(config)`
+
+Configures **API documentation** and interactive playground using OpenAPI specification.
+
+```typescript
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .docs({
+    openapi: '3.1.0',
+    info: {
+      title: 'My API',
+      version: '1.0.0',
+      description: 'A fully type-safe API built with Igniter.js'
+    },
+    servers: [
+      { url: 'https://api.example.com', description: 'Production' },
+      { url: 'http://localhost:3000', description: 'Development' }
+    ],
+    playground: {
+      enabled: true,
+      route: '/docs',
+      security: async (req) => {
+        // Protect playground in production
+        return req.headers.get('x-admin-key') === process.env.ADMIN_KEY;
+      }
+    }
+  })
+  .create();
+```
+
+#### Documentation Options
+
+<TypeTable type={{
+  openapi: {
+    type: 'string',
+    description: 'OpenAPI version (e.g., "3.1.0")',
+    required: true
+  },
+  info: {
+    type: 'OpenApiInfoObject',
+    description: 'API metadata (title, version, description, contact, license)',
+    required: false
+  },
+  servers: {
+    type: 'OpenApiServerObject[]',
+    description: 'Array of server configurations',
+    required: false
+  },
+  securitySchemes: {
+    type: 'Record<string, OpenApiSecuritySchemeObject>',
+    description: 'Authentication schemes (API key, OAuth2, etc.)',
+    required: false
+  },
+  playground: {
+    type: 'object',
+    description: 'Interactive API playground configuration',
+    required: false
+  }
+}} />
+
+---
+
+### `.create()`
+
+Finalizes the builder and returns the **fully configured Igniter instance** with all methods available.
+
+```typescript
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .config({ baseURL: 'https://api.example.com' })
+  .store(redisStore)
+  .jobs(jobsAdapter)
+  .create(); // ← Returns configured instance
+
+// Now you can use:
+igniter.query(...)
+igniter.mutation(...)
+igniter.controller(...)
+igniter.router(...)
+igniter.procedure(...)
+
+// And access adapters:
+igniter.store
+igniter.logger
+igniter.jobs
+igniter.telemetry
+igniter.realtime
+igniter.plugins
+```
+
+<Callout type="warn" title="Must Call .create()">
+  You **must call `.create()`** to finalize the builder. Without it, you won't have access to `query`, `mutation`, `controller`, and other methods.
+</Callout>
+
+---
+
+## Complete Examples
+
+### Minimal Setup
+
+Perfect for getting started or simple APIs:
+
+```typescript
+import { Igniter } from '@igniter-js/core';
+
+interface AppContext {
+  db: Database;
+}
+
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .create();
+
+// Ready to create actions!
+```
+
+### Production Setup
+
+Full-featured configuration for production applications:
+
+```typescript
+import { Igniter } from '@igniter-js/core';
+import { createRedisStoreAdapter } from '@igniter-js/adapter-redis';
+import { createBullMQAdapter } from '@igniter-js/adapter-bullmq';
+import { createOpenTelemetryProvider } from '@igniter-js/adapter-opentelemetry';
+
+// 1. Setup adapters
+const redisStore = createRedisStoreAdapter({
+  host: process.env.REDIS_HOST,
+  port: Number(process.env.REDIS_PORT),
+  password: process.env.REDIS_PASSWORD
+});
+
+const jobsAdapter = createBullMQAdapter({
+  store: redisStore,
+  defaultJobOptions: {
+    removeOnComplete: 10,
+    removeOnFail: 50,
+    attempts: 3
+  }
+});
+
+const telemetry = createOpenTelemetryProvider({
+  serviceName: 'my-api',
+  serviceVersion: '1.0.0'
+});
+
+// 2. Create jobs
+const jobs = jobsAdapter.create({
+  sendEmail: { handler: async (payload) => { /* ... */ } },
+  processOrder: { handler: async (payload) => { /* ... */ } }
+});
+
+// 3. Configure Igniter
+const igniter = Igniter
+  .context(async (req: Request) => {
+    const session = await getSession(req);
+    return {
+      db: database,
+      user: session?.user || null,
+      requestId: crypto.randomUUID()
+    };
+  })
+  .config({
+    baseURL: process.env.API_URL,
+    basePATH: '/api/v1'
+  })
+  .store(redisStore)
+  .jobs(jobs)
+  .telemetry(telemetry)
+  .docs({
+    openapi: '3.1.0',
+    info: {
+      title: 'My Production API',
+      version: '1.0.0'
+    },
+    playground: {
+      enabled: process.env.NODE_ENV === 'development',
+      route: '/docs'
+    }
+  })
+  .create();
+
+export { igniter };
+```
+
+### With Plugins
+
+Extending functionality with modular plugins:
+
+```typescript
+import { Igniter } from '@igniter-js/core';
+import { auditPlugin } from './plugins/audit';
+import { authPlugin } from './plugins/auth';
+import { emailPlugin } from './plugins/email';
+
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .store(redisStore)
+  .plugins({
+    audit: auditPlugin,
+    auth: authPlugin,
+    email: emailPlugin
+  })
+  .create();
+
+// Use plugins in actions
+const userController = igniter.controller({
+  actions: {
+    create: igniter.mutation({
+      handler: async ({ plugins, response }) => {
+        await plugins.audit.actions.log({ event: 'user:create' });
+        await plugins.email.actions.send({ to: 'admin@example.com' });
+        return response.success({ message: 'Done' });
+      }
+    })
+  }
+});
+```
+
+---
+
+## Type Inference
+
+The builder progressively enhances types as you configure:
+
+```typescript
+// Step 1: No context yet
+const step1 = Igniter;
+// Type: IgniterBuilder<{}, {}, ...>
+
+// Step 2: Context added
+const step2 = Igniter.context<{ db: Database }>();
+// Type: IgniterBuilder<{ db: Database }, {}, ...>
+
+// Step 3: Store added
+const step3 = step2.store(redisStore);
+// Type: IgniterBuilder<{ db: Database }, {}, RedisStoreAdapter, ...>
+
+// Step 4: Created
+const step4 = step3.create();
+// Now has: .query(), .mutation(), .controller(), etc.
+// Plus: .store, .logger, .jobs, .telemetry, .realtime, .plugins
+```
+
+<Callout type="success" title="Full IntelliSense">
+  At every step, TypeScript provides complete autocomplete and type checking. You can't make invalid configurations!
+</Callout>
+
+---
+
+## Adapter Access
+
+After calling `.create()`, all configured adapters are available directly on the Igniter instance:
+
+```typescript
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .store(redisStore)
+  .jobs(jobsAdapter)
+  .telemetry(telemetry)
+  .create();
+
+// Access adapters anywhere:
+igniter.store.get('key');
+igniter.store.set('key', 'value');
+igniter.store.subscribe('channel', callback);
+
+igniter.jobs.sendEmail.add({ to: 'user@example.com' });
+igniter.jobs.processOrder.addBulk([{ orderId: '1' }, { orderId: '2' }]);
+
+igniter.telemetry.startSpan('operation-name');
+
+igniter.realtime.broadcast('channel', { data: 'value' });
+```
+
+---
+
+## Best Practices
+
+### 1. Single Igniter Instance
+
+Create **one Igniter instance** per application and export it:
+
+```typescript
+// src/igniter.ts
+export const igniter = Igniter
+  .context(createIgniterAppContext())
+  .config({ baseURL: process.env.API_URL })
+  .create();
+```
+
+```typescript
+// src/features/users/users.controller.ts
+import { igniter } from '@/igniter';
+
+export const userController = igniter.controller({ /* ... */ });
+```
+
+### 2. Environment-Based Configuration
+
+Use environment variables for different environments:
+
+```typescript
+const igniter = Igniter
+  .context(createIgniterAppContext())
+  .config({
+    baseURL: process.env.NODE_ENV === 'production' 
+      ? 'https://api.example.com' 
+      : 'http://localhost:3000',
+    basePATH: '/api/v1'
+  })
+  .docs({
+    playground: {
+      enabled: process.env.NODE_ENV === 'development'
+    }
+  })
+  .create();
+```
+
+### 3. Reusable Context Functions
+
+Extract context logic into reusable functions:
+
+```typescript
+async function createRequestContext(req: Request): Promise<AppContext> {
+  const session = await getSession(req);
+  const user = session ? await db.users.findById(session.userId) : null;
+  
+  return {
+    db,
+    user,
+    requestId: crypto.randomUUID(),
+    ip: req.headers.get('x-forwarded-for') || 'unknown'
+  };
+}
+
+const igniter = Igniter
+  .context(createRequestContext)
+  .create();
+```
+
+### 4. Conditional Adapters
+
+Only add adapters when needed:
+
+```typescript
+let builder = Igniter.context(createIgniterAppContext());
+
+// Only add telemetry in production
+if (process.env.NODE_ENV === 'production') {
+  builder = builder.telemetry(telemetryProvider);
+}
+
+// Only add jobs if Redis is available
+if (process.env.REDIS_URL) {
+  builder = builder.store(redisStore).jobs(jobsAdapter);
+}
+
+const igniter = builder.create();
+```
+
+---
+
+## Next Steps
+
+Now that you understand the Builder, learn how to create APIs:
+
+<Cards>
+  <Card title="Router" href="/docs/router">
+    Learn how to create routers and assemble your API
+  </Card>
+  
+  <Card title="Actions" href="/docs/actions">
+    Create queries and mutations for your endpoints
+  </Card>
+  
+  <Card title="Controllers" href="/docs/controllers">
+    Organize related actions into logical groups
+  </Card>
+  
+  <Card title="Procedures" href="/docs/procedures">
+    Add reusable middleware to your actions
+  </Card>
+</Cards>

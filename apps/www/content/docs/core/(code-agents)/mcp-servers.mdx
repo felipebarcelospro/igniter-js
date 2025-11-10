@@ -1,0 +1,906 @@
+---
+title: Igniter.js MCP Server
+description: Comprehensive guide to configuring and using the Igniter.js Model Context Protocol server for code generation, browser testing, and more.
+---
+
+By the end of this guide, you'll have a complete understanding of what a Model Context Protocol (MCP) server is, how to configure the Igniter.js MCP server in your favorite IDE or Code Agent, and what tools it provides to enhance your development workflow.
+
+## What is an MCP Server?
+
+A **Model Context Protocol (MCP) Server** is a specialized backend that acts as a bridge between an AI model (like a code agent) and your development environment. It follows a standard protocol that allows the AI to securely access context-aware tools and information that are not part of its general training data.
+
+Think of it as giving your AI assistant a set of superpowers tailored specifically to your project. Instead of just understanding code, it can now:
+
+- Interact with your local development server.
+- Run tests and builds.
+- Scaffold new features based on your project's conventions.
+- Analyze your codebase with deep, contextual understanding.
+- Safely access your database or other services.
+
+This allows AI agents like Lia to perform complex, multi-step tasks autonomously, moving beyond simple code completion to become a true pair programmer.
+
+## How to Add the Igniter.js MCP Server
+
+Integrating the Igniter.js MCP Server into your development tool is straightforward. It is typically defined in a JSON configuration file that your IDE or code agent reads on startup.
+
+Below are instructions for popular environments.
+
+<Tabs items={['Cursor', 'VS Code', 'GitHub Copilot', 'Windsurf', 'Trae']}>
+  <Tab value="Cursor">
+    1.  Go to `File` > `Settings` > `Cursor`.
+    2.  Find the `Model Context Protocol` section.
+    3.  Click on `Add new global MCP server`.
+    4.  A `~/.cursor/mcp.json` file will be created if it doesn't exist. Add the following configuration:
+
+    ```json
+    {
+      "mcpServers": {
+        "igniter": {
+          "command": "npx",
+          "args": ["-y", "@igniter-js/mcp-server@latest"],
+          "env": {}
+        }
+      }
+    }
+    ```
+
+    5.  Save the file and restart Cursor.
+  </Tab>
+  <Tab value="VS Code">
+    1.  Create a file named `mcp.json` inside the `.vscode` directory of your project.
+    2.  Add the following configuration:
+
+    ```json
+    {
+      "mcpServers": {
+        "igniter": {
+          "command": "npx",
+          "args": ["-y", "@igniter-js/mcp-server@latest"],
+          "env": {}
+        }
+      }
+    }
+    ```
+
+    3.  Save the file and restart VS Code.
+  </Tab>
+  <Tab value="GitHub Copilot">
+    GitHub Copilot in VS Code can also be configured to use MCP servers.
+
+    1.  Create a file named `mcp.json` inside the `.vscode` directory of your project.
+    2.  Add the following configuration:
+
+    ```json
+    {
+      "mcpServers": {
+        "igniter": {
+          "command": "npx",
+          "args": ["-y", "@igniter-js/mcp-server@latest"],
+          "env": {}
+        }
+      }
+    }
+    ```
+    
+    3.  Save the file. Copilot will automatically detect and use the server.
+  </Tab>
+  <Tab value="Windsurf">
+    1. Open Windsurf's settings.
+    2. Navigate to the `MCP Servers` configuration section.
+    3. Add a new server with the following details:
+
+    ```json
+    {
+      "mcpServers": {
+        "igniter": {
+          "command": "npx",
+          "args": ["-y", "@igniter-js/mcp-server@latest"],
+          "env": {}
+        }
+      }
+    }
+    ```
+    4. Save and restart Windsurf.
+  </Tab>
+  <Tab value="Trae">
+    1. In Trae, find the option to add a new MCP Server.
+    2. Provide the configuration details, which usually involves specifying a command and arguments.
+    
+    ```json
+    {
+      "mcpServers": {
+        "igniter": {
+          "command": "npx",
+          "args": ["-y", "@igniter-js/mcp-server@latest"],
+          "env": {}
+        }
+      }
+    }
+    ```
+    3. Save the configuration.
+  </Tab>
+</Tabs>
+
+## Igniter.js MCP Server
+
+The Igniter.js MCP server provides comprehensive tools for the complete development lifecycle, including server management, code generation, API testing, documentation, and advanced code analysis capabilities.
+
+### Configuration
+
+The server is started using `npx`. The `-y` flag ensures that `@igniter-js/mcp-server` is automatically downloaded and run without needing a manual installation. The server's behavior can be customized via the following environment variables:
+
+<TypeTable
+  type={{
+    GITHUB_TOKEN: {
+      description: 'Your GitHub Personal Access Token. Required for tools that interact with the GitHub API, such as searching issues or creating pull requests.',
+      type: 'string'
+    },
+    ENABLE_CLI_TOOLS: {
+      description: 'Set to "false" to disable tools for interacting with command-line interfaces.',
+      type: 'boolean',
+      default: 'true'
+    },
+    ENABLE_API_VALIDATION_TOOLS: {
+      description: 'Set to "false" to disable tools for API validation and testing.',
+      type: 'boolean',
+      default: 'true'
+    },
+    ENABLE_DOCUMENTATION_TOOLS: {
+      description: 'Set to "false" to disable tools related to documentation generation and retrieval.',
+      type: 'boolean',
+      default: 'true'
+    },
+    ENABLE_GITHUB_TOOLS: {
+      description: 'Set to "false" to disable all GitHub-related tools. Requires GITHUB_TOKEN to be set.',
+      type: 'boolean',
+      default: 'true'
+    },
+    ENABLE_FILE_ANALYSIS_TOOLS: {
+      description: 'Set to "false" to disable tools for static file analysis.',
+      type: 'boolean',
+      default: 'true'
+    },
+    ENABLE_CODE_INVESTIGATION_TOOLS: {
+      description: 'Set to "false" to disable tools for deeper code investigation and dependency tracing.',
+      type: 'boolean',
+      default: 'true'
+    },
+    ENABLE_DEBUGGING_TOOLS: {
+      description: 'Set to "false" to disable debugging-related tools.',
+      type: 'boolean',
+      default: 'true'
+    }
+  }}
+/>
+
+### Available Tools
+
+<Accordions type="multiple">
+<Accordion title="start_dev_server - Start development server">
+This tool starts the Igniter.js development server, a crucial first step for most local development workflows. Lia uses this command at the beginning of a session to run the project, which enables her to test changes in real-time, validate API endpoints, and ensure the application is running correctly. For Lia, having the dev server running provides an immediate feedback loop through hot-reloading and allows her to directly interact with the live application as she builds and modifies features.
+
+**Parameters**
+<TypeTable
+  type={{
+    port: {
+      description: "Port to run the server on. Defaults to the project's standard port (e.g., 3000).",
+      type: 'number'
+    },
+    watch: {
+      description: "Enable file watching for automatic restarts and client regeneration. Defaults to true.",
+      type: 'boolean',
+      default: 'true'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="build_project - Build for production">
+This tool compiles the entire project for a production environment. Lia uses this to verify that all code, dependencies, and assets are correctly bundled and optimized, catching potential issues that might only appear in a production build. Running a build is a critical quality assurance step before deploying changes, and it gives Lia confidence that the features she has worked on are ready for release.
+
+**Parameters**
+<TypeTable
+  type={{
+    mode: {
+      description: "Build mode. 'production' is the default and standard for builds.",
+      type: "'development' | 'production'",
+      default: "'production'"
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="run_tests - Execute test suite">
+This tool executes the project's test suite to validate code quality and functionality. After making changes, Lia runs this command to ensure that her modifications work as expected and have not introduced any regressions in other parts of the application. It is a fundamental tool for maintaining a healthy and reliable codebase, allowing her to autonomously verify her work against the project's established standards.
+
+**Parameters**
+<TypeTable
+  type={{
+    filter: {
+      description: "Filter tests by a specific pattern or package name (e.g., '@igniter-js/core').",
+      type: 'string'
+    },
+    watch: {
+      description: "Run tests in watch mode to automatically re-run on file changes.",
+      type: 'boolean'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="generate_feature - Create new feature">
+This tool scaffolds a new feature module following Igniter.js conventions, creating the necessary directory structure and boilerplate files. Lia uses this to quickly set up the foundation for a new area of functionality, such as 'user-management' or 'billing'. This automates the repetitive setup process, ensuring consistency across the codebase and allowing Lia to immediately start implementing the specific business logic for the new feature.
+
+**Parameters**
+<TypeTable
+  type={{
+    name: {
+      description: "The name of the feature in kebab-case (e.g., 'user-management').",
+      type: 'string'
+    },
+    schema: {
+      description: "EXPERIMENTAL: Generate CRUD operations from a schema provider (e.g., 'prisma:User').",
+      type: 'string',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="add_package_dependency - Add Package Dependency">
+This tool adds a new dependency to the project using the configured package manager. When a task requires a new library or package, Lia uses this command to add it to the project's `package.json` and install it. This ensures that all dependencies are managed cleanly and consistently through a single interface, avoiding manual edits to package files.
+
+**Parameters**
+<TypeTable
+  type={{
+    package_name: {
+      description: "The name of the package to add (e.g., axios, lodash).",
+      type: 'string'
+    },
+    version: {
+      description: "The specific version of the package (e.g., ^1.0.0, latest). Defaults to the latest version.",
+      type: 'string',
+      default: 'null'
+    },
+    dev_dependency: {
+      description: "If true, adds as a development dependency.",
+      type: 'boolean',
+      default: 'false'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="remove_package_dependency - Remove Package Dependency">
+This tool removes an existing dependency from the project. If a package is no longer needed or is being replaced, Lia can use this command to cleanly uninstall it and remove it from the `package.json`. This helps in keeping the project's dependency tree lean and free of unused packages.
+
+**Parameters**
+<TypeTable
+  type={{
+    package_name: {
+      description: "The name of the package to remove.",
+      type: 'string'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="get_openapi_spec - Retrieve OpenAPI specification">
+This tool retrieves the OpenAPI specification from a running server. Lia uses this to understand the available API endpoints, their expected inputs, and their outputs. This self-discovery mechanism is crucial for her to validate API contracts, test endpoints using `make_api_request`, or even generate client-side code that correctly interacts with the backend.
+
+**Parameters**
+<TypeTable
+  type={{
+    url: {
+      description: 'API documentation URL',
+      type: 'string',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="make_api_request - Execute HTTP requests">
+This tool allows for the execution of HTTP requests against any URL, which is essential for API testing and validation. After building a new endpoint or making changes, Lia uses this tool to send requests and inspect the responses, verifying that the API behaves as expected. This enables her to perform autonomous end-to-end testing of the backend services she develops.
+
+**Parameters**
+<TypeTable
+  type={{
+    method: {
+      description: 'HTTP method',
+      type: '"GET"|"POST"|"PUT"|"DELETE"|"PATCH"'
+    },
+    url: {
+      description: 'Request URL',
+      type: 'string'
+    },
+    headers: {
+      description: 'Request headers',
+      type: 'Record<string,string>',
+      default: 'null'
+    },
+    body: {
+      description: 'Request body',
+      type: 'any',
+      default: 'null'
+    },
+    timeout: {
+      description: 'Request timeout in milliseconds',
+      type: 'number',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="read_as_markdown - Fetch external documentation">
+This tool fetches content from a URL and converts it to clean, readable Markdown. Lia uses this for research when she needs to understand a concept, learn about a library, or consult external documentation to solve a problem. It gives her the ability to "read the docs" just like a human developer would, integrating external knowledge into her development process.
+
+**Parameters**
+<TypeTable
+  type={{
+    url: {
+      description: 'Custom URL for documentation',
+      type: 'string'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="analyze_file - Comprehensive file analysis">
+This tool performs a deep analysis of a single source file, providing information about its structure, imports, exports, functions, and any TypeScript or ESLint errors. Lia uses this to understand a file's responsibilities and health before making changes. This analysis helps her identify potential issues, understand dependencies, and plan her modifications with full context.
+
+**Parameters**
+<TypeTable
+  type={{
+    filePath: {
+      description: 'Path to the file to analyze',
+      type: 'string'
+    },
+    includeErrors: {
+      description: 'Include error analysis',
+      type: 'boolean',
+      default: 'true'
+    },
+    projectRoot: {
+      description: 'Project root directory',
+      type: 'string',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="analyze_feature - Feature analysis">
+This tool provides a comprehensive analysis of an entire feature module, including its file structure, overall health, and exposed API endpoints. When tasked with working on an existing feature, Lia uses this to get a high-level overview of its components and current state. This allows her to understand the feature's architecture before diving into individual files.
+
+**Parameters**
+<TypeTable
+  type={{
+    featurePath: {
+      description: 'Path to the feature directory',
+      type: 'string'
+    },
+    projectRoot: {
+      description: 'Project root directory',
+      type: 'string',
+      default: 'null'
+    },
+    includeStats: {
+      description: 'Include statistical analysis',
+      type: 'boolean',
+      default: 'false'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="find_implementation - Locate symbol definitions">
+This tool helps locate the definition of a specific symbol (like a function, class, or type) within the codebase. When Lia encounters a piece of code she doesn't immediately understand, she uses this tool to trace it back to its source. This "go to definition" capability is fundamental for navigating and understanding large, complex codebases.
+
+**Parameters**
+<TypeTable
+  type={{
+    symbol: {
+      description: 'Symbol to find',
+      type: 'string'
+    },
+    filePath: {
+      description: 'Starting file path',
+      type: 'string'
+    },
+    projectRoot: {
+      description: 'Project root directory',
+      type: 'string',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="explore_source - Deep file analysis">
+This tool performs a deep analysis of a source file, focusing on a specific symbol and its dependencies. It's a more focused version of `analyze_file`. Lia uses it when she needs to understand the implementation details of a particular function or class in depth, providing her with the context needed to make precise and safe code modifications.
+
+**Parameters**
+<TypeTable
+  type={{
+    filePath: {
+      description: 'Path to the file to explore',
+      type: 'string'
+    },
+    symbol: {
+      description: 'Specific symbol to analyze',
+      type: 'string',
+      default: 'null'
+    },
+    includeContext: {
+      description: 'Include surrounding context',
+      type: 'boolean',
+      default: 'false'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="trace_dependency_chain - Map import chains">
+This tool maps the complete import chain for a symbol, showing how different parts of the codebase are connected. Lia uses this to understand the impact of a potential change. By tracing dependencies, she can identify which other files or features might be affected by her modifications, preventing unintended side effects and breaking changes.
+
+**Parameters**
+<TypeTable
+  type={{
+    symbol: {
+      description: 'Symbol to trace',
+      type: 'string'
+    },
+    startFile: {
+      description: 'Starting file for tracing',
+      type: 'string'
+    },
+    maxDepth: {
+      description: 'Maximum tracing depth',
+      type: 'number',
+      default: '5'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="get_process_info - Get Process Information">
+This tool provides detailed information about a running process on the system using its Process ID (PID). Lia uses this for debugging purposes, for example, to check if a development server or another required process is running correctly, what port it's using, or how much memory it's consuming. It gives her visibility into the runtime environment.
+
+**Parameters**
+<TypeTable
+  type={{
+    process_id: {
+      description: 'The PID of the process.',
+      type: 'number'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="inspect_runtime_variable - Inspect Runtime Variable">
+This tool allows Lia to inspect the value of a variable in a running JavaScript/TypeScript process that has been started with the `--inspect` flag. This is an incredibly powerful debugging tool, giving her the ability to check the state of the application at runtime without having to add `console.log` statements and restart the server.
+
+**Parameters**
+<TypeTable
+  type={{
+    process_id: {
+      description: 'The PID of the JavaScript/TypeScript process to inspect.',
+      type: 'number'
+    },
+    variable_name: {
+      description: 'The name of the variable to inspect (must be in an accessible scope, preferably global).',
+      type: 'string'
+    },
+    debug_port: {
+      description: 'The port where the debugger is listening. Defaults to 9229.',
+      type: 'number',
+      default: '9229'
+    },
+    file_path: {
+      description: 'The path of the file where the variable is declared.',
+      type: 'string',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="list_processes_on_port - List Processes on Port">
+This tool lists all processes that are currently listening on a specific network port. Lia uses this to troubleshoot issues like a port already being in use when trying to start a development server. It helps her diagnose and resolve common environment setup problems autonomously.
+
+**Parameters**
+<TypeTable
+  type={{
+    port: {
+      description: 'The TCP/UDP port to inspect (e.g., 3000, 9230).',
+      type: 'number'
+    },
+    protocol: {
+      description: "Filter by protocol. If not provided, searches for both.",
+      type: "'tcp' | 'udp'",
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="search_github_issues - Search GitHub issues">
+This tool allows Lia to search for issues and pull requests on GitHub, scoped to the Igniter.js repository by default. She uses this for research, to check if a bug has already been reported, find context on a feature request, or learn from previous solutions. It connects her directly to the project's development history and community discussions.
+
+**Parameters**
+<TypeTable
+  type={{
+    query: {
+      description: 'Search query',
+      type: 'string'
+    },
+    repository: {
+      description: "Target repository in format 'owner/repo'. Defaults to 'felipebarcelospro/igniter-js'",
+      type: 'string',
+      default: 'null'
+    },
+    state: {
+      description: 'Issue state',
+      type: '"open"|"closed"|"all"',
+      default: '"open"'
+    },
+    labels: {
+      description: 'Issue labels',
+      type: 'string[]',
+      default: 'null'
+    },
+    sort: {
+      description: 'Sort order',
+      type: '"created"|"updated"|"comments"',
+      default: '"created"'
+    },
+    order: {
+      description: 'Sort direction',
+      type: '"asc"|"desc"',
+      default: '"desc"'
+    },
+    per_page: {
+      description: 'Results per page',
+      type: 'number',
+      default: '30'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="create_github_issue - Create GitHub issue">
+This tool enables Lia to create new issues on GitHub. If she identifies a bug, has a suggestion for a new feature, or finds a gap in the documentation during her work, she can use this tool to formally report it. This capability allows her to contribute to the project's backlog and participate in the development process just like a human team member.
+
+**Parameters**
+<TypeTable
+  type={{
+    title: {
+      description: 'Issue title',
+      type: 'string'
+    },
+    body: {
+      description: 'Issue description',
+      type: 'string'
+    },
+    repository: {
+      description: "Target repository in format 'owner/repo'. Defaults to 'felipebarcelospro/igniter-js'",
+      type: 'string',
+      default: 'null'
+    },
+    labels: {
+      description: 'Issue labels',
+      type: 'string[]',
+      default: 'null'
+    },
+    assignees: {
+      description: 'Issue assignees',
+      type: 'string[]',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="get_github_issue - Get GitHub Issue Details">
+This tool gives Lia the ability to retrieve detailed information about a specific GitHub issue. She uses this to get the full context of a bug report or feature request, including the description, comments, labels, and current status. This is essential for her to understand the problem thoroughly before starting to work on a solution.
+
+**Parameters**
+<TypeTable
+  type={{
+    issueNumber: {
+      description: 'The issue number to get details for',
+      type: 'number'
+    },
+    repository: {
+      description: "Repository in format 'owner/repo'. Defaults to 'felipebarcelospro/igniter-js'",
+      type: 'string',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="search_github_code - Search GitHub Code">
+This tool allows Lia to search for code snippets across GitHub repositories. She uses this to find examples of how a particular library is used, learn from existing implementations, or discover solutions to common programming problems. It's a powerful research tool that extends her knowledge beyond the current project's codebase.
+
+**Parameters**
+<TypeTable
+  type={{
+    query: {
+      description: 'Code search query',
+      type: 'string'
+    },
+    repository: {
+      description: "Repository in format 'owner/repo'. If not specified, searches across GitHub",
+      type: 'string',
+      default: 'null'
+    },
+    language: {
+      description: 'Programming language filter (typescript, javascript, etc.)',
+      type: 'string',
+      default: 'null'
+    },
+    filename: {
+      description: 'Filename pattern to search in',
+      type: 'string',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="read_github_file - Read GitHub File">
+This tool gives Lia the ability to read the content of a specific file directly from a GitHub repository. This is useful when she needs to inspect a file from an external project for reference, or to read a file from the project's own repository without having to clone it locally. It provides direct access to source code for analysis and learning.
+
+**Parameters**
+<TypeTable
+  type={{
+    repository: {
+      description: "The repository in format 'owner/repo'.",
+      type: 'string'
+    },
+    path: {
+      description: 'The path to the file within the repository (e.g., src/main.ts).',
+      type: 'string'
+    },
+    ref: {
+      description: "The branch, tag, or commit SHA. Defaults to the repository's default branch if not provided.",
+      type: 'string',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="list_github_repository_content - List GitHub Repository Content">
+This tool allows Lia to list the contents of a directory within a GitHub repository. She uses this to explore the structure of a project, discover files, and navigate the codebase without having it locally. It's a fundamental capability for understanding the layout and organization of an external or remote repository.
+
+**Parameters**
+<TypeTable
+  type={{
+    repository: {
+      description: "The repository in format 'owner/repo'.",
+      type: 'string'
+    },
+    path: {
+      description: 'The path to the directory. Defaults to the root if not provided.',
+      type: 'string',
+      default: 'null'
+    },
+    ref: {
+      description: "The branch, tag, or commit SHA. Defaults to the repository's default branch.",
+      type: 'string',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="update_github_issue - Update GitHub Issue">
+This tool allows Lia to modify existing GitHub issues. She can use this to update an issue's title, add details to the body, assign labels, or change its state (e.g., from 'open' to 'closed'). This enables her to manage the lifecycle of issues she is working on, keeping the project board up-to-date with her progress.
+
+**Parameters**
+<TypeTable
+  type={{
+    issueNumber: {
+      description: 'The issue number to update',
+      type: 'number'
+    },
+    repository: {
+      description: "Repository in format 'owner/repo'. Defaults to 'felipebarcelospro/igniter-js'",
+      type: 'string',
+      default: 'null'
+    },
+    title: {
+      description: 'New title for the issue',
+      type: 'string',
+      default: 'null'
+    },
+    body: {
+      description: 'New body/description for the issue',
+      type: 'string',
+      default: 'null'
+    },
+    labels: {
+      description: 'Labels to set on the issue',
+      type: 'string[]',
+      default: 'null'
+    },
+    assignees: {
+      description: 'Users to assign to the issue',
+      type: 'string[]',
+      default: 'null'
+    },
+    state: {
+      description: 'New state for the issue',
+      type: '"open" | "closed"',
+      default: 'null'
+    },
+    milestone: {
+      description: 'Milestone number to associate with the issue',
+      type: 'number',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="close_github_issue - Close GitHub Issue">
+This tool provides a straightforward way for Lia to close a GitHub issue. When she has completed a task and verified the fix, she can use this command to mark the corresponding issue as 'closed'. This is a key part of her workflow, allowing her to signal the completion of her work on the project's issue tracker.
+
+**Parameters**
+<TypeTable
+  type={{
+    issueNumber: {
+      description: 'The issue number to close',
+      type: 'number'
+    },
+    repository: {
+      description: "Repository in format 'owner/repo'. Defaults to 'felipebarcelospro/igniter-js'",
+      type: 'string',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="list_github_issue_comments - List GitHub Issue Comments">
+This tool lets Lia retrieve all the comments from a specific GitHub issue. She uses this to understand the full conversation around a bug or feature, gathering context from the discussion that might not be in the main issue description. This helps her make more informed decisions based on the team's input.
+
+**Parameters**
+<TypeTable
+  type={{
+    issueNumber: {
+      description: 'The issue number to get comments for',
+      type: 'number'
+    },
+    repository: {
+      description: "Repository in format 'owner/repo'. Defaults to 'felipebarcelospro/igniter-js'",
+      type: 'string',
+      default: 'null'
+    },
+    per_page: {
+      description: 'Number of comments per page (max 100)',
+      type: 'number',
+      default: 'null'
+    },
+    page: {
+      description: 'Page number for pagination',
+      type: 'number',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="create_github_issue_comment - Create GitHub Issue Comment">
+This tool allows Lia to add comments to a GitHub issue. She uses this to ask clarifying questions, provide status updates on her progress, or explain the solution she has implemented. It's her primary way of communicating and collaborating with the human team members on the project's issue tracker.
+
+**Parameters**
+<TypeTable
+  type={{
+    issueNumber: {
+      description: 'The issue number to comment on',
+      type: 'number'
+    },
+    body: {
+      description: 'The comment body',
+      type: 'string'
+    },
+    repository: {
+      description: "Repository in format 'owner/repo'. Defaults to 'felipebarcelospro/igniter-js'",
+      type: 'string',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="update_github_issue_comment - Update GitHub Issue Comment">
+This tool gives Lia the ability to edit one of her existing comments on a GitHub issue. She might use this to correct a mistake, add more information, or clarify a previous update. This ensures her communication remains accurate and clear.
+
+**Parameters**
+<TypeTable
+  type={{
+    commentId: {
+      description: 'The comment ID to update',
+      type: 'number'
+    },
+    body: {
+      description: 'The new comment body',
+      type: 'string'
+    },
+    repository: {
+      description: "Repository in format 'owner/repo'. Defaults to 'felipebarcelospro/igniter-js'",
+      type: 'string',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+
+<Accordion title="delete_github_issue_comment - Delete GitHub Issue Comment">
+This tool allows Lia to delete one of her own comments. She would use this rarely, perhaps if a comment was posted by mistake or contains incorrect information that is better removed than corrected.
+
+**Parameters**
+<TypeTable
+  type={{
+    commentId: {
+      description: 'The comment ID to delete',
+      type: 'number'
+    },
+    repository: {
+      description: "Repository in format 'owner/repo'. Defaults to 'felipebarcelospro/igniter-js'",
+      type: 'string',
+      default: 'null'
+    }
+  }}
+/>
+</Accordion>
+</Accordions>
+
+## Best Practices
+
+<Accordions type="multiple">
+<Accordion title="Security Considerations">
+- Never hardcode database credentials or API keys in configuration files.
+- Use environment variables for sensitive configuration.
+- Limit permissions to read-only where possible for development.
+</Accordion>
+<Accordion title="Performance Optimization">
+- Configure appropriate timeouts for long-running operations.
+- Cache frequently accessed schema information or documentation.
+</Accordion>
+<Accordion title="Error Handling">
+- Implement retry logic for transient failures.
+- Log errors for debugging while avoiding sensitive data exposure.
+- Provide meaningful error messages to users.
+</Accordion>
+<Accordion title="Integration with Lia">
+- Lia automatically discovers and uses available MCP tools.
+- Lia will request permission before executing destructive operations.
+- Combine multiple tools for complex workflows (e.g., generate code + run tests).
+</Accordion>
+</Accordions>
+
+## Troubleshooting
+
+<Accordions type="multiple">
+<Accordion title="Server Won't Start">
+- Check that all required packages are installed (`npx` should handle this, but network issues can occur).
+- Verify environment variables are set correctly if needed by any tool.
+- Ensure no other process is using the same port if the server requires one.
+</Accordion>
+<Accordion title="Tool Execution Fails">
+- Validate input parameters match tool specifications.
+- Check for permission issues (file system, network).
+- Review error logs for detailed failure information.
+</Accordion>
+<Accordion title="Performance Issues">
+- Adjust timeout values for slow operations.
+- Optimize queries and reduce data transfer for tools that interact with external services.
+- Consider caching for frequently accessed data.
+</Accordion>
+</Accordions>

@@ -1,0 +1,508 @@
+---
+title: Multi-Tenancy
+description: Build multi-tenant applications with queue prefixes, isolated job processing, and tenant-specific configurations.
+---
+
+Multi-tenancy allows you to isolate jobs for different tenants (customers, organizations, or environments) while sharing the same Redis instance and worker infrastructure. This is essential for SaaS applications and environments that need clear separation.
+
+## Queue Prefixes
+
+Queue prefixes are the foundation of multi-tenancy. They allow you to create isolated queues for each tenant:
+
+```typescript
+import { createBullMQAdapter } from '@igniter-js/adapter-bullmq';
+
+const jobs = createBullMQAdapter({
+  store: redisStore,
+  globalPrefix: 'app', // Global prefix for all queues
+});
+```
+
+### Global Prefix
+
+Set a global prefix for all queues in your application:
+
+```typescript
+const jobs = createBullMQAdapter({
+  store: redisStore,
+  globalPrefix: process.env.NODE_ENV === 'production' ? 'prod' : 'dev',
+});
+```
+
+All queues will be prefixed:
+- `prod__default` (instead of `default`)
+- `prod__email-queue` (instead of `email-queue`)
+
+---
+
+## Per-Job Queue Prefixes
+
+Override the global prefix for specific jobs:
+
+```typescript
+const tenantJob = jobs.register({
+  name: 'Tenant Task',
+  input: z.object({ data: z.string() }),
+  handler: async ({ payload }) => {
+    // Job logic
+  },
+  queue: {
+    name: 'tenant-queue',
+    prefix: 'tenant-123', // Tenant-specific prefix
+  },
+});
+```
+
+This creates a queue: `app__tenant-123__tenant-queue`
+
+---
+
+## Dynamic Tenant Queues
+
+Create tenant-specific queues dynamically:
+
+```typescript
+function createTenantJob(tenantId: string) {
+  return jobs.register({
+    name: 'Tenant Task',
+    input: z.object({ data: z.string() }),
+    handler: async ({ payload }) => {
+      // Job logic with tenant context
+    },
+    queue: {
+      name: 'tenant-queue',
+      prefix: `tenant-${tenantId}`,
+    },
+  });
+}
+
+// Create job for tenant "acme"
+const acmeJob = createTenantJob('acme');
+// Queue: app__tenant-acme__tenant-queue
+
+// Create job for tenant "contoso"
+const contosoJob = createTenantJob('contoso');
+// Queue: app__tenant-contoso__tenant-queue
+```
+
+---
+
+## Tenant-Aware Routers
+
+Organize jobs by tenant in routers:
+
+```typescript
+function createTenantRouter(tenantId: string) {
+  return jobs.router({
+    namespace: `tenant-${tenantId}`,
+    defaultOptions: {
+      queue: {
+        name: 'default',
+        prefix: `tenant-${tenantId}`,
+      },
+    },
+    jobs: {
+      processData: jobs.register({
+        name: 'Process Data',
+        input: z.object({ data: z.string() }),
+        handler: async ({ payload }) => {
+          // Tenant-specific processing
+        },
+      }),
+    },
+  });
+}
+
+// Create routers for different tenants
+const acmeRouter = createTenantRouter('acme');
+const contosoRouter = createTenantRouter('contoso');
+
+// Merge tenant routers
+const REGISTERED_JOBS = jobs.merge({
+  acme: acmeRouter,
+  contoso: contosoRouter,
+});
+```
+
+---
+
+## Environment-Based Prefixes
+
+Separate environments with prefixes:
+
+```typescript
+const jobs = createBullMQAdapter({
+  store: redisStore,
+  globalPrefix: process.env.ENVIRONMENT || 'local',
+});
+
+// Development
+// Queues: dev__default, dev__email-queue
+
+// Staging
+// Queues: staging__default, staging__email-queue
+
+// Production
+// Queues: prod__default, prod__email-queue
+```
+
+---
+
+## Tenant-Specific Workers
+
+Process jobs for specific tenants with dedicated workers:
+
+```typescript
+// Worker for tenant "acme"
+await jobs.worker({
+  queues: ['default'], // Queue name (without prefix)
+  // Note: Prefix is handled at the queue level
+});
+
+// Worker for tenant "contoso"
+await jobs.worker({
+  queues: ['default'],
+});
+```
+
+### Multi-Tenant Worker Pattern
+
+Process jobs for multiple tenants with a single worker:
+
+```typescript
+// Worker processes jobs from all tenant queues
+await jobs.worker({
+  queues: ['default'], // Processes all queues matching the pattern
+  concurrency: 10,
+});
+```
+
+---
+
+## Tenant Context in Jobs
+
+Access tenant information in job handlers:
+
+```typescript
+const tenantJob = jobs.register({
+  name: 'Tenant Task',
+  input: z.object({ tenantId: z.string(), data: z.string() }),
+  handler: async ({ payload, context }) => {
+    // Access tenant-specific services
+    const tenantDb = context.getTenantDatabase(payload.tenantId);
+    await tenantDb.process(payload.data);
+  },
+  queue: {
+    name: 'tenant-queue',
+    prefix: `tenant-${payload.tenantId}`, // Note: Dynamic prefix requires special handling
+  },
+});
+```
+
+### Static Tenant Prefix
+
+For better isolation, use static tenant prefixes when possible:
+
+```typescript
+function createTenantJob(tenantId: string) {
+  return jobs.register({
+    name: 'Tenant Task',
+    input: z.object({ data: z.string() }),
+    handler: async ({ payload }) => {
+      // Job logic
+    },
+    queue: {
+      name: 'tenant-queue',
+      prefix: `tenant-${tenantId}`, // Static prefix at registration time
+    },
+  });
+}
+```
+
+---
+
+## Tenant Isolation Best Practices
+
+### 1. Use Consistent Naming
+
+```typescript
+// ✅ Good - consistent prefix pattern
+queue: { prefix: `tenant-${tenantId}` }
+
+// ❌ Bad - inconsistent patterns
+queue: { prefix: `t-${tenantId}` }
+queue: { prefix: `${tenantId}-queue` }
+```
+
+### 2. Validate Tenant IDs
+
+```typescript
+function createTenantJob(tenantId: string) {
+  // Validate tenant ID format
+  if (!/^[a-z0-9-]+$/.test(tenantId)) {
+    throw new Error('Invalid tenant ID format');
+  }
+  
+  return jobs.register({
+    // ...
+    queue: {
+      prefix: `tenant-${tenantId}`,
+    },
+  });
+}
+```
+
+### 3. Separate Critical Jobs
+
+```typescript
+// Critical jobs get dedicated queues
+const criticalJob = jobs.register({
+  name: 'Critical Task',
+  queue: {
+    name: 'critical',
+    prefix: `tenant-${tenantId}`,
+  },
+});
+
+// Non-critical jobs share queues
+const regularJob = jobs.register({
+  name: 'Regular Task',
+  queue: {
+    name: 'default',
+    prefix: `tenant-${tenantId}`,
+  },
+});
+```
+
+---
+
+## Queue Naming Strategy
+
+Follow a consistent queue naming strategy:
+
+```typescript
+// Pattern: {globalPrefix}__{tenantPrefix}__{queueName}
+
+// Example configurations:
+const jobs = createBullMQAdapter({
+  globalPrefix: 'app',
+});
+
+// Tenant-specific queue
+queue: {
+  name: 'email-queue',
+  prefix: 'tenant-acme',
+}
+// Result: app__tenant-acme__email-queue
+
+// Environment + tenant
+globalPrefix: 'prod',
+queue: {
+  name: 'email-queue',
+  prefix: 'tenant-acme',
+}
+// Result: prod__tenant-acme__email-queue
+```
+
+---
+
+## Searching Tenant Jobs
+
+Search jobs for specific tenants:
+
+```typescript
+// Search jobs in tenant-specific queue
+const tenantJobs = await igniter.jobs.search({
+  queue: {
+    name: 'default',
+    prefix: 'tenant-acme',
+  },
+  filter: {
+    status: ['waiting', 'active'],
+  },
+});
+```
+
+---
+
+## Multi-Tenant Architecture Pattern
+
+### Complete Example
+
+```typescript
+// 1. Create adapter with global prefix
+const jobs = createBullMQAdapter({
+  store: redisStore,
+  globalPrefix: process.env.ENVIRONMENT || 'local',
+});
+
+// 2. Factory function for tenant routers
+function createTenantJobRouter(tenantId: string) {
+  return jobs.router({
+    namespace: `tenant-${tenantId}`,
+    defaultOptions: {
+      queue: {
+        name: 'default',
+        prefix: `tenant-${tenantId}`,
+      },
+    },
+    jobs: {
+      processOrder: jobs.register({
+        name: 'Process Order',
+        input: z.object({ orderId: z.string() }),
+        handler: async ({ payload, context }) => {
+          // Use tenant-specific database
+          const tenantDb = context.getTenantDatabase(tenantId);
+          return await tenantDb.orders.process(payload.orderId);
+        },
+      }),
+      
+      sendEmail: jobs.register({
+        name: 'Send Email',
+        input: z.object({ email: z.string().email() }),
+        handler: async ({ payload }) => {
+          // Job logic
+        },
+      }),
+    },
+  });
+}
+
+// 3. Create routers for tenants
+const tenants = ['acme', 'contoso', 'fabrikam'];
+const tenantRouters = tenants.reduce((acc, tenantId) => {
+  acc[`tenant-${tenantId}`] = createTenantJobRouter(tenantId);
+  return acc;
+}, {} as Record<string, any>);
+
+// 4. Merge all tenant routers
+export const REGISTERED_JOBS = jobs.merge(tenantRouters);
+
+// 5. Use in application
+await igniter.jobs['tenant-acme'].schedule({
+  task: 'processOrder',
+  input: { orderId: '123' },
+});
+```
+
+---
+
+## Security Considerations
+
+### Tenant Isolation
+
+Ensure tenants can't access each other's jobs:
+
+```typescript
+function scheduleTenantJob(tenantId: string, task: string, input: any) {
+  // Validate tenant has access to this job
+  if (!userHasAccessToTenant(tenantId)) {
+    throw new Error('Unauthorized tenant access');
+  }
+  
+  return igniter.jobs[`tenant-${tenantId}`].schedule({
+    task,
+    input,
+  });
+}
+```
+
+### Input Validation
+
+Validate tenant ID in job input:
+
+```typescript
+const tenantJob = jobs.register({
+  name: 'Tenant Task',
+  input: z.object({
+    tenantId: z.string().uuid(), // Validate tenant ID format
+    data: z.string(),
+  }),
+  handler: async ({ payload }) => {
+    // Verify tenant exists and user has access
+    await verifyTenantAccess(payload.tenantId);
+    // Process job
+  },
+});
+```
+
+---
+
+## Best Practices
+
+1. **Use Consistent Prefixes**: Follow a naming pattern across your application
+2. **Validate Tenant IDs**: Always validate tenant IDs before use
+3. **Separate Critical Jobs**: Use dedicated queues for critical tenant operations
+4. **Monitor Per-Tenant**: Track metrics and errors per tenant
+5. **Document Prefix Strategy**: Document your queue naming convention
+6. **Test Isolation**: Verify tenants can't access each other's queues
+7. **Use Environment Prefixes**: Separate environments with global prefixes
+
+---
+
+## Common Patterns
+
+### SaaS Application
+
+```typescript
+// Global prefix for environment
+globalPrefix: process.env.ENVIRONMENT,
+
+// Per-customer prefix
+queue: {
+  prefix: `customer-${customerId}`,
+}
+```
+
+### Multi-Environment Deployment
+
+```typescript
+// Development
+globalPrefix: 'dev',
+
+// Staging
+globalPrefix: 'staging',
+
+// Production
+globalPrefix: 'prod',
+```
+
+### Tenant + Feature Isolation
+
+```typescript
+queue: {
+  name: 'email-queue',
+  prefix: `tenant-${tenantId}-feature-emails`,
+}
+```
+
+---
+
+## Troubleshooting
+
+### Jobs Not Found
+
+**Problem**: Can't find jobs for a tenant
+
+**Solutions**:
+- Verify queue prefix matches exactly
+- Check global prefix configuration
+- Verify tenant ID format
+
+### Wrong Tenant Processing
+
+**Problem**: Jobs processed by wrong tenant
+
+**Solutions**:
+- Verify queue prefix in job definition
+- Check tenant ID validation
+- Review queue naming strategy
+
+---
+
+## Next Steps
+
+- **[Getting Started](/docs/jobs/getting-started)**: Review basic job setup
+- **[Routers](/docs/jobs/routers)**: Learn about organizing jobs
+- **[Workers](/docs/jobs/workers)**: Configure tenant-specific workers
+

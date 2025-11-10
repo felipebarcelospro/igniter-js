@@ -22,10 +22,12 @@ export interface Config {
   discordUrl: string;
 
   // Developer Info
-  developerName: string;
-  developerEmail: string;
-  developerImage: string;
-  developerBio: string;
+  creator: {
+    name: string;
+    url: string;
+    image: string;
+    role: string;
+  };
 
   // Features
   features: Feature[];

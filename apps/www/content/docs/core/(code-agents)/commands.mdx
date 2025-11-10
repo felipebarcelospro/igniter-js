@@ -1,0 +1,253 @@
+---
+title: Commands
+description: Learn how to use slash commands to trigger automated workflows with Lia in your SaaS Boilerplate project.
+---
+
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+import { Accordions, Accordion } from 'fumadocs-ui/components/accordion';
+
+By the end of this guide, you'll understand how to use slash commands with Lia to automate development workflows in your SaaS Boilerplate project.
+
+## What Are Commands in Code Agents?
+
+Commands are custom slash commands (like `/setup` or `/create-command`) that trigger specific automated workflows in AI code agents. When you type a slash command in your chat with Lia, she executes a predefined sequence of actions designed to accomplish complex development tasks.
+
+In modern code agents (Cursor, VS Code Copilot, Claude Code, etc.), commands provide a way to create "shortcuts" for frequently used workflows. Instead of describing what you want to do in natural language each time, you can use a command to trigger a specific, well-defined process.
+
+## How Commands Work
+
+When you interact with Lia, she automatically recognizes slash commands and executes the corresponding workflow. These commands influence:
+
+- **Project Setup**: Environment configuration and dependency management
+- **Code Generation**: Automated creation of components, pages, and features
+- **Quality Assurance**: Testing, validation, and documentation workflows
+- **Development Automation**: Streamlined processes for common tasks
+
+## Commands in SaaS Boilerplate
+
+The SaaS Boilerplate includes a comprehensive set of commands organized in the `.rulesync/commands/` directory. These commands are specifically designed for multi-tenant SaaS applications built with modern web technologies.
+
+### File Structure
+```
+.rulesync/commands/
+├── init.md                 # Personalized project onboarding
+├── setup.md                # Environment configuration and dependencies
+├── create-command.md       # Custom command creation workflow
+├── create-rule.md          # Custom rule creation workflow
+├── docs.md                 # Documentation generation and management
+└── task.md                 # Complete feature development lifecycle
+```
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `/init` | Start personalized project onboarding and setup guidance |
+| `/setup` | Guide through complete environment configuration and dependency installation |
+| `/create-command` | Create new custom slash commands with proper structure and validation |
+| `/create-rule` | Create new rules for training Lia and automating workflows |
+| `/docs` | Generate and manage project documentation automatically |
+| `/task` | Guide through complete feature development lifecycle from planning to deployment |
+
+## Using Commands
+
+To use a command, simply type it in your chat with Lia:
+
+<Steps>
+
+<Step>
+
+### Start a chat with Lia
+
+Open your preferred code editor and start a chat with Lia.
+
+</Step>
+
+<Step>
+
+### Type the slash command
+
+Enter the command you want to execute:
+
+```
+/setup
+```
+
+</Step>
+
+<Step>
+
+### Follow the guidance
+
+Lia will guide you through any required prompts and questions.
+
+</Step>
+
+<Step>
+
+### Review results
+
+Once complete, review the generated files, code changes, or other outputs.
+
+</Step>
+
+</Steps>
+
+## Creating Custom Commands
+
+To create a new custom command for your project, you have two options: using the `/create-command` command for guided creation, or manually creating the command file.
+
+<Tabs items={["Via Command", "Manual Creation"]} defaultIndex={0}>
+<Tab>
+
+Use the `/create-command` command in your chat with Lia to create a new command interactively.
+
+<Steps>
+
+<Step>
+
+### Start the command
+
+In your chat with Lia, type:
+
+```
+/create-command
+```
+
+</Step>
+
+<Step>
+
+### Define the command details
+
+Lia will guide you through:
+
+- **Command name**: The slash command (e.g., `/my-custom-workflow`)
+- **Purpose**: What the command should accomplish
+- **Workflow steps**: The sequence of actions to execute
+- **Validation rules**: How to ensure the command works correctly
+
+</Step>
+
+<Step>
+
+### Test and finalize
+
+Lia will create the command file and allow you to test it before finalizing.
+
+</Step>
+
+</Steps>
+
+</Tab>
+<Tab>
+
+Create the command file manually in the `.rulesync/commands/` directory.
+
+<Steps>
+
+<Step>
+
+### Create the command file
+
+Create a new Markdown file in `.rulesync/commands/` with a descriptive name:
+
+```bash
+touch .rulesync/commands/my-custom-command.md
+```
+
+</Step>
+
+<Step>
+
+### Add the command structure
+
+Use this template as a starting point:
+
+```yaml
+---
+description: "Custom command for [specific purpose]"
+---
+
+# /my-custom-command
+
+## Overview
+[Explain what this command does and when to use it]
+
+## Workflow Steps
+1. [Step 1 description]
+2. [Step 2 description]
+3. [Additional steps as needed]
+
+## Validation
+[How to verify the command worked correctly]
+
+## Integration Points
+[How this command works with other commands or rules]
+```
+
+</Step>
+
+<Step>
+
+### Customize the command
+
+Replace the placeholders with your specific requirements:
+
+- Update the `description` in the frontmatter
+- Define clear workflow steps that Lia can follow
+- Include validation criteria
+- Document integration points with existing commands
+
+</Step>
+
+</Steps>
+
+</Tab>
+</Tabs>
+
+## Troubleshooting
+
+<Accordions type="multiple">
+<Accordion title="Command Not Recognized">
+**Problem:** Lia doesn't recognize the slash command you typed.
+
+**Solution:**
+- Ensure you're in an active chat with Lia in your code editor
+- Check the command syntax (include the `/` at the beginning)
+- Verify the command exists in the table above
+- Make sure you're using the correct command name without typos
+</Accordion>
+
+<Accordion title="Workflow Issues">
+**Problem:** A command workflow fails or doesn't complete properly.
+
+**Solution:**
+- Follow Lia's guidance step by step without skipping prompts
+- Answer questions clearly and completely
+- Approve automated actions when prompted
+- Check for error messages and address them
+- Contact support if workflows fail repeatedly
+</Accordion>
+
+<Accordion title="Command Not Working as Expected">
+**Problem:** The command runs but produces unexpected results.
+
+**Solution:**
+- Verify you're in the correct project directory
+- Check that all prerequisites are met (dependencies, environment setup)
+- Review the command output for specific error messages
+- Try running the command again after fixing any issues
+- Check the project documentation for command-specific requirements
+</Accordion>
+</Accordions>
+
+## Integration with Rules
+
+Commands work seamlessly with rules to provide comprehensive automation:
+
+- **Setup Commands**: Use environment rules for configuration
+- **Development Commands**: Apply coding standards and patterns
+- **Testing Commands**: Follow validation and quality rules
+- **Documentation Commands**: Use documentation standards

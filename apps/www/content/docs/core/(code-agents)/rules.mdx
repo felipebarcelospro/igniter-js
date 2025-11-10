@@ -1,0 +1,267 @@
+---
+title: Rules
+description: Learn how to use rules to customize Lia's behavior and ensure consistent development practices in your SaaS Boilerplate project.
+---
+
+By the end of this guide, you'll understand how rules work in modern code agents and how to use them to customize Lia's behavior for your Igniter.js project.
+
+## What Are Rules in Code Agents?
+
+Rules are configuration files that customize how AI code agents like Lia behave in your project. They define coding standards, development patterns, tool usage guidelines, and behavioral constraints that ensure consistent, high-quality development practices.
+
+In modern code agents (Cursor, VS Code Copilot, Claude Code, etc.), rules serve as a "training context" that guides the AI's decision-making process. Instead of relying only on the AI's general training data, rules provide project-specific knowledge and constraints.
+
+## How Rules Work in Code Agents
+
+When you interact with Lia, she automatically loads and applies relevant rules from your project. These rules influence:
+
+- **Code Generation**: What patterns and conventions to follow
+- **Tool Selection**: Which tools to use for specific tasks
+- **Quality Standards**: What constitutes acceptable code quality
+- **Behavioral Guidelines**: How to approach problem-solving
+- **Project Context**: Understanding your specific requirements and constraints
+
+## Rules in Igniter.js
+
+The Igniter.js includes a comprehensive set of rules organized in the `.rulesync/rules/` directory. These rules are specifically designed for multi-tenant SaaS applications built with modern web technologies.
+
+### File Structure
+```
+.rulesync/rules/
+├── auth.md                 # Authentication and authorization patterns
+├── billing.md              # Billing and subscription management
+├── browser.md              # Browser automation protocols
+├── data-table.md           # Data table component usage
+├── delegation.md           # Task delegation protocols
+├── docs.md                 # Documentation standards
+├── email.md                # Email template creation
+├── form.md                 # Form building patterns
+├── frontend.md             # Frontend development workflow
+├── igniter-advanced-features.md # Advanced Igniter.js features
+├── igniter-client.md       # Igniter.js client usage
+├── igniter-controllers.md  # Controller development patterns
+├── igniter-patterns.md     # Igniter.js development standards
+├── igniter-procedures.md   # Procedure creation guidelines
+├── notifications.md        # Notification system usage
+├── og-image.md             # Dynamic OG image generation
+├── overview.md             # Project overview and context
+├── page.md                 # Page creation guidelines
+├── plugin-manager.md       # Plugin manager usage
+├── seo.md                  # SEO component usage
+├── testing.md              # API testing and validation
+└── tools.md                # Custom tools usage
+```
+
+### Rule File Format
+Each rule file follows a consistent Markdown format with frontmatter:
+
+```yaml
+---
+description: "Brief description of the rule's purpose"
+targets: ["file patterns or scopes this rule applies to"]
+globs: ["**/*"]  # File patterns to match
+---
+# Rule Title
+
+Rule content with detailed guidelines, protocols, and examples...
+```
+
+### Creating Custom Rules
+
+To create a new custom rule for your project, you have two options: using the `/create-rule` command for guided creation, or manually creating the rule file. After creating the rule, you'll need to synchronize it with your code agent using the Igniter.js CLI.
+
+<Tabs items={["Via Command", "Manual Creation"]} defaultIndex={0}>
+<Tab>
+
+Use the `/create-rule` command in your chat with Lia to create a new rule interactively.
+
+<Steps>
+
+<Step>
+
+### Start the command
+
+In your chat with Lia, type:
+
+```
+/create-rule
+```
+
+</Step>
+
+<Step>
+
+### Follow the prompts
+
+Lia will guide you through creating the rule:
+
+- **Rule name**: A descriptive name for your rule
+- **Purpose**: What the rule should accomplish
+- **Target files**: Which file patterns the rule should apply to
+- **Guidelines**: Specific instructions for Lia to follow
+
+</Step>
+
+<Step>
+
+### Review and approve
+
+Lia will show you the generated rule file and ask for your approval before creating it.
+
+</Step>
+
+<Step>
+
+### Sincronize new rule with your code agent
+
+Use the `--targets` flag to specify which code agents you want to configure:
+
+```bash
+npx @igniter-js/cli@latest lia generate --targets copilot,cursor,claudecode
+```
+
+Available targets: `copilot`, `cursor`, `claudecode`.
+
+</Step>
+
+<Step>
+
+### Verify synchronization
+
+The CLI will confirm successful synchronization for each specified agent. Your new rule is now active and will be applied in future interactions with Lia. **Just start a new session and observe the changes.**
+
+</Step>
+
+</Steps>
+
+</Tab>
+<Tab>
+
+Create the rule file manually in the `.rulesync/rules/` directory.
+
+<Steps>
+
+<Step>
+
+### Create the rule file
+
+Create a new Markdown file in `.rulesync/rules/` with a descriptive name:
+
+```bash
+touch .rulesync/rules/my-custom-rule.md
+```
+
+</Step>
+
+<Step>
+
+### Add the frontmatter and content
+
+Use this template as a starting point:
+
+```yaml
+---
+description: "Custom rule for [specific purpose]"
+targets: ["file patterns or scopes"]
+globs: ["**/*.{ts,tsx}"]
+---
+
+# Custom Rule Title
+
+## Overview
+[Explain what this rule does and why it's needed]
+
+## Guidelines
+[Specific instructions for Lia to follow]
+
+## Examples
+[Code examples showing the rule in action]
+
+## Integration Points
+[How this rule works with other rules or tools]
+```
+
+</Step>
+
+<Step>
+
+### Customize the rule
+
+Replace the placeholders with your specific requirements:
+
+- Update the `description`, `targets`, and `globs` in the frontmatter
+- Write clear guidelines that Lia can follow
+- Include practical examples from your codebase
+- Document how this rule integrates with existing ones
+
+</Step>
+
+<Step>
+
+### Sincronize new rule with your code agent
+
+Use the `--targets` flag to specify which code agents you want to configure:
+
+```bash
+npx @igniter-js/cli@latest lia generate --targets copilot,cursor,claudecode
+```
+
+Available targets: `copilot`, `cursor`, `claudecode`.
+
+</Step>
+
+<Step>
+
+### Verify synchronization
+
+The CLI will confirm successful synchronization for each specified agent. Your new rule is now active and will be applied in future interactions with Lia. **Just start a new session and observe the changes.**
+
+</Step>
+
+</Steps>
+
+</Tab>
+</Tabs>
+
+## Troubleshooting
+
+<Accordions type="multiple">
+<Accordion title="Rule Not Applied">
+**Problem:** Lia isn't following a specific rule.
+
+**Solution:**
+- Check if the rule file exists in `.rulesync/rules/`
+- Verify the glob patterns match your files
+- Ensure the rule syntax is correct
+- Check for conflicting rules
+</Accordion>
+
+<Accordion title="Rule Conflicts">
+**Problem:** Multiple rules provide conflicting guidance.
+
+**Solution:**
+- Review rule specificity and scope
+- Reorganize rules to avoid overlap
+- Document conflict resolution decisions
+- Consider merging related rules
+</Accordion>
+
+<Accordion title="Performance Issues">
+**Problem:** Rules slow down Lia's responses.
+
+**Solution:**
+- Narrow glob patterns to specific file types
+- Reduce the number of active rules
+- Optimize rule evaluation logic
+- Cache frequently used rule lookups
+</Accordion>
+</Accordions>
+
+## Integration with Commands
+
+Rules work seamlessly with slash commands to provide comprehensive automation:
+
+- **Setup Commands**: Use environment rules for configuration
+- **Development Commands**: Apply coding standards and patterns
+- **Testing Commands**: Follow validation and quality rules
+- **Documentation Commands**: Use documentation standards

@@ -1,0 +1,558 @@
+---
+title: "Introducing Igniter.js Templates: Production-Ready Starters for Every Stack"
+description: "Skip the boilerplate and start building. Our curated collection of production-ready templates gives you the perfect foundation for Next.js, React, Express, Bun, Deno, and more—all with best practices baked in."
+tags: ["announcement", "templates", "developer-experience"]
+---
+
+Starting a new project shouldn't mean spending hours configuring build tools, setting up databases, implementing authentication, and establishing project structure. Yet that's exactly what developers face every time they begin a new application.
+
+**Igniter.js Templates** eliminate this friction. Our curated collection of production-ready starter templates provides battle-tested foundations that follow industry best practices and leverage the full power of the Igniter.js ecosystem.
+
+## The Problem: Setup Friction Kills Momentum
+
+Every experienced developer knows the pain:
+
+<Steps>
+  <Step>
+    ### Choose Your Stack
+    Research and decide on frameworks, libraries, and tools
+  </Step>
+
+  <Step>
+    ### Configure Build Tools
+    Set up TypeScript, bundlers, linters, formatters
+  </Step>
+
+  <Step>
+    ### Database Setup
+    Configure ORM, migrations, connection pooling
+  </Step>
+
+  <Step>
+    ### Project Structure
+    Establish folder organization and naming conventions
+  </Step>
+
+  <Step>
+    ### Development Environment
+    Docker compose, environment variables, local services
+  </Step>
+
+  <Step>
+    ### Actually Start Coding
+    Finally begin building features (hours or days later)
+  </Step>
+</Steps>
+
+By the time you're ready to write actual business logic, your initial excitement has often faded. **What if you could skip straight to building features?**
+
+## The Solution: Production-Ready Templates
+
+Igniter.js Templates are not toy examples or minimal boilerplates. They're comprehensive, production-grade starter projects that include:
+
+✅ **Complete Type Safety**: End-to-end TypeScript with strict mode enabled  
+✅ **Database Integration**: Prisma ORM pre-configured with PostgreSQL  
+✅ **Modern Tooling**: Latest versions of all dependencies  
+✅ **Docker Development**: One-command local environment setup  
+✅ **Best Practices**: Established patterns for scaling  
+✅ **Feature Examples**: Real implementations to learn from  
+✅ **Testing Setup**: Vitest configured and ready  
+✅ **CI/CD Ready**: GitHub Actions workflows included
+
+## Template Collection
+
+Our initial collection covers the most popular stacks and use cases:
+
+### Full-Stack Applications
+
+<Callout type="info" title="Complete Solutions">
+These templates include both frontend and backend, fully integrated with Igniter.js for end-to-end type safety.
+</Callout>
+
+#### Next.js Full-Stack App
+
+The most comprehensive template, perfect for building modern web applications.
+
+**Stack**: Next.js 15, React 19, Prisma, PostgreSQL, Redis, BullMQ, Tailwind CSS
+
+**Best For**:
+- SaaS applications
+- Content-driven websites
+- Admin dashboards
+- Customer portals
+
+**Key Features**:
+- App Router with Server Components
+- Real-time updates via SSE
+- Background job processing
+- Authentication ready
+- shadcn/ui components
+
+```bash
+npx @igniter-js/cli init my-app --template nextjs
+```
+
+[View Template Details](/templates/starter-nextjs)
+
+---
+
+#### TanStack Start Full-Stack App
+
+Modern React framework with powerful file-based routing and data fetching.
+
+**Stack**: TanStack Start, React 19, Prisma, PostgreSQL, Tailwind CSS
+
+**Best For**:
+- SPAs with complex routing
+- Apps requiring fine-grained data loading
+- Projects prioritizing performance
+
+**Key Features**:
+- File-based routing
+- Automatic code splitting
+- Optimized data loading
+- Type-safe navigation
+
+```bash
+npx @igniter-js/cli init my-app --template tanstack-start
+```
+
+[View Template Details](/templates/starter-tanstack-start)
+
+---
+
+#### Bun + React SPA
+
+Lightning-fast development with Bun's revolutionary runtime.
+
+**Stack**: Bun, React 18, Prisma, PostgreSQL, Tailwind CSS
+
+**Best For**:
+- Single-page applications
+- Projects prioritizing speed
+- Node.js alternative seekers
+
+**Key Features**:
+- Instant hot reload with Bun
+- Native TypeScript support
+- Minimal configuration
+- 3x faster install times
+
+```bash
+npx @igniter-js/cli init my-app --template bun-react
+```
+
+[View Template Details](/templates/starter-bun-react-app)
+
+### Backend APIs
+
+<Callout type="success" title="Framework Agnostic">
+Build APIs that work with any frontend framework—React, Vue, Svelte, Angular, or mobile applications.
+</Callout>
+
+#### Express REST API
+
+The classic Node.js framework, enhanced with Igniter.js type safety.
+
+**Stack**: Express.js, TypeScript, Prisma, PostgreSQL
+
+**Best For**:
+- Traditional REST APIs
+- Microservices
+- Teams familiar with Express
+- Projects requiring Express middleware
+
+**Key Features**:
+- Express ecosystem compatibility
+- Middleware support
+- Well-documented patterns
+- Easy deployment
+
+```bash
+npx @igniter-js/cli init my-api --template express-api
+```
+
+[View Template Details](/templates/starter-express-rest-api)
+
+---
+
+#### Bun REST API
+
+Modern backend powered by Bun's performance-first runtime.
+
+**Stack**: Bun, TypeScript, Prisma, PostgreSQL
+
+**Best For**:
+- High-performance APIs
+- WebSocket-heavy applications
+- Modern backend architectures
+
+**Key Features**:
+- Native WebSocket support
+- Built-in testing framework
+- Fast cold starts
+- Minimal dependencies
+
+```bash
+npx @igniter-js/cli init my-api --template bun-api
+```
+
+[View Template Details](/templates/starter-bun-rest-api)
+
+---
+
+#### Deno REST API
+
+Secure-by-default runtime with modern JavaScript features.
+
+**Stack**: Deno, TypeScript, Prisma, PostgreSQL
+
+**Best For**:
+- Security-focused applications
+- Edge deployments
+- Teams wanting modern defaults
+
+**Key Features**:
+- Secure by default
+- Native TypeScript
+- Standard library included
+- Deno Deploy ready
+
+```bash
+npx @igniter-js/cli init my-api --template deno-api
+```
+
+[View Template Details](/templates/starter-deno-rest-api)
+
+## Consistent Architecture Across Templates
+
+Every template follows the same proven architecture, making it easy to switch between stacks or apply patterns across projects:
+
+### Feature-Based Organization
+
+All templates use a scalable, feature-based folder structure:
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="features">
+      <Folder name="auth">
+        <File name="auth.controller.ts" />
+        <File name="auth.procedure.ts" />
+        <File name="auth.schema.ts" />
+      </Folder>
+      <Folder name="users">
+        <File name="users.controller.ts" />
+        <File name="users.procedure.ts" />
+        <File name="users.schema.ts" />
+      </Folder>
+    </Folder>
+    <Folder name="lib">
+      <File name="database.ts" />
+      <File name="logger.ts" />
+    </Folder>
+    <File name="igniter.ts" />
+    <File name="igniter.router.ts" />
+    <File name="igniter.client.ts" />
+  </Folder>
+</Files>
+
+### Shared Conventions
+
+**Controller Pattern**: Type-safe API endpoints with automatic validation
+
+```typescript
+export const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    list: igniter.query({
+      path: '/',
+      handler: async ({ context, response }) => {
+        const users = await context.db.user.findMany()
+        return response.success({ users })
+      }
+    })
+  }
+})
+```
+
+**Procedure Pattern**: Reusable business logic and middleware
+
+```typescript
+export const auth = igniter.procedure({
+  handler: async (options, { context, response }) => {
+    const user = await getCurrentUser(context)
+    if (options.required && !user) {
+      return response.unauthorized()
+    }
+    return { auth: { user } }
+  }
+})
+```
+
+**Schema Pattern**: Centralized validation with Zod
+
+```typescript
+export const createUserSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email()
+})
+```
+
+## Getting Started: 2-Minute Setup
+
+Every template includes comprehensive setup instructions, but the basics are the same:
+
+<Steps>
+  <Step>
+    ### Initialize Project
+    
+    <Tabs items={['Interactive', 'Direct']} groupId="init-method">
+      <Tab value="Interactive">
+        ```bash
+        npx @igniter-js/cli init my-app
+        # Follow prompts to select template
+        ```
+      </Tab>
+      
+      <Tab value="Direct">
+        ```bash
+        npx @igniter-js/cli init my-app --template nextjs
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step>
+    ### Install Dependencies
+    
+    <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+      <Tab value="npm">
+        ```bash
+        cd my-app
+        npm install
+        ```
+      </Tab>
+      
+      <Tab value="pnpm">
+        ```bash
+        cd my-app
+        pnpm install
+        ```
+      </Tab>
+      
+      <Tab value="yarn">
+        ```bash
+        cd my-app
+        yarn install
+        ```
+      </Tab>
+      
+      <Tab value="bun">
+        ```bash
+        cd my-app
+        bun install
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step>
+    ### Start Local Services
+    
+    ```bash
+    # Start PostgreSQL and Redis with Docker
+    docker-compose up -d
+    ```
+  </Step>
+
+  <Step>
+    ### Configure Environment
+    
+    ```bash
+    # Copy example environment file
+    cp .env.example .env
+    
+    # Edit .env with your settings
+    # DATABASE_URL and REDIS_URL are pre-configured for Docker
+    ```
+  </Step>
+
+  <Step>
+    ### Initialize Database
+    
+    ```bash
+    npx prisma db push
+    ```
+  </Step>
+
+  <Step>
+    ### Start Development Server
+    
+    ```bash
+    npm run dev
+    ```
+    
+    Your application is now running at `http://localhost:3000`
+  </Step>
+</Steps>
+
+<Callout type="success" title="Ready to Build">
+In under 2 minutes, you have a fully functional application with database, caching, type-safe API, and modern frontend—all working together.
+</Callout>
+
+## What's Included in Every Template
+
+### Development Experience
+
+**Instant Feedback**: Hot reload on every change  
+**Type Safety**: Full TypeScript coverage with strict mode  
+**Code Quality**: ESLint and Prettier pre-configured  
+**Testing**: Vitest setup with example tests  
+**Debugging**: VS Code launch configurations included
+
+### Production Readiness
+
+**Environment Management**: `.env` files with validation  
+**Error Handling**: Comprehensive error boundaries  
+**Logging**: Structured logging setup  
+**Security**: CORS, rate limiting, input validation  
+**Performance**: Built-in caching strategies
+
+### Documentation
+
+**README**: Detailed setup and usage instructions  
+**AGENT.md**: AI assistant integration guide  
+**Code Comments**: Well-documented examples  
+**Architecture Docs**: Explanation of patterns and decisions
+
+## Contributing Your Own Template
+
+We welcome community contributions! Share your expertise by creating templates for new frameworks, use cases, or technology stacks.
+
+<Steps>
+  <Step>
+    ### Fork and Clone
+    
+    ```bash
+    git clone https://github.com/felipebarcelospro/igniter-js.git
+    cd igniter-js
+    ```
+  </Step>
+
+  <Step>
+    ### Create Template Directory
+    
+    ```bash
+    mkdir apps/starter-your-template-name
+    cd apps/starter-your-template-name
+    ```
+  </Step>
+
+  <Step>
+    ### Build Your Template
+    
+    Include these essentials:
+    - Comprehensive `README.md` with setup instructions
+    - `AGENT.md` describing template purpose and features
+    - TypeScript with strict mode enabled
+    - Error handling and validation throughout
+    - Security best practices
+    - Example features demonstrating patterns
+  </Step>
+
+  <Step>
+    ### Add Documentation
+    
+    Create template documentation page:
+    ```bash
+    mkdir apps/docs/content/templates/
+    # Create MDX file with frontmatter and details
+    ```
+  </Step>
+
+  <Step>
+    ### Test Thoroughly
+    
+    Verify:
+    - Clean installation process
+    - All dependencies install correctly
+    - Development server starts without errors
+    - Build process completes successfully
+    - TypeScript compilation passes
+    - Tests run and pass
+  </Step>
+
+  <Step>
+    ### Submit Pull Request
+    
+    Include:
+    - Detailed description of template features
+    - Target use cases and audience
+    - Any unique setup requirements
+    - Screenshots or demo links
+  </Step>
+</Steps>
+
+<Callout type="info" title="Quality Standards">
+We review all template submissions to ensure they meet our quality standards and provide genuine value to the community. Thank you for helping make Igniter.js better!
+</Callout>
+
+## Community Templates
+
+Beyond our official templates, the community is building amazing starters for specific use cases:
+
+- **E-commerce Platform**: Full shopping cart, payments, and inventory
+- **SaaS Boilerplate**: Multi-tenancy, billing, and user management
+- **Mobile API**: Optimized for React Native and Flutter apps
+- **Real-Time Chat**: WebSocket and SSE implementation
+- **Analytics Dashboard**: Data visualization and reporting
+
+Browse community templates and submit your own at [igniterjs.com/templates/community](/templates/community)
+
+## What's Next?
+
+We're continuously expanding our template collection based on community needs. Upcoming templates include:
+
+- **Monorepo Starter**: Turborepo setup with shared packages
+- **GraphQL API**: Apollo Server integration
+- **Mobile Full-Stack**: React Native with Igniter.js backend
+- **Electron Desktop**: Cross-platform desktop applications
+- **Chrome Extension**: Browser extension with Igniter.js API
+
+<Callout type="tip" title="Vote on Priorities">
+Help us prioritize by voting on template requests in our [GitHub Discussions](https://github.com/felipebarcelospro/igniter-js/discussions).
+</Callout>
+
+## Try It Today
+
+Stop spending hours on setup. Start building features in minutes with Igniter.js Templates:
+
+```bash
+# Choose your adventure
+npx @igniter-js/cli init my-awesome-app
+
+# Get coding immediately
+cd my-awesome-app
+npm run dev
+```
+
+Join thousands of developers who are already building faster with production-ready templates.
+
+## Resources
+
+- [Template Gallery](/templates)
+- [CLI Documentation](/docs/cli)
+- [Template Architecture Guide](/docs/templates/architecture)
+- [Contributing Guide](https://github.com/felipebarcelospro/igniter-js/blob/main/CONTRIBUTING.md)
+
+## Community
+
+Share what you're building and get help from the community:
+
+- [Discord Community](https://discord.gg/igniterjs)
+- [GitHub Discussions](https://github.com/felipebarcelospro/igniter-js/discussions)
+- [Twitter](https://twitter.com/igniterjs)
+
+---
+
+Your next great project is just one command away. Choose a template and start building today.

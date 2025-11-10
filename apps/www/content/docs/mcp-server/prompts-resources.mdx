@@ -1,0 +1,539 @@
+---
+title: Prompts & Resources
+description: Use prompts and resources to provide AI agents with structured guidance and data access.
+---
+
+## Overview
+
+MCP supports two additional concepts beyond tools:
+
+- **Prompts**: Pre-defined prompt templates that AI agents can use to guide interactions
+- **Resources**: Read-only data sources that AI agents can access
+
+---
+
+## Prompts
+
+Prompts are pre-defined message templates that help AI agents understand how to interact with your system. They're useful for:
+
+- Debugging workflows
+- Multi-step processes
+- Complex instructions
+- Context-aware guidance
+
+---
+
+## Adding Prompts
+
+### Builder Pattern
+
+```typescript
+import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server';
+import { z } from 'zod';
+
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .addPrompt({
+    name: 'debugUser',
+    description: 'Debug user account issues',
+    args: {
+      userId: z.string().uuid(),
+    },
+    handler: async (args, context) => {
+      // context is automatically typed from your router!
+      return {
+        messages: [{
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `Please debug the account for user ${args.userId}. ` +
+                  `Check their permissions, recent activity, and any error logs. ` +
+                  `If you find issues, use the appropriate tools to fix them.`
+          }
+        }]
+      };
+    },
+  })
+  .build();
+```
+
+### Function API
+
+```typescript
+import { createMcpAdapter } from '@igniter-js/adapter-mcp-server';
+import { z } from 'zod';
+
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  prompts: {
+    custom: [{
+      name: 'debugUser',
+      description: 'Debug user account issues',
+      args: {
+        userId: z.string().uuid(),
+      },
+      handler: async (args, context) => {
+        return {
+          messages: [{
+            role: 'user',
+            content: {
+              type: 'text',
+              text: `Debug user ${args.userId}`
+            }
+          }]
+        };
+      }
+    }]
+  }
+});
+```
+
+---
+
+## Prompt Structure
+
+### Required Fields
+
+**`name`** (string): Prompt name
+
+**`description`** (string): Prompt description
+
+**`args`** (ZodRawShape, optional): Arguments schema
+
+**`handler`** (function): Function that returns prompt messages
+
+---
+
+## Prompt Handler
+
+The handler returns an array of messages:
+
+```typescript
+handler: async (args, context) => {
+  return {
+    messages: [
+      {
+        role: 'user',
+        content: {
+          type: 'text',
+          text: 'Your prompt text here'
+        }
+      },
+      // You can include multiple messages
+      {
+        role: 'assistant',
+        content: {
+          type: 'text',
+          text: 'Previous context or response'
+        }
+      }
+    ]
+  };
+}
+```
+
+---
+
+## Practical Prompt Examples
+
+### Example 1: Debugging Workflow
+
+```typescript
+.addPrompt({
+  name: 'troubleshootOrder',
+  description: 'Troubleshoot an order that failed to process',
+  args: {
+    orderId: z.string().uuid(),
+  },
+  handler: async (args, context) => {
+    return {
+      messages: [{
+        role: 'user',
+        content: {
+          type: 'text',
+          text: `Order ${args.orderId} failed to process. ` +
+                `Please investigate by:\n` +
+                `1. Checking the order status using orders.getById\n` +
+                `2. Reviewing payment information using payments.getByOrderId\n` +
+                `3. Checking for error logs using logs.search with orderId filter\n` +
+                `4. If payment failed, retry using payments.retry\n` +
+                `5. Report findings and any actions taken`
+        }
+      }]
+    };
+  },
+})
+```
+
+### Example 2: Multi-Step Analysis
+
+```typescript
+.addPrompt({
+  name: 'analyzeUserActivity',
+  description: 'Perform comprehensive user activity analysis',
+  args: {
+    userId: z.string().uuid(),
+    dateRange: z.object({
+      start: z.coerce.date(),
+      end: z.coerce.date(),
+    }),
+  },
+  handler: async (args, context) => {
+    return {
+      messages: [{
+        role: 'user',
+        content: {
+          type: 'text',
+          text: `Analyze user ${args.userId}'s activity from ` +
+                `${args.dateRange.start.toISOString()} to ` +
+                `${args.dateRange.end.toISOString()}.\n\n` +
+                `Steps:\n` +
+                `1. Get user details with users.getById\n` +
+                `2. Get activity logs with logs.getByUser for the date range\n` +
+                `3. Get orders with orders.getByUser for the date range\n` +
+                `4. Calculate metrics: total orders, total spent, most active day\n` +
+                `5. Identify patterns or anomalies\n` +
+                `6. Provide a summary report`
+        }
+      }]
+    };
+  },
+})
+```
+
+---
+
+## Resources
+
+Resources are read-only data sources that AI agents can access. They're useful for:
+
+- Configuration files
+- Documentation
+- Reference data
+- Static content
+
+---
+
+## Adding Resources
+
+### Builder Pattern
+
+```typescript
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .addResource({
+    uri: 'config://app/settings',
+    name: 'Application Settings',
+    description: 'Current application configuration',
+    mimeType: 'application/json',
+    handler: async (context) => {
+      // context is automatically typed!
+      const settings = await getAppSettings();
+      return {
+        contents: [{
+          uri: 'config://app/settings',
+          mimeType: 'application/json',
+          text: JSON.stringify(settings, null, 2)
+        }]
+      };
+    }
+  })
+  .build();
+```
+
+### Function API
+
+```typescript
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  resources: {
+    custom: [{
+      uri: 'config://app/settings',
+      name: 'Application Settings',
+      description: 'Current application configuration',
+      mimeType: 'application/json',
+      handler: async (context) => {
+        const settings = await getAppSettings();
+        return {
+          contents: [{
+            uri: 'config://app/settings',
+            mimeType: 'application/json',
+            text: JSON.stringify(settings, null, 2)
+          }]
+        };
+      }
+    }]
+  }
+});
+```
+
+---
+
+## Resource Structure
+
+### Required Fields
+
+**`uri`** (string): Resource URI (use schemes like `config://`, `file://`, `db://`)
+
+**`name`** (string): Resource name
+
+**`description`** (string): Resource description
+
+**`mimeType`** (string): MIME type of the resource content
+
+**`handler`** (function): Function that returns resource contents
+
+---
+
+## Resource Handler
+
+The handler returns resource contents:
+
+```typescript
+handler: async (context) => {
+  // Fetch or generate resource content
+  const content = await getResourceContent();
+  
+  return {
+    contents: [{
+      uri: 'config://app/settings',
+      mimeType: 'application/json',
+      text: JSON.stringify(content, null, 2)
+    }]
+  };
+}
+```
+
+---
+
+## Practical Resource Examples
+
+### Example 1: Application Configuration
+
+```typescript
+.addResource({
+  uri: 'config://app/settings',
+  name: 'Application Settings',
+  description: 'Current application configuration',
+  mimeType: 'application/json',
+  handler: async (context) => {
+    const settings = {
+      version: process.env.APP_VERSION,
+      environment: process.env.NODE_ENV,
+      features: {
+        enableFeatureX: process.env.FEATURE_X === 'true',
+        enableFeatureY: process.env.FEATURE_Y === 'true',
+      },
+      limits: {
+        maxUsers: parseInt(process.env.MAX_USERS || '1000'),
+        maxRequestsPerMinute: parseInt(process.env.MAX_RPM || '100'),
+      }
+    };
+    
+    return {
+      contents: [{
+        uri: 'config://app/settings',
+        mimeType: 'application/json',
+        text: JSON.stringify(settings, null, 2)
+      }]
+    };
+  }
+})
+```
+
+### Example 2: API Documentation
+
+```typescript
+.addResource({
+  uri: 'docs://api/reference',
+  name: 'API Reference',
+  description: 'API endpoint documentation',
+  mimeType: 'text/markdown',
+  handler: async (context) => {
+    const docs = `# API Reference
+
+## Users Endpoints
+
+### GET /users
+List all users
+
+### GET /users/:id
+Get user by ID
+
+### POST /users
+Create a new user
+
+## Products Endpoints
+
+### GET /products
+List all products
+
+### GET /products/:id
+Get product by ID
+`;
+    
+    return {
+      contents: [{
+        uri: 'docs://api/reference',
+        mimeType: 'text/markdown',
+        text: docs
+      }]
+    };
+  }
+})
+```
+
+### Example 3: Database Schema
+
+```typescript
+.addResource({
+  uri: 'db://schema/users',
+  name: 'Users Table Schema',
+  description: 'Database schema for users table',
+  mimeType: 'application/json',
+  handler: async (context) => {
+    const schema = {
+      table: 'users',
+      columns: [
+        { name: 'id', type: 'uuid', primaryKey: true },
+        { name: 'email', type: 'varchar(255)', unique: true, nullable: false },
+        { name: 'name', type: 'varchar(255)', nullable: false },
+        { name: 'created_at', type: 'timestamp', default: 'now()' },
+        { name: 'updated_at', type: 'timestamp', default: 'now()' },
+      ],
+      indexes: [
+        { columns: ['email'], unique: true },
+        { columns: ['created_at'] },
+      ]
+    };
+    
+    return {
+      contents: [{
+        uri: 'db://schema/users',
+        mimeType: 'application/json',
+        text: JSON.stringify(schema, null, 2)
+      }]
+    };
+  }
+})
+```
+
+---
+
+## URI Schemes
+
+Use consistent URI schemes for better organization:
+
+- `config://` - Configuration resources
+- `docs://` - Documentation resources
+- `db://` - Database resources
+- `file://` - File-based resources
+- `api://` - API metadata resources
+
+---
+
+## Multiple Prompts and Resources
+
+You can add multiple prompts and resources:
+
+**Builder Pattern:**
+
+```typescript
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .addPrompt({ /* prompt 1 */ })
+  .addPrompt({ /* prompt 2 */ })
+  .addResource({ /* resource 1 */ })
+  .addResource({ /* resource 2 */ })
+  .build();
+```
+
+**Function API:**
+
+```typescript
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  prompts: {
+    custom: [
+      { /* prompt 1 */ },
+      { /* prompt 2 */ },
+    ]
+  },
+  resources: {
+    custom: [
+      { /* resource 1 */ },
+      { /* resource 2 */ },
+    ]
+  }
+});
+```
+
+---
+
+## Best Practices
+
+### 1. Clear Descriptions
+
+Provide clear, actionable descriptions:
+
+```typescript
+// ✅ Good
+{
+  name: 'debugUser',
+  description: 'Debug user account issues by checking permissions, activity logs, and recent errors',
+}
+
+// ❌ Bad
+{
+  name: 'debug',
+  description: 'Debug stuff',
+}
+```
+
+### 2. Use Schemas for Prompts
+
+Even though prompts can be argument-less, use schemas when appropriate:
+
+```typescript
+args: {
+  userId: z.string().uuid().describe('User ID to debug'),
+  includeHistory: z.boolean().default(false).describe('Include full history'),
+}
+```
+
+### 3. Keep Resources Updated
+
+Resources should reflect current state:
+
+```typescript
+handler: async (context) => {
+  // ✅ Fetch fresh data
+  const settings = await getCurrentSettings();
+  
+  // ❌ Don't use stale cached data
+  // const settings = cachedSettings;
+  
+  return { contents: [...] };
+}
+```
+
+### 4. Use Appropriate MIME Types
+
+Choose correct MIME types for resources:
+
+- `application/json` - JSON data
+- `text/markdown` - Markdown documentation
+- `text/plain` - Plain text
+- `application/xml` - XML data
+
+---
+
+## Next Steps
+
+- Learn about [OAuth](/docs/mcp-server/oauth) for securing your server
+- Explore [Event Handlers](/docs/mcp-server/events) for monitoring
+- Check out [Best Practices](/docs/mcp-server/best-practices)
+

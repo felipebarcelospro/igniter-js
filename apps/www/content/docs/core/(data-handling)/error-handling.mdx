@@ -1,0 +1,682 @@
+---
+title: Error Handling
+description: Master error handling in Igniter.js with IgniterError, IgniterResponseError, validation errors, custom error codes, and global error handlers.
+---
+
+## Overview
+
+**Error Handling** in Igniter.js is designed to be type-safe, structured, and developer-friendly. The framework provides built-in error classes, automatic validation error handling, and comprehensive error tracking through telemetry.
+
+```typescript
+import { IgniterError, IgniterResponseError } from '@igniter-js/core';
+
+const getUser = igniter.query({
+  path: '/users/:id' as const,
+  handler: async ({ request, response, context }) => {
+    const user = await context.db.users.findUnique({
+      where: { id: request.params.id }
+    });
+    
+    if (!user) {
+      // ✅ Return typed error response
+      return response.notFound('User not found');
+    }
+    
+    // ✅ Or throw IgniterError for framework-level errors
+    if (!user.isActive) {
+      throw new IgniterError({
+        message: 'User account is inactive',
+        code: 'USER_INACTIVE',
+        details: { userId: user.id },
+        log: true
+      });
+    }
+    
+    return response.success({ user });
+  }
+});
+```
+
+<Callout type="success" title="Automatic Error Handling">
+  Igniter.js automatically catches and formats all errors, including validation errors, framework errors, and uncaught exceptions.
+</Callout>
+
+---
+
+## Error Response Structure
+
+All errors follow a consistent structure:
+
+```typescript
+type IgniterResponse<TData, TError> = 
+  | { data: TData; error: null }           // ✅ Success
+  | { data: null; error: TError };         // ❌ Error
+```
+
+**Error Response Format:**
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "ERR_NOT_FOUND",
+    "message": "User not found",
+    "data": {
+      "userId": "123"
+    }
+  }
+}
+```
+
+---
+
+## Response Error Methods
+
+### Built-in Error Responses
+
+Igniter.js provides semantic error response methods:
+
+```typescript
+const action = igniter.query({
+  handler: async ({ response }) => {
+    // 400 Bad Request
+    return response.badRequest('Invalid request data');
+    
+    // 401 Unauthorized
+    return response.unauthorized('Authentication required');
+    
+    // 403 Forbidden
+    return response.forbidden('Access denied');
+    
+    // 404 Not Found
+    return response.notFound('Resource not found');
+  }
+});
+```
+
+**With Additional Data:**
+
+```typescript
+return response.badRequest('Validation failed', {
+  fields: {
+    email: 'Invalid format',
+    age: 'Must be at least 18'
+  }
+});
+```
+
+---
+
+## IgniterResponseError
+
+The `IgniterResponseError` class represents client-facing errors:
+
+### Creating Response Errors
+
+```typescript
+import { IgniterResponseError } from '@igniter-js/core';
+
+const action = igniter.mutation({
+  handler: async ({ response }) => {
+    const error = new IgniterResponseError({
+      code: 'ERR_BAD_REQUEST',
+      message: 'Invalid input provided',
+      data: {
+        field: 'email',
+        reason: 'already_exists'
+      }
+    });
+    
+    return response.error(error);
+  }
+});
+```
+
+### Common Error Codes
+
+Igniter.js defines standard error codes:
+
+| Code | HTTP Status | Method |
+|------|-------------|--------|
+| `ERR_BAD_REQUEST` | 400 | `response.badRequest()` |
+| `ERR_UNAUTHORIZED` | 401 | `response.unauthorized()` |
+| `ERR_FORBIDDEN` | 403 | `response.forbidden()` |
+| `ERR_NOT_FOUND` | 404 | `response.notFound()` |
+| `ERR_REDIRECT` | 302 | `response.redirect()` |
+| `ERR_UNKNOWN_ERROR` | 500 | Generic errors |
+
+### IgniterResponseError Methods
+
+```typescript
+const error = new IgniterResponseError({
+  code: 'ERR_NOT_FOUND',
+  message: 'User not found',
+  data: { userId: '123' }
+});
+
+// Get error code
+error.getCode(); // 'ERR_NOT_FOUND'
+
+// Get message
+error.getMessage(); // 'User not found'
+
+// Get additional data
+error.getData(); // { userId: '123' }
+
+// Serialize to JSON
+error.toJSON(); 
+// { code: 'ERR_NOT_FOUND', message: 'User not found', data: { userId: '123' } }
+
+// String representation
+error.toString(); 
+// 'IgniterResponseError [ERR_NOT_FOUND]: User not found'
+```
+
+---
+
+## IgniterError (Framework Errors)
+
+The `IgniterError` class is for **framework-level** errors (not client-facing):
+
+### Creating Framework Errors
+
+```typescript
+import { IgniterError } from '@igniter-js/core';
+
+throw new IgniterError({
+  message: 'Database connection failed',
+  code: 'DATABASE_ERROR',
+  log: true,           // ✅ Logs to console with styled output
+  details: {
+    host: 'localhost',
+    port: 5432
+  },
+  metadata: {
+    timestamp: Date.now(),
+    environment: process.env.NODE_ENV
+  }
+});
+```
+
+### IgniterError Properties
+
+```typescript
+class IgniterError extends Error {
+  readonly code: string;         // Error code
+  readonly details?: unknown;    // Additional error details
+  readonly metadata?: Record<string, unknown>;  // Extra metadata
+  readonly stackTrace?: string;  // Stack trace
+}
+```
+
+### When to Use IgniterError
+
+✅ **Use IgniterError for:**
+- Database connection failures
+- Configuration errors
+- Initialization errors
+- Plugin errors
+- Internal framework issues
+
+❌ **Don't use IgniterError for:**
+- Validation errors (use schemas)
+- Not found errors (use `response.notFound()`)
+- Authorization errors (use `response.unauthorized()`)
+- Client-facing errors (use `response.badRequest()`, etc.)
+
+---
+
+## Validation Errors
+
+Validation errors are automatically handled:
+
+### Schema Validation
+
+```typescript
+import { z } from 'zod';
+
+const CreateUserSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  age: z.number().min(18, 'Must be at least 18'),
+  name: z.string().min(2, 'Name too short')
+});
+
+const action = igniter.mutation({
+  method: 'POST',
+  body: CreateUserSchema,
+  handler: async ({ request, response }) => {
+    // ✅ If validation fails, automatic 400 response
+    const { email, age, name } = request.body;
+  }
+});
+```
+
+### Validation Error Response
+
+Request:
+```json
+POST /users
+{
+  "email": "invalid-email",
+  "age": 15,
+  "name": "J"
+}
+```
+
+Response (400 Bad Request):
+```json
+{
+  "data": null,
+  "error": {
+    "message": "Validation Error",
+    "code": "VALIDATION_ERROR",
+    "details": [
+      {
+        "path": ["email"],
+        "message": "Invalid email format"
+      },
+      {
+        "path": ["age"],
+        "message": "Must be at least 18"
+      },
+      {
+        "path": ["name"],
+        "message": "Name too short"
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Try-Catch in Actions
+
+You can use try-catch for error handling:
+
+### Basic Try-Catch
+
+```typescript
+const action = igniter.mutation({
+  handler: async ({ response, context }) => {
+    try {
+      const result = await context.db.users.create({
+        data: { email: 'user@example.com' }
+      });
+      return response.created({ user: result });
+    } catch (error) {
+      // Handle database errors
+      if (error.code === 'P2002') {  // Prisma unique constraint
+        return response.badRequest('Email already exists');
+      }
+      
+      // Re-throw for global error handler
+      throw error;
+    }
+  }
+});
+```
+
+### Graceful Degradation
+
+```typescript
+const getRecommendations = igniter.query({
+  handler: async ({ response, context }) => {
+    try {
+      // Try to get personalized recommendations
+      const recommendations = await context.aiService.getRecommendations();
+      return response.success({ recommendations });
+    } catch (error) {
+      // Fallback to popular items
+      const popular = await context.db.products.findMany({
+        orderBy: { views: 'desc' },
+        take: 10
+      });
+      
+      return response.success({
+        recommendations: popular,
+        fallback: true
+      });
+    }
+  }
+});
+```
+
+---
+
+## Error Handler Processor
+
+Igniter.js has a built-in `ErrorHandlerProcessor` that handles all errors:
+
+### Error Types Handled
+
+1. **Validation Errors** (Zod, Valibot, etc.)
+   - Returns 400 with validation details
+   - Logged as warnings
+   - Tracked in telemetry
+
+2. **IgniterError** (Framework errors)
+   - Returns 500 with error details
+   - Logged as errors with styled output
+   - Tracked in telemetry
+
+3. **Generic Errors** (Uncaught exceptions)
+   - Returns 500 with generic error message
+   - Logged as errors
+   - Tracked in telemetry
+   - Production mode hides stack traces
+
+### How Error Handler Works
+
+```typescript
+// Internal Igniter.js flow:
+try {
+  // 1. Execute action handler
+  const result = await handler(context);
+  return result;
+} catch (error) {
+  // 2. ErrorHandlerProcessor catches error
+  if (error.issues) {
+    // Validation error → 400
+    return ErrorHandlerProcessor.handleValidationError(error);
+  }
+  
+  if (error instanceof IgniterError) {
+    // Framework error → 500
+    return ErrorHandlerProcessor.handleIgniterError(error);
+  }
+  
+  // Generic error → 500
+  return ErrorHandlerProcessor.handleGenericError(error);
+}
+```
+
+---
+
+## Custom Error Codes
+
+### Define Custom Errors
+
+```typescript
+type CustomErrorCode = 
+  | 'USER_SUSPENDED'
+  | 'QUOTA_EXCEEDED'
+  | 'PAYMENT_REQUIRED'
+  | 'MAINTENANCE_MODE';
+
+const action = igniter.query({
+  handler: async ({ response }) => {
+    const error = new IgniterResponseError<CustomErrorCode>({
+      code: 'USER_SUSPENDED',
+      message: 'Your account has been suspended',
+      data: {
+        reason: 'Terms of Service violation',
+        suspendedAt: new Date(),
+        contact: 'support@example.com'
+      }
+    });
+    
+    return response
+      .status(403)
+      .error(error);
+  }
+});
+```
+
+### Reusable Error Factory
+
+```typescript
+// utils/errors.ts
+export const createUserError = (
+  code: 'NOT_FOUND' | 'SUSPENDED' | 'DELETED',
+  userId: string
+) => {
+  const messages = {
+    NOT_FOUND: 'User not found',
+    SUSPENDED: 'User account is suspended',
+    DELETED: 'User account has been deleted'
+  };
+  
+  return new IgniterResponseError({
+    code: `USER_${code}`,
+    message: messages[code],
+    data: { userId }
+  });
+};
+
+// Usage in actions
+const getUser = igniter.query({
+  path: '/users/:id' as const,
+  handler: async ({ request, response, context }) => {
+    const user = await context.db.users.findUnique({
+      where: { id: request.params.id }
+    });
+    
+    if (!user) {
+      return response.error(createUserError('NOT_FOUND', request.params.id));
+    }
+    
+    if (user.status === 'suspended') {
+      return response.error(createUserError('SUSPENDED', user.id));
+    }
+    
+    return response.success({ user });
+  }
+});
+```
+
+---
+
+## Telemetry Integration
+
+All errors are automatically tracked in telemetry:
+
+```typescript
+// Errors are logged with:
+// - Error code
+// - Error message
+// - Stack trace
+// - Request context (path, method, headers)
+// - Timing information
+// - Custom metadata
+
+const action = igniter.query({
+  handler: async ({ response }) => {
+    throw new IgniterError({
+      message: 'External API failed',
+      code: 'EXTERNAL_API_ERROR',
+      metadata: {
+        service: 'stripe',
+        endpoint: '/v1/charges',
+        statusCode: 503
+      }
+    });
+    // ✅ Automatically tracked in OpenTelemetry
+  }
+});
+```
+
+---
+
+## Best Practices
+
+### 1. Use Semantic Error Methods
+
+```typescript
+// ✅ Good - Clear intent
+return response.notFound('User not found');
+
+// ❌ Bad - Less semantic
+return response.status(404).json({ error: 'Not found' });
+```
+
+### 2. Provide Meaningful Error Messages
+
+```typescript
+// ✅ Good - Helpful to developers and users
+return response.badRequest('Email is required and must be valid', {
+  field: 'email',
+  constraint: 'email_format'
+});
+
+// ❌ Bad - Generic
+return response.badRequest('Bad request');
+```
+
+### 3. Use Validation Schemas, Not Manual Checks
+
+```typescript
+// ✅ Good - Automatic validation
+const action = igniter.mutation({
+  body: z.object({ email: z.string().email() }),
+  handler: async ({ request }) => {
+    // request.body.email is validated
+  }
+});
+
+// ❌ Bad - Manual validation
+const action = igniter.mutation({
+  handler: async ({ request, response }) => {
+    if (!request.body.email) {
+      return response.badRequest('Email required');
+    }
+    if (!isValidEmail(request.body.email)) {
+      return response.badRequest('Invalid email');
+    }
+  }
+});
+```
+
+### 4. Don't Expose Sensitive Errors in Production
+
+```typescript
+const action = igniter.query({
+  handler: async ({ response, context }) => {
+    try {
+      return await context.db.users.findMany();
+    } catch (error) {
+      if (process.env.NODE_ENV === 'production') {
+        // ✅ Generic error in production
+        return response.error(new IgniterResponseError({
+          code: 'ERR_UNKNOWN_ERROR',
+          message: 'An error occurred'
+        }));
+      } else {
+        // ✅ Detailed error in development
+        return response.error(new IgniterResponseError({
+          code: 'DATABASE_ERROR',
+          message: error.message,
+          data: { stack: error.stack }
+        }));
+      }
+    }
+  }
+});
+```
+
+### 5. Log Framework Errors
+
+```typescript
+// ✅ Good - Logs styled error
+throw new IgniterError({
+  message: 'Redis connection failed',
+  code: 'REDIS_ERROR',
+  log: true,  // ✅ Logs to console
+  details: { host: 'localhost', port: 6379 }
+});
+
+// ❌ Bad - Silent failure
+throw new Error('Redis failed');
+```
+
+---
+
+## Common Error Patterns
+
+### Resource Not Found
+
+```typescript
+const getResource = igniter.query({
+  path: '/:id' as const,
+  handler: async ({ request, response, context }) => {
+    const resource = await context.db.resources.findUnique({
+      where: { id: request.params.id }
+    });
+    
+    if (!resource) {
+      return response.notFound(`Resource ${request.params.id} not found`);
+    }
+    
+    return response.success({ resource });
+  }
+});
+```
+
+### Authorization Errors
+
+```typescript
+const deletePost = igniter.mutation({
+  path: '/posts/:id' as const,
+  method: 'DELETE',
+  handler: async ({ request, context, response }) => {
+    const post = await context.db.posts.findUnique({
+      where: { id: request.params.id }
+    });
+    
+    if (!post) return response.notFound();
+    
+    // Check ownership
+    if (post.authorId !== context.user.id) {
+      return response.forbidden('You can only delete your own posts');
+    }
+    
+    await context.db.posts.delete({ where: { id: post.id } });
+    return response.noContent();
+  }
+});
+```
+
+### External API Failures
+
+```typescript
+const getExternalData = igniter.query({
+  handler: async ({ response }) => {
+    try {
+      const data = await fetch('https://api.example.com/data');
+      return response.success({ data });
+    } catch (error) {
+      throw new IgniterError({
+        message: 'External API request failed',
+        code: 'EXTERNAL_API_ERROR',
+        log: true,
+        details: {
+          url: 'https://api.example.com/data',
+          error: error.message
+        }
+      });
+    }
+  }
+});
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Response Types" href="/docs/response-types">
+    Learn all response methods
+  </Card>
+  
+  <Card title="Validation" href="/docs/validation">
+    Validate input with schemas
+  </Card>
+  
+  <Card title="Procedures" href="/docs/procedures">
+    Handle errors in procedures
+  </Card>
+  
+  <Card title="Testing" href="/docs/testing">
+    Test error handling
+  </Card>
+</Cards>

@@ -1,0 +1,513 @@
+---
+title: Vite
+description: Build modern full-stack applications with Igniter.js and Vite, the lightning-fast build tool for modern web development.
+---
+
+Vite is a next-generation frontend build tool that provides an instant dev server and lightning-fast hot module replacement. When combined with Igniter.js, you can build full-stack applications with a type-safe API backend and a modern React/Vue/Svelte frontend—all in a single codebase with excellent developer experience.
+
+This guide focuses on integrating Igniter.js as an API backend within a Vite project. You'll learn how to set up API routes that work seamlessly with Vite's dev server and production builds, while maintaining full type safety between your frontend and backend.
+
+<Callout type="info" title="Full-Stack Development">
+  Vite + Igniter.js enables full-stack development with frontend frameworks like React, Vue, or Svelte while maintaining a type-safe API layer.
+</Callout>
+
+---
+
+## Quick Start
+
+For a complete full-stack setup, we recommend using **TanStack Start** (Vite-powered React framework):
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest init
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest init
+    ```
+  </Tab>
+</Tabs>
+
+Your app runs at `http://localhost:3000`, API at `http://localhost:3000/api/v1`, and docs at `http://localhost:3000/api/v1/docs` 🚀
+
+### Direct Command
+
+If you prefer to skip the interactive prompts, you can specify your project name and framework directly:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="direct-command">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest init my-vite-app --framework tanstack-start
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest init my-vite-app --framework tanstack-start
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest init my-vite-app --framework tanstack-start
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest init my-vite-app --framework tanstack-start
+    ```
+  </Tab>
+</Tabs>
+
+This command will create a TanStack Start project with all Igniter.js features pre-configured.
+
+---
+
+## Manual Setup with Vite
+
+<Card title="Complete Vite Setup Guide">
+  <Steps>
+    <Step>
+      ### Prerequisites
+
+      Before you begin, ensure you have:
+      - **Node.js** 22.0+
+      - **Vite** 5.0+
+      - A Vite project (React, Vue, Svelte, etc.)
+    </Step>
+
+    <Step>
+      ### Install Dependencies
+
+      Add Igniter.js to your Vite project:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/core zod
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/core zod
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/core zod
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/core zod
+    ```
+      </Tab>
+    </Tabs>
+    </Step>
+
+    <Step>
+      ### Configure Vite for API Routes
+
+Update your `vite.config.ts` to proxy API requests during development:
+
+```typescript title="vite.config.ts"
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  
+  server: {
+    proxy: {
+      // Proxy API requests to your backend
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+    },
+  },
+})
+      ```
+
+      This configuration proxies `/api/*` requests to your Igniter.js server during development.
+    </Step>
+
+    <Step>
+      ### Define Application Context
+
+Create the context for your API. Create `src/igniter.context.ts`:
+
+```typescript title="src/igniter.context.ts"
+/**
+ * Application Context Type
+ * Defines what dependencies are available to all API handlers
+ */
+export interface AppContext {
+  // Add your dependencies here, e.g.:
+  // db: PrismaClient
+  // auth: AuthService
+}
+
+/**
+ * Context Factory
+ * Creates the context instance passed to handlers
+ */
+export function createIgniterAppContext(): AppContext {
+  return {
+    // Initialize dependencies here
+  }
+}
+      ```
+    </Step>
+
+    <Step>
+      ### Initialize Igniter.js
+
+Create the main Igniter instance. Create `src/igniter.ts`:
+
+```typescript title="src/igniter.ts"
+import { Igniter } from '@igniter-js/core'
+import { createIgniterAppContext } from './igniter.context'
+
+export const igniter = Igniter
+  .context(createIgniterAppContext())
+  .config({
+    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001',
+    basePATH: import.meta.env.VITE_API_BASE_PATH || '/api/v1',
+  })
+  .docs({
+    info: {
+      title: 'My Vite App API',
+      version: '1.0.0',
+      description: 'Full-stack app with Vite and Igniter.js',
+    }
+  })
+  .create()
+      ```
+
+      Note: Vite uses `import.meta.env` for environment variables, not `process.env`.
+    </Step>
+
+    <Step>
+      ### Create Your First Controller
+
+Controllers group related endpoints. Create `src/features/example/controllers/example.controller.ts`:
+
+```typescript title="src/features/example/controllers/example.controller.ts"
+import { igniter } from '@/igniter'
+
+export const exampleController = igniter.controller({
+  name: 'Example',
+  path: '/example',
+  actions: {
+    hello: igniter.query({
+      path: '/hello',
+      handler: async ({ response }) => {
+        return response.success({ 
+          message: 'Hello from Igniter.js with Vite!',
+          timestamp: new Date().toISOString()
+        })
+      },
+    }),
+  },
+})
+```
+
+Create barrel export at `src/features/example/index.ts`:
+
+```typescript title="src/features/example/index.ts"
+      export * from './controllers/example.controller'
+      ```
+    </Step>
+
+    <Step>
+      ### Create Application Router
+
+The router assembles all controllers. Create `src/igniter.router.ts`:
+
+```typescript title="src/igniter.router.ts"
+import { igniter } from './igniter'
+import { exampleController } from './features/example'
+
+export const AppRouter = igniter.router({
+  controllers: {
+    example: exampleController
+  }
+})
+
+      export type AppRouterType = typeof AppRouter
+      ```
+    </Step>
+
+    <Step>
+      ### Create Separate API Server
+
+For Vite projects, run the API as a separate Node.js server. Create `server/index.ts`:
+
+```typescript title="server/index.ts"
+import express from 'express'
+import { expressAdapter } from '@igniter-js/core/adapters'
+import { AppRouter } from '../src/igniter.router'
+
+const app = express()
+
+const PORT = process.env.API_PORT || 3001
+const API_BASE_PATH = '/api/v1'
+
+// Mount Igniter.js router
+app.use(API_BASE_PATH, expressAdapter(AppRouter.handler))
+
+app.listen(PORT, () => {
+  console.log(`🚀 API Server running at http://localhost:${PORT}`)
+})
+```
+
+Add to `package.json`:
+
+```json title="package.json"
+{
+  "scripts": {
+    "dev": "concurrently \"vite\" \"tsx watch server/index.ts\"",
+    "dev:api": "tsx watch server/index.ts",
+    "dev:frontend": "vite"
+  }
+}
+```
+
+Install `concurrently`:
+
+```bash
+      npm install -D concurrently tsx
+      ```
+    </Step>
+  </Steps>
+</Card>
+
+## Using in React Components
+
+### Type-Safe Client
+
+Create a type-safe client. Create `src/igniter.client.ts`:
+
+```typescript title="src/igniter.client.ts"
+import { createIgniterClient } from '@igniter-js/core/client'
+import type { AppRouterType } from './igniter.router'
+
+export const api = createIgniterClient<AppRouterType>({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001',
+  basePATH: import.meta.env.VITE_API_BASE_PATH || '/api/v1',
+  router: () => import('./igniter.schema').then(m => m.AppRouterSchema),
+})
+
+export type ApiClient = typeof api
+```
+
+### Using Client Components
+
+Use React hooks for automatic loading/error states:
+
+```tsx title="src/components/Example.tsx"
+'use client'
+
+import { api } from '@/igniter.client'
+
+export function Example() {
+  const { data, isLoading, error } = api.example.hello.useQuery()
+
+  if (isLoading) return <div>Loading...</div>
+  if (error) return <div>Error: {error.message}</div>
+
+  return <div>Message: {data.message}</div>
+}
+```
+
+---
+
+## Generating Schema and Docs
+
+Since TanStack Start is a full-stack framework, you'll need to generate the client schema whenever you modify your API.
+
+### When to Generate Schema
+
+<Callout type="error">
+  **Critical:** You MUST run schema generation BEFORE using the client in your frontend. The client depends on the generated schema to function correctly.
+</Callout>
+
+<Callout type="info">
+  Run this command whenever you modify your API structure (add/remove/modify controllers or actions) OR before using the client for the first time.
+</Callout>
+
+### Generate Schema
+
+Run this command whenever you make changes to your API structure:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-schema">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest generate schema
+    ```
+  </Tab>
+</Tabs>
+
+This creates:
+- `src/igniter.schema.ts` - Type-safe schema for client-side usage
+- `src/docs/openapi.json` - OpenAPI 3.0 specification
+
+### Generate OpenAPI Documentation
+
+To generate or update the OpenAPI specification and interactive documentation:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-docs">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest generate docs
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Environment Variables
+
+Create `.env` for Vite environment variables:
+
+```bash title=".env"
+VITE_API_URL=http://localhost:3001
+VITE_API_BASE_PATH=/api/v1
+```
+
+Access in code using `import.meta.env.VITE_*`:
+
+```typescript
+const apiUrl = import.meta.env.VITE_API_URL
+```
+
+---
+
+## Production Build
+
+### Build Both Frontend and API
+
+Update `package.json`:
+
+```json
+{
+  "scripts": {
+    "build": "tsc && vite build",
+    "build:api": "tsc --project tsconfig.server.json",
+    "preview": "vite preview"
+  }
+}
+```
+
+Create `tsconfig.server.json` for the API:
+
+```json title="tsconfig.server.json"
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist/server",
+    "module": "commonjs",
+    "target": "ES2020"
+  },
+  "include": ["server/**/*", "src/igniter*.ts", "src/features/**/*"]
+}
+```
+
+---
+
+## Alternative: TanStack Start
+
+For the best full-stack Vite experience, use **TanStack Start** which includes:
+- Built-in API routes (no separate server needed)
+- File-based routing
+- SSR and streaming
+- Type-safe data loading
+
+See the [TanStack Start guide](/docs/installation/tanstack-start) for details.
+
+---
+
+## Project Structure
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="features">
+      <Folder name="example">
+        <Folder name="controllers">
+          <File name="example.controller.ts" />
+        </Folder>
+        <File name="index.ts" />
+      </Folder>
+    </Folder>
+    <Folder name="components">
+      <File name="Example.tsx" />
+    </Folder>
+    <File name="igniter.ts" />
+    <File name="igniter.context.ts" />
+    <File name="igniter.router.ts" />
+    <File name="igniter.client.ts" />
+    <File name="main.tsx" />
+  </Folder>
+  <Folder name="server">
+    <File name="index.ts" />
+  </Folder>
+  <File name="vite.config.ts" />
+  <File name="package.json" />
+</Files>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="TanStack Start" href="/docs/installation/tanstack-start">
+    Full-stack framework with built-in API routes
+  </Card>
+  <Card title="Client" href="/docs/client">
+    Type-safe client with React hooks
+  </Card>
+  <Card title="Actions" href="/docs/actions">
+    Create queries and mutations
+  </Card>
+</Cards>

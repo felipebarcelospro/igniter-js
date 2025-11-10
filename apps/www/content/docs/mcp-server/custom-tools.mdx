@@ -1,0 +1,450 @@
+---
+title: Custom Tools
+description: Add custom tools beyond your router actions to extend your MCP server's capabilities.
+---
+
+## Overview
+
+While the adapter automatically exposes all your Igniter.js router actions as MCP tools, you can also add custom tools that don't correspond to any router action. Custom tools are useful for:
+
+- Utility functions (calculations, formatting, etc.)
+- External API integrations
+- Business logic operations
+- Data transformations
+
+---
+
+## Adding Custom Tools
+
+### Builder Pattern
+
+```typescript
+import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server';
+import { z } from 'zod';
+
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .addTool({
+    name: 'calculateTax',
+    description: 'Calculate tax for a given amount',
+    args: {
+      amount: z.number().describe('The amount to calculate tax for'),
+      taxRate: z.number().min(0).max(1).describe('Tax rate as decimal (e.g., 0.08 for 8%)'),
+    },
+    handler: async (args, context) => {
+      // context is automatically typed from your router!
+      const tax = args.amount * args.taxRate;
+      const total = args.amount + tax;
+      
+      return {
+        content: [{
+          type: 'text',
+          text: `Amount: $${args.amount.toFixed(2)}\n` +
+                `Tax (${(args.taxRate * 100).toFixed(1)}%): $${tax.toFixed(2)}\n` +
+                `Total: $${total.toFixed(2)}`
+        }]
+      };
+    },
+  })
+  .build();
+```
+
+### Function API
+
+```typescript
+import { createMcpAdapter } from '@igniter-js/adapter-mcp-server';
+import { z } from 'zod';
+
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  tools: {
+    custom: [{
+      name: 'calculateTax',
+      description: 'Calculate tax for a given amount',
+      args: {
+        amount: z.number(),
+        taxRate: z.number().min(0).max(1),
+      },
+      handler: async (args, context) => {
+        const tax = args.amount * args.taxRate;
+        return {
+          content: [{
+            type: 'text',
+            text: `Tax: $${tax.toFixed(2)}`
+          }]
+        };
+      }
+    }]
+  }
+});
+```
+
+---
+
+## Tool Definition
+
+### Required Fields
+
+**`name`** (string): Tool name (must be MCP-compliant, will be sanitized automatically)
+
+**`description`** (string): Tool description shown to AI agents
+
+**`args`** (ZodRawShape): Zod schema defining tool arguments
+
+**`handler`** (function): Async function that executes the tool
+
+---
+
+## Tool Arguments Schema
+
+Define arguments using Zod schemas. These are automatically converted to JSON Schema for MCP:
+
+```typescript
+.addTool({
+  name: 'processOrder',
+  description: 'Process an order with validation',
+  args: {
+    orderId: z.string().uuid().describe('Order UUID'),
+    items: z.array(z.object({
+      productId: z.string(),
+      quantity: z.number().int().positive(),
+      price: z.number().positive(),
+    })).min(1).describe('Order items'),
+    shippingAddress: z.object({
+      street: z.string(),
+      city: z.string(),
+      state: z.string().length(2),
+      zipCode: z.string().regex(/^\d{5}$/),
+    }).describe('Shipping address'),
+    priority: z.enum(['standard', 'express', 'overnight']).default('standard'),
+  },
+  handler: async (args, context) => {
+    // args is fully typed based on the schema above
+    // args.orderId is string
+    // args.items is array of { productId, quantity, price }
+    // args.shippingAddress is { street, city, state, zipCode }
+    // args.priority is 'standard' | 'express' | 'overnight'
+    
+    // Your tool logic here
+    return {
+      content: [{
+        type: 'text',
+        text: `Order ${args.orderId} processed successfully`
+      }]
+    };
+  },
+})
+```
+
+---
+
+## Tool Handler
+
+The handler function receives two arguments:
+
+**`args`**: Tool arguments, typed based on your Zod schema
+
+**`context`**: MCP context with router context, tools list, request info, etc.
+
+```typescript
+handler: async (args, context) => {
+  // Access router context
+  const db = context.context.db;
+  const services = context.context.services;
+  
+  // Access request information
+  const userAgent = context.client;
+  const timestamp = context.timestamp;
+  
+  // Access available tools
+  const availableTools = context.tools;
+  
+  // Your tool logic
+  return {
+    content: [{
+      type: 'text',
+      text: 'Tool result'
+    }]
+  };
+}
+```
+
+---
+
+## Return Format
+
+Tools must return an MCP-compliant `CallToolResult`:
+
+```typescript
+// Simple text response
+return {
+  content: [{
+    type: 'text',
+    text: 'Result here'
+  }]
+};
+
+// Multiple content items
+return {
+  content: [
+    {
+      type: 'text',
+      text: 'Primary result'
+    },
+    {
+      type: 'text',
+      text: 'Additional information'
+    }
+  ]
+};
+
+// With data (for structured responses)
+return {
+  content: [{
+    type: 'text',
+    text: JSON.stringify({ result: 'data' }, null, 2)
+  }]
+};
+```
+
+---
+
+## Practical Examples
+
+### Example 1: Currency Converter
+
+```typescript
+.addTool({
+  name: 'convertCurrency',
+  description: 'Convert amount between currencies',
+  args: {
+    amount: z.number().positive(),
+    from: z.string().length(3).describe('Source currency code (e.g., USD)'),
+    to: z.string().length(3).describe('Target currency code (e.g., EUR)'),
+  },
+  handler: async (args, context) => {
+    // In a real app, you'd call an exchange rate API
+    const exchangeRates = await context.context.services.exchangeRates.getRate(args.from, args.to);
+    const converted = args.amount * exchangeRates.rate;
+    
+    return {
+      content: [{
+        type: 'text',
+        text: `${args.amount} ${args.from} = ${converted.toFixed(2)} ${args.to} ` +
+              `(rate: ${exchangeRates.rate})`
+      }]
+    };
+  },
+})
+```
+
+### Example 2: Data Formatter
+
+```typescript
+.addTool({
+  name: 'formatDate',
+  description: 'Format a date in various formats',
+  args: {
+    date: z.string().or(z.coerce.date()),
+    format: z.enum(['iso', 'us', 'european', 'relative']).default('iso'),
+  },
+  handler: async (args, context) => {
+    const date = new Date(args.date);
+    let formatted: string;
+    
+    switch (args.format) {
+      case 'iso':
+        formatted = date.toISOString();
+        break;
+      case 'us':
+        formatted = date.toLocaleDateString('en-US');
+        break;
+      case 'european':
+        formatted = date.toLocaleDateString('en-GB');
+        break;
+      case 'relative':
+        const now = new Date();
+        const diff = now.getTime() - date.getTime();
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        formatted = days === 0 ? 'Today' : `${days} days ago`;
+        break;
+    }
+    
+    return {
+      content: [{
+        type: 'text',
+        text: formatted
+      }]
+    };
+  },
+})
+```
+
+### Example 3: External API Integration
+
+```typescript
+.addTool({
+  name: 'sendSlackMessage',
+  description: 'Send a message to a Slack channel',
+  args: {
+    channel: z.string().describe('Slack channel name or ID'),
+    message: z.string().min(1),
+    threadTs: z.string().optional().describe('Thread timestamp for replies'),
+  },
+  handler: async (args, context) => {
+    const slackService = context.context.services.slack;
+    
+    const result = await slackService.postMessage({
+      channel: args.channel,
+      text: args.message,
+      thread_ts: args.threadTs,
+    });
+    
+    return {
+      content: [{
+        type: 'text',
+        text: `Message sent to ${args.channel} at ${result.ts}`
+      }]
+    };
+  },
+})
+```
+
+---
+
+## Multiple Custom Tools
+
+You can add multiple custom tools:
+
+**Builder Pattern:**
+
+```typescript
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .addTool({ /* tool 1 */ })
+  .addTool({ /* tool 2 */ })
+  .addTool({ /* tool 3 */ })
+  .build();
+```
+
+**Function API:**
+
+```typescript
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  tools: {
+    custom: [
+      { /* tool 1 */ },
+      { /* tool 2 */ },
+      { /* tool 3 */ },
+    ]
+  }
+});
+```
+
+---
+
+## Error Handling
+
+Handle errors gracefully in your tool handlers:
+
+```typescript
+.addTool({
+  name: 'riskyOperation',
+  description: 'Perform a risky operation',
+  args: {
+    input: z.string(),
+  },
+  handler: async (args, context) => {
+    try {
+      const result = await performRiskyOperation(args.input);
+      return {
+        content: [{
+          type: 'text',
+          text: `Success: ${result}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text',
+          text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }],
+        isError: true
+      };
+    }
+  },
+})
+```
+
+---
+
+## Best Practices
+
+### 1. Descriptive Names and Descriptions
+
+```typescript
+// ✅ Good
+{
+  name: 'calculateTax',
+  description: 'Calculate sales tax for a given amount based on location and tax rate',
+}
+
+// ❌ Bad
+{
+  name: 'tax',
+  description: 'Calculate tax',
+}
+```
+
+### 2. Use Zod Descriptions
+
+Add `.describe()` to your schema fields to help AI agents understand parameters:
+
+```typescript
+args: {
+  amount: z.number().describe('The monetary amount in USD'),
+  taxRate: z.number().min(0).max(1).describe('Tax rate as decimal (0.08 = 8%)'),
+}
+```
+
+### 3. Validate Inputs
+
+Use Zod's validation features:
+
+```typescript
+args: {
+  email: z.string().email(),
+  age: z.number().int().min(0).max(150),
+  status: z.enum(['active', 'inactive', 'pending']),
+}
+```
+
+### 4. Provide Clear Error Messages
+
+```typescript
+handler: async (args, context) => {
+  try {
+    // Operation
+  } catch (error) {
+    return {
+      content: [{
+        type: 'text',
+        text: `Failed to process: ${error.message}. Please check your inputs and try again.`
+      }],
+      isError: true
+    };
+  }
+}
+```
+
+---
+
+## Next Steps
+
+- Learn about [Prompts & Resources](/docs/mcp-server/prompts-resources)
+- Explore [Event Handlers](/docs/mcp-server/events) for monitoring
+- Check out [Best Practices](/docs/mcp-server/best-practices)
+

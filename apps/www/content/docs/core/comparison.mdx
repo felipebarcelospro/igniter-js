@@ -1,0 +1,581 @@
+---
+title: Comparison
+description: A comprehensive comparison of Igniter.js with popular TypeScript API frameworks including tRPC, Next.js Server Actions, Express, and Fastify.
+---
+
+## Overview
+
+Choosing the right framework is crucial for your project's success. This guide compares **Igniter.js** with popular alternatives to help you make an informed decision.
+
+<Callout type="info" title="Fair Comparison">
+  This comparison aims to be fair and objective. Each framework has its strengths, and the "best" choice depends on your specific needs.
+</Callout>
+
+---
+
+## Quick Comparison Table
+
+| Feature | Igniter.js | tRPC | Next.js SA | Express | Fastify |
+|---------|------------|------|------------|---------|---------|
+| **Type Safety** | ✅ End-to-end | ✅ End-to-end | ⚠️ Partial | ❌ Manual | ❌ Manual |
+| **Code Generation** | ❌ Not needed | ❌ Not needed | ❌ Not needed | ❌ Not needed | ❌ Not needed |
+| **Standard HTTP** | ✅ Full | ⚠️ RPC only | ⚠️ Limited | ✅ Full | ✅ Full |
+| **Framework Agnostic** | ✅ Yes | ⚠️ Mostly | ❌ Next.js only | ✅ Yes | ✅ Yes |
+| **React Hooks** | ✅ Built-in | ✅ Adapter | ✅ Built-in | ❌ Manual | ❌ Manual |
+| **OpenAPI** | ✅ Auto | ❌ External | ❌ No | ⚠️ Manual | ⚠️ Manual |
+| **Real-time** | ✅ SSE/WS | ⚠️ Subscriptions | ❌ Limited | ⚠️ Manual | ⚠️ Manual |
+| **Middleware** | ✅ Procedures | ✅ Yes | ❌ Limited | ✅ Yes | ✅ Yes |
+| **Background Jobs** | ✅ Built-in | ❌ External | ❌ External | ❌ External | ❌ External |
+| **Telemetry** | ✅ Built-in | ❌ External | ❌ External | ❌ External | ❌ External |
+| **Learning Curve** | 🟢 Low | 🟢 Low | 🟢 Low | 🟡 Medium | 🟡 Medium |
+| **Performance** | ⚡ Fast | ⚡ Fast | ⚡ Fast | ⚡ Fast | ⚡⚡ Fastest |
+
+---
+
+## Igniter.js vs tRPC
+
+### Overview
+
+Both provide **end-to-end type safety** without code generation. If you like tRPC, you'll feel at home with Igniter.js.
+
+### Feature Comparison
+
+| Feature | Igniter.js | tRPC |
+|---------|------------|------|
+| Type Safety | ✅ Full end-to-end | ✅ Full end-to-end |
+| HTTP Methods | ✅ GET, POST, PUT, DELETE, PATCH | ⚠️ RPC only |
+| REST Support | ✅ Standard REST endpoints | ❌ Not RESTful |
+| Framework Support | ✅ Next.js, Vite, Express, Bun, Deno | ⚠️ Primarily Next.js |
+| React Hooks | ✅ Built-in | ✅ Via @trpc/react-query |
+| OpenAPI Docs | ✅ Auto-generated | ❌ Third-party tools |
+| Background Jobs | ✅ Built-in (BullMQ) | ❌ External library |
+| Caching/Pub-Sub | ✅ Built-in (Redis) | ❌ External library |
+| Telemetry | ✅ Built-in (OpenTelemetry) | ❌ External library |
+| Non-TS Clients | ✅ Works with any HTTP client | ⚠️ TypeScript only |
+
+### Code Comparison
+
+<Tabs items={['Igniter.js', 'tRPC']}>
+  <Tab value="Igniter.js">
+    ```typescript
+    // Define API with standard HTTP
+    const userController = igniter.controller({
+      name: 'Users',
+      description: 'Manage user accounts and profiles',
+      path: '/users',
+      actions: {
+        getById: igniter.query({
+          name: 'Get User by ID',
+          description: 'Retrieve a specific user by their ID',
+          path: '/:id' as const,
+          handler: async ({ request, response }) => {
+            const user = await db.users.findUnique({
+              where: { id: request.params.id }
+            });
+            return response.success({ user });
+          }
+        }),
+        create: igniter.mutation({
+          name: 'Create User',
+          description: 'Create a new user account',
+          path: '/',
+          method: 'POST',
+          body: z.object({
+            name: z.string(),
+            email: z.string().email()
+          }),
+          handler: async ({ request, response }) => {
+            const user = await db.users.create({ 
+              data: request.body 
+            });
+            return response.created({ user });
+          }
+        })
+      }
+    });
+    
+    // Client usage
+    const { data } = await client.users.getById.query({ 
+      params: { id: '123' } 
+    });
+    
+    // ✅ Also works with curl, Postman, etc.
+    // GET /api/v1/users/123
+    ```
+  </Tab>
+  
+  <Tab value="tRPC">
+    ```typescript
+    // Define API with RPC
+    const userRouter = t.router({
+      getById: t.procedure
+        .input(z.object({ id: z.string() }))
+        .query(async ({ input }) => {
+          const user = await db.users.findUnique({ 
+            where: { id: input.id } 
+          });
+          return { user };
+        }),
+      create: t.procedure
+        .input(z.object({
+          name: z.string(),
+          email: z.string().email()
+        }))
+        .mutation(async ({ input }) => {
+          const user = await db.users.create({ 
+            data: input 
+          });
+          return { user };
+        })
+    });
+    
+    // Client usage
+    const data = await trpc.users.getById.query({ id: '123' });
+    
+    // ⚠️ Only works with TypeScript clients
+    // Not standard REST
+    ```
+  </Tab>
+</Tabs>
+
+### When to Choose tRPC
+
+<Cards>
+  <Card title="Next.js Only">
+    You're building exclusively for Next.js
+  </Card>
+  <Card title="No REST Needed">
+    You don't need standard REST endpoints
+  </Card>
+  <Card title="No External Clients">
+    Only TypeScript clients will consume your API
+  </Card>
+</Cards>
+
+### When to Choose Igniter.js
+
+<Cards>
+  <Card title="Standard HTTP">
+    You need REST endpoints for external clients
+  </Card>
+  <Card title="Framework Flexibility">
+    You want to work with Vite, Express, Bun, etc.
+  </Card>
+  <Card title="Rich Ecosystem">
+    You need jobs, caching, telemetry built-in
+  </Card>
+  <Card title="OpenAPI Docs">
+    You want auto-generated API documentation
+  </Card>
+</Cards>
+
+---
+
+## Igniter.js vs Next.js Server Actions
+
+### Overview
+
+Both provide type-safe client-server communication in React, but with very different approaches and capabilities.
+
+### Feature Comparison
+
+| Feature | Igniter.js | Next.js Server Actions |
+|---------|------------|------------------------|
+| Type Safety | ✅ Full inference | ⚠️ Partial (FormData casting) |
+| HTTP Methods | ✅ All methods | ❌ POST only |
+| REST Endpoints | ✅ Standard REST | ❌ None |
+| Framework Support | ✅ Framework agnostic | ❌ Next.js only |
+| External Clients | ✅ Any HTTP client | ❌ Next.js only |
+| Real-time (SSE) | ✅ Built-in | ❌ Limited |
+| WebSockets | ✅ Supported | ❌ Not supported |
+| Webhooks | ✅ Standard routes | ❌ Not suitable |
+| Validation | ✅ Zod/Valibot schemas | ⚠️ Manual |
+| Testing | ✅ Server-side caller | ⚠️ Full Next.js context needed |
+
+### Code Comparison
+
+<Tabs items={['Igniter.js', 'Server Actions']}>
+  <Tab value="Igniter.js">
+    ```typescript
+    // Server: Type-safe with validation
+    const createUser = igniter.mutation({
+      path: '/users',
+      method: 'POST',
+      body: z.object({
+        name: z.string().min(2),
+        email: z.string().email()
+      }),
+      handler: async ({ request, response }) => {
+        // ✅ request.body is fully typed!
+        const user = await db.users.create({ 
+          data: request.body 
+        });
+        return response.created({ user });
+      }
+    });
+    
+    // Client: Fully typed
+    const { data } = await client.users.create.mutate({
+      body: { name: 'John', email: 'john@example.com' }
+    });
+    // ✅ data.user is fully typed!
+    
+    // ✅ Also works with external clients
+    // POST /api/v1/users
+    ```
+  </Tab>
+  
+  <Tab value="Server Actions">
+    ```typescript
+    // Server: Manual type casting
+    'use server'
+    
+    async function createUser(formData: FormData) {
+      // ⚠️ Manual casting and validation
+      const name = formData.get('name') as string;
+      const email = formData.get('email') as string;
+      
+      // Manual validation
+      if (!name || name.length < 2) {
+        throw new Error('Name too short');
+      }
+      
+      const user = await db.users.create({ 
+        data: { name, email } 
+      });
+      return user;
+    }
+    
+    // Client: Limited type inference
+    const user = await createUser(formData);
+    // ⚠️ Type not automatically inferred
+    
+    // ❌ Can't call from external clients
+    // ❌ No REST endpoint
+    ```
+  </Tab>
+</Tabs>
+
+### When to Choose Server Actions
+
+<Cards>
+  <Card title="Next.js Exclusive">
+    Building only for Next.js with RSC
+  </Card>
+  <Card title="Simple Forms">
+    Primary use case is form submissions
+  </Card>
+  <Card title="No External API">
+    Don't need external clients or webhooks
+  </Card>
+</Cards>
+
+### When to Choose Igniter.js
+
+<Cards>
+  <Card title="REST API">
+    Need standard REST endpoints
+  </Card>
+  <Card title="Framework Agnostic">
+    Want to use Vite, Remix, or other frameworks
+  </Card>
+  <Card title="External Clients">
+    Mobile apps, webhooks, third-party integrations
+  </Card>
+  <Card title="Real-time">
+    Need SSE, WebSockets, or Pub/Sub
+  </Card>
+</Cards>
+
+---
+
+## Igniter.js vs Express.js
+
+### Overview
+
+Express is the most popular Node.js framework, while Igniter.js is a modern TypeScript-first alternative with built-in type safety.
+
+### Feature Comparison
+
+| Feature | Igniter.js | Express.js |
+|---------|------------|------------|
+| Type Safety | ✅ Automatic inference | ❌ Manual TypeScript |
+| Validation | ✅ Built-in (Zod/Valibot) | ❌ External (express-validator) |
+| Client Generation | ✅ Automatic | ❌ Manual |
+| React Hooks | ✅ Built-in | ❌ Manual implementation |
+| OpenAPI Docs | ✅ Auto-generated | ⚠️ Manual (Swagger) |
+| Background Jobs | ✅ Built-in | ❌ External library |
+| Telemetry | ✅ Built-in | ❌ External (Morgan, etc.) |
+| Ecosystem | 🟡 Growing | ⚡ Massive |
+| Maturity | 🟡 New | ⚡⚡⚡ Very mature |
+| Learning Curve | 🟢 Low | 🟢 Low |
+
+### Code Comparison
+
+<Tabs items={['Igniter.js', 'Express.js']}>
+  <Tab value="Igniter.js">
+    ```typescript
+    // Route with automatic validation & typing
+    const createUser = igniter.mutation({
+      path: '/users',
+      method: 'POST',
+      body: z.object({
+        name: z.string().min(2),
+        email: z.string().email(),
+        age: z.number().min(18)
+      }),
+      handler: async ({ request, response }) => {
+        // ✅ request.body is validated and typed
+        const { name, email, age } = request.body;
+        
+        const user = await db.users.create({ 
+          data: { name, email, age } 
+        });
+        
+        return response.created({ user });
+      }
+    });
+    
+    // Client: Automatic type-safe hooks
+    const { mutate, isLoading } = client.users.create.useMutation();
+    
+    await mutate({ 
+      body: { name: 'John', email: 'john@example.com', age: 25 } 
+    });
+    ```
+  </Tab>
+  
+  <Tab value="Express.js">
+    ```typescript
+    import { body, validationResult } from 'express-validator';
+    
+    // Route with manual validation
+    app.post('/users',
+      // Manual validation rules
+      body('name').isString().isLength({ min: 2 }),
+      body('email').isEmail(),
+      body('age').isInt({ min: 18 }),
+      async (req, res) => {
+        // Manual error checking
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ errors: errors.array() });
+        }
+        
+        // ⚠️ Manual type casting
+        const { name, email, age } = req.body as {
+          name: string;
+          email: string;
+          age: number;
+        };
+        
+        const user = await db.users.create({ 
+          data: { name, email, age } 
+        });
+        
+        res.status(201).json({ user });
+      }
+    );
+    
+    // Client: Manual fetch
+    const response = await fetch('/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'John', email: 'john@example.com', age: 25 })
+    });
+    
+    const data = await response.json() as { user: User };
+    ```
+  </Tab>
+</Tabs>
+
+### When to Choose Express
+
+<Cards>
+  <Card title="Huge Ecosystem">
+    Need access to thousands of Express plugins
+  </Card>
+  <Card title="Team Experience">
+    Team is already experienced with Express
+  </Card>
+  <Card title="Migration">
+    Migrating from existing Express codebase
+  </Card>
+  <Card title="Maximum Control">
+    Need low-level HTTP control
+  </Card>
+</Cards>
+
+### When to Choose Igniter.js
+
+<Cards>
+  <Card title="Type Safety">
+    Want automatic end-to-end type safety
+  </Card>
+  <Card title="Modern DX">
+    Prefer modern TypeScript-first development
+  </Card>
+  <Card title="Auto Client">
+    Need automatic client generation
+  </Card>
+  <Card title="Built-in Tools">
+    Want validation, jobs, telemetry out of the box
+  </Card>
+</Cards>
+
+---
+
+## Igniter.js vs Fastify
+
+### Overview
+
+Fastify is the fastest Node.js framework, optimized for performance. Igniter.js prioritizes developer experience while maintaining excellent performance.
+
+### Feature Comparison
+
+| Feature | Igniter.js | Fastify |
+|---------|------------|---------|
+| Performance | ⚡⚡ Very fast | ⚡⚡⚡ Fastest |
+| Type Safety | ✅ Automatic inference | ⚠️ Manual generics |
+| Validation | ✅ Zod/Valibot | ✅ JSON Schema |
+| Client Generation | ✅ Automatic | ❌ Manual |
+| React Hooks | ✅ Built-in | ❌ External |
+| Schema Required | ⚠️ Optional | ✅ Recommended |
+| OpenAPI | ✅ Auto-generated | ⚠️ Via plugin |
+| DX | ⚡ Excellent | 🟡 Good |
+| Ecosystem | 🟡 Growing | ⚡ Large |
+| Plugin System | ✅ Yes | ⚡⚡ Very rich |
+
+### Code Comparison
+
+<Tabs items={['Igniter.js', 'Fastify']}>
+  <Tab value="Igniter.js">
+    ```typescript
+    // Automatic type inference
+    const getUser = igniter.query({
+      name: 'Get User',
+      description: 'Retrieve a specific user by ID',
+      path: '/users/:id' as const,
+      handler: async ({ request, response }) => {
+        // ✅ request.params.id is automatically typed
+        const user = await db.users.findUnique({ 
+          where: { id: request.params.id } 
+        });
+        
+        if (!user) {
+          return response.notFound('User not found');
+        }
+        
+        return response.success({ user });
+      }
+    });
+    
+    // Client: Automatic hooks
+    const { data, isLoading } = client.users.getById.useQuery({
+      params: { id: '123' }
+    });
+    ```
+  </Tab>
+  
+  <Tab value="Fastify">
+    ```typescript
+    // Manual type definitions
+    interface GetUserParams {
+      id: string;
+    }
+    
+    interface GetUserReply {
+      user: User;
+    }
+    
+    fastify.get<{
+      Params: GetUserParams;
+      Reply: GetUserReply;
+    }>('/users/:id', {
+      schema: {
+        params: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              user: { type: 'object' }
+            }
+          }
+        }
+      }
+    }, async (request, reply) => {
+      const user = await db.users.findUnique({ 
+        where: { id: request.params.id } 
+      });
+      
+      if (!user) {
+        return reply.code(404).send({ error: 'User not found' });
+      }
+      
+      return { user };
+    });
+    
+    // Client: Manual fetch
+    const response = await fetch('/users/123');
+    const data = await response.json() as GetUserReply;
+    ```
+  </Tab>
+</Tabs>
+
+### When to Choose Fastify
+
+<Cards>
+  <Card title="Maximum Performance">
+    Performance is the absolute top priority
+  </Card>
+  <Card title="JSON Schema">
+    Prefer JSON Schema over Zod
+  </Card>
+  <Card title="Rich Plugins">
+    Need access to Fastify's plugin ecosystem
+  </Card>
+  <Card title="Low-Level Control">
+    Need fine-grained HTTP control
+  </Card>
+</Cards>
+
+### When to Choose Igniter.js
+
+<Cards>
+  <Card title="Better DX">
+    Developer experience matters more than raw speed
+  </Card>
+  <Card title="Auto Types">
+    Want automatic type inference
+  </Card>
+  <Card title="React Integration">
+    Need built-in React hooks
+  </Card>
+  <Card title="Zod/Valibot">
+    Prefer Zod over JSON Schema
+  </Card>
+</Cards>
+
+---
+
+## Summary
+
+Choose **Igniter.js** if you want:
+
+- ✅ **End-to-end type safety** without code generation
+- ✅ **Framework flexibility** (not locked to Next.js)
+- ✅ **Standard HTTP/REST** support
+- ✅ **Built-in ecosystem** (jobs, caching, telemetry, bots)
+- ✅ **Excellent DX** with automatic client generation
+- ✅ **Production-ready** features out of the box
+
+<Callout type="success" title="Ready to Start?">
+  Igniter.js combines the best of all worlds: tRPC's type safety, Express's flexibility, and a rich built-in ecosystem.
+  
+  [Get Started →](/docs/installation)
+</Callout>

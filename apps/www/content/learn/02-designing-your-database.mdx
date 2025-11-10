@@ -1,0 +1,290 @@
+---
+title: "02: Setup Database"
+description: "Design and create your database schema with Prisma"
+---
+
+import { ChapterObjectives } from '@/components/learn/chapter-objectives'
+import { ChapterNav } from '@/components/learn/chapter-nav'
+import { Quiz } from '@/components/learn/quiz'
+
+<ChapterObjectives
+  objectives={[
+    { text: 'Understand the data model for Shortify' },
+    { text: 'Create your Prisma schema' },
+    { text: 'Run your first migration' },
+    { text: 'Explore your database with Prisma Studio' }
+  ]}
+/>
+
+Now that your project is set up, let's design the database. For Shortify, we need to store three main types of information: users, shortened links, and clicks.
+
+## The Data Model
+
+Before writing any code, it's crucial to understand what data our application needs to store and how different pieces of data relate to each other. This upfront planning prevents costly refactoring later.
+
+Our SaaS needs three core models that work together to provide the link shortening functionality:
+
+```prisma
+// Users who create and manage links
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  links     Link[]
+}
+
+// Shortened links created by users
+model Link {
+  id        String   @id @default(cuid())
+  shortCode String   @unique
+  url       String
+  userId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  clicks    Click[]
+}
+
+// Click events tracked for analytics
+model Click {
+  id        String   @id @default(cuid())
+  linkId    String
+  createdAt DateTime @default(now())
+  link      Link     @relation(fields: [linkId], references: [id])
+}
+```
+
+### Understanding the Design
+
+Let's break down why we designed the schema this way:
+
+- **User Model**: Stores the essential authentication information. The `email` field is marked as `@unique` to prevent duplicate accounts. The `password` field will store a hashed version (never plain text!). The `links` field creates a one-to-many relationship—one user can have many links.
+
+- **Link Model**: This is the heart of our application. The `shortCode` is what appears in the short URL (e.g., `short.ly/github`), and it must be unique. The `url` is the original long URL we're shortening. The `userId` creates the relationship back to the user who owns this link.
+
+- **Click Model**: Keeps it simple for analytics. Each time someone clicks a link, we create a new `Click` record. This gives us basic analytics like total clicks and click timestamps without the complexity of geolocation or device tracking.
+
+## Creating the Schema
+
+Prisma uses a declarative schema language that's both human-readable and type-safe. When you ran `igniter init`, it created a basic `prisma/schema.prisma` file. Let's build upon it.
+
+Open the file `prisma/schema.prisma`. You'll see the foundational configuration:
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+```
+
+The `generator` section tells Prisma to generate a TypeScript client, and the `datasource` section configures the PostgreSQL connection using an environment variable for security.
+
+Now, add the three models we designed above to this file:
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  links     Link[]
+}
+
+model Link {
+  id        String   @id @default(cuid())
+  shortCode String   @unique
+  url       String
+  userId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  clicks    Click[]
+}
+
+model Click {
+  id        String   @id @default(cuid())
+  linkId    String
+  createdAt DateTime @default(now())
+  link      Link     @relation(fields: [linkId], references: [id])
+}
+```
+
+## Setting Up the Database
+
+Before we can apply this schema, we need to ensure PostgreSQL is running. If you selected Docker during setup, start it with:
+
+```bash
+docker-compose up -d
+```
+
+This starts PostgreSQL in the background. The `-d` flag means "detached mode"—it runs without blocking your terminal.
+
+Now, push the schema to your database:
+
+```bash
+npx prisma db push
+```
+
+This single command does three powerful things:
+1. **Reads** your `schema.prisma` file
+2. **Creates** all the tables in PostgreSQL with the correct structure
+3. **Generates** the Prisma Client with full TypeScript types
+
+You should see output confirming that your database is now synchronized with your schema.
+
+<Callout type="info">
+**Why `db push` instead of `migrate`?**  
+During development, `db push` is faster and more flexible—it applies changes directly without creating migration files. When you're ready for production, you'll use `prisma migrate` to create versioned migration files that can be safely applied to production databases.
+</Callout>
+
+## Exploring with Prisma Studio
+
+Prisma includes a powerful visual database browser that makes it incredibly easy to inspect and manipulate your data during development.
+
+Launch it with:
+
+```bash
+npx prisma studio
+```
+
+This opens a web interface at `http://localhost:5555` where you can:
+- **View all tables** and their data in a clean UI
+- **Create records** manually without writing SQL
+- **Edit and delete** data with a few clicks
+- **Test relationships** by navigating between related records
+
+<Callout type="success">
+**Pro Tip**: Keep Prisma Studio open in a browser tab while you develop. It's invaluable for quickly checking if your API endpoints are creating data correctly!
+</Callout>
+
+## Adding Seed Data
+
+Starting with an empty database makes testing difficult. Let's create a seed script that populates the database with sample data.
+
+Create a new file at `prisma/seed.ts`:
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
+
+const prisma = new PrismaClient()
+
+async function main() {
+  // Clean the database
+  await prisma.click.deleteMany()
+  await prisma.link.deleteMany()
+  await prisma.user.deleteMany()
+
+  // Create a test user
+  const user = await prisma.user.create({
+    data: {
+      email: 'test@example.com',
+      password: await bcrypt.hash('password123', 10),
+      name: 'Test User',
+    },
+  })
+
+  // Create sample links
+  await prisma.link.createMany({
+    data: [
+      {
+        shortCode: 'github',
+        url: 'https://github.com',
+        userId: user.id,
+      },
+      {
+        shortCode: 'igniter',
+        url: 'https://igniterjs.com',
+        userId: user.id,
+      },
+    ],
+  })
+
+  console.log('✅ Database seeded successfully!')
+}
+
+main()
+  .catch((e) => {
+    console.error(e)
+    process.exit(1)
+  })
+  .finally(async () => {
+    await prisma.$disconnect()
+  })
+```
+
+This seed script is straightforward but powerful. It clears existing data (useful for development resets), creates a test user with a securely hashed password, and adds a couple of sample links.
+
+Now configure the seed script in your `package.json`:
+
+```json
+{
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
+```
+
+Install the required dependencies:
+
+```bash
+npm install bcryptjs
+npm install -D @types/bcryptjs tsx
+```
+
+Finally, run the seed:
+
+```bash
+npx prisma db seed
+```
+
+Open Prisma Studio again, and you'll see your test data! You now have a user you can log in with and some links to work with.
+
+## Quiz
+
+<Quiz
+  question="Why do we use @unique on the shortCode field?"
+  options={[
+    { label: 'To improve database performance', value: 'performance' },
+    { label: 'To ensure each link has a different code', value: 'unique', isCorrect: true },
+    { label: 'To create an index in the database', value: 'index' },
+    { label: 'It is required by Prisma', value: 'required' }
+  ]}
+  explanation="The @unique constraint ensures no two links share the same shortCode. Imagine the chaos if multiple links had the code 'promo'—users would never know which URL they'd get!"
+/>
+
+<Quiz
+  question="Which command should you use during development to apply schema changes?"
+  options={[
+    { label: 'prisma migrate dev', value: 'migrate' },
+    { label: 'prisma db push', value: 'push', isCorrect: true },
+    { label: 'prisma generate', value: 'generate' },
+    { label: 'prisma studio', value: 'studio' }
+  ]}
+  explanation="During development, `prisma db push` is faster and more practical. It applies changes directly to the database without creating migration files."
+/>
+
+<ChapterNav
+  current={{ number: 2, title: 'Designing Your Database' }}
+  next={{
+    number: 3,
+    title: 'Your First Feature',
+    description: 'Generate a complete CRUD feature using the Igniter.js CLI and understand how controllers, services, and procedures work together.',
+    href: '/learn/03-first-feature'
+  }}
+/>
+

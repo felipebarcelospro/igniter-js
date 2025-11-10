@@ -1,0 +1,908 @@
+---
+title: "04: Authentication"
+description: "Build a complete authentication system from scratch"
+---
+
+import { ChapterObjectives } from '@/components/learn/chapter-objectives'
+import { ChapterNav } from '@/components/learn/chapter-nav'
+import { Quiz } from '@/components/learn/quiz'
+
+<ChapterObjectives
+  objectives={[
+    { text: 'Create auth feature with sign up and sign in' },
+    { text: 'Implement password hashing with bcrypt' },
+    { text: 'Generate and validate JWT tokens' },
+    { text: 'Create an auth procedure to protect routes' },
+    { text: 'Use context extension for user sessions' }
+  ]}
+/>
+
+Let's build a complete authentication system using only Igniter.js patterns, without complex external dependencies. We'll follow the established framework conventions for maximum type safety and developer experience.
+
+## Creating the Auth Feature
+
+First, let's generate the basic structure:
+
+```bash
+igniter generate feature auth --schema prisma:User
+```
+
+We'll heavily customize this feature because authentication has specific requirements around security and session management.
+
+## Defining Interfaces and Constants
+
+Authentication requires several constants and schemas. These should be centralized in the interfaces file for easy maintenance and reuse.
+
+Open `src/features/auth/auth.interfaces.ts` and add:
+
+```typescript
+import { z } from "zod";
+
+/**
+ * Number of salt rounds for bcrypt password hashing
+ * Higher numbers = more secure but slower
+ */
+export const SALT_ROUNDS = 10;
+
+/**
+ * JWT secret key from environment variables
+ * MUST be set in production to a strong random string
+ */
+export const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
+
+/**
+ * JWT token expiration time (7 days)
+ * Adjust based on your security requirements
+ */
+export const JWT_EXPIRES_IN = "7d";
+
+/**
+ * Request body schema for user sign up
+ * Validates email format and password strength
+ */
+export const SignUpBodySchema = z.object({
+  email: z.string().email("Invalid email format"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  name: z.string().optional(),
+});
+
+/**
+ * Request body schema for user sign in
+ * Simpler validation since we're just checking credentials
+ */
+export const SignInBodySchema = z.object({
+  email: z.string().email("Invalid email format"),
+  password: z.string().min(1, "Password is required"),
+});
+
+/**
+ * Type for sign up request body
+ * Inferred from Zod schema for type safety
+ */
+export type SignUpBody = z.infer<typeof SignUpBodySchema>;
+
+/**
+ * Type for sign in request body
+ * Inferred from Zod schema for type safety
+ */
+export type SignInBody = z.infer<typeof SignInBodySchema>;
+
+/**
+ * JWT payload structure
+ * Contains only public, non-sensitive user data
+ */
+export type JwtPayload = {
+  userId: string;
+  email: string;
+};
+```
+
+These constants and schemas form the foundation of our authentication system. Notice how we use Zod to validate inputs and TypeScript to ensure type safety throughout.
+
+## Creating Global Services
+
+Authentication uses two core services: one for password hashing and one for JWT operations. These are global utilities used across multiple features, so they should be injected at the application level.
+
+Create `src/services/password.service.ts`:
+
+```typescript
+import bcrypt from "bcryptjs";
+
+/**
+ * Service responsible for password hashing and verification
+ * Uses bcrypt for secure one-way hashing
+ */
+export class PasswordService {
+  /**
+   * Hash a plain text password
+   * @param password - The plain text password to hash
+   * @param saltRounds - Number of salt rounds (higher = more secure but slower)
+   * @returns Promise resolving to the hashed password
+   */
+  async hash(password: string, saltRounds: number = 10): Promise<string> {
+    return bcrypt.hash(password, saltRounds);
+  }
+
+  /**
+   * Compare a plain text password with a hash
+   * @param password - The plain text password to check
+   * @param hash - The hashed password to compare against
+   * @returns Promise resolving to true if passwords match
+   */
+  async compare(password: string, hash: string): Promise<boolean> {
+    return bcrypt.compare(password, hash);
+  }
+}
+```
+
+Now create `src/services/jwt.service.ts`:
+
+```typescript
+import jwt from "jsonwebtoken";
+
+/**
+ * Service responsible for JWT token generation and verification
+ * Handles encoding user data into secure tokens
+ */
+export class JwtService {
+  /**
+   * Generate a JWT token with the given payload
+   * @param payload - Data to encode in the token
+   * @param secret - Secret key for signing
+   * @param expiresIn - Token expiration time (e.g., "7d", "24h")
+   * @returns Signed JWT token string
+   */
+  sign<T extends object>(
+    payload: T,
+    secret: string,
+    expiresIn: string = "7d"
+  ): string {
+    return jwt.sign(payload, secret, { expiresIn });
+  }
+
+  /**
+   * Verify and decode a JWT token
+   * @param token - The JWT token to verify
+   * @param secret - Secret key used for signing
+   * @returns Decoded payload if valid, null if invalid/expired
+   */
+  verify<T extends object>(token: string, secret: string): T | null {
+    try {
+      return jwt.verify(token, secret) as T;
+    } catch {
+      // Token is invalid, expired, or malformed
+      return null;
+    }
+  }
+}
+```
+
+### Injecting Services Globally
+
+These services need to be available application-wide. Open `src/igniter.context.ts` and inject them:
+
+```typescript
+import { database } from "@/services/database";
+import { PasswordService } from "@/services/password.service";
+import { JwtService } from "@/services/jwt.service";
+
+export const createIgniterAppContext = () => {
+  return {
+    database,
+    services: {
+      password: new PasswordService(),
+      jwt: new JwtService(),
+    },
+  };
+};
+
+export type IgniterAppContext = ReturnType<typeof createIgniterAppContext>;
+```
+
+By placing these in the global context, they're available to any controller or procedure without needing to instantiate them repeatedly.
+
+## Creating the Auth Service
+
+Now let's create the service for user data access. Since this service will be used globally (not just in auth controllers), we'll inject it into the global context as well.
+
+Create `src/services/auth.service.ts`:
+
+```typescript
+import { PrismaClient, User } from "@prisma/client";
+
+/**
+ * Service responsible for user data access and management
+ * Handles database operations for the User entity
+ */
+export class AuthService {
+  constructor(private prisma: PrismaClient) {}
+
+  /**
+   * Find a user by email address
+   * Used during sign in to locate the account
+   */
+  async findByEmail(email: string): Promise<User | null> {
+    return this.prisma.user.findUnique({
+      where: { email },
+    });
+  }
+
+  /**
+   * Find a user by ID
+   * Used to fetch user data after JWT validation
+   * Excludes password for security
+   */
+  async findById(id: string): Promise<Omit<User, 'password'> | null> {
+    return this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        createdAt: true,
+        // Note: password is intentionally excluded
+      },
+    });
+  }
+
+  /**
+   * Create a new user account
+   * Password should already be hashed before calling this
+   */
+  async create(data: {
+    email: string;
+    password: string;
+    name?: string;
+  }): Promise<User> {
+    return this.prisma.user.create({
+      data,
+    });
+  }
+}
+```
+
+Now inject it into the global context. Open `src/igniter.context.ts` again and add the `AuthService`:
+
+```typescript
+import { database } from "@/services/database";
+import { PasswordService } from "@/services/password.service";
+import { JwtService } from "@/services/jwt.service";
+import { AuthService } from "@/services/auth.service";
+
+export const createIgniterAppContext = () => {
+  return {
+    database,
+    services: {
+      password: new PasswordService(),
+      jwt: new JwtService(),
+      auth: new AuthService(database),
+    },
+  };
+};
+
+export type IgniterAppContext = ReturnType<typeof createIgniterAppContext>;
+```
+
+The `AuthService` is now available globally via `context.services.auth`, making it easy to use across all controllers and procedures.
+
+## Creating the Auth Controller
+
+Now let's build the controller with sign up, sign in, and session endpoints. We'll also set JWT tokens as HTTP-only cookies for automatic authentication.
+
+Create `src/features/auth/controllers/auth.controller.ts`:
+
+```typescript
+import { igniter } from "@/igniter";
+import { z } from "zod";
+import {
+  SignUpBodySchema,
+  SignInBodySchema,
+  SALT_ROUNDS,
+  JWT_SECRET,
+  JWT_EXPIRES_IN,
+  JwtPayload,
+} from "../auth.interfaces";
+
+export const authController = igniter.controller({
+  name: "auth",
+  path: "/auth",
+  actions: {
+    /**
+     * Sign up a new user account
+     */
+    signUp: igniter.action({
+      method: "POST",
+      path: "/signup",
+      body: SignUpBodySchema,
+      handler: async ({ context, response, request }) => {
+        const { email, password, name } = request.body;
+
+        // Business Rule: Check if user already exists
+        const existingUser = await context.services.auth.findByEmail(email);
+
+        if (existingUser) {
+          return response.badRequest("Email already registered");
+        }
+
+        // Business Rule: Hash password before storing
+        // Never store plain text passwords!
+        const hashedPassword = await context.services.password.hash(
+          password,
+          SALT_ROUNDS
+        );
+
+        // Business Rule: Create user with hashed password
+        const user = await context.services.auth.create({
+          email,
+          password: hashedPassword,
+          name,
+        });
+
+        // Business Rule: Generate JWT token for immediate login
+        // This provides a seamless experience after signup
+        const token = context.services.jwt.sign<JwtPayload>(
+          {
+            userId: user.id,
+            email: user.email,
+          },
+          JWT_SECRET,
+          JWT_EXPIRES_IN
+        );
+
+        // Business Rule: Set token as HTTP-only cookie for automatic auth
+        // This means the frontend doesn't need to manually handle tokens
+        return response
+          .setCookie('auth-token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 7, // 7 days in seconds
+            path: '/',
+          })
+          .created({
+            user: {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+            },
+            token, // Still return token for manual handling if needed
+          });
+      },
+    }),
+
+    /**
+     * Sign in an existing user
+     */
+    signIn: igniter.action({
+      method: "POST",
+      path: "/signin",
+      body: SignInBodySchema,
+      handler: async ({ context, response, request }) => {
+        const { email, password } = request.body;
+
+        // Business Rule: Find user by email
+        const user = await context.services.auth.findByEmail(email);
+
+        if (!user) {
+          // Security: Use generic message to prevent email enumeration
+          return response.unauthorized("Invalid credentials");
+        }
+
+        // Business Rule: Verify password hash
+        const isValidPassword = await context.services.password.compare(
+          password,
+          user.password
+        );
+
+        if (!isValidPassword) {
+          return response.unauthorized("Invalid credentials");
+        }
+
+        // Business Rule: Generate JWT token
+        const token = context.services.jwt.sign<JwtPayload>(
+          {
+            userId: user.id,
+            email: user.email,
+          },
+          JWT_SECRET,
+          JWT_EXPIRES_IN
+        );
+
+        // Business Rule: Set token as HTTP-only cookie
+        return response
+          .setCookie('auth-token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 7, // 7 days
+            path: '/',
+          })
+          .success({
+            user: {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+            },
+            token, // Also return in body for flexibility
+          });
+      },
+    }),
+
+    /**
+     * Get current session (requires authentication)
+     */
+    getSession: igniter.action({
+      method: "GET",
+      path: "/session",
+      handler: async ({ context, response, request }) => {
+        // Business Rule: Try cookie first, then fall back to Authorization header
+        const tokenFromCookie = request.cookies.get('auth-token');
+        const authHeader = request.headers.get("Authorization");
+        const tokenFromHeader = authHeader?.startsWith("Bearer ") 
+          ? authHeader.substring(7) 
+          : null;
+
+        const token = tokenFromCookie || tokenFromHeader;
+        
+        if (!token) {
+          return response.unauthorized("No token provided");
+        }
+
+        // Business Rule: Verify and decode token
+        const payload = context.services.jwt.verify<JwtPayload>(
+          token,
+          JWT_SECRET
+        );
+
+        if (!payload) {
+          return response.unauthorized("Invalid or expired token");
+        }
+
+        // Business Rule: Fetch current user data
+        const user = await context.services.auth.findById(payload.userId);
+
+        if (!user) {
+          return response.unauthorized("User not found");
+        }
+
+        return response.success({
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+          },
+        });
+      },
+    }),
+
+    /**
+     * Sign out - clear the auth cookie
+     */
+    signOut: igniter.action({
+      method: "POST",
+      path: "/signout",
+      handler: async ({ response }) => {
+        // Business Rule: Clear the auth cookie
+        return response
+          .setCookie('auth-token', '', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 0, // Expire immediately
+            path: '/',
+          })
+          .success({ message: 'Signed out successfully' });
+      },
+    }),
+  },
+});
+```
+
+This controller demonstrates several key authentication patterns:
+
+**Sign Up**: Validates input, checks for existing users, hashes the password, creates the account, generates a JWT token, **and sets it as an HTTP-only cookie**.
+
+**Sign In**: Verifies credentials using bcrypt, generates a JWT token, and **sets it as an HTTP-only cookie** for automatic authentication.
+
+**Get Session**: Validates a JWT token from **cookies first (preferred)**, falls back to Authorization header, and returns the current user data.
+
+**Sign Out**: Clears the auth cookie by setting its maxAge to 0.
+
+### Why HTTP-Only Cookies?
+
+Using HTTP-only cookies for JWT tokens provides several security benefits:
+
+1. **XSS Protection**: JavaScript cannot access HTTP-only cookies, protecting against cross-site scripting attacks
+2. **Automatic Inclusion**: Browsers automatically include cookies in requests, so the frontend doesn't need to manually add Authorization headers
+3. **Secure Flag**: In production, cookies are marked as `secure`, meaning they only transmit over HTTPS
+4. **SameSite Protection**: The `sameSite: 'lax'` setting protects against CSRF attacks
+
+The token is still returned in the response body for flexibility (e.g., for mobile apps or custom authentication flows).
+
+Notice the detailed comments explaining each business rule. This makes the code self-documenting.
+
+## Creating the Auth Procedure
+
+Now let's create a procedure to protect routes. This procedure will validate JWT tokens and inject the authenticated user into the context.
+
+Create `src/features/auth/procedures/auth.procedure.ts`:
+
+```typescript
+import { igniter } from "@/igniter";
+import { User } from "@prisma/client";
+import { JWT_SECRET, JwtPayload } from "../auth.interfaces";
+
+/**
+ * Options for configuring the auth procedure
+ */
+type AuthProcedureOptions = {
+  /** If false, allows requests without authentication */
+  required?: boolean;
+};
+
+/**
+ * Procedure that validates JWT and injects user into context
+ * Can be configured to make authentication optional or required
+ */
+export const authProcedure = igniter.procedure<AuthProcedureOptions>({
+  name: "authProcedure",
+  handler: async (options, { context, request }) => {
+    // Business Rule: Try cookie first, then fall back to Authorization header
+    const tokenFromCookie = request.cookies.get('auth-token');
+    const authHeader = request.headers.get("Authorization");
+    const tokenFromHeader = authHeader?.startsWith("Bearer ") 
+      ? authHeader.substring(7) 
+      : null;
+
+    const token = tokenFromCookie || tokenFromHeader;
+
+    if (!token) {
+      // Observation: If auth is required, return error response
+      if (options?.required !== false) {
+        return context.response.unauthorized("Authentication required");
+      }
+      // Observation: If auth is optional, return null user
+      return {
+        auth: {
+          session: {
+            user: null,
+          },
+        },
+      };
+    }
+
+    // Business Rule: Verify JWT token
+    const payload = context.services.jwt.verify<JwtPayload>(token, JWT_SECRET);
+
+    if (!payload) {
+      if (options?.required !== false) {
+        return context.response.unauthorized("Invalid or expired token");
+      }
+      return {
+        auth: {
+          session: {
+            user: null,
+          },
+        },
+      };
+    }
+
+    // Business Rule: Fetch user from database
+    const user = await context.services.auth.findById(payload.userId);
+
+    if (!user) {
+      if (options?.required !== false) {
+        return context.response.unauthorized("User not found");
+      }
+      return {
+        auth: {
+          session: {
+            user: null,
+          },
+        },
+      };
+    }
+
+    // Observation: Inject authenticated user into context
+    return {
+      auth: {
+        session: {
+          user,
+        },
+      },
+    };
+  },
+});
+```
+
+### Understanding the Auth Procedure
+
+This procedure is incredibly powerful. Let's break down its key features:
+
+1. **Options Parameter First**: The handler signature is `async (options, { context, request })`. This is the standard pattern for Igniter.js procedures - options come first, then the context object.
+
+2. **Cookie-First Authentication**: Checks `request.cookies.get('auth-token')` first, then falls back to the `Authorization` header. This dual approach provides flexibility while prioritizing the more secure cookie method.
+
+3. **Optional Authentication**: The `required` option (defaults to `true`) allows routes to make authentication optional. When `required: false`, the procedure returns `user: null` instead of an error.
+
+4. **Global Service Usage**: Uses `context.services.jwt` and `context.services.auth` which are injected in the global context. No manual service instantiation needed.
+
+5. **Context Extension**: Returns an object that extends the context with `auth.session.user`, making the authenticated user available to all subsequent handlers in the chain.
+
+6. **Type Inference**: TypeScript automatically infers the extended context type. There's no need for explicit type annotations like `as AuthContext` - the framework handles this for you.
+
+## Protecting Routes
+
+Now we can protect the link controller. Open `src/features/link/controllers/link.controller.ts` and add the `authProcedure`:
+
+```typescript
+import { authProcedure } from "@/features/auth/procedures/auth.procedure";
+import { linkProcedure } from "../procedures/link.procedure";
+
+export const linkController = igniter.controller({
+  name: "link",
+  path: "/link",
+  actions: {
+    create: igniter.action({
+      method: "POST",
+      path: "/",
+      body: CreateLinkBodySchema,
+      use: [authProcedure, linkProcedure], // Auth first, then link!
+      handler: async ({ context, response, request }) => {
+        // Business Rule: Use authenticated user ID
+        // TypeScript knows user exists because authProcedure is required by default
+        const userId = context.auth.session.user!.id;
+
+        const link = await context.link.service.link.create({
+          ...request.body,
+          userId, // Ensures link belongs to authenticated user
+        });
+
+        return response.created(link);
+      },
+    }),
+    // ... other endpoints
+  },
+});
+```
+
+Now all endpoints in the link controller are protected. Requests without a valid JWT token will be rejected with a 401 error.
+
+## Integrating Auth with the Link Feature
+
+Now that we have authentication working, we need to update the Link feature from Chapter 3 to use the authenticated user's ID. This ensures each link is owned by a specific user.
+
+### Update the Link Interface
+
+First, remove `userId` from the create body schema since it will come from the auth context. Open `src/features/link/link.interfaces.ts`:
+
+```typescript
+import { z } from "zod";
+
+export const CreateLinkBodySchema = z.object({
+  shortCode: z.string().min(1),
+  url: z.string().url(),
+  // Remove userId - it comes from auth context now
+});
+
+export type CreateLinkBody = z.infer<typeof CreateLinkBodySchema>;
+```
+
+### Update the Link Service
+
+The `LinkService` should accept `userId` as a parameter and filter results by user. Open `src/features/link/services/link.service.ts`:
+
+```typescript
+import { PrismaClient } from "@prisma/client";
+import { CreateLinkBody } from "../link.interfaces";
+
+export class LinkService {
+  constructor(private readonly database: PrismaClient) {}
+
+  /**
+   * Create a new link for a specific user
+   */
+  async create(data: CreateLinkBody, userId: string) {
+    return this.database.link.create({
+      data: {
+        ...data,
+        userId, // Associate link with user
+      },
+    });
+  }
+
+  /**
+   * Find all links for a specific user
+   */
+  async findMany(userId: string) {
+    return this.database.link.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  /**
+   * Find a link by ID (ensuring it belongs to the user)
+   */
+  async findById(id: string, userId: string) {
+    return this.database.link.findFirst({
+      where: { id, userId },
+    });
+  }
+
+  // Add more methods as needed (update, delete, etc.)
+}
+```
+
+### Update the Link Controller
+
+Now update the controller to use the authenticated user ID from context. Open `src/features/link/controllers/link.controller.ts`:
+
+```typescript
+import { igniter } from "@/igniter";
+import { authProcedure } from "@/features/auth/procedures/auth.procedure";
+import { linkProcedure } from "../procedures/link.procedure";
+import { CreateLinkBodySchema } from "../link.interfaces";
+
+export const linkController = igniter.controller({
+  name: "link",
+  path: "/link",
+  actions: {
+    /**
+     * Create a new link (requires authentication)
+     */
+    create: igniter.action({
+      method: "POST",
+      path: "/",
+      body: CreateLinkBodySchema,
+      use: [authProcedure, linkProcedure], // Auth provides user, link provides service
+      handler: async ({ context, response, request }) => {
+        // Get user ID from auth context (guaranteed to exist because authProcedure is required)
+        const userId = context.auth.session.user!.id;
+
+        // Create link with user ID from context, not from request body
+        const link = await context.link.service.link.create(
+          request.body,
+          userId
+        );
+
+        return response.created(link);
+      },
+    }),
+
+    /**
+     * List all links for the authenticated user
+     */
+    list: igniter.action({
+      method: "GET",
+      path: "/",
+      use: [authProcedure, linkProcedure],
+      handler: async ({ context, response }) => {
+        const userId = context.auth.session.user!.id;
+        const links = await context.link.service.link.findMany(userId);
+
+        return response.success(links);
+      },
+    }),
+
+    /**
+     * Get a specific link (only if it belongs to the user)
+     */
+    getById: igniter.action({
+      method: "GET",
+      path: "/:id",
+      use: [authProcedure, linkProcedure],
+      handler: async ({ context, response, request }) => {
+        const userId = context.auth.session.user!.id;
+        const link = await context.link.service.link.findById(
+          request.params.id,
+          userId
+        );
+
+        if (!link) {
+          return response.notFound("Link not found or you don't have access");
+        }
+
+        return response.success(link);
+      },
+    }),
+  },
+});
+```
+
+### Key Security Improvements
+
+By integrating authentication with the Link feature:
+
+1. **No Trust in Client Input**: The `userId` never comes from the request body - it's extracted from the verified JWT token in the auth context.
+
+2. **Automatic Access Control**: Each database query filters by `userId`, ensuring users can only see and modify their own links.
+
+3. **Type Safety**: TypeScript knows that `context.auth.session.user` exists after the `authProcedure` runs.
+
+4. **Clean Separation**: Auth logic is in the `authProcedure`, business logic is in the `LinkService`. The controller just wires them together.
+
+This is the power of Igniter.js procedures - they extend the context with domain-specific data (like the authenticated user), and subsequent procedures and handlers can use that data with full type safety.
+
+## Installing Dependencies
+
+Install the required packages:
+
+```bash
+npm install bcryptjs jsonwebtoken
+npm install -D @types/bcryptjs @types/jsonwebtoken
+```
+
+## Testing the Authentication
+
+Configure the JWT secret in `.env`:
+
+```bash
+JWT_SECRET="your-super-secret-jwt-key-change-this-in-production"
+```
+
+<Callout type="warn">
+**Security Warning**: In production, use a strong, randomly generated secret. Never commit secrets to version control!
+</Callout>
+
+Test the signup endpoint:
+
+```bash
+curl -X POST http://localhost:3000/api/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "password123",
+    "name": "John Doe"
+  }'
+```
+
+You'll receive a JWT token in the response. Copy it and use it to create a link:
+
+```bash
+curl -X POST http://localhost:3000/api/links \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -d '{
+    "shortCode": "test",
+    "url": "https://example.com"
+  }'
+```
+
+<Callout type="success">
+**Congratulations!** You've built a complete authentication system from scratch using only Igniter.js patterns. No complex external dependencies, complete type safety, and full control over the implementation!
+</Callout>
+
+## Quiz
+
+<Quiz
+  question="Why do we inject PasswordService and JwtService into igniter.context.ts?"
+  options={[
+    { label: 'To save memory', value: 'memory' },
+    { label: 'They are global services used by multiple features', value: 'global', isCorrect: true },
+    { label: 'To improve performance', value: 'performance' },
+    { label: 'It is required by Igniter.js', value: 'required' }
+  ]}
+  explanation="Global services (like password and JWT) are used by multiple features and should be injected in the global context to be accessible throughout the app."
+/>
+
+<Quiz
+  question="What does authProcedure do when required is false?"
+  options={[
+    { label: 'Returns 401 error', value: 'error' },
+    { label: 'Returns user: null in context', value: 'null', isCorrect: true },
+    { label: 'Ignores the token completely', value: 'ignore' },
+    { label: 'Redirects to login', value: 'redirect' }
+  ]}
+  explanation="When required is false, the procedure allows access without authentication but returns user: null in the context, enabling conditional logic in handlers."
+/>
+
+<ChapterNav
+  current={{ number: 4, title: 'Authentication' }}
+  next={{
+    number: 5,
+    title: 'Frontend Setup',
+    description: 'Connect your frontend using the auto-generated Igniter.js client with full type safety and built-in React hooks.',
+    href: '/learn/05-frontend-setup'
+  }}
+/>

@@ -1,0 +1,856 @@
+---
+title: "07: Click Tracking & Analytics"
+description: "Implement click tracking, capture visitor data, and build interactive analytics dashboards with charts and geographic insights."
+---
+
+In this chapter, we'll add comprehensive analytics to Shortify. You'll learn how to track clicks, capture visitor information (location, device, browser), and create beautiful visualizations to help users understand their link performance.
+
+<ChapterObjectives objectives={[
+  { text: "Create a redirect endpoint that tracks clicks before redirecting" },
+  { text: "Capture visitor metadata (IP, user agent, referrer)" },
+  { text: "Parse user agent data to extract device and browser information" },
+  { text: "Build an analytics page with charts using Recharts" },
+  { text: "Display geographic data and top-performing links" }
+]} />
+
+## Understanding Click Tracking
+
+When someone visits a shortened link (`/my-link`), we need to:
+
+1. **Record the click** - Save it to the database with metadata
+2. **Extract visitor data** - Parse IP, user agent, referrer
+3. **Redirect** - Send the user to the destination URL
+
+This must happen **fast**—users shouldn't notice any delay. We'll use an efficient approach that records the click and redirects immediately.
+
+## Creating the Redirect Route
+
+Next.js App Router allows us to create API routes as Route Handlers. We'll create a catch-all route that handles all shortened URLs.
+
+Create `src/app/[slug]/route.ts`:
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/database';
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { slug: string } }
+) {
+  const { slug } = params;
+
+  try {
+    // Find the link by slug
+    const link = await db.link.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        url: true,
+        isActive: true,
+      },
+    });
+
+    // If link doesn't exist or is inactive, show 404
+    if (!link || !link.isActive) {
+      return NextResponse.json(
+        { error: 'Link not found' },
+        { status: 404 }
+      );
+    }
+
+    // Extract visitor metadata
+    const ip = request.ip || 
+               request.headers.get('x-forwarded-for')?.split(',')[0] || 
+               request.headers.get('x-real-ip') || 
+               'unknown';
+    
+    const userAgent = request.headers.get('user-agent') || 'unknown';
+    const referrer = request.headers.get('referer') || null;
+
+    // Record the click asynchronously (don't wait for it)
+    // This ensures the redirect happens immediately
+    db.click.create({
+      data: {
+        linkId: link.id,
+        ip,
+        userAgent,
+        referrer,
+      },
+    }).catch((error) => {
+      // Log the error but don't block the redirect
+      console.error('Failed to record click:', error);
+    });
+
+    // Redirect to the destination URL
+    return NextResponse.redirect(link.url, { status: 307 });
+    
+  } catch (error) {
+    console.error('Error in redirect route:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### Understanding the Redirect Route
+
+**1. Catch-All Route**: The `[slug]` folder name makes this route match any path (e.g., `/my-link`, `/promo2024`).
+
+**2. Link Lookup**: We query the database for the link, selecting only the fields we need for efficiency.
+
+**3. Metadata Extraction**:
+   - **IP Address**: Tries multiple headers because proxies/load balancers use different headers
+   - **User Agent**: Contains browser, OS, and device information
+   - **Referrer**: Shows where the user came from (if available)
+
+**4. Async Click Recording**: We use `.catch()` instead of `await` so the redirect happens immediately without waiting for the database write.
+
+**5. 307 Redirect**: A temporary redirect that preserves the HTTP method (GET in this case).
+
+<Callout type="info" title="Why Async Recording?">
+Recording the click asynchronously means users get redirected instantly. The click data is saved in the background. If it fails, we log the error but don't impact the user experience.
+</Callout>
+
+## Enhancing Click Data with User Agent Parsing
+
+The raw user agent string contains useful information, but it's hard to read. Let's parse it to extract device type, browser, and OS information.
+
+First, install a user agent parser:
+
+```bash
+npm install ua-parser-js
+npm install -D @types/ua-parser-js
+```
+
+Now update the redirect route to parse user agent data:
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { UAParser } from 'ua-parser-js';
+import { db } from '@/lib/database';
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { slug: string } }
+) {
+  const { slug } = params;
+
+  try {
+    const link = await db.link.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        url: true,
+        isActive: true,
+      },
+    });
+
+    if (!link || !link.isActive) {
+      return NextResponse.json(
+        { error: 'Link not found' },
+        { status: 404 }
+      );
+    }
+
+    // Extract metadata
+    const ip = request.ip || 
+               request.headers.get('x-forwarded-for')?.split(',')[0] || 
+               request.headers.get('x-real-ip') || 
+               'unknown';
+    
+    const userAgent = request.headers.get('user-agent') || 'unknown';
+    const referrer = request.headers.get('referer') || null;
+
+    // Parse user agent to extract device/browser/OS info
+    const parser = new UAParser(userAgent);
+    const uaResult = parser.getResult();
+
+    // Record click with parsed data
+    db.click.create({
+      data: {
+        linkId: link.id,
+        ip,
+        userAgent,
+        referrer,
+        // Parsed user agent data
+        browser: uaResult.browser.name || null,
+        browserVersion: uaResult.browser.version || null,
+        os: uaResult.os.name || null,
+        osVersion: uaResult.os.version || null,
+        device: uaResult.device.type || 'desktop',
+        deviceModel: uaResult.device.model || null,
+      },
+    }).catch((error) => {
+      console.error('Failed to record click:', error);
+    });
+
+    return NextResponse.redirect(link.url, { status: 307 });
+    
+  } catch (error) {
+    console.error('Error in redirect route:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### Understanding User Agent Parsing
+
+**1. UAParser**: A lightweight library that parses user agent strings into structured data.
+
+**2. Extracted Data**:
+   - **Browser**: Chrome, Safari, Firefox, etc.
+   - **OS**: Windows, macOS, iOS, Android, etc.
+   - **Device**: mobile, tablet, desktop
+
+**3. Database Fields**: Make sure your Prisma schema has these optional fields in the `Click` model (they should already exist from Chapter 2).
+
+## Adding Analytics Endpoints to the Link Controller
+
+Now let's add actions to fetch analytics data. We'll create endpoints for overall stats and per-link analytics.
+
+Open `src/features/link/link.controller.ts` and add these new actions:
+
+```typescript
+// Add this to your existing link controller
+
+// Get overall analytics stats
+getStats: igniter.action({
+  use: [authProcedure],
+  handler: async ({ context }) => {
+    const userId = context.auth.session.user!.id;
+
+    // Get all user's links
+    const links = await context.db.link.findMany({
+      where: { userId },
+      include: {
+        clicks: true,
+      },
+    });
+
+    const totalLinks = links.length;
+    const totalClicks = links.reduce((sum, link) => sum + link.clicks.length, 0);
+
+    return context.response.ok({
+      totalLinks,
+      totalClicks,
+    });
+  },
+}),
+
+// Get analytics for a specific link
+getLinkAnalytics: igniter.action({
+  use: [authProcedure],
+  input: z.object({
+    id: z.string(),
+  }),
+  handler: async ({ input, context }) => {
+    const userId = context.auth.session.user!.id;
+
+    // Get link with all clicks
+    const link = await context.db.link.findFirst({
+      where: {
+        id: input.id,
+        userId,
+      },
+      include: {
+        clicks: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+    });
+
+    if (!link) {
+      return context.response.notFound({
+        message: 'Link not found',
+      });
+    }
+
+    // Aggregate analytics data
+    const totalClicks = link.clicks.length;
+    
+    // Group by browser
+    const browserStats = link.clicks.reduce((acc, click) => {
+      const browser = click.browser || 'Unknown';
+      acc[browser] = (acc[browser] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Group by device
+    const deviceStats = link.clicks.reduce((acc, click) => {
+      const device = click.device || 'desktop';
+      acc[device] = (acc[device] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Group by OS
+    const osStats = link.clicks.reduce((acc, click) => {
+      const os = click.os || 'Unknown';
+      acc[os] = (acc[os] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Clicks over time (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const recentClicks = link.clicks.filter(
+      (click) => new Date(click.createdAt) >= sevenDaysAgo
+    );
+
+    // Group by date
+    const clicksByDate = recentClicks.reduce((acc, click) => {
+      const date = new Date(click.createdAt).toISOString().split('T')[0];
+      acc[date] = (acc[date] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Top referrers
+    const referrerStats = link.clicks
+      .filter((click) => click.referrer)
+      .reduce((acc, click) => {
+        const referrer = click.referrer!;
+        acc[referrer] = (acc[referrer] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+    return context.response.ok({
+      link: {
+        id: link.id,
+        slug: link.slug,
+        url: link.url,
+      },
+      totalClicks,
+      browserStats,
+      deviceStats,
+      osStats,
+      clicksByDate,
+      referrerStats,
+    });
+  },
+}),
+```
+
+### Understanding the Analytics Actions
+
+**1. getStats**: Returns overall statistics for the dashboard overview (total links, total clicks).
+
+**2. getLinkAnalytics**: Returns detailed analytics for a specific link:
+   - **Browser distribution**: How many clicks from each browser
+   - **Device distribution**: Mobile vs tablet vs desktop
+   - **OS distribution**: Windows, macOS, iOS, Android, etc.
+   - **Clicks over time**: Daily click count for the last 7 days
+   - **Top referrers**: Where traffic is coming from
+
+**3. Data Aggregation**: We use `reduce()` to group clicks by different dimensions. This happens in-memory for speed.
+
+## Installing Chart Components
+
+For visualizations, we'll use Recharts—a composable charting library built on React components.
+
+```bash
+npm install recharts
+```
+
+Also install the Shadcn UI chart components wrapper:
+
+```bash
+npx shadcn@latest add chart
+```
+
+## Creating the Link Analytics Page
+
+Now let's create a dedicated analytics page for each link. This page will show detailed metrics with beautiful charts.
+
+Create `src/app/app/links/[id]/analytics/page.tsx`:
+
+```typescript
+'use client';
+
+import { use } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft, TrendingUp } from 'lucide-react';
+import Link from 'next/link';
+import { api } from '@/igniter.client';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart';
+import {
+  Bar,
+  BarChart,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+
+export default function LinkAnalyticsPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
+
+  const { data, isLoading } = api.link.getLinkAnalytics.useQuery({
+    body: { id },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <p className="text-muted-foreground">Loading analytics...</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4">
+        <p className="text-muted-foreground">Link not found</p>
+        <Button asChild>
+          <Link href="/app/links">Back to Links</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  // Transform data for charts
+  const browserData = Object.entries(data.browserStats).map(([name, value]) => ({
+    name,
+    value,
+  }));
+
+  const deviceData = Object.entries(data.deviceStats).map(([name, value]) => ({
+    name,
+    value,
+  }));
+
+  const osData = Object.entries(data.osStats).map(([name, value]) => ({
+    name,
+    value,
+  }));
+
+  const clicksOverTimeData = Object.entries(data.clicksByDate)
+    .map(([date, clicks]) => ({
+      date,
+      clicks,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const topReferrers = Object.entries(data.referrerStats)
+    .map(([url, clicks]) => ({
+      url,
+      clicks,
+    }))
+    .sort((a, b) => b.clicks - a.clicks)
+    .slice(0, 5);
+
+  return (
+    <div className="flex flex-1 flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" asChild>
+          <Link href="/app/links">
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+        </Button>
+        <div className="flex-1">
+          <h1 className="text-3xl font-bold">Link Analytics</h1>
+          <p className="text-muted-foreground">/{data.link.slug}</p>
+        </div>
+      </div>
+
+      {/* Stats Overview */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Total Clicks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{data.totalClicks}</div>
+            <p className="text-xs text-muted-foreground">All-time clicks</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">
+              Unique Browsers
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{browserData.length}</div>
+            <p className="text-xs text-muted-foreground">Different browsers</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">
+              Unique Devices
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{deviceData.length}</div>
+            <p className="text-xs text-muted-foreground">Device types</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Clicks Over Time */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Clicks Over Time</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer
+              config={{
+                clicks: {
+                  label: 'Clicks',
+                  color: 'hsl(var(--chart-1))',
+                },
+              }}
+              className="h-[300px]"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={clicksOverTimeData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(value) => {
+                      const date = new Date(value);
+                      return `${date.getMonth() + 1}/${date.getDate()}`;
+                    }}
+                  />
+                  <YAxis />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Line
+                    type="monotone"
+                    dataKey="clicks"
+                    stroke="var(--color-clicks)"
+                    strokeWidth={2}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        {/* Browser Distribution */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Browser Distribution</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer
+              config={browserData.reduce((acc, item, index) => ({
+                ...acc,
+                [item.name]: {
+                  label: item.name,
+                  color: COLORS[index % COLORS.length],
+                },
+              }), {})}
+              className="h-[300px]"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={browserData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) =>
+                      `${name} ${(percent * 100).toFixed(0)}%`
+                    }
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {browserData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        {/* Device Distribution */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Device Distribution</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer
+              config={deviceData.reduce((acc, item, index) => ({
+                ...acc,
+                [item.name]: {
+                  label: item.name,
+                  color: COLORS[index % COLORS.length],
+                },
+              }), {})}
+              className="h-[300px]"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={deviceData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="value" fill="#8884d8">
+                    {deviceData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        {/* Operating System Distribution */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Operating System</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer
+              config={osData.reduce((acc, item, index) => ({
+                ...acc,
+                [item.name]: {
+                  label: item.name,
+                  color: COLORS[index % COLORS.length],
+                },
+              }), {})}
+              className="h-[300px]"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={osData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="value" fill="#8884d8">
+                    {osData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Top Referrers */}
+      {topReferrers.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Referrers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {topReferrers.map((referrer, index) => (
+                <div key={index} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
+                      {index + 1}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium truncate max-w-md">
+                        {referrer.url}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      {referrer.clicks} clicks
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+```
+
+### Understanding the Analytics Page
+
+**1. Data Transformation**: We transform the stats objects into arrays that Recharts can consume.
+
+**2. Four Main Charts**:
+   - **Line Chart**: Shows click trends over the last 7 days
+   - **Pie Chart**: Browser distribution as percentages
+   - **Bar Chart (Devices)**: Visual comparison of mobile vs desktop vs tablet
+   - **Bar Chart (OS)**: Operating system distribution
+
+**3. Top Referrers**: A ranked list showing where traffic originates.
+
+**4. Responsive Charts**: All charts use `ResponsiveContainer` to adapt to screen sizes.
+
+**5. Color Palette**: Consistent colors across all charts using the `COLORS` array.
+
+## Adding Analytics Links to the Table
+
+Let's update the links table to include a link to view analytics for each link.
+
+Open `src/app/app/links/page.tsx` and update the actions column:
+
+```typescript
+// In the TableRow mapping, update the actions cell:
+
+<TableCell className="text-right">
+  <div className="flex justify-end gap-2">
+    <Button
+      variant="ghost"
+      size="icon"
+      asChild
+    >
+      <Link href={`/app/links/${link.id}/analytics`}>
+        <TrendingUp className="h-4 w-4" />
+      </Link>
+    </Button>
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => handleEdit(link.id)}
+    >
+      <Pencil className="h-4 w-4" />
+    </Button>
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => handleDelete(link.id)}
+    >
+      <Trash2 className="h-4 w-4 text-destructive" />
+    </Button>
+  </div>
+</TableCell>
+```
+
+Don't forget to import the `TrendingUp` icon at the top:
+
+```typescript
+import { Plus, Pencil, Trash2, Copy, ExternalLink, TrendingUp } from 'lucide-react';
+```
+
+## Testing Click Tracking and Analytics
+
+Start your development server:
+
+```bash
+igniter dev
+```
+
+Now test the complete analytics flow:
+
+1. **Create a few test links** at `/app/links`
+
+2. **Open shortened links in different browsers/devices**
+   - Open `/your-slug` in Chrome
+   - Open `/your-slug` on your phone
+   - Open `/your-slug` in Safari (if available)
+   - This simulates traffic from different sources
+
+3. **View analytics** by clicking the chart icon on any link
+   - You should see the clicks distributed across browsers
+   - Device types should reflect desktop/mobile usage
+   - The line chart shows clicks over time
+
+4. **Test referrers** by sharing a link from another website
+   - Create a simple HTML file with a link to your shortened URL
+   - Open it in a browser and click
+   - The referrer should appear in "Top Referrers"
+
+5. **Check the dashboard** at `/app`
+   - Total clicks should increase with each visit
+   - Recent links table should update
+
+<Callout type="success" title="Analytics Working!">
+You now have a complete analytics system that:
+- Tracks every click with detailed metadata
+- Parses user agents to identify browsers, devices, and OS
+- Provides beautiful visualizations with Recharts
+- Shows geographic insights (via IP) and referrer sources
+- Updates in real-time as new clicks come in
+</Callout>
+
+## Key Concepts Review
+
+**1. Catch-All Routes**: Next.js `[slug]` routes match dynamic paths. We use this to handle all shortened URLs in one place.
+
+**2. Async Operations**: Recording clicks asynchronously ensures redirects happen instantly without waiting for database writes.
+
+**3. User Agent Parsing**: The `ua-parser-js` library extracts structured data from raw user agent strings.
+
+**4. Data Aggregation**: We use `reduce()` to group clicks by dimensions (browser, device, OS) for analytics.
+
+**5. Chart Components**: Recharts provides composable React components for building interactive charts with minimal code.
+
+## Quiz
+
+<Quiz
+  question="Why do we record clicks asynchronously without awaiting?"
+  options={[
+    { label: 'To save database resources', value: 'resources' },
+    { label: 'To make redirects instant without waiting for database writes', value: 'instant', isCorrect: true },
+    { label: 'To prevent errors in the redirect', value: 'errors' },
+    { label: 'To improve chart performance', value: 'charts' }
+  ]}
+  explanation="We don't await the click recording operation so users get redirected immediately. The click is saved in the background. If it fails, we log the error but don't impact the user experience."
+/>
+
+<Quiz
+  question="What does the UAParser library do?"
+  options={[
+    { label: 'Parses URLs into components', value: 'url' },
+    { label: 'Extracts browser, OS, and device data from user agent strings', value: 'ua', isCorrect: true },
+    { label: 'Converts IP addresses to locations', value: 'ip' },
+    { label: 'Generates unique user IDs', value: 'id' }
+  ]}
+  explanation="UAParser takes a raw user agent string (like 'Mozilla/5.0...') and extracts structured information about the browser (Chrome, Safari), operating system (Windows, iOS), and device type (mobile, desktop, tablet)."
+/>
+
+<ChapterNav
+  current={{ number: 7, title: 'Click Tracking & Analytics' }}
+  next={{
+    number: 8,
+    title: 'Adding Link Previews',
+    description: 'Generate beautiful Open Graph previews for your shortened links to improve social media sharing.',
+    href: '/learn/08-link-previews'
+  }}
+/>

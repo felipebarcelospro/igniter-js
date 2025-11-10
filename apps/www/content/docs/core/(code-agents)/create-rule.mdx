@@ -1,0 +1,379 @@
+---
+title: Create Rule
+description: Learn how to use the create-rule command to automate the creation of new rules that guide Lia's behavior and development workflows.
+---
+
+By the end of this guide, you'll understand how to use the create-rule command to automate the creation of new rules in your SaaS Boilerplate project, ensuring they integrate seamlessly with workflows and enhance Lia's training context.
+
+## What is the Create Rule Command?
+
+The create-rule command is a specialized automation tool that guides you through creating new rules for the SaaS Boilerplate ecosystem. Rules define standards, protocols, and decision-making frameworks that Lia uses to ensure consistent, high-quality development practices.
+
+This command is particularly useful when you need to:
+- Standardize development processes and workflows
+- Enhance Lia's training and decision-making capabilities
+- Create quality gates and validation protocols
+- Establish architectural patterns and best practices
+
+## Before You Begin
+
+### Prerequisites
+- Access to the `.rulesync/rules/` directory
+- Understanding of the rule ecosystem structure
+- Familiarity with the workflows and commands you want to integrate
+- Clear understanding of the behavior or process you want to standardize
+
+### Required Context
+- Knowledge of existing rules to avoid duplication
+- Understanding of when the rule should apply (`alwaysApply` vs contextual)
+- Awareness of file patterns and scopes for rule application
+
+## Using the Create Rule Command
+
+<Steps>
+<Step>
+### Phase 1: Define Your Rule Purpose
+
+Start by clarifying what your rule should accomplish. The create-rule command will guide you through understanding:
+
+**For Workflow Automation:**
+- Which processes need standardization?
+- What steps should be automated?
+- What success criteria must be met?
+- How should it integrate with existing workflows?
+
+**For Training Enhancement:**
+- What behavior should Lia learn?
+- Which decision-making patterns need guidance?
+- How will this improve code quality and consistency?
+- What patterns should be recognized and enforced?
+
+**For Both (Recommended):**
+- How can the rule enhance both automation and training?
+- What workflows can it reference or trigger?
+- How does it integrate with the broader ecosystem?
+</Step>
+
+<Step>
+### Phase 2: Analyze Existing Context
+
+The command helps you analyze the current ecosystem to ensure proper integration.
+
+```bash
+# The create-rule command will automatically:
+# - Search for related rules and workflows
+# - Check existing rule structures
+# - Analyze applicable file patterns
+# - Identify integration opportunities
+```
+
+**Key Questions Addressed:**
+- Does this overlap with existing rules?
+- Which workflows should be referenced?
+- How will this enhance Lia's training?
+- What quality gates should be enforced?
+</Step>
+
+<Step>
+### Phase 3: Design Rule Structure
+
+Choose the appropriate rule type and configure metadata based on your needs.
+
+<Accordions type="multiple">
+<Accordion title="Workflow-Focused Rules">
+Best for standardizing development processes, tool usage patterns, and integration workflows.
+
+**Examples:**
+- Development process automation
+- Quality assurance protocols
+- Tool usage guidelines
+- Integration standards
+</Accordion>
+
+<Accordion title="Training-Focused Rules">
+Ideal for enhancing Lia's decision-making, pattern recognition, and knowledge integration.
+
+**Examples:**
+- Code quality standards
+- Architectural patterns
+- Best practice enforcement
+- Pattern recognition frameworks
+</Accordion>
+
+<Accordion title="Hybrid Rules (Recommended)">
+Perfect for combining automation with training context for comprehensive development guidance.
+
+**Examples:**
+- Process automation with decision guidance
+- Quality enforcement with learning
+- Workflow triggers with training context
+</Accordion>
+</Accordions>
+</Step>
+
+<Step>
+### Phase 4: Configure Rule Metadata
+
+Set up the frontmatter that controls how and when the rule applies.
+
+```yaml
+---
+description: "Clear description of what the rule does"
+globs: ["specific files or patterns to apply to"]
+alwaysApply: false  # true for mandatory rules, false for contextual
+---
+```
+
+**Metadata Guidelines:**
+- `description`: Must be clear, actionable, and specific
+- `globs`: Use specific patterns for optimal performance
+- `alwaysApply`: Reserve for critical standards only
+</Step>
+
+<Step>
+### Phase 5: Implement and Validate
+
+The create-rule command generates a properly structured rule file with:
+
+**Standard Structure:**
+- Clear purpose and overview
+- Core principles and requirements
+- Implementation guidelines
+- Quality gates and validation criteria
+- Integration points and relationships
+
+**Automatic Validation:**
+- Rule structure verification
+- Conflict detection with existing rules
+- Integration point validation
+- Performance testing
+</Step>
+
+<Step>
+### Phase 6: Deploy and Document
+
+Once created, the rule is automatically:
+- Moved to the correct location in `.rulesync/rules/`
+- Integrated with the memory system
+- Made available for immediate use by Lia
+- Documented for future reference
+</Step>
+</Steps>
+
+## Rule Parameters
+
+<TypeTable
+  type={{
+    purpose: {
+      description: 'The primary goal or behavior to standardize',
+      type: 'string',
+      default: 'Required - must be specified'
+    },
+    type: {
+      description: 'Rule category (workflow/training/hybrid)',
+      type: 'string',
+      default: 'hybrid'
+    },
+    scope: {
+      description: 'File patterns where the rule applies',
+      type: 'array',
+      default: '["**/*"]'
+    },
+    alwaysApply: {
+      description: 'Whether the rule applies universally or contextually',
+      type: 'boolean',
+      default: 'false'
+    },
+    workflows: {
+      description: 'Workflows that this rule can reference or trigger',
+      type: 'array',
+      default: '[]'
+    },
+    validate: {
+      description: 'Enable automatic validation and testing',
+      type: 'boolean',
+      default: 'true'
+    }
+  }}
+/>
+
+## Usage Examples
+
+### Creating a Workflow Automation Rule
+
+```bash
+# Create a rule for development process standardization
+/create-rule --purpose "Standardize feature development workflow" --type workflow --scope "src/**/*.{ts,tsx}" --workflows "feature-development,testing-validation" --validate true
+```
+
+**What happens:**
+1. Analyzes existing development patterns
+2. Creates rule structure with workflow integration
+3. Defines quality gates and validation steps
+4. Generates comprehensive documentation
+5. Tests integration with existing workflows
+
+### Creating a Training Enhancement Rule
+
+```bash
+# Create a rule for code quality standards
+/create-rule --purpose "Enhance TypeScript best practices" --type training --scope "src/**/*.{ts,tsx}" --alwaysApply true --validate true
+```
+
+**What happens:**
+1. Scans codebase for TypeScript patterns
+2. Creates decision-making framework
+3. Defines pattern recognition criteria
+4. Sets up training context for Lia
+5. Generates examples and best practices
+
+### Creating a Hybrid Rule
+
+```bash
+# Create a rule for API development standards
+/create-rule --purpose "Standardize API development with training context" --type hybrid --scope "src/controllers/**/*.ts" --workflows "api-validation" --validate true
+```
+
+**What happens:**
+1. Combines automation with training context
+2. Defines API development standards
+3. Creates validation workflows
+4. Provides decision-making guidance
+5. Integrates with memory system
+
+## Integration Points
+
+### Workflow Integration
+
+Rules created with this command can reference and trigger workflows:
+
+<Accordions type="multiple">
+<Accordion title="Feature Development Workflow">
+For code generation, scaffolding, and feature implementation processes.
+</Accordion>
+
+<Accordion title="Testing Validation Workflow">
+For quality assurance, testing protocols, and validation procedures.
+</Accordion>
+
+<Accordion title="API Validation Workflow">
+For backend API testing, contract validation, and integration testing.
+</Accordion>
+
+<Accordion title="Deployment Workflow">
+For release processes, environment management, and deployment automation.
+</Accordion>
+</Accordions>
+
+### Memory System Enhancement
+
+Every rule created contributes to Lia's knowledge base:
+
+```javascript
+// Automatically stores rule patterns
+await store_memory({
+  type: "architectural_decision",
+  title: "Rule-Based Development Standards",
+  content: "# Rule Integration Pattern\n\nHow rules guide development decisions...",
+  tags: ["rules", "training", "decision-making"],
+  confidence: 0.95
+});
+```
+
+### Cross-Rule Relationships
+
+Rules can reference and build upon each other:
+
+```markdown
+## 🔗 Related Rules
+
+This rule relates to:
+- `core-principles.mdc` - Fundamental development standards
+- `development-workflow.mdc` - Process automation guidelines
+- `quality-gates.mdc` - Validation and testing requirements
+```
+
+## Quality Gates
+
+The create-rule command enforces several quality standards:
+
+<Accordions type="multiple">
+<Accordion title="Structure Validation">
+Ensures rule follows established format and includes all required sections.
+</Accordion>
+
+<Accordion title="Integration Testing">
+Validates that the rule works with existing workflows, commands, and tools.
+</Accordion>
+
+<Accordion title="Performance Validation">
+Tests rule application performance and resource usage.
+</Accordion>
+
+<Accordion title="Training Context Validation">
+Verifies that the rule provides adequate training context for Lia.
+</Accordion>
+</Accordions>
+
+## Troubleshooting
+
+<Accordions type="multiple">
+<Accordion title="Rule Conflicts">
+**Problem:** New rule overlaps with existing functionality.
+
+**Solution:** 
+- Review existing rules in `.rulesync/rules/`
+- Modify scope or purpose to differentiate
+- Consider extending existing rules instead
+</Accordion>
+
+<Accordion title="Performance Issues">
+**Problem:** Rule application is slow or resource-intensive.
+
+**Solution:**
+- Narrow file pattern scopes
+- Optimize glob patterns
+- Reduce unnecessary processing
+- Implement caching strategies
+</Accordion>
+
+<Accordion title="Workflow Integration Problems">
+**Problem:** Rule doesn't trigger workflows correctly.
+
+**Solution:**
+- Verify workflow file paths and names
+- Check workflow trigger conditions
+- Ensure proper parameter passing
+- Test workflow execution independently
+</Accordion>
+
+<Accordion title="Training Context Gaps">
+**Problem:** Rule doesn't enhance Lia's decision-making.
+
+**Solution:**
+- Add more specific examples and patterns
+- Include decision-making frameworks
+- Provide clearer guidance and criteria
+- Test with various scenarios
+</Accordion>
+</Accordions>
+
+## Best Practices
+
+### Rule Design
+- Keep rules focused on specific, well-defined concerns
+- Use clear, actionable language in descriptions and guidelines
+- Include comprehensive examples and use cases
+- Provide measurable quality gates and validation criteria
+
+### Integration Strategy
+- Reference existing rules and workflows when possible
+- Contribute meaningful patterns to the memory system
+- Ensure rules work well with the task management system
+- Document all integration points and relationships clearly
+
+### Performance Considerations
+- Use specific file patterns rather than broad globs when possible
+- Implement efficient validation logic
+- Consider caching for expensive operations
+- Test performance with realistic file sets

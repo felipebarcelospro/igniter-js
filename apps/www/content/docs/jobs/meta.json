@@ -1,0 +1,21 @@
+{
+  "title": "Jobs",
+  "root": true,
+  "pages": [
+    "index",
+    "---Getting Started---",
+    "getting-started",
+    "job-definitions",
+    "routers",
+    "---Scheduling---",
+    "scheduling",
+    "cron-jobs",
+    "---Operations---",
+    "workers",
+    "search-and-monitoring",
+    "---Advanced---",
+    "advanced-features",
+    "multi-tenancy"
+  ]
+}
+

@@ -1,0 +1,395 @@
+---
+title: Express
+description: Build type-safe REST APIs with Igniter.js and Express.js, the minimal and flexible Node.js web framework.
+---
+
+Express.js is the most popular Node.js web framework, known for its minimalist approach and robust middleware ecosystem. When combined with Igniter.js, you maintain Express's simplicity and flexibility while gaining end-to-end type safety, automatic schema generation, and a modern API design experience.
+
+This guide shows you how to integrate Igniter.js with Express to build production-ready REST APIs. You'll learn how to leverage Express's mature ecosystem (middleware, routing, error handling) alongside Igniter.js's type-safe controllers and automatic documentation.
+
+<Callout type="info" title="Perfect for REST APIs">
+  Express + Igniter.js is ideal for building traditional REST APIs, microservices, and backends that need Express's mature middleware ecosystem.
+</Callout>
+
+---
+
+## Quick Start
+
+The fastest way to start is using the official CLI, which scaffolds a complete Express application with Igniter.js:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npx create-igniter-app@latest my-app --template express
+    cd my-app
+    npm install
+    npm run dev
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm create igniter-app my-app --template express
+    cd my-app
+    pnpm install
+    pnpm dev
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn create igniter-app my-app --template express
+    cd my-app
+    yarn install
+    yarn dev
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx create-igniter-app my-app --template express
+    cd my-app
+    bun install
+    bun dev
+    ```
+  </Tab>
+</Tabs>
+
+Your API runs at `http://localhost:3000/api/v1`, and interactive docs at `http://localhost:3000/api/v1/docs` 🚀
+
+---
+
+## Manual Setup
+
+<Card title="Complete Express Setup Guide">
+  <Steps>
+    <Step>
+      ### Prerequisites
+
+      Before you begin, ensure you have:
+      - **Node.js** 18.0+ (20.0+ recommended)
+      - **Express** 4.0+
+      - **TypeScript** 5.0+
+    </Step>
+
+    <Step>
+      ### Install Dependencies
+
+      Install Igniter.js, Express, and Zod for schema validation:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/core express zod
+    npm install -D @types/express tsx
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/core express zod
+    pnpm add -D @types/express tsx
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/core express zod
+    yarn add -D @types/express tsx
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/core express zod
+    bun add -D @types/express
+    ```
+      </Tab>
+    </Tabs>
+
+      The `tsx` package enables running TypeScript directly during development without a build step.
+    </Step>
+
+    <Step>
+      ### Define Application Context
+
+The context defines dependencies available throughout your API. Create `src/igniter.context.ts`:
+
+```typescript title="src/igniter.context.ts"
+/**
+ * Application Context Type
+ * Defines what dependencies are available to all API handlers
+ */
+export interface AppContext {
+  // Add your dependencies here, e.g.:
+  // db: PrismaClient
+  // logger: Logger
+}
+
+/**
+ * Context Factory
+ * Creates the context instance passed to handlers
+ */
+export function createIgniterAppContext(): AppContext {
+  return {
+    // Initialize dependencies here
+  }
+}
+      ```
+    </Step>
+
+    <Step>
+      ### Initialize Igniter.js
+
+Create the main Igniter instance. Create `src/igniter.ts`:
+
+```typescript title="src/igniter.ts"
+import { Igniter } from '@igniter-js/core'
+import { createIgniterAppContext } from './igniter.context'
+
+export const igniter = Igniter
+  .context(createIgniterAppContext())
+  .config({
+    baseURL: process.env.IGNITER_API_URL || 'http://localhost:3000',
+    basePATH: process.env.IGNITER_API_BASE_PATH || '/api/v1',
+  })
+  .docs({
+    info: {
+      title: 'My Express API',
+      version: '1.0.0',
+      description: 'REST API built with Express and Igniter.js',
+    }
+  })
+  .create()
+      ```
+    </Step>
+
+    <Step>
+      ### Create Your First Controller
+
+Controllers group related endpoints. Create `src/features/example/controllers/example.controller.ts`:
+
+```typescript title="src/features/example/controllers/example.controller.ts"
+import { igniter } from '@/igniter'
+
+export const exampleController = igniter.controller({
+  name: 'Example',
+  path: '/example',
+  actions: {
+    hello: igniter.query({
+      path: '/hello',
+      handler: async ({ response }) => {
+        return response.success({ 
+          message: 'Hello from Igniter.js with Express!',
+          timestamp: new Date().toISOString()
+        })
+      },
+    }),
+  },
+})
+```
+
+Create barrel export at `src/features/example/index.ts`:
+
+```typescript title="src/features/example/index.ts"
+export * from './controllers/example.controller'
+```
+
+      This creates `GET /api/v1/example/hello` with fully typed responses.
+    </Step>
+
+    <Step>
+      ### Create Application Router
+
+The router assembles all controllers. Create `src/igniter.router.ts`:
+
+```typescript title="src/igniter.router.ts"
+import { igniter } from './igniter'
+import { exampleController } from './features/example'
+
+export const AppRouter = igniter.router({
+  controllers: {
+    example: exampleController
+  }
+})
+
+      export type AppRouterType = typeof AppRouter
+      ```
+    </Step>
+
+    <Step>
+      ### Set Up Express Server
+
+Connect the router to Express using the adapter. Create `src/index.ts`:
+
+```typescript title="src/index.ts"
+import express from 'express'
+import { expressAdapter } from '@igniter-js/core/adapters'
+import { AppRouter } from './igniter.router'
+
+const app = express()
+
+const IGNITER_API_BASE_PATH = process.env.IGNITER_API_BASE_PATH || '/api/v1'
+const PORT = process.env.PORT || 3000
+
+// Mount the Igniter.js router
+app.use(IGNITER_API_BASE_PATH, expressAdapter(AppRouter.handler))
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`🚀 Server running at http://localhost:${PORT}`)
+})
+```
+
+The `expressAdapter` converts Igniter.js's universal handler into Express-compatible middleware.
+
+### Step 7: Add Development Scripts
+
+Update your `package.json`:
+
+```json title="package.json"
+{
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  }
+}
+```
+
+      Now run `npm run dev` to start the development server with hot reload!
+    </Step>
+  </Steps>
+</Card>
+
+## Using Express Middleware
+
+Express middleware works seamlessly with Igniter.js. Add middleware before mounting the Igniter router:
+
+```typescript title="src/index.ts"
+import express from 'express'
+import cors from 'cors'
+import helmet from 'helmet'
+import compression from 'compression'
+import { expressAdapter } from '@igniter-js/core/adapters'
+import { AppRouter } from './igniter.router'
+
+const app = express()
+
+// Add Express middleware
+app.use(cors())
+app.use(helmet())
+app.use(compression())
+app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
+
+// Add custom middleware
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path}`)
+  next()
+})
+
+// Mount Igniter.js router
+app.use('/api/v1', expressAdapter(AppRouter.handler))
+
+app.listen(3000)
+```
+
+Middleware like CORS, security headers, compression, and logging work exactly as you'd expect in Express.
+
+---
+
+## Type-Safe Client
+
+Create a type-safe client for consuming your API. Create `src/igniter.client.ts`:
+
+```typescript title="src/igniter.client.ts"
+import { createIgniterClient } from '@igniter-js/core/client'
+import type { AppRouterType } from './igniter.router'
+
+export const api = createIgniterClient<AppRouterType>({
+  baseURL: process.env.IGNITER_API_URL || 'http://localhost:3000',
+  basePATH: process.env.IGNITER_API_BASE_PATH || '/api/v1',
+  router: () => require('./igniter.router').AppRouter,
+})
+
+export type ApiClient = typeof api
+```
+
+Use it anywhere in your application:
+
+```typescript
+// Fully typed request and response
+const { message } = await api.example.hello.query()
+```
+
+---
+
+## Igniter Studio (API Playground)
+
+Igniter.js includes an interactive API playground called **Igniter Studio**. It's automatically available at `/api/v1/docs` when you configure the `.docs()` method.
+
+To access it:
+
+1. Start your dev server: `npm run dev`
+2. Navigate to `http://localhost:3000/api/v1/docs`
+3. You'll see an interactive interface where you can:
+   - Browse all API endpoints
+   - View request/response schemas
+   - Test endpoints directly
+   - See auto-generated examples
+
+The playground updates automatically as you add endpoints.
+
+---
+
+## Environment Variables
+
+Create a `.env` file for configuration:
+
+```bash title=".env"
+PORT=3000
+IGNITER_API_BASE_PATH=/api/v1
+IGNITER_API_URL=http://localhost:3000
+NODE_ENV=development
+```
+
+---
+
+## Project Structure
+
+Here's the recommended structure:
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="features">
+      <Folder name="example">
+        <Folder name="controllers">
+          <File name="example.controller.ts" />
+        </Folder>
+        <File name="index.ts" />
+      </Folder>
+    </Folder>
+    <Folder name="docs">
+      <File name="openapi.json" />
+    </Folder>
+    <File name="index.ts" />
+    <File name="igniter.ts" />
+    <File name="igniter.context.ts" />
+    <File name="igniter.router.ts" />
+    <File name="igniter.client.ts" />
+    <File name="igniter.schema.ts" />
+  </Folder>
+  <File name="package.json" />
+  <File name="tsconfig.json" />
+</Files>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Core Concepts" href="/docs/builder">
+    Learn about Builder, Router, and Controllers
+  </Card>
+  <Card title="Actions" href="/docs/actions">
+    Create queries and mutations with validation
+  </Card>
+  <Card title="Middleware" href="/docs/middleware">
+    Add authentication and custom middleware
+  </Card>
+</Cards>

@@ -1,0 +1,290 @@
+---
+title: Getting Started
+description: Learn how to set up and use the MCP Server adapter to expose your Igniter.js API as an MCP server.
+---
+
+## Introduction
+
+This guide will walk you through setting up the MCP Server adapter step-by-step. By the end, you'll have a working MCP server that exposes your Igniter.js API to AI agents.
+
+---
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- An Igniter.js application with at least one controller and action
+- A Next.js application (or compatible framework)
+- Node.js 18+ installed
+
+---
+
+## Step 1: Create Your Igniter.js Router
+
+First, ensure you have an Igniter.js router with some controllers and actions:
+
+```typescript
+// src/igniter.router.ts
+import { igniter } from '@/igniter';
+import { z } from 'zod';
+
+export const usersController = igniter.controller({
+  path: '/users',
+  actions: {
+    list: igniter.query({
+      path: '/',
+      handler: async ({ context, response }) => {
+        const users = await context.db.users.findMany();
+        return response.success({ users });
+      },
+    }),
+    
+    getById: igniter.query({
+      path: '/:id',
+      handler: async ({ request, response }) => {
+        const user = await context.db.users.findUnique({
+          where: { id: request.params.id },
+        });
+        return response.success({ user });
+      },
+    }),
+    
+    create: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: z.object({
+        email: z.string().email(),
+        name: z.string(),
+      }),
+      handler: async ({ request, response }) => {
+        const user = await context.db.users.create({
+          data: request.body,
+        });
+        return response.created({ user });
+      },
+    }),
+  },
+});
+
+export const AppRouter = igniter.merge({
+  users: usersController,
+});
+```
+
+---
+
+## Step 2: Create the MCP Route Handler
+
+Create a new API route in your Next.js application:
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="app">
+      <Folder name="api">
+        <Folder name="mcp">
+          <Folder name="[...transport]">
+            <File name="route.ts" />
+          </Folder>
+        </Folder>
+      </Folder>
+    </Folder>
+  </Folder>
+</Files>
+
+**Using Builder Pattern:**
+
+```typescript
+// src/app/api/mcp/[...transport]/route.ts
+import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server';
+import { AppRouter } from '@/igniter.router';
+
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withServerInfo({
+    name: 'My API MCP Server',
+    version: '1.0.0',
+  })
+  .withInstructions(
+    "This server provides tools to manage users in the system. " +
+    "Use the users.list tool to get all users, users.getById to get a specific user, " +
+    "and users.create to create a new user."
+  )
+  .build();
+
+export const GET = handler;
+export const POST = handler;
+```
+
+**Using Function API:**
+
+```typescript
+// src/app/api/mcp/[...transport]/route.ts
+import { createMcpAdapter } from '@igniter-js/adapter-mcp-server';
+import { AppRouter } from '@/igniter.router';
+
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  serverInfo: {
+    name: 'My API MCP Server',
+    version: '1.0.0',
+  },
+  instructions: "This server provides tools to manage users in the system.",
+});
+
+export const GET = server;
+export const POST = server;
+```
+
+---
+
+## Step 3: Start Your Development Server
+
+Start your Next.js development server:
+
+```bash
+npm run dev
+```
+
+Your MCP server will be available at:
+
+```
+http://localhost:3000/api/mcp/sse
+```
+
+---
+
+## Step 4: Connect from an MCP Client
+
+### Cursor IDE
+
+1. Open Cursor settings
+2. Navigate to **Features** → **Model Context Protocol**
+3. Click **Add Server**
+4. Configure:
+   - **Name**: `My Igniter API`
+   - **URL**: `http://localhost:3000/api/mcp/sse`
+   - **Transport**: `SSE` (Server-Sent Events)
+
+### Claude Desktop
+
+Add to your Claude Desktop configuration (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "igniter-api": {
+      "url": "http://localhost:3000/api/mcp/sse",
+      "transport": "sse"
+    }
+  }
+}
+```
+
+---
+
+## Step 5: Test Your MCP Server
+
+After connecting, you can test your MCP server by asking the AI agent:
+
+**Example Prompts:**
+
+- "List all users in the system"
+- "Get user with ID '123'"
+- "Create a new user with email 'test@example.com' and name 'Test User'"
+
+The AI agent will automatically:
+1. Discover available tools from your MCP server
+2. Select the appropriate tool (`users.list`, `users.getById`, or `users.create`)
+3. Execute the tool with the correct parameters
+4. Return the result in a natural language response
+
+---
+
+## Understanding Tool Names
+
+The adapter automatically generates tool names from your controller and action names:
+
+- Controller: `users`, Action: `list` → Tool: `users_list`
+- Controller: `users`, Action: `getById` → Tool: `users_getById`
+- Controller: `users`, Action: `create` → Tool: `users_create`
+
+<Callout type="info">
+  Tool names are sanitized to be MCP-compliant. Special characters are replaced, and names are normalized. You can customize this behavior using the `naming` option in advanced configurations.
+</Callout>
+
+---
+
+## Understanding Tool Schemas
+
+The adapter automatically converts your Zod schemas to JSON Schema:
+
+```typescript
+// Your Igniter action
+create: igniter.mutation({
+  body: z.object({
+    email: z.string().email(),
+    name: z.string(),
+  }),
+  // ...
+})
+
+// Becomes MCP tool with schema:
+{
+  "type": "object",
+  "properties": {
+    "body": {
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" }
+      },
+      "required": ["email", "name"]
+    }
+  }
+}
+```
+
+The AI agent will automatically understand the required parameters and their types.
+
+---
+
+## Common Patterns
+
+### Passing Arguments
+
+When an AI agent calls a tool, arguments are passed based on your action's schema:
+
+**Query Actions** - Arguments come from `query` or `params`:
+
+```typescript
+// Action definition
+getById: igniter.query({
+  path: '/:id',
+  // ...
+})
+
+// AI calls: users_getById({ params: { id: "123" } })
+```
+
+**Mutation Actions** - Arguments come from `body`:
+
+```typescript
+// Action definition
+create: igniter.mutation({
+  body: z.object({ email: z.string().email() }),
+  // ...
+})
+
+// AI calls: users_create({ body: { email: "test@example.com" } })
+```
+
+---
+
+## Next Steps
+
+- Learn about the [Builder Pattern](/docs/mcp-server/builder-pattern) for advanced configurations
+- Explore [Custom Tools](/docs/mcp-server/custom-tools) to extend your server
+- Check out [OAuth](/docs/mcp-server/oauth) for securing your MCP server
+- See [Events](/docs/mcp-server/events) for monitoring and logging
+

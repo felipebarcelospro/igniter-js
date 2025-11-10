@@ -1,0 +1,14 @@
+{
+  "title": "Code Agents",
+  "description": "Lia (AI agent), MCP servers, rules/commands, and IDE setup.",
+  "defaultOpen": false,
+  "icon": "Bot",
+  "pages": [
+    "lia-overview",
+    "quickstart",
+    "mcp-servers",
+    "rules",
+    "commands",
+    "using-llms-txt"
+  ]
+}

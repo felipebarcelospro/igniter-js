@@ -1,0 +1,155 @@
+---
+title: Using llms.txt
+description: Learn how the llms.txt standard helps AI agents discover and understand your documentation structure for better results.
+---
+
+By the end of this guide, you'll understand how the llms.txt standard works and how Igniter.js leverages it to make documentation more accessible to AI agents like Lia.
+
+## What is llms.txt?
+
+The `llms.txt` standard is a simple convention that helps Large Language Models (LLMs) and AI agents better understand and navigate documentation websites. It's essentially a plain text file that provides a structured overview of your documentation, making it easier for AI tools to:
+
+- **Discover content**: Quickly find relevant documentation pages
+- **Understand structure**: See how your docs are organized
+- **Get context**: Access high-level information about your project
+- **Navigate efficiently**: Jump to specific sections without crawling the entire site
+
+This standard was popularized by libraries like Next.js and has become a common practice across the developer ecosystem.
+
+## How llms.txt Works
+
+The `llms.txt` file is typically placed at the root of your website (e.g., `yoursite.com/llms.txt`) and follows a simple format:
+
+```
+# Project Name
+
+Brief description of what this project does.
+
+## Getting Started
+
+- [Quick Start Guide](link-to-quickstart)
+- [Installation](link-to-installation)
+- [Configuration](link-to-config)
+
+## Core Concepts
+
+- [Architecture Overview](link-to-architecture)
+- [API Reference](link-to-api)
+- [Best Practices](link-to-best-practices)
+
+## Advanced Topics
+
+- [Performance Tuning](link-to-performance)
+- [Troubleshooting](link-to-troubleshooting)
+- [Contributing](link-to-contributing)
+```
+
+This structured format allows AI agents to quickly understand your project's scope and find the information they need.
+
+## Igniter.js Implementation
+
+Igniter.js comes with `llms.txt` support built-in, making all your content (documentation, blog posts, help center, and updates) easily accessible to AI agents.
+
+### Automatic Content Exposure
+
+Your Igniter.js automatically exposes content through API routes configured in `next.config.ts`:
+
+```typescript
+// next.config.ts - Automatic llms.txt routing
+async rewrites() {
+  return [
+    {
+      source: '/docs/:path*.mdx',
+      destination: '/api/content/docs/llms.mdx/:path*',
+    },
+    {
+      source: '/blog/:path*.mdx',
+      destination: '/api/content/blog/llms.mdx/:path*',
+    },
+    {
+      source: '/help/:path*.mdx',
+      destination: '/api/content/help/llms.mdx/:path*',
+    },
+    {
+      source: '/updates/:path*.mdx',
+      destination: '/api/content/updates/llms.mdx/:path*',
+    },
+  ]
+}
+```
+
+This means any AI agent can access your content at URLs like:
+- `yoursite.com/docs/getting-started/quickstart/llms.mdx`
+- `yoursite.com/blog/announcements/llms.mdx`
+- `yoursite.com/help/faq/llms.mdx`
+
+### Content API Structure
+
+The content is served through API routes in `src/app/(api)/api/content/` that automatically convert your MDX files into LLM-friendly formats. This includes:
+
+- **Documentation**: All technical docs and guides
+- **Blog posts**: Announcements, tutorials, and updates
+- **Help center**: FAQs, troubleshooting, and support content
+- **Release notes**: Version updates and changelogs
+
+## Lia and llms.txt
+
+While Lia comes pre-trained with deep knowledge of the Igniter.js ecosystem, she can optionally leverage `llms.txt` files for additional context:
+
+### Built-in Training vs. Dynamic Context
+
+- **Built-in Training**: Lia has specialized knowledge of Igniter.js patterns, multi-tenancy, and architecture
+- **Dynamic Context**: She can use `llms.txt` to access the latest documentation, blog posts, and project updates
+- **Hybrid Approach**: Best results come from combining Lia's training with fresh content via `llms.txt`
+
+### Practical Usage
+
+When working with Lia, you can reference `llms.txt` content for:
+- Latest API changes or deprecations
+- New feature announcements
+- Updated best practices
+- Recent troubleshooting guides
+
+## Popular llms.txt Resources
+
+Many popular libraries and frameworks provide `llms.txt` files for their documentation. Here's a curated list of useful resources:
+
+| Library/Framework | llms.txt URL | Description |
+|-------------------|--------------|-------------|
+| **Next.js** | [nextjs.org/docs/llms.txt](https://nextjs.org/docs/llms.txt) | React framework documentation |
+| **Better Auth** | [better-auth.com/docs/llms.txt](http://better-auth.com/docs/llms.txt) | Authentication library docs |
+| **Zod** | [zod.dev/llms.txt](https://zod.dev/llms.txt) | TypeScript schema validation |
+| **Prisma** | [prisma.io/docs/llms.txt](https://www.prisma.io/docs/llms.txt) | Database ORM documentation |
+| **Fumadocs** | [fumadocs.dev/llms.txt](https://fumadocs.dev/llms.txt) | Documentation framework |
+| **Igniter.js Demo** | [demo.igniterjs.com/llms.txt](https://demo.igniterjs.com/llms.txt) | Live demo of this implementation |
+
+## Implementing llms.txt in Your Project
+
+If you're extending Igniter.js or building your own implementation:
+
+### Basic Setup
+
+1. **Create the file**: Add `public/llms.txt` to your project
+2. **Structure content**: Organize with clear sections and links
+3. **Keep updated**: Regularly refresh with new content
+4. **Test access**: Ensure the file is publicly accessible
+
+## Best Practices
+
+<Accordions type="multiple">
+<Accordion title="Keep it Focused">
+Don't include every single page—focus on high-value, frequently accessed content that AI agents would find most useful.
+</Accordion>
+
+<Accordion title="Maintain Structure">
+Use consistent formatting with clear headings and logical grouping of related topics.
+</Accordion>
+
+<Accordion title="Update Regularly">
+As your documentation evolves, keep the `llms.txt` file current to ensure AI agents have access to the latest information.
+</Accordion>
+
+<Accordion title="Test with AI Agents">
+Use tools like Lia to test that your `llms.txt` provides the context AI agents need for effective assistance.
+</Accordion>
+</Accordions>

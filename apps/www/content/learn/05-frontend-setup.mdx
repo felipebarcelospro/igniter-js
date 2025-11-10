@@ -1,0 +1,746 @@
+---
+title: "05: Frontend Setup"
+description: "Set up the Next.js frontend with middleware authentication, Igniter.js client, and beautiful authentication forms using Shadcn UI and React Hook Form."
+---
+
+In this chapter, we'll build the complete frontend for Shortify. You'll learn how to protect routes using Next.js middleware, configure the type-safe Igniter.js client, and create beautiful authentication forms with proper validation.
+
+<ChapterObjectives objectives={[
+  { text: "Configure Next.js 16 proxy.ts for route protection" },
+  { text: "Set up the Igniter.js client with end-to-end type safety" },
+  { text: "Create authentication forms using Shadcn UI, React Hook Form, and Zod" },
+  { text: "Structure the presentation layer following Igniter.js best practices" }
+]} />
+
+## Creating the Middleware (proxy.ts)
+
+Next.js 16 renamed middleware to `proxy.ts`. This file acts as a gatekeeper, checking authentication before allowing access to protected pages.
+
+The middleware runs at the edge, making it extremely fast. It should only perform lightweight checks—heavy logic belongs in API routes or server components.
+
+Create `src/proxy.ts`:
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { api } from '@/igniter.client';
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  
+  // Business Rule: Define application routes
+  const pages = {
+    signIn: '/auth/login',
+    signUp: '/auth/signup',
+    protected: '/app',
+    publicHome: '/',
+  };
+
+  // Business Rule: Allow public access to the landing page
+  if (pathname === pages.publicHome) {
+    return NextResponse.next();
+  }
+
+  // Business Rule: Allow access to auth pages without session check
+  if (pathname.startsWith('/auth/')) {
+    return NextResponse.next();
+  }
+
+  // Business Logic: Check authentication status
+  // This is a lightweight call - just validating the session token
+  try {
+    const session = await api.auth.getSession.query();
+    const isAuthenticated = !!session?.data?.user?.id;
+
+    // Business Rule: Redirect authenticated users away from auth pages
+    if (isAuthenticated && (pathname === pages.signIn || pathname === pages.signUp)) {
+      return NextResponse.redirect(new URL(pages.protected, request.url));
+    }
+
+    // Business Rule: Protect app routes - require authentication
+    if (pathname.startsWith(pages.protected) && !isAuthenticated) {
+      return NextResponse.redirect(new URL(pages.signIn, request.url));
+    }
+  } catch (error) {
+    // Business Rule: On session check error, redirect to login for protected routes
+    if (pathname.startsWith(pages.protected)) {
+      return NextResponse.redirect(new URL(pages.signIn, request.url));
+    }
+  }
+  
+  // Default: Allow the request to proceed
+  return NextResponse.next();
+}
+
+export const config = {
+  // Use Node.js runtime for full compatibility with Igniter.js client
+  runtime: 'nodejs',
+  
+  // Business Rule: Run middleware on all routes except static assets
+  matcher: [
+    /*
+     * Match all request paths except:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico, sitemap.xml, robots.txt (metadata files)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
+  ],
+};
+```
+
+### Understanding the Middleware
+
+**1. Route Definition**: The `pages` object centralizes all route paths, making them easy to update and maintain.
+
+**2. Public Routes**: The landing page (`/`) and authentication pages (`/auth/*`) are accessible without authentication.
+
+**3. Session Check**: We call `api.auth.getSession.query()` to verify authentication. This is fast because it only validates the cookie token—no database queries in the middleware.
+
+**4. Redirect Logic**: 
+   - Authenticated users accessing `/auth/login` → redirect to `/app` (dashboard)
+   - Unauthenticated users accessing `/app` → redirect to `/auth/login`
+
+**5. Error Handling**: If the session check fails (e.g., invalid token), unauthenticated users are redirected to login.
+
+**6. Matcher Configuration**: The `matcher` prevents the middleware from running on static assets, API routes, and metadata files, improving performance.
+
+<Callout type="info" title="Why Node.js Runtime?">
+We use `runtime: 'nodejs'` instead of `'edge'` because the Igniter.js client requires full Node.js APIs. The Edge runtime has limitations that prevent proper client initialization.
+</Callout>
+
+## Configuring the Igniter.js Client
+
+The Igniter.js client provides full type safety from server to frontend. It automatically generates typed hooks for all your controllers, giving you autocomplete, type checking, and runtime validation—all with zero configuration.
+
+Create `src/igniter.client.ts`:
+
+```typescript
+import { createIgniterClient } from '@igniter-js/core/client';
+import type { AppRouter } from './igniter';
+
+/**
+ * Type-safe Igniter.js client for frontend
+ * 
+ * This client provides:
+ * - Full TypeScript inference from your backend router
+ * - React hooks (useQuery, useMutation, useRealtime)
+ * - Automatic request/response validation
+ * - Built-in error handling
+ * - Cookie-based authentication support
+ */
+export const api = createIgniterClient<AppRouter>({
+  // Business Rule: Use environment variable for API URL
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000',
+  
+  // Business Rule: API routes are under /api/v1
+  basePATH: '/api/v1',
+  
+  // Business Rule: Import router for type inference
+  router: () => {
+    if (typeof window === 'undefined') {
+      // Server-side: Direct function calls (zero HTTP overhead)
+      return require('./igniter').router;
+    }
+    // Client-side: HTTP-based requests with React hooks
+    return require('./igniter.schema').RouterSchema;
+  },
+  
+  // Business Rule: Include credentials for cookie-based auth
+  credentials: 'include',
+});
+```
+
+### Understanding the Client Configuration
+
+**1. Type Safety**: The `AppRouter` type is imported from your backend, giving the client complete knowledge of all available endpoints, their parameters, and return types.
+
+**2. Environment-Aware**: Uses `NEXT_PUBLIC_API_URL` in production, falls back to `localhost:3000` in development.
+
+**3. Universal Client**: Works on both server and client:
+   - **Server**: Direct function calls through the router (React Server Components, API routes)
+   - **Client**: HTTP requests with React hooks (Client Components)
+
+**4. Cookie Support**: `credentials: 'include'` ensures cookies (including the auth token) are automatically sent with every request.
+
+Now add the client provider to your root layout. Open `src/app/layout.tsx`:
+
+```typescript
+import { IgniterProvider } from '@igniter-js/core/client';
+import './globals.css';
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body>
+        <IgniterProvider>
+          {children}
+        </IgniterProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+The `<IgniterProvider>` wraps your app, providing React Query context for all Igniter.js hooks (`useQuery`, `useMutation`, `useRealtime`).
+
+## Structuring the Presentation Layer
+
+Following Igniter.js best practices, we'll organize the authentication UI into a feature module under `src/features/auth/presentation/components/`. This keeps the auth-related components together and organized.
+
+Create the directory structure:
+
+```bash
+mkdir -p src/features/auth/presentation/components
+```
+
+<Files>
+  <Folder name="src">
+    <Folder name="features">
+      <Folder name="auth">
+        <Folder name="presentation" defaultOpen>
+          <Folder name="components">
+            <File name="login-form.tsx" />
+            <File name="signup-form.tsx" />
+          </Folder>
+        </Folder>
+      </Folder>
+    </Folder>
+  </Folder>
+</Files>
+
+This simple structure keeps all authentication UI components in one place, making them easy to find and maintain.
+
+## Building the Login Form
+
+Now let's create the login form component using Shadcn UI and React Hook Form. We'll keep everything self-contained in the component—the validation schema, the form logic, and the API calls.
+
+First, make sure you have the required Shadcn UI components installed:
+
+```bash
+npx shadcn@latest add card input button field
+```
+
+Create `src/features/auth/presentation/components/login-form.tsx`:
+
+```typescript
+'use client';
+
+import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useRouter } from 'next/navigation';
+import { z } from 'zod';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import Link from 'next/link';
+import { api } from '@/igniter.client';
+
+// Validation schema defined inline
+const loginSchema = z.object({
+  email: z
+    .string()
+    .min(1, 'Email is required')
+    .email('Enter a valid email address'),
+  password: z
+    .string()
+    .min(1, 'Password is required')
+    .min(8, 'Password must be at least 8 characters'),
+});
+
+type LoginFormData = z.infer<typeof loginSchema>;
+
+export function LoginForm() {
+  const router = useRouter();
+
+  // Setup the form with validation
+  const form = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
+
+  // Setup the mutation for login
+  const loginMutation = api.auth.signIn.useMutation({
+    onSuccess: (data) => {
+      toast.success('Welcome back!', {
+        description: `Logged in as ${data.user.email}`,
+      });
+      router.push('/app');
+    },
+    onError: (error) => {
+      toast.error('Login failed', {
+        description: error.message || 'Invalid email or password',
+      });
+    },
+  });
+
+  // Handle form submission
+  const onSubmit = async (data: LoginFormData) => {
+    await loginMutation.mutate({
+      body: {
+        email: data.email,
+        password: data.password,
+      },
+    });
+  };
+
+  return (
+    <Card className="w-full max-w-md">
+      <CardHeader>
+        <CardTitle className="text-2xl">Login</CardTitle>
+        <CardDescription>
+          Enter your email and password to access your account
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <FieldGroup>
+            <Controller
+              name="email"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="login-email">Email</FieldLabel>
+                  <Input
+                    {...field}
+                    id="login-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    aria-invalid={fieldState.invalid}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
+            <Controller
+              name="password"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="login-password">Password</FieldLabel>
+                  <Input
+                    {...field}
+                    id="login-password"
+                    type="password"
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    aria-invalid={fieldState.invalid}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={loginMutation.isLoading}
+            >
+              {loginMutation.isLoading ? 'Logging in...' : 'Login'}
+            </Button>
+          </FieldGroup>
+        </form>
+
+        <div className="mt-4 text-center text-sm">
+          Don't have an account?{' '}
+          <Link href="/auth/signup" className="underline underline-offset-4">
+            Sign up
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+### Understanding the Login Form
+
+**1. Inline Validation Schema**: The Zod schema is defined directly in the component file. This makes it easy to see what validation rules apply without jumping between files.
+
+**2. React Hook Form Integration**: `useForm` manages form state, validation, and submission. The `zodResolver` connects Zod validation to React Hook Form.
+
+**3. Igniter.js Mutation**: We call `api.auth.signIn.useMutation()` directly in the component. The mutation handles the API call, loading states, and success/error callbacks.
+
+**4. Controller Component**: Wraps each input field, providing access to `field` (for input props) and `fieldState` (for validation errors).
+
+**5. Error Display**: `<FieldError>` automatically shows validation errors below each field when `fieldState.invalid` is true.
+
+**6. Loading State**: The submit button uses `loginMutation.isLoading` to show feedback and prevent duplicate submissions.
+
+**7. Accessibility**: Proper `htmlFor`, `aria-invalid`, and `autoComplete` attributes for screen readers and browsers.
+
+## Building the Signup Form
+
+The signup form follows the same pattern as the login form, with additional fields for name and password confirmation. Everything is self-contained in one file.
+
+Create `src/features/auth/presentation/components/signup-form.tsx`:
+
+```typescript
+'use client';
+
+import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useRouter } from 'next/navigation';
+import { z } from 'zod';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import Link from 'next/link';
+import { api } from '@/igniter.client';
+
+// Validation schema with password confirmation
+const signupSchema = z.object({
+  name: z
+    .string()
+    .min(1, 'Name is required')
+    .min(2, 'Name must be at least 2 characters')
+    .max(100, 'Name must be less than 100 characters'),
+  email: z
+    .string()
+    .min(1, 'Email is required')
+    .email('Enter a valid email address'),
+  password: z
+    .string()
+    .min(1, 'Password is required')
+    .min(8, 'Password must be at least 8 characters')
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      'Password must contain uppercase, lowercase, and number'
+    ),
+  confirmPassword: z
+    .string()
+    .min(1, 'Please confirm your password'),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
+});
+
+type SignupFormData = z.infer<typeof signupSchema>;
+
+export function SignupForm() {
+  const router = useRouter();
+
+  // Setup the form with validation
+  const form = useForm<SignupFormData>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+    },
+  });
+
+  // Setup the mutation for signup
+  const signupMutation = api.auth.signUp.useMutation({
+    onSuccess: (data) => {
+      toast.success('Account created!', {
+        description: `Welcome, ${data.user.name}!`,
+      });
+      router.push('/app');
+    },
+    onError: (error) => {
+      toast.error('Signup failed', {
+        description: error.message || 'Could not create account',
+      });
+    },
+  });
+
+  // Handle form submission
+  const onSubmit = async (data: SignupFormData) => {
+    await signupMutation.mutate({
+      body: {
+        name: data.name,
+        email: data.email,
+        password: data.password,
+      },
+    });
+  };
+
+  return (
+    <Card className="w-full max-w-md">
+      <CardHeader>
+        <CardTitle className="text-2xl">Create an account</CardTitle>
+        <CardDescription>
+          Enter your information to get started with Shortify
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <FieldGroup>
+            <Controller
+              name="name"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="signup-name">Full Name</FieldLabel>
+                  <Input
+                    {...field}
+                    id="signup-name"
+                    type="text"
+                    placeholder="John Doe"
+                    autoComplete="name"
+                    aria-invalid={fieldState.invalid}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
+            <Controller
+              name="email"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="signup-email">Email</FieldLabel>
+                  <Input
+                    {...field}
+                    id="signup-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    aria-invalid={fieldState.invalid}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
+            <Controller
+              name="password"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="signup-password">Password</FieldLabel>
+                  <Input
+                    {...field}
+                    id="signup-password"
+                    type="password"
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    aria-invalid={fieldState.invalid}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
+            <Controller
+              name="confirmPassword"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="signup-confirm">
+                    Confirm Password
+                  </FieldLabel>
+                  <Input
+                    {...field}
+                    id="signup-confirm"
+                    type="password"
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    aria-invalid={fieldState.invalid}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={signupMutation.isLoading}
+            >
+              {signupMutation.isLoading ? 'Creating account...' : 'Create account'}
+            </Button>
+          </FieldGroup>
+        </form>
+
+        <div className="mt-4 text-center text-sm">
+          Already have an account?{' '}
+          <Link href="/auth/login" className="underline underline-offset-4">
+            Login
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+### Key Differences in the Signup Form
+
+**1. Extended Validation**: The signup schema includes a `name` field and password confirmation with a `.refine()` method to ensure passwords match.
+
+**2. Password Strength**: The password field uses a regex to require uppercase, lowercase, and numbers for better security.
+
+**3. Confirmation Field**: The `confirmPassword` field is validated but not sent to the API—only used for client-side verification.
+
+Both forms follow the same pattern: define the schema inline, setup the form, create the mutation, and handle submission. This makes the code easy to understand and maintain.
+
+## Creating the Auth Pages
+
+Now we'll create the actual pages that use these forms. Next.js 15+ uses the App Router, so we'll create pages in the `src/app/` directory.
+
+Create `src/app/auth/login/page.tsx`:
+
+```typescript
+import { LoginForm } from '@/features/auth/presentation/components/login-form';
+
+export const metadata = {
+  title: 'Login - Shortify',
+  description: 'Log in to your Shortify account',
+};
+
+export default function LoginPage() {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <LoginForm />
+    </div>
+  );
+}
+```
+
+Create `src/app/auth/signup/page.tsx`:
+
+```typescript
+import { SignupForm } from '@/features/auth/presentation/components/signup-form';
+
+export const metadata = {
+  title: 'Sign Up - Shortify',
+  description: 'Create a new Shortify account',
+};
+
+export default function SignupPage() {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <SignupForm />
+    </div>
+  );
+}
+```
+
+## Testing the Authentication Flow
+
+Start your development server:
+
+```bash
+igniter dev
+```
+
+Now test the complete authentication flow:
+
+1. **Navigate to `/auth/signup`** and create an account
+   - Fill in name, email, password, and confirmation
+   - Click "Create account"
+   - You should see a success toast and be redirected to `/app`
+
+2. **Try accessing `/app` without logging in**
+   - The middleware should redirect you to `/auth/login`
+
+3. **Log in with your credentials**
+   - Enter email and password
+   - Click "Login"
+   - You should be redirected to `/app`
+
+4. **Try accessing `/auth/login` while logged in**
+   - The middleware should redirect you to `/app` (you're already authenticated)
+
+<Callout type="success" title="Authentication Complete!">
+You now have a fully functional authentication system with:
+- Protected routes via middleware
+- Type-safe API calls with the Igniter.js client
+- Beautiful, accessible forms with validation
+- Proper error handling and user feedback
+</Callout>
+
+## Key Concepts Review
+
+**1. Middleware (proxy.ts)**: Runs at the edge to protect routes. It should only perform lightweight checks—no database queries or heavy logic.
+
+**2. Igniter.js Client**: Provides end-to-end type safety from backend to frontend. The client automatically generates typed hooks for all your controllers.
+
+**3. Self-Contained Components**: Keep validation schemas, API calls, and UI logic together in each component. This makes the code easier to understand and maintain.
+
+**4. Form Validation**: Use Zod schemas with React Hook Form. The `zodResolver` connects them seamlessly, providing both type safety and runtime validation.
+
+## Quiz
+
+<Quiz
+  question="Why do we use runtime: 'nodejs' in the middleware config?"
+  options={[
+    { label: 'It is faster than edge', value: 'faster' },
+    { label: 'Igniter.js client requires full Node.js APIs', value: 'apis', isCorrect: true },
+    { label: 'Edge runtime is deprecated', value: 'deprecated' },
+    { label: 'It supports more browsers', value: 'browsers' }
+  ]}
+  explanation="The Igniter.js client needs full Node.js API compatibility. The Edge runtime has limitations that prevent proper client initialization."
+/>
+
+<Quiz
+  question="What does the Igniter.js client provide?"
+  options={[
+    { label: 'Only HTTP requests', value: 'http' },
+    { label: 'End-to-end type safety with React hooks', value: 'types', isCorrect: true },
+    { label: 'Database access', value: 'database' },
+    { label: 'Server rendering', value: 'ssr' }
+  ]}
+  explanation="The client provides full TypeScript inference from your backend router, React hooks (useQuery, useMutation, useRealtime), and automatic validation—all with zero configuration."
+/>
+
+<ChapterNav
+  current={{ number: 5, title: 'Frontend Setup' }}
+  next={{
+    number: 6,
+    title: 'Link Management UI',
+    description: 'Build the dashboard UI to create, list, and manage shortened links with full CRUD operations.',
+    href: '/learn/06-link-management-ui'
+  }}
+/>
