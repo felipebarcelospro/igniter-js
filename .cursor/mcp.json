@@ -1,0 +1,37 @@
+{
+  "mcpServers": {
+    "next-devtools": {
+      "command": "npx",
+      "args": ["-y", "next-devtools-mcp@latest"]
+    },
+    "igniter": {
+      "command": "node",
+      "args": [
+        "/Users/felipebarcelospro/Sandbox/igniter-js/igniter-js/packages/mcp-server/dist"
+      ],
+      "env": {
+        "GITHUB_TOKEN": "",
+        "ENABLE_MEMORY_TOOLS": "false",
+        "ENABLE_TASK_MANAGEMENT_TOOLS": "false",
+        "ENABLE_AGENT_DELEGATION_TOOLS": "false"
+      }
+    },
+    "browser": {
+      "command": "npx @playwright/mcp@latest",
+      "env": {},
+      "args": []
+    },
+    "shadcn": {
+      "command": "npx",
+      "args": ["shadcn@latest", "mcp"]
+    },
+    "ai-elements": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://registry.ai-sdk.dev/api/mcp"
+      ]
+    }
+  }
+}
