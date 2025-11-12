@@ -4,10 +4,11 @@
     "baseUrl": "",
     "outDir": "dist",
     "rootDir": "src",
-    "module": "CommonJS",
+    "module": "NodeNext",
     "target": "ES2020",
     "lib": ["ES2020"],
-    "moduleResolution": "node",
+    "moduleResolution": "nodenext",
+    "jsx": "react",
     "types": ["node"],
     "paths": {
       "@/*": ["./src/*"],

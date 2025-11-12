@@ -1,68 +1,51 @@
 {
-  "name": "@igniter-js/cli",
-  "version": "0.2.72",
-  "description": "CLI for Igniter.js type-safe client generation",
-  "main": "dist/index.js",
+  "name": "@igniter-js/new-cli",
+  "version": "0.0.1",
+  "description": "The next-generation command-line interface for Igniter.js",
   "bin": {
-    "igniter": "./bin/igniter"
+    "igniter": "./dist/index.js"
   },
-  "files": [
-    "dist",
-    "bin"
-  ],
   "scripts": {
-    "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix",
-    "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
   },
-  "keywords": [
-    "igniter",
-    "cli",
-    "typescript",
-    "code-generation",
-    "api"
-  ],
-  "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
-  "license": "MIT",
   "dependencies": {
-    "@igniter-js/core": "*",
+    "@clack/prompts": "^0.7.0",
     "@mrleebo/prisma-ast": "^0.5.0",
-    "c12": "^3.0.4",
-    "chalk": "4.1.2",
-    "chokidar": "^3.6.0",
-    "commander": "^11.0.0",
-    "concurrently": "^7.6.0",
-    "cross-spawn": "^7.0.3",
-    "esbuild": "^0.23.0",
-    "execa": "^8.0.1",
-    "is-binary-path": "^3.0.0",
-    "ofetch": "^1.3.4",
-    "ora": "^8.2.0",
-    "prompts": "^2.4.2",
-    "tree-kill": "^1.2.2",
-    "tsx": "^4.7.0"
+    "chokidar": "^4.0.3",
+    "commander": "^12.0.0",
+    "esbuild": "^0.25.12",
+    "execa": "^9.6.0",
+    "handlebars": "^4.7.8",
+    "ink": "^6.5.0",
+    "js-yaml": "^4.1.0",
+    "picocolors": "^1.0.0",
+    "react": "^19.2.0",
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
     "@igniter-js/eslint-config": "*",
     "@igniter-js/typescript-config": "*",
-    "@types/cross-spawn": "^6.0.6",
-    "@types/ioredis": "^4.28.10",
-    "@types/prompts": "^2.4.9",
-    "eslint": "^8.57.0",
-    "ioredis": "^5.6.1",
-    "tsup": "^8.0.0",
-    "typescript": "^5.6.3",
-    "vitest": "^2.1.4"
+    "@types/handlebars": "^4.1.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.11.24",
+    "@types/react": "^19.2.3",
+    "tsup": "^8.0.2",
+    "typescript": "^5.3.3"
   },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  }
+  "keywords": [
+    "igniterjs",
+    "cli",
+    "scaffolding",
+    "codegeneration"
+  ],
+  "author": "Felipe Barcelos",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "templates"
+  ]
 }
