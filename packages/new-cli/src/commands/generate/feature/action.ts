@@ -5,9 +5,8 @@ import { createLogger } from "@/core/logger";
 import { TemplateEngine } from "@/core/template-engine";
 import { FeatureWorkspace } from "./feature";
 import { FeaturePrompts } from "./prompts";
-import { SchemaProviderRegistry } from "./providers/registry";
-import { PrismaSchemaProvider } from "./providers/prisma";
-import type { SchemaProvider, SchemaProviderSelection } from "./providers/base";
+import { schemaProviderRegistry } from "@/registry/schema-providers";
+import type { SchemaProvider, SchemaProviderSelection } from "@/core/registry/schema-providers/base-schema-provider";
 import { Casing } from "@/utils/casing";
 
 const logger = createLogger("generate:feature");
@@ -29,9 +28,7 @@ export async function handleGenerateFeatureAction(
   p.intro("Generate Feature");
 
   const templateEngine = TemplateEngine.create();
-  const registry = SchemaProviderRegistry.create()
-    .register(new PrismaSchemaProvider())
-    .build();
+  const registry = schemaProviderRegistry;
 
   const featureInput =
     name ??

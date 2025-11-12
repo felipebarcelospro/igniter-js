@@ -2,7 +2,7 @@ import { getSchema, Model, Property } from "@mrleebo/prisma-ast";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as p from "@clack/prompts";
-import { SchemaProvider, SchemaPromptContext, SchemaProviderSelection, SchemaGenerationContext } from "./base";
+import { SchemaProvider, SchemaPromptContext, SchemaProviderSelection, SchemaGenerationContext } from "@/core/registry/schema-providers/base-schema-provider";
 import { Casing } from "@/utils/casing";
 import { FeatureWorkspace } from "../feature";
 
