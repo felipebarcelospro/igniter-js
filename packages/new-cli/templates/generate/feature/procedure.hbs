@@ -4,16 +4,18 @@
 --}}
 import { igniter } from '@/igniter'
 
-export const {{procedureVariable}} = igniter.procedure({
-  name: '{{procedureName}}',
-  handler: async (_options, { context }) => {
+export const {{procedureExport}} = igniter.procedure({
+  name: '{{procedureDisplayName}}',
+  handler: async () => {
     return {
-      {{procedureContextKey}}: {
-        example: () => {
-          return {
-            message: 'Hello from {{procedureName}}!',
-            timestamp: new Date().toISOString(),
-          }
+      {{procedureExport}}: {
+        services: {
+          example: () => {
+            return {
+              message: 'Hello from {{procedureDisplayName}}!',
+              timestamp: new Date().toISOString(),
+            }
+          },
         },
       },
     }

@@ -4,14 +4,16 @@
 --}}
 import { igniter } from '@/igniter'
 
-export const {{controllerVariable}} = igniter.controller({
-  name: '{{controllerName}}',
+export const {{controllerExport}} = igniter.controller({
+  name: '{{controllerDisplayName}}',
   path: '/{{controllerRoute}}',
   actions: {
     hello: igniter.query({
+      name: 'Hello',
+      description: 'Demonstration endpoint',
       path: '/hello',
       handler: async ({ response }) => {
-        return response.success({ message: 'Hello from {{controllerName}}!' })
+        return response.success({ message: 'Hello from {{controllerDisplayName}}!' })
       },
     }),
   },

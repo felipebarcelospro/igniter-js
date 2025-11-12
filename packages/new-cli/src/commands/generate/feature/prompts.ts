@@ -1,91 +1,103 @@
 import * as p from "@clack/prompts";
-import { listFeatureDirectories } from "./feature-fs";
-import { toKebabCase } from "@/utils/casing";
+import { FeatureWorkspace } from "./feature";
 
-export function isValidName(value: string): boolean {
-  return /^[a-zA-Z][a-zA-Z0-9-_]*$/.test(value);
-}
+/**
+ * Encapsulates all interactive prompts required for feature generation.
+ */
+export abstract class FeaturePrompts {
+  protected constructor() {}
 
-export async function promptForName(
-  message: string,
-  placeholder: string,
-  cancel: (message: string) => never,
-  cancelMessage: string,
-): Promise<string> {
-  const response = await p.text({
+  /**
+   * Asks the user to confirm or supply a feature name.
+   */
+  public static async askForFeatureName(cancelMessage: string): Promise<string> {
+    return this.askForEntityName({
+      message: "What is the name of your feature?",
+      placeholder: "users",
+      cancelMessage,
+    });
+  }
+
+  /**
+   * Resolves the feature slug either from user input or from available features.
+   */
+  public static async resolveFeatureSlug(
+    cancelMessage: string,
+    initial?: string,
+  ): Promise<string> {
+    if (initial) {
+      const validation = this.validateSlug(initial);
+      if (validation === true) {
+        return initial.trim().toLowerCase();
+      }
+      throw new Error(typeof validation === "string" ? validation : "Invalid feature name.");
+    }
+
+    const existing = await FeatureWorkspace.listFeatures();
+    if (existing.length === 0) {
+      return this.askForFeatureName(cancelMessage);
+    }
+
+    const selection = await p.select({
+      message: "Select the target feature:",
+      options: [
+        ...existing.map((feature) => ({
+          label: feature,
+          value: feature,
+        })),
+        { label: "Create a new feature", value: "__new__" },
+      ],
+      initialValue: existing[0],
+    });
+
+    if (p.isCancel(selection)) {
+      this.cancel(cancelMessage);
+    }
+
+    if (selection === "__new__") {
+      return this.askForFeatureName(cancelMessage);
+    }
+
+    return String(selection);
+  }
+
+  /**
+   * Generic helper for asking an entity name while applying the standard validation.
+   */
+  public static async askForEntityName({
     message,
     placeholder,
-    validate: (value) => {
-      if (!value || !value.trim()) {
-        return "A value is required.";
-      }
-      if (!isValidName(value.trim())) {
-        return "Use letters, numbers, hyphens, and underscores only (must start with a letter).";
-      }
-    },
-  });
+    cancelMessage,
+  }: {
+    message: string;
+    placeholder: string;
+    cancelMessage: string;
+  }): Promise<string> {
+    const response = await p.text({
+      message,
+      placeholder,
+      validate: (value) => this.validateSlug(value),
+    });
 
-  if (p.isCancel(response)) {
-    cancel(cancelMessage);
-  }
-
-  return response.trim();
-}
-
-export async function resolveFeatureSlug(
-  cancel: (message: string) => never,
-  initial?: string,
-  cancelMessage: string = "Operation cancelled.",
-): Promise<string> {
-  if (initial) {
-    if (!isValidName(initial)) {
-      throw new Error(
-        "Feature name must start with a letter and may contain letters, numbers, hyphens, or underscores.",
-      );
+    if (p.isCancel(response)) {
+      this.cancel(cancelMessage);
     }
-    return toKebabCase(initial);
+
+    return response.trim();
   }
 
-  const features = await listFeatureDirectories();
-
-  if (features.length === 0) {
-    const name = await promptForName(
-      "What is the name of the feature?",
-      "users",
-      cancel,
-      cancelMessage,
-    );
-    return toKebabCase(name);
+  private static validateSlug(value: string | undefined): true | string {
+    if (!value || !value.trim()) {
+      return "A value is required.";
+    }
+    if (!/^[a-zA-Z][a-zA-Z0-9-_]*$/.test(value.trim())) {
+      return "Use letters, numbers, hyphens, and underscores only (must start with a letter).";
+    }
+    return true;
   }
 
-  const selection = await p.select({
-    message: "Select the target feature:",
-    options: [
-      ...features.map((feature) => ({
-        label: feature,
-        value: feature,
-      })),
-      {
-        label: "Create a new feature",
-        value: "__new__",
-      },
-    ],
-    initialValue: features[0],
-  });
-
-  if (p.isCancel(selection)) {
-    cancel(cancelMessage);
+  private static cancel(message: string): never {
+    p.cancel(message);
+    process.exit(0);
   }
-
-  if (selection === "__new__") {
-    const name = await promptForName(
-      "Name of the new feature:",
-      "inventory",
-      cancel,
-      cancelMessage,
-    );
-    return toKebabCase(name);
-  }
-
-  return toKebabCase(selection);
 }

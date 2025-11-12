@@ -5,16 +5,18 @@
 import { igniter } from '@/igniter'
 import type { Create{{modelName}}Input, Update{{modelName}}Input } from '../{{featureName}}.interfaces'
 
-export const {{procedureName}} = igniter.procedure({
-  name: '{{procedureName}}',
+export const {{procedureExport}} = igniter.procedure({
+  name: '{{procedureDisplayName}}',
   handler: async (_options, { context }) => {
     return {
-      {{repositoryName}}: {
-        findAll: () => context.database.{{prismaDelegate}}.findMany(),
-        findById: (id: {{idType}}) => context.database.{{prismaDelegate}}.findUnique({ where: { id } }),
-        create: (data: Create{{modelName}}Input) => context.database.{{prismaDelegate}}.create({ data }),
-        update: (id: {{idType}}, data: Update{{modelName}}Input) => context.database.{{prismaDelegate}}.update({ where: { id }, data }),
-        delete: (id: {{idType}}) => context.database.{{prismaDelegate}}.delete({ where: { id } }),
+      {{procedureExport}}: {
+        services: {
+          findAll: () => context.database.{{prismaDelegate}}.findMany(),
+          findById: (id: {{idType}}) => context.database.{{prismaDelegate}}.findUnique({ where: { id } }),
+          create: (data: Create{{modelName}}Input) => context.database.{{prismaDelegate}}.create({ data }),
+          update: (id: {{idType}}, data: Update{{modelName}}Input) => context.database.{{prismaDelegate}}.update({ where: { id }, data }),
+          delete: (id: {{idType}}) => context.database.{{prismaDelegate}}.delete({ where: { id } }),
+        }
       }
     }
   }

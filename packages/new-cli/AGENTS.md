@@ -57,14 +57,13 @@ Maintain and extend the next-generation CLI tool for Igniter.js, ensuring reliab
 │   │   │   │   └── index.ts
 │   │   │   ├── feature/    # App feature generation (NOT add-ons)
 │   │   │   │   ├── action.ts
-│   │   │   │   ├── feature-fs.ts
-│   │   │   │   ├── index-manager.ts
+│   │   │   │   ├── feature.ts
 │   │   │   │   ├── index.ts
 │   │   │   │   ├── prompts.ts
 │   │   │   │   ├── providers/
 │   │   │   │   │   ├── base.ts
-│   │   │   │   │   └── prisma.ts
-│   │   │   │   └── schema-utils.ts
+│   │   │   │   │   ├── prisma.ts
+│   │   │   │   │   └── registry.ts
 │   │   │   ├── procedure/
 │   │   │   │   ├── action.ts
 │   │   │   │   └── index.ts
@@ -158,7 +157,6 @@ Maintain and extend the next-generation CLI tool for Igniter.js, ensuring reliab
 │   │   └── feature/
 │   │       ├── empty.controller.hbs
 │   │       ├── empty.interfaces.hbs
-│   │       ├── index.hbs
 │   │       ├── procedure.hbs
 │   │       ├── schema.controller.hbs
 │   │       ├── schema.interfaces.hbs
@@ -199,6 +197,7 @@ igniter [command] [subcommand] [options]
 1. **`igniter init`** - Create new Igniter.js projects
 2. **`igniter generate`** - Generate application building blocks and documentation
    - `igniter generate feature` - Scaffold new feature modules (controllers, procedures, interfaces)
+     - Supports `--schema <provider:model>` and `--schema-path <path>` to customise schema sources
    - `igniter generate controller` - Create a controller inside an existing or new feature
    - `igniter generate procedure` - Create a procedure inside an existing or new feature
    - `igniter generate docs` - Generate OpenAPI specification
@@ -764,12 +763,15 @@ src/features/[feature-name]/
 ├── controllers/
 │   └── [feature-name].controller.ts
 ├── procedures/
-│   └── [feature-name].procedure.ts    # CRUD features only
-├── [feature-name].interfaces.ts
-└── index.ts                           # Barrel exports maintained automatically
+│   └── [feature-name].procedure.ts    # Generated only for schema-aware features
+└── [feature-name].interfaces.ts
 ```
 
-Empty features generate a controller + interfaces file (no procedure). Schema-based features generate controller, procedure, interfaces, and update the feature index automatically.
+Key conventions:
+- Controllers export PascalCase constants (`UserController`, `PostController`) and actions use friendly names (`List`, `Get By Id`, `Create`, `Update`, `Delete`).
+- Procedures export PascalCase constants (`UserProcedure`) and return `{ UserProcedure: { services: { ... } } }` to avoid name collisions.
+- Empty features generate only the controller and interface files; schema-aware providers add the procedure automatically.
+- Barrel files are intentionally not created to avoid bundling contamination.
 
 #### Standalone Controller Generation
 
@@ -779,7 +781,6 @@ igniter generate controller <name> --feature <feature>
 
 - Works with existing features or creates a new feature structure on the fly
 - Generates controller files via `templates/generate/feature/empty.controller.hbs`
-- Updates `src/features/<feature>/index.ts` to re-export the controller
 
 #### Standalone Procedure Generation
 
@@ -788,24 +789,36 @@ igniter generate procedure <name> --feature <feature>
 ```
 
 - Creates reusable procedure scaffolds using `templates/generate/feature/procedure.hbs`
-- Ensures feature directories exist and appends exports to the feature index
+- Ensures feature directories exist without creating barrel files
 - Ideal for adding repository-style helpers without regenerating entire features
 
 **Note:** All code generation commands operate on application features (controllers, procedures, interfaces) — not on CLI add-ons.
+
+#### Schema Provider Architecture
+
+- `SchemaProvider` (in `feature/providers/base.ts`) is an abstract class that encapsulates validation, interactive prompts, and feature generation for schema-backed workflows.
+- `SchemaProviderRegistry` uses a builder API (`SchemaProviderRegistry.create().register(...).build()`) similar to add-ons/starters to register providers.
+- Each provider can expose prompts (`promptForSelection`) and respects `--schema-path` overrides when resolving schema sources.
+- `PrismaSchemaProvider` implements CRUD scaffolding and lives entirely in `feature/providers/prisma.ts`, keeping provider-specific logic self-contained.
+- `FeaturePrompts` (in `feature/prompts.ts`) is an abstract helper that centralises all interactive questions for feature tooling.
 
 ---
 
 ## 7. Core Utilities
 
-### 7.1. File System Operations
+### 7.1. Feature Workspace Utilities
 
-#### Core Functions
+The `FeatureWorkspace` abstract class (located at `src/commands/generate/feature/feature.ts`) centralises filesystem helpers for features:
+
 ```typescript
-// file-system.ts
-export async function isPathEmpty(path: string): Promise<boolean>
+FeatureWorkspace.root(): string
+FeatureWorkspace.featureDir(name: string): string
+FeatureWorkspace.ensureStructure(featureDir: string): Promise<void>
+FeatureWorkspace.listFeatures(): Promise<string[]>
+FeatureWorkspace.fileExists(filePath: string): Promise<boolean>
 ```
 
-The `isPathEmpty` function checks if a directory exists and is empty, returning `true` for non-existent directories as well. This is used during project initialization to determine if the target directory can be used for a new project.
+All generation commands rely on these helpers to normalise paths and guard against file collisions.
 
 ### 7.2. Package Manager Detection
 
@@ -855,17 +868,22 @@ The logger uses `@clack/prompts` for consistent CLI output formatting and `picoc
 Located in `src/core/template-engine.ts`. Provides a thin abstraction over Handlebars:
 
 ```typescript
-resolveTemplatePath(...segments: string[]): string
-renderTemplate(path: string, context: Record<string, unknown>): Promise<string>
-renderTemplateToFile(path: string, context: Record<string, unknown>, output: string): Promise<void>
+const engine = TemplateEngine.create();
+engine.resolvePath("generate", "feature", "schema.controller.hbs");
+await engine.render(templatePath, context);
+await engine.renderToFile(templatePath, context, outputPath);
 ```
 
 Key features:
 
 - Automatically registers custom Handlebars helpers on first use
 - Searches multiple candidate directories so templates resolve both in source (`src/templates`) and packaged (`dist/templates`) environments
-- Ensures output directories exist (`mkdirSync` with `{ recursive: true }`) before writing files
-- Used by `generate feature/controller/procedure` to render scaffolding templates safely
+- Ensures output directories exist before writing files
+- Used by all generation commands to render scaffolding templates safely
+
+### 7.6. Naming Utilities
+
+The `Casing` abstract class (`src/utils/casing.ts`) provides shared helpers for converting between kebab, camel, and Pascal cases, plus simple pluralisation. All generation logic relies on these helpers to keep export names and routes consistent.
 
 ---
 

@@ -1,21 +1,15 @@
 import * as path from "path";
 import * as p from "@clack/prompts";
 import { createLogger } from "@/core/logger";
-import { ensureFeatureStructure, getFeatureDir, fileExists } from "@/commands/generate/feature/feature-fs";
-import { ensureIndexExport } from "@/commands/generate/feature/index-manager";
-import { renderTemplateToFile, resolveTemplatePath } from "@/core/template-engine";
-import { toCamelCase, toKebabCase, toPascalCase } from "@/utils/casing";
-import { isValidName, promptForName, resolveFeatureSlug } from "@/commands/generate/feature/prompts";
+import { FeatureWorkspace } from "@/commands/generate/feature/feature";
+import { FeaturePrompts } from "@/commands/generate/feature/prompts";
+import { TemplateEngine } from "@/core/template-engine";
+import { Casing } from "@/utils/casing";
 
 const logger = createLogger("generate:controller");
 
 interface ControllerOptions {
   feature?: string;
-}
-
-function cancel(message: string): never {
-  p.cancel(message);
-  process.exit(0);
 }
 
 export async function handleGenerateControllerAction(
@@ -24,33 +18,25 @@ export async function handleGenerateControllerAction(
 ): Promise<void> {
   p.intro("Generate Controller");
 
-  let controllerName = name;
-  if (!controllerName) {
-    controllerName = await promptForName(
-      "What is the name of the controller?",
-      "profile",
-      cancel,
-      "Controller generation cancelled.",
-    );
-  } else {
-    if (!isValidName(controllerName)) {
-      p.log.error(
-        "Controller name must start with a letter and may contain letters, numbers, hyphens, or underscores.",
-      );
-      process.exit(1);
-    }
-  }
+  const controllerInput =
+    name ??
+    (await FeaturePrompts.askForEntityName({
+      message: "What is the name of the controller?",
+      placeholder: "profile",
+      cancelMessage: "Controller generation cancelled.",
+    }));
 
-  const controllerSlug = toKebabCase(controllerName);
-  const controllerVariable = `${toCamelCase(controllerSlug)}Controller`;
-  const controllerDisplay = toPascalCase(controllerSlug);
+  const controllerSlug = Casing.toKebabCase(controllerInput);
+  const controllerExport = `${Casing.toPascalCase(controllerSlug)}Controller`;
+  const controllerDisplay = Casing.toPascalCase(controllerSlug);
 
   let featureSlug: string;
   try {
-    featureSlug = await resolveFeatureSlug(
-      cancel,
-      options.feature,
-      "Controller generation cancelled.",
+    featureSlug = Casing.toKebabCase(
+      await FeaturePrompts.resolveFeatureSlug(
+        "Controller generation cancelled.",
+        options.feature,
+      ),
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -58,26 +44,28 @@ export async function handleGenerateControllerAction(
     process.exit(1);
   }
 
-  const featureDir = getFeatureDir(featureSlug);
-  await ensureFeatureStructure(featureDir);
+  const featureDir = FeatureWorkspace.featureDir(featureSlug);
+  await FeatureWorkspace.ensureStructure(featureDir);
 
-  const controllerTemplate = resolveTemplatePath(
-    "generate",
-    "feature",
-    "empty.controller.hbs",
-  );
   const controllerPath = path.join(
     featureDir,
     "controllers",
-    `${controllerSlug}.controller.ts`,
+    `${featureSlug}.controller.ts`,
   );
 
-  if (await fileExists(controllerPath)) {
+  if (await FeatureWorkspace.fileExists(controllerPath)) {
     p.log.error(
       `Controller '${controllerSlug}' already exists at ${path.relative(process.cwd(), controllerPath)}.`,
     );
     process.exit(1);
   }
+
+  const templateEngine = TemplateEngine.create();
+  const controllerTemplate = templateEngine.resolvePath(
+    "generate",
+    "feature",
+    "empty.controller.hbs",
+  );
 
   const spinner = p.spinner();
   spinner.start(
@@ -85,20 +73,14 @@ export async function handleGenerateControllerAction(
   );
 
   try {
-    await renderTemplateToFile(
+    await templateEngine.renderToFile(
       controllerTemplate,
       {
-        controllerVariable,
-        controllerName: controllerDisplay,
-        controllerRoute: controllerSlug,
+        controllerExport,
+        controllerDisplayName: controllerDisplay,
+        controllerRoute: featureSlug,
       },
       controllerPath,
-    );
-
-    await ensureIndexExport(
-      featureDir,
-      "controller",
-      `${controllerSlug}.controller`,
     );
 
     spinner.stop("Controller created successfully!");

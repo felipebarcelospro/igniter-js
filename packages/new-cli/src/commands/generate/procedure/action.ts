@@ -1,21 +1,15 @@
 import * as path from "path";
 import * as p from "@clack/prompts";
 import { createLogger } from "@/core/logger";
-import { ensureFeatureStructure, getFeatureDir, fileExists } from "@/commands/generate/feature/feature-fs";
-import { ensureIndexExport } from "@/commands/generate/feature/index-manager";
-import { renderTemplateToFile, resolveTemplatePath } from "@/core/template-engine";
-import { toCamelCase, toKebabCase, toPascalCase } from "@/utils/casing";
-import { isValidName, promptForName, resolveFeatureSlug } from "@/commands/generate/feature/prompts";
+import { FeatureWorkspace } from "@/commands/generate/feature/feature";
+import { FeaturePrompts } from "@/commands/generate/feature/prompts";
+import { TemplateEngine } from "@/core/template-engine";
+import { Casing } from "@/utils/casing";
 
 const logger = createLogger("generate:procedure");
 
 interface ProcedureOptions {
   feature?: string;
-}
-
-function cancel(message: string): never {
-  p.cancel(message);
-  process.exit(0);
 }
 
 export async function handleGenerateProcedureAction(
@@ -24,34 +18,25 @@ export async function handleGenerateProcedureAction(
 ): Promise<void> {
   p.intro("Generate Procedure");
 
-  let procedureName = name;
-  if (!procedureName) {
-    procedureName = await promptForName(
-      "What is the name of the procedure?",
-      "profile",
-      cancel,
-      "Procedure generation cancelled.",
-    );
-  } else {
-    if (!isValidName(procedureName)) {
-      p.log.error(
-        "Procedure name must start with a letter and may contain letters, numbers, hyphens, or underscores.",
-      );
-      process.exit(1);
-    }
-  }
+  const procedureInput =
+    name ??
+    (await FeaturePrompts.askForEntityName({
+      message: "What is the name of the procedure?",
+      placeholder: "profile",
+      cancelMessage: "Procedure generation cancelled.",
+    }));
 
-  const procedureSlug = toKebabCase(procedureName);
-  const procedureVariable = `${toCamelCase(procedureSlug)}Procedure`;
-  const procedureDisplay = toPascalCase(procedureSlug);
-  const procedureContextKey = toCamelCase(procedureSlug);
+  const procedureSlug = Casing.toKebabCase(procedureInput);
+  const procedureExport = `${Casing.toPascalCase(procedureSlug)}Procedure`;
+  const procedureDisplay = Casing.toPascalCase(procedureSlug);
 
   let featureSlug: string;
   try {
-    featureSlug = await resolveFeatureSlug(
-      cancel,
-      options.feature,
-      "Procedure generation cancelled.",
+    featureSlug = Casing.toKebabCase(
+      await FeaturePrompts.resolveFeatureSlug(
+        "Procedure generation cancelled.",
+        options.feature,
+      ),
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -59,14 +44,8 @@ export async function handleGenerateProcedureAction(
     process.exit(1);
   }
 
-  const featureDir = getFeatureDir(featureSlug);
-  await ensureFeatureStructure(featureDir);
-
-  const procedureTemplate = resolveTemplatePath(
-    "generate",
-    "feature",
-    "procedure.hbs",
-  );
+  const featureDir = FeatureWorkspace.featureDir(featureSlug);
+  await FeatureWorkspace.ensureStructure(featureDir);
 
   const procedurePath = path.join(
     featureDir,
@@ -74,12 +53,19 @@ export async function handleGenerateProcedureAction(
     `${procedureSlug}.procedure.ts`,
   );
 
-  if (await fileExists(procedurePath)) {
+  if (await FeatureWorkspace.fileExists(procedurePath)) {
     p.log.error(
       `Procedure '${procedureSlug}' already exists at ${path.relative(process.cwd(), procedurePath)}.`,
     );
     process.exit(1);
   }
+
+  const templateEngine = TemplateEngine.create();
+  const procedureTemplate = templateEngine.resolvePath(
+    "generate",
+    "feature",
+    "procedure.hbs",
+  );
 
   const spinner = p.spinner();
   spinner.start(
@@ -87,21 +73,14 @@ export async function handleGenerateProcedureAction(
   );
 
   try {
-    await renderTemplateToFile(
+    await templateEngine.renderToFile(
       procedureTemplate,
       {
-        procedureVariable,
-        procedureName: procedureDisplay,
-        procedureContextKey,
-        featureName: toPascalCase(featureSlug),
+        procedureExport,
+        procedureDisplayName: procedureDisplay,
+        featureName: Casing.toKebabCase(featureSlug),
       },
       procedurePath,
-    );
-
-    await ensureIndexExport(
-      featureDir,
-      "procedure",
-      `${procedureSlug}.procedure`,
     );
 
     spinner.stop("Procedure created successfully!");
