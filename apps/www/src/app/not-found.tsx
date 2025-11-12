@@ -1,56 +1,85 @@
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { ArrowLeft, Home, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function NotFound() {
   return (
-    <main className="container mx-auto px-4 py-16 flex flex-col items-center justify-center h-[calc(100vh-200px)]">
-      <div className="text-center">
+    <div className="flex min-h-[calc(100vh-200px)] flex-col items-center justify-center px-4 py-16">
+      <div className="mx-auto max-w-2xl text-center">
+        {/* 404 Number */}
         <div className="mb-8">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="120"
-            height="120"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="mx-auto text-primary"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <path d="M16 16s-1.5-2-4-2-4 2-4 2" />
-            <line x1="9" y1="9" x2="9.01" y2="9" />
-            <line x1="15" y1="9" x2="15.01" y2="9" />
-          </svg>
+          <h1 className="text-[10rem] font-bold leading-none tracking-tighter text-primary/10 dark:text-primary/20 sm:text-[12rem]">
+            404
+          </h1>
         </div>
-        <h1 className="text-4xl sm:text-5xl font-bold mb-4">
-          404 - Page Not Found
-        </h1>
-        <p className="text-xl text-muted-foreground mb-8">
-          Oops! The page you&apos;re looking for doesn&apos;t exist.
-        </p>
-        <Link href="/" passHref>
-          <Button size="lg" className="inline-flex items-center">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="mr-2"
-            >
-              <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
-            Back to Home
+
+        {/* Message */}
+        <div className="space-y-4 mb-12">
+          <h2 className="text-2xl font-mono tracking-tight text-foreground">
+            Page Not Found
+          </h2>
+          <p className="text-md text-muted-foreground max-w-md mx-auto">
+            Sorry, we couldn't find the page you're looking for. It might have
+            been moved or deleted.
+          </p>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <Button variant="default" asChild>
+            <Link href="/">
+              <Home className="h-4 w-4" />
+              Back to Home
+            </Link>
           </Button>
-        </Link>
+
+          <Button variant="outline" asChild>
+            <Link
+              href="/docs"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-6 py-3 text-sm font-medium text-foreground shadow-sm transition-all hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <Search className="h-4 w-4" />
+              Browse Documentation
+            </Link>
+          </Button>
+        </div>
+
+        {/* Helpful Links */}
+        <div className="mt-16 pt-8 border-t border-border/50">
+          <p className="text-sm text-muted-foreground mb-4">
+            Looking for something specific?
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-4 text-sm">
+            <Link
+              href="/docs/quick-start"
+              className="text-primary hover:text-primary/80 transition-colors underline-offset-4 hover:underline"
+            >
+              Quick Start Guide
+            </Link>
+            <span className="text-muted-foreground">•</span>
+            <Link
+              href="/templates"
+              className="text-primary hover:text-primary/80 transition-colors underline-offset-4 hover:underline"
+            >
+              Templates
+            </Link>
+            <span className="text-muted-foreground">•</span>
+            <Link
+              href="/blog"
+              className="text-primary hover:text-primary/80 transition-colors underline-offset-4 hover:underline"
+            >
+              Blog
+            </Link>
+            <span className="text-muted-foreground">•</span>
+            <Link
+              href="/showcase"
+              className="text-primary hover:text-primary/80 transition-colors underline-offset-4 hover:underline"
+            >
+              Showcase
+            </Link>
+          </div>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

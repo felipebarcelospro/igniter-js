@@ -1,57 +1,35 @@
-import "./globals.css";
+import { RootProvider } from 'fumadocs-ui/provider/next';
+import './global.css';
+import { Inter } from 'next/font/google';
+import { HomeLayout } from 'fumadocs-ui/layouts/home';
+import { baseOptions } from '@/app/layout.shared';
+import { getDefaultMetadata } from '@/lib/metadata';
+import { GoogleAnalytics } from '@next/third-parties/google';
+import { ChatLayout } from '@/components/lia-chat/chat-layout';
 
-import type { Metadata } from "next";
+const inter = Inter({
+  subsets: ['latin'],
+});
 
-import { Footer } from "@/app/(shared)/components/footer";
-import { Header } from "@/app/(shared)/components/header";
-import { ThemeProvider } from "@/components/theme-provider";
-import { config } from "@/configs/application";
-import { githubService } from "@/lib/github";
-import { cn } from "@/lib/utils";
-import { GoogleAnalytics } from "@next/third-parties/google";
-import { GeistSans } from 'geist/font/sans';
-import { GeistMono } from 'geist/font/mono';
-import { Analytics } from "@vercel/analytics/next"
+export const metadata = getDefaultMetadata();
 
-export const metadata: Metadata = {
-  title: {
-    absolute: config.projectName,
-    template: `%s • ${config.projectName}`,
-  },
-  openGraph: {
-    images: [
-      {
-        url: 'https://igniterjs.com/og-image.png',
-      }
-    ]
-  }
-};
-
-export default async function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  const repoInfo = await githubService.getRepositoryInfo();
+export default function Layout({ children }: LayoutProps<'/'>) {
+  const gaId = process.env.NEXT_PUBLIC_GA_ID;
 
   return (
-    <html lang="en" suppressContentEditableWarning suppressHydrationWarning>
-      <body
-        className={cn(GeistSans.variable, GeistMono.variable, "antialiased")}
-      >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <Header repoInfo={repoInfo} />
-          <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID ?? ""} />
-          <Analytics />
-          <div>{children}</div>
-          <Footer />
-        </ThemeProvider>
+    <html lang="en" className={inter.className} suppressHydrationWarning>
+      <body className="flex flex-col min-h-screen">
+      <RootProvider>
+      <HomeLayout {...baseOptions()}>
+        <ChatLayout>
+          
+            {children}
+          
+        </ChatLayout>
+        </HomeLayout>
+        </RootProvider>
       </body>
+      {gaId && <GoogleAnalytics gaId={gaId} />}
     </html>
   );
 }

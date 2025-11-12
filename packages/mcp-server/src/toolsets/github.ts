@@ -231,6 +231,45 @@ export function registerGitHubTools({ server, octokit }: ToolsetContext) {
     }
   });
 
+  server.registerTool("list_github_repository_content", {
+    title: "List GitHub Repository Content",
+    description: "Lists the contents of a directory within a GitHub repository. If no path is provided, it lists the root directory.",
+    inputSchema: {
+      owner: z.string().describe("The username or organization that owns the repository."),
+      repo: z.string().describe("The name of the repository."),
+      path: z.string().optional().describe("The path to the directory. Defaults to the root if not provided."),
+      ref: z.string().optional().describe("The branch, tag, or commit SHA. Defaults to the repository's default branch."),
+    },
+  }, async ({ owner, repo, path = '', ref }: { owner: string, repo: string, path?: string, ref?: string }) => {
+    try {
+      const response = await octokit.rest.repos.getContent({
+        owner,
+        repo,
+        path,
+        ref,
+      });
+
+      if (!Array.isArray(response.data)) {
+        return { content: [{ type: "text", text: `Error: The specified path '${path}' is a file, not a directory. Use 'read_github_file' to read its content.` }] };
+      }
+
+      const contents = response.data.map((item: any) => ({
+        type: item.type,
+        name: item.name,
+        path: item.path,
+        sha: item.sha,
+        url: item.html_url,
+      }));
+
+      return { content: [{ type: "text", text: JSON.stringify(contents, null, 2) }] };
+    } catch (error: any) {
+      if (error.status === 404) {
+        return { content: [{ type: "text", text: `Error: The repository '${owner}/${repo}' or the path '${path}' was not found.` }] };
+      }
+      return { content: [{ type: "text", text: `An unexpected error occurred: ${error.message}` }] };
+    }
+  });
+
   server.registerTool("update_github_issue", {
     title: "Update GitHub Issue",
     description: "Updates an existing GitHub issue (title, body, labels, assignees, state, etc.)",

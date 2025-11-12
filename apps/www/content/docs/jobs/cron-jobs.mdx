@@ -1,0 +1,487 @@
+---
+title: Cron Jobs
+description: Create recurring jobs that run on schedule using cron expressions with enhanced context and execution tracking.
+---
+
+Cron jobs are a special type of job designed specifically for recurring tasks. They provide enhanced scheduling capabilities, execution tracking, and cron-specific context to help you build reliable scheduled workflows.
+
+## Creating a Cron Job
+
+Use `jobs.cron()` to create a cron job:
+
+```typescript
+import { jobs } from '@/services/jobs';
+
+const dailyReportJob = jobs.cron(
+  '0 2 * * *', // Every day at 2 AM
+  async ({ context, cron }) => {
+    const report = await context.reports.generateDaily();
+    console.log(`Report generated (execution #${cron.executionCount})`);
+    return { reportId: report.id };
+  },
+  {
+    jobName: 'daily-report-generator',
+    timezone: 'America/New_York',
+  }
+);
+```
+
+### Understanding Cron Expressions
+
+Cron expressions follow the format: `minute hour day month weekday [year]`
+
+```
+┌───────────── minute (0 - 59)
+│ ┌───────────── hour (0 - 23)
+│ │ ┌───────────── day of month (1 - 31)
+│ │ │ ┌───────────── month (1 - 12)
+│ │ │ │ ┌───────────── day of week (0 - 6) (Sunday to Saturday)
+│ │ │ │ │
+* * * * *
+```
+
+**Common Examples:**
+
+- `'0 * * * *'` - Every hour at minute 0
+- `'0 9 * * *'` - Every day at 9 AM
+- `'0 0 * * 0'` - Every Sunday at midnight
+- `'0 0 1 * *'` - First day of every month at midnight
+- `'*/5 * * * *'` - Every 5 minutes
+
+---
+
+## Cron Job Handler
+
+Cron job handlers receive a special `CronJobExecutionContext` with cron-specific information:
+
+```typescript
+const reportJob = jobs.cron(
+  '0 2 * * *',
+  async ({ context, cron }) => {
+    // Access execution count
+    console.log(`Execution #${cron.executionCount}`);
+    
+    // Check if this is the final execution
+    if (cron.isFinalExecution) {
+      console.log('This is the final execution');
+    }
+    
+    // Access schedule information
+    console.log(`Schedule: ${cron.schedule}`);
+    console.log(`Timezone: ${cron.timezone}`);
+    
+    // Your business logic
+    const report = await context.reports.generate();
+    return { reportId: report.id };
+  }
+);
+```
+
+### Cron Context Properties
+
+- **`executionCount`**: Number of times this cron job has executed
+- **`maxExecutions`**: Maximum executions (if set)
+- **`isFinalExecution`**: Whether this is the final execution
+- **`schedule`**: The cron expression string
+- **`timezone`**: The timezone configured for this job
+- **`nextExecution`**: When the next execution will occur (if available)
+- **`previousExecution`**: When the previous execution occurred (if tracked)
+
+---
+
+## Cron Job Options
+
+Configure cron jobs with various options:
+
+```typescript
+const limitedCronJob = jobs.cron(
+  '0 9 * * *', // Every day at 9 AM
+  async ({ context, cron }) => {
+    // Handler logic
+  },
+  {
+    // Job identification
+    jobName: 'daily-newsletter',
+    
+    // Scheduling
+    timezone: 'America/New_York',
+    startDate: new Date('2024-01-01'), // Start on Jan 1st
+    endDate: new Date('2024-12-31'), // End on Dec 31st
+    
+    // Execution limits
+    maxExecutions: 365, // Run 365 times (1 year)
+    skipIfRunning: true, // Skip if previous execution is still running
+    
+    // Retry configuration
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 5000,
+    },
+    
+    // Metadata
+    metadata: {
+      source: 'cron-scheduler',
+      priority: 'high',
+    },
+  }
+);
+```
+
+### Available Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `jobName` | `string` | Custom name for the cron job |
+| `timezone` | `string` | Timezone for schedule (e.g., `'America/New_York'`) |
+| `startDate` | `Date` | When to start the cron schedule |
+| `endDate` | `Date` | When to stop the cron schedule |
+| `maxExecutions` | `number` | Maximum number of executions |
+| `skipIfRunning` | `boolean` | Skip if previous execution is still running |
+| `attempts` | `number` | Retry attempts on failure |
+| `backoff` | `object` | Retry backoff configuration |
+| `metadata` | `object` | Custom metadata for tracking |
+
+---
+
+## Using Cron Jobs in Routers
+
+Add cron jobs to routers like regular jobs:
+
+```typescript
+const maintenanceRouter = jobs.router({
+  namespace: 'maintenance',
+  jobs: {
+    // Regular job
+    cleanup: jobs.register({
+      name: 'Cleanup',
+      input: z.object({ type: z.string() }),
+      handler: async ({ payload }) => {
+        // Handler logic
+      },
+    }),
+    
+    // Cron job
+    dailyBackup: jobs.cron(
+      '0 3 * * *', // Every day at 3 AM
+      async ({ context }) => {
+        await context.database.backup();
+        return { backedUp: true };
+      },
+      {
+        jobName: 'daily-database-backup',
+      }
+    ),
+  },
+});
+```
+
+---
+
+## Predefined Cron Schedules
+
+Use predefined schedules for common patterns:
+
+```typescript
+import { CronSchedules } from '@igniter-js/core';
+
+// Daily at midnight
+const dailyJob = jobs.cron(
+  CronSchedules.DAILY_MIDNIGHT,
+  async ({ context }) => {
+    // Handler
+  }
+);
+
+// Weekly on Monday
+const weeklyJob = jobs.cron(
+  CronSchedules.WEEKLY_MONDAY,
+  async ({ context }) => {
+    // Handler
+  }
+);
+```
+
+Available predefined schedules:
+
+- `DAILY_MIDNIGHT`: `'0 0 0 * * *'`
+- `DAILY_6AM`: `'0 0 6 * * *'`
+- `DAILY_NOON`: `'0 0 12 * * *'`
+- `WEEKLY_MONDAY`: `'0 0 0 * * 1'`
+- `MONTHLY_FIRST_DAY`: `'0 0 0 1 * *'`
+- `HOURLY`: `'0 0 * * * *'`
+- `EVERY_MINUTE`: `'0 * * * * *'`
+
+---
+
+## Execution Tracking
+
+Track cron job executions using the execution count:
+
+```typescript
+const analyticsJob = jobs.cron(
+  '0 * * * *', // Every hour
+  async ({ context, cron }) => {
+    // Log execution number
+    console.log(`Running analytics job (execution #${cron.executionCount})`);
+    
+    // Different behavior based on execution count
+    if (cron.executionCount === 1) {
+      // First execution - initialize
+      await context.analytics.initialize();
+    }
+    
+    // Regular processing
+    const stats = await context.analytics.collect();
+    
+    // Check if we've reached the limit
+    if (cron.maxExecutions && cron.executionCount >= cron.maxExecutions) {
+      console.log('Reached maximum executions');
+    }
+    
+    return { stats };
+  },
+  {
+    maxExecutions: 1000, // Run 1000 times
+  }
+);
+```
+
+---
+
+## Timezone Handling
+
+Always specify timezones for cron jobs to ensure consistent execution times:
+
+```typescript
+// ❌ Bad - uses server timezone (inconsistent)
+const badJob = jobs.cron(
+  '0 9 * * *', // 9 AM in server timezone
+  async () => {}
+);
+
+// ✅ Good - explicit timezone
+const goodJob = jobs.cron(
+  '0 9 * * *', // 9 AM
+  async () => {},
+  {
+    timezone: 'America/New_York', // Always 9 AM EST
+  }
+);
+```
+
+<Callout type="warn" title="Timezone Best Practice">
+  Always specify timezones for cron jobs in production. Server timezones can change, causing unpredictable execution times.
+</Callout>
+
+---
+
+## Limited Execution Cron Jobs
+
+Run a cron job a specific number of times:
+
+```typescript
+const limitedJob = jobs.cron(
+  '0 9 * * *', // Every day at 9 AM
+  async ({ context, cron }) => {
+    console.log(`Execution ${cron.executionCount} of ${cron.maxExecutions}`);
+    
+    // Process data
+    await context.processDailyData();
+    
+    // Handle final execution
+    if (cron.isFinalExecution) {
+      await context.sendFinalReport();
+    }
+  },
+  {
+    maxExecutions: 30, // Run 30 times (about 1 month)
+  }
+);
+```
+
+---
+
+## Cron Jobs with Skip If Running
+
+Prevent overlapping executions:
+
+```typescript
+const heavyJob = jobs.cron(
+  '0 * * * *', // Every hour
+  async ({ context }) => {
+    // Long-running task that might overlap
+    await context.processLargeDataset();
+  },
+  {
+    skipIfRunning: true, // Skip if previous execution is still running
+  }
+);
+```
+
+---
+
+## Complex Cron Patterns
+
+### Business Hours Only
+
+```typescript
+const businessHoursJob = jobs.cron(
+  '0 9-17 * * 1-5', // Every hour, 9 AM - 5 PM, Monday - Friday
+  async ({ context }) => {
+    await context.processDuringBusinessHours();
+  },
+  {
+    timezone: 'America/New_York',
+  }
+);
+```
+
+### Specific Days of Month
+
+```typescript
+const monthlyJob = jobs.cron(
+  '0 0 1,15 * *', // 1st and 15th of every month at midnight
+  async ({ context }) => {
+    await context.runMonthlyTasks();
+  }
+);
+```
+
+### Multiple Times Per Day
+
+```typescript
+const frequentJob = jobs.cron(
+  '0 8,12,18 * * *', // 8 AM, 12 PM, 6 PM daily
+  async ({ context }) => {
+    await context.sendNotifications();
+  }
+);
+```
+
+---
+
+## Cron Job Lifecycle
+
+Cron jobs follow the same lifecycle as regular jobs, with additional cron-specific tracking:
+
+```typescript
+const trackedCronJob = jobs.cron(
+  '0 2 * * *',
+  async ({ context, cron }) => {
+    // Handler logic
+  },
+  {
+    onStart: async ({ job, cron }) => {
+      console.log(`Cron job ${job.name} started (execution #${cron.executionCount})`);
+    },
+    onSuccess: async ({ job, cron, result }) => {
+      console.log(`Cron job ${job.name} completed (execution #${cron.executionCount})`);
+    },
+    onFailure: async ({ job, cron, error }) => {
+      console.error(`Cron job ${job.name} failed (execution #${cron.executionCount}):`, error);
+    },
+  }
+);
+```
+
+---
+
+## Best Practices
+
+1. **Always Specify Timezones**: Use the `timezone` option for predictable execution times
+2. **Use Descriptive Names**: Set `jobName` to identify cron jobs in logs
+3. **Set Execution Limits**: Use `maxExecutions` or `endDate` to prevent infinite execution
+4. **Handle Overlaps**: Use `skipIfRunning: true` for long-running cron jobs
+5. **Test Cron Expressions**: Validate expressions before deploying
+6. **Monitor Execution**: Track execution counts and failures
+7. **Use Appropriate Frequency**: Don't run expensive operations too frequently
+
+---
+
+## Common Use Cases
+
+### Daily Report Generation
+
+```typescript
+const dailyReport = jobs.cron(
+  '0 2 * * *', // 2 AM daily
+  async ({ context }) => {
+    const report = await context.reports.generateDaily();
+    await context.notifications.sendReport(report);
+    return { reportId: report.id };
+  },
+  {
+    jobName: 'daily-report',
+    timezone: 'America/New_York',
+  }
+);
+```
+
+### Weekly Database Cleanup
+
+```typescript
+const weeklyCleanup = jobs.cron(
+  '0 3 * * 0', // Sunday at 3 AM
+  async ({ context }) => {
+    await context.database.cleanup();
+    return { cleaned: true };
+  },
+  {
+    jobName: 'weekly-cleanup',
+  }
+);
+```
+
+### Hourly Health Checks
+
+```typescript
+const healthCheck = jobs.cron(
+  '0 * * * *', // Every hour
+  async ({ context }) => {
+    const health = await context.system.checkHealth();
+    if (!health.ok) {
+      await context.alerts.sendCriticalAlert(health);
+    }
+    return health;
+  },
+  {
+    jobName: 'hourly-health-check',
+  }
+);
+```
+
+---
+
+## Troubleshooting
+
+### Cron Job Not Executing
+
+**Problem**: Cron job doesn't run at scheduled time
+
+**Solutions**:
+- Verify cron expression syntax
+- Check timezone configuration
+- Ensure workers are running
+- Verify Redis connection
+
+### Overlapping Executions
+
+**Problem**: Multiple instances of cron job run simultaneously
+
+**Solution**: Use `skipIfRunning: true` option
+
+### Wrong Execution Time
+
+**Problem**: Cron job runs at unexpected time
+
+**Solution**: Verify timezone configuration matches your expectations
+
+---
+
+## Next Steps
+
+- **[Scheduling](/docs/jobs/scheduling)**: Learn about one-time scheduled jobs
+- **[Workers](/docs/jobs/workers)**: Configure workers to process cron jobs
+- **[Advanced Features](/docs/jobs/advanced-features)**: Explore hooks and retry strategies
+

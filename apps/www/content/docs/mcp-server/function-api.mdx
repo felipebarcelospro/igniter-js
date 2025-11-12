@@ -1,0 +1,440 @@
+---
+title: Function API
+description: Use the simple function-based API for straightforward MCP server configurations.
+---
+
+## Overview
+
+The Function API (`createMcpAdapter`) provides a simpler, single-object configuration approach. It's ideal for basic setups and JavaScript projects where you prefer configuration over a fluent API.
+
+<Callout type="info">
+  For TypeScript projects seeking maximum type safety, consider using the [Builder Pattern API](/docs/mcp-server/builder-pattern) instead.
+</Callout>
+
+---
+
+## Basic Usage
+
+### Simple Configuration
+
+The function API accepts a single configuration object:
+
+```typescript
+import { createMcpAdapter } from '@igniter-js/adapter-mcp-server';
+import { AppRouter } from '@/igniter.router';
+
+const { server, auth } = createMcpAdapter({
+  router: AppRouter,
+  serverInfo: {
+    name: 'My MCP Server',
+    version: '1.0.0',
+  },
+  instructions: "Use the available tools to manage users and products.",
+});
+
+export const GET = server;
+export const POST = server;
+```
+
+---
+
+## Configuration Options
+
+### router (Required)
+
+The Igniter.js router to expose as MCP tools:
+
+```typescript
+const { server } = createMcpAdapter({
+  router: AppRouter, // Required
+});
+```
+
+---
+
+### serverInfo
+
+Server metadata:
+
+```typescript
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  serverInfo: {
+    name: 'Acme Corporation API',
+    version: '1.2.0',
+  },
+});
+```
+
+---
+
+### instructions
+
+Instructions for AI agents:
+
+```typescript
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  instructions: "This server provides tools to manage users and products.",
+});
+```
+
+---
+
+### tools
+
+Customize tool generation and add custom tools:
+
+```typescript
+import { z } from 'zod';
+
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  tools: {
+    // Automatically map all router actions (default: true)
+    autoMap: true,
+    
+    // Custom naming strategy
+    naming: (controller, action) => `${controller}_${action}`,
+    
+    // Filter which actions to expose
+    filter: (controller, action, actionConfig) => {
+      // Only expose actions with a specific tag
+      return actionConfig.tags?.includes('mcp-enabled');
+    },
+    
+    // Transform action configurations
+    transform: (controller, action, actionConfig) => ({
+      name: `${controller}.${action}`,
+      description: actionConfig.summary || actionConfig.description,
+      schema: actionConfig.body || actionConfig.query || {},
+      tags: actionConfig.tags
+    }),
+    
+    // Custom tools
+    custom: [{
+      name: 'calculateTax',
+      description: 'Calculate tax for a given amount',
+      args: {
+        amount: z.number(),
+        taxRate: z.number(),
+      },
+      handler: async (args, context) => {
+        const tax = args.amount * args.taxRate;
+        return {
+          content: [{
+            type: 'text',
+            text: `Tax: $${tax.toFixed(2)}`
+          }]
+        };
+      }
+    }]
+  }
+});
+```
+
+---
+
+### prompts
+
+Register custom prompts:
+
+```typescript
+import { z } from 'zod';
+
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  prompts: {
+    custom: [{
+      name: 'debugUser',
+      description: 'Debug user account issues',
+      args: {
+        userId: z.string(),
+      },
+      handler: async (args, context) => {
+        return {
+          messages: [{
+            role: 'user',
+            content: {
+              type: 'text',
+              text: `Please debug the account for user ${args.userId}.`
+            }
+          }]
+        };
+      }
+    }]
+  }
+});
+```
+
+---
+
+### resources
+
+Expose custom resources:
+
+```typescript
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  resources: {
+    custom: [{
+      uri: 'config://app/settings',
+      name: 'Application Settings',
+      description: 'Current application configuration',
+      mimeType: 'application/json',
+      handler: async (context) => {
+        const settings = await getAppSettings();
+        return {
+          contents: [{
+            uri: 'config://app/settings',
+            mimeType: 'application/json',
+            text: JSON.stringify(settings, null, 2)
+          }]
+        };
+      }
+    }]
+  }
+});
+```
+
+---
+
+### oauth
+
+Configure OAuth authentication:
+
+```typescript
+const { server, auth } = createMcpAdapter({
+  router: AppRouter,
+  oauth: {
+    issuer: 'https://auth.example.com',
+    resourceMetadataPath: '/.well-known/oauth-protected-resource',
+    scopes: ['mcp:read', 'mcp:write'],
+    verifyToken: async ({ request, bearerToken, context }) => {
+      const result = await verifyJWT(bearerToken);
+      return {
+        valid: result.valid,
+        user: result.user
+      };
+    }
+  }
+});
+
+// Export OAuth endpoints
+export const GET = server;
+export const POST = server;
+export const OPTIONS = auth.cors;
+```
+
+---
+
+### events
+
+Monitor MCP operations:
+
+```typescript
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  events: {
+    onRequest: async (request, context) => {
+      console.log('MCP request received:', request.url);
+    },
+    onResponse: async (response, context) => {
+      console.log('MCP response sent');
+    },
+    onToolCall: async (toolName, args, context) => {
+      console.log(`Tool called: ${toolName}`, args);
+    },
+    onToolSuccess: async (toolName, result, duration, context) => {
+      console.log(`Tool ${toolName} completed in ${duration}ms`);
+    },
+    onToolError: async (toolName, error, context) => {
+      console.error(`Tool ${toolName} failed:`, error);
+    },
+    onError: async (error, context) => {
+      console.error('MCP adapter error:', error);
+    }
+  }
+});
+```
+
+---
+
+### response
+
+Customize response transformation:
+
+```typescript
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  response: {
+    transform: async (igniterResponse, toolName, context) => {
+      // Customize response format
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify(igniterResponse, null, 2)
+        }]
+      };
+    },
+    onError: async (error, toolName, context) => {
+      // Custom error handling
+      return {
+        content: [{
+          type: 'text',
+          text: `Error in ${toolName}: ${error.message}`
+        }]
+      };
+    }
+  }
+});
+```
+
+---
+
+### adapter
+
+Adapter-specific options:
+
+```typescript
+const { server } = createMcpAdapter({
+  router: AppRouter,
+  adapter: {
+    basePath: '/api/mcp',
+    maxDuration: 60,
+    verboseLogs: true,
+    redis: {
+      url: process.env.REDIS_URL,
+    }
+  }
+});
+```
+
+---
+
+## Complete Example
+
+Here's a complete example with multiple features:
+
+```typescript
+import { createMcpAdapter } from '@igniter-js/adapter-mcp-server';
+import { AppRouter } from '@/igniter.router';
+import { z } from 'zod';
+
+const { server, auth } = createMcpAdapter({
+  router: AppRouter,
+  serverInfo: {
+    name: 'Acme Corporation API',
+    version: '1.0.0',
+  },
+  instructions: "This server provides tools to manage users and products.",
+  tools: {
+    custom: [{
+      name: 'calculateTax',
+      description: 'Calculate tax',
+      args: {
+        amount: z.number(),
+        taxRate: z.number(),
+      },
+      handler: async (args, context) => {
+        const tax = args.amount * args.taxRate;
+        return {
+          content: [{
+            type: 'text',
+            text: `Tax: $${tax.toFixed(2)}`
+          }]
+        };
+      }
+    }]
+  },
+  prompts: {
+    custom: [{
+      name: 'debugUser',
+      description: 'Debug user account',
+      args: { userId: z.string() },
+      handler: async (args, context) => {
+        return {
+          messages: [{
+            role: 'user',
+            content: {
+              type: 'text',
+              text: `Debug user ${args.userId}`
+            }
+          }]
+        };
+      }
+    }]
+  },
+  resources: {
+    custom: [{
+      uri: 'config://app/settings',
+      name: 'App Settings',
+      description: 'Application configuration',
+      mimeType: 'application/json',
+      handler: async (context) => {
+        const settings = await getAppSettings();
+        return {
+          contents: [{
+            uri: 'config://app/settings',
+            mimeType: 'application/json',
+            text: JSON.stringify(settings, null, 2)
+          }]
+        };
+      }
+    }]
+  },
+  oauth: {
+    issuer: 'https://auth.example.com',
+    verifyToken: async ({ bearerToken, context }) => {
+      const result = await verifyJWT(bearerToken);
+      return { valid: result.valid, user: result.user };
+    }
+  },
+  events: {
+    onToolCall: async (toolName, args, context) => {
+      console.log(`Tool called: ${toolName}`);
+    }
+  }
+});
+
+export const GET = server;
+export const POST = server;
+export const OPTIONS = auth.cors;
+```
+
+---
+
+## Comparison: Function API vs Builder Pattern
+
+| Feature | Function API | Builder Pattern |
+|---------|--------------|-----------------|
+| Type Inference | Partial | Full |
+| IDE Autocomplete | Good | Excellent |
+| Configuration Style | Single object | Chainable methods |
+| Best For | Simple setups, JavaScript | Complex setups, TypeScript |
+| Verbosity | Less verbose | More explicit |
+
+---
+
+## When to Use Function API
+
+**Choose Function API when:**
+- You prefer a single configuration object
+- Working in JavaScript (not TypeScript)
+- You have a simple setup
+- You want less verbose code
+
+**Choose Builder Pattern when:**
+- You need full type inference
+- Working in TypeScript
+- You have complex configurations
+- You want progressive configuration
+
+---
+
+## Next Steps
+
+- Learn about the [Builder Pattern API](/docs/mcp-server/builder-pattern) for advanced type safety
+- Explore [Custom Tools](/docs/mcp-server/custom-tools) in detail
+- Check out [Advanced Configurations](/docs/mcp-server/advanced)
+

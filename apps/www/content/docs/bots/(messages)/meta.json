@@ -1,0 +1,10 @@
+{
+  "title": "Message Handling",
+  "pages": [
+    "sending-messages",
+    "receiving-messages",
+    "mentions",
+    "message-types"
+  ]
+}
+

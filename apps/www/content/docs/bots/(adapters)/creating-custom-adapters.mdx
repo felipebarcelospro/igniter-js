@@ -1,0 +1,363 @@
+---
+title: Creating Custom Adapters
+description: Build your own adapter to integrate with any messaging platform.
+---
+
+While Igniter.js ships with adapters for Telegram and WhatsApp, you might need to integrate with other messaging platforms—Discord, Slack, Microsoft Teams, or your own custom messaging system. The adapter pattern makes this straightforward: you implement a simple interface that translates between your platform's API and Igniter.js's unified bot interface.
+
+Creating a custom adapter is simpler than it sounds. You're essentially writing three functions: one to initialize (set up webhooks or connections), one to send messages, and one to parse incoming webhooks. The adapter handles all the platform-specific details, so your bot code stays clean and platform-agnostic.
+
+---
+
+## Understanding the Adapter Interface
+
+Every adapter must implement the `IBotAdapter` interface. This interface defines the contract between your platform-specific code and the bot core. Understanding this interface is the first step to building your own adapter—it tells you exactly what methods you need to implement and what they should return.
+
+Here's what the interface looks like:
+
+```typescript
+interface IBotAdapter<TConfig extends ZodObject<any>> {
+  name: string
+  parameters: TConfig
+  init: (params: {
+    config: TypeOf<TConfig>
+    commands: BotCommand[]
+    logger?: BotLogger
+  }) => Promise<void>
+  send: (params: BotSendParams<TConfig> & { logger?: BotLogger }) => Promise<void>
+  handle: (params: BotHandleParams<TConfig> & { logger?: BotLogger }) => Promise<Omit<BotContext, 'bot'> | null>
+}
+```
+
+---
+
+## Creating Your Adapter
+
+Building a custom adapter involves four main steps. Let's walk through each one, understanding not just what to do, but why each step matters for creating a robust, production-ready adapter.
+
+<Card title="Building a Custom Adapter">
+  <Steps>
+    <Step>
+      ### Define Configuration Schema
+      
+      Start by defining your adapter's configuration using Zod. This schema serves two purposes: it validates your configuration at runtime (catching errors early), and it provides TypeScript types automatically. Think of it as both your validation layer and your type definitions.
+
+```typescript
+import { z } from 'zod'
+
+export const MyAdapterParams = z.object({
+  apiKey: z.string().min(1, 'API key is required'),
+  apiUrl: z.string().url().optional().default('https://api.example.com'),
+  handle: z.string().optional().describe('Bot handle for mention detection')
+})
+```
+    </Step>
+    
+    <Step>
+      ### Create the Adapter Factory
+      
+      Use `Bot.adapter()` to create your adapter factory. This factory function returns an adapter instance when called with configuration. The factory pattern lets you create multiple adapter instances with different configurations, which is useful if you need to support multiple accounts or environments.
+
+```typescript
+import { Bot } from '@igniter-js/bot'
+import { z } from 'zod'
+import { MyAdapterParams } from './my-adapter.schemas'
+
+export const myPlatform = Bot.adapter({
+  name: 'my-platform',
+  parameters: MyAdapterParams,
+  
+  async init({ config, commands, logger }) {
+    // Optional: Register commands remotely
+    // Optional: Set up webhooks
+    logger?.info?.('[my-platform] adapter initialized')
+  },
+  
+  async send({ channel, content, config, logger }) {
+    // Send message to your platform
+    const response = await fetch(`${config.apiUrl}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        to: channel,
+        text: content.content
+      })
+    })
+    
+    if (!response.ok) {
+      logger?.error?.('[my-platform] send failed', await response.json())
+      throw new Error('Failed to send message')
+    }
+    
+    logger?.debug?.('[my-platform] message sent', { channel })
+  },
+  
+  async handle({ request, config, logger }) {
+    // Parse incoming webhook
+    const body = await request.json()
+    
+    // Return null to ignore this update
+    if (!body.message) {
+      return null
+    }
+    
+    // Return BotContext (without bot field)
+    return {
+      event: 'message',
+      provider: 'my-platform',
+      channel: {
+        id: body.channelId,
+        name: body.channelName || 'Unknown',
+        isGroup: body.isGroup || false
+      },
+      message: {
+        content: {
+          type: 'text',
+          content: body.message.text,
+          raw: body.message.text
+        },
+        author: {
+          id: body.userId,
+          name: body.userName || 'Unknown',
+          username: body.userHandle || ''
+        },
+        isMentioned: body.isMentioned || false
+      }
+    }
+  }
+})
+```
+    </Step>
+    
+    <Step>
+      ### Follow Implementation Rules
+      
+      There are a few critical rules to follow when implementing your adapter. These rules ensure your adapter works correctly with the bot core and follows best practices. We'll explain each rule in detail after this step-by-step guide, but here's a quick overview:
+      
+      - **No side effects at top level** - Keep your adapter factory pure
+      - **Return context or null** - Control which updates your bot processes
+      - **Use logger instead of console** - Allow users to inject their own logging
+      - **Validate with Zod** - Never trust external data blindly
+    </Step>
+    
+    <Step>
+      ### Use Your Adapter
+      
+      Once your adapter is created, you can use it just like the built-in adapters. Import it, configure it with your credentials, and add it to your bot's adapters object.
+    </Step>
+  </Steps>
+</Card>
+
+---
+
+## Implementation Rules Explained
+
+Following these rules isn't just about making your code work—it's about ensuring your adapter integrates smoothly with the bot core and follows patterns that other developers (and AI agents) can understand. Let's dive into why each rule matters:
+
+### 1. No Side Effects at Top Level
+
+Never perform network calls or side effects when importing the adapter. This might seem obvious, but it's easy to accidentally trigger API calls or database queries when a module is imported. The bot core expects adapters to be pure factories—they shouldn't do anything until you explicitly call their methods.
+
+Here's why this matters: when you import an adapter, it should just define the adapter factory. All the actual work (sending messages, parsing webhooks) should happen inside the methods (`init`, `send`, `handle`). This keeps your code predictable and makes testing easier.
+
+Here's a complete example adapter for a fictional messaging platform:
+
+```typescript
+// src/adapters/my-platform/index.ts
+import { Bot } from '@igniter-js/bot'
+import { z } from 'zod'
+
+const MyPlatformParams = z.object({
+  apiKey: z.string().min(1),
+  webhookSecret: z.string().optional(),
+  handle: z.string().optional()
+})
+
+const WebhookPayloadSchema = z.object({
+  event: z.enum(['message', 'event']),
+  data: z.object({
+    channelId: z.string(),
+    channelName: z.string().optional(),
+    isGroup: z.boolean().optional(),
+    message: z.object({
+      id: z.string(),
+      text: z.string(),
+      userId: z.string(),
+      userName: z.string().optional(),
+      userHandle: z.string().optional()
+    }).optional()
+  })
+})
+
+export const myPlatform = Bot.adapter({
+  name: 'my-platform',
+  parameters: MyPlatformParams,
+  
+  async init({ config, commands, logger }) {
+    logger?.info?.('[my-platform] initializing adapter')
+    
+    // Optional: Register commands with platform
+    if (commands.length > 0) {
+      await fetch(`${config.apiUrl}/commands`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          commands: commands.map(cmd => ({
+            name: cmd.name,
+            description: cmd.description
+          }))
+        })
+      })
+    }
+    
+    logger?.info?.('[my-platform] adapter initialized')
+  },
+  
+  async send({ channel, content, config, logger }) {
+    logger?.debug?.('[my-platform] sending message', { channel })
+    
+    const response = await fetch(`${config.apiUrl}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        to: channel,
+        text: content.content
+      })
+    })
+    
+    if (!response.ok) {
+      const error = await response.json()
+      logger?.error?.('[my-platform] send failed', error)
+      throw new Error(`Failed to send message: ${error.message}`)
+    }
+    
+    logger?.debug?.('[my-platform] message sent successfully')
+  },
+  
+  async handle({ request, config, logger }) {
+    // Parse and validate webhook
+    const body = await request.json()
+    const parsed = WebhookPayloadSchema.safeParse(body)
+    
+    if (!parsed.success) {
+      logger?.warn?.('[my-platform] invalid webhook payload', parsed.error)
+      return null
+    }
+    
+    const { event, data } = parsed.data
+    
+    // Only process message events
+    if (event !== 'message' || !data.message) {
+      return null
+    }
+    
+    const { message, channelId, channelName, isGroup } = data
+    
+    // Determine if bot was mentioned
+    const isMentioned = isGroup 
+      ? message.text?.toLowerCase().includes(config.handle?.toLowerCase() || '')
+      : true
+    
+    return {
+      event: 'message',
+      provider: 'my-platform',
+      channel: {
+        id: channelId,
+        name: channelName || 'Unknown',
+        isGroup: isGroup || false
+      },
+      message: {
+        content: {
+          type: 'text',
+          content: message.text,
+          raw: message.text
+        },
+        author: {
+          id: message.userId,
+          name: message.userName || 'Unknown',
+          username: message.userHandle || ''
+        },
+        isMentioned
+      }
+    }
+  }
+})
+```
+
+---
+
+## Complete Example
+
+Here's a complete example adapter for a fictional messaging platform that demonstrates all the concepts we've discussed:
+
+```typescript
+import { Bot } from '@igniter-js/bot'
+import { myPlatform } from './adapters/my-platform'
+
+const bot = Bot.create({
+  id: 'my-bot',
+  name: 'My Bot',
+  adapters: {
+    myPlatform: myPlatform({
+      apiKey: process.env.MY_PLATFORM_API_KEY!,
+      handle: 'mybot'
+    })
+  },
+  commands: {
+    start: {
+      name: 'start',
+      description: 'Start command',
+      async handle(ctx) {
+        await ctx.bot.send({
+          provider: 'my-platform',
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: 'Hello from my platform!'
+          }
+        })
+      }
+    }
+  }
+})
+
+await bot.start()
+```
+
+---
+
+## Best Practices
+
+Following these practices ensures your adapter is production-ready, maintainable, and integrates smoothly with the bot core. Good adapters are reliable, well-documented, and easy to debug when things go wrong.
+
+<Accordions>
+  <Accordion title="Validate All Inputs">
+    Use Zod schemas for both configuration and webhook payloads—don't trust external data. Platforms might send unexpected formats, missing fields, or malicious data. Validating with Zod catches these issues early and provides clear error messages. Validation also serves as documentation—the schema tells other developers exactly what structure to expect.
+  </Accordion>
+  
+  <Accordion title="Handle Errors Gracefully">
+    Log errors and return `null` for invalid updates rather than throwing. When webhooks fail validation or API calls fail, log the error for debugging but don't crash the bot. Return `null` from `handle()` to silently ignore invalid updates, or throw only for truly unexpected errors that need immediate attention.
+  </Accordion>
+  
+  <Accordion title="Use Logger">
+    Never use `console.*` directly—let users inject their own logging solution. The logger interface allows users to integrate their preferred logging library (Pino, Winston, etc.) and ensures consistent log formatting across your adapter and the bot core. Production applications need structured logging, not console output.
+  </Accordion>
+  
+  <Accordion title="Document Your Adapter">
+    Add JSDoc comments explaining your adapter's behavior—especially any platform-specific quirks. Good documentation helps other developers (and AI agents) understand how your adapter works, what it expects, and what edge cases to watch for. Document configuration options, webhook formats, and any platform limitations.
+  </Accordion>
+  
+  <Accordion title="Test Thoroughly">
+    Test webhook parsing, message sending, and edge cases—adapter bugs can be hard to debug in production. Adapters run at the edge of your system, interacting with external platforms. Bugs here can cause silent failures or unexpected behavior. Test with real webhook payloads, edge cases, and failure scenarios.
+  </Accordion>
+</Accordions>
+

@@ -1,0 +1,17 @@
+{
+  "title": "Documentation",
+  "root": true,
+  "pages": [
+    "---Getting Started---",
+    "index",
+    "comparison",
+    "(installation)/page",
+    "quick-start",
+    "...(installation)",
+    "---Core Concepts---",
+    "...(core-concepts)",
+    "---Advanced---",
+    "(data-handling)",
+    "(client)"
+  ]
+}

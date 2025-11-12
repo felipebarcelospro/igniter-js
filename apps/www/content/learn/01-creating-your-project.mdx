@@ -1,0 +1,496 @@
+---
+title: "01: Creating Your Project"
+description: "Use the Igniter.js CLI to scaffold a production-ready Next.js application"
+---
+
+<ChapterObjectives
+  objectives={[
+    { text: "Understand the Igniter.js CLI and its capabilities" },
+    { text: "Create a new project using the interactive setup wizard" },
+    { text: "Configure your project with the right features and providers" },
+    { text: "Explore the generated project structure" },
+    { text: "Run your first development server" }
+  ]}
+/>
+
+## The Igniter.js CLI
+
+The **Igniter.js CLI** is your best friend for building applications with Igniter.js. It's a powerful command-line tool that:
+
+- 🏗️ **Scaffolds new projects** with interactive setup
+- 🔄 **Generates features** automatically from Prisma schemas
+- 📝 **Creates controllers and procedures** with proper structure
+- 🔍 **Generates TypeScript client** and OpenAPI docs automatically
+- 🚀 **Runs development server** with hot-reload and interactive dashboard
+
+Think of it as your personal assistant that handles all the boilerplate so you can focus on building features.
+
+## Creating Your Project
+
+Let's create your link shortening SaaS! Open your terminal and run:
+
+```bash
+npx @igniter-js/cli init shortify
+```
+
+This command launches an **interactive setup wizard** that will guide you through configuring your project.
+
+<Callout type="info" title="Using a different package manager?">
+The CLI works with any package manager:
+- **npm**: `npx @igniter-js/cli init shortify`
+- **pnpm**: `pnpx @igniter-js/cli init shortify`
+- **yarn**: `yarn dlx @igniter-js/cli init shortify`
+- **bun**: `bunx @igniter-js/cli init shortify`
+</Callout>
+
+## Interactive Setup Wizard
+
+The CLI will ask you a series of questions to customize your project. Here's what to choose for our SaaS:
+
+### 1. **Select a Framework**
+
+```
+? Which framework would you like to use?
+  ❯ Next.js (Recommended for full-stack apps)
+    Vite (For frontend + separate API)
+    Remix
+    Express
+    Tanstack Start
+```
+
+**Choose: Next.js** - It's perfect for full-stack applications and gives us Server Components, API Routes, and excellent TypeScript support.
+
+### 2. **Choose Your Database**
+
+```
+? Which database would you like to use?
+  ❯ PostgreSQL (Recommended for production)
+    MySQL
+    SQLite (For development only)
+    None (I'll set it up later)
+```
+
+**Choose: PostgreSQL** - It's robust, scalable, and has excellent Prisma support. We'll use a free hosted instance later.
+
+### 3. **Select Your ORM**
+
+```
+? Which ORM would you like to use?
+  ❯ Prisma (Recommended - Type-safe, great DX)
+    Drizzle
+    None
+```
+
+**Choose: Prisma** - Best developer experience, auto-generated types, and amazing tooling.
+
+### 4. **Choose Features**
+
+```
+? Select the features you want to enable (use space to select):
+  ◯ Store (Redis caching)
+  ◯ Jobs (Background task processing with BullMQ)
+  ◯ Logging (Structured logging)
+  ◯ Telemetry (OpenTelemetry for monitoring)
+```
+
+**For now, let's start simple and select:**
+- ✅ **Logging** - Essential for debugging
+- ✅ **Telemetry** - Good to have from the start
+
+We'll add Store and Jobs later when we implement analytics and background processing.
+
+### 5. **Package Manager**
+
+```
+? Which package manager would you like to use?
+  ❯ npm
+    pnpm
+    yarn
+    bun
+```
+
+**Choose your preferred package manager** - I recommend **pnpm** or **bun** for faster installs, but **npm** works perfectly fine too.
+
+### 6. **Additional Options**
+
+```
+? Would you like to initialize a Git repository? (Y/n)
+? Would you like to set up Docker Compose? (Y/n)
+? Would you like to install dependencies now? (Y/n)
+```
+
+- **Git**: ✅ Yes (essential for version control)
+- **Docker Compose**: ❌ No (we'll use cloud services)
+- **Install dependencies**: ✅ Yes (saves time)
+
+## What Just Happened?
+
+After you complete the wizard, the CLI will:
+
+1. ✨ **Create your project directory** (`shortify/`)
+2. 📦 **Generate all necessary files** (configuration, boilerplate, etc.)
+3. 🔧 **Configure your selected features**
+4. 📥 **Install all dependencies**
+5. 🎯 **Initialize a Git repository**
+6. 🎉 **Display next steps**
+
+You'll see output like this:
+
+```bash
+✔ Project created successfully!
+✔ Dependencies installed
+✔ Git repository initialized
+
+🎉 Your Igniter.js project is ready!
+
+📁 Project: shortify
+🚀 Framework: Next.js
+💾 Database: PostgreSQL (Prisma)
+✨ Features: Logging, Telemetry
+
+Next steps:
+  1. cd shortify
+  2. Copy .env.example to .env and configure your environment
+  3. Run 'npm run dev' to start the development server
+
+Happy building! 🔥
+```
+
+## Exploring Your Project
+
+Let's navigate into your new project and explore what was generated:
+
+```bash
+cd shortify
+```
+
+Here's the structure you'll see:
+
+<Files>
+  <Folder name="shortify" defaultOpen>
+    <Folder name="src" defaultOpen>
+      <Folder name="app">
+        <File name="layout.tsx" />
+        <File name="page.tsx" />
+        <Folder name="api">
+          <Folder name="[[...igniter]]">
+            <File name="route.ts" />
+          </Folder>
+        </Folder>
+      </Folder>
+      <Folder name="features">
+        <Folder name="example">
+          <Folder name="controllers">
+            <File name="example.controller.ts" />
+          </Folder>
+        </Folder>
+      </Folder>
+      <Folder name="services">
+        <File name="logger.ts" />
+        <File name="telemetry.ts" />
+      </Folder>
+      <File name="igniter.ts" />
+      <File name="igniter.context.ts" />
+      <File name="igniter.router.ts" />
+      <File name="igniter.client.ts" />
+    </Folder>
+    <Folder name="prisma">
+      <File name="schema.prisma" />
+    </Folder>
+    <File name=".env.example" />
+    <File name="package.json" />
+    <File name="next.config.ts" />
+    <File name="tsconfig.json" />
+  </Folder>
+</Files>
+
+### Key Files Explained
+
+Let's understand what each important file does:
+
+**`src/igniter.ts`**
+The main Igniter.js instance. This is where you configure all your features, adapters, and plugins.
+
+```typescript
+// This file was generated with your selected features
+export const igniter = Igniter
+  .context(createIgniterAppContext())
+  .logger(logger)           // ← You selected Logging
+  .telemetry(telemetry)     // ← You selected Telemetry
+  .config({
+    baseURL: 'http://localhost:3000',
+    basePATH: '/api/v1',
+  })
+  .create()
+```
+
+**`src/igniter.router.ts`**
+Your API router. All controllers are registered here.
+
+```typescript
+export const AppRouter = igniter.router({
+  controllers: {
+    example: exampleController, // ← Example controller
+    // Your new controllers will be added here
+  },
+})
+```
+
+**`src/app/api/[[...igniter]]/route.ts`**
+The Next.js API route that connects Igniter.js to Next.js. This is the magic glue!
+
+**`prisma/schema.prisma`**
+Your database schema. We'll design our tables here in the next chapter.
+
+<Quiz
+  question="What does the Igniter.js CLI do when you run 'init'?"
+  options={[
+    { label: "Only creates a package.json file", value: "package" },
+    { label: "Downloads a pre-built template without customization", value: "template" },
+    { label: "Runs an interactive wizard and generates a customized project structure", value: "wizard", isCorrect: true },
+    { label: "Just installs Igniter.js as a dependency", value: "install" }
+  ]}
+  explanation="The CLI runs an interactive setup wizard that asks you about your framework, database, features, and preferences, then generates a fully customized project structure based on your answers."
+/>
+
+## Setting Up Environment Variables
+
+Before running your project, you need to configure environment variables. The CLI created an `.env.example` file with all the variables you need.
+
+Copy it to create your local environment file:
+
+```bash
+cp .env.example .env
+```
+
+Now open `.env` in your code editor. You'll see something like:
+
+```bash
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/shortify?schema=public"
+
+# Next.js
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+
+# Igniter.js
+NEXT_PUBLIC_IGNITER_API_URL="http://localhost:3000"
+NEXT_PUBLIC_IGNITER_API_BASE_PATH="/api/v1"
+```
+
+<Callout type="warn" title="Don't worry about the database yet!">
+We'll set up a free PostgreSQL database in the next chapter. For now, you can leave the `DATABASE_URL` as is - we won't be using the database yet.
+</Callout>
+
+## Running Your Development Server
+
+Now for the exciting part - let's start your application! Run:
+
+```bash
+npm run dev
+```
+
+This command does three things:
+1. 🔄 Starts the Next.js development server
+2. 🔥 Starts Igniter.js with hot-reload
+3. 🎯 Opens Igniter Studio (interactive API dashboard)
+
+You'll see output like:
+
+```bash
+▲ Next.js 15.0.0
+  - Local:        http://localhost:3000
+  - Network:      http://192.168.1.100:3000
+
+🔥 Igniter.js
+  ✓ Router loaded successfully
+  ✓ 1 controller registered (example)
+  ✓ 1 endpoint available
+  ✓ Client schema generated
+  ✓ OpenAPI docs generated
+
+📚 Igniter Studio: http://localhost:3000/api/v1/studio
+📖 OpenAPI Docs: http://localhost:3000/api/v1/docs
+
+Ready in 1.2s
+```
+
+## Testing Your API
+
+Open your browser and navigate to:
+
+**http://localhost:3000** - Your Next.js homepage
+**http://localhost:3000/api/v1/studio** - Igniter Studio (API dashboard)
+
+### Using Igniter Studio
+
+Igniter Studio is an **interactive API playground** that lets you:
+- 📋 See all your endpoints
+- 🧪 Test API calls directly in the browser
+- 📝 View request/response schemas
+- 🔍 Inspect the generated TypeScript types
+
+Try calling the example endpoint:
+1. Click on **"example"** in the sidebar
+2. Click on **"GET /hello"**
+3. Click **"Execute"**
+
+You should see a response:
+
+```json
+{
+  "message": "Hello from example!"
+}
+```
+
+🎉 **Congratulations!** Your Igniter.js application is running!
+
+<Quiz
+  question="What is Igniter Studio used for?"
+  options={[
+    { label: "A code editor for TypeScript", value: "editor" },
+    { label: "An interactive API dashboard for testing endpoints without Postman", value: "dashboard", isCorrect: true },
+    { label: "A database management tool", value: "database" },
+    { label: "A deployment platform", value: "deploy" }
+  ]}
+  explanation="Igniter Studio is an interactive API playground that comes with every Igniter.js project. It lets you explore and test your API endpoints directly in your browser, eliminating the need for tools like Postman or cURL during development."
+/>
+
+## Understanding the CLI Commands
+
+Now that your project is running, let's learn about the other powerful CLI commands you'll use throughout development:
+
+### `igniter dev`
+
+```bash
+npx igniter dev
+```
+
+Starts the development server with:
+- 🔥 **Hot-reload** for Igniter.js changes
+- 🚀 **Framework server** (Next.js in our case)
+- 🎯 **Interactive dashboard** with live API explorer
+- 📖 **Auto-generated OpenAPI docs**
+
+<Callout type="info" title="Pro Tip">
+The `dev` command is smart! It automatically detects your framework (Next.js) and runs the appropriate commands. You can also customize it with flags:
+
+```bash
+npx igniter dev --port 4000        # Custom port
+npx igniter dev --no-interactive   # Disable interactive mode
+```
+</Callout>
+
+### `igniter generate schema`
+
+```bash
+npx igniter generate schema
+```
+
+Generates the **TypeScript client** from your Igniter.js router. This runs automatically during `dev`, but you can also run it manually for:
+- CI/CD pipelines
+- Pre-commit hooks
+- Manual type generation
+
+### `igniter generate docs`
+
+```bash
+npx igniter generate docs
+```
+
+Generates **OpenAPI specification** and optionally a **Scalar UI** for your API documentation.
+
+```bash
+npx igniter generate docs --ui   # Generate interactive HTML docs
+```
+
+### `igniter generate feature`
+
+```bash
+npx igniter generate feature users --schema prisma:User
+```
+
+This is where the magic happens! This command:
+1. Reads your Prisma schema
+2. Generates a complete CRUD controller
+3. Creates type-safe queries and mutations
+4. Sets up proper file structure
+
+We'll use this extensively in Chapter 4!
+
+## Project Structure Deep Dive
+
+Let's understand how your project is organized:
+
+### Frontend Layer (`src/app/`)
+
+```
+src/app/
+├── layout.tsx          # Root layout, providers
+├── page.tsx            # Homepage
+└── api/
+    └── [[...igniter]]/ # Igniter.js catch-all route
+        └── route.ts
+```
+
+This is your **Next.js App Router** structure. The `[[...igniter]]` route is special - it catches all API requests and forwards them to Igniter.js.
+
+### Backend Layer (`src/features/`)
+
+```
+src/features/
+└── example/
+    └── controllers/
+        └── example.controller.ts
+```
+
+This is your **Igniter.js API**. Each feature is self-contained with its controllers, procedures, and business logic. This **feature-based architecture** keeps your code organized as your app grows.
+
+### Configuration (`src/igniter.*.ts`)
+
+```
+src/
+├── igniter.ts          # Main Igniter instance
+├── igniter.context.ts  # Application context & DI
+├── igniter.router.ts   # API router
+└── igniter.client.ts   # Auto-generated client
+```
+
+These files work together to create your API:
+- **`igniter.ts`**: Configures features and adapters
+- **`igniter.context.ts`**: Defines what's available globally (DB, logger, etc.)
+- **`igniter.router.ts`**: Registers all your controllers
+- **`igniter.client.ts`**: Auto-generated type-safe client for the frontend
+
+### Services (`src/services/`)
+
+```
+src/services/
+├── logger.ts       # Structured logging
+└── telemetry.ts    # OpenTelemetry setup
+```
+
+These are your **infrastructure services** - things like logging, caching, job processing, etc.
+
+## Next Steps
+
+Your development environment is ready! You've:
+- ✅ Created a new Igniter.js project with the CLI
+- ✅ Configured your project with the right features
+- ✅ Started your development server
+- ✅ Tested your first API endpoint
+- ✅ Learned about the CLI commands
+
+In the next chapter, we'll design our database schema and set up Prisma to manage our data.
+
+<ChapterNav
+  current={{
+    number: 1,
+    title: "Creating Your Project"
+  }}
+  next={{
+    number: 2,
+    title: "Designing Your Database",
+    description: "Create your database schema with Prisma and set up your data models",
+    href: "/learn/02-designing-your-database"
+  }}
+/>

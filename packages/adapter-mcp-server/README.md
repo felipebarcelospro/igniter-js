@@ -47,7 +47,7 @@ import { AppRouter } from '@/igniter.router'; // Import your main Igniter.js rou
  * Create the MCP server using the builder pattern.
  * This provides full type inference and a fluent API.
  */
-const { handler, auth } = IgniterMcpServer
+const { handler } = IgniterMcpServer
   .create()
   .router(AppRouter)
   .withServerInfo({

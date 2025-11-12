@@ -1,0 +1,240 @@
+---
+title: Mentions
+description: Handle mentions in group chats.
+---
+
+In group chats, bots typically only respond when mentioned. This guide shows you how to handle mentions effectively.
+
+---
+
+## How Mentions Work
+
+Mention detection is crucial for group chat bots. In private chats, bots can respond to every message, but in group chats, bots should only respond when explicitly mentioned to avoid spamming the conversation. Understanding how mentions work helps you build bots that feel natural and respectful of group chat dynamics.
+
+The mention system allows bots to distinguish between messages directed at them and general group conversation. This prevents bots from interrupting conversations and ensures they only participate when addressed.
+
+**In private chats**: The bot always responds (no mention needed).
+
+**In group chats**: The bot only responds when:
+- The message starts with `/` (commands)
+- The message contains the bot's handle (mentions)
+
+---
+
+## Mention Detection
+
+The adapter automatically detects mentions and sets the `isMentioned` flag on the message context. This flag is essential for building bots that behave appropriately in group chats—checking this flag allows you to filter messages and only respond when your bot is explicitly addressed. The mention detection works differently on each platform, but the unified API makes it easy to handle mentions consistently.
+
+Using `isMentioned` is the recommended way to check if your bot should respond to a message. This flag is set automatically based on the platform's mention format and your bot's configured handle.
+
+The adapter automatically sets `ctx.message.isMentioned`:
+
+```typescript
+bot.on('message', async (ctx) => {
+  if (ctx.message.isMentioned) {
+    // Bot was mentioned in a group chat
+    await ctx.bot.send({
+      provider: ctx.provider,
+      channel: ctx.channel.id,
+      content: {
+        type: 'text',
+        content: 'Hey! You mentioned me!'
+      }
+    })
+  }
+})
+```
+
+---
+
+## Platform Differences
+
+Different messaging platforms handle mentions differently, so understanding platform-specific behavior helps you configure your bot correctly. Telegram uses username-based mentions (`@username`), while WhatsApp uses keyword detection. These differences affect how you configure your bot's handle and how mentions are detected.
+
+Knowing platform differences helps you set up your bot correctly and troubleshoot mention detection issues. Always test mention detection after configuring your bot's handle.
+
+<Accordions>
+  <Accordion title="Telegram">
+    Telegram mentions use the `@username` format, which is straightforward and explicit. When users mention your bot using `@your_bot`, the `isMentioned` flag is set to `true`. Commands (starting with `/`) also trigger mention detection, making them work seamlessly in group chats.
+    
+    ```typescript
+    telegram({
+      handle: '@my_bot', // Bot responds when mentioned with this username
+      // ...
+    })
+    ```
+    
+    **Examples:**
+    - `@my_bot hello` → `isMentioned = true`
+    - `/start` → `isMentioned = true` (commands always work)
+    - `hello` → `isMentioned = false` (ignored in groups)
+    
+    The handle must match your bot's actual Telegram username exactly. You can find or set your bot's username through BotFather using the `/setusername` command.
+  </Accordion>
+  
+  <Accordion title="WhatsApp">
+    WhatsApp uses keyword-based mention detection instead of username mentions. When the configured keyword appears anywhere in the message, the bot considers itself mentioned. This is more flexible than Telegram's approach but requires careful keyword selection to avoid false positives.
+    
+    ```typescript
+    whatsapp({
+      handle: 'mybot', // Bot responds when this keyword appears
+      // ...
+    })
+    ```
+    
+    **Examples:**
+    - `hello mybot` → `isMentioned = true` (keyword detected)
+    - `MYBOT help` → `isMentioned = true` (case-insensitive)
+    - `hello` → `isMentioned = false` (no keyword)
+    
+    Choose a unique keyword that's unlikely to appear in normal conversation. Common words like "bot" or "help" might cause false positives. Case-insensitive matching makes mentions more user-friendly.
+  </Accordion>
+</Accordions>
+
+---
+
+## Handling Mentions
+
+Proper mention handling ensures your bot responds appropriately in group chats while staying responsive in private chats. You can filter messages based on mention status, implement mention-based commands, or use middleware to handle mentions globally. Each approach has its use cases—choose the one that fits your bot's needs.
+
+Understanding different mention handling patterns helps you build bots that feel natural and don't interrupt group conversations unnecessarily.
+
+<Accordions>
+  <Accordion title="Respond Only to Mentions">
+    Filter messages to only respond when mentioned in group chats. This pattern ensures your bot doesn't spam group conversations while still responding to all messages in private chats. It's the most common pattern for group chat bots.
+    
+    ```typescript
+    bot.on('message', async (ctx) => {
+      // Only respond in groups if mentioned
+      if (ctx.channel.isGroup && !ctx.message.isMentioned) {
+        return // Ignore non-mentions in groups
+      }
+      
+      // Process message...
+    })
+    ```
+    
+    This pattern is essential for bots that participate in group chats. It ensures your bot only responds when explicitly addressed, preventing it from interrupting normal group conversation.
+  </Accordion>
+  
+  <Accordion title="Mention-Based Commands">
+    Implement commands that work through mentions instead of command prefixes. This is useful for bots that need to respond to natural language queries when mentioned. Users can mention your bot and ask questions naturally, rather than using formal command syntax.
+    
+    ```typescript
+    bot.on('message', async (ctx) => {
+      if (ctx.message.content?.type === 'text' && ctx.message.isMentioned) {
+        const text = ctx.message.content.content.toLowerCase()
+        
+        if (text.includes('help')) {
+          await ctx.bot.send({
+            provider: ctx.provider,
+            channel: ctx.channel.id,
+            content: {
+              type: 'text',
+              content: 'Here are available commands: /start, /help'
+            }
+          })
+        }
+      }
+    })
+    ```
+    
+    Mention-based commands make your bot feel more conversational and natural. Users can interact with your bot using natural language when they mention it, making the bot more accessible.
+  </Accordion>
+  
+  <Accordion title="Middleware for Mentions">
+    Use middleware to handle mention filtering globally. This centralizes your mention logic and keeps command handlers clean. Middleware filters out non-mention messages in group chats before they reach your handlers, making your bot code simpler and more maintainable.
+    
+    ```typescript
+    const mentionMiddleware: Middleware = async (ctx, next) => {
+      // Skip non-mentions in groups
+      if (ctx.channel.isGroup && !ctx.message.isMentioned) {
+        return // Don't call next() - ignore message
+      }
+      
+      await next() // Process mention or private message
+    }
+    ```
+    
+    Middleware-based mention handling is ideal for bots where all commands should only work when mentioned in groups. It removes the need to check `isMentioned` in every command handler, reducing code duplication and improving maintainability.
+  </Accordion>
+</Accordions>
+
+---
+
+## Complete Example
+
+Here's a complete example that demonstrates proper mention handling in group chats. This example shows how to filter messages based on mention status, ensuring your bot only responds when explicitly addressed in groups while maintaining full responsiveness in private chats. It's a production-ready pattern you can adapt for your own bots.
+
+This example demonstrates:
+- **Mention Filtering**: Checking `isMentioned` before responding in groups
+- **Channel Type Detection**: Different behavior for groups vs private chats
+- **Responsive Design**: Full responsiveness in private chats
+- **Clean Integration**: Simple integration with message event listeners
+
+```typescript
+import { Bot, telegram } from '@igniter-js/bot'
+
+const bot = Bot.create({
+  id: 'mention-bot',
+  name: 'Mention Bot',
+  adapters: {
+    telegram: telegram({
+      token: process.env.TELEGRAM_TOKEN!,
+      handle: '@mention_bot',
+      webhook: {
+        url: process.env.TELEGRAM_WEBHOOK_URL!
+      }
+    })
+  },
+  on: {
+    message: async (ctx) => {
+      // In groups, only respond to mentions
+      if (ctx.channel.isGroup && !ctx.message.isMentioned) {
+        return
+      }
+      
+      if (ctx.message.content?.type === 'text') {
+        await ctx.bot.send({
+          provider: ctx.provider,
+          channel: ctx.channel.id,
+          content: {
+            type: 'text',
+            content: `Hello, ${ctx.message.author.name}!`
+          }
+        })
+      }
+    }
+  }
+})
+
+await bot.start()
+```
+
+---
+
+## Best Practices
+
+Proper mention handling ensures your bot responds appropriately in group chats while staying responsive in private chats. These practices help you build bots that feel natural and don't spam group conversations.
+
+<Accordions>
+  <Accordion title="Always check isMentioned">
+    In group chats, always check `isMentioned` before responding. Don't assume users want your bot to respond to every message—group chats are for human conversation, and bots should only participate when explicitly addressed.
+  </Accordion>
+  
+  <Accordion title="Set correct handle">
+    Set the correct handle in adapter configuration. The handle is used for mention detection, so it must match your bot's actual username on the platform. An incorrect handle means your bot won't detect mentions correctly.
+  </Accordion>
+  
+  <Accordion title="Handle private chats separately">
+    Always respond in private chats (no mention needed). Private chats are one-on-one conversations where users expect responses. Check `ctx.channel.isGroup` to determine if you're in a group or private chat, and adjust your behavior accordingly.
+  </Accordion>
+  
+  <Accordion title="Use middleware">
+    Use middleware to filter mentions globally. Instead of checking `isMentioned` in every command handler, create middleware that blocks non-mention messages in group chats. This centralizes your mention logic and keeps command handlers clean.
+  </Accordion>
+</Accordions>
+
+---
+
+

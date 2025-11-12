@@ -1,0 +1,128 @@
+---
+title: Installation
+description: Get started with Igniter.js by choosing your preferred framework and following the installation guide.
+---
+
+Choose your framework to get started with Igniter.js. Each guide provides step-by-step instructions tailored to your development environment.
+
+## Framework Guides
+
+Select your framework below for detailed installation and setup instructions:
+
+<Cards>
+  <Card
+    title="Next.js"
+    description="Full-stack React framework with SSR and API routes"
+    href="/docs/nextjs"
+    icon={<NextJsIcon className="size-6" />}
+  />
+  <Card
+    title="Vite"
+    description="Lightning-fast build tool for modern web projects"
+    href="/docs/vite"
+    icon={<ViteIcon className="size-6" />}
+  />
+  <Card
+    title="Express"
+    description="Fast, unopinionated web framework for Node.js"
+    href="/docs/express"
+    icon={<ExpressIcon className="size-6" />}
+  />
+  <Card
+    title="Bun"
+    description="Fast all-in-one JavaScript runtime and toolkit"
+    href="/docs/bun"
+    icon={<BunIcon className="size-6" />}
+  />
+  <Card
+    title="Deno"
+    description="Secure runtime for JavaScript and TypeScript"
+    href="/docs/deno"
+    icon={<DenoIcon className="size-6" />}
+  />
+</Cards>
+
+---
+
+## Quick Start
+
+If you're not sure which framework to choose, or want to quickly test Igniter.js features:
+
+<Steps>
+  <Step>
+    ### Use the CLI
+    
+    Start a new project with our interactive CLI:
+    
+    <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+      <Tab value="npm">
+        ```bash
+        npx @igniter-js/cli@latest init
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm create igniter-app
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn create igniter-app
+        ```
+      </Tab>
+      <Tab value="bun">
+        ```bash
+        bunx create-igniter-app
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step>
+    ### Choose your template
+    
+    The CLI will guide you through:
+    - Framework selection (Next.js, Vite, Express, etc.)
+    - TypeScript configuration
+    - Database setup (optional)
+    - Additional features (auth, jobs, etc.)
+  </Step>
+  
+  <Step>
+    ### Start developing
+    
+    ```bash
+    cd my-igniter-app
+    npm run dev
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Requirements
+
+Before installing Igniter.js, ensure you have:
+
+- **Node.js** 22.0 or higher
+- **Package Manager**: npm, pnpm, yarn, or bun
+- **TypeScript** 5.0 or higher (configured in your project)
+
+<Callout type="info" title="TypeScript Required">
+  Igniter.js is built with TypeScript-first principles and requires TypeScript for full type safety and autocomplete features.
+</Callout>
+
+---
+
+## What's Next?
+
+After installation, explore the core concepts:
+
+- [**Builder**](/docs/builder) - Learn how to create your Igniter.js instance
+- [**Router**](/docs/router) - Understand routing and controllers
+- [**Actions**](/docs/actions) - Create queries and mutations
+- [**Client**](/docs/client) - Use the auto-generated type-safe client
+
+<Callout type="success" title="Need Help?">
+  Join our [Discord community](https://discord.gg/igniterjs) or check out [GitHub Discussions](https://github.com/igniterjs/igniter/discussions) for support.
+</Callout>

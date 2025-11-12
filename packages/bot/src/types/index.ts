@@ -15,7 +15,26 @@
  *  to maintain a clean, predictable public surface.
  */
 
+// Core bot types
 export * from './bot.types'
+
+// Capabilities system
+export * from './capabilities'
+
+// Content types (inbound/outbound)
+export * from './content'
+
+// Session management
+export * from './session'
+
+// Plugin system
+export * from './plugins'
+
+// Builder pattern types
+export * from './builder'
+
+// Adapter types
+export * from './adapter'
 
 /**
  * Versioned typing note:

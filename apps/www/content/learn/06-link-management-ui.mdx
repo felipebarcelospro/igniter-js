@@ -1,0 +1,1121 @@
+---
+title: "06: Link Management UI"
+description: "Build a professional dashboard with analytics cards, link tables, and CRUD operations using Shadcn UI blocks and the Igniter.js client."
+---
+
+In this chapter, we'll build the complete dashboard for Shortify. You'll create a professional interface with analytics cards, a data table for managing links, and full CRUD operations—all powered by the type-safe Igniter.js client.
+
+<ChapterObjectives objectives={[
+  { text: "Install and configure Shadcn UI dashboard components" },
+  { text: "Create a dashboard layout with sidebar navigation" },
+  { text: "Build an analytics overview page with stats cards" },
+  { text: "Implement a link management page with data table" },
+  { text: "Add CRUD operations using Igniter.js hooks" }
+]} />
+
+## Installing Dashboard Components
+
+The Shadcn UI dashboard block provides a complete, production-ready layout with sidebar, navigation, and card components. Let's install everything we need:
+
+```bash
+npx shadcn@latest add card table button badge dialog sheet sidebar
+```
+
+These components will give us:
+- **Card** - For analytics statistics
+- **Table** - For displaying links in a data table
+- **Button** - For actions and navigation
+- **Badge** - For status indicators (active/inactive)
+- **Dialog** - For create/edit forms
+- **Sheet** - For mobile navigation
+- **Sidebar** - For app navigation
+
+## Creating the Dashboard Layout
+
+The dashboard layout provides consistent navigation and structure across all protected pages. It uses a sidebar for navigation and a content area for page content.
+
+Create `src/app/app/layout.tsx`:
+
+```typescript
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { AppSidebar } from '@/features/dashboard/presentation/components/app-sidebar';
+import {
+  SidebarInset,
+  SidebarProvider,
+} from '@/components/ui/sidebar';
+
+export default async function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
+          {children}
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
+```
+
+### Understanding the Layout
+
+**1. SidebarProvider**: Manages sidebar state (open/closed) and provides context to child components.
+
+**2. AppSidebar**: The navigation sidebar with links to different sections of the app.
+
+**3. SidebarInset**: The main content area that adjusts based on sidebar state.
+
+**4. Server Component**: This is a server component, allowing us to perform server-side checks before rendering.
+
+## Building the Sidebar Component
+
+The sidebar provides navigation to different sections of the dashboard. It includes user information, navigation links, and a logout button.
+
+Create `src/features/dashboard/presentation/components/app-sidebar.tsx`:
+
+```typescript
+'use client';
+
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
+import {
+  LayoutDashboard,
+  Link as LinkIcon,
+  LogOut,
+  Settings,
+} from 'lucide-react';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from '@/components/ui/sidebar';
+import { Button } from '@/components/ui/button';
+
+// Navigation items
+const items = [
+  {
+    title: 'Dashboard',
+    href: '/app',
+    icon: LayoutDashboard,
+  },
+  {
+    title: 'Links',
+    href: '/app/links',
+    icon: LinkIcon,
+  },
+  {
+    title: 'Settings',
+    href: '/app/settings',
+    icon: Settings,
+  },
+];
+
+export function AppSidebar() {
+  const pathname = usePathname();
+
+  const handleLogout = async () => {
+    // Clear auth cookie and redirect
+    document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    window.location.href = '/auth/login';
+  };
+
+  return (
+    <Sidebar>
+      <SidebarHeader>
+        <div className="flex h-14 items-center border-b px-6">
+          <Link href="/app" className="flex items-center gap-2 font-semibold">
+            <LinkIcon className="h-6 w-6" />
+            <span>Shortify</span>
+          </Link>
+        </div>
+      </SidebarHeader>
+      
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Application</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {items.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === item.href}
+                  >
+                    <Link href={item.href}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter>
+        <div className="p-4">
+          <Button
+            variant="outline"
+            className="w-full justify-start"
+            onClick={handleLogout}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </Button>
+        </div>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
+```
+
+### Understanding the Sidebar
+
+**1. Navigation Items**: The `items` array defines all navigation links with titles, paths, and icons from `lucide-react`.
+
+**2. Active State**: `pathname === item.href` highlights the current page in the navigation.
+
+**3. Logout Handler**: Clears the auth cookie and redirects to login. This is a simple client-side logout.
+
+**4. Responsive**: The sidebar automatically collapses on mobile using the Shadcn UI sidebar component.
+
+## Creating the Dashboard Overview Page
+
+The dashboard overview shows analytics at a glance: total links, total clicks, click-through rate, and recent activity. This gives users immediate insight into their link performance.
+
+Create `src/app/app/page.tsx`:
+
+```typescript
+'use client';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { ArrowUpRight, Link as LinkIcon, MousePointerClick } from 'lucide-react';
+import Link from 'next/link';
+import { api } from '@/igniter.client';
+
+export default function DashboardPage() {
+  // Fetch analytics data
+  const { data: stats, isLoading: statsLoading } = api.link.getStats.useQuery();
+  
+  // Fetch recent links
+  const { data: recentLinks, isLoading: linksLoading } = api.link.list.useQuery({
+    query: {
+      limit: '5',
+      orderBy: 'createdAt',
+      order: 'desc',
+    },
+  });
+
+  // Calculate analytics
+  const totalLinks = stats?.totalLinks || 0;
+  const totalClicks = stats?.totalClicks || 0;
+  const clickThroughRate = totalLinks > 0 ? ((totalClicks / totalLinks) * 100).toFixed(1) : '0';
+
+  return (
+    <div className="flex flex-1 flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+      </div>
+
+      {/* Analytics Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Links</CardTitle>
+            <LinkIcon className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {statsLoading ? '...' : totalLinks}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Active shortened links
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Clicks</CardTitle>
+            <MousePointerClick className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {statsLoading ? '...' : totalClicks}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              All-time clicks across links
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Average CTR
+            </CardTitle>
+            <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {statsLoading ? '...' : `${clickThroughRate}%`}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Click-through rate
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Links Table */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Recent Links</CardTitle>
+            <Button asChild size="sm">
+              <Link href="/app/links">
+                View All
+                <ArrowUpRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {linksLoading ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Loading links...
+            </div>
+          ) : recentLinks?.links?.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p className="mb-2">No links yet</p>
+              <Button asChild size="sm">
+                <Link href="/app/links">Create your first link</Link>
+              </Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Short URL</TableHead>
+                  <TableHead>Destination</TableHead>
+                  <TableHead>Clicks</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentLinks?.links?.map((link) => (
+                  <TableRow key={link.id}>
+                    <TableCell className="font-medium">
+                      <Link
+                        href={`/${link.slug}`}
+                        className="hover:underline text-primary"
+                        target="_blank"
+                      >
+                        /{link.slug}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="max-w-md truncate">
+                      {link.url}
+                    </TableCell>
+                    <TableCell>{link.clicks.length}</TableCell>
+                    <TableCell>
+                      <Badge variant={link.isActive ? 'default' : 'secondary'}>
+                        {link.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+```
+
+### Understanding the Dashboard Overview
+
+**1. Analytics Cards**: Three cards show key metrics using `useQuery` hooks. The loading states ensure a smooth UX while data loads.
+
+**2. Stats Calculation**: We calculate the click-through rate client-side from the stats data.
+
+**3. Recent Links Table**: Displays the 5 most recent links with truncated URLs and click counts.
+
+**4. Empty State**: Shows a helpful message when there are no links yet, with a CTA to create the first one.
+
+**5. Type Safety**: All data is fully typed thanks to the Igniter.js client—no manual type definitions needed.
+
+## Creating the Links Management Page
+
+The links page displays all links in a filterable, sortable table with actions for creating, editing, and deleting links. This is the main interface for managing shortened URLs.
+
+Create `src/app/app/links/page.tsx`:
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Plus, Pencil, Trash2, Copy, ExternalLink } from 'lucide-react';
+import { api } from '@/igniter.client';
+import { toast } from 'sonner';
+import { CreateLinkDialog } from '@/features/link/presentation/components/create-link-dialog';
+import { EditLinkDialog } from '@/features/link/presentation/components/edit-link-dialog';
+import { DeleteLinkDialog } from '@/features/link/presentation/components/delete-link-dialog';
+
+export default function LinksPage() {
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
+
+  // Fetch all links
+  const { data, isLoading, refetch } = api.link.list.useQuery({
+    query: {
+      orderBy: 'createdAt',
+      order: 'desc',
+    },
+  });
+
+  const handleCopyLink = (slug: string) => {
+    const fullUrl = `${window.location.origin}/${slug}`;
+    navigator.clipboard.writeText(fullUrl);
+    toast.success('Link copied!', {
+      description: 'The shortened link has been copied to your clipboard.',
+    });
+  };
+
+  const handleEdit = (id: string) => {
+    setSelectedLinkId(id);
+    setEditDialogOpen(true);
+  };
+
+  const handleDelete = (id: string) => {
+    setSelectedLinkId(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleSuccess = () => {
+    refetch();
+    setCreateDialogOpen(false);
+    setEditDialogOpen(false);
+    setDeleteDialogOpen(false);
+    setSelectedLinkId(null);
+  };
+
+  return (
+    <div className="flex flex-1 flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Links</h1>
+        <Button onClick={() => setCreateDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Create Link
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>All Links</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Loading links...
+            </div>
+          ) : data?.links?.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-4">
+                No links created yet
+              </p>
+              <Button onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create your first link
+              </Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Short URL</TableHead>
+                  <TableHead>Destination</TableHead>
+                  <TableHead>Clicks</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data?.links?.map((link) => (
+                  <TableRow key={link.id}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`/${link.slug}`}
+                          className="hover:underline text-primary"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          /{link.slug}
+                        </a>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleCopyLink(link.slug)}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell className="max-w-md">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate">{link.url}</span>
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0"
+                        >
+                          <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                        </a>
+                      </div>
+                    </TableCell>
+                    <TableCell>{link.clicks.length}</TableCell>
+                    <TableCell>
+                      <Badge variant={link.isActive ? 'default' : 'secondary'}>
+                        {link.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(link.id)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(link.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Dialogs */}
+      <CreateLinkDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onSuccess={handleSuccess}
+      />
+      
+      {selectedLinkId && (
+        <>
+          <EditLinkDialog
+            open={editDialogOpen}
+            onOpenChange={setEditDialogOpen}
+            linkId={selectedLinkId}
+            onSuccess={handleSuccess}
+          />
+          
+          <DeleteLinkDialog
+            open={deleteDialogOpen}
+            onOpenChange={setDeleteDialogOpen}
+            linkId={selectedLinkId}
+            onSuccess={handleSuccess}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+```
+
+### Understanding the Links Page
+
+**1. State Management**: Local state tracks which dialog is open and which link is being edited/deleted.
+
+**2. Copy to Clipboard**: The copy button uses the Clipboard API to copy the shortened URL.
+
+**3. Refetch Pattern**: After any mutation (create/edit/delete), we call `refetch()` to update the table with fresh data.
+
+**4. Actions Column**: Each row has edit and delete buttons that open the appropriate dialog.
+
+**5. External Link Icons**: Both the short URL and destination URL have icons for opening in new tabs.
+
+## Creating the Link Dialogs
+
+Now let's create the three dialogs for CRUD operations. Each dialog is self-contained with its own form, validation, and mutation logic.
+
+### Create Link Dialog
+
+Create `src/features/link/presentation/components/create-link-dialog.tsx`:
+
+```typescript
+'use client';
+
+import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { api } from '@/igniter.client';
+
+const createLinkSchema = z.object({
+  url: z
+    .string()
+    .min(1, 'URL is required')
+    .url('Enter a valid URL'),
+  slug: z
+    .string()
+    .min(1, 'Slug is required')
+    .min(3, 'Slug must be at least 3 characters')
+    .max(50, 'Slug must be less than 50 characters')
+    .regex(/^[a-z0-9-]+$/, 'Slug can only contain lowercase letters, numbers, and hyphens'),
+});
+
+type CreateLinkFormData = z.infer<typeof createLinkSchema>;
+
+interface CreateLinkDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+}
+
+export function CreateLinkDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+}: CreateLinkDialogProps) {
+  const form = useForm<CreateLinkFormData>({
+    resolver: zodResolver(createLinkSchema),
+    defaultValues: {
+      url: '',
+      slug: '',
+    },
+  });
+
+  const createMutation = api.link.create.useMutation({
+    onSuccess: () => {
+      toast.success('Link created!', {
+        description: 'Your shortened link is ready to use.',
+      });
+      form.reset();
+      onSuccess();
+    },
+    onError: (error) => {
+      toast.error('Failed to create link', {
+        description: error.message || 'Please try again.',
+      });
+    },
+  });
+
+  const onSubmit = async (data: CreateLinkFormData) => {
+    await createMutation.mutate({
+      body: {
+        url: data.url,
+        slug: data.slug,
+        isActive: true,
+      },
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create New Link</DialogTitle>
+          <DialogDescription>
+            Create a shortened link for your URL
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <FieldGroup>
+            <Controller
+              name="url"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="url">Destination URL</FieldLabel>
+                  <Input
+                    {...field}
+                    id="url"
+                    type="url"
+                    placeholder="https://example.com/very/long/url"
+                    aria-invalid={fieldState.invalid}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
+            <Controller
+              name="slug"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="slug">Custom Slug</FieldLabel>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">/</span>
+                    <Input
+                      {...field}
+                      id="slug"
+                      type="text"
+                      placeholder="my-link"
+                      aria-invalid={fieldState.invalid}
+                    />
+                  </div>
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
+            <div className="flex justify-end gap-2 mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createMutation.isLoading}>
+                {createMutation.isLoading ? 'Creating...' : 'Create Link'}
+              </Button>
+            </div>
+          </FieldGroup>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+### Edit Link Dialog
+
+Create `src/features/link/presentation/components/edit-link-dialog.tsx`:
+
+```typescript
+'use client';
+
+import { useEffect } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { api } from '@/igniter.client';
+
+const editLinkSchema = z.object({
+  url: z
+    .string()
+    .min(1, 'URL is required')
+    .url('Enter a valid URL'),
+  isActive: z.boolean(),
+});
+
+type EditLinkFormData = z.infer<typeof editLinkSchema>;
+
+interface EditLinkDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  linkId: string;
+  onSuccess: () => void;
+}
+
+export function EditLinkDialog({
+  open,
+  onOpenChange,
+  linkId,
+  onSuccess,
+}: EditLinkDialogProps) {
+  // Fetch link data
+  const { data: link, isLoading } = api.link.getById.useQuery({
+    params: { id: linkId },
+  });
+
+  const form = useForm<EditLinkFormData>({
+    resolver: zodResolver(editLinkSchema),
+    defaultValues: {
+      url: '',
+      isActive: true,
+    },
+  });
+
+  // Update form when link data loads
+  useEffect(() => {
+    if (link) {
+      form.reset({
+        url: link.url,
+        isActive: link.isActive,
+      });
+    }
+  }, [link, form]);
+
+  const updateMutation = api.link.update.useMutation({
+    onSuccess: () => {
+      toast.success('Link updated!', {
+        description: 'Your changes have been saved.',
+      });
+      onSuccess();
+    },
+    onError: (error) => {
+      toast.error('Failed to update link', {
+        description: error.message || 'Please try again.',
+      });
+    },
+  });
+
+  const onSubmit = async (data: EditLinkFormData) => {
+    await updateMutation.mutate({
+      params: { id: linkId },
+      body: {
+        url: data.url,
+        isActive: data.isActive,
+      },
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Link</DialogTitle>
+          <DialogDescription>
+            Update your link settings
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="py-8 text-center text-muted-foreground">
+            Loading link...
+          </div>
+        ) : (
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <FieldGroup>
+              <Controller
+                name="url"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="edit-url">Destination URL</FieldLabel>
+                    <Input
+                      {...field}
+                      id="edit-url"
+                      type="url"
+                      placeholder="https://example.com"
+                      aria-invalid={fieldState.invalid}
+                    />
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                )}
+              />
+
+              <Controller
+                name="isActive"
+                control={form.control}
+                render={({ field }) => (
+                  <Field>
+                    <div className="flex items-center justify-between">
+                      <FieldLabel htmlFor="edit-active">
+                        Link Status
+                      </FieldLabel>
+                      <Switch
+                        id="edit-active"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {field.value ? 'Link is active' : 'Link is inactive'}
+                    </p>
+                  </Field>
+                )}
+              />
+
+              <div className="flex justify-end gap-2 mt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={updateMutation.isLoading}>
+                  {updateMutation.isLoading ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </FieldGroup>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+### Delete Link Dialog
+
+Create `src/features/link/presentation/components/delete-link-dialog.tsx`:
+
+```typescript
+'use client';
+
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { api } from '@/igniter.client';
+
+interface DeleteLinkDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  linkId: string;
+  onSuccess: () => void;
+}
+
+export function DeleteLinkDialog({
+  open,
+  onOpenChange,
+  linkId,
+  onSuccess,
+}: DeleteLinkDialogProps) {
+  const deleteMutation = api.link.delete.useMutation({
+    onSuccess: () => {
+      toast.success('Link deleted!', {
+        description: 'The link has been permanently removed.',
+      });
+      onSuccess();
+    },
+    onError: (error) => {
+      toast.error('Failed to delete link', {
+        description: error.message || 'Please try again.',
+      });
+    },
+  });
+
+  const handleDelete = async () => {
+    await deleteMutation.mutate({
+      params: { id: linkId },
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete Link</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete this link? This action cannot be undone.
+            All analytics data for this link will also be removed.
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={deleteMutation.isLoading}
+          >
+            {deleteMutation.isLoading ? 'Deleting...' : 'Delete Link'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+### Understanding the Dialogs
+
+**1. Create Dialog**: Simple form with URL and slug validation. The slug regex ensures it's URL-safe.
+
+**2. Edit Dialog**: Fetches existing data with `useQuery`, then populates the form with `useEffect`. Includes a toggle for active/inactive status.
+
+**3. Delete Dialog**: Confirmation dialog with a destructive action. No form needed—just a confirmation.
+
+**4. Consistent Pattern**: All three dialogs follow the same pattern: schema, form, mutation, success/error handling.
+
+## Testing the Dashboard
+
+Start your development server:
+
+```bash
+igniter dev
+```
+
+Now test the complete dashboard:
+
+1. **Navigate to `/app`** after logging in
+   - You should see the dashboard with analytics cards
+   - If you have links, the recent links table appears
+   - If no links exist, you see an empty state with a CTA
+
+2. **Click "Create Link"** or navigate to `/app/links`
+   - The create dialog opens
+   - Enter a URL and custom slug
+   - Click "Create Link"
+   - The dialog closes and the table updates automatically
+
+3. **Edit a link**
+   - Click the pencil icon on any link
+   - Change the URL or toggle the active status
+   - Click "Save Changes"
+   - The table updates with the new data
+
+4. **Delete a link**
+   - Click the trash icon on any link
+   - Confirm the deletion
+   - The link disappears from the table
+
+5. **Copy a link**
+   - Click the copy icon next to any short URL
+   - You should see a success toast
+   - Paste to verify the full URL was copied
+
+<Callout type="success" title="Dashboard Complete!">
+You now have a fully functional dashboard with:
+- Professional layout with sidebar navigation
+- Analytics overview with real-time stats
+- Link management with full CRUD operations
+- Type-safe data fetching with Igniter.js hooks
+- Beautiful UI components from Shadcn UI
+</Callout>
+
+## Key Concepts Review
+
+**1. Dashboard Layout**: The sidebar layout pattern provides consistent navigation across the app. The `SidebarProvider` manages state for responsive behavior.
+
+**2. Data Fetching with Hooks**: The `useQuery` hook fetches data reactively. When you call `refetch()`, it automatically updates all components using that data.
+
+**3. Mutations**: The `useMutation` hook handles create, update, and delete operations. It provides loading states and error handling out of the box.
+
+**4. Dialog Pattern**: Dialogs are controlled components. State in the parent component determines which dialog is open and which item is being edited.
+
+**5. Optimistic Updates**: After mutations, we call `refetch()` to ensure the UI shows the latest data. In production, you might use optimistic updates for instant feedback.
+
+## Quiz
+
+<Quiz
+  question="Why do we call refetch() after mutations?"
+  options={[
+    { label: 'To reset the form', value: 'reset' },
+    { label: 'To update the table with fresh data from the server', value: 'refresh', isCorrect: true },
+    { label: 'To close the dialog', value: 'close' },
+    { label: 'To show a loading state', value: 'loading' }
+  ]}
+  explanation="After creating, updating, or deleting a link, we call refetch() to fetch the latest data from the server. This ensures the table displays accurate information without needing a page reload."
+/>
+
+<Quiz
+  question="What does the SidebarProvider component do?"
+  options={[
+    { label: 'Fetches sidebar data from the API', value: 'fetch' },
+    { label: 'Manages sidebar state and provides context to children', value: 'state', isCorrect: true },
+    { label: 'Renders the sidebar navigation', value: 'render' },
+    { label: 'Handles authentication for sidebar routes', value: 'auth' }
+  ]}
+  explanation="The SidebarProvider manages the sidebar state (open/closed) and provides that state to child components through React context. This allows the sidebar to respond to user interactions and screen size changes."
+/>
+
+<ChapterNav
+  current={{ number: 6, title: 'Link Management UI' }}
+  next={{
+    number: 7,
+    title: 'Click Tracking & Analytics',
+    description: 'Implement click tracking, capture visitor data, and build analytics visualizations with charts.',
+    href: '/learn/07-click-tracking-analytics'
+  }}
+/>

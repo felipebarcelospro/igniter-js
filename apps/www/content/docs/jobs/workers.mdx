@@ -1,0 +1,508 @@
+---
+title: Workers
+description: Configure and manage workers to process jobs from your queues with concurrency control, event handlers, and lifecycle management.
+---
+
+Workers are the processes that execute your background jobs. They continuously poll Redis for new jobs and execute them according to your configuration. Understanding how to configure and manage workers is essential for building reliable job processing systems.
+
+## Automatic Worker Startup
+
+The easiest way to start workers is through `autoStartWorker` configuration:
+
+```typescript
+import { createBullMQAdapter } from '@igniter-js/adapter-bullmq';
+
+const jobs = createBullMQAdapter({
+  store: redisStore,
+  autoStartWorker: {
+    concurrency: 5, // Process up to 5 jobs concurrently
+    queues: ['default'], // Process jobs from these queues
+    debug: true, // Enable debug logging
+  },
+});
+```
+
+When jobs are registered via `jobs.merge()`, workers automatically start for the discovered queues.
+
+<Callout type="info" title="Auto-Start Behavior">
+  With `autoStartWorker` enabled, workers start automatically when you register jobs. This is convenient for development but you may want manual control in production.
+</Callout>
+
+---
+
+## Manual Worker Management
+
+For more control, manage workers manually:
+
+```typescript
+// Create adapter without auto-start
+const jobs = createBullMQAdapter({
+  store: redisStore,
+  // No autoStartWorker config
+});
+
+// Later, start workers manually
+await jobs.worker({
+  queues: ['default', 'email-queue', 'analytics-queue'],
+  concurrency: 10,
+  onActive: ({ job }) => {
+    console.log(`Job ${job.id} started`);
+  },
+  onSuccess: ({ job, result }) => {
+    console.log(`Job ${job.id} completed:`, result);
+  },
+  onFailure: ({ job, error }) => {
+    console.error(`Job ${job.id} failed:`, error);
+  },
+});
+```
+
+---
+
+## Worker Configuration
+
+Configure workers with various options:
+
+```typescript
+await jobs.worker({
+  // Queue configuration
+  queues: ['default', 'priority-queue'],
+  
+  // Concurrency control
+  concurrency: 10, // Process up to 10 jobs simultaneously
+  
+  // Job filtering
+  jobFilter: ['emails.sendWelcome', 'users.processSignup'], // Only process these jobs
+  
+  // Event handlers
+  onActive: ({ job }) => {
+    console.log(`Processing: ${job.name} (${job.id})`);
+  },
+  
+  onSuccess: ({ job, result }) => {
+    console.log(`Completed: ${job.name}`, result);
+  },
+  
+  onFailure: ({ job, error }) => {
+    console.error(`Failed: ${job.name}`, error);
+  },
+  
+  onIdle: () => {
+    console.log('No jobs available');
+  },
+});
+```
+
+### Configuration Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `queues` | `string[]` | Queue names to process jobs from |
+| `concurrency` | `number` | Maximum concurrent job executions |
+| `jobFilter` | `string[]` | Optional: only process specific jobs |
+| `onActive` | `function` | Called when a job starts processing |
+| `onSuccess` | `function` | Called when a job completes successfully |
+| `onFailure` | `function` | Called when a job fails |
+| `onIdle` | `function` | Called when queue is empty |
+
+---
+
+## Concurrency Control
+
+Control how many jobs run simultaneously:
+
+```typescript
+// Low concurrency - good for CPU-intensive jobs
+await jobs.worker({
+  queues: ['cpu-intensive'],
+  concurrency: 2, // Only 2 jobs at a time
+});
+
+// High concurrency - good for I/O-bound jobs
+await jobs.worker({
+  queues: ['io-bound'],
+  concurrency: 50, // Up to 50 jobs concurrently
+});
+
+// Mixed - different queues, different concurrency
+await jobs.worker({
+  queues: ['default'],
+  concurrency: 10,
+});
+
+await jobs.worker({
+  queues: ['background'],
+  concurrency: 5,
+});
+```
+
+<Callout type="info" title="Choosing Concurrency">
+  - **CPU-intensive jobs**: Lower concurrency (2-5) to avoid CPU contention
+  - **I/O-bound jobs**: Higher concurrency (10-50) to maximize throughput
+  - **Database-heavy jobs**: Moderate concurrency (5-10) to avoid connection pool exhaustion
+</Callout>
+
+---
+
+## Queue-Specific Workers
+
+Process different queues with dedicated workers:
+
+```typescript
+// Email queue worker
+await jobs.worker({
+  queues: ['email-queue'],
+  concurrency: 20, // High concurrency for emails
+  onSuccess: ({ job }) => {
+    console.log(`Email sent: ${job.name}`);
+  },
+});
+
+// Analytics queue worker
+await jobs.worker({
+  queues: ['analytics-queue'],
+  concurrency: 5, // Lower concurrency for analytics
+  onSuccess: ({ job }) => {
+    console.log(`Analytics processed: ${job.name}`);
+  },
+});
+
+// Critical queue worker
+await jobs.worker({
+  queues: ['critical-queue'],
+  concurrency: 1, // One at a time for critical jobs
+  onFailure: ({ job, error }) => {
+    // Alert on critical job failures
+    sendAlert(`Critical job failed: ${job.name}`, error);
+  },
+});
+```
+
+---
+
+## Job Filtering
+
+Process only specific jobs from a queue:
+
+```typescript
+await jobs.worker({
+  queues: ['default'],
+  concurrency: 10,
+  jobFilter: [
+    'emails.sendWelcome',
+    'emails.sendPasswordReset',
+    // Only process these two jobs, ignore others
+  ],
+});
+```
+
+This is useful when:
+- You want separate workers for different job types
+- You need to isolate certain jobs for debugging
+- You want to process high-priority jobs separately
+
+---
+
+## Event Handlers
+
+React to worker events with handlers:
+
+### onActive
+
+Called when a job starts processing:
+
+```typescript
+await jobs.worker({
+  queues: ['default'],
+  onActive: ({ job }) => {
+    console.log(`Job ${job.id} started`);
+    trackMetric('job.started', {
+      jobId: job.id,
+      jobName: job.name,
+    });
+  },
+});
+```
+
+### onSuccess
+
+Called when a job completes successfully:
+
+```typescript
+await jobs.worker({
+  queues: ['default'],
+  onSuccess: ({ job, result }) => {
+    console.log(`Job ${job.id} completed successfully`);
+    trackMetric('job.completed', {
+      jobId: job.id,
+      executionTime: result.executionTime,
+    });
+  },
+});
+```
+
+### onFailure
+
+Called when a job fails:
+
+```typescript
+await jobs.worker({
+  queues: ['default'],
+  onFailure: ({ job, error }) => {
+    console.error(`Job ${job.id} failed:`, error);
+    
+    // Alert on failures
+    if (error.critical) {
+      sendAlert(`Critical job failed: ${job.name}`, error);
+    }
+  },
+});
+```
+
+### onIdle
+
+Called when no jobs are available:
+
+```typescript
+await jobs.worker({
+  queues: ['default'],
+  onIdle: () => {
+    console.log('Queue is empty, worker is idle');
+    // Could implement health checks or cleanup here
+  },
+});
+```
+
+---
+
+## Multiple Workers
+
+Run multiple workers for redundancy and scale:
+
+```typescript
+// Worker 1
+await jobs.worker({
+  queues: ['default'],
+  concurrency: 10,
+});
+
+// Worker 2 (same queue, shares load)
+await jobs.worker({
+  queues: ['default'],
+  concurrency: 10,
+});
+
+// Worker 3 (dedicated queue)
+await jobs.worker({
+  queues: ['priority-queue'],
+  concurrency: 5,
+});
+```
+
+Multiple workers processing the same queue will automatically share the workload, providing:
+- **High availability**: If one worker fails, others continue
+- **Scalability**: Add workers to handle increased load
+- **Fault tolerance**: Worker failures don't stop job processing
+
+---
+
+## Worker Lifecycle
+
+### Starting Workers
+
+```typescript
+// Start a worker
+await jobs.worker({
+  queues: ['default'],
+  concurrency: 10,
+});
+
+console.log('Worker started');
+```
+
+### Stopping Workers
+
+Gracefully shutdown all workers:
+
+```typescript
+// Shutdown all workers and close connections
+await jobs.shutdown();
+
+console.log('All workers stopped');
+```
+
+<Callout type="warn" title="Graceful Shutdown">
+  Always call `shutdown()` before exiting your application to ensure:
+  - In-flight jobs complete or are properly handled
+  - Redis connections are closed
+  - No jobs are lost during shutdown
+</Callout>
+
+### Handling Shutdown Signals
+
+In production, handle shutdown signals gracefully:
+
+```typescript
+// Handle SIGTERM and SIGINT
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down workers...');
+  await jobs.shutdown();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, shutting down workers...');
+  await jobs.shutdown();
+  process.exit(0);
+});
+```
+
+---
+
+## Worker Monitoring
+
+Monitor worker health and performance:
+
+```typescript
+await jobs.worker({
+  queues: ['default'],
+  concurrency: 10,
+  onActive: ({ job }) => {
+    // Track active jobs
+    activeJobs.increment();
+  },
+  onSuccess: ({ job, result }) => {
+    // Track successful jobs
+    successfulJobs.increment();
+    activeJobs.decrement();
+  },
+  onFailure: ({ job, error }) => {
+    // Track failed jobs
+    failedJobs.increment();
+    activeJobs.decrement();
+  },
+});
+```
+
+---
+
+## Advanced Worker Patterns
+
+### Separate Workers for Different Priorities
+
+```typescript
+// High priority worker
+await jobs.worker({
+  queues: ['high-priority'],
+  concurrency: 1, // One at a time
+  onFailure: ({ job, error }) => {
+    // Immediate alert for high-priority failures
+    sendCriticalAlert(`High-priority job failed: ${job.name}`);
+  },
+});
+
+// Normal priority worker
+await jobs.worker({
+  queues: ['default'],
+  concurrency: 10,
+});
+```
+
+### Worker with Retry Logic
+
+```typescript
+await jobs.worker({
+  queues: ['default'],
+  concurrency: 5,
+  onFailure: async ({ job, error }) => {
+    // Custom retry logic
+    if (job.attemptsMade < 3) {
+      console.log(`Retrying job ${job.id} (attempt ${job.attemptsMade + 1})`);
+    } else {
+      console.error(`Job ${job.id} failed after all retries`);
+      await sendFailureNotification(job, error);
+    }
+  },
+});
+```
+
+### Resource-Aware Workers
+
+```typescript
+let activeJobCount = 0;
+const MAX_CONCURRENT = 10;
+
+await jobs.worker({
+  queues: ['default'],
+  concurrency: MAX_CONCURRENT,
+  onActive: ({ job }) => {
+    activeJobCount++;
+    console.log(`Active jobs: ${activeJobCount}/${MAX_CONCURRENT}`);
+    
+    // Pause processing if resource limits reached
+    if (activeJobCount >= MAX_CONCURRENT) {
+      console.log('Maximum concurrency reached, pausing...');
+    }
+  },
+  onSuccess: ({ job }) => {
+    activeJobCount--;
+  },
+  onFailure: ({ job }) => {
+    activeJobCount--;
+  },
+});
+```
+
+---
+
+## Best Practices
+
+1. **Set Appropriate Concurrency**: Match concurrency to your workload type
+2. **Monitor Worker Health**: Track metrics for active, successful, and failed jobs
+3. **Handle Shutdown Gracefully**: Always call `shutdown()` before exiting
+4. **Use Separate Workers**: Use different workers for different priorities or queue types
+5. **Implement Alerting**: Set up alerts for worker failures or queue buildup
+6. **Scale Horizontally**: Run multiple workers for redundancy and scale
+7. **Test Worker Behavior**: Verify workers handle job failures correctly
+
+---
+
+## Troubleshooting
+
+### Workers Not Processing Jobs
+
+**Problem**: Jobs are queued but not executing
+
+**Solutions**:
+- Verify workers are started: Check logs for "Starting worker for queue"
+- Check queue names: Ensure workers process the correct queues
+- Verify Redis connection: Workers need access to Redis
+- Check job filters: Verify `jobFilter` isn't excluding your jobs
+
+### High Memory Usage
+
+**Problem**: Workers consuming too much memory
+
+**Solutions**:
+- Reduce concurrency: Lower `concurrency` value
+- Process smaller batches: Limit number of jobs processed simultaneously
+- Monitor job memory usage: Some jobs may be memory-intensive
+
+### Worker Crashes
+
+**Problem**: Workers crash unexpectedly
+
+**Solutions**:
+- Add error handling: Wrap job handlers in try-catch
+- Monitor logs: Check for unhandled errors
+- Implement health checks: Verify worker availability
+- Use process managers: Use PM2 or similar to restart crashed workers
+
+---
+
+## Next Steps
+
+- **[Search & Monitoring](/docs/jobs/search-and-monitoring)**: Monitor jobs and queue health
+- **[Advanced Features](/docs/jobs/advanced-features)**: Explore hooks and webhooks
+- **[Multi-Tenancy](/docs/jobs/multi-tenancy)**: Scale workers for multi-tenant applications
+

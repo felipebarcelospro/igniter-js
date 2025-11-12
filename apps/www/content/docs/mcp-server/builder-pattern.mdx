@@ -1,0 +1,558 @@
+---
+title: Builder Pattern API
+description: Use the fluent builder pattern API for full type inference and step-by-step configuration of your MCP server.
+---
+
+## Overview
+
+The Builder Pattern API (`IgniterMcpServer`) provides a fluent, chainable interface for configuring your MCP server. It offers full TypeScript type inference, better IDE autocomplete, and explicit separation of concerns.
+
+<Callout type="success" title="Recommended">
+  The builder pattern is recommended for TypeScript projects where you want maximum type safety and a clear, progressive configuration flow.
+</Callout>
+
+---
+
+## Basic Usage
+
+### Creating a Server
+
+Start by calling `IgniterMcpServer.create()` and chain configuration methods:
+
+```typescript
+import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server';
+import { AppRouter } from '@/igniter.router';
+
+const { handler, auth } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withServerInfo({
+    name: 'My MCP Server',
+    version: '1.0.0',
+  })
+  .build();
+
+export const GET = handler;
+export const POST = handler;
+```
+
+---
+
+## Configuration Methods
+
+### router()
+
+Sets the Igniter.js router to expose as MCP tools. **This method is required.**
+
+```typescript
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter) // Required: Your Igniter router
+  .build();
+```
+
+**Type Safety**: After calling `.router()`, all subsequent methods benefit from type inference based on your router's context type.
+
+---
+
+### withServerInfo()
+
+Sets metadata about your MCP server:
+
+```typescript
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withServerInfo({
+    name: 'Acme Corporation API',
+    version: '1.2.0',
+  })
+  .build();
+```
+
+**Parameters:**
+- `name` (string): Server name displayed to MCP clients
+- `version` (string): Server version (semantic versioning recommended)
+
+---
+
+### withInstructions()
+
+Provides instructions to AI agents about how to use your server:
+
+```typescript
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withInstructions(
+    "This server provides tools to manage users and products. " +
+    "Use users.list to get all users, users.create to add new users, " +
+    "and products.search to find products by keyword."
+  )
+  .build();
+```
+
+**Best Practices:**
+- Describe what your API does
+- List key tools and their purposes
+- Mention any important usage patterns or constraints
+
+---
+
+### withCapabilities()
+
+Configure server capabilities to advertise to MCP clients:
+
+```typescript
+import { ServerCapabilities } from '@modelcontextprotocol/sdk/types';
+
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withCapabilities({
+    tools: {},
+    prompts: {},
+    resources: {},
+  })
+  .build();
+```
+
+---
+
+### addTool()
+
+Add custom tools beyond your router actions. Each tool gets full type inference:
+
+```typescript
+import { z } from 'zod';
+
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .addTool({
+    name: 'calculateTax',
+    description: 'Calculate tax for a given amount',
+    args: {
+      amount: z.number(),
+      taxRate: z.number(),
+    },
+    handler: async (args, context) => {
+      // context is automatically typed from your router!
+      const tax = args.amount * args.taxRate;
+      return {
+        content: [{
+          type: 'text',
+          text: `Tax: $${tax.toFixed(2)}`
+        }]
+      };
+    },
+  })
+  .build();
+```
+
+**Type Inference:**
+- `args` is automatically typed based on your Zod schema
+- `context` is automatically typed from your router's context type
+- Return type is validated to match MCP's `CallToolResult`
+
+**Multiple Tools:**
+
+```typescript
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .addTool({ /* tool 1 */ })
+  .addTool({ /* tool 2 */ })
+  .addTool({ /* tool 3 */ })
+  .build();
+```
+
+---
+
+### addPrompt()
+
+Register prompts that AI agents can use to guide interactions:
+
+```typescript
+import { z } from 'zod';
+
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .addPrompt({
+    name: 'debugUser',
+    description: 'Debug user account issues',
+    args: {
+      userId: z.string(),
+    },
+    handler: async (args, context) => {
+      // context is automatically typed!
+      return {
+        messages: [{
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `Please debug the account for user ${args.userId}. ` +
+                  `Check their permissions, recent activity, and any error logs.`
+          }
+        }]
+      };
+    },
+  })
+  .build();
+```
+
+**Use Cases:**
+- Create debugging prompts that combine multiple steps
+- Guide AI agents through complex workflows
+- Provide context-aware instructions
+
+---
+
+### addResource()
+
+Expose resources that AI agents can read:
+
+```typescript
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .addResource({
+    uri: 'config://app/settings',
+    name: 'Application Settings',
+    description: 'Current application configuration',
+    mimeType: 'application/json',
+    handler: async (context) => {
+      // context is automatically typed!
+      const settings = await getAppSettings();
+      return {
+        contents: [{
+          uri: 'config://app/settings',
+          mimeType: 'application/json',
+          text: JSON.stringify(settings, null, 2)
+        }]
+      };
+    }
+  })
+  .build();
+```
+
+**Resource URI Patterns:**
+- `config://` - Configuration resources
+- `file://` - File-based resources
+- `db://` - Database resources
+- Custom schemes are also supported
+
+---
+
+### withOAuth()
+
+Secure your MCP server with OAuth authentication:
+
+```typescript
+const { handler, auth } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withOAuth({
+    issuer: 'https://auth.example.com',
+    resourceMetadataPath: '/.well-known/oauth-protected-resource',
+    scopes: ['mcp:read', 'mcp:write'],
+    verifyToken: async ({ request, bearerToken, context }) => {
+      // context is automatically typed!
+      const result = await verifyJWT(bearerToken);
+      return {
+        valid: result.valid,
+        user: result.user
+      };
+    }
+  })
+  .build();
+
+// Export the handler and OAuth endpoints
+export const GET = handler;
+export const POST = handler;
+export const OPTIONS = auth.cors;
+
+// In your OAuth metadata endpoint route (e.g., /.well-known/oauth-protected-resource)
+// export { auth.resource as GET };
+```
+
+**OAuth Features:**
+- Automatic Bearer token validation
+- Custom token verification logic
+- OAuth metadata endpoint
+- CORS support for OAuth flows
+
+---
+
+### withEvents()
+
+Monitor and log MCP operations:
+
+```typescript
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withEvents({
+    onRequest: async (request, context) => {
+      console.log('MCP request received:', request.url);
+    },
+    onResponse: async (response, context) => {
+      console.log('MCP response sent');
+    },
+    onToolCall: async (toolName, args, context) => {
+      console.log(`Tool called: ${toolName}`, args);
+    },
+    onToolSuccess: async (toolName, result, duration, context) => {
+      console.log(`Tool ${toolName} completed in ${duration}ms`);
+    },
+    onToolError: async (toolName, error, context) => {
+      console.error(`Tool ${toolName} failed:`, error);
+    },
+    onError: async (error, context) => {
+      console.error('MCP adapter error:', error);
+    }
+  })
+  .build();
+```
+
+**Available Events:**
+- `onRequest` - Called when any MCP request is received
+- `onResponse` - Called when a response is sent
+- `onToolCall` - Called when a tool is invoked
+- `onToolSuccess` - Called when a tool completes successfully
+- `onToolError` - Called when a tool fails
+- `onError` - Called on general adapter errors
+
+---
+
+### withToolTransform()
+
+Customize how router actions are transformed into tools:
+
+```typescript
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withToolTransform((controller, action, actionConfig) => {
+    // Customize tool name
+    const name = `${controller}_${action}`;
+    
+    // Use summary if available, fallback to description
+    const description = actionConfig.summary || 
+                       actionConfig.description || 
+                       `Execute ${controller} ${action}`;
+    
+    // Include tags from action config
+    const tags = actionConfig.tags || [];
+    
+    return {
+      name,
+      description,
+      schema: actionConfig.body || actionConfig.query || {},
+      tags: [...tags, controller, actionConfig.method?.toLowerCase()].filter(Boolean)
+    };
+  })
+  .build();
+```
+
+**Use Cases:**
+- Custom naming strategies
+- Enhanced descriptions
+- Additional metadata (tags, categories)
+- Schema transformations
+
+---
+
+### withLogger()
+
+Configure custom logging:
+
+```typescript
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withLogger({
+    log: (message) => console.log(`[MCP] ${message}`),
+    error: (message) => console.error(`[MCP ERROR] ${message}`),
+    warn: (message) => console.warn(`[MCP WARN] ${message}`),
+    debug: (message) => console.debug(`[MCP DEBUG] ${message}`),
+  })
+  .build();
+```
+
+---
+
+### withResponse()
+
+Customize response transformation and error handling:
+
+```typescript
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withResponse({
+    transform: async (igniterResponse, toolName, context) => {
+      // Customize how Igniter responses are formatted for MCP
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify(igniterResponse, null, 2)
+        }]
+      };
+    },
+    onError: async (error, toolName, context) => {
+      // Custom error handling
+      return {
+        content: [{
+          type: 'text',
+          text: `Error in ${toolName}: ${error.message}`
+        }]
+      };
+    }
+  })
+  .build();
+```
+
+---
+
+## Complete Example
+
+Here's a complete example combining multiple features:
+
+```typescript
+import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server';
+import { AppRouter } from '@/igniter.router';
+import { z } from 'zod';
+
+const { handler, auth } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withServerInfo({
+    name: 'Acme Corporation API',
+    version: '1.0.0',
+  })
+  .withInstructions(
+    "This server provides tools to manage users, products, and orders. " +
+    "Use the appropriate tools to interact with each resource."
+  )
+  .addTool({
+    name: 'calculateTax',
+    description: 'Calculate tax for an amount',
+    args: {
+      amount: z.number(),
+      taxRate: z.number(),
+    },
+    handler: async (args, context) => {
+      const tax = args.amount * args.taxRate;
+      return {
+        content: [{
+          type: 'text',
+          text: `Tax: $${tax.toFixed(2)}`
+        }]
+      };
+    },
+  })
+  .addPrompt({
+    name: 'debugUser',
+    description: 'Debug user account',
+    args: { userId: z.string() },
+    handler: async (args, context) => {
+      return {
+        messages: [{
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `Debug user ${args.userId}`
+          }
+        }]
+      };
+    },
+  })
+  .addResource({
+    uri: 'config://app/settings',
+    name: 'App Settings',
+    description: 'Application configuration',
+    mimeType: 'application/json',
+    handler: async (context) => {
+      const settings = await getAppSettings();
+      return {
+        contents: [{
+          uri: 'config://app/settings',
+          mimeType: 'application/json',
+          text: JSON.stringify(settings, null, 2)
+        }]
+      };
+    }
+  })
+  .withOAuth({
+    issuer: 'https://auth.example.com',
+    verifyToken: async ({ bearerToken, context }) => {
+      const result = await verifyJWT(bearerToken);
+      return { valid: result.valid, user: result.user };
+    }
+  })
+  .withEvents({
+    onToolCall: async (toolName, args, context) => {
+      console.log(`Tool called: ${toolName}`);
+    },
+    onToolError: async (toolName, error, context) => {
+      console.error(`Tool error: ${toolName}`, error);
+    }
+  })
+  .build();
+
+export const GET = handler;
+export const POST = handler;
+export const OPTIONS = auth.cors;
+```
+
+---
+
+## Type Safety Benefits
+
+The builder pattern provides excellent type safety:
+
+**1. Router Context Inference:**
+```typescript
+// Context type is automatically inferred from AppRouter
+.handler(async (args, context) => {
+  // ✅ context.db is typed
+  // ✅ context.services is typed
+  // ✅ All your context properties are available
+})
+```
+
+**2. Tool Arguments:**
+```typescript
+.addTool({
+  args: {
+    amount: z.number(),
+    email: z.string().email(),
+  },
+  handler: async (args, context) => {
+    // ✅ args.amount is number
+    // ✅ args.email is string
+    // ✅ TypeScript enforces correct usage
+  }
+})
+```
+
+**3. Chain Type Safety:**
+```typescript
+// Each method returns a properly typed builder
+const builder = IgniterMcpServer.create()
+  .router(AppRouter) // Now knows about AppRouter's context
+  .addTool({ /* Full type inference */ })
+  .addPrompt({ /* Full type inference */ })
+  .build(); // Returns properly typed handler
+```
+
+---
+
+## Next Steps
+
+- Learn about the [Function API](/docs/mcp-server/function-api) for simpler setups
+- Explore [Custom Tools](/docs/mcp-server/custom-tools) in detail
+- Check out [Advanced Configurations](/docs/mcp-server/advanced)
+

@@ -1,0 +1,643 @@
+---
+title: Validation
+description: Master input validation in Igniter.js using Zod, Valibot, Yup, or any StandardSchemaV1-compliant library for type-safe request handling.
+---
+
+## Overview
+
+**Validation** in Igniter.js ensures that incoming data (request body, query parameters) matches your expected schema before reaching your action handler. This prevents bugs, improves security, and provides automatic type inference.
+
+```typescript
+import { igniter } from '@/igniter';
+import { z } from 'zod';
+
+const CreateUserSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  age: z.number().int().min(18)
+});
+
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    create: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: CreateUserSchema,  // ✅ Auto-validates and types request.body
+      handler: async ({ request, response }) => {
+        // ✅ request.body is fully typed and validated!
+        const { name, email, age } = request.body;
+        
+        const user = await db.users.create({ data: { name, email, age } });
+        return response.created({ user });
+      }
+    })
+  }
+});
+```
+
+<Callout type="success" title="Automatic Type Inference">
+  When you provide a validation schema, TypeScript **automatically infers** the type of `request.body` or `request.query`. No manual type annotations needed!
+</Callout>
+
+---
+
+## StandardSchemaV1
+
+Igniter.js uses the **StandardSchemaV1** interface, which means it works with any validation library that implements this standard:
+
+- ✅ **Zod** (most popular)
+- ✅ **Valibot** (lightweight alternative)
+- ✅ **Yup** (with adapter)
+- ✅ **ArkType**
+- ✅ Any custom schema implementing StandardSchemaV1
+
+<Callout type="info" title="What is StandardSchemaV1?">
+  StandardSchemaV1 is a universal interface for validation libraries. It allows Igniter.js to work with multiple validation libraries without being tied to any specific one.
+</Callout>
+
+---
+
+## Body Validation
+
+Validate request bodies for POST, PUT, PATCH requests:
+
+### Basic Body Validation
+
+```typescript
+import { z } from 'zod';
+
+const CreatePostSchema = z.object({
+  title: z.string().min(3).max(100),
+  content: z.string().min(10),
+  published: z.boolean().default(false)
+});
+
+const postController = igniter.controller({
+  path: '/posts',
+  actions: {
+    create: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: CreatePostSchema,
+      handler: async ({ request, context, response }) => {
+        // ✅ request.body is typed as:
+        // {
+        //   title: string;
+        //   content: string;
+        //   published: boolean;
+        // }
+        
+        const post = await context.db.posts.create({
+          data: request.body
+        });
+        
+        return response.created({ post });
+      }
+    })
+  }
+});
+```
+
+### Nested Objects
+
+```typescript
+const CreateUserSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+  profile: z.object({
+    bio: z.string().optional(),
+    avatar: z.string().url().optional(),
+    social: z.object({
+      twitter: z.string().optional(),
+      github: z.string().optional()
+    }).optional()
+  }),
+  settings: z.object({
+    newsletter: z.boolean().default(true),
+    notifications: z.boolean().default(true)
+  })
+});
+
+// Usage
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    create: igniter.mutation({
+      method: 'POST',
+      body: CreateUserSchema,
+      handler: async ({ request, response }) => {
+        // ✅ Fully typed nested access
+        const { name, email, profile, settings } = request.body;
+        console.log(profile.social?.twitter);
+        console.log(settings.newsletter);
+      }
+    })
+  }
+});
+```
+
+### Arrays
+
+```typescript
+const CreatePostSchema = z.object({
+  title: z.string(),
+  content: z.string(),
+  tags: z.array(z.string()).min(1).max(5),  // 1-5 tags
+  categories: z.array(z.enum(['tech', 'design', 'business'])),
+  coAuthors: z.array(z.object({
+    name: z.string(),
+    email: z.string().email()
+  })).optional()
+});
+
+// Usage
+const handler = async ({ request }) => {
+  // ✅ request.body.tags is string[]
+  // ✅ request.body.categories is ('tech' | 'design' | 'business')[]
+  // ✅ request.body.coAuthors is { name: string; email: string }[] | undefined
+};
+```
+
+---
+
+## Query Validation
+
+Validate URL query parameters:
+
+### Basic Query Validation
+
+```typescript
+const SearchSchema = z.object({
+  q: z.string().min(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  offset: z.coerce.number().min(0).default(0)
+});
+
+const productController = igniter.controller({
+  path: '/products',
+  actions: {
+    search: igniter.query({
+      path: '/search',
+      query: SearchSchema,
+      handler: async ({ request, context, response }) => {
+        // ✅ request.query is typed as:
+        // {
+        //   q: string;
+        //   limit: number;
+        //   offset: number;
+        // }
+        
+        const { q, limit, offset } = request.query;
+        
+        const products = await context.db.products.findMany({
+          where: { name: { contains: q } },
+          take: limit,
+          skip: offset
+        });
+        
+        return response.success({ products });
+      }
+    })
+  }
+});
+
+// Usage: GET /products/search?q=laptop&limit=10&offset=0
+```
+
+<Callout type="warn" title="Use z.coerce for Query Params">
+  Query parameters come as **strings** from URLs. Use `z.coerce.number()`, `z.coerce.boolean()`, etc. to automatically convert them!
+</Callout>
+
+### Advanced Query Validation
+
+```typescript
+const ProductSearchSchema = z.object({
+  q: z.string().min(1),
+  category: z.enum(['electronics', 'clothing', 'books']).optional(),
+  minPrice: z.coerce.number().min(0).optional(),
+  maxPrice: z.coerce.number().min(0).optional(),
+  sortBy: z.enum(['price', 'date', 'popularity']).default('date'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+  inStock: z.coerce.boolean().optional(),
+  tags: z.string().transform(val => val.split(',')).optional()  // "tag1,tag2" → ["tag1", "tag2"]
+});
+
+const handler = async ({ request }) => {
+  const { q, category, minPrice, maxPrice, sortBy, order, inStock, tags } = request.query;
+  
+  // ✅ All types are inferred correctly:
+  // q: string
+  // category: 'electronics' | 'clothing' | 'books' | undefined
+  // minPrice: number | undefined
+  // sortBy: 'price' | 'date' | 'popularity'
+  // tags: string[] | undefined
+};
+```
+
+---
+
+## Validation Errors
+
+When validation fails, Igniter.js automatically returns a `400 Bad Request` with detailed error information:
+
+### Example Validation Error
+
+Request:
+```json
+POST /users
+{
+  "name": "J",
+  "email": "invalid-email",
+  "age": 15
+}
+```
+
+Response (400 Bad Request):
+```json
+{
+  "error": "Validation failed",
+  "issues": [
+    {
+      "path": ["name"],
+      "message": "String must contain at least 2 character(s)"
+    },
+    {
+      "path": ["email"],
+      "message": "Invalid email"
+    },
+    {
+      "path": ["age"],
+      "message": "Number must be greater than or equal to 18"
+    }
+  ]
+}
+```
+
+---
+
+## Common Validation Patterns
+
+### Optional Fields
+
+```typescript
+const UpdateUserSchema = z.object({
+  name: z.string().min(2).optional(),
+  email: z.string().email().optional(),
+  bio: z.string().max(500).optional()
+});
+
+// Or use .partial() to make all fields optional
+const UpdateUserSchema2 = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  bio: z.string().max(500)
+}).partial();
+```
+
+### Default Values
+
+```typescript
+const CreatePostSchema = z.object({
+  title: z.string(),
+  content: z.string(),
+  published: z.boolean().default(false),     // ✅ Defaults to false if not provided
+  views: z.number().default(0),
+  tags: z.array(z.string()).default([])
+});
+```
+
+### Transformations
+
+```typescript
+const CreateUserSchema = z.object({
+  email: z.string().email().transform(val => val.toLowerCase()),  // ✅ Auto-lowercase
+  name: z.string().transform(val => val.trim()),                  // ✅ Auto-trim
+  age: z.string().transform(val => parseInt(val, 10))             // ✅ Convert to number
+});
+```
+
+### Custom Refinements
+
+```typescript
+const CreateUserSchema = z.object({
+  password: z.string().min(8),
+  confirmPassword: z.string()
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"]
+});
+```
+
+### Conditional Validation
+
+```typescript
+const CreateOrderSchema = z.object({
+  items: z.array(z.object({
+    productId: z.string(),
+    quantity: z.number().min(1)
+  })),
+  paymentMethod: z.enum(['credit_card', 'paypal', 'bank_transfer']),
+  creditCard: z.object({
+    number: z.string(),
+    cvv: z.string(),
+    expiryDate: z.string()
+  }).optional()
+}).refine(
+  data => {
+    // Require credit card details if payment method is credit card
+    if (data.paymentMethod === 'credit_card') {
+      return !!data.creditCard;
+    }
+    return true;
+  },
+  {
+    message: "Credit card details are required for credit card payments",
+    path: ["creditCard"]
+  }
+);
+```
+
+---
+
+## Combining Body and Query Validation
+
+You can validate both at the same time:
+
+```typescript
+const CreateUserSchema = z.object({
+  name: z.string(),
+  email: z.string().email()
+});
+
+const InviteQuerySchema = z.object({
+  inviteCode: z.string().length(8)
+});
+
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    createWithInvite: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: CreateUserSchema,      // ✅ Validates body
+      query: InviteQuerySchema,    // ✅ Validates query
+      handler: async ({ request, response }) => {
+        // ✅ Both request.body and request.query are typed and validated
+        const { name, email } = request.body;
+        const { inviteCode } = request.query;
+        
+        // Verify invite code
+        const invite = await db.invites.findUnique({
+          where: { code: inviteCode }
+        });
+        
+        if (!invite) {
+          return response.badRequest({ message: 'Invalid invite code' });
+        }
+        
+        // Create user
+        const user = await db.users.create({ data: { name, email } });
+        return response.created({ user });
+      }
+    })
+  }
+});
+
+// Usage: POST /users?inviteCode=ABC12345
+// Body: { "name": "John", "email": "john@example.com" }
+```
+
+---
+
+## Using Valibot
+
+Valibot is a lightweight alternative to Zod with similar API:
+
+```typescript
+import * as v from 'valibot';
+
+const CreateUserSchema = v.object({
+  name: v.pipe(v.string(), v.minLength(2)),
+  email: v.pipe(v.string(), v.email()),
+  age: v.pipe(v.number(), v.integer(), v.minValue(18))
+});
+
+const userController = igniter.controller({
+  path: '/users',
+  actions: {
+    create: igniter.mutation({
+      path: '/',
+      method: 'POST',
+      body: CreateUserSchema,  // ✅ Works the same as Zod!
+      handler: async ({ request, response }) => {
+        // ✅ request.body is fully typed
+        const { name, email, age } = request.body;
+      }
+    })
+  }
+});
+```
+
+---
+
+## Schema Reusability
+
+### Extract Common Schemas
+
+```typescript
+// schemas/user.schema.ts
+export const EmailSchema = z.string().email();
+export const PasswordSchema = z.string().min(8).max(100);
+export const NameSchema = z.string().min(2).max(50);
+
+export const UserSchema = z.object({
+  name: NameSchema,
+  email: EmailSchema,
+  password: PasswordSchema
+});
+
+export const CreateUserSchema = UserSchema;
+export const UpdateUserSchema = UserSchema.partial();
+export const LoginSchema = UserSchema.pick({ email: true, password: true });
+```
+
+### Compose Schemas
+
+```typescript
+const AddressSchema = z.object({
+  street: z.string(),
+  city: z.string(),
+  state: z.string(),
+  zip: z.string()
+});
+
+const UserSchema = z.object({
+  name: z.string(),
+  email: z.string().email()
+});
+
+const UserWithAddressSchema = UserSchema.extend({
+  address: AddressSchema
+});
+
+// Or merge
+const UserWithAddressSchema2 = UserSchema.merge(
+  z.object({ address: AddressSchema })
+);
+```
+
+### Inheritance
+
+```typescript
+const BaseEntitySchema = z.object({
+  id: z.string(),
+  createdAt: z.date(),
+  updatedAt: z.date()
+});
+
+const UserSchema = BaseEntitySchema.extend({
+  name: z.string(),
+  email: z.string().email()
+});
+
+const PostSchema = BaseEntitySchema.extend({
+  title: z.string(),
+  content: z.string(),
+  authorId: z.string()
+});
+```
+
+---
+
+## Best Practices
+
+### 1. Use Descriptive Error Messages
+
+```typescript
+const CreateUserSchema = z.object({
+  email: z.string().email('Please provide a valid email address'),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(100, 'Password must not exceed 100 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+  age: z.number()
+    .int('Age must be a whole number')
+    .min(18, 'You must be at least 18 years old')
+    .max(120, 'Age seems unrealistic')
+});
+```
+
+### 2. Extract Schemas into Separate Files
+
+```typescript
+// ✅ Good - Organized and reusable
+// schemas/user.schema.ts
+export const CreateUserSchema = z.object({ /* ... */ });
+export const UpdateUserSchema = z.object({ /* ... */ });
+
+// features/users/user.controller.ts
+import { CreateUserSchema, UpdateUserSchema } from '@/schemas/user.schema';
+```
+
+### 3. Use z.coerce for URL Parameters
+
+```typescript
+// ✅ Good - Auto-converts strings to numbers
+const PaginationSchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20)
+});
+
+// ❌ Bad - Will fail because URL params are strings
+const PaginationSchema = z.object({
+  page: z.number().min(1).default(1),  // ❌ "1" is not a number!
+  limit: z.number().min(1).max(100).default(20)
+});
+```
+
+### 4. Validate Early
+
+```typescript
+// ✅ Good - Validation happens before handler
+const action = igniter.mutation({
+  body: CreateUserSchema,
+  handler: async ({ request }) => {
+    // request.body is already validated
+  }
+});
+
+// ❌ Bad - Manual validation in handler
+const action = igniter.mutation({
+  handler: async ({ request }) => {
+    const result = CreateUserSchema.safeParse(request.body);
+    if (!result.success) {
+      // Handle errors manually...
+    }
+  }
+});
+```
+
+---
+
+## Advanced Validation
+
+### Async Refinements
+
+```typescript
+const CreateUserSchema = z.object({
+  email: z.string().email()
+}).refine(
+  async (data) => {
+    // Check if email already exists
+    const existing = await db.users.findUnique({
+      where: { email: data.email }
+    });
+    return !existing;
+  },
+  {
+    message: "Email already in use",
+    path: ["email"]
+  }
+);
+```
+
+### Custom Validators
+
+```typescript
+const isValidCreditCard = (cardNumber: string) => {
+  // Luhn algorithm
+  return /* validation logic */;
+};
+
+const PaymentSchema = z.object({
+  cardNumber: z.string().refine(isValidCreditCard, {
+    message: "Invalid credit card number"
+  }),
+  cvv: z.string().length(3).regex(/^\d{3}$/, "CVV must be 3 digits"),
+  expiryDate: z.string().regex(/^\d{2}\/\d{2}$/, "Format: MM/YY")
+});
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Actions" href="/docs/actions">
+    Use validation in queries and mutations
+  </Card>
+  
+  <Card title="Error Handling" href="/docs/error-handling">
+    Handle validation errors gracefully
+  </Card>
+  
+  <Card title="Response Types" href="/docs/response-types">
+    Return proper error responses
+  </Card>
+  
+  <Card title="Testing" href="/docs/testing">
+    Test validation logic
+  </Card>
+</Cards>

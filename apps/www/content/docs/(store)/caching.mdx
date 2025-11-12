@@ -1,0 +1,459 @@
+---
+title: Caching
+description: Learn how to use the Store for high-performance caching. Store and retrieve data, manage TTL, check key existence, and implement cache patterns.
+---
+
+## Overview
+
+Caching is one of the primary use cases for the Store adapter. It allows you to store frequently accessed data in Redis, dramatically improving response times and reducing load on your database or external APIs.
+
+The Store adapter automatically handles JSON serialization and deserialization, so you can cache complex objects without manual conversion.
+
+---
+
+## Basic Operations
+
+### Storing Values
+
+Use `set()` to store values in the cache:
+
+```typescript
+handler: async ({ context }) => {
+  // Store a simple value
+  await context.store.set('user:123', { name: 'John Doe', email: 'john@example.com' });
+  
+  // Store with TTL (time-to-live) in seconds
+  await context.store.set('user:123', userData, { ttl: 3600 }); // Expires in 1 hour
+  
+  return response.success({ message: 'User cached' });
+}
+```
+
+### Retrieving Values
+
+Use `get<T>()` to retrieve cached values with automatic deserialization:
+
+```typescript
+handler: async ({ context, response }) => {
+  // Get with type inference
+  const user = await context.store.get<User>('user:123');
+  
+  if (user) {
+    return response.success({ user, source: 'cache' });
+  }
+  
+  // Fetch from database if not cached
+  const userData = await context.db.user.findUnique({ where: { id: '123' } });
+  
+  // Cache for future requests
+  await context.store.set('user:123', userData, { ttl: 3600 });
+  
+  return response.success({ user: userData, source: 'database' });
+}
+```
+
+### Checking Key Existence
+
+Use `has()` to check if a key exists without retrieving its value:
+
+```typescript
+handler: async ({ context }) => {
+  const exists = await context.store.has('user:123');
+  
+  if (!exists) {
+    // Key doesn't exist, fetch and cache
+    const user = await fetchUser();
+    await context.store.set('user:123', user, { ttl: 3600 });
+  }
+}
+```
+
+### Deleting Keys
+
+Use `delete()` to remove cached entries:
+
+```typescript
+handler: async ({ context }) => {
+  // Delete a single key
+  await context.store.delete('user:123');
+  
+  // Delete after updating data
+  await context.db.user.update({ where: { id: '123' }, data: newData });
+  await context.store.delete('user:123'); // Invalidate cache
+}
+```
+
+---
+
+## Cache Patterns
+
+### Cache-Aside Pattern
+
+The most common caching pattern. Check cache first, then fetch from source if needed:
+
+```typescript
+const getUser = async (id: string, context: AppContext) => {
+  // 1. Check cache
+  const cached = await context.store.get<User>(`user:${id}`);
+  if (cached) {
+    return cached;
+  }
+  
+  // 2. Fetch from database
+  const user = await context.db.user.findUnique({ where: { id } });
+  if (!user) {
+    return null;
+  }
+  
+  // 3. Store in cache
+  await context.store.set(`user:${id}`, user, { ttl: 3600 });
+  
+  return user;
+};
+```
+
+### Write-Through Pattern
+
+Write to both cache and database simultaneously:
+
+```typescript
+const updateUser = async (id: string, data: Partial<User>, context: AppContext) => {
+  // Update database
+  const user = await context.db.user.update({
+    where: { id },
+    data,
+  });
+  
+  // Update cache
+  await context.store.set(`user:${id}`, user, { ttl: 3600 });
+  
+  return user;
+};
+```
+
+### Write-Behind Pattern
+
+Write to cache immediately, then asynchronously persist to database:
+
+```typescript
+const createUser = async (data: UserInput, context: AppContext) => {
+  // Create user
+  const user = await context.db.user.create({ data });
+  
+  // Cache immediately
+  await context.store.set(`user:${user.id}`, user, { ttl: 3600 });
+  
+  // Async: Schedule background sync (if needed)
+  await igniter.jobs.users.schedule({
+    task: 'syncToSecondary',
+    input: { userId: user.id },
+  });
+  
+  return user;
+};
+```
+
+---
+
+## TTL Management
+
+### Setting TTL on Set
+
+Set expiration time when storing values:
+
+```typescript
+// Cache for 1 hour
+await context.store.set('key', value, { ttl: 3600 });
+
+// Cache for 30 minutes
+await context.store.set('key', value, { ttl: 1800 });
+
+// Cache for 1 day
+await context.store.set('key', value, { ttl: 86400 });
+```
+
+### Updating TTL
+
+Use `expire()` to update or set TTL on existing keys:
+
+```typescript
+// Set TTL on existing key
+await context.store.set('user:123', userData);
+await context.store.expire('user:123', 3600); // Extend to 1 hour
+
+// Refresh TTL after access
+const user = await context.store.get<User>('user:123');
+if (user) {
+  await context.store.expire('user:123', 3600); // Refresh expiration
+}
+```
+
+---
+
+## Key Naming Conventions
+
+Use consistent naming patterns for better organization:
+
+```typescript
+// Entity patterns
+`user:${userId}`                    // Single user
+`users:list`                        // List of users
+`users:list:page:${pageNumber}`    // Paginated list
+
+// Feature-specific patterns
+`session:${sessionId}`              // User session
+`rate:limit:${userId}`              // Rate limiting
+`api:response:${endpoint}`          // API response cache
+
+// Scoped patterns
+`tenant:${tenantId}:user:${userId}` // Multi-tenant
+`env:${env}:key:${key}`             // Environment-specific
+```
+
+<Callout type="info" title="Best Practice">
+  Use colons (`:`) to create hierarchical key names. This makes it easier to identify and manage related keys.
+</Callout>
+
+---
+
+## Advanced Caching Strategies
+
+### Cache Warming
+
+Pre-populate cache on application startup:
+
+```typescript
+// On application startup
+const warmCache = async (context: AppContext) => {
+  const popularUsers = await context.db.user.findMany({
+    where: { isPopular: true },
+    take: 100,
+  });
+  
+  await Promise.all(
+    popularUsers.map(user =>
+      context.store.set(`user:${user.id}`, user, { ttl: 3600 })
+    )
+  );
+};
+```
+
+### Cache Invalidation
+
+Invalidate related cache entries when data changes:
+
+```typescript
+const invalidateUserCache = async (userId: string, context: AppContext) => {
+  // Delete specific user cache
+  await context.store.delete(`user:${userId}`);
+  
+  // Delete related caches
+  await context.store.delete('users:list');
+  await context.store.delete(`user:${userId}:posts`);
+  await context.store.delete(`user:${userId}:profile`);
+};
+```
+
+### Conditional Caching
+
+Only cache when conditions are met:
+
+```typescript
+const getExpensiveData = async (params: QueryParams, context: AppContext) => {
+  const cacheKey = `data:${JSON.stringify(params)}`;
+  
+  // Check cache
+  const cached = await context.store.get<Data>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  
+  // Fetch expensive data
+  const data = await expensiveOperation(params);
+  
+  // Only cache successful responses
+  if (data.status === 'success') {
+    await context.store.set(cacheKey, data, { ttl: 300 });
+  }
+  
+  return data;
+};
+```
+
+---
+
+## Data Serialization
+
+The Store adapter automatically handles JSON serialization:
+
+```typescript
+// Complex objects are automatically serialized
+const complexData = {
+  user: {
+    id: '123',
+    name: 'John',
+    metadata: {
+      preferences: ['theme-dark', 'notifications-on'],
+      lastLogin: new Date(),
+    },
+  },
+  nested: {
+    array: [1, 2, 3],
+    map: new Map([['key', 'value']]),
+  },
+};
+
+// Stored as JSON string in Redis
+await context.store.set('complex:data', complexData, { ttl: 3600 });
+
+// Retrieved and automatically parsed
+const retrieved = await context.store.get<typeof complexData>('complex:data');
+```
+
+<Callout type="warn" title="Limitations">
+  Some JavaScript types (like `Date`, `Map`, `Set`) need special handling. Consider serializing them manually or using a library like `superjson` for complex types.
+</Callout>
+
+---
+
+## Error Handling
+
+Handle cache errors gracefully:
+
+```typescript
+const getCachedUser = async (id: string, context: AppContext) => {
+  try {
+    const cached = await context.store.get<User>(`user:${id}`);
+    if (cached) {
+      return cached;
+    }
+  } catch (error) {
+    // Log error but don't fail - fall back to database
+    context.logger.warn('Cache read failed', { error, key: `user:${id}` });
+  }
+  
+  // Fallback to database
+  return await context.db.user.findUnique({ where: { id } });
+};
+```
+
+---
+
+## Performance Tips
+
+### Batch Operations
+
+For multiple keys, consider batching:
+
+```typescript
+// ❌ Slow: Multiple round trips
+const user1 = await context.store.get('user:1');
+const user2 = await context.store.get('user:2');
+const user3 = await context.store.get('user:3');
+
+// ✅ Fast: Use Promise.all (parallel requests)
+const [user1, user2, user3] = await Promise.all([
+  context.store.get('user:1'),
+  context.store.get('user:2'),
+  context.store.get('user:3'),
+]);
+```
+
+### Appropriate TTL Values
+
+Choose TTL based on data volatility:
+
+```typescript
+// Highly volatile data: Short TTL
+await context.store.set('stock:price', price, { ttl: 60 }); // 1 minute
+
+// Moderately volatile: Medium TTL
+await context.store.set('user:profile', profile, { ttl: 3600 }); // 1 hour
+
+// Stable data: Long TTL
+await context.store.set('config:app', config, { ttl: 86400 }); // 1 day
+```
+
+### Memory Considerations
+
+Monitor cache size and implement eviction strategies:
+
+```typescript
+// Use shorter TTLs for large objects
+await context.store.set('large:data', largeData, { ttl: 300 }); // 5 minutes
+
+// Delete old cache entries periodically
+const cleanupOldCache = async () => {
+  // Implementation depends on your key naming pattern
+  // Consider using Redis SCAN for pattern-based deletion
+};
+```
+
+---
+
+## Real-World Examples
+
+### API Response Caching
+
+```typescript
+export const apiController = igniter.controller({
+  path: '/api',
+  actions: {
+    fetchData: igniter.query({
+      handler: async ({ request, context, response }) => {
+        const { endpoint, params } = request.query;
+        const cacheKey = `api:${endpoint}:${JSON.stringify(params)}`;
+        
+        // Check cache
+        const cached = await context.store.get<ApiResponse>(cacheKey);
+        if (cached) {
+          return response.success(cached);
+        }
+        
+        // Fetch from external API
+        const data = await fetchExternalApi(endpoint, params);
+        
+        // Cache successful responses
+        if (data.status === 'success') {
+          await context.store.set(cacheKey, data, { ttl: 600 });
+        }
+        
+        return response.success(data);
+      },
+    }),
+  },
+});
+```
+
+### Session Management
+
+```typescript
+const createSession = async (userId: string, context: AppContext) => {
+  const sessionId = generateSessionId();
+  const sessionData = {
+    userId,
+    createdAt: new Date(),
+    expiresAt: new Date(Date.now() + 86400000), // 24 hours
+  };
+  
+  await context.store.set(`session:${sessionId}`, sessionData, { ttl: 86400 });
+  return sessionId;
+};
+
+const getSession = async (sessionId: string, context: AppContext) => {
+  return await context.store.get<SessionData>(`session:${sessionId}`);
+};
+
+const deleteSession = async (sessionId: string, context: AppContext) => {
+  await context.store.delete(`session:${sessionId}`);
+};
+```
+
+---
+
+## Next Steps
+
+- Learn about [Pub/Sub messaging](/docs/store/pubsub) for event-driven communication
+- Explore [atomic operations](/docs/store/atomic-operations) for counters and expiration
+- Check out [advanced usage patterns](/docs/store/advanced)
+

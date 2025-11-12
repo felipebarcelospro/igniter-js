@@ -1,0 +1,9 @@
+{
+  "title": "Middleware",
+  "pages": [
+    "middleware-basics",
+    "lifecycle-hooks",
+    "common-patterns"
+  ]
+}
+

@@ -24,6 +24,7 @@
 
 export * from './telegram'
 export * from './whatsapp'
+export * from './discord'
 
 /**
  * Namespace-style export for optional ergonomic access:
@@ -35,16 +36,19 @@ export * from './whatsapp'
  *     name: 'DemoBot',
  *     adapters: {
  *       telegram: builtinAdapters.telegram({ token: '...' }),
- *       whatsapp: builtinAdapters.whatsapp({ token: '...', phone: '...' })
+ *       whatsapp: builtinAdapters.whatsapp({ token: '...', phone: '...' }),
+ *       discord: builtinAdapters.discord({ token: '...', applicationId: '...' })
  *     }
  *   })
  */
 import { telegram } from './telegram'
 import { whatsapp } from './whatsapp'
+import { discord } from './discord'
 
 export const builtinAdapters = {
   telegram,
   whatsapp,
+  discord,
 } as const
 
 /**

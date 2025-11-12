@@ -1,0 +1,135 @@
+---
+title: "Bun + React Full-Stack App"
+description: "A full-stack, type-safe application with Bun and React featuring server-side rendering and unified runtime."
+framework: "Bun"
+cover: "/templates/bun-base-template.png"
+demo: "https://github.com/felipebarcelospro/igniter-js/tree/main/apps/starter-bun-react-app"
+repository: "https://github.com/felipebarcelospro/igniter-js/tree/main/apps/starter-bun-react-app"
+stack: ["Bun", "React", "TypeScript", "Redis", "BullMQ", "Tailwind CSS", "SSR"]
+useCases: ["Full-Stack"]
+creator:
+  username: "felipebarcelospro"
+---
+
+## Overview
+
+This template provides a high-performance, full-stack application built with Bun and React, offering a unified runtime and server-side rendering. It's ideal for developers seeking speed, type safety, and a streamlined development experience.
+
+## Features
+
+- ✅ **Full-Stack with Bun**: A single, unified runtime for both server and front-end code.
+- ✅ **Server-Side Rendering (SSR)**: Achieves fast initial page loads and improved SEO.
+- ✅ **Type-Safe API**: Powered by Igniter.js, ensuring end-to-end type safety between your front-end and back-end.
+- ✅ **Feature-Based Architecture**: A scalable project structure that organizes code by business domain.
+- ✅ **Ready-to-Use Services**: Pre-configured examples for:
+  - **Caching**: Integrated with Redis via `@igniter-js/adapter-redis`.
+  - **Background Jobs**: Asynchronous task processing with BullMQ via `@igniter-js/adapter-bullmq`.
+  - **Structured Logging**: Production-ready logging.
+- ✅ **TailwindCSS**: A utility-first CSS framework for rapid UI development.
+- ✅ **Auto-Generated API Client**: A fully-typed client that mirrors your API, providing autocomplete and compile-time error checking.
+
+## Project Structure
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="app" />
+    <Folder name="components" />
+    <Folder name="features">
+      <Folder name="example">
+        <Folder name="controllers" />
+        <Folder name="presentation" />
+      </Folder>
+    </Folder>
+    <Folder name="lib" />
+    <Folder name="services" />
+    <File name="igniter.ts" />
+    <File name="igniter.client.ts" />
+    <File name="igniter.context.ts" />
+    <File name="igniter.router.ts" />
+    <File name="index.tsx" />
+  </Folder>
+</Files>
+
+## Quick Start
+
+<Steps>
+  <Step>
+    ### Clone the Repository
+    ```bash
+    git clone https://github.com/felipebarcelospro/igniter-js.git
+    cd igniter-js/apps/starter-bun-react-app
+    ```
+  </Step>
+  
+  <Step>
+    ### Install Dependencies
+    <Tabs items={['bun', 'npm', 'pnpm', 'yarn']} groupId="package-manager">
+      <Tab value="bun">
+        ```bash
+        bun install
+        ```
+      </Tab>
+      <Tab value="npm">
+        ```bash
+        npm install
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm install
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn install
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step>
+    ### Configure Environment Variables
+    Create a `.env` file in the root of this starter and add your Redis connection URL:
+    ```bash
+    # .env
+    REDIS_URL="redis://127.0.0.1:6379"
+    ```
+  </Step>
+  
+  <Step>
+    ### Run the Development Server
+    ```bash
+    bun run dev
+    ```
+    Your application will be available at `http://localhost:3000`.
+  </Step>
+</Steps>
+
+<Callout type="info">
+  Ensure you have Bun (v1.0 or higher) installed and a running Redis instance.
+</Callout>
+
+## Key Features Explained
+
+### Bun Server (`src/index.tsx`)
+
+The `src/index.tsx` file is the main entry point, using Bun's native `serve` function. It forwards API requests to Igniter.js and serves the React application for client-side routing.
+
+### Igniter.js API (`src/igniter.router.ts`)
+
+Backend API logic is defined using Igniter.js:
+- **Initialization (`src/igniter.ts`)**: Core Igniter instance configured with adapters for store (Redis), jobs (BullMQ), logging, and telemetry.
+- **Router (`src/igniter.router.ts`)**: Defines all API controllers.
+- **Controllers (`src/features/example/controllers/example.controller.ts`)**: Group related API actions (queries and mutations), demonstrating cache interaction and background job scheduling.
+
+### React Front-End (`src/app/`)
+
+The user interface is a standard React application, with `src/app/_app.tsx` as the root component setting up providers, including `IgniterProvider` for the API client.
+
+### Type-Safe Client (`src/igniter.client.ts`)
+
+Igniter.js automatically generates a type-safe client for seamless interaction with your backend from the frontend, providing full type-checking and autocompletion.
+
+## Deployment
+
+This template can be deployed to various platforms that support Bun applications. Follow the quick start guide to get your application running locally, then refer to Bun's deployment documentation for production environments.

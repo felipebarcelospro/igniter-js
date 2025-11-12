@@ -1,0 +1,346 @@
+---
+title: Types
+description: Complete type definitions for the Bots package.
+---
+
+Complete TypeScript type definitions for the Bots package.
+
+---
+
+## Core Types
+
+### `BotContext`
+
+Context object passed to handlers and middleware.
+
+```typescript
+interface BotContext {
+  event: BotEvent
+  provider: string
+  bot: {
+    id: string
+    name: string
+    send: (params: Omit<BotSendParams<any>, 'config'>) => Promise<void>
+  }
+  channel: {
+    id: string
+    name: string
+    isGroup: boolean
+  }
+  message: {
+    content?: BotContent
+    attachments?: BotAttachmentContent[]
+    author: {
+      id: string
+      name: string
+      username: string
+    }
+    isMentioned: boolean
+  }
+}
+```
+
+---
+
+### `BotCommand`
+
+Command definition.
+
+```typescript
+interface BotCommand {
+  name: string
+  aliases: string[]
+  description: string
+  help: string
+  handle: (ctx: BotContext, params: any) => Promise<void>
+}
+```
+
+---
+
+### `Middleware`
+
+Middleware function type.
+
+```typescript
+type Middleware = (
+  ctx: BotContext,
+  next: () => Promise<void>
+) => Promise<void>
+```
+
+---
+
+### `BotEvent`
+
+Event type union.
+
+```typescript
+type BotEvent = 'start' | 'message' | 'error'
+```
+
+---
+
+## Content Types
+
+### `BotContent`
+
+Union of all content types.
+
+```typescript
+type BotContent =
+  | BotTextContent
+  | BotCommandContent
+  | BotImageContent
+  | BotAudioContent
+  | BotDocumentContent
+```
+
+---
+
+### `BotTextContent`
+
+Text message content.
+
+```typescript
+interface BotTextContent {
+  type: 'text'
+  content: string
+  raw: string
+}
+```
+
+---
+
+### `BotCommandContent`
+
+Command message content.
+
+```typescript
+interface BotCommandContent {
+  type: 'command'
+  command: string
+  params: string[]
+  raw: string
+}
+```
+
+---
+
+### `BotImageContent`
+
+Image message content.
+
+```typescript
+interface BotImageContent {
+  type: 'image'
+  content: string
+  file: File
+  caption?: string
+}
+```
+
+---
+
+### `BotDocumentContent`
+
+Document message content.
+
+```typescript
+interface BotDocumentContent {
+  type: 'document'
+  content: string
+  file: File
+}
+```
+
+---
+
+### `BotAudioContent`
+
+Audio message content.
+
+```typescript
+interface BotAudioContent {
+  type: 'audio'
+  content: string
+  file: File
+}
+```
+
+---
+
+### `BotAttachmentContent`
+
+Attachment content.
+
+```typescript
+interface BotAttachmentContent {
+  type: string
+  name: string
+  content: string
+}
+```
+
+---
+
+## Adapter Types
+
+### `IBotAdapter<TConfig>`
+
+Adapter interface.
+
+```typescript
+interface IBotAdapter<TConfig extends ZodObject<any>> {
+  name: string
+  parameters: TConfig
+  init: (params: {
+    config: TypeOf<TConfig>
+    commands: BotCommand[]
+    logger?: BotLogger
+  }) => Promise<void>
+  send: (params: BotSendParams<TConfig> & { logger?: BotLogger }) => Promise<void>
+  handle: (params: BotHandleParams<TConfig> & { logger?: BotLogger }) => Promise<Omit<BotContext, 'bot'> | null>
+}
+```
+
+---
+
+### `BotSendParams<TConfig>`
+
+Parameters for sending messages.
+
+```typescript
+type BotSendParams<TConfig extends Record<string, any>> = {
+  provider: string
+  channel: string
+  content: { type: 'text'; content: string }
+  config: TConfig
+}
+```
+
+---
+
+### `BotHandleParams<TConfig>`
+
+Parameters for handling requests.
+
+```typescript
+type BotHandleParams<TConfig extends Record<string, any>> = {
+  request: Request
+  config: TConfig
+}
+```
+
+---
+
+## Logger Types
+
+### `BotLogger`
+
+Logger interface.
+
+```typescript
+interface BotLogger {
+  debug?: (...args: any[]) => void
+  info?: (...args: any[]) => void
+  warn?: (...args: any[]) => void
+  error?: (...args: any[]) => void
+}
+```
+
+---
+
+## Error Types
+
+### `BotError`
+
+Error class.
+
+```typescript
+class BotError extends Error {
+  constructor(
+    public code: BotErrorCode,
+    message?: string,
+    public meta?: Record<string, unknown>
+  )
+}
+```
+
+---
+
+### `BotErrorCode`
+
+Error code type.
+
+```typescript
+type BotErrorCode =
+  | 'PROVIDER_NOT_FOUND'
+  | 'COMMAND_NOT_FOUND'
+  | 'INVALID_COMMAND_PARAMETERS'
+  | 'ADAPTER_HANDLE_RETURNED_NULL'
+```
+
+---
+
+## Importing Types
+
+Import types from the package:
+
+```typescript
+import type {
+  BotContext,
+  BotCommand,
+  BotContent,
+  Middleware,
+  BotEvent,
+  BotLogger,
+  IBotAdapter
+} from '@igniter-js/bot/types'
+```
+
+---
+
+## Type Guards
+
+Use type guards for type narrowing:
+
+```typescript
+function isTextContent(content: BotContent | undefined): content is BotTextContent {
+  return content?.type === 'text'
+}
+
+if (isTextContent(ctx.message.content)) {
+  // TypeScript knows content is BotTextContent
+  console.log(ctx.message.content.content)
+}
+```
+
+---
+
+## Extending Types
+
+Extend context types for custom data:
+
+```typescript
+interface ExtendedContext extends BotContext {
+  session?: {
+    userId: string
+    data: Record<string, any>
+  }
+}
+
+bot.onPreProcess(async (ctx) => {
+  const session = await loadSession(ctx.message.author.id)
+  ;(ctx as ExtendedContext).session = session
+})
+```
+
+---
+
+## Next Steps
+
+- **[API Reference](/docs/bots/api-reference)** - Complete API documentation
+- **[Getting Started](/docs/bots/installation)** - Setup guide
+- **[Best Practices](/docs/bots/best-practices)** - Production patterns
+

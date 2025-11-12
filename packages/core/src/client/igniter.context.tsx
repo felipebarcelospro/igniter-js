@@ -641,7 +641,7 @@ export function IgniterProvider<TContext extends () => Promise<any> | any>({
  * @throws {IgniterError} Throws an error if the hook is used outside of an IgniterProvider
  */
 export const useIgniterQueryClient = <
-  TRouter extends IgniterRouter<any, any, any, any, any>,
+  TRouter extends Omit<IgniterRouter<any, any, any, any, any>, 'caller'> & { caller: any }
 >() => {
   const context = useContext(IgniterContext) as
     | IgniterContextType<TRouter>

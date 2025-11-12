@@ -1,0 +1,18 @@
+{
+  "title": "Store",
+  "root": true,
+  "pages": [
+    "---Getting Started---",
+    "index",
+    "installation",
+    "---Core Concepts---",
+    "caching",
+    "pubsub",
+    "atomic-operations",
+    "---Advanced---",
+    "advanced",
+    "---API Reference---",
+    "api-reference"
+  ]
+}
+

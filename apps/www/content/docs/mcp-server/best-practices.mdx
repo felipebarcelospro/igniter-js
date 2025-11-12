@@ -1,0 +1,627 @@
+---
+title: Best Practices
+description: Follow these best practices to build secure, performant, and maintainable MCP servers.
+---
+
+## Overview
+
+This guide covers best practices for building production-ready MCP servers with the Igniter.js adapter. Follow these recommendations to ensure security, performance, and maintainability.
+
+---
+
+## Security
+
+### 1. Always Use OAuth for Production
+
+Never expose sensitive APIs without authentication:
+
+```typescript
+// ✅ Good - OAuth enabled
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .withOAuth({
+    issuer: process.env.OAUTH_ISSUER,
+    verifyToken: async ({ bearerToken }) => {
+      return await verifyJWT(bearerToken);
+    }
+  })
+  .build();
+
+// ❌ Bad - No authentication
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  .build();
+```
+
+---
+
+### 2. Filter Sensitive Actions
+
+Only expose actions that should be accessible via MCP:
+
+```typescript
+// ✅ Good - Filter sensitive actions
+tools: {
+  filter: (controller, action, actionConfig) => {
+    // Only expose public actions
+    return actionConfig.tags?.includes('public') || 
+           actionConfig.tags?.includes('mcp-enabled');
+  }
+}
+
+// ❌ Bad - Expose everything
+tools: {
+  autoMap: true, // Exposes all actions including admin endpoints
+}
+```
+
+---
+
+### 3. Sanitize Inputs and Outputs
+
+Remove sensitive data from logs and responses:
+
+```typescript
+// ✅ Good - Sanitize sensitive data
+withEvents({
+  onToolCall: async (toolName, args, context) => {
+    const sanitized = {
+      ...args,
+      password: undefined,
+      token: undefined,
+      secret: undefined,
+    };
+    await logger.log(toolName, sanitized);
+  }
+})
+
+// ❌ Bad - Log everything including secrets
+withEvents({
+  onToolCall: async (toolName, args, context) => {
+    await logger.log(toolName, args); // May include passwords!
+  }
+})
+```
+
+---
+
+### 4. Validate All Inputs
+
+Use Zod schemas to validate tool arguments:
+
+```typescript
+// ✅ Good - Strict validation
+addTool({
+  name: 'createUser',
+  args: {
+    email: z.string().email(),
+    password: z.string().min(8).regex(/[A-Za-z0-9@$!%*#?&]/),
+  },
+  handler: async (args, context) => {
+    // args.email and args.password are validated
+  }
+})
+
+// ❌ Bad - No validation
+addTool({
+  name: 'createUser',
+  args: {},
+  handler: async (args, context) => {
+    // args could be anything!
+  }
+})
+```
+
+---
+
+## Performance
+
+### 1. Monitor Execution Times
+
+Track tool execution performance:
+
+```typescript
+// ✅ Good - Monitor performance
+withEvents({
+  onToolSuccess: async (toolName, result, duration, context) => {
+    await metrics.record('tool_execution', {
+      tool: toolName,
+      duration,
+    });
+    
+    if (duration > 5000) {
+      await alerts.warn(`Slow tool: ${toolName} took ${duration}ms`);
+    }
+  }
+})
+```
+
+---
+
+### 2. Use Efficient Data Formats
+
+Return data in efficient formats:
+
+```typescript
+// ✅ Good - Structured JSON
+handler: async (args, context) => {
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify({
+        success: true,
+        data: result,
+      }, null, 2)
+    }]
+  };
+}
+
+// ❌ Bad - Verbose text
+handler: async (args, context) => {
+  return {
+    content: [{
+      type: 'text',
+      text: `Success! Data: ${JSON.stringify(result)} and more text...`
+    }]
+  };
+}
+```
+
+---
+
+### 3. Implement Rate Limiting
+
+Protect your server from abuse:
+
+```typescript
+// ✅ Good - Rate limiting
+withEvents({
+  onToolCall: async (toolName, args, context) => {
+    const clientId = context.client || 'unknown';
+    const limit = await rateLimiter.check(`mcp:${clientId}`, {
+      limit: 100,
+      window: 60000, // 1 minute
+    });
+    
+    if (limit < 0) {
+      throw new Error('Rate limit exceeded');
+    }
+  }
+})
+```
+
+---
+
+## Error Handling
+
+### 1. Provide Clear Error Messages
+
+Help users understand what went wrong:
+
+```typescript
+// ✅ Good - Clear error messages
+withResponse({
+  onError: async (error, toolName, context) => {
+    return {
+      content: [{
+        type: 'text',
+        text: `An error occurred while executing ${toolName}: ${error.message}. ` +
+              `Please check your inputs and try again.`
+      }],
+      isError: true
+    };
+  }
+})
+
+// ❌ Bad - Generic errors
+withResponse({
+  onError: async (error, toolName, context) => {
+    return {
+      content: [{
+        type: 'text',
+        text: 'Error occurred'
+      }],
+      isError: true
+    };
+  }
+})
+```
+
+---
+
+### 2. Log Errors Properly
+
+Track errors for debugging:
+
+```typescript
+// ✅ Good - Comprehensive error logging
+withEvents({
+  onToolError: async (toolName, error, context) => {
+    await errorTracking.log({
+      tool: toolName,
+      error: error.message,
+      stack: error.stack,
+      args: sanitizeArgs(context.request.body),
+      timestamp: new Date(),
+    });
+  }
+})
+```
+
+---
+
+### 3. Don't Expose Internal Details
+
+Avoid exposing sensitive error details:
+
+```typescript
+// ✅ Good - Hide internal details
+withResponse({
+  onError: async (error, toolName, context) => {
+    // Log full error internally
+    await logger.error('Tool error', { tool: toolName, error });
+    
+    // Return user-friendly message
+    return {
+      content: [{
+        type: 'text',
+        text: `An error occurred. Please try again or contact support.`
+      }],
+      isError: true
+    };
+  }
+})
+
+// ❌ Bad - Expose stack traces
+withResponse({
+  onError: async (error, toolName, context) => {
+    return {
+      content: [{
+        type: 'text',
+        text: error.stack // Exposes internal structure!
+      }],
+      isError: true
+    };
+  }
+})
+```
+
+---
+
+## Tool Design
+
+### 1. Use Descriptive Names
+
+Make tool names clear and self-documenting:
+
+```typescript
+// ✅ Good - Descriptive names
+{
+  name: 'calculateTax',
+  description: 'Calculate sales tax for a given amount',
+}
+
+// ❌ Bad - Unclear names
+{
+  name: 'tax',
+  description: 'Calculate tax',
+}
+```
+
+---
+
+### 2. Provide Clear Descriptions
+
+Help AI agents understand your tools:
+
+```typescript
+// ✅ Good - Clear descriptions
+{
+  name: 'processOrder',
+  description: 'Process a customer order, validate payment, update inventory, and send confirmation email',
+}
+
+// ❌ Bad - Vague descriptions
+{
+  name: 'processOrder',
+  description: 'Process order',
+}
+```
+
+---
+
+### 3. Use Zod Descriptions
+
+Add descriptions to schema fields:
+
+```typescript
+// ✅ Good - Schema descriptions
+args: {
+  amount: z.number().describe('The monetary amount in USD'),
+  taxRate: z.number().min(0).max(1).describe('Tax rate as decimal (0.08 = 8%)'),
+}
+
+// ❌ Bad - No descriptions
+args: {
+  amount: z.number(),
+  taxRate: z.number(),
+}
+```
+
+---
+
+### 4. Keep Tools Focused
+
+Each tool should do one thing well:
+
+```typescript
+// ✅ Good - Focused tools
+addTool({ name: 'getUser', /* ... */ })
+addTool({ name: 'updateUser', /* ... */ })
+addTool({ name: 'deleteUser', /* ... */ })
+
+// ❌ Bad - Multi-purpose tool
+addTool({
+  name: 'manageUser',
+  // Handles get, update, delete all in one
+})
+```
+
+---
+
+## Configuration
+
+### 1. Use Environment Variables
+
+Store configuration in environment variables:
+
+```typescript
+// ✅ Good - Environment variables
+withOAuth({
+  issuer: process.env.OAUTH_ISSUER,
+  verifyToken: async ({ bearerToken }) => {
+    return await verifyJWT(bearerToken, process.env.JWT_SECRET);
+  }
+})
+
+// ❌ Bad - Hardcoded values
+withOAuth({
+  issuer: 'https://auth.example.com',
+  verifyToken: async ({ bearerToken }) => {
+    return await verifyJWT(bearerToken, 'secret-key');
+  }
+})
+```
+
+---
+
+### 2. Consistent Naming Strategy
+
+Use consistent naming across your tools:
+
+```typescript
+// ✅ Good - Consistent format
+tools: {
+  naming: (controller, action) => `${controller}_${action}`,
+}
+
+// ❌ Bad - Inconsistent formats
+tools: {
+  naming: (controller, action) => {
+    if (controller === 'users') return `get${action}`;
+    return `${controller}_${action}`;
+  }
+}
+```
+
+---
+
+### 3. Organize by Feature
+
+Group related tools together:
+
+```typescript
+// ✅ Good - Organized by feature
+const usersController = igniter.controller({
+  path: '/users',
+  actions: {
+    list: igniter.query({ /* ... */ }),
+    getById: igniter.query({ /* ... */ }),
+    create: igniter.mutation({ /* ... */ }),
+  }
+});
+
+// ❌ Bad - Everything mixed
+const allController = igniter.controller({
+  path: '/all',
+  actions: {
+    users: igniter.query({ /* ... */ }),
+    products: igniter.query({ /* ... */ }),
+    orders: igniter.query({ /* ... */ }),
+  }
+});
+```
+
+---
+
+## Monitoring and Observability
+
+### 1. Log All Operations
+
+Track all MCP operations:
+
+```typescript
+// ✅ Good - Comprehensive logging
+withEvents({
+  onRequest: async (request, context) => {
+    await logger.info('MCP request', {
+      url: request.url,
+      method: request.method,
+      timestamp: context.timestamp,
+    });
+  },
+  onToolCall: async (toolName, args, context) => {
+    await logger.info('Tool called', {
+      tool: toolName,
+      args: sanitizeArgs(args),
+    });
+  }
+})
+```
+
+---
+
+### 2. Monitor Performance
+
+Track execution times and success rates:
+
+```typescript
+// ✅ Good - Performance monitoring
+withEvents({
+  onToolSuccess: async (toolName, result, duration, context) => {
+    await metrics.histogram('tool_duration', duration, {
+      tool: toolName,
+    });
+    await metrics.increment('tool_success', {
+      tool: toolName,
+    });
+  },
+  onToolError: async (toolName, error, context) => {
+    await metrics.increment('tool_error', {
+      tool: toolName,
+      error: error.constructor.name,
+    });
+  }
+})
+```
+
+---
+
+### 3. Set Up Alerts
+
+Alert on critical issues:
+
+```typescript
+// ✅ Good - Alerting
+withEvents({
+  onToolError: async (toolName, error, context) => {
+    if (isCriticalTool(toolName)) {
+      await alerts.send({
+        type: 'critical_tool_failure',
+        tool: toolName,
+        error: error.message,
+      });
+    }
+  },
+  onError: async (error, context) => {
+    await alerts.send({
+      type: 'mcp_adapter_error',
+      error: error.message,
+      severity: 'critical',
+    });
+  }
+})
+```
+
+---
+
+## Testing
+
+### 1. Test Tool Handlers
+
+Write unit tests for your tools:
+
+```typescript
+// ✅ Good - Tested handlers
+describe('calculateTax tool', () => {
+  it('calculates tax correctly', async () => {
+    const result = await tool.handler({
+      amount: 100,
+      taxRate: 0.08,
+    }, mockContext);
+    
+    expect(result.content[0].text).toContain('8.00');
+  });
+});
+```
+
+---
+
+### 2. Test Error Cases
+
+Test error handling:
+
+```typescript
+// ✅ Good - Error testing
+describe('calculateTax tool', () => {
+  it('handles invalid inputs', async () => {
+    await expect(
+      tool.handler({ amount: -100, taxRate: 0.08 }, mockContext)
+    ).rejects.toThrow();
+  });
+});
+```
+
+---
+
+## Documentation
+
+### 1. Document Your Tools
+
+Provide clear documentation:
+
+```typescript
+// ✅ Good - Well documented
+addTool({
+  name: 'calculateTax',
+  description: 'Calculate sales tax for a given amount. ' +
+               'The tax rate should be provided as a decimal (e.g., 0.08 for 8%). ' +
+               'Returns the calculated tax amount and total.',
+  args: {
+    amount: z.number().positive().describe('The amount to calculate tax for in USD'),
+    taxRate: z.number().min(0).max(1).describe('Tax rate as decimal (0.08 = 8%)'),
+  },
+  // ...
+})
+```
+
+---
+
+### 2. Keep Instructions Updated
+
+Update instructions as your API evolves:
+
+```typescript
+// ✅ Good - Updated instructions
+withInstructions(
+  "This server provides tools for managing users, products, and orders. " +
+  "Use users.list to get all users, users.create to add new users, " +
+  "products.search to find products, and orders.process to process orders."
+)
+```
+
+---
+
+## Summary
+
+Follow these best practices to build secure, performant, and maintainable MCP servers:
+
+- ✅ Always use OAuth for production
+- ✅ Filter sensitive actions
+- ✅ Sanitize inputs and outputs
+- ✅ Monitor performance and errors
+- ✅ Provide clear error messages
+- ✅ Use descriptive names and descriptions
+- ✅ Keep tools focused and well-documented
+- ✅ Set up comprehensive logging and alerting
+
+---
+
+## Next Steps
+
+- Review [Advanced Configuration](/docs/mcp-server/advanced) for fine-tuning
+- Learn about [Event Handlers](/docs/mcp-server/events) for monitoring
+- Explore [OAuth](/docs/mcp-server/oauth) for security
+

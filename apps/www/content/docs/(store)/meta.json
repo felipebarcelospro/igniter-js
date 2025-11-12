@@ -1,0 +1,13 @@
+{
+  "title": "Store",
+  "pages": [
+    "page",
+    "installation",
+    "caching",
+    "pubsub",
+    "atomic-operations",
+    "advanced",
+    "api-reference"
+  ]
+}
+

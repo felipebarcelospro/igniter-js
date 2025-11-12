@@ -1,120 +1,121 @@
-# @igniter-js/bot (Alpha)
+# @igniter-js/bot
 
-A modern, type‑safe, multi‑platform bot framework for the Igniter.js ecosystem.
-It provides a clean abstraction layer for building chatbot-style integrations with **Telegram**, **WhatsApp** (Cloud API), and future providers—featuring middleware chains, command handling with aliases, logging, strong typing (TypeScript + Zod), and an extensible adapter architecture.
+[![NPM Version](https://img.shields.io/npm/v/@igniter-js/bot.svg)](https://www.npmjs.com/package/@igniter-js/bot)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> Status: **alpha** – Public API may still evolve. Breaking changes may occur to improve DX and internal consistency before the first stable release.
+A modern, type-safe, multi-platform bot framework for the Igniter.js ecosystem. Build sophisticated chatbots for **Telegram**, **WhatsApp**, **Discord**, and other platforms with a clean, fluent API, powerful middleware system, session management, and extensive TypeScript support.
+
+> **Status:** Alpha - API is stabilizing. Breaking changes are minimized but may occur before v1.0.0.
 
 ---
 
 ## Table of Contents
 
-1. [Key Features](#key-features)
-2. [Installation](#installation)
-3. [Quick Start](#quick-start)
-4. [Configuration Overview](#configuration-overview)
-5. [Adapters](#adapters)
-   - [Telegram](#telegram-adapter)
-   - [WhatsApp](#whatsapp-adapter)
-6. [Commands](#commands)
-7. [Mentions & Bot Handle Activation](#mentions--bot-handle-activation)
-8. [Middleware](#middleware)
-9. [Lifecycle Hooks](#lifecycle-hooks)
-10. [Logging](#logging)
-11. [Error Model](#error-model)
-12. [API Reference (Core)](#api-reference-core)
-13. [Types Overview](#types-overview)
-14. [Sending Messages](#sending-messages)
-15. [Adapter Authoring Guide](#adapter-authoring-guide)
-16. [Testing Strategy (Planned)](#testing-strategy-planned)
-17. [Security Considerations](#security-considerations)
-18. [Performance Notes](#performance-notes)
-19. [Roadmap](#roadmap)
-20. [Contributing](#contributing)
-21. [FAQ](#faq)
-22. [License](#license)
+- [Key Features](#key-features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Builder Pattern API](#builder-pattern-api)
+- [Adapters](#adapters)
+- [Commands](#commands)
+- [Session Management](#session-management)
+- [Middlewares](#middlewares)
+- [Plugins](#plugins)
+- [Context Helpers](#context-helpers)
+- [Capabilities System](#capabilities-system)
+- [Examples](#examples)
+- [API Reference](#api-reference)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
 ## Key Features
 
-- 🚀 **Multi-platform**: First-party adapters (Telegram, WhatsApp); more coming soon.
-- 🧩 **Adapter Pattern**: Clean contract for adding new messaging providers.
-- 🧠 **Type Safety**: End-to-end TypeScript with Zod runtime validation.
-- ⚙️ **Middleware Pipeline**: Express-like chain for cross-cutting concerns (auth, metrics, rate limiting).
-- 🗣️ **Command System**: Aliases, help text, structured command events.
-- 🔔 **Mention Activation**: Customizable `handle` (username/keyword) for group contexts.
-- 🪵 **Structured Logging**: Inject your logger, avoid hard-coded consoles.
-- 🧱 **Error Codes & BotError**: Consistent error semantics for automation & observability.
-- 🪶 **Lightweight & Tree-Shakeable**: Pure exports; no hidden side effects.
-- 🔌 **Extensible**: Dynamic runtime registration: adapters, commands, middleware, hooks.
+- 🎯 **Builder Pattern** - Fluent, chainable API inspired by modern frameworks
+- 🚀 **Multi-Platform** - Telegram, WhatsApp, Discord, and more
+- 🧩 **Type-Safe** - Full TypeScript support with end-to-end type inference
+- ⚡ **Zod Validation** - Validate command arguments with Zod schemas
+- 💾 **Session Management** - Stateful conversations with pluggable storage
+- ⚙️ **Middleware Pipeline** - Express-like middleware for cross-cutting concerns
+- 🔌 **Plugin System** - Modular extensions for reusable functionality
+- 🛡️ **Built-in Security** - Rate limiting, authentication, and authorization
+- 📊 **Observability** - Structured logging and analytics support
+- 🎨 **Excellent DX** - Autocomplete, type inference, and helpful error messages
+- 🌳 **Tree-Shakeable** - Zero runtime overhead for unused features
+- 🔄 **Capabilities System** - Adapters declare what they support
 
 ---
 
 ## Installation
 
 ```bash
-npm install @igniter-js/bot
+npm install @igniter-js/bot zod
 # or
-yarn add @igniter-js/bot
+pnpm add @igniter-js/bot zod
 # or
-pnpm add @igniter-js/bot
+yarn add @igniter-js/bot zod
+# or
+bun add @igniter-js/bot zod
 ```
 
-Peer requirements: TypeScript >= 5.x
+**Requirements:**
+- Node.js >= 18
+- TypeScript >= 5.0
+- Zod >= 3.0
+
+### Import Paths
+
+The package provides organized imports for better code organization and tree-shaking:
+
+```typescript
+// Main exports (everything in one import)
+import { IgniterBot, telegram, memoryStore, rateLimitMiddleware } from '@igniter-js/bot'
+
+// Organized imports (recommended for large projects)
+import { telegram, whatsapp, discord } from '@igniter-js/bot/adapters'
+import { rateLimitMiddleware, authMiddleware, loggingMiddleware } from '@igniter-js/bot/middlewares'
+import { analyticsPlugin } from '@igniter-js/bot/plugins'
+import { memoryStore } from '@igniter-js/bot/stores'
+import type { BotContext, BotCommand } from '@igniter-js/bot/types'
+```
+
+**Why use organized imports?**
+- 📦 **Better tree-shaking** - Only import what you need
+- 🗂️ **Clearer code** - Explicit about where things come from
+- 🔍 **Easier to find** - Know exactly which module exports what
+- 🎯 **Better autocomplete** - IDE shows only relevant exports
 
 ---
 
 ## Quick Start
 
-```ts
-import { Bot, telegram } from '@igniter-js/bot'
+Create your first bot in under 2 minutes:
 
-const bot = Bot.create({
-  id: 'demo-bot',
-  name: 'Demo Bot',
-  adapters: {
-    telegram: telegram({
+```typescript
+import { IgniterBot, telegram } from '@igniter-js/bot'
+
+const bot = IgniterBot
+  .create()
+  .withHandle('@mybot')  // ← Your bot's handle (ID and name auto-derived)
+  .addAdapter('telegram', telegram({
       token: process.env.TELEGRAM_TOKEN!,
-      handle: '@demo_bot',               // used for group mention detection
-      webhook: {
-        url: process.env.TELEGRAM_WEBHOOK_URL!,
-        secret: process.env.TELEGRAM_WEBHOOK_SECRET
-      }
-    })
-  },
-  commands: {
-    start: {
+    // handle inherited from global
+  }))
+  .addCommand('start', {
       name: 'start',
       aliases: ['hello'],
-      description: 'Greets the user',
-      help: 'Use /start to receive a welcome message.',
+    description: 'Start the bot',
+    help: 'Use /start to begin',
       async handle(ctx) {
-        await ctx.bot.send({
-          provider: ctx.provider,
-          channel: ctx.channel.id,
-            content: { type: 'text', content: '👋 Welcome, friend!' }
-        })
+      await ctx.reply('👋 Welcome! I am your bot.')
       }
-    }
-  },
-  on: {
-    message: async (ctx) => {
-      if (ctx.message.content?.type === 'text') {
-        console.log('[inbound]', ctx.message.content.raw)
-      }
-    },
-    error: async (ctx) => {
-      // @ts-expect-error error injected internally
-      console.warn('[bot-error]', ctx.error?.code || ctx.error?.message)
-    }
-  },
-  logger: console // minimal, but you can bring pino/winston/etc
-})
+  })
+  .build()
 
+// Initialize the bot (registers webhooks, commands, etc)
 await bot.start()
 
-// Example (Next.js / edge-like handler)
+// Use in Next.js API route
 export async function POST(req: Request) {
   return bot.handle('telegram', req)
 }
@@ -122,384 +123,858 @@ export async function POST(req: Request) {
 
 ---
 
-## Configuration Overview
+## Builder Pattern API
 
-Each adapter defines its own Zod-based configuration schema. Core fields:
+The `IgniterBot` builder provides a fluent API for configuring your bot:
 
-| Field      | Purpose                              |
-|------------|--------------------------------------|
-| `token`    | Provider API token                   |
-| `handle`   | Mention trigger (username/keyword)   |
-| `webhook`  | (Telegram) Webhook URL + secret      |
-| `phone`    | (WhatsApp) Phone number ID           |
+### Core Configuration
 
-**Example (Telegram):**
-```ts
-telegram({
-  token: '123:ABC',
-  handle: '@my_bot',
-  webhook: { url: 'https://example.com/api/telegram', secret: 's3cr3t' }
+```typescript
+const bot = IgniterBot
+  .create()
+  .withHandle('@mybot')              // Recommended: Bot handle (ID/name auto-derived)
+  .withId('custom-id')               // Optional: Override auto-generated ID
+  .withName('Custom Name')           // Optional: Override auto-generated name
+  .withLogger(console)               // Optional: Logger instance
+  .withOptions({                     // Optional: Advanced options
+    timeout: 30000,
+    retries: 3,
+    autoRegisterCommands: true
+  })
+  .withSessionStore(memoryStore())   // Optional: Session storage
+```
+
+**Handle Benefits:**
+- 🎯 One handle for all platforms (DRY principle)
+- 🤖 Auto-generates `id` and `name` from handle
+- 🔄 Each adapter can override if needed
+- 📝 Simpler configuration
+
+### Adding Adapters
+
+```typescript
+// Single adapter (inherits global handle)
+.addAdapter('telegram', telegram({
+  token: '...',
+  // handle: '@custom' ← Optional override
+}))
+
+// Multiple adapters (all inherit global handle)
+.addAdapters({
+  telegram: telegram({ token: '...' }),
+  whatsapp: whatsapp({ token: '...', phone: '...' }),
+  discord: discord({ token: '...', applicationId: '...' })
+})
+
+// Override handle for specific adapter
+.addAdapter('telegram', telegram({
+  token: '...',
+  handle: '@custom_telegram_handle' // ← Platform-specific override
+}))
+```
+
+### Adding Commands
+
+```typescript
+// Single command
+.addCommand('start', {
+  name: 'start',
+  aliases: ['hello'],
+  description: 'Start the bot',
+  help: 'Use /start',
+  async handle(ctx) {
+    await ctx.reply('Hello!')
+  }
+})
+
+// Multiple commands
+.addCommands({
+  start: { ... },
+  help: { ... }
+})
+
+// Command with Zod validation
+.addCommand('ban', {
+  name: 'ban',
+  description: 'Ban a user',
+  args: z.object({
+    userId: z.string(),
+    reason: z.string().optional()
+  }),
+  async handle(ctx, args) {
+    // args is fully typed!
+    await ctx.reply(`Banned ${args.userId}`)
+  }
 })
 ```
 
-**Example (WhatsApp Cloud API):**
-```ts
-whatsapp({
-  token: process.env.WHATSAPP_TOKEN!,
-  phone: process.env.WHATSAPP_PHONE_ID!,
-  handle: 'mybot' // keyword for group mention
+### Adding Middlewares
+
+```typescript
+// Import from main package
+import { rateLimitMiddleware, authMiddleware, loggingMiddleware } from '@igniter-js/bot'
+
+// Or use organized imports (recommended)
+import {
+  rateLimitMiddleware,
+  authMiddleware,
+  loggingMiddleware
+} from '@igniter-js/bot/middlewares'
+
+.addMiddleware(loggingMiddleware({ logCommands: true }))
+.addMiddleware(rateLimitMiddleware({ maxRequests: 10, windowMs: 60000 }))
+.addMiddleware(authMiddleware({ allowedUsers: ['admin_id'] }))
+
+// Or add multiple at once
+.addMiddlewares([
+  loggingMiddleware({ ... }),
+  rateLimitMiddleware({ ... })
+])
+```
+
+### Event Handlers
+
+```typescript
+.onMessage(async (ctx) => {
+  console.log('Message:', ctx.message.content)
 })
+.onError(async (ctx) => {
+  console.error('Error:', ctx.error)
+})
+.onCommand(async (ctx) => {
+  console.log('Command executed')
+})
+.onStart(async () => {
+  console.log('Bot started!')
+})
+```
+
+### Using Plugins
+
+```typescript
+// Import from main package
+import { analyticsPlugin } from '@igniter-js/bot'
+
+// Or use organized imports (recommended)
+import { analyticsPlugin } from '@igniter-js/bot/plugins'
+
+.usePlugin(analyticsPlugin({
+  trackMessages: true,
+  trackCommands: true
+}))
+```
+
+### Building
+
+```typescript
+.build() // Creates immutable bot instance
 ```
 
 ---
 
 ## Adapters
 
-### Telegram Adapter
+### Telegram
 
-Supports:
-- Webhook registration (auto on `start()` if `webhook.url` provided)
-- Command synchronization (`setMyCommands`)
-- Text, photo, document, audio, voice
-- MarkdownV2 escaping
+Full-featured Telegram Bot API adapter with webhook support:
 
-Config fields:
-| Field     | Required | Description |
-|-----------|----------|-------------|
-| `token`   | Yes      | Bot API token |
-| `handle`  | Yes      | `@<username>` used to detect mentions |
-| `webhook.url` | Optional | HTTPS endpoint for updates |
-| `webhook.secret` | Optional | Validates authenticity |
+```typescript
+import { telegram } from '@igniter-js/bot/adapters'
 
-### WhatsApp Adapter
+// Minimal (uses global bot handle)
+.addAdapter('telegram', telegram({
+  token: 'your_bot_token'
+}))
 
-Supports:
-- Cloud API send text
-- Media parsing (image/document/audio)
-- Mention keyword detection in group contexts
-- Manual webhook management (you configure the endpoint at Meta dashboard)
+// With webhook
+.addAdapter('telegram', telegram({
+  token: 'your_bot_token',
+  webhook: {
+    url: 'https://example.com/api/telegram',
+    secret: 'webhook_secret'
+  }
+}))
 
-Config fields:
-| Field    | Required | Description |
-|----------|----------|-------------|
-| `token`  | Yes      | Cloud API token |
-| `phone`  | Yes      | Phone number (ID) |
-| `handle` | Yes      | Keyword to consider a group mention |
+// Override global handle for this platform
+.addAdapter('telegram', telegram({
+  token: 'your_bot_token',
+  handle: '@custom_telegram_bot' // ← Override
+}))
+```
+
+**Capabilities:**
+- ✅ Text, images, videos, audio, documents, stickers
+- ✅ Locations, contacts, polls
+- ✅ Interactive buttons and inline keyboards
+- ✅ Edit and delete messages
+- ✅ Webhooks and long polling
+- ✅ Slash commands
+- **Limits:** 4096 chars, 50MB files, 8 buttons
+
+### WhatsApp
+
+WhatsApp Cloud API adapter:
+
+```typescript
+import { whatsapp } from '@igniter-js/bot/adapters'
+
+// Minimal (uses global bot handle)
+.addAdapter('whatsapp', whatsapp({
+  token: 'your_whatsapp_token',
+  phone: 'phone_number_id'
+}))
+
+// Override global handle for this platform
+.addAdapter('whatsapp', whatsapp({
+  token: 'your_whatsapp_token',
+  phone: 'phone_number_id',
+  handle: 'custom_keyword' // ← Override for WhatsApp-specific keyword
+}))
+```
+
+**Capabilities:**
+- ✅ Text, images, videos, audio, documents
+- ✅ Locations, contacts
+- ✅ Interactive buttons and lists
+- ✅ Message reactions
+- ❌ No edit/delete via API
+- **Limits:** 4096 chars, 100MB files, 3 buttons
+
+### Discord
+
+Discord Interactions API adapter with slash commands support:
+
+```typescript
+import { discord } from '@igniter-js/bot/adapters'
+
+// Minimal (uses global bot handle)
+.addAdapter('discord', discord({
+  token: 'your_discord_token',
+  applicationId: 'your_application_id',
+  publicKey: 'your_public_key' // Optional but recommended for signature verification
+}))
+
+// Override global handle for this platform
+.addAdapter('discord', discord({
+  token: 'your_discord_token',
+  applicationId: 'your_application_id',
+  publicKey: 'your_public_key',
+  handle: '@custom_discord_bot' // ← Override
+}))
+```
+
+**Capabilities:**
+- ✅ Text, images, videos, audio, documents
+- ✅ Interactive buttons and message components
+- ✅ Edit and delete messages
+- ✅ Message reactions
+- ✅ Slash commands (APPLICATION_COMMAND)
+- ✅ Message components (MESSAGE_COMPONENT - button clicks)
+- ✅ Ed25519 signature verification
+- ❌ No stickers, location, contact, or polls via API
+- **Limits:** 2000 chars, 25MB files (100MB for verified bots), 5 buttons per row
+
+### Creating Custom Adapters
+
+```typescript
+import { Bot } from '@igniter-js/bot'
+import { z } from 'zod'
+
+const myAdapter = Bot.adapter({
+  name: 'my-platform',
+  parameters: z.object({
+    token: z.string(),
+    handle: z.string()
+  }),
+  capabilities: {
+    content: { text: true, image: true, ... },
+    actions: { edit: true, delete: false, ... },
+    features: { webhooks: true, ... },
+    limits: { maxMessageLength: 2000, ... }
+  },
+  async init({ config, commands, logger }) {
+    // Initialize (register webhooks, commands, etc)
+  },
+  async send({ channel, content, config, logger }) {
+    // Send message via platform API
+  },
+  async handle({ request, config, logger }) {
+    // Parse webhook and return context
+    return {
+      event: 'message',
+      provider: 'my-platform',
+      channel: { ... },
+      message: { ... }
+    }
+  }
+})
+```
 
 ---
 
 ## Commands
 
-A command is triggered by messages starting with `/` (Telegram style or custom typed message).
-Structure:
+### Basic Command
 
-```ts
-const echo = {
-  name: 'echo',
-  aliases: ['repeat', 'say'],
-  description: 'Repeats your message back',
-  help: 'Usage: /echo <text>',
-  async handle(ctx, params) {
-    await ctx.bot.send({
-      provider: ctx.provider,
-      channel: ctx.channel.id,
-      content: { type: 'text', content: params.join(' ') || '(empty)' }
-    })
+```typescript
+.addCommand('ping', {
+  name: 'ping',
+  aliases: ['pong'],
+  description: 'Check if bot is alive',
+  help: 'Use /ping to test',
+  async handle(ctx) {
+    await ctx.reply('🏓 Pong!')
   }
-}
-```
-
-Register at creation or dynamically:
-```ts
-bot.registerCommand('echo', echo)
-```
-
----
-
-## Mentions & Bot Handle Activation
-
-In group chats:
-- **Telegram**: Message is considered addressing the bot if it contains `@<handle>` or starts with `/`.
-- **WhatsApp**: We treat `handle` as a keyword; if it appears (case-insensitive) in a group message, `isMentioned = true`.
-- In private chats: `isMentioned` defaults to `true`.
-
-Use `ctx.message.isMentioned` inside listeners or middleware to implement mention-gated logic.
-
----
-
-## Middleware
-
-Signature:
-```ts
-type Middleware = (ctx: BotContext, next: () => Promise<void>) => Promise<void>
-```
-
-Example:
-```ts
-const metrics: Middleware = async (ctx, next) => {
-  const t0 = Date.now()
-  await next()
-  console.log('[latency]', ctx.event, Date.now() - t0)
-}
-bot.use(metrics)
-```
-
-Common use cases:
-- Rate limiting
-- Authorization
-- Session loading
-- Telemetry
-- Caching attachments
-
----
-
-## Lifecycle Hooks
-
-```ts
-bot
-  .onPreProcess(async (ctx) => {/* enrich context */})
-  .onPostProcess(async (ctx) => {/* audit / metrics */})
-```
-
-Execution order:
-1. preProcess hooks
-2. middleware chain
-3. event listeners
-4. command execution (if applicable)
-5. postProcess hooks
-
----
-
-## Logging
-
-Inject a logger implementing:
-```ts
-interface BotLogger {
-  debug?: (...a: any[]) => void
-  info?: (...a: any[]) => void
-  warn?: (...a: any[]) => void
-  error?: (...a: any[]) => void
-}
-```
-
-Adapters use `logger?.level?.()` – no console fallback if omitted (silent mode except thrown errors).
-
----
-
-## Error Model
-
-Core emits structured `BotError` instances internally:
-
-| Code                        | Meaning                                  |
-|----------------------------|------------------------------------------|
-| `PROVIDER_NOT_FOUND`       | Adapter key not registered               |
-| `COMMAND_NOT_FOUND`        | Command or alias not present             |
-| `INVALID_COMMAND_PARAMETERS` | Command handler threw / invalid usage |
-| `ADAPTER_HANDLE_RETURNED_NULL` | Update intentionally ignored        |
-
-Listen to errors:
-```ts
-bot.on('error', async (ctx) => {
-  // @ts-expect-error internal injection
-  const err = ctx.error
-  console.error('[bot-error]', err.code, err.message)
 })
 ```
 
----
+### Command with Validation
 
-## API Reference (Core)
-
-### `Bot.create(options)`
-Creates an instance with:
-- `id`, `name`
-- `adapters`: record of adapter instances
-- `middlewares?`
-- `commands?`
-- `on?`: event handlers (`message`, `error`, `start`)
-- `logger?`
-
-### Instance Methods
-
-| Method | Description |
-|--------|-------------|
-| `start()` | Initializes adapters (webhook setup, sync commands). |
-| `handle(provider, request)` | Processes inbound HTTP webhook events. |
-| `send({ provider, channel, content })` | Sends message using adapter. |
-| `use(mw)` | Adds middleware dynamically. |
-| `registerCommand(name, command)` | Adds command at runtime. |
-| `registerAdapter(name, adapter)` | Dynamically adds an adapter. |
-| `on(event, handler)` | Subscribes to an event. |
-| `emit(event, ctx)` | Manually emits an event. |
-| `onPreProcess(hook)` | Adds pre-process hook. |
-| `onPostProcess(hook)` | Adds post-process hook. |
-
----
-
-## Types Overview
-
-Frequently used:
-```ts
-import type {
-  BotContext,
-  BotCommand,
-  BotEvent,
-  BotContent,
-  Middleware
-} from '@igniter-js/bot/types'
-```
-
-Message content union: `BotTextContent | BotCommandContent | BotImageContent | BotAudioContent | BotDocumentContent`
-
----
-
-## Sending Messages
-
-```ts
-await bot.send({
-  provider: 'telegram',
-  channel: '<chat_id>',
-  content: { type: 'text', content: 'Hello world' }
-})
-```
-
-Content currently supports:
-- `text` (outbound)
-- Other types primarily parsed inbound (attachments extracted)
-
-Future: structured replies, interactive elements, attachments sending.
-
----
-
-## Adapter Authoring Guide
-
-Create a new adapter:
-
-```ts
-import { Bot } from '@igniter-js/bot'
+```typescript
 import { z } from 'zod'
 
-const MyAdapterParams = z.object({
-  token: z.string(),
-  handle: z.string().optional()
+.addCommand('remind', {
+  name: 'remind',
+  description: 'Set a reminder',
+  help: 'Use /remind <time> <message>',
+  args: z.object({
+    time: z.number().positive(),
+    message: z.string().min(1)
+  }),
+  async handle(ctx, args) {
+    // args is fully typed!
+    await ctx.reply(`Reminder set for ${args.time} minutes: ${args.message}`)
+  }
 })
+```
 
-export const myAdapter = Bot.adapter({
-  name: 'my-adapter',
-  parameters: MyAdapterParams,
-  async init({ config, commands, logger }) {
-    logger?.info?.('[my-adapter] init')
-  },
-  async send({ channel, content, config, logger }) {
-    logger?.debug?.('[my-adapter] send', { channel })
-    // ... send logic
-  },
-  async handle({ request, config, logger }) {
-    const body = await request.json()
-    if (!body.message) return null
-    return {
-      event: 'message',
-      provider: 'my-adapter',
-      channel: { id: body.channelId, name: body.channelName, isGroup: !!body.isGroup },
-      message: {
-        content: { type: 'text', content: body.message, raw: body.message },
-        author: { id: body.userId, name: body.userName, username: body.userHandle },
-        isMentioned: true
+### Command with Subcommands
+
+```typescript
+.addCommand('config', {
+  name: 'config',
+  description: 'Bot configuration',
+  subcommands: {
+    set: {
+      args: z.object({ key: z.string(), value: z.string() }),
+      async handle(ctx, args) {
+        await ctx.reply(`Set ${args.key} = ${args.value}`)
+  }
+    },
+    get: {
+      args: z.object({ key: z.string() }),
+      async handle(ctx, args) {
+        await ctx.reply(`Value of ${args.key}`)
       }
     }
   }
 })
 ```
 
-Rules:
-1. Do not return `Response` – return context or `null`.
-2. Perform validation (Zod schema).
-3. Use logger instead of console.
-4. Keep side effects inside `init` / functions (no top-level network calls).
+---
+
+## Session Management
+
+Manage stateful conversations across messages:
+
+```typescript
+// Import from main package
+import { memoryStore } from '@igniter-js/bot'
+
+// Or use organized imports (recommended)
+import { memoryStore } from '@igniter-js/bot/stores'
+
+const bot = IgniterBot
+  .create()
+  .withSessionStore(memoryStore()) // or redisStore(), prismaStore()
+  .addCommand('survey', {
+    name: 'survey',
+    async handle(ctx) {
+      const session = ctx.session
+      
+      if (!session.data.step) {
+        session.data.step = 1
+        session.data.answers = {}
+        await ctx.reply('What is your name?')
+        await session.save()
+        return
+      }
+      
+      if (session.data.step === 1) {
+        session.data.answers.name = ctx.message.content?.content
+        session.data.step = 2
+        await ctx.reply('What is your email?')
+        await session.save()
+        return
+      }
+      
+      // Complete survey
+      await ctx.reply('Thank you!')
+      await session.delete()
+    }
+  })
+  .build()
+```
+
+**Session API:**
+- `session.data` - Store arbitrary data
+- `session.save()` - Persist changes
+- `session.delete()` - Remove session
+- `session.update(data)` - Merge partial data
 
 ---
 
-## Testing Strategy (Planned)
+## Middlewares
 
-Planned categories (to be introduced when exiting alpha):
+### Official Middlewares
 
-| Layer | Scope |
-|-------|-------|
-| Unit  | Command handlers, helpers |
-| Adapter | Parsing & send logic (HTTP mocked) |
-| Integration | Middleware + command pipeline |
-| Contract | Type-level assertions (d.ts health) |
+#### Rate Limiting
+
+```typescript
+// Import from main package
+import { rateLimitMiddleware, rateLimitPresets } from '@igniter-js/bot'
+
+// Or use organized imports (recommended)
+import { rateLimitMiddleware, rateLimitPresets } from '@igniter-js/bot/middlewares'
+
+// Custom configuration
+.addMiddleware(rateLimitMiddleware({
+  maxRequests: 10,
+  windowMs: 60000,
+  message: 'Too many requests!',
+  skip: (ctx) => isAdmin(ctx.message.author.id)
+}))
+
+// Or use presets
+.addMiddleware(rateLimitPresets.moderate())
+```
+
+**Presets:** `strict`, `moderate`, `lenient`, `perCommand`
+
+#### Authentication
+
+```typescript
+// Organized imports (recommended)
+import { authMiddleware, authPresets } from '@igniter-js/bot/middlewares'
+
+// Whitelist users
+.addMiddleware(authMiddleware({
+  allowedUsers: ['user1', 'user2'],
+  unauthorizedMessage: 'Access denied'
+}))
+
+// Or use presets
+.addMiddleware(authPresets.adminsOnly(['admin1']))
+.addMiddleware(authPresets.privateOnly())
+.addMiddleware(authPresets.groupsOnly())
+```
+
+#### Logging
+
+```typescript
+// Organized imports (recommended)
+import { loggingMiddleware, loggingPresets } from '@igniter-js/bot/middlewares'
+
+// Custom logging
+.addMiddleware(loggingMiddleware({
+  logMessages: true,
+  logCommands: true,
+  logMetrics: true,
+  includeUserInfo: true
+}))
+
+// Or use presets
+.addMiddleware(loggingPresets.production())
+```
+
+**Presets:** `minimal`, `standard`, `verbose`, `debug`, `production`
+
+### Custom Middleware
+
+```typescript
+const myMiddleware: Middleware = async (ctx, next) => {
+  console.log('Before')
+  await next() // Call next middleware/handler
+  console.log('After')
+}
+
+.addMiddleware(myMiddleware)
+```
 
 ---
 
-## Security Considerations
+## Plugins
 
-| Concern | Recommendation |
-|---------|---------------|
-| Tokens | Never commit; load via env |
-| Webhooks | Use HTTPS + secrets |
-| Markdown (Telegram) | Escape via provided helper |
-| Rate limiting | Implement via middleware |
-| Error leakage | Avoid echoing raw provider errors to users |
+Plugins package commands, middlewares, and hooks into reusable modules:
+
+```typescript
+// Import from main package
+import { analyticsPlugin } from '@igniter-js/bot'
+
+// Or use organized imports (recommended)
+import { analyticsPlugin } from '@igniter-js/bot/plugins'
+
+.usePlugin(analyticsPlugin({
+  trackEvent: async (event, properties) => {
+    await analytics.track(event, properties)
+  },
+  trackMessages: true,
+  trackCommands: true
+}))
+```
+
+The analytics plugin automatically adds a `/stats` command!
+
+### Creating Custom Plugins
+
+```typescript
+import type { BotPlugin } from '@igniter-js/bot'
+
+const myPlugin: BotPlugin = {
+  name: 'my-plugin',
+  version: '1.0.0',
+  description: 'My custom plugin',
+  
+  commands: {
+    custom: {
+      name: 'custom',
+      aliases: [],
+      description: 'Custom command',
+      help: 'Use /custom',
+      async handle(ctx) {
+        await ctx.reply('From plugin!')
+      }
+    }
+  },
+  
+  middlewares: [
+    async (ctx, next) => {
+      console.log('Plugin middleware')
+      await next()
+    }
+  ],
+  
+  hooks: {
+    onStart: async () => console.log('Plugin started'),
+    onMessage: async (ctx) => console.log('Message'),
+    onError: async (ctx) => console.error('Error')
+  }
+}
+
+.usePlugin(myPlugin)
+```
 
 ---
 
-## Performance Notes
+## Context Helpers
 
-- Adapters avoid heavy processing; CPU cost dominated by network I/O.
-- Media fetching is synchronous per request; consider caching large files externally.
-- Middleware chain is linear; keep each middleware efficient.
-- Logging can be the heaviest operation in high-throughput setups—use conditional log levels.
+The `BotContext` includes convenient helper methods:
+
+### Sending Messages
+
+```typescript
+// Simple text reply
+await ctx.reply('Hello!')
+
+// Reply with buttons
+await ctx.replyWithButtons('Choose an option:', [
+  { id: '1', label: 'Option 1', action: 'callback', data: 'opt1' },
+  { id: '2', label: 'Option 2', action: 'callback', data: 'opt2' }
+])
+
+// Reply with image
+await ctx.replyWithImage('https://example.com/image.jpg', 'Caption')
+
+// Reply with document
+await ctx.replyWithDocument(file, 'Document caption')
+```
+
+### Message Actions
+
+```typescript
+// Edit message (if adapter supports)
+await ctx.editMessage?.('message_id', { type: 'text', content: 'Updated!' })
+
+// Delete message (if adapter supports)
+await ctx.deleteMessage?.('message_id')
+
+// React to message (if adapter supports)
+await ctx.react?.('👍')
+```
+
+### Session Access
+
+```typescript
+// Access session
+const step = ctx.session.data.step || 0
+ctx.session.data.step = step + 1
+await ctx.session.save()
+```
+
+---
+
+## Capabilities System
+
+Adapters declare their capabilities, allowing you to check support before using features:
+
+```typescript
+.addCommand('feature', {
+  name: 'feature',
+  async handle(ctx) {
+    const adapter = ctx.bot.getAdapter?.(ctx.provider)
+    
+    if (!adapter?.capabilities.content.image) {
+      await ctx.reply('This platform does not support images')
+      return
+    }
+    
+    await ctx.replyWithImage('...')
+  }
+})
+```
+
+**Capability Categories:**
+- **content** - Text, image, video, audio, document, sticker, location, contact, poll, interactive
+- **actions** - Edit, delete, react, pin, thread
+- **features** - Webhooks, long polling, commands, mentions, groups, channels, users, files
+- **limits** - maxMessageLength, maxFileSize, maxButtonsPerMessage
+
+---
+
+## Examples
+
+### Multi-Platform Bot
+
+```typescript
+const bot = IgniterBot
+  .create()
+  .withId('multi-bot')
+  .withName('Multi-Platform Bot')
+  .addAdapters({
+    telegram: telegram({ token: '...', handle: '@bot' }),
+    whatsapp: whatsapp({ token: '...', phone: '...' }),
+    discord: discord({ token: '...', applicationId: '...' })
+})
+  .addCommand('broadcast', {
+    name: 'broadcast',
+    description: 'Send to all platforms',
+    args: z.object({ message: z.string() }),
+    async handle(ctx, args) {
+      const adapters = ctx.bot.getAdapters?.() || {}
+      for (const [key, adapter] of Object.entries(adapters)) {
+        await ctx.bot.send({
+          provider: key,
+          channel: ctx.channel.id,
+          content: { type: 'text', content: args.message }
+        })
+      }
+    }
+  })
+  .build()
+```
+
+### E-commerce Bot
+
+```typescript
+import { memoryStore, rateLimitMiddleware } from '@igniter-js/bot'
+
+const bot = IgniterBot
+  .create()
+  .withId('shop-bot')
+  .withName('Shop Bot')
+  .withSessionStore(memoryStore())
+  .addAdapter('telegram', telegram({ ... }))
+  .addMiddleware(rateLimitMiddleware({ maxRequests: 20 }))
+  .addCommand('catalog', {
+    name: 'catalog',
+    async handle(ctx) {
+      const products = await getProducts()
+      await ctx.replyWithButtons(
+        'Choose a product:',
+        products.map(p => ({
+          id: p.id,
+          label: p.name,
+          action: 'callback',
+          data: `product:${p.id}`
+        }))
+      )
+    }
+  })
+  .addCommand('cart', {
+    name: 'cart',
+    async handle(ctx) {
+      const cart = ctx.session.data.cart || []
+      const total = cart.reduce((s, item) => s + item.price, 0)
+      await ctx.reply(`Cart total: $${total}`)
+    }
+  })
+  .build()
+```
+
+More examples in [`examples/`](./examples/) directory.
+
+---
+
+## API Reference
+
+### IgniterBot Builder
+
+| Method | Description |
+|--------|-------------|
+| `.create()` | Creates new builder instance |
+| `.withId(id)` | Sets bot ID (required) |
+| `.withName(name)` | Sets bot name (required) |
+| `.withLogger(logger)` | Configures logger |
+| `.withSessionStore(store)` | Configures session storage |
+| `.withOptions(options)` | Advanced options |
+| `.addAdapter(key, adapter)` | Adds platform adapter |
+| `.addAdapters(adapters)` | Adds multiple adapters |
+| `.addCommand(name, command)` | Adds command |
+| `.addCommands(commands)` | Adds multiple commands |
+| `.addCommandGroup(prefix, commands)` | Adds prefixed command group |
+| `.addMiddleware(middleware)` | Adds middleware |
+| `.addMiddlewares(middlewares)` | Adds multiple middlewares |
+| `.usePlugin(plugin)` | Loads plugin |
+| `.onMessage(handler)` | Message event listener |
+| `.onError(handler)` | Error event listener |
+| `.onCommand(handler)` | Command event listener |
+| `.onStart(handler)` | Start hook |
+| `.build()` | Builds bot instance |
+
+### Bot Instance
+
+| Method | Description |
+|--------|-------------|
+| `start()` | Initialize bot (webhooks, commands) |
+| `handle(provider, request)` | Handle webhook request |
+| `send(params)` | Send message via adapter |
+| `registerAdapter(key, adapter)` | Add adapter at runtime |
+| `registerCommand(name, command)` | Add command at runtime |
+| `use(middleware)` | Add middleware at runtime |
+| `on(event, handler)` | Subscribe to event |
+| `emit(event, ctx)` | Emit event manually |
+
+### Context Object
+
+| Property/Method | Description |
+|--------|-------------|
+| `event` | Event type (message, error, start) |
+| `provider` | Platform name (telegram, whatsapp) |
+| `channel` | Channel info (id, name, isGroup) |
+| `message` | Message data (content, author, etc) |
+| `session` | Session helper |
+| `bot` | Bot instance methods |
+| `reply(content)` | Send reply |
+| `replyWithButtons(text, buttons)` | Interactive reply |
+| `replyWithImage(image, caption)` | Image reply |
+| `replyWithDocument(file, caption)` | Document reply |
+| `editMessage(id, content)` | Edit message |
+| `deleteMessage(id)` | Delete message |
+| `react(emoji)` | Add reaction |
+
+---
+
+## Testing
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { IgniterBot, telegram } from '@igniter-js/bot'
+
+describe('My Bot', () => {
+  it('should respond to /start', async () => {
+    const bot = IgniterBot
+      .create()
+      .withId('test-bot')
+      .withName('Test')
+      .addAdapter('telegram', telegram({ token: 'test', handle: '@test' }))
+      .addCommand('start', {
+        name: 'start',
+        async handle(ctx) {
+          await ctx.reply('Started!')
+        }
+      })
+      .build()
+    
+    expect(bot).toBeDefined()
+  })
+})
+```
+
+---
+
+## Security Best Practices
+
+1. **Never commit tokens** - Use environment variables
+2. **Use webhook secrets** - Validate incoming requests
+3. **Enable rate limiting** - Prevent abuse
+4. **Implement auth** - Whitelist authorized users
+5. **Validate inputs** - Use Zod schemas
+6. **Handle errors gracefully** - Use `onError` handler
+7. **Sanitize output** - Escape special characters
+8. **Log securely** - Don't log sensitive data
+
+---
+
+## Performance Tips
+
+- Use **memory store** for development, **Redis** for production
+- Enable **rate limiting** to prevent spam
+- Use **logging presets** appropriate for environment
+- **Check capabilities** before attempting unsupported operations
+- **Cache** expensive operations in session data
+- Use **middleware** to avoid repeating logic
+- **Monitor** with analytics plugin
 
 ---
 
 ## Roadmap
 
-| Area | Planned Enhancements |
-|------|----------------------|
-| Adapters | Discord, Slack, Matrix |
-| Media | Outbound file sending helpers |
-| Commands | Subcommand & parameter schema validation |
-| Sessions | Pluggable session store (Redis / Memory) |
-| Telemetry | OpenTelemetry integration |
-| Rate Limiting | Official middleware |
-| Plugin System | `bot.usePlugin()` style ecosystem |
-| Testing | Official test harness utilities |
+| Feature | Status |
+|---------|--------|
+| ✅ Builder Pattern | Completed |
+| ✅ Session Management | Completed |
+| ✅ Plugin System | Completed |
+| ✅ Official Middlewares | Completed |
+| ✅ Capabilities System | Completed |
+| ✅ Discord Adapter | Completed |
+| 📋 Slack Adapter | Planned |
+| 📋 Redis Session Store | Planned |
+| 📋 Prisma Session Store | Planned |
+| 📋 Interactive Components (advanced) | Planned |
+| 📋 Test Utilities | Planned |
+| 📋 CLI for scaffolding | Planned |
 
 ---
 
 ## Contributing
 
-1. Fork the monorepo
-2. Create a branch: `feat/bot-<feature>`
-3. Align with `AGENT.md` guidelines
-4. Run build & typecheck locally
-5. Open a PR with clear description & rationale
+We welcome contributions! Please:
 
-We enforce:
-- Clear naming
-- Strong typing (no `any` unless justified)
-- No unbounded console usage (use logger)
-- Document all public APIs with JSDoc
+1. Fork the repository
+2. Create a feature branch: `feat/bot-<feature>`
+3. Follow the [AGENTS.md](./AGENTS.md) guidelines
+4. Run `npm run build` and `npm run typecheck`
+5. Submit a PR with clear description
 
 ---
 
-## FAQ
+## Documentation
 
-**Q: Why does `handle` return a Response from `bot.handle()` but adapters return context?**
-A: Separation of concerns. Adapters parse; core coordinates and finalizes the HTTP response.
+- 📖 [Full Documentation](https://igniterjs.com/docs/bots)
+- 📘 [Builder Pattern Examples](./BUILDER_EXAMPLE.md)
+- 📗 [Migration Guide](./MIGRATION_GUIDE.md)
+- 📙 [Implementation Summary](./IMPLEMENTATION_SUMMARY.md)
+- 📕 [Agent Manual](./AGENTS.md)
+- 💡 [Code Examples](./examples/)
 
-**Q: How do I ignore irrelevant provider updates?**
-Return `null` from the adapter’s `handle` method.
+---
 
-**Q: Can I mutate `ctx.message.content` in middleware?**
-Yes, but preserve structural integrity (avoid deleting required fields).
+## Support
 
-**Q: How do I trigger custom events?**
-Use `bot.emit('message', ctxLike)`—ensure the shape matches `BotContext`.
-
-**Q: Are retries built-in?**
-Not yet. Wrap `bot.send` externally if you need resilience.
+- **Website:** https://igniterjs.com
+- **Issues:** https://github.com/felipebarcelospro/igniter-js/issues
+- **Discord:** Coming soon
+- **Email:** felipebarcelospro@gmail.com
 
 ---
 
@@ -509,12 +984,8 @@ MIT © Felipe Barcelos & Igniter.js Contributors
 
 ---
 
-## Support & Links
+## Acknowledgments
 
-- Website: https://igniterjs.com
-- Issues: https://github.com/felipebarcelospro/igniter-js/issues
-- Future Community: Discord / Telegram (planned)
+This package is part of the [Igniter.js](https://igniterjs.com) ecosystem - a modern, type-safe HTTP framework for TypeScript applications.
 
----
-
-> This README reflects the **alpha** state. Expect rapid iteration. Feedback and issue reports are highly appreciated.
+Built with ❤️ for developers who love type safety and excellent DX.

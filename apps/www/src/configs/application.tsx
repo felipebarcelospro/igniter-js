@@ -5,9 +5,9 @@ export const config: Config = {
   // General
   projectName: "Igniter.js",
   projectDescription:
-    "Igniter is a modern, type-safe HTTP framework designed to streamline the development of scalable TypeScript applications.",
+    "The first AI-native TypeScript framework with built-in training for 15+ Code Agents (Cursor, Claude Code, Copilot). Zero setup, advanced debugging, and low-entropy architecture. Type-safe RPC, real-time events, background jobs, and framework-agnostic design for Next.js, Bun, Hono, Express.",
   projectTagline:
-    'Build powerful TypeScript applications with end-to-end type safety and developer-first experience',
+    "The First AI-Native Framework: Built for Code Agents, Perfected for Developers",
 
   // Links
   githubUrl: "https://github.com/felipebarcelospro/igniter-js",
@@ -16,60 +16,61 @@ export const config: Config = {
   purchaseUrl: "",
 
   // Developer Info
-  developerName: "Igniter.js Team",
-  developerEmail: "team@nubler.com.br",
-  developerImage: "https://pbs.twimg.com/profile_images/1950303869390770178/skjEZTye_400x400.jpg",
-  developerBio:
-    "I'm a passionate software engineer and entrepreneur from 🇧🇷, dedicated to creating powerful and developer-friendly tools for the modern web ecosystem.",
+  creator: {
+    name: "Felipe Barcelos",
+    url: "https://felipebarcelos.pro",
+    image: "https://avatars.githubusercontent.com/u/30063988?s=400&u=1f456436f25a6db3d808faced776c80f80d70a3a&v=4",
+    role: "Creator of Igniter.js",
+  },
 
   // Features
   features: [
     {
       title: "End-to-End Type Safety",
       description:
-        "Write your API once, get fully-typed clients for React and server communication. Pure TypeScript magic catches bugs early zero config.",
+        "Write your API once, get fully-typed clients automatically. Pure TypeScript magic with zero config.",
       icon: <Wrench className="size-4" />,
     },
     {
       title: "Framework Agnostic",
       description:
-        "Works with any modern framework like Next.js, Express, Hono, and Bun. Built on standard Web APIs for maximum compatibility and flexibility.",
+        "Works with Next.js, Express, Hono, and Bun. Built on Web Standards for maximum compatibility.",
       icon: <Cloud className="size-4" />,
     },
     {
       title: "Real-Time & Jobs",
       description:
-        "Built-in real-time features with Server-Sent Events and job queues. Add live updates and async processing with minimal setup.",
+        "Server-Sent Events and job queues built-in. Add live updates and async processing.",
       icon: <Wifi className="size-4" />,
     },
     {
       title: "Code Agents Ready",
       description:
-        "Built-in training for seamless integration with Claude Code, Gemini CLI, OpenCode, Grok CLI, Cursor, Windsurft and VS Code Copilot.",
+        "Native training for Cursor, Claude Code, Copilot, and 15+ AI assistants. Zero configuration required.",
       icon: <Bot className="size-4" />,
     },
     {
       title: "Powerful Plugin System",
       description:
-        "Extend functionality with self-contained, reusable modules. Plugins can add routes, middleware, context, and type-safe actions across projects.",
+        "Self-contained modules that add routes, middleware, and type-safe actions across projects.",
       icon: <Puzzle className="size-4" />,
     },
     {
       title: "CLI & Developer Tools",
       description:
-        "Interactive CLI with project scaffolding, live dashboard, and development tools. Get started instantly with 'igniter init'.",
+        "Interactive CLI with scaffolding and live dashboard. Start instantly with 'igniter init'.",
       icon: <Terminal className="size-4" />,
     },
     {
       title: "Feature-Based",
       description:
-        "Organize code by business features, not technical layers. High cohesion, low coupling design promotes scalability and maintainability.",
+        "Organize by business features, not layers. High cohesion, low coupling for better scalability.",
       icon: <Layers className="size-4" />,
     },
     {
       title: "Dependency Injection",
       description:
-        "Clean, type-safe dependency injection through the Context system. Inject services like databases and loggers in a testable way.",
+        "Type-safe DI through the Context system. Inject databases and services in a testable way.",
       icon: <Zap className="size-4" />,
     },
   ],

@@ -159,7 +159,7 @@ export const createIgniterRouter = <
      * @example
      * const result = await router.caller.users.getUserById({ id: "123" });
      */
-    caller: createServerCaller(controllers, processor),
+    caller: createServerCaller(controllers, processor) as TRouter['caller'],
 
     /**
      * The registered controllers for this router.

@@ -1,0 +1,548 @@
+---
+title: Advanced Features
+description: Explore advanced job features including lifecycle hooks, retry strategies, webhooks, and conditional execution.
+---
+
+Beyond basic job execution, Igniter.js Jobs provides powerful advanced features for building resilient, observable, and flexible job processing systems.
+
+## Lifecycle Hooks
+
+Hooks allow you to react to job lifecycle events without modifying the job handler itself. They're perfect for logging, metrics, notifications, and cleanup.
+
+### Available Hooks
+
+Jobs support four lifecycle hooks:
+
+- **`onStart`**: Called when job execution begins
+- **`onSuccess`**: Called when job completes successfully
+- **`onFailure`**: Called when job fails
+- **`onComplete`**: Called always (success or failure)
+
+### Using Hooks
+
+Define hooks when registering a job:
+
+```typescript
+const trackedJob = jobs.register({
+  name: 'Tracked Task',
+  input: z.object({ data: z.string() }),
+  handler: async ({ payload }) => {
+    // Main job logic
+    return { processed: true };
+  },
+  
+  onStart: async ({ input, context, job }) => {
+    console.log(`Job ${job.id} started`);
+    await context.analytics.track('job.started', {
+      jobId: job.id,
+      jobName: job.name,
+    });
+  },
+  
+  onSuccess: async ({ input, context, job, result, executionTime }) => {
+    console.log(`Job ${job.id} completed in ${executionTime}ms`);
+    await context.analytics.track('job.completed', {
+      jobId: job.id,
+      executionTime,
+    });
+  },
+  
+  onFailure: async ({ input, context, job, error, isFinalAttempt }) => {
+    console.error(`Job ${job.id} failed:`, error);
+    
+    if (isFinalAttempt) {
+      await context.alerts.send({
+        type: 'critical',
+        message: `Job ${job.name} failed after all retries`,
+      });
+    }
+  },
+  
+  onComplete: async ({ input, context, job, success, result, error }) => {
+    await context.audit.log({
+      jobId: job.id,
+      status: success ? 'success' : 'failure',
+      timestamp: new Date(),
+    });
+  },
+});
+```
+
+### Hook Context
+
+Each hook receives a context object with relevant information:
+
+**onStart Context:**
+```typescript
+{
+  input: any; // Job input payload
+  context: AppContext; // Application context
+  job: {
+    id: string;
+    name: string;
+    attemptsMade: number;
+    createdAt: Date;
+    metadata?: any;
+  };
+  startedAt: Date;
+}
+```
+
+**onSuccess Context:**
+```typescript
+{
+  input: any;
+  context: AppContext;
+  job: JobHookInfo;
+  result: any; // Job handler return value
+  completedAt: Date;
+  executionTime: number; // Milliseconds
+}
+```
+
+**onFailure Context:**
+```typescript
+{
+  input: any;
+  context: AppContext;
+  job: JobHookInfo;
+  error: Error;
+  failedAt: Date;
+  executionTime: number;
+  isFinalAttempt: boolean; // True if no more retries
+}
+```
+
+**onComplete Context:**
+```typescript
+{
+  input: any;
+  context: AppContext;
+  job: JobHookInfo;
+  success: boolean;
+  result?: any; // Only if successful
+  error?: Error; // Only if failed
+  completedAt: Date;
+  executionTime: number;
+}
+```
+
+---
+
+## Retry Strategies
+
+Configure how jobs retry when they fail using different strategies:
+
+### Exponential Backoff
+
+Exponential backoff doubles the delay between retries:
+
+```typescript
+const resilientJob = jobs.register({
+  name: 'Resilient Task',
+  input: z.object({ url: z.string().url() }),
+  handler: async ({ payload }) => {
+    const response = await fetch(payload.url);
+    return response.json();
+  },
+  retryStrategy: 'exponential',
+  backoffMultiplier: 2, // Double delay each retry
+  maxRetryDelay: 60000, // Max 60 seconds
+  attempts: 5, // Retry up to 5 times
+});
+```
+
+Retry timeline:
+- Attempt 1: Immediate
+- Attempt 2: After 2 seconds
+- Attempt 3: After 4 seconds
+- Attempt 4: After 8 seconds
+- Attempt 5: After 16 seconds (capped at 60s)
+
+### Linear Backoff
+
+Fixed delay between retries:
+
+```typescript
+const linearRetryJob = jobs.register({
+  name: 'Linear Retry Task',
+  handler: async () => {
+    // Job logic
+  },
+  retryStrategy: 'linear',
+  delay: 5000, // 5 seconds between retries
+  attempts: 3,
+});
+```
+
+### Fixed Delay
+
+Constant delay specified manually:
+
+```typescript
+const fixedRetryJob = jobs.register({
+  name: 'Fixed Retry Task',
+  handler: async () => {
+    // Job logic
+  },
+  retryStrategy: 'fixed',
+  delay: 10000, // Always wait 10 seconds
+  attempts: 3,
+});
+```
+
+### Custom Retry Delays
+
+Specify exact delays for each retry:
+
+```typescript
+const customRetryJob = jobs.register({
+  name: 'Custom Retry Task',
+  handler: async () => {
+    // Job logic
+  },
+  retryStrategy: {
+    type: 'custom',
+    delays: [1000, 5000, 15000, 60000], // Exact delays in milliseconds
+  },
+  attempts: 4,
+});
+```
+
+### Jitter Factor
+
+Add randomness to retry delays to prevent thundering herd:
+
+```typescript
+const jitteredJob = jobs.register({
+  name: 'Jittered Retry Task',
+  handler: async () => {
+    // Job logic
+  },
+  retryStrategy: 'exponential',
+  jitterFactor: 0.2, // Add ±20% randomness
+  backoffMultiplier: 2,
+});
+```
+
+---
+
+## Webhooks
+
+Receive notifications when jobs complete or fail:
+
+```typescript
+const webhookJob = jobs.register({
+  name: 'Webhook Task',
+  input: z.object({ data: z.string() }),
+  handler: async ({ payload }) => {
+    // Job logic
+    return { processed: true };
+  },
+});
+
+// Schedule with webhook
+await igniter.jobs.tasks.schedule({
+  task: 'webhookTask',
+  input: { data: 'test' },
+  webhookUrl: 'https://api.example.com/webhooks/job-complete',
+});
+```
+
+### Webhook Payload
+
+Webhooks receive POST requests with:
+
+```json
+{
+  "jobId": "12345",
+  "jobName": "tasks.webhookTask",
+  "status": "completed",
+  "result": { "processed": true },
+  "executionTime": 1234,
+  "completedAt": "2024-01-01T12:00:00Z",
+  "tags": ["important"],
+  "timestamp": "2024-01-01T12:00:00Z",
+  "source": "igniter-jobs",
+  "version": "1.0.0"
+}
+```
+
+### Handling Webhook Failures
+
+Webhook failures don't fail the job. They're fire-and-forget notifications:
+
+```typescript
+// Webhook is sent asynchronously
+// If webhook fails, job still succeeds
+await igniter.jobs.tasks.schedule({
+  task: 'webhookTask',
+  input: { data: 'test' },
+  webhookUrl: 'https://api.example.com/webhooks/job-complete',
+});
+```
+
+---
+
+## Conditional Execution
+
+Skip job execution based on conditions:
+
+```typescript
+const conditionalJob = jobs.register({
+  name: 'Conditional Task',
+  input: z.object({ userId: z.string() }),
+  handler: async ({ payload }) => {
+    // Job logic
+  },
+});
+
+// Schedule with condition
+await igniter.jobs.tasks.schedule({
+  task: 'conditionalTask',
+  input: { userId: '123' },
+  condition: async () => {
+    // Only run if user is active
+    const user = await context.db.users.findUnique({
+      where: { id: '123' },
+    });
+    return user?.active === true;
+  },
+});
+```
+
+<Callout type="info" title="Condition Limitations">
+  Conditions are evaluated before job execution. In distributed systems, conditions can't access serialized functions. Use metadata-based conditions instead.
+</Callout>
+
+---
+
+## Skip If Running
+
+Prevent duplicate job executions:
+
+```typescript
+// Skip if job with same ID is already running
+await igniter.jobs.tasks.schedule({
+  task: 'sendNotification',
+  input: { userId: '123' },
+  skipIfRunning: true,
+});
+
+// Use custom job ID for deduplication
+await igniter.jobs.tasks.schedule({
+  task: 'sendNotification',
+  input: { userId: '123' },
+  skipIfRunning: 'user-123-notification', // Custom ID
+});
+```
+
+---
+
+## Priority Boost
+
+Increase job priority dynamically:
+
+```typescript
+await igniter.jobs.tasks.schedule({
+  task: 'processOrder',
+  input: { orderId: '123' },
+  priority: 5, // Base priority
+  priorityBoost: 10, // Add 10 to priority (becomes 15)
+});
+```
+
+---
+
+## Timeout Configuration
+
+Set job timeouts to prevent jobs from running indefinitely:
+
+```typescript
+const timeoutJob = jobs.register({
+  name: 'Timeout Task',
+  handler: async () => {
+    // Long-running task
+  },
+  timeout: 30000, // Fail if takes longer than 30 seconds
+});
+```
+
+### Dynamic Timeout
+
+Set timeout when scheduling:
+
+```typescript
+await igniter.jobs.tasks.schedule({
+  task: 'timeoutTask',
+  input: {},
+  timeout: 60000, // 60 second timeout for this execution
+});
+```
+
+---
+
+## Tags and Metadata
+
+Add tags and metadata for tracking and filtering:
+
+```typescript
+await igniter.jobs.tasks.schedule({
+  task: 'processData',
+  input: { data: 'test' },
+  tags: ['analytics', 'batch-processing', 'important'],
+  metadata: {
+    source: 'scheduled-job',
+    userId: '123',
+    campaignId: 'summer-sale',
+  },
+});
+```
+
+### Using Tags in Search
+
+Filter jobs by tags:
+
+```typescript
+// Note: Tag filtering is implemented via metadata
+// Search for jobs with specific metadata values
+const importantJobs = await igniter.jobs.search({
+  filter: {
+    // Filtering by metadata requires custom search logic
+  },
+});
+```
+
+---
+
+## Combining Advanced Features
+
+Combine multiple advanced features:
+
+```typescript
+const advancedJob = jobs.register({
+  name: 'Advanced Task',
+  input: z.object({ data: z.string() }),
+  handler: async ({ payload }) => {
+    // Job logic
+    return { processed: true };
+  },
+  
+  // Hooks
+  onStart: async ({ job }) => {
+    console.log(`Starting: ${job.id}`);
+  },
+  onSuccess: async ({ job, result }) => {
+    console.log(`Completed: ${job.id}`);
+  },
+  onFailure: async ({ job, error, isFinalAttempt }) => {
+    if (isFinalAttempt) {
+      await sendAlert(`Job failed: ${job.name}`);
+    }
+  },
+  
+  // Retry configuration
+  retryStrategy: 'exponential',
+  backoffMultiplier: 2,
+  maxRetryDelay: 60000,
+  attempts: 5,
+  
+  // Timeout
+  timeout: 30000,
+});
+
+// Schedule with additional options
+await igniter.jobs.tasks.schedule({
+  task: 'advancedTask',
+  input: { data: 'test' },
+  webhookUrl: 'https://api.example.com/webhooks/job-complete',
+  tags: ['important', 'monitored'],
+  skipIfRunning: true,
+  priorityBoost: 5,
+});
+```
+
+---
+
+## Best Practices
+
+1. **Use Hooks for Observability**: Don't mix business logic with hooks
+2. **Choose Appropriate Retry Strategy**: Match retry strategy to failure patterns
+3. **Set Reasonable Timeouts**: Prevent jobs from hanging indefinitely
+4. **Use Tags for Organization**: Tag jobs for better tracking
+5. **Implement Webhook Fallbacks**: Don't rely solely on webhooks for critical notifications
+6. **Monitor Hook Performance**: Hooks shouldn't slow down job execution
+7. **Test Retry Logic**: Verify retry behavior in staging
+
+---
+
+## Common Patterns
+
+### Auditing All Jobs
+
+```typescript
+const auditedJob = jobs.register({
+  name: 'Audited Task',
+  handler: async () => {
+    // Job logic
+  },
+  onComplete: async ({ job, success, result, error }) => {
+    await context.audit.log({
+      jobId: job.id,
+      jobName: job.name,
+      status: success ? 'success' : 'failure',
+      result,
+      error: error?.message,
+      timestamp: new Date(),
+    });
+  },
+});
+```
+
+### Alerting on Failures
+
+```typescript
+const criticalJob = jobs.register({
+  name: 'Critical Task',
+  handler: async () => {
+    // Critical business logic
+  },
+  onFailure: async ({ job, error, isFinalAttempt }) => {
+    if (isFinalAttempt) {
+      await context.alerts.send({
+        level: 'critical',
+        title: `Critical job failed: ${job.name}`,
+        message: error.message,
+        jobId: job.id,
+      });
+    }
+  },
+});
+```
+
+### Metrics Collection
+
+```typescript
+const meteredJob = jobs.register({
+  name: 'Metered Task',
+  handler: async () => {
+    // Job logic
+  },
+  onSuccess: async ({ job, executionTime }) => {
+    await context.metrics.record({
+      name: 'job.execution_time',
+      value: executionTime,
+      tags: { jobName: job.name },
+    });
+  },
+});
+```
+
+---
+
+## Next Steps
+
+- **[Multi-Tenancy](/docs/jobs/multi-tenancy)**: Build multi-tenant applications with queue prefixes
+- **[Workers](/docs/jobs/workers)**: Configure workers to process jobs efficiently
+- **[Search & Monitoring](/docs/jobs/search-and-monitoring)**: Monitor jobs and track performance
+
