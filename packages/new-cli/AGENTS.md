@@ -49,10 +49,23 @@ Maintain and extend the next-generation CLI tool for Igniter.js, ensuring reliab
 ├── src/
 │   ├── commands/         # CLI command definitions
 │   │   ├── generate/     # Code generation commands
+│   │   │   ├── controller/
+│   │   │   │   ├── action.ts
+│   │   │   │   └── index.ts
 │   │   │   ├── docs/
 │   │   │   │   ├── action.ts
 │   │   │   │   └── index.ts
 │   │   │   ├── feature/    # App feature generation (NOT add-ons)
+│   │   │   │   ├── action.ts
+│   │   │   │   ├── feature-fs.ts
+│   │   │   │   ├── index-manager.ts
+│   │   │   │   ├── index.ts
+│   │   │   │   ├── prompts.ts
+│   │   │   │   ├── providers/
+│   │   │   │   │   ├── base.ts
+│   │   │   │   │   └── prisma.ts
+│   │   │   │   └── schema-utils.ts
+│   │   │   ├── procedure/
 │   │   │   │   ├── action.ts
 │   │   │   │   └── index.ts
 │   │   │   ├── schema/
@@ -80,6 +93,7 @@ Maintain and extend the next-generation CLI tool for Igniter.js, ensuring reliab
 │   │   ├── openapi.ts
 │   │   ├── package-manager.ts
 │   │   ├── router-instrospector.ts
+│   │   ├── template-engine.ts
 │   │   └── watcher.ts
 │   ├── index.ts         # Main CLI entry point
 │   ├── registry/        # Registry of available items
@@ -107,6 +121,8 @@ Maintain and extend the next-generation CLI tool for Igniter.js, ensuring reliab
 │   │       ├── nextjs-starter.ts
 │   │       └── tanstack-start-starter.ts
 │   └── utils/           # Utility functions
+│       ├── casing.ts
+│       └── try-catch.ts
 ├── templates/           # Handlebars templates
 │   ├── add-ons/        # Add-on specific templates (NEW)
 │   │   ├── bots/       # Bot framework templates
@@ -138,6 +154,15 @@ Maintain and extend the next-generation CLI tool for Igniter.js, ensuring reliab
 │   │   │   ├── example.interfaces.hbs
 │   │   │   └── example.procedure.hbs
 │   │   └── igniter.schema.hbs
+│   ├── generate/
+│   │   └── feature/
+│   │       ├── empty.controller.hbs
+│   │       ├── empty.interfaces.hbs
+│   │       ├── index.hbs
+│   │       ├── procedure.hbs
+│   │       ├── schema.controller.hbs
+│   │       ├── schema.interfaces.hbs
+│   │       └── schema.procedure.hbs
 │   └── starters/       # Starter-specific templates
 │       ├── igniter.client.hbs
 │       ├── igniter.context.hbs
@@ -172,8 +197,10 @@ igniter [command] [subcommand] [options]
 #### Available Commands
 
 1. **`igniter init`** - Create new Igniter.js projects
-2. **`igniter generate`** - Generate code and documentation
-   - `igniter generate feature` - Scaffold new feature modules
+2. **`igniter generate`** - Generate application building blocks and documentation
+   - `igniter generate feature` - Scaffold new feature modules (controllers, procedures, interfaces)
+   - `igniter generate controller` - Create a controller inside an existing or new feature
+   - `igniter generate procedure` - Create a procedure inside an existing or new feature
    - `igniter generate docs` - Generate OpenAPI specification
    - `igniter generate schema` - Generate client schema
 
@@ -590,14 +617,10 @@ The CLI uses Handlebars.js with custom helpers for template rendering.
 
 ```
 templates/
-├── features/           # Feature-specific templates
-│   ├── store/         # Redis store templates
-│   ├── jobs/          # BullMQ job templates
-│   ├── mcp/           # MCP server templates
-│   ├── logging/       # Logging templates
-│   ├── telemetry/     # Telemetry templates
-│   └── bots/          # Bot framework templates
-├── scaffold/           # General scaffolding templates
+├── add-ons/           # Feature add-on templates (store, jobs, logging, etc.)
+├── generate/
+│   └── feature/       # Controller/procedure/feature scaffolding
+├── scaffold/          # General scaffolding templates
 │   └── example-feature/  # Example feature structure
 └── starters/          # Starter-specific templates
     ├── nextjs/        # Next.js specific templates
@@ -724,13 +747,13 @@ Generates OpenAPI 3.0 specification from router.
 #### Interactive Feature Generation
 
 ```bash
-# Interactive Feature Generation
 igniter generate feature [name]
 ```
 
 Supports:
 - **Manual naming** - `igniter generate feature users`
-- **Schema-based generation** - `igniter generate feature --schema prisma:User`
+- **Prisma-aware CRUD** - If a Prisma schema is present, the CLI offers model selection (`--schema prisma:User`)
+- **Template-driven output** - Uses Handlebars templates under `templates/generate/feature`
 
 #### Feature Structure Generation
 
@@ -741,12 +764,34 @@ src/features/[feature-name]/
 ├── controllers/
 │   └── [feature-name].controller.ts
 ├── procedures/
-│   └── [feature-name].procedure.ts
+│   └── [feature-name].procedure.ts    # CRUD features only
 ├── [feature-name].interfaces.ts
-└── [feature-name].types.ts
+└── index.ts                           # Barrel exports maintained automatically
 ```
 
-**Note:** This `igniter generate feature` command creates **application features** (controllers, procedures) - NOT CLI add-ons.
+Empty features generate a controller + interfaces file (no procedure). Schema-based features generate controller, procedure, interfaces, and update the feature index automatically.
+
+#### Standalone Controller Generation
+
+```bash
+igniter generate controller <name> --feature <feature>
+```
+
+- Works with existing features or creates a new feature structure on the fly
+- Generates controller files via `templates/generate/feature/empty.controller.hbs`
+- Updates `src/features/<feature>/index.ts` to re-export the controller
+
+#### Standalone Procedure Generation
+
+```bash
+igniter generate procedure <name> --feature <feature>
+```
+
+- Creates reusable procedure scaffolds using `templates/generate/feature/procedure.hbs`
+- Ensures feature directories exist and appends exports to the feature index
+- Ideal for adding repository-style helpers without regenerating entire features
+
+**Note:** All code generation commands operate on application features (controllers, procedures, interfaces) — not on CLI add-ons.
 
 ---
 
@@ -804,6 +849,23 @@ class Logger {
 ```
 
 The logger uses `@clack/prompts` for consistent CLI output formatting and `picocolors` for colored text. Each logger instance is associated with a component name for better debugging. Messages include timestamps and component information.
+
+### 7.5. Template Rendering Utilities
+
+Located in `src/core/template-engine.ts`. Provides a thin abstraction over Handlebars:
+
+```typescript
+resolveTemplatePath(...segments: string[]): string
+renderTemplate(path: string, context: Record<string, unknown>): Promise<string>
+renderTemplateToFile(path: string, context: Record<string, unknown>, output: string): Promise<void>
+```
+
+Key features:
+
+- Automatically registers custom Handlebars helpers on first use
+- Searches multiple candidate directories so templates resolve both in source (`src/templates`) and packaged (`dist/templates`) environments
+- Ensures output directories exist (`mkdirSync` with `{ recursive: true }`) before writing files
+- Used by `generate feature/controller/procedure` to render scaffolding templates safely
 
 ---
 
@@ -868,6 +930,7 @@ The build configuration creates a single ESM bundle with TypeScript declarations
 - **esbuild** - Bundle and compile router files for introspection
 - **handlebars** - Template engine for code generation
 - **js-yaml** - YAML parsing for Docker Compose configuration
+- **@mrleebo/prisma-ast** - Prisma schema parsing for CRUD scaffolding
 - **zod** - Schema validation
 - **zod-to-json-schema** - Schema conversion for OpenAPI generation
 - **execa** - Process execution for package managers and git
@@ -1648,6 +1711,12 @@ Options:
 ```bash
 # Feature generation
 igniter generate feature [name] [--schema <provider:entity>]
+
+# Controller generation
+igniter generate controller <name> --feature <feature>
+
+# Procedure generation
+igniter generate procedure <name> --feature <feature>
 
 # Documentation generation
 igniter generate docs [--router <path>] [--output <dir>]
