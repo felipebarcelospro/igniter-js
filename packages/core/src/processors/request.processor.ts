@@ -720,16 +720,16 @@ export class RequestProcessor<
     if (!action) {
       throw new IgniterError({
         code: "ACTION_NOT_FOUND",
-        message: `Action ${actionKey.toString()} not found`,
+        message: `Action '${String(actionKey)}' not found in controller '${String(controllerKey)}'`,
       });
     }
 
     // Get the base path and URL
     const basePATH =
-      this.config.basePATH || process.env.IGNITER_APP_PATH || "/api/v1";
+      this.config.basePATH || process.env.IGNITER_APP_BASE_PATH || "/api/v1";
     const baseURL =
       this.config.baseURL ||
-      process.env.IGNITER_APP_URL ||
+      process.env.IGNITER_APP_BASE_URL ||
       "http://localhost:3000";
 
     // Construct the URL with parameters

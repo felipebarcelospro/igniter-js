@@ -1,0 +1,88 @@
+{
+  "name": "@igniter-js/storage",
+  "version": "0.1.0",
+  "description": "Type-safe, adapter-based file storage library for Igniter.js with S3 and Google Cloud Storage support",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.js",
+      "require": "./dist/adapters/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "igniter",
+    "igniterjs",
+    "storage",
+    "file-upload",
+    "s3",
+    "google-cloud-storage",
+    "file-storage",
+    "cloud-storage",
+    "typescript"
+  ],
+  "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/felipebarcelospro/igniter-js.git",
+    "directory": "packages/storage"
+  },
+  "bugs": {
+    "url": "https://github.com/felipebarcelospro/igniter-js/issues"
+  },
+  "homepage": "https://igniterjs.com",
+  "dependencies": {
+    "mime-types": "^3.0.2"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "^3.645.0",
+    "@aws-sdk/lib-storage": "^3.645.0",
+    "@google-cloud/storage": "^7.12.1",
+    "@igniter-js/core": "*",
+    "@types/mime-types": "^3.0.1",
+    "@types/node": "^22.7.5",
+    "mime-types": "^3.0.2",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  },
+  "peerDependencies": {
+    "@igniter-js/core": "*"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-s3": {
+      "optional": true
+    },
+    "@aws-sdk/lib-storage": {
+      "optional": true
+    },
+    "@google-cloud/storage": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
