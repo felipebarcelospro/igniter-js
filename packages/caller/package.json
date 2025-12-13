@@ -1,0 +1,70 @@
+{
+  "name": "@igniter-js/caller",
+  "version": "0.1.0",
+  "description": "Type-safe HTTP client for Igniter.js with interceptors, retries, caching, and StandardSchema validation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "AGENTS.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "igniter",
+    "igniterjs",
+    "caller",
+    "http",
+    "http-client",
+    "fetch",
+    "api",
+    "request",
+    "retry",
+    "cache",
+    "typescript",
+    "zod"
+  ],
+  "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/felipebarcelospro/igniter-js.git",
+    "directory": "packages/caller"
+  },
+  "bugs": {
+    "url": "https://github.com/felipebarcelospro/igniter-js/issues"
+  },
+  "homepage": "https://igniterjs.com",
+  "devDependencies": {
+    "@igniter-js/core": "*",
+    "@types/node": "^22.7.5",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4",
+    "zod": "^3.23.8"
+  },
+  "peerDependencies": {
+    "@igniter-js/core": "*",
+    "zod": "^3.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
