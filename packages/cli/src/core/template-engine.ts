@@ -5,7 +5,7 @@ import handlebars from "handlebars";
 import { fileURLToPath } from "url";
 import { registerHandlebarsHelpers } from "./handlebars-helpers";
 
-const __filename = fileURLToPath(import.meta.url);
+const __filename = fileURLToPath(import.meta?.url);
 const __dirname = path.dirname(__filename);
 
 /**

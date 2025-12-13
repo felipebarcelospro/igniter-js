@@ -8,7 +8,8 @@
   "files": [
     "dist",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "AGENTS.md"
   ],
   "exports": {
     ".": {
@@ -59,10 +60,8 @@
     "@types/nodemailer": "^6.4.16",
     "@types/react": "^18.3.12",
     "nodemailer": "^6.9.15",
-    "postmark": "^4.0.5",
     "react": "^18.3.1",
     "resend": "^4.0.1",
-    "sendgrid": "^5.2.3",
     "typescript": "^5.6.3",
     "tsup": "^8.3.0",
     "vitest": "^2.1.4"

@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/cli",
-  "version": "0.4.1",
+  "version": "0.4.92",
   "description": "The next-generation command-line interface for Igniter.js",
   "bin": {
     "igniter": "./dist/index.mjs"
@@ -48,6 +48,7 @@
   "license": "MIT",
   "files": [
     "dist",
-    "templates"
+    "templates",
+    "dist/templates"
   ]
 }

@@ -44,7 +44,7 @@ export function preserveUnion<T>(value: T): T {
 export function conditionalResponse<TSuccess, TError>(
   condition: boolean,
   errorFn: () => TError,
-  successFn: () => TSuccess
+  successFn: () => TSuccess,
 ): TSuccess | TError {
   return condition ? errorFn() : successFn();
 }
@@ -68,12 +68,12 @@ export function conditionalResponse<TSuccess, TError>(
  * }
  */
 export async function parseResponse(
-  response: Response
+  response: Response,
 ): Promise<{ data: any; error: any }> {
   try {
     const data = await response.json();
     if (data && typeof data === "object" && "error" in data && "data" in data) {
-      return data;
+      return data as { data: any; error: any };
     }
 
     return { data, error: null };
@@ -133,51 +133,56 @@ export async function parseResponse(
  * // Result: { data: { users: [...] }, error: null }
  * ```
  */
-export function normalizeResponseData<T>(response: any): { data: T | null; error: any | null } {
+export function normalizeResponseData<T>(response: any): {
+  data: T | null;
+  error: any | null;
+} {
   // Handle null/undefined responses
   if (response === null || response === undefined) {
     return { data: null, error: null };
   }
 
   // Handle non-object responses (primitives, arrays, etc.)
-  if (typeof response !== 'object') {
+  if (typeof response !== "object") {
     return { data: response as T, error: null };
   }
 
   // Check if response has the expected { data, error } structure
-  if ('data' in response && 'error' in response) {
+  if ("data" in response && "error" in response) {
     // Check for double-wrapping: if response.data also has { data, error } structure
-    if (response.data &&
-        typeof response.data === 'object' &&
-        'data' in response.data &&
-        'error' in response.data) {
+    if (
+      response.data &&
+      typeof response.data === "object" &&
+      "data" in response.data &&
+      "error" in response.data
+    ) {
       // Double-wrapped case: return the inner structure
       return {
         data: response.data.data as T,
-        error: response.data.error
+        error: response.data.error,
       };
     }
 
     // Single-wrapped case: extract the data from the envelope
     return {
       data: response.data as T,
-      error: response.error
+      error: response.error,
     };
   }
 
   // Check if response has only 'data' field (partial structure)
-  if ('data' in response && !('error' in response)) {
+  if ("data" in response && !("error" in response)) {
     return {
       data: response.data as T,
-      error: undefined
+      error: undefined,
     };
   }
 
   // Check if response has only 'error' field (partial structure)
-  if ('error' in response && !('data' in response)) {
+  if ("error" in response && !("data" in response)) {
     return {
       data: undefined as T,
-      error: response.error
+      error: response.error,
     };
   }
 

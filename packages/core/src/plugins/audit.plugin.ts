@@ -1,7 +1,10 @@
-import { createIgniterPlugin, createIgniterPluginAction } from "../types/plugin.interface";
+import {
+  createIgniterPlugin,
+  createIgniterPluginAction,
+} from "../types/plugin.interface";
 import { z } from "zod";
-import { IgniterConsoleLogger } from '../services/logger.service';
-import { resolveLogLevel, createLoggerContext } from '../utils/logger';
+import { IgniterConsoleLogger } from "../services/logger.service";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
  * Audit Plugin - Example plugin for testing the plugin system
@@ -20,7 +23,7 @@ type AuditContext = {
   userId?: string;
   sessionId?: string;
   requestId?: string;
-}
+};
 
 export const audit = createIgniterPlugin<AuditContext>({
   name: "audit",
@@ -38,7 +41,7 @@ export const audit = createIgniterPlugin<AuditContext>({
       input: z.object({
         action: z.string(),
         userId: z.string().optional(),
-        metadata: z.record(z.any()).optional(),
+        metadata: z.record(z.string(), z.any()).optional(),
       }),
       handler: async ({ context, input }) => {
         const event: AuditEvent = {
@@ -49,15 +52,15 @@ export const audit = createIgniterPlugin<AuditContext>({
         };
 
         try {
-          const logger = new IgniterConsoleLogger({ 
-            level: resolveLogLevel(), 
-            context: createLoggerContext('AuditPlugin') 
+          const logger = new IgniterConsoleLogger({
+            level: resolveLogLevel(),
+            context: createLoggerContext("AuditPlugin"),
           });
           logger.debug(`Logging event: ${JSON.stringify(event)}`);
         } catch {
           console.log(`[AuditPlugin] Logging event:`, event);
         }
-        
+
         return {
           success: true,
           eventId: crypto.randomUUID(),
@@ -74,20 +77,20 @@ export const audit = createIgniterPlugin<AuditContext>({
           action: z.string(),
           userId: z.string().optional(),
           timestamp: z.date(),
-          metadata: z.record(z.any()).optional(),
+          metadata: z.record(z.string(), z.any()).optional(),
         }),
       }),
       handler: async ({ context, input }) => {
         try {
-          const logger = new IgniterConsoleLogger({ 
-            level: resolveLogLevel(), 
-            context: createLoggerContext('AuditPlugin') 
+          const logger = new IgniterConsoleLogger({
+            level: resolveLogLevel(),
+            context: createLoggerContext("AuditPlugin"),
           });
           logger.debug(`Storing event: ${JSON.stringify(input.event)}`);
         } catch {
           console.log(`[AuditPlugin] Storing event:`, input.event);
         }
-        
+
         return {
           stored: true,
           totalUserLogs: 2, // Mock data
@@ -96,7 +99,7 @@ export const audit = createIgniterPlugin<AuditContext>({
     }),
 
     getUserLogs: createIgniterPluginAction({
-      name: "getUserLogs", 
+      name: "getUserLogs",
       description: "Get user audit logs",
       input: z.object({
         userId: z.string(),
@@ -113,7 +116,7 @@ export const audit = createIgniterPlugin<AuditContext>({
             metadata: { ip: "192.168.1.1" },
           },
           {
-            action: "user:profile_update", 
+            action: "user:profile_update",
             userId: input.userId,
             timestamp: new Date(Date.now() - 1800000), // 30 mins ago
             metadata: { fields: ["email", "name"] },
@@ -121,7 +124,10 @@ export const audit = createIgniterPlugin<AuditContext>({
         ];
 
         return {
-          logs: mockLogs.slice(input.offset || 0, (input.offset || 0) + (input.limit || 10)),
+          logs: mockLogs.slice(
+            input.offset || 0,
+            (input.offset || 0) + (input.limit || 10),
+          ),
           total: mockLogs.length,
           userId: input.userId,
         };
@@ -136,7 +142,7 @@ export const audit = createIgniterPlugin<AuditContext>({
       method: "POST" as const,
       body: z.object({
         action: z.string(),
-        metadata: z.record(z.any()).optional(),
+        metadata: z.record(z.string(), z.any()).optional(),
       }),
       handler: async ({ request, context, self }) => {
         const event: AuditEvent = {
@@ -193,7 +199,7 @@ export const audit = createIgniterPlugin<AuditContext>({
         .optional(),
       handler: async ({ request, context, self }) => {
         const userId = self.context.userId || "anonymous";
-        
+
         // Self-referential: Get user logs to calculate analytics
         const userLogs = await self.actions.getUserLogs({ userId });
 
@@ -235,20 +241,23 @@ export const audit = createIgniterPlugin<AuditContext>({
   hooks: {
     /**
      * Plugin initialization hook.
-     * 
+     *
      * This must be compatible with the generic PluginSelfContext<any, any> type for type-safety.
      * To ensure compatibility, cast `self` to the correct type inside the function body.
      */
     init: async (context, self) => {
       try {
-        const logger = new IgniterConsoleLogger({ 
-          level: resolveLogLevel(), 
-          context: createLoggerContext('AuditPlugin') 
+        const logger = new IgniterConsoleLogger({
+          level: resolveLogLevel(),
+          context: createLoggerContext("AuditPlugin"),
         });
-        logger.debug(`Initialized with context: ${JSON.stringify({
-          userId: self.context.userId,
-          sessionId: self.context.sessionId,
-        })}`);
+
+        logger.debug(
+          `Initialized with context: ${JSON.stringify({
+            userId: self.context.userId,
+            sessionId: self.context.sessionId,
+          })}`,
+        );
       } catch {
         console.log(`[AuditPlugin] Initialized with context:`, {
           userId: self.context.userId,
@@ -326,11 +335,11 @@ export const audit = createIgniterPlugin<AuditContext>({
     resources: [],
     cleanup: async (context) => {
       try {
-        const logger = new IgniterConsoleLogger({ 
-          level: resolveLogLevel(), 
-          context: createLoggerContext('AuditPlugin') 
+        const logger = new IgniterConsoleLogger({
+          level: resolveLogLevel(),
+          context: createLoggerContext("AuditPlugin"),
         });
-        logger.debug('Cleaning up resources');
+        logger.debug("Cleaning up resources");
       } catch {
         console.log("[AuditPlugin] Cleaning up resources");
       }

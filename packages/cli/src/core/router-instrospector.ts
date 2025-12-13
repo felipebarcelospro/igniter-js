@@ -3,6 +3,8 @@ import { build, type BuildFailure } from 'esbuild';
 import { IgniterRouter, IgniterControllerConfig, IgniterAction } from '@igniter-js/core';
 import zodToJsonSchema from 'zod-to-json-schema';
 import { createRequire } from 'module';
+import { nodeExternalsPlugin} from 'esbuild-node-externals';
+import * as p from '@clack/prompts';
 
 export interface IntrospectedRouter {
   controllers: Record<string, IntrospectedController>;
@@ -72,6 +74,7 @@ export class RouterInstrospector {
         format: 'cjs',
         write: false, // Keep the result in memory
         logLevel: 'silent', // We will handle our own logging
+        plugins: [nodeExternalsPlugin()],
         external: [
           '@igniter-js/*',
           '@prisma/*',
@@ -81,13 +84,13 @@ export class RouterInstrospector {
           'bullmq',
           '@opentelemetry/*',
           'chalk',
-          'supports-color'
+          'supports-color',
         ],
       });
 
       const [outputFile] = result.outputFiles;
       if (!outputFile) {
-        throw new Error('esbuild did not produce any output.');
+        throw new RouterLoadError('esbuild did not produce any output.');
       }
 
       const compiledCode = outputFile.text;
@@ -112,7 +115,7 @@ export class RouterInstrospector {
         return router;
       }
 
-      throw new Error('Module was compiled and loaded, but no valid Igniter router export was found.');
+      throw new RouterLoadError('Module was compiled and loaded, but no valid Igniter router export was found.');
     } catch (error: any) {
       if (error && Array.isArray((error as BuildFailure).errors)) {
         const buildFailure = error as BuildFailure;
@@ -120,6 +123,9 @@ export class RouterInstrospector {
         const detailedMessage = `esbuild failed to compile the router file:\n${errorMessages}`;
         throw new RouterLoadError(detailedMessage, error);
       }
+
+      p.log.error(`Error loading router: ${error instanceof Error ? error.message : String(error)}`);
+
       throw new RouterLoadError(`Failed to load router from ${routerPath}`, error);
     }
   }
@@ -134,23 +140,29 @@ export class RouterInstrospector {
     const introspectedControllers: Record<string, IntrospectedController> = {};
     let totalActions = 0;
 
+    
+
     for (const [controllerName, controller] of Object.entries(router.controllers)) {
       const introspectedActions: Record<string, IntrospectedAction> = {};
       const typedController = controller as IgniterControllerConfig<any>;
 
       if (typedController && typedController.actions) {
         for (const [actionName, action] of Object.entries(typedController.actions)) {
-          const typedAction = action as IgniterAction<any, any, any, any, any, any, any, any, any, any>;
+          try {
+            const typedAction = action as IgniterAction<any, any, any, any, any, any, any, any, any, any>;
 
-          introspectedActions[actionName] = {
-            name: actionName,
-            path: typedAction.path,
-            method: typedAction.method,
-            description: typedAction.description,
-            bodySchema: typedAction.body ? zodToJsonSchema(typedAction.body, { target: 'openApi3' }) : undefined,
-            querySchema: typedAction.query ? zodToJsonSchema(typedAction.query, { target: 'openApi3' }) : undefined,
-          };
-          totalActions++;
+            introspectedActions[actionName] = {
+              name: actionName,
+              path: typedAction.path,
+              method: typedAction.method,
+              description: typedAction.description,
+              bodySchema: typedAction.body ? zodToJsonSchema(typedAction.body, { target: 'openApi3' }) : undefined,
+              querySchema: typedAction.query ? zodToJsonSchema(typedAction.query, { target: 'openApi3' }) : undefined,
+            };
+            totalActions++;
+          } catch (err) {
+            throw err;
+          }
         }
       }
 

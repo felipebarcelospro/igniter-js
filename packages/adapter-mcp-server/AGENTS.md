@@ -82,7 +82,78 @@ This is the heart of the adapter.
 -   **Action-to-Tool Mapping:** Each `IgniterAction` (from `igniter.query` or `igniter.mutation`) is converted into an MCP tool. The tool's name is derived from its path in the router, such as `users.list` or `posts.getById`.
 -   **Schema Conversion:** The Zod schemas defined in the `body` and `query` properties of an `IgniterAction` are converted into **JSON Schema**. The JSON Schema standard is what MCP uses to describe the parameters a tool accepts.
 
-### 2.4. The Execution Flow
+### 2.4. Automatic Tool Annotations
+
+The adapter automatically infers MCP tool annotations from HTTP methods using the `inferToolAnnotations` utility in `src/utils/infer-tool-annotations.ts`.
+
+**Annotation Inference Logic:**
+
+```typescript
+// HTTP Method → Annotations
+GET    → { readOnlyHint: true,  destructiveHint: false, idempotentHint: true  }
+POST   → { readOnlyHint: false, destructiveHint: false, idempotentHint: false }
+PUT    → { readOnlyHint: false, destructiveHint: false, idempotentHint: true  }
+DELETE → { readOnlyHint: false, destructiveHint: true,  idempotentHint: true  }
+PATCH  → { readOnlyHint: false, destructiveHint: false, idempotentHint: false }
+```
+
+**Key Functions:**
+- `inferToolAnnotations(method, actionName)` - Main inference function
+- `isReadOnlyMethod(method)` - Check if method is read-only
+- `isDestructiveMethod(method)` - Check if method is destructive
+- `isIdempotentMethod(method)` - Check if method is idempotent
+
+**Note:** `openWorldHint` defaults to `false` since APIs are typically closed systems.
+
+### 2.5. Automatic Path Parameter Extraction
+The adapter automatically extracts path parameters from Igniter.js routes and includes them in the tool schema.
+
+**How it works:**
+1. **Path Parsing:** The adapter builds the full path by combining `controller.path` + `action.path` (e.g., `/users` + `/:id` = `/users/:id`)
+2. **Param Extraction:** Path parameters are extracted using regex from patterns like `:id`, `:userId`, `:postId`
+3. **Schema Generation:** A Zod schema is automatically generated with all params as `z.string()` with descriptive messages
+4. **Description Enhancement:** The tool description is enhanced to include endpoint info and required path parameters
+
+**Example:**
+Given a route `/users/:id`, the adapter generates:
+```typescript
+{
+  name: "users_getById",
+  description: "Get user by ID [GET /users/:id]. Required path parameters: params.id",
+  schema: {
+    params: z.object({
+      id: z.string().describe("Path parameter: id")
+    })
+  }
+}
+```
+
+**Utility Functions (from `src/utils/extract-params-from-path.ts`):**
+- `extractParamNamesFromPath(path)` → `["id", "postId"]`
+- `createParamsSchemaFromPath(path)` → `z.object({ id: z.string(), postId: z.string() })`
+- `buildFullPath(controllerPath, actionPath)` → `/users/:id`
+
+### 2.6. Type-Safe Tool Filtering
+
+The adapter provides a type-safe way to filter which tools are exposed via the `withToolFilter` method.
+
+**Type Inference:**
+```typescript
+// InferToolPaths extracts all valid paths from the router
+type Paths = InferToolPaths<typeof router>;
+// Results in: "users.list" | "users.getById" | "posts.create" | ...
+```
+
+**Filter Modes:**
+- **'include'** (default): Only expose the specified tools
+- **'exclude'**: Expose all tools EXCEPT the specified ones
+
+**Implementation Details:**
+- The `shouldIncludeTool` function in `extract-tools-from-router.ts` handles the filtering
+- Tool paths are matched using exact string comparison: `${controllerName}.${actionName}`
+- The function filter (`options.tools.filter`) is still applied after the path filter
+
+### 2.7. The Execution Flow
 When an AI agent decides to call a tool, the following sequence occurs:
 1.  **Incoming MCP Request:** The adapter's handler receives an HTTP request from the MCP client with a payload indicating the tool to run and its arguments.
 2.  **Tool-to-Action Resolution:** The adapter looks up the requested tool name (e.g., `users.create`) and finds the corresponding `IgniterAction` in its internal map.
@@ -130,7 +201,27 @@ The package has been refactored into a modular structure:
     > **Purpose**: Sanitizes tool names to be MCP-compatible.
     > **Maintenance**: Update if tool naming rules change.
 
+*   **`src/utils/extract-params-from-path.ts`**
+    > **Purpose**: Extracts path parameters from URL patterns and generates Zod schemas.
+    > **Key Functions**:
+    >    - `extractParamNamesFromPath(path)` - Extracts param names from patterns like `/:id`
+    >    - `createParamsSchemaFromPath(path)` - Generates Zod schema for path params
+    >    - `buildFullPath(controllerPath, actionPath)` - Combines controller and action paths
+    > **Maintenance**: Update when changing path parameter extraction or schema generation.
+
+*   **`src/utils/infer-tool-annotations.ts`**
+    > **Purpose**: Infers MCP tool annotations from HTTP methods and action metadata.
+    > **Key Functions**:
+    >    - `inferToolAnnotations(method, actionName)` - Main inference function
+    >    - `isReadOnlyMethod(method)` - Check if method is read-only (GET)
+    >    - `isDestructiveMethod(method)` - Check if method is destructive (DELETE)
+    >    - `isIdempotentMethod(method)` - Check if method is idempotent (GET/PUT/DELETE)
+    > **Maintenance**: Update when adding new annotation types or changing inference logic.
+
 *   **`src/types.ts`**
+    > **Key Types for Tool Filtering**:
+    >    - `InferToolPaths<TRouter>` - Infers all valid "controller.action" paths from router
+    >    - `McpToolFilterMode` - 'include' | 'exclude'
     > **Purpose**: Contains all TypeScript `interface` and `type` definitions.
     > **Key Types**: 
     >    - `McpAdapterOptions` - Configuration for function API

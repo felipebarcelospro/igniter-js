@@ -8,13 +8,5 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   treeshake: true,
-  minify: false,
-  external: [
-    '@igniter-js/core',
-    '@opentelemetry/api',
-    '@opentelemetry/sdk-node',
-    '@opentelemetry/exporter-jaeger',
-    '@opentelemetry/exporter-prometheus',
-    '@opentelemetry/exporter-otlp-http'
-  ]
+  minify: false
 }); 

@@ -1,11 +1,14 @@
 import { IgniterResponseProcessor } from "./response.processor";
-import { IgniterLogLevel, type IgniterLogger, type IgniterProcedure } from "../types";
+import type { IgniterProcedure, IgniterLogger } from "../types";
 import type { ProcessedContext } from "./context-builder.processor";
-import { IgniterConsoleLogger } from "../services/logger.service";
 import type { IgniterProcedureContext } from "../types/procedure.interface";
 import { IgniterCookie } from "../services/cookie.service";
-import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 import type { NextFunction, NextState } from "../types/next.interface";
+import type {
+  IgniterTelemetryProvider,
+  IgniterTelemetrySpan,
+} from "../types/telemetry.interface";
+import { TelemetryManagerProcessor } from "./telemetry-manager.processor";
 
 /**
  * Result of middleware execution pipeline
@@ -20,57 +23,76 @@ export interface MiddlewareExecutionResult {
 
 /**
  * Middleware executor processor for the Igniter Framework.
- * Handles execution of global and action-specific middlewares.
+ * Handles execution of global and action-specific middlewares with telemetry integration.
  */
 export class MiddlewareExecutorProcessor {
-  private static _logger: IgniterLogger;
-
-  private static get logger(): IgniterLogger {
-    if (!this._logger) {
-      this._logger = IgniterConsoleLogger.create({
-        level: resolveLogLevel(),
-        context: createLoggerContext('MiddlewareExecutor'),
-        showTimestamp: true,
-      });
-    }
-    return this._logger;
-  }
-
   /**
    * Executes global middlewares in sequence.
    * Protects core providers from being overwritten.
    *
    * @param context - The processed context
    * @param middlewares - Array of global middlewares to execute
+   * @param logger - Optional logger instance
+   * @param telemetry - Optional telemetry provider for metrics
+   * @param parentSpan - Optional parent span for tracing
    * @returns Promise resolving to execution result
    */
   static async executeGlobal(
     context: ProcessedContext,
-    middlewares: IgniterProcedure<unknown, unknown, unknown>[]
+    middlewares: IgniterProcedure<unknown, unknown, unknown>[],
+    logger?: IgniterLogger,
+    telemetry?: IgniterTelemetryProvider | null,
+    parentSpan?: IgniterTelemetrySpan,
   ): Promise<MiddlewareExecutionResult> {
+    const childLogger = logger?.child("MiddlewareExecutorProcessor");
+
     let updatedContext = { ...context };
 
     if (middlewares.length === 0) {
-      this.logger.debug("Global middleware skipped", { reason: "no middlewares" });
+      childLogger?.debug("Global middleware skipped", {
+        reason: "no middlewares",
+      });
       return { success: true, updatedContext };
     }
 
-    this.logger.debug("Global middleware started", { count: middlewares.length });
+    childLogger?.debug("Global middleware started", {
+      count: middlewares.length,
+    });
 
     for (let i = 0; i < middlewares.length; i++) {
       const middleware = middlewares[i];
-      const middlewareName = middleware.name || 'anonymous';
-      this.logger.debug(
-        "Middleware executing",
-        { middlewareName }
+      const middlewareName = middleware.name || `anonymous_${i}`;
+      const middlewareStartTime = Date.now();
+
+      // Create telemetry span for this middleware
+      const middlewareSpan = TelemetryManagerProcessor.createMiddlewareSpan(
+        telemetry,
+        middlewareName,
+        "global",
+        parentSpan,
+        logger,
       );
+
+      childLogger?.debug("Middleware executing", { middlewareName });
 
       // Validate middleware has handler
       if (!middleware.handler || typeof middleware.handler !== "function") {
-        this.logger.warn(
-          "Middleware handler invalid",
-          { middlewareName, reason: "missing or not a function" }
+        childLogger?.warn("Middleware handler invalid", {
+          component: "MiddlewareExecutor",
+          middlewareName,
+          reason: "missing or not a function",
+        });
+
+        // Finish span - invalid handler
+        const duration = Date.now() - middlewareStartTime;
+        TelemetryManagerProcessor.finishMiddlewareSpan(
+          middlewareSpan,
+          "error",
+          duration,
+          new Error("Invalid middleware handler"),
+          logger,
         );
+
         continue;
       }
 
@@ -83,109 +105,284 @@ export class MiddlewareExecutorProcessor {
           skipRemaining: false,
           metadata: {},
           skip: false,
-          stop: false
+          stop: false,
         };
 
         // Build proper procedure context with next function
-        const procedureContext = this.buildProcedureContext(updatedContext, nextState);
+        const procedureContext = this.buildProcedureContext(
+          updatedContext,
+          nextState,
+          logger,
+        );
 
         // @ts-expect-error - Its correct
         const result = await middleware.handler(procedureContext);
 
+        const duration = Date.now() - middlewareStartTime;
+
         // Handle next() function calls
         if (nextState.called) {
           if (nextState.error) {
-            this.logger.error(
-              "Middleware next() called with error",
-              { middlewareName, error: nextState.error }
+            childLogger?.error("Middleware next() called with error", {
+              component: "MiddlewareExecutor",
+              middlewareName,
+              error: nextState.error.message,
+            });
+
+            // Finish span with error
+            TelemetryManagerProcessor.finishMiddlewareSpan(
+              middlewareSpan,
+              "error",
+              duration,
+              nextState.error,
+              logger,
             );
+
+            // Record metrics
+            TelemetryManagerProcessor.recordMiddlewareExecution(
+              telemetry,
+              middlewareName,
+              "global",
+              duration,
+              "error",
+              logger,
+            );
+
             return {
               success: false,
               error: nextState.error,
-              updatedContext
+              updatedContext,
             };
           }
 
           if (nextState.result !== null) {
-            this.logger.debug(
-              "Middleware next() called with custom result",
-              { middlewareName }
+            childLogger?.debug("Middleware next() called with custom result", {
+              middlewareName,
+            });
+
+            // Finish span - early return
+            TelemetryManagerProcessor.finishMiddlewareSpan(
+              middlewareSpan,
+              "early_return",
+              duration,
+              undefined,
+              logger,
             );
+
+            // Record metrics
+            TelemetryManagerProcessor.recordMiddlewareExecution(
+              telemetry,
+              middlewareName,
+              "global",
+              duration,
+              "early_return",
+              logger,
+            );
+
             return {
               success: false,
               customResult: nextState.result,
-              updatedContext
+              updatedContext,
             };
           }
 
           if (nextState.stop) {
-            this.logger.debug(
-              "Middleware next() called with stop",
-              { middlewareName }
+            childLogger?.debug("Middleware next() called with stop", {
+              middlewareName,
+            });
+
+            // Finish span - success (stop)
+            TelemetryManagerProcessor.finishMiddlewareSpan(
+              middlewareSpan,
+              "success",
+              duration,
+              undefined,
+              logger,
             );
+
+            // Record metrics
+            TelemetryManagerProcessor.recordMiddlewareExecution(
+              telemetry,
+              middlewareName,
+              "global",
+              duration,
+              "success",
+              logger,
+            );
+
             return {
               success: true,
-              updatedContext
+              updatedContext,
             };
           }
 
           if (nextState.skip) {
-            this.logger.debug(
-              "Middleware next() called with skip",
-              { middlewareName }
+            childLogger?.debug("Middleware next() called with skip", {
+              middlewareName,
+            });
+
+            // Finish span - success (skip)
+            TelemetryManagerProcessor.finishMiddlewareSpan(
+              middlewareSpan,
+              "success",
+              duration,
+              undefined,
+              logger,
             );
+
+            // Record metrics
+            TelemetryManagerProcessor.recordMiddlewareExecution(
+              telemetry,
+              middlewareName,
+              "global",
+              duration,
+              "success",
+              logger,
+            );
+
             continue;
           }
         }
 
         // Check for early return (Response)
         if (result instanceof Response) {
-          this.logger.debug(
-            "Middleware early return",
-            { middlewareName, type: "Response" }
+          childLogger?.debug("Middleware early return", {
+            middlewareName,
+            type: "Response",
+          });
+
+          // Finish span - early return
+          TelemetryManagerProcessor.finishMiddlewareSpan(
+            middlewareSpan,
+            "early_return",
+            duration,
+            undefined,
+            logger,
           );
+
+          // Record metrics
+          TelemetryManagerProcessor.recordMiddlewareExecution(
+            telemetry,
+            middlewareName,
+            "global",
+            duration,
+            "early_return",
+            logger,
+          );
+
           return {
             success: false,
             earlyReturn: result,
-            updatedContext
+            updatedContext,
           };
         }
 
         // Check for early return (ResponseProcessor)
         if (result instanceof IgniterResponseProcessor) {
-          this.logger.debug(
-            "Middleware early return",
-            { middlewareName, type: "ResponseProcessor" }
+          childLogger?.debug("Middleware early return", {
+            middlewareName,
+            type: "ResponseProcessor",
+          });
+
+          // Finish span - early return
+          TelemetryManagerProcessor.finishMiddlewareSpan(
+            middlewareSpan,
+            "early_return",
+            duration,
+            undefined,
+            logger,
           );
+
+          // Record metrics
+          TelemetryManagerProcessor.recordMiddlewareExecution(
+            telemetry,
+            middlewareName,
+            "global",
+            duration,
+            "early_return",
+            logger,
+          );
+
           return {
             success: false,
             earlyReturn: await result.toResponse(),
-            updatedContext
+            updatedContext,
           };
         }
 
         // Safely merge middleware result
         if (result && typeof result === "object" && !Array.isArray(result)) {
           const previousKeys = Object.keys(updatedContext.$context);
-          updatedContext = this.mergeContextSafely(updatedContext, result, middlewareName);
-          const newKeys = Object.keys(updatedContext.$context).filter(k => !previousKeys.includes(k));
+          updatedContext = this.mergeContextSafely(
+            updatedContext,
+            result,
+            middlewareName,
+            logger,
+          );
+          const newKeys = Object.keys(updatedContext.$context).filter(
+            (k) => !previousKeys.includes(k),
+          );
           if (newKeys.length > 0) {
-            this.logger.debug("Context updated", { middlewareName, newKeys });
+            childLogger?.debug("Context updated", { middlewareName, newKeys });
           }
         }
-      } catch (error) {
-        this.logger.error(
-          "Middleware execution failed",
-          { middlewareName, error }
+
+        // Finish span - success
+        TelemetryManagerProcessor.finishMiddlewareSpan(
+          middlewareSpan,
+          "success",
+          duration,
+          undefined,
+          logger,
         );
+
+        // Record metrics
+        TelemetryManagerProcessor.recordMiddlewareExecution(
+          telemetry,
+          middlewareName,
+          "global",
+          duration,
+          "success",
+          logger,
+        );
+      } catch (error) {
+        const duration = Date.now() - middlewareStartTime;
+
+        childLogger?.error("Middleware execution failed", {
+          component: "MiddlewareExecutor",
+          middlewareName,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+
+        // Finish span with error
+        TelemetryManagerProcessor.finishMiddlewareSpan(
+          middlewareSpan,
+          "error",
+          duration,
+          error instanceof Error ? error : new Error(String(error)),
+          logger,
+        );
+
+        // Record metrics
+        TelemetryManagerProcessor.recordMiddlewareExecution(
+          telemetry,
+          middlewareName,
+          "global",
+          duration,
+          "error",
+          logger,
+        );
+
         throw error; // Re-throw to be caught by the main processor
       }
     }
 
-    this.logger.debug("Global middleware completed", { count: middlewares.length });
+    childLogger?.debug("Global middleware completed", {
+      count: middlewares.length,
+    });
     return {
       success: true,
-      updatedContext
+      updatedContext,
     };
   }
 
@@ -195,92 +392,226 @@ export class MiddlewareExecutorProcessor {
    *
    * @param context - The processed context
    * @param middlewares - Array of action-specific middlewares to execute
+   * @param logger - Optional logger instance
+   * @param telemetry - Optional telemetry provider for metrics
+   * @param parentSpan - Optional parent span for tracing
    * @returns Promise resolving to execution result
    */
   static async executeAction(
     context: ProcessedContext,
-    middlewares: IgniterProcedure<unknown, unknown, unknown>[]
+    middlewares: IgniterProcedure<unknown, unknown, unknown>[],
+    logger?: IgniterLogger,
+    telemetry?: IgniterTelemetryProvider | null,
+    parentSpan?: IgniterTelemetrySpan,
   ): Promise<MiddlewareExecutionResult> {
+    const childLogger = logger?.child("MiddlewareExecutorProcessor");
+
     let updatedContext = { ...context };
 
     if (middlewares.length === 0) {
-      this.logger.debug("Action middleware skipped", { reason: "no middlewares" });
+      childLogger?.debug("Action middleware skipped", {
+        reason: "no middlewares",
+      });
       return { success: true, updatedContext };
     }
 
-    this.logger.debug("Action middleware started", { count: middlewares.length });
+    childLogger?.debug("Action middleware started", {
+      count: middlewares.length,
+    });
 
+    let index = 0;
     for (const middleware of middlewares) {
-      const middlewareName = middleware.name || 'anonymous';
-      this.logger.debug(
-        "Middleware executing",
-        { middlewareName }
+      const middlewareName = middleware.name || `anonymous_${index}`;
+      const middlewareStartTime = Date.now();
+
+      // Create telemetry span for this middleware
+      const middlewareSpan = TelemetryManagerProcessor.createMiddlewareSpan(
+        telemetry,
+        middlewareName,
+        "action",
+        parentSpan,
+        logger,
       );
+
+      childLogger?.debug("Middleware executing", { middlewareName });
 
       // Validate middleware has handler
       if (!middleware.handler || typeof middleware.handler !== "function") {
-        this.logger.warn(
-          "Middleware handler invalid",
-          { middlewareName, reason: "missing or not a function" }
+        childLogger?.warn("Middleware handler invalid", {
+          component: "MiddlewareExecutor",
+          middlewareName,
+          reason: "missing or not a function",
+        });
+
+        // Finish span - invalid handler
+        const duration = Date.now() - middlewareStartTime;
+        TelemetryManagerProcessor.finishMiddlewareSpan(
+          middlewareSpan,
+          "error",
+          duration,
+          new Error("Invalid middleware handler"),
+          logger,
         );
+
+        index++;
         continue;
       }
 
       try {
         // Build proper procedure context
-        const procedureContext = this.buildProcedureContext(updatedContext);
+        const procedureContext = this.buildProcedureContext(
+          updatedContext,
+          undefined,
+          logger,
+        );
 
         // @ts-expect-error - Its correct
         const result = await middleware.handler(procedureContext);
 
+        const duration = Date.now() - middlewareStartTime;
+
         // Check for early return (Response)
         if (result instanceof Response) {
-          this.logger.debug(
-            "Middleware early return",
-            { middlewareName, type: "Response" }
+          childLogger?.debug("Middleware early return", {
+            middlewareName,
+            type: "Response",
+          });
+
+          // Finish span - early return
+          TelemetryManagerProcessor.finishMiddlewareSpan(
+            middlewareSpan,
+            "early_return",
+            duration,
+            undefined,
+            logger,
           );
+
+          // Record metrics
+          TelemetryManagerProcessor.recordMiddlewareExecution(
+            telemetry,
+            middlewareName,
+            "action",
+            duration,
+            "early_return",
+            logger,
+          );
+
           return {
             success: false,
             earlyReturn: result,
-            updatedContext
+            updatedContext,
           };
         }
 
         // Check for early return (ResponseProcessor)
         if (result instanceof IgniterResponseProcessor) {
-          this.logger.debug(
-            "Middleware early return",
-            { middlewareName, type: "ResponseProcessor" }
+          childLogger?.debug("Middleware early return", {
+            middlewareName,
+            type: "ResponseProcessor",
+          });
+
+          // Finish span - early return
+          TelemetryManagerProcessor.finishMiddlewareSpan(
+            middlewareSpan,
+            "early_return",
+            duration,
+            undefined,
+            logger,
           );
+
+          // Record metrics
+          TelemetryManagerProcessor.recordMiddlewareExecution(
+            telemetry,
+            middlewareName,
+            "action",
+            duration,
+            "early_return",
+            logger,
+          );
+
           return {
             success: false,
             earlyReturn: await result.toResponse(),
-            updatedContext
+            updatedContext,
           };
         }
 
         // Safely merge middleware result
         if (result && typeof result === "object" && !Array.isArray(result)) {
           const previousKeys = Object.keys(updatedContext.$context);
-          updatedContext = this.mergeContextSafely(updatedContext, result, middlewareName);
-          const newKeys = Object.keys(updatedContext.$context).filter(k => !previousKeys.includes(k));
+          updatedContext = this.mergeContextSafely(
+            updatedContext,
+            result,
+            middlewareName,
+            logger,
+          );
+          const newKeys = Object.keys(updatedContext.$context).filter(
+            (k) => !previousKeys.includes(k),
+          );
           if (newKeys.length > 0) {
-            this.logger.debug("Context updated", { middlewareName, newKeys });
+            childLogger?.debug("Context updated", { middlewareName, newKeys });
           }
         }
-      } catch (error) {
-        this.logger.error(
-          "Middleware execution failed",
-          { middlewareName, error }
+
+        // Finish span - success
+        TelemetryManagerProcessor.finishMiddlewareSpan(
+          middlewareSpan,
+          "success",
+          duration,
+          undefined,
+          logger,
         );
+
+        // Record metrics
+        TelemetryManagerProcessor.recordMiddlewareExecution(
+          telemetry,
+          middlewareName,
+          "action",
+          duration,
+          "success",
+          logger,
+        );
+      } catch (error) {
+        const duration = Date.now() - middlewareStartTime;
+
+        childLogger?.error("Middleware execution failed", {
+          component: "MiddlewareExecutor",
+          middlewareName,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+
+        // Finish span with error
+        TelemetryManagerProcessor.finishMiddlewareSpan(
+          middlewareSpan,
+          "error",
+          duration,
+          error instanceof Error ? error : new Error(String(error)),
+          logger,
+        );
+
+        // Record metrics
+        TelemetryManagerProcessor.recordMiddlewareExecution(
+          telemetry,
+          middlewareName,
+          "action",
+          duration,
+          "error",
+          logger,
+        );
+
         throw error; // Re-throw to be caught by the main processor
       }
+
+      index++;
     }
 
-    this.logger.debug("Action middleware completed", { count: middlewares.length });
+    childLogger?.debug("Action middleware completed", {
+      count: middlewares.length,
+    });
+
     return {
       success: true,
-      updatedContext
+      updatedContext,
     };
   }
 
@@ -290,33 +621,39 @@ export class MiddlewareExecutorProcessor {
    *
    * @param context - The processed context
    * @param nextState - Optional next state for middleware control flow
+   * @param logger - Optional logger instance
    * @returns Properly structured procedure context
    */
   private static buildProcedureContext(
-    context: ProcessedContext, 
-    nextState?: NextState
+    context: ProcessedContext,
+    nextState?: NextState,
+    logger?: IgniterLogger,
   ): IgniterProcedureContext<any> {
+    const childLogger = logger?.child("MiddlewareExecutorProcessor");
+
     // Extract and validate required components
     const processedRequest = context.request;
 
     if (!processedRequest) {
-      throw new Error('Request is missing from processed context');
+      throw new Error("Request is missing from processed context");
     }
 
     // Map ProcessedRequest to IgniterProcedureContext.request structure
     const procedureRequest = {
-      path: processedRequest.path || '',
+      path: processedRequest.path || "",
       params: processedRequest.params || {},
       body: processedRequest.body || null,
       query: processedRequest.query || {},
       method: processedRequest.method as any,
       headers: processedRequest.headers || new Headers(),
-      cookies: processedRequest.cookies
+      cookies: processedRequest.cookies,
     };
 
     // Validate cookies specifically (this was the source of the bug)
     if (!procedureRequest.cookies) {
-      this.logger.warn("Cookies missing", { action: "creating fallback instance" });
+      childLogger?.warn("Cookies missing", {
+        action: "creating fallback instance",
+      });
       // Create a fallback cookies instance if missing
       procedureRequest.cookies = new IgniterCookie(procedureRequest.headers);
     }
@@ -337,7 +674,7 @@ export class MiddlewareExecutorProcessor {
       request: procedureRequest,
       context: context.$context || {}, // Use $context, not the full context
       response: context.response || new IgniterResponseProcessor(),
-      next
+      next,
     };
 
     return procedureContext;
@@ -349,13 +686,17 @@ export class MiddlewareExecutorProcessor {
    * @param context - Current context
    * @param result - Result from middleware execution
    * @param middlewareName - Name of the middleware for logging
+   * @param logger - Optional logger instance
    * @returns Updated context with safe merge
    */
   private static mergeContextSafely(
     context: ProcessedContext,
     result: Record<string, any>,
-    middlewareName: string
+    middlewareName: string,
+    logger?: IgniterLogger,
   ): ProcessedContext {
+    const childLogger = logger?.child("MiddlewareExecutorProcessor");
+
     const protectedKeys = [
       "store",
       "logger",
@@ -371,7 +712,11 @@ export class MiddlewareExecutorProcessor {
       if (!protectedKeys.includes(key)) {
         safeResult[key] = value;
       } else {
-        this.logger.warn("Protected key overwrite prevented", { middlewareName, key });
+        childLogger?.warn("Protected key overwrite prevented", {
+          component: "MiddlewareExecutor",
+          middlewareName,
+          key,
+        });
       }
     }
 

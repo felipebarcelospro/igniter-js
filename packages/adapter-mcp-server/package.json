@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/adapter-mcp-server",
-  "version": "0.3.1",
+  "version": "0.3.7",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "private": false,
@@ -19,9 +19,8 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.20.0",
-    "@socotra/modelcontextprotocol-sdk": "1.18.0",
+    "@modelcontextprotocol/sdk": "^1.23.0",
     "mcp-handler": "^1.0.3",
-    "zod": "^3"
+    "zod": "^4.1.13"
   }
 }

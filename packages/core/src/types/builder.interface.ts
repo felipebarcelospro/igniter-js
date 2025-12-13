@@ -1,5 +1,5 @@
 import type { IgniterRealtimeService } from "../services/realtime.service";
-import type { JobsNamespaceProxy } from "./jobs.interface";
+import type { JobsNamespaceProxy, JobsManagementProxy } from "./jobs.interface";
 import type { IgniterLogger } from "./logger.interface";
 import type { IgniterProcedure } from "./procedure.interface";
 import type { IgniterStoreAdapter } from "./store.interface";
@@ -149,7 +149,7 @@ export interface IgniterBuilderConfig<
   TConfig extends IgniterBaseConfig,
   TStore extends IgniterStoreAdapter = any,
   TLogger extends IgniterLogger = any,
-  TJobs extends JobsNamespaceProxy<TContext> = any,
+  TJobs extends JobsNamespaceProxy<TContext> & JobsManagementProxy = any,
   TTelemetry extends IgniterTelemetryProvider = any,
   TPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>> = Record<string, any>,
   TDocs extends DocsConfig = any,
@@ -236,7 +236,7 @@ export interface IgniterBuilderConfig<
    * })
    * ```
    */
-  jobs: TJobs extends JobsNamespaceProxy<any> ? TJobs : never;
+  jobs: TJobs extends JobsNamespaceProxy<any> & JobsManagementProxy ? TJobs : never;
 
   /**
    * Telemetry provider for distributed tracing, metrics, and observability.
@@ -313,7 +313,7 @@ export type IgniterBuilderExtension<
   TMiddlewares extends readonly IgniterProcedure<unknown, unknown, unknown>[], 
   TStore extends IgniterStoreAdapter, 
   TLogger extends IgniterLogger, 
-  TJobs extends JobsNamespaceProxy<any>, 
+  TJobs extends JobsNamespaceProxy<any> & JobsManagementProxy, 
   TTelemetry extends IgniterTelemetryProvider, 
   TRealtime extends IgniterRealtimeService, 
   TPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>, 

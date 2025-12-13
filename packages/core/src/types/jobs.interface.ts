@@ -12,6 +12,35 @@ export interface JobQueueConfig {
 }
 
 /**
+ * Rate limiter configuration for jobs.
+ * Limits the number of jobs processed within a time window.
+ *
+ * This is applied at the worker level - all jobs in the same queue
+ * share the same rate limit.
+ *
+ * @example
+ * ```typescript
+ * // Process maximum 1 job every 30 seconds
+ * const limiter: JobLimiter = {
+ *   max: 1,
+ *   duration: 30000,
+ * };
+ *
+ * // Process maximum 10 jobs per minute
+ * const limiter: JobLimiter = {
+ *   max: 10,
+ *   duration: 60000,
+ * };
+ * ```
+ */
+export interface JobLimiter {
+  /** Maximum number of jobs to process within the duration window */
+  max: number;
+  /** Time window in milliseconds */
+  duration: number;
+}
+
+/**
  * Advanced options for job execution (based on BullMQ).
  */
 export interface JobInvokeOptions {
@@ -42,6 +71,24 @@ export interface JobInvokeOptions {
   removeOnFail?: boolean | number;
   /** Additional metadata */
   metadata?: Record<string, any>;
+  /**
+   * Rate limiter configuration for this job.
+   * Limits the number of jobs processed within a time window.
+   *
+   * Note: This is applied at the worker level. If multiple jobs share
+   * the same queue, they will share the rate limit. Job-level limiter
+   * takes precedence over router-level defaultOptions.limiter.
+   *
+   * @example
+   * ```typescript
+   * // Rate limiting for YouTube downloads to avoid 429 errors
+   * limiter: {
+   *   max: 1,        // Maximum 1 job at a time
+   *   duration: 30000, // 30 seconds between jobs
+   * }
+   * ```
+   */
+  limiter?: JobLimiter;
 }
 
 /**
@@ -121,6 +168,29 @@ export interface JobWorkerConfig {
   concurrency?: number;
   /** Filter to process only specific jobs */
   jobFilter?: string[];
+  /**
+   * Rate limiter configuration for this worker.
+   * Limits the number of jobs processed within a time window.
+   *
+   * Note: This is a global rate limit for the worker. All jobs processed
+   * by this worker share the same rate limit.
+   *
+   * @example
+   * ```typescript
+   * // Process maximum 1 job every 30 seconds (useful for API rate limits)
+   * limiter: {
+   *   max: 1,
+   *   duration: 30000,
+   * }
+   *
+   * // Process maximum 10 jobs per minute
+   * limiter: {
+   *   max: 10,
+   *   duration: 60000,
+   * }
+   * ```
+   */
+  limiter?: JobLimiter;
   /** Callback when a job becomes active */
   onActive?: (data: { job: JobSearchResult }) => void | Promise<void>;
   /** Callback when a job completes successfully */
@@ -144,7 +214,9 @@ export interface JobWorkerConfig {
  */
 export interface JobExecutionContext<TContext extends object, TInput = any> {
   /** Job input (typed and validated) */
-  input: TInput extends StandardSchemaV1 ? StandardSchemaV1.InferInput<TInput> : TInput;
+  input: TInput extends StandardSchemaV1
+    ? StandardSchemaV1.InferInput<TInput>
+    : TInput;
   /** Full application context */
   context: TContext;
   /** Information about the current job */
@@ -187,13 +259,15 @@ export interface JobHookInfo {
 
 /**
  * Base context for all job hooks.
- * 
+ *
  * @template TContext - The application context type
  * @template TInput - The job input type
  */
 export interface JobHookContext<TContext extends object, TInput = any> {
   /** Job input (typed and validated) */
-  input: TInput extends StandardSchemaV1 ? StandardSchemaV1.InferInput<TInput> : TInput;
+  input: TInput extends StandardSchemaV1
+    ? StandardSchemaV1.InferInput<TInput>
+    : TInput;
   /** Full application context */
   context: TContext;
   /** Enhanced job information */
@@ -204,8 +278,10 @@ export interface JobHookContext<TContext extends object, TInput = any> {
  * Context for job start hook.
  * Called when a job begins execution.
  */
-export interface JobStartHookContext<TContext extends object, TInput = any> 
-  extends JobHookContext<TContext, TInput> {
+export interface JobStartHookContext<
+  TContext extends object,
+  TInput = any,
+> extends JobHookContext<TContext, TInput> {
   /** Job start timestamp */
   startedAt: Date;
 }
@@ -214,8 +290,10 @@ export interface JobStartHookContext<TContext extends object, TInput = any>
  * Context for job progress hook.
  * Called during job execution to report progress.
  */
-export interface JobProgressHookContext<TContext extends object, TInput = any> 
-  extends JobHookContext<TContext, TInput> {
+export interface JobProgressHookContext<
+  TContext extends object,
+  TInput = any,
+> extends JobHookContext<TContext, TInput> {
   /** Progress percentage (0-100) */
   progress: number;
   /** Optional progress message */
@@ -226,8 +304,11 @@ export interface JobProgressHookContext<TContext extends object, TInput = any>
  * Context for job success hook.
  * Called when a job completes successfully.
  */
-export interface JobSuccessHookContext<TContext extends object, TInput = any, TResult = any> 
-  extends JobHookContext<TContext, TInput> {
+export interface JobSuccessHookContext<
+  TContext extends object,
+  TInput = any,
+  TResult = any,
+> extends JobHookContext<TContext, TInput> {
   /** Job execution result */
   result: TResult;
   /** Job completion timestamp */
@@ -240,8 +321,10 @@ export interface JobSuccessHookContext<TContext extends object, TInput = any, TR
  * Context for job failure hook.
  * Called when a job fails.
  */
-export interface JobFailureHookContext<TContext extends object, TInput = any> 
-  extends JobHookContext<TContext, TInput> {
+export interface JobFailureHookContext<
+  TContext extends object,
+  TInput = any,
+> extends JobHookContext<TContext, TInput> {
   /** The error that caused the failure */
   error: Error;
   /** Job failure timestamp */
@@ -256,8 +339,10 @@ export interface JobFailureHookContext<TContext extends object, TInput = any>
  * Context for job retry hook.
  * Called when a job is being retried after a failure.
  */
-export interface JobRetryHookContext<TContext extends object, TInput = any> 
-  extends JobHookContext<TContext, TInput> {
+export interface JobRetryHookContext<
+  TContext extends object,
+  TInput = any,
+> extends JobHookContext<TContext, TInput> {
   /** The error from the previous attempt */
   previousError: Error;
   /** Retry attempt number (1-based) */
@@ -272,8 +357,11 @@ export interface JobRetryHookContext<TContext extends object, TInput = any>
  * Context for job complete hook.
  * Called when a job finishes (either success or final failure).
  */
-export interface JobCompleteHookContext<TContext extends object, TInput = any, TResult = any> 
-  extends JobHookContext<TContext, TInput> {
+export interface JobCompleteHookContext<
+  TContext extends object,
+  TInput = any,
+  TResult = any,
+> extends JobHookContext<TContext, TInput> {
   /** Whether the job succeeded */
   success: boolean;
   /** Job result (if successful) */
@@ -289,23 +377,37 @@ export interface JobCompleteHookContext<TContext extends object, TInput = any, T
 /**
  * Job hook function types.
  */
-export type JobStartHook<TContext extends object, TInput = any> = 
-  (context: JobStartHookContext<TContext, TInput>) => void | Promise<void>;
+export type JobStartHook<TContext extends object, TInput = any> = (
+  context: JobStartHookContext<TContext, TInput>,
+) => void | Promise<void>;
 
-export type JobProgressHook<TContext extends object, TInput = any> = 
-  (context: JobProgressHookContext<TContext, TInput>) => void | Promise<void>;
+export type JobProgressHook<TContext extends object, TInput = any> = (
+  context: JobProgressHookContext<TContext, TInput>,
+) => void | Promise<void>;
 
-export type JobSuccessHook<TContext extends object, TInput = any, TResult = any> = 
-  (context: JobSuccessHookContext<TContext, TInput, TResult>) => void | Promise<void>;
+export type JobSuccessHook<
+  TContext extends object,
+  TInput = any,
+  TResult = any,
+> = (
+  context: JobSuccessHookContext<TContext, TInput, TResult>,
+) => void | Promise<void>;
 
-export type JobFailureHook<TContext extends object, TInput = any> = 
-  (context: JobFailureHookContext<TContext, TInput>) => void | Promise<void>;
+export type JobFailureHook<TContext extends object, TInput = any> = (
+  context: JobFailureHookContext<TContext, TInput>,
+) => void | Promise<void>;
 
-export type JobRetryHook<TContext extends object, TInput = any> = 
-  (context: JobRetryHookContext<TContext, TInput>) => void | Promise<void>;
+export type JobRetryHook<TContext extends object, TInput = any> = (
+  context: JobRetryHookContext<TContext, TInput>,
+) => void | Promise<void>;
 
-export type JobCompleteHook<TContext extends object, TInput = any, TResult = any> = 
-  (context: JobCompleteHookContext<TContext, TInput, TResult>) => void | Promise<void>;
+export type JobCompleteHook<
+  TContext extends object,
+  TInput = any,
+  TResult = any,
+> = (
+  context: JobCompleteHookContext<TContext, TInput, TResult>,
+) => void | Promise<void>;
 
 /**
  * Configuration options for job registration.
@@ -331,11 +433,11 @@ export interface JobDefinition<
   handler: (
     context: JobExecutionContext<TContext, TInput>,
   ) => Promise<TResult> | TResult;
-  
+
   // ==========================================
   // JOB LIFECYCLE HOOKS (ROOT LEVEL)
   // ==========================================
-  
+
   /** Called when the job starts execution */
   onStart?: JobStartHook<TContext, TInput>;
   /** Called during job execution to report progress */
@@ -353,7 +455,9 @@ export interface JobDefinition<
 /**
  * Parameters to invoke a job.
  */
-export interface JobInvokeParams<TInput = StandardSchemaV1> extends JobRegistrationOptions {
+export interface JobInvokeParams<
+  TInput = StandardSchemaV1,
+> extends JobRegistrationOptions {
   /** Registered job ID */
   id: string;
   /** Payload for the job */
@@ -402,11 +506,11 @@ export interface JobsRouterConfig<
   namespace?: string;
   /** Default options to apply to all jobs in this router */
   defaultOptions?: Partial<JobRegistrationOptions>;
-  
+
   // ==========================================
   // ROUTER-LEVEL GLOBAL HOOKS (ROOT LEVEL)
   // ==========================================
-  
+
   /** Global hook called when any job in this router starts execution */
   onStart?: JobStartHook<any, any>;
   /** Global hook called during any job execution to report progress */
@@ -486,7 +590,9 @@ export interface JobsNamespaceExecutor<
       {
         task: TJobId;
         input: TJobs[TJobId] extends JobDefinition<any, infer TInput, any>
-          ? TInput extends StandardSchemaV1 ? StandardSchemaV1.InferInput<TInput> : TInput
+          ? TInput extends StandardSchemaV1
+            ? StandardSchemaV1.InferInput<TInput>
+            : TInput
           : never;
       } & JobInvokeOptions
     >,
@@ -499,7 +605,7 @@ export interface JobsNamespaceExecutor<
    * @template TJobId - The specific job ID to schedule
    * @param params - Advanced scheduling parameters with type-safe input
    * @returns Promise resolving to the job execution ID
-   * 
+   *
    * @example
    * ```typescript
    * // Schedule with advanced options
@@ -516,8 +622,10 @@ export interface JobsNamespaceExecutor<
     params: Prettify<
       {
         task: TJobId;
-        input: TJobs[TJobId] extends JobDefinition<any, any,  infer TInput>
-          ? TInput extends StandardSchemaV1 ? StandardSchemaV1.InferInput<TInput> : TInput
+        input: TJobs[TJobId] extends JobDefinition<any, any, infer TInput>
+          ? TInput extends StandardSchemaV1
+            ? StandardSchemaV1.InferInput<TInput>
+            : TInput
           : never;
       } & AdvancedScheduleOptions
     >,
@@ -562,17 +670,34 @@ export type MergedJobsExecutor<T extends Record<string, any>> =
   MergedJobsExecutorBase<T> & {
     /**
      * Creates a namespace proxy for enhanced job access patterns.
-     * This enables `context.jobs.namespace.job.enqueue()` syntax.
+     * This enables `context.jobs.namespace.job.enqueue()` syntax and exposes
+     * management APIs ($queues, $job, $workers).
      *
-     * @returns A proxy object providing type-safe namespace access
+     * @returns A proxy object providing type-safe namespace and management access
      *
      * @example
      * ```typescript
      * const proxy = executor.createProxy();
      * await proxy.user.sendEmail.enqueue({ to: "user@example.com" });
+     * await proxy.$queues.pause("email");
      * ```
      */
-    createProxy(): JobsNamespaceProxy<T>;
+    createProxy(): JobsNamespaceProxy<T> & JobsManagementProxy;
+
+    /**
+     * Direct access to queue management operations.
+     */
+    readonly queues?: QueueManager;
+
+    /**
+     * Direct access to job management operations.
+     */
+    readonly job?: JobManager;
+
+    /**
+     * Access to active worker handles.
+     */
+    getWorkers?(): Map<string, WorkerHandle>;
   };
 
 /**
@@ -580,8 +705,34 @@ export type MergedJobsExecutor<T extends Record<string, any>> =
  * Defines all required operations for a complete queue system.
  */
 export interface IgniterJobQueueAdapter<TContext extends object> {
-  /** Underlying client (e.g., BullMQ instance) */
+  /** Underlying client (e.g., BullMQ instances and state) */
   readonly client: unknown;
+
+  // ==========================================
+  // MANAGEMENT APIs (NEW)
+  // ==========================================
+
+  /**
+   * Queue management operations.
+   * Provides methods to inspect, control, and clean queues.
+   */
+  readonly queues: QueueManager;
+
+  /**
+   * Individual job operations.
+   * Provides methods to inspect, retry, and control jobs.
+   */
+  readonly job: JobManager;
+
+  /**
+   * Gets all active worker handles.
+   * @returns Map of worker ID to WorkerHandle
+   */
+  getWorkers(): Map<string, WorkerHandle>;
+
+  // ==========================================
+  // JOB REGISTRATION
+  // ==========================================
 
   /**
    * Registers available jobs in the system.
@@ -669,27 +820,52 @@ export interface IgniterJobQueueAdapter<TContext extends object> {
    */
   search(params?: JobSearchParams): Promise<JobSearchResult[]>;
 
-  /**
-   * Starts a worker to process jobs.
-   * @param config Worker configuration
-   */
-  worker(config: JobWorkerConfig): Promise<void>;
+  // ==========================================
+  // WORKER MANAGEMENT
+  // ==========================================
 
   /**
-   * Stops all active workers.
+   * Starts a worker to process jobs.
+   * Returns a WorkerHandle for controlling the worker.
+   *
+   * @param config Worker configuration
+   * @returns Promise resolving to a WorkerHandle for controlling the worker
+   *
+   * @example
+   * ```typescript
+   * const handle = await adapter.worker({ queues: ['email'], concurrency: 5 });
+   *
+   * // Later, pause the worker
+   * await handle.pause();
+   *
+   * // Resume processing
+   * await handle.resume();
+   *
+   * // Close when done
+   * await handle.close();
+   * ```
+   */
+  worker(config: JobWorkerConfig): Promise<WorkerHandle>;
+
+  /**
+   * Stops all active workers and closes connections.
    */
   shutdown(): Promise<void>;
+
+  // ==========================================
+  // CRON JOBS
+  // ==========================================
 
   /**
    * Creates a cron job with enhanced scheduling capabilities.
    * Provides a clean interface for creating scheduled jobs with advanced options.
-   * 
+   *
    * @template TResult - The result type of the cron job handler
    * @param schedule - Cron expression or predefined schedule
    * @param handler - Function to execute on schedule
    * @param options - Enhanced cron job configuration
    * @returns A complete JobDefinition for the cron job
-   * 
+   *
    * @example
    * ```typescript
    * // Using predefined schedule
@@ -710,7 +886,7 @@ export interface IgniterJobQueueAdapter<TContext extends object> {
   cron<TResult = any>(
     schedule: string | CronSchedule,
     handler: CronJobHandler<TContext, TResult>,
-    options?: CronJobOptions
+    options?: CronJobOptions,
     // @ts-expect-error - TODO: fix this
   ): JobDefinition<TContext, {}, TResult>;
 }
@@ -961,7 +1137,11 @@ export interface JobsRegistryType<TMergedJobs extends Record<string, any>> {
  * These are essential for type-safe namespace access.
  */
 export type InferJobInput<T> =
-  T extends JobDefinition<any, infer TInput, any> ? TInput extends StandardSchemaV1 ? StandardSchemaV1.InferInput<TInput> : TInput : never;
+  T extends JobDefinition<any, infer TInput, any>
+    ? TInput extends StandardSchemaV1
+      ? StandardSchemaV1.InferInput<TInput>
+      : TInput
+    : never;
 export type InferJobOutput<T> =
   T extends JobDefinition<any, any, infer TOutput> ? TOutput : never;
 
@@ -993,11 +1173,11 @@ export interface JobExecutor<TJobDef extends JobDefinition<any, any, any>> {
   /**
    * Schedule the job for advanced delayed execution with enhanced options.
    * Supports sophisticated scheduling including business hours, weekends, conditions, and retry strategies.
-   * 
+   *
    * @param input - The job input data (typed from job definition)
    * @param options - Advanced scheduling options with enhanced timing control
    * @returns Promise resolving to the job ID
-   * 
+   *
    * @example
    * ```typescript
    * // Schedule for next business day with retry strategy
@@ -1006,7 +1186,7 @@ export interface JobExecutor<TJobDef extends JobDefinition<any, any, any>> {
    *   retryStrategy: 'exponential',
    *   repeat: { skipWeekends: true, onlyBusinessHours: true }
    * });
-   * 
+   *
    * // Use predefined patterns
    * await jobExecutor.schedule(input, SchedulePatterns.NEXT_BUSINESS_DAY);
    * ```
@@ -1072,12 +1252,14 @@ export interface NamespaceFallbackMethods<
   ): Promise<string>;
 
   bulk<
-    TArray extends Array<{
-      jobId: keyof TJobs;
-      input: InferJobInput<TJobs[TArray[number]['jobId']]>;
-    } & JobInvokeOptions>
+    TArray extends Array<
+      {
+        jobId: keyof TJobs;
+        input: InferJobInput<TJobs[TArray[number]["jobId"]]>;
+      } & JobInvokeOptions
+    >,
   >(
-    jobs: TArray
+    jobs: TArray,
   ): Promise<string[]>;
 }
 
@@ -1098,7 +1280,7 @@ export type JobsProxyInvokeFunction = (params: {
 /**
  * Advanced scheduling options for jobs with enhanced timing control.
  * Provides sophisticated scheduling capabilities beyond basic delay and repeat.
- * 
+ *
  * @example
  * ```typescript
  * // Schedule a job for next Monday at 9 AM, skip weekends
@@ -1121,16 +1303,16 @@ export interface AdvancedScheduleOptions extends JobInvokeOptions {
   // ==========================================
   // BASIC SCHEDULING
   // ==========================================
-  
+
   /** Execute the job at a specific date/time */
   at?: Date;
   /** Delay before execution (in milliseconds) - alternative to 'at' */
   delay?: number;
-  
+
   // ==========================================
   // ADVANCED REPETITION
   // ==========================================
-  
+
   /** Advanced repeat configuration */
   repeat?: {
     /** Interval between executions (in milliseconds) */
@@ -1150,7 +1332,7 @@ export interface AdvancedScheduleOptions extends JobInvokeOptions {
     /** Custom business hours override */
     businessHours?: {
       start: number; // Hour (0-23)
-      end: number;   // Hour (0-23)
+      end: number; // Hour (0-23)
       timezone?: string;
     };
     /** Skip execution on these specific dates */
@@ -1158,38 +1340,42 @@ export interface AdvancedScheduleOptions extends JobInvokeOptions {
     /** Only execute on these specific weekdays (0=Sunday, 6=Saturday) */
     onlyWeekdays?: number[];
   };
-  
+
   // ==========================================
   // CONDITIONAL EXECUTION
   // ==========================================
-  
+
   /** Condition that must be met for the job to execute */
   condition?: () => boolean | Promise<boolean>;
   /** Skip execution if a job with this ID is already running */
   skipIfRunning?: string | boolean;
   /** Maximum concurrent executions of this job */
   maxConcurrency?: number;
-  
+
   // ==========================================
   // RETRY STRATEGY
   // ==========================================
-  
+
   /** Advanced retry strategy */
-  retryStrategy?: 'exponential' | 'linear' | 'fixed' | {
-    type: 'custom';
-    delays: number[]; // Array of delay values in ms
-  };
+  retryStrategy?:
+    | "exponential"
+    | "linear"
+    | "fixed"
+    | {
+        type: "custom";
+        delays: number[]; // Array of delay values in ms
+      };
   /** Backoff multiplier for exponential retry (default: 2) */
   backoffMultiplier?: number;
   /** Maximum delay between retries (in milliseconds) */
   maxRetryDelay?: number;
   /** Jitter factor to add randomness to retries (0-1) */
   jitterFactor?: number;
-  
+
   // ==========================================
   // NOTIFICATION & MONITORING
   // ==========================================
-  
+
   /** Webhook URL to notify on job completion */
   webhookUrl?: string;
   /** Custom tags for monitoring and filtering */
@@ -1203,10 +1389,12 @@ export interface AdvancedScheduleOptions extends JobInvokeOptions {
 /**
  * Enhanced schedule options specifically for the JobExecutor.schedule() method.
  * Extends AdvancedScheduleOptions with additional type-safe constraints.
- * 
+ *
  * @template TJobDef - The job definition type for input validation
  */
-export interface JobScheduleOptions<TJobDef extends JobDefinition<any, any, any>> extends AdvancedScheduleOptions {
+export interface JobScheduleOptions<
+  TJobDef extends JobDefinition<any, any, any>,
+> extends AdvancedScheduleOptions {
   /** Input data for the job (type-safe from job definition) */
   input?: InferJobInput<TJobDef>;
 }
@@ -1214,7 +1402,7 @@ export interface JobScheduleOptions<TJobDef extends JobDefinition<any, any, any>
 /**
  * Predefined scheduling patterns for common use cases.
  * Provides convenient access to frequently used scheduling configurations.
- * 
+ *
  * @example
  * ```typescript
  * // Use predefined patterns
@@ -1234,9 +1422,9 @@ export const SchedulePatterns = {
       if (tomorrow.getDay() === 6) tomorrow.setDate(tomorrow.getDate() + 2); // Saturday -> Monday
       return tomorrow;
     })(),
-    repeat: { onlyBusinessHours: true, skipWeekends: true }
+    repeat: { onlyBusinessHours: true, skipWeekends: true },
   } as AdvancedScheduleOptions,
-  
+
   /** Schedule for end of current month */
   END_OF_MONTH: {
     at: (() => {
@@ -1244,33 +1432,33 @@ export const SchedulePatterns = {
       endOfMonth.setMonth(endOfMonth.getMonth() + 1, 0); // Last day of current month
       endOfMonth.setHours(23, 59, 0, 0);
       return endOfMonth;
-    })()
+    })(),
   } as AdvancedScheduleOptions,
-  
+
   /** Schedule for every weekday at 8 AM */
   WEEKDAYS_8AM: {
     repeat: {
-      cron: '0 8 * * 1-5', // Monday to Friday at 8 AM
-      skipWeekends: true
-    }
+      cron: "0 8 * * 1-5", // Monday to Friday at 8 AM
+      skipWeekends: true,
+    },
   } as AdvancedScheduleOptions,
-  
+
   /** Schedule for every hour during business hours */
   HOURLY_BUSINESS_HOURS: {
     repeat: {
       every: 60 * 60 * 1000, // Every hour
       onlyBusinessHours: true,
-      skipWeekends: true
-    }
+      skipWeekends: true,
+    },
   } as AdvancedScheduleOptions,
-  
+
   /** Schedule for immediate execution with exponential retry */
   IMMEDIATE_WITH_RETRY: {
     delay: 0,
     attempts: 5,
-    retryStrategy: 'exponential',
+    retryStrategy: "exponential",
     backoffMultiplier: 2,
-    maxRetryDelay: 30000 // Max 30 seconds
+    maxRetryDelay: 30000, // Max 30 seconds
   } as AdvancedScheduleOptions,
 } as const;
 
@@ -1283,7 +1471,7 @@ export type SchedulePattern = keyof typeof SchedulePatterns;
  * Enhanced configuration options for cron jobs.
  * Provides additional features beyond basic repeat options.
  */
-export interface CronJobOptions extends Omit<JobInvokeOptions, 'repeat'> {
+export interface CronJobOptions extends Omit<JobInvokeOptions, "repeat"> {
   /** Timezone for cron execution (e.g., 'America/New_York', 'UTC') */
   timezone?: string;
   /** Maximum number of executions (prevents infinite runs) */
@@ -1306,61 +1494,61 @@ export interface CronJobOptions extends Omit<JobInvokeOptions, 'repeat'> {
  */
 export const CronSchedules = {
   /** Every minute: '* * * * *' */
-  EVERY_MINUTE: '* * * * *',
+  EVERY_MINUTE: "* * * * *",
   /** Every 5 minutes: */
-  EVERY_5_MINUTES: '*/5 * * * *',
+  EVERY_5_MINUTES: "*/5 * * * *",
   /** Every 15 minutes: */
-  EVERY_15_MINUTES: '*/15 * * * *',
+  EVERY_15_MINUTES: "*/15 * * * *",
   /** Every 30 minutes: */
-  EVERY_30_MINUTES: '*/30 * * * *',
+  EVERY_30_MINUTES: "*/30 * * * *",
   /** Every hour: */
-  HOURLY: '0 * * * *',
+  HOURLY: "0 * * * *",
   /** Every 2 hours: */
-  EVERY_2_HOURS: '0 */2 * * *',
+  EVERY_2_HOURS: "0 */2 * * *",
   /** Every 6 hours: */
-  EVERY_6_HOURS: '0 */6 * * *',
+  EVERY_6_HOURS: "0 */6 * * *",
   /** Every 12 hours: */
-  EVERY_12_HOURS: '0 */12 * * *',
+  EVERY_12_HOURS: "0 */12 * * *",
   /** Daily at midnight: */
-  DAILY: '0 0 * * *',
+  DAILY: "0 0 * * *",
   /** Daily at 6 AM: */
-  DAILY_6AM: '0 6 * * *',
+  DAILY_6AM: "0 6 * * *",
   /** Daily at noon: */
-  DAILY_NOON: '0 12 * * *',
+  DAILY_NOON: "0 12 * * *",
   /** Daily at 6 PM: */
-  DAILY_6PM: '0 18 * * *',
+  DAILY_6PM: "0 18 * * *",
   /** Weekly on Sunday at midnight */
-  WEEKLY: '0 0 * * 0',
+  WEEKLY: "0 0 * * 0",
   /** Weekly on Monday at 9 AM: */
-  WEEKLY_MONDAY_9AM: '0 9 * * 1',
+  WEEKLY_MONDAY_9AM: "0 9 * * 1",
   /** Monthly on the 1st at midnight: */
-  MONTHLY: '0 0 1 * *',
+  MONTHLY: "0 0 1 * *",
   /** Quarterly on the 1st at midnight: */
-  QUARTERLY: '0 0 1 */3 *',
+  QUARTERLY: "0 0 1 */3 *",
   /** Yearly on January 1st at midnight: */
-  YEARLY: '0 0 1 1 *',
+  YEARLY: "0 0 1 1 *",
 } as const;
 
 /**
  * Type for predefined cron schedule values.
  */
-export type CronSchedule = typeof CronSchedules[keyof typeof CronSchedules];
+export type CronSchedule = (typeof CronSchedules)[keyof typeof CronSchedules];
 
 /**
  * Enhanced cron job handler function type.
  * Provides additional context specific to cron executions.
- * 
+ *
  * @template TContext - The application context type
  * @template TResult - The return type of the handler
  */
 export type CronJobHandler<TContext extends object, TResult = any> = (
-  context: CronJobExecutionContext<TContext>
+  context: CronJobExecutionContext<TContext>,
 ) => Promise<TResult> | TResult;
 
 /**
  * Enhanced execution context for cron jobs.
  * Includes cron-specific information and utilities.
- * 
+ *
  * @template TContext - The application context type
  */
 export interface CronJobExecutionContext<TContext extends object> {
@@ -1391,4 +1579,456 @@ export interface CronJobExecutionContext<TContext extends object> {
     createdAt: Date;
     metadata?: Record<string, any>;
   };
+}
+
+// ==========================================
+// WORKER CONTROL SYSTEM
+// ==========================================
+
+/**
+ * Metrics collected from a worker instance.
+ * Provides insights into worker performance and health.
+ */
+export interface WorkerMetrics {
+  /** Total number of jobs processed by this worker */
+  processed: number;
+  /** Total number of jobs that failed */
+  failed: number;
+  /** Average job duration in milliseconds */
+  avgDuration: number;
+  /** Current concurrency setting */
+  concurrency: number;
+  /** Worker uptime in milliseconds */
+  uptime: number;
+}
+
+/**
+ * Handle for controlling an individual worker instance.
+ * Provides methods to pause, resume, and monitor worker status.
+ *
+ * @example
+ * ```typescript
+ * const handle = await adapter.worker({ queues: ['email'] });
+ *
+ * // Pause processing during maintenance
+ * await handle.pause();
+ *
+ * // Check status
+ * console.log('Running:', handle.isRunning());
+ * console.log('Paused:', handle.isPaused());
+ *
+ * // Resume processing
+ * await handle.resume();
+ *
+ * // Get performance metrics
+ * const metrics = await handle.getMetrics();
+ * console.log(`Processed: ${metrics.processed}, Failed: ${metrics.failed}`);
+ *
+ * // Gracefully close worker
+ * await handle.close();
+ * ```
+ */
+export interface WorkerHandle {
+  /** Unique identifier for this worker instance */
+  readonly id: string;
+  /** Name of the queue this worker is processing */
+  readonly queueName: string;
+
+  // ==========================================
+  // CONTROL METHODS
+  // ==========================================
+
+  /**
+   * Pauses the worker, stopping it from processing new jobs.
+   * Jobs currently being processed will complete.
+   */
+  pause(): Promise<void>;
+
+  /**
+   * Resumes a paused worker, allowing it to process jobs again.
+   */
+  resume(): Promise<void>;
+
+  /**
+   * Gracefully closes the worker.
+   * Waits for current jobs to complete before closing.
+   */
+  close(): Promise<void>;
+
+  // ==========================================
+  // STATUS METHODS
+  // ==========================================
+
+  /**
+   * Checks if the worker is currently running and processing jobs.
+   * @returns True if the worker is actively processing
+   */
+  isRunning(): boolean;
+
+  /**
+   * Checks if the worker is paused.
+   * @returns True if the worker is paused
+   */
+  isPaused(): boolean;
+
+  /**
+   * Checks if the worker has been closed.
+   * @returns True if the worker is closed
+   */
+  isClosed(): boolean;
+
+  // ==========================================
+  // METRICS
+  // ==========================================
+
+  /**
+   * Retrieves performance metrics from the worker.
+   * @returns Promise resolving to worker metrics
+   */
+  getMetrics(): Promise<WorkerMetrics>;
+}
+
+// ==========================================
+// QUEUE MANAGEMENT SYSTEM
+// ==========================================
+
+/**
+ * Job counts for a queue, broken down by status.
+ */
+export interface JobCounts {
+  /** Jobs waiting to be processed */
+  waiting: number;
+  /** Jobs currently being processed */
+  active: number;
+  /** Jobs that completed successfully */
+  completed: number;
+  /** Jobs that failed */
+  failed: number;
+  /** Jobs scheduled for future execution */
+  delayed: number;
+  /** Jobs in paused queues */
+  paused: number;
+}
+
+/**
+ * Information about a queue.
+ */
+export interface QueueInfo {
+  /** Queue name */
+  name: string;
+  /** Whether the queue is currently paused */
+  isPaused: boolean;
+  /** Job counts by status */
+  jobCounts: JobCounts;
+}
+
+/**
+ * Options for cleaning jobs from a queue.
+ */
+export interface QueueCleanOptions {
+  /** Job status(es) to clean */
+  status: JobStatus | JobStatus[];
+  /** Only clean jobs older than this (milliseconds) */
+  olderThan?: number;
+  /** Maximum number of jobs to clean */
+  limit?: number;
+}
+
+/**
+ * Manager for queue-level operations.
+ * Provides methods to inspect, control, and clean queues.
+ *
+ * @example
+ * ```typescript
+ * // List all queues
+ * const queues = await adapter.queues.list();
+ *
+ * // Get specific queue info
+ * const emailQueue = await adapter.queues.get('email');
+ * console.log(`Email queue has ${emailQueue.jobCounts.waiting} waiting jobs`);
+ *
+ * // Pause a queue
+ * await adapter.queues.pause('email');
+ *
+ * // Clean old completed jobs
+ * const cleaned = await adapter.queues.clean('email', {
+ *   status: 'completed',
+ *   olderThan: 7 * 24 * 60 * 60 * 1000 // 7 days
+ * });
+ * console.log(`Cleaned ${cleaned} jobs`);
+ *
+ * // Resume queue
+ * await adapter.queues.resume('email');
+ * ```
+ */
+export interface QueueManager {
+  // ==========================================
+  // LISTING & INSPECTION
+  // ==========================================
+
+  /**
+   * Lists all queues managed by this adapter.
+   * @returns Promise resolving to array of queue information
+   */
+  list(): Promise<QueueInfo[]>;
+
+  /**
+   * Gets information about a specific queue.
+   * @param queueName - Name of the queue
+   * @returns Promise resolving to queue info or null if not found
+   */
+  get(queueName: string): Promise<QueueInfo | null>;
+
+  /**
+   * Gets job counts for a specific queue.
+   * @param queueName - Name of the queue
+   * @returns Promise resolving to job counts
+   */
+  getJobCounts(queueName: string): Promise<JobCounts>;
+
+  /**
+   * Gets jobs from a queue with optional filtering.
+   * @param queueName - Name of the queue
+   * @param filter - Optional filter criteria
+   * @returns Promise resolving to array of job results
+   */
+  getJobs(
+    queueName: string,
+    filter?: JobSearchFilter,
+  ): Promise<JobSearchResult[]>;
+
+  // ==========================================
+  // CONTROL
+  // ==========================================
+
+  /**
+   * Pauses a queue, preventing workers from processing new jobs.
+   * @param queueName - Name of the queue to pause
+   */
+  pause(queueName: string): Promise<void>;
+
+  /**
+   * Resumes a paused queue.
+   * @param queueName - Name of the queue to resume
+   */
+  resume(queueName: string): Promise<void>;
+
+  /**
+   * Checks if a queue is paused.
+   * @param queueName - Name of the queue
+   * @returns Promise resolving to true if paused
+   */
+  isPaused(queueName: string): Promise<boolean>;
+
+  // ==========================================
+  // CLEANUP
+  // ==========================================
+
+  /**
+   * Drains a queue, removing all waiting jobs.
+   * Active jobs will complete but no new jobs will be processed.
+   * @param queueName - Name of the queue to drain
+   * @returns Promise resolving to number of jobs removed
+   */
+  drain(queueName: string): Promise<number>;
+
+  /**
+   * Cleans jobs from a queue based on criteria.
+   * @param queueName - Name of the queue to clean
+   * @param options - Cleaning options (status, age, limit)
+   * @returns Promise resolving to number of jobs cleaned
+   */
+  clean(queueName: string, options: QueueCleanOptions): Promise<number>;
+
+  /**
+   * Completely removes a queue and all its jobs.
+   * WARNING: This is destructive and cannot be undone.
+   * @param queueName - Name of the queue to obliterate
+   * @param options - Options including force flag
+   */
+  obliterate(queueName: string, options?: { force?: boolean }): Promise<void>;
+}
+
+// ==========================================
+// JOB MANAGEMENT SYSTEM
+// ==========================================
+
+/**
+ * Log entry from a job execution.
+ */
+export interface JobLog {
+  /** When the log was created */
+  timestamp: Date;
+  /** Log message content */
+  message: string;
+  /** Log level */
+  level: "info" | "warn" | "error";
+}
+
+/**
+ * Manager for individual job operations.
+ * Provides methods to inspect, retry, and control individual jobs.
+ *
+ * @example
+ * ```typescript
+ * // Get job info
+ * const job = await adapter.job.get('job-123');
+ * console.log(`Job status: ${job?.status}`);
+ *
+ * // Get job logs
+ * const logs = await adapter.job.getLogs('job-123');
+ * logs.forEach(log => console.log(`[${log.level}] ${log.message}`));
+ *
+ * // Retry a failed job
+ * await adapter.job.retry('job-123');
+ *
+ * // Promote a delayed job to immediate execution
+ * await adapter.job.promote('job-456');
+ *
+ * // Remove a job
+ * await adapter.job.remove('job-789');
+ *
+ * // Batch retry multiple jobs
+ * await adapter.job.retryMany(['job-1', 'job-2', 'job-3']);
+ * ```
+ */
+export interface JobManager {
+  // ==========================================
+  // GET INFO
+  // ==========================================
+
+  /**
+   * Gets detailed information about a job.
+   * @param jobId - The job ID
+   * @param queueName - Optional queue name (searches all queues if not provided)
+   * @returns Promise resolving to job info or null if not found
+   */
+  get(jobId: string, queueName?: string): Promise<JobSearchResult | null>;
+
+  /**
+   * Gets the current state of a job.
+   * @param jobId - The job ID
+   * @param queueName - Optional queue name
+   * @returns Promise resolving to job status or null if not found
+   */
+  getState(jobId: string, queueName?: string): Promise<JobStatus | null>;
+
+  /**
+   * Gets execution logs for a job.
+   * @param jobId - The job ID
+   * @param queueName - Optional queue name
+   * @returns Promise resolving to array of log entries
+   */
+  getLogs(jobId: string, queueName?: string): Promise<JobLog[]>;
+
+  /**
+   * Gets the progress of a job (0-100).
+   * @param jobId - The job ID
+   * @param queueName - Optional queue name
+   * @returns Promise resolving to progress percentage
+   */
+  getProgress(jobId: string, queueName?: string): Promise<number>;
+
+  // ==========================================
+  // CONTROL
+  // ==========================================
+
+  /**
+   * Retries a failed job.
+   * @param jobId - The job ID to retry
+   * @param queueName - Optional queue name
+   */
+  retry(jobId: string, queueName?: string): Promise<void>;
+
+  /**
+   * Removes a job from the queue.
+   * @param jobId - The job ID to remove
+   * @param queueName - Optional queue name
+   */
+  remove(jobId: string, queueName?: string): Promise<void>;
+
+  /**
+   * Promotes a delayed job to immediate execution.
+   * @param jobId - The job ID to promote
+   * @param queueName - Optional queue name
+   */
+  promote(jobId: string, queueName?: string): Promise<void>;
+
+  /**
+   * Moves a job to the failed state with a reason.
+   * @param jobId - The job ID
+   * @param reason - Reason for the failure
+   * @param queueName - Optional queue name
+   */
+  moveToFailed(
+    jobId: string,
+    reason: string,
+    queueName?: string,
+  ): Promise<void>;
+
+  // ==========================================
+  // BATCH OPERATIONS
+  // ==========================================
+
+  /**
+   * Retries multiple jobs at once.
+   * @param jobIds - Array of job IDs to retry
+   * @param queueName - Optional queue name
+   */
+  retryMany(jobIds: string[], queueName?: string): Promise<void>;
+
+  /**
+   * Removes multiple jobs at once.
+   * @param jobIds - Array of job IDs to remove
+   * @param queueName - Optional queue name
+   */
+  removeMany(jobIds: string[], queueName?: string): Promise<void>;
+}
+
+// ==========================================
+// MANAGEMENT PROXY FOR CONTROLLERS
+// ==========================================
+
+/**
+ * Management API exposed through the jobs proxy.
+ * Allows controllers to manage queues, jobs, and workers.
+ *
+ * @example
+ * ```typescript
+ * // In a controller handler
+ * const handler = async (ctx) => {
+ *   // Access queue management
+ *   await ctx.jobs.$queues.pause('email');
+ *
+ *   // Access job management
+ *   await ctx.jobs.$job.retry('job-123');
+ *
+ *   // Access active workers
+ *   const workers = ctx.jobs.$workers;
+ *   for (const [id, worker] of workers) {
+ *     console.log(`Worker ${id}: running=${worker.isRunning()}`);
+ *   }
+ * };
+ * ```
+ */
+export interface JobsManagementProxy {
+  /** Queue management operations */
+  readonly $queues: QueueManager;
+  /** Individual job operations */
+  readonly $job: JobManager;
+  /** Access to active workers */
+  readonly $workers: Map<string, WorkerHandle>;
+}
+
+/**
+ * Configuration for the management API passed to createJobsProxy.
+ * @internal
+ */
+export interface JobsManagementApi {
+  /** Queue manager instance */
+  queues: QueueManager;
+  /** Job manager instance */
+  job: JobManager;
+  /** Map of active worker handles */
+  workers: Map<string, WorkerHandle>;
 }

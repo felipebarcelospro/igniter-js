@@ -1,7 +1,10 @@
 import { findRoute, type RouterContext } from "rou3";
-import { IgniterLogLevel, type IgniterAction, type IgniterLogger } from "../types";
-import { IgniterConsoleLogger } from "../services/logger.service";
-import { resolveLogLevel, createLoggerContext } from "../utils/logger";
+import type { IgniterAction, IgniterLogger } from "../types";
+import type {
+  IgniterTelemetryProvider,
+  IgniterTelemetrySpan,
+} from "../types/telemetry.interface";
+import { TelemetryManagerProcessor } from "./telemetry-manager.processor";
 
 /**
  * Handles route resolution for HTTP requests.
@@ -19,44 +22,79 @@ export interface RouteResult {
 
 /**
  * Route resolver processor for the Igniter Framework.
- * Handles route finding and validation logic.
+ * Handles route finding and validation logic with telemetry integration.
  */
 export class RouteResolverProcessor {
-  private static _logger: IgniterLogger;
-
-  private static get logger(): IgniterLogger {
-    if (!this._logger) {
-      this._logger = IgniterConsoleLogger.create({
-        level: resolveLogLevel(),
-        context: createLoggerContext('RouteResolver'),
-        showTimestamp: true,
-      });
-    }
-    return this._logger;
-  }
   /**
    * Resolves a route based on method and path.
    *
    * @param router - The router context containing registered routes
    * @param method - HTTP method (GET, POST, etc.)
    * @param path - URL path to resolve
+   * @param logger - Optional logger instance
+   * @param telemetry - Optional telemetry provider for metrics
+   * @param parentSpan - Optional parent span for tracing
    * @returns RouteResult with success status and route data or error
    */
   static resolve(
-    router: RouterContext<IgniterAction<any, any, any, any, any, any, any, any, any, any>>,
+    router: RouterContext<
+      IgniterAction<any, any, any, any, any, any, any, any, any, any>
+    >,
     method: string,
-    path: string
+    path: string,
+    logger?: IgniterLogger,
+    telemetry?: IgniterTelemetryProvider | null,
+    parentSpan?: IgniterTelemetrySpan,
   ): RouteResult {
-    this.logger.debug("Route resolution started", { method, path });
+    const childLogger = logger?.child("RouteResolverProcessor");
+    const startTime = Date.now();
+
+    // Create telemetry span for route resolution
+    const span = TelemetryManagerProcessor.createRouteResolutionSpan(
+      telemetry,
+      method,
+      path,
+      parentSpan,
+      logger,
+    );
+
+    childLogger?.debug("Route resolution started", { method, path });
+
     // Validate path
     if (!path?.length) {
-      this.logger.warn("Route resolution failed", { method, reason: "invalid path" });
+      childLogger?.warn("Route resolution failed", {
+        component: "RouteResolver",
+        method,
+        reason: "invalid path",
+      });
+
+      const duration = Date.now() - startTime;
+
+      // Finish span with failure
+      TelemetryManagerProcessor.finishRouteResolutionSpan(
+        span,
+        false,
+        0,
+        duration,
+        logger,
+      );
+
+      // Record route resolution metrics
+      TelemetryManagerProcessor.recordRouteResolution(
+        telemetry,
+        method,
+        path || "empty",
+        false,
+        duration,
+        logger,
+      );
+
       return {
         success: false,
         error: {
           status: 404,
-          statusText: "Not Found - Empty path"
-        }
+          statusText: "Not Found - Empty path",
+        },
       };
     }
 
@@ -64,28 +102,90 @@ export class RouteResolverProcessor {
     const route = findRoute(router, method, path);
 
     if (!route?.data) {
-      this.logger.warn("Route not found", { method, path });
+      childLogger?.warn("Route not found", {
+        component: "RouteResolver",
+        method,
+        path,
+      });
+
+      const duration = Date.now() - startTime;
+
+      // Finish span with not found
+      TelemetryManagerProcessor.finishRouteResolutionSpan(
+        span,
+        false,
+        0,
+        duration,
+        logger,
+      );
+
+      // Record route resolution metrics
+      TelemetryManagerProcessor.recordRouteResolution(
+        telemetry,
+        method,
+        path,
+        false,
+        duration,
+        logger,
+      );
+
       return {
         success: false,
         error: {
           status: 404,
-          statusText: "Not Found - Route not registered"
-        }
+          statusText: "Not Found - Route not registered",
+        },
       };
     }
 
-    const finalParams = route.params ? JSON.parse(JSON.stringify(route.params)) : {};
+    const finalParams = route.params
+      ? JSON.parse(JSON.stringify(route.params))
+      : {};
 
-    this.logger.debug("Route resolved", {
+    const duration = Date.now() - startTime;
+    const paramsCount = Object.keys(finalParams).length;
+
+    // Finish span with success
+    TelemetryManagerProcessor.finishRouteResolutionSpan(
+      span,
+      true,
+      paramsCount,
+      duration,
+      logger,
+    );
+
+    // Record route resolution metrics
+    TelemetryManagerProcessor.recordRouteResolution(
+      telemetry,
       method,
       path,
-      params: finalParams
+      true,
+      duration,
+      logger,
+    );
+
+    childLogger?.debug("Route resolved", {
+      method,
+      path,
+      params: finalParams,
+      duration_ms: duration,
     });
 
     return {
       success: true,
-      action: route.data as IgniterAction<any, any, any, any, any, any, any, any, any, any>,
-      params: finalParams
+      action: route.data as IgniterAction<
+        any,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any
+      >,
+      params: finalParams,
     };
   }
 }

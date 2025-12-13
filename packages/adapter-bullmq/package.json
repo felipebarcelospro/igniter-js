@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/adapter-bullmq",
-  "version": "0.2.1",
+  "version": "0.3.4",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "sideEffects": false,
@@ -19,16 +19,19 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "bullmq": "4.18.3"
+  },
   "devDependencies": {
     "@igniter-js/core": "*",
-    "bullmq": "^4.10.3",
+    "bullmq": "4.18.3",
     "vitest": "^2.1.4",
-    "zod": "^3.23.8",
+    "zod": "3.23.8",
     "typescript": "^5.6.3"
   },
   "peerDependencies": {
     "@igniter-js/core": "*",
-    "bullmq": "^4.10.3"
+    "zod": "3.23.8"
   },
   "license": "MIT"
 }

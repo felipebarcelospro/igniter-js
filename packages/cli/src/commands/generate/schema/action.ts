@@ -20,9 +20,8 @@ export async function generateSchemaWatchMode(routerPath: string, outputPath: st
 
   const templateEngine = TemplateEngine.create();
   const templatePath = templateEngine.resolvePath('scaffold', 'igniter.schema.hbs');
-  const templateSource = fs.readFileSync(templatePath, 'utf8');
-  const template = handlebars.compile(templateSource);
-  const schemaContent = template({
+  
+  const schemaContent = await templateEngine.render(templatePath, {
     generatedAt: new Date().toISOString(),
     schemaString: JSON.stringify(schema, null, 2),
   });

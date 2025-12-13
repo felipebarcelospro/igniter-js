@@ -1,6 +1,6 @@
 # AI Agent Maintenance Manual: `@igniter-js/adapter-bullmq`
 
-**Version:** 1.0.0
+**Version:** 2.0.0
 **For Agent Use Only.**
 
 This document provides a comprehensive technical guide for Large Language Model (LLM) based AI agents responsible for maintaining, debugging, and extending the `@igniter-js/adapter-bullmq` package. You are an expert TypeScript engineer; this manual is your single source of truth for this package. Adherence to these instructions is critical.
@@ -14,6 +14,13 @@ This document provides a comprehensive technical guide for Large Language Model 
 
 ### 1.2. Purpose
 This package serves as a concrete **Adapter** that connects the abstract **Igniter.js Queues** system (defined in `@igniter-js/core`) to the [BullMQ](https://bullmq.io/) library. Its sole responsibility is to implement the `IgniterJobQueueAdapter` interface, providing a robust, production-ready solution for background job processing using Redis as the backend.
+
+### 1.3. Key Features (v2.0)
+- **Worker Control**: Granular control over workers via `WorkerHandle` (pause, resume, close, metrics)
+- **Queue Management**: Full queue control via `QueueManager` (pause, resume, drain, clean, obliterate)
+- **Job Management**: Individual job control via `JobManager` (retry, remove, promote, move to failed)
+- **Management API via Proxy**: Access `$queues`, `$job`, `$workers` directly in controllers
+- **Rate Limiting**: Control job processing rate at job, router, or worker level to avoid API throttling
 
 ---
 
@@ -47,15 +54,83 @@ The package has a minimal and focused file structure.
 
 *   `src/bullmq.adapter.ts`
     > **Purpose**: **This is the most critical file.** It contains the entire implementation of the `createBullMQAdapter` function. All logic for creating routers, registering jobs, enqueuing tasks, and managing workers resides here.
-    > **Maintenance**: Any change to the adapter's behavior, such as adding support for a new BullMQ feature or changing default options, will happen in this file. You must study the `createBullMQAdapter` function thoroughly.
+    > **Key Components:**
+    > - `createWorkerHandle()` - Factory for creating WorkerHandle instances
+    > - `queuesManager` - Implementation of QueueManager interface
+    > - `jobManager` - Implementation of JobManager interface
+    > - `worker()` method - Now returns WorkerHandle instead of void
+    > **Maintenance**: Any change to the adapter's behavior will happen in this file.
 
 *   `src/types.ts`
-    > **Purpose**: Contains TypeScript `interface` and `type` definitions that are **specific to this adapter**. This primarily includes the configuration options for the `createBullMQAdapter` function, like `BullMQAdapterConfig`.
+    > **Purpose**: Contains TypeScript `interface` and `type` definitions that are **specific to this adapter**.
+    > **Key Types:**
+    > - `BullMQAdapterOptions` - Configuration options (includes `autoStartWorker.limiter`)
+    > - `BullMQInstances` - Internal state management (queues, workers, workerHandles, registeredJobs)
+    > - `BullMQWorkerHandle` - Extended WorkerHandle with BullMQ-specific properties
+    > - `BullMQWorkerMetricsState` - Internal metrics tracking
     > **Maintenance**: If you add a new configuration option to the adapter, its type definition must be added here first.
 
 *   `src/__tests__/`
     > **Purpose**: Contains all Vitest unit and integration tests for the adapter.
-    > **Maintenance**: Any code change **must** be accompanied by a corresponding new or updated test. Before committing any changes, you must run the tests within this directory to ensure there are no regressions.
+    > **Key Test Sections:**
+    > - Worker Management tests (WorkerHandle control)
+    > - Queue Management tests (QueueManager operations)
+    > - Job Management tests (JobManager operations)
+    > - Management API via Proxy tests ($queues, $job, $workers)
+    > **Maintenance**: Any code change **must** be accompanied by a corresponding new or updated test.
+
+---
+
+## 3.1. Management API Architecture
+
+### WorkerHandle
+The `worker()` method now returns a `WorkerHandle` that provides:
+- `pause()` / `resume()` / `close()` - Worker control
+- `isRunning()` / `isPaused()` / `isClosed()` - Status checking
+- `getMetrics()` - Performance metrics (processed, failed, avgDuration, uptime)
+
+### QueueManager (adapter.queues)
+Provides queue-level operations:
+- `list()` / `get(name)` - Queue info
+- `pause(name)` / `resume(name)` / `isPaused(name)` - Queue control
+- `drain(name)` - Remove all waiting jobs
+- `clean(name, options)` - Remove jobs by status/age
+- `obliterate(name)` - Completely remove queue
+- `getJobCounts(name)` / `getJobs(name, filter)` - Job listing
+
+### JobManager (adapter.job)
+Provides individual job operations:
+- `get(id)` / `getState(id)` / `getLogs(id)` / `getProgress(id)` - Job info
+- `retry(id)` / `remove(id)` / `promote(id)` - Job control
+- `moveToFailed(id, reason)` - Manual failure
+- `retryMany(ids)` / `removeMany(ids)` - Batch operations
+
+### Proxy Access
+The `createJobsProxy()` function exposes management APIs via special properties:
+- `ctx.jobs.$queues` - Access to QueueManager
+- `ctx.jobs.$job` - Access to JobManager
+- `ctx.jobs.$workers` - Access to active worker handles Map
+
+### Rate Limiting
+Rate limiting is implemented at the BullMQ Worker level using `JobLimiter` interface:
+```typescript
+interface JobLimiter {
+  max: number;      // Maximum jobs to process within duration
+  duration: number; // Time window in milliseconds
+}
+```
+
+**Configuration levels (priority order):**
+1. **Job-level** (`JobDefinition.limiter`) - Highest priority
+2. **Router-level** (`defaultOptions.limiter`) - Used if job doesn't have one
+3. **Worker-level** (`JobWorkerConfig.limiter`) - Applied globally to worker
+4. **Auto-start** (`autoStartWorker.limiter`) - For auto-started workers
+
+**Implementation details:**
+- Limiter is passed to BullMQ Worker constructor
+- Jobs that hit rate limit return to "waiting" state
+- Rate limit is global per queue (shared across all workers)
+- Auto-discovery: If no limiter configured, adapter discovers from job definitions
 
 ---
 

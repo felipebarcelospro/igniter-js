@@ -1,7 +1,10 @@
-import { IgniterLogLevel, type IgniterLogger } from "../types";
+import type { IgniterLogger } from "../types";
 import { IgniterError } from "../error";
-import { IgniterConsoleLogger } from "../services/logger.service";
-import { resolveLogLevel, createLoggerContext } from "../utils/logger";
+import type {
+  IgniterTelemetryProvider,
+  IgniterTelemetrySpan,
+} from "../types/telemetry.interface";
+import { TelemetryManagerProcessor } from "./telemetry-manager.processor";
 
 /**
  * Structure defining an SSE channel
@@ -90,19 +93,6 @@ export interface SSEStreamOptions {
  * Manages event channels, connections, and message distribution
  */
 export class SSEProcessor {
-  private static _logger: IgniterLogger;
-
-  private static get logger(): IgniterLogger {
-    if (!this._logger) {
-      this._logger = IgniterConsoleLogger.create({
-        level: resolveLogLevel(),
-        context: createLoggerContext('SSE'),
-        showTimestamp: true,
-      });
-    }
-    return this._logger;
-  }
-
   /**
    * Map of registered channels and their metadata
    * @private
@@ -126,17 +116,19 @@ export class SSEProcessor {
    * Register a new channel for SSE events
    *
    * @param channel - Channel configuration
-   * @throws {IgniterError} When channel already exists
+   * @param logger - Optional logger instance
    */
-  static registerChannel(channel: SSEChannel): void {
+  static registerChannel(channel: SSEChannel, logger?: IgniterLogger): void {
+    const childLogger = logger?.child("RouteResolverProcessor");
+
     if (this.channels.has(channel.id)) {
-      this.logger.warn(
-        "Channel already exists",
-        { channelId: channel.id }
-      );
+      childLogger?.warn("Channel already exists", { channelId: channel.id });
     }
 
-    this.logger.debug("Channel registered", { channelId: channel.id, description: channel.description });
+    childLogger?.debug("Channel registered", {
+      channelId: channel.id,
+      description: channel.description,
+    });
     this.channels.set(channel.id, channel);
 
     // Initialize connection set if it doesn't exist
@@ -149,17 +141,17 @@ export class SSEProcessor {
    * Unregister a channel and close all its connections
    *
    * @param channelId - ID of the channel to unregister
+   * @param logger - Optional logger instance
    */
-  static unregisterChannel(channelId: string): void {
+  static unregisterChannel(channelId: string, logger?: IgniterLogger): void {
+    const childLogger = logger?.child("RouteResolverProcessor");
+
     if (!this.channels.has(channelId)) {
-      this.logger.warn(
-        "Channel not found for unregister",
-        { channelId }
-      );
+      childLogger?.warn("Channel not found for unregister", { channelId });
       return;
     }
 
-    this.logger.debug("Channel unregistered", { channelId });
+    childLogger?.debug("Channel unregistered", { channelId });
 
     // Notify all connections about channel closure
     const connections = this.connections.get(channelId);
@@ -173,15 +165,18 @@ export class SSEProcessor {
         },
       };
 
-      this.logger.debug("Channel closure notified", { channelId, connectionCount: connections.size });
+      childLogger?.debug("Channel closure notified", {
+        channelId,
+        connectionCount: connections.size,
+      });
       connections.forEach((handler) => {
         try {
           handler.handler(closeEvent);
         } catch (error) {
-          this.logger.error(
-            "Channel closure notification failed",
-            { channelId, error }
-          );
+          childLogger?.error("Channel closure notification failed", {
+            channelId,
+            error: error instanceof Error ? error.message : "Unknown error",
+          });
         }
       });
     }
@@ -238,33 +233,71 @@ export class SSEProcessor {
    * Handle a new SSE connection request
    *
    * @param request - The incoming HTTP request
+   * @param logger - Optional logger instance
+   * @param telemetry - Optional telemetry provider for metrics
+   * @param parentSpan - Optional parent span for tracing
    * @returns SSE response stream
    * @throws {IgniterError} When channel validation fails
    */
-  static async handleConnection(request: Request): Promise<Response> {
+  static async handleConnection(
+    request: Request,
+    logger?: IgniterLogger,
+    telemetry?: IgniterTelemetryProvider | null,
+    parentSpan?: IgniterTelemetrySpan,
+  ): Promise<Response> {
+    const childLogger = logger?.child("SSEProcessor");
+
     const url = new URL(request.url);
     const channelsParam = url.searchParams.get("channels");
     const channels = channelsParam ? channelsParam.split(",") : [];
     const scopesParam = url.searchParams.get("scopes");
     const scopes = scopesParam ? scopesParam.split(",") : [];
+    const connectionId = crypto.randomUUID();
 
-    this.logger.debug("SSE connection requested", {
+    // Create telemetry span for SSE connection
+    const span = TelemetryManagerProcessor.createSSESpan(
+      telemetry,
+      connectionId,
+      channels,
+      parentSpan,
+      logger,
+    );
+
+    childLogger?.debug("SSE connection requested", {
+      connection_id: connectionId,
       requested_channels: channels,
       requested_scopes: scopes,
-      from_ip: request.headers.get('x-forwarded-for')
+      from_ip: request.headers.get("x-forwarded-for"),
     });
 
     // Validate that requested channels exist
     for (const channel of channels) {
       if (!this.channelExists(channel)) {
-        this.logger.error("SSE connection refused", {
+        childLogger?.error("SSE connection refused", {
           requestedChannel: channel,
           availableChannels: this.getRegisteredChannels().map((c) => c.id),
-          reason: "channel not registered"
+          reason: "channel not registered",
         });
+
+        // Record connection failure metric
+        TelemetryManagerProcessor.recordSSEConnection(
+          telemetry,
+          channel,
+          "disconnect",
+          this.getTotalConnectionCount(),
+          logger,
+        );
+
+        // Finish span with error
+        if (span) {
+          span.setTag("sse.error", "invalid_channel");
+          span.finish();
+        }
+
         throw new IgniterError({
           code: "INVALID_SSE_CHANNEL",
           message: `Channel '${channel}' is not registered`,
+          logger: logger,
           details: {
             requestedChannel: channel,
             availableChannels: this.getRegisteredChannels().map((c) => c.id),
@@ -277,36 +310,71 @@ export class SSEProcessor {
     const targetChannels =
       channels.length > 0 ? channels : Array.from(this.channels.keys());
 
+    // Record successful connection metric for each channel
+    for (const channel of targetChannels) {
+      TelemetryManagerProcessor.recordSSEConnection(
+        telemetry,
+        channel,
+        "connect",
+        this.getTotalConnectionCount() + 1,
+        logger,
+      );
+    }
+
+    // Finish span - connection established (span will live as long as the connection)
+    if (span) {
+      span.setTag("sse.channels_count", targetChannels.length);
+      span.setTag("sse.connection_id", connectionId);
+    }
+
     // Create and return the SSE stream
-    return this.createSSEStream({
-      channels: targetChannels,
-      keepAliveInterval: 30000, // 30 seconds default
-      scopes,
-    });
+    return this.createSSEStream(
+      {
+        channels: targetChannels,
+        keepAliveInterval: 30000, // 30 seconds default
+        scopes,
+      },
+      logger,
+      telemetry,
+      connectionId,
+    );
   }
 
   /**
    * Create an SSE stream for specific channels
    *
    * @param options - Stream configuration options
+   * @param logger - Optional logger instance
+   * @param telemetry - Optional telemetry provider for metrics
+   * @param connectionId - Optional connection ID for tracking
    * @returns Response object with SSE stream
    */
-  private static createSSEStream(options: SSEStreamOptions): Response {
-    const { channels, keepAliveInterval = 30000, headers = {}, scopes } = options;
+  private static createSSEStream(
+    options: SSEStreamOptions,
+    logger?: IgniterLogger,
+    telemetry?: IgniterTelemetryProvider | null,
+    connectionId?: string,
+  ): Response {
+    const childLogger = logger?.child("SSEProcessor");
+
+    const {
+      channels,
+      keepAliveInterval = 30000,
+      headers = {},
+      scopes,
+    } = options;
     const encoder = new TextEncoder();
-    const connectionId = crypto.randomUUID();
+    const connId = connectionId || crypto.randomUUID();
 
     // Create a new ReadableStream for SSE
     const stream = new ReadableStream({
       start: (controller) => {
-        this.logger.debug(
-          "SSE stream initialized", {
-            connectionId,
-            channels: channels.join(", "),
-            scopes: scopes?.join(", "),
-            keep_alive_ms: keepAliveInterval
-          }
-        );
+        childLogger?.debug("SSE stream initialized", {
+          connectionId: connId,
+          channels: channels.join(", "),
+          scopes: scopes?.join(", "),
+          keep_alive_ms: keepAliveInterval,
+        });
 
         // Send initial connection message
         const initialMessage = this.encodeSSEMessage({
@@ -329,21 +397,22 @@ export class SSEProcessor {
 
             // Check if controller is still active before enqueueing
             if (controller.desiredSize === null) {
-              // This indicates the client has disconnected. The 'cancel' method will handle cleanup.
               throw new Error("Controller is closed");
             }
 
-            // 🔥 FILTRO PRINCIPAL - Subscriber filtering
+            // Scope filtering - if event has scopes, check if connection matches
             if (event.scopes && event.scopes.length > 0) {
-              // Se o evento tem lista de subscribers específicos
-              if (!scopes || !event.scopes.some(scope => scopes.includes(scope))) {
-                this.logger.debug("Event scope filtering applied", {
-                  connectionId,
+              if (
+                !scopes ||
+                !event.scopes.some((scope) => scopes.includes(scope))
+              ) {
+                childLogger?.debug("Event scope filtering applied", {
+                  connectionId: connId,
                   channel: event.channel,
                   event_scopes: event.scopes,
-                  connection_scopes: scopes
+                  connection_scopes: scopes,
                 });
-                return; // 🚫 Não envia se o client não está na lista
+                return; // Don't send if client is not in the scope list
               }
             }
 
@@ -355,21 +424,19 @@ export class SSEProcessor {
                 channel: event.channel,
                 data: event.data,
                 timestamp: new Date().toISOString(),
-              })
+              }),
             });
 
-            this.logger.debug("Event sent", {
-              connectionId,
+            childLogger?.debug("Event sent", {
+              connectionId: connId,
               channel: event.channel,
               event_type: event.type,
-              event_id: event.id
+              event_id: event.id,
             });
             controller.enqueue(message);
           } catch (error) {
-            this.logger.warn("Event delivery failed", { connectionId, error });
-
-            // Don't rethrow the error - we'll handle cleanup elsewhere
-            // This prevents the error from bubbling up
+            childLogger?.warn("Event delivery failed", { connectionId: connId, error });
+            // Connection might be closed - cleanup will happen elsewhere
           }
         };
 
@@ -380,12 +447,12 @@ export class SSEProcessor {
             channelConnections.add({
               handler: connectionHandler,
               scopes,
-              metadata: { connectedAt: Date.now() }
+              metadata: { connectedAt: Date.now() },
             });
-            this.logger.debug(
-              "Client subscribed",
-              { channel, connectionCount: channelConnections.size }
-            );
+            childLogger?.debug("Client subscribed", {
+              channel,
+              connectionCount: channelConnections.size,
+            });
           }
         }
 
@@ -394,27 +461,32 @@ export class SSEProcessor {
           try {
             // Check if controller is still active
             if (controller.desiredSize === null) {
-              this.logger.debug("Controller closed, stopping keep-alive", { connectionId });
+              childLogger?.debug("Controller closed, stopping keep-alive", {
+                connectionId: connId,
+              });
               clearInterval(keepAliveTimer);
               return;
             }
 
             // Send comment as keep-alive to prevent connection timeout
-            this.logger.debug("Keep-alive ping sent", { connectionId });
+            childLogger?.debug("Keep-alive ping sent", { connectionId: connId });
             controller.enqueue(encoder.encode(": keepalive\n\n"));
           } catch (error) {
             // Connection might be closed already, clear interval
-            this.logger.warn("Keep-alive failed, cleaning up timer", { connectionId, error });
+            childLogger?.warn("Keep-alive failed, cleaning up timer", {
+              connectionId: connId,
+              error,
+            });
             clearInterval(keepAliveTimer);
           }
         }, keepAliveInterval);
 
         // Return cleanup function
         return () => {
-          this.logger.debug(
-            "Closing SSE connection",
-            { connectionId, channels: channels.join(", ") }
-          );
+          childLogger?.debug("Closing SSE connection", {
+            connectionId: connId,
+            channels: channels.join(", "),
+          });
           clearInterval(keepAliveTimer);
 
           // Unregister this connection handler from all channels
@@ -424,9 +496,9 @@ export class SSEProcessor {
               channelConnections.delete({
                 handler: connectionHandler,
                 scopes,
-                metadata: { connectedAt: Date.now() }
+                metadata: { connectedAt: Date.now() },
               });
-              this.logger.debug(
+              childLogger?.debug(
                 `Client unsubscribed from channel '${channel}' (${channelConnections.size} connections remaining)`,
               );
             }
@@ -454,36 +526,39 @@ export class SSEProcessor {
    * Publish an event to a specific channel
    *
    * @param event - The event to publish
+   * @param logger - Optional logger instance
+   * @param telemetry - Optional telemetry provider for metrics
    * @returns Number of clients the event was sent to
    */
-  static publishEvent(event: SSEEvent): number {
+  static publishEvent(
+    event: SSEEvent,
+    logger?: IgniterLogger,
+    telemetry?: IgniterTelemetryProvider | null,
+  ): number {
+    const childLogger = logger?.child("SSEProcessor");
+
     const { channel } = event;
 
     // Validate channel exists
     if (!this.channelExists(channel)) {
-      this.logger.warn(
-          "Channel not found for publish",
-          { channel }
-        );
+      childLogger?.warn("Channel not found for publish", { channel });
       return 0;
     }
 
     const connections = this.connections.get(channel);
     if (!connections || connections.size === 0) {
-      this.logger.debug("No connections, event skipped", { channel });
+      childLogger?.debug("No connections, event skipped", { channel });
       // No active connections for this channel
       return 0;
     }
 
-    this.logger.debug(
-      "Event published", {
-        channel,
-        connectionCount: connections.size,
-        event_type: event.type,
-        event_id: event.id,
-        has_scopes: !!event.scopes && event.scopes.length > 0
-      }
-    );
+    childLogger?.debug("Event published", {
+      channel,
+      connectionCount: connections.size,
+      event_type: event.type,
+      event_id: event.id,
+      has_scopes: !!event.scopes && event.scopes.length > 0,
+    });
 
     // Add timestamp if not present
     if (
@@ -511,12 +586,16 @@ export class SSEProcessor {
         connection.handler(event);
         sentCount++;
       } catch (error) {
-        this.logger.warn("Event send failed", { error });
+        childLogger?.warn("Event send failed", { error });
 
         // Check if error is related to closed controller
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        if (errorMessage.includes("closed") || errorMessage.includes("Invalid state")) {
-          this.logger.debug("Connection closed, removing", { channel });
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        if (
+          errorMessage.includes("closed") ||
+          errorMessage.includes("Invalid state")
+        ) {
+          childLogger?.debug("Connection closed, removing", { channel });
           deadConnections.push(connection);
         }
       }
@@ -527,12 +606,21 @@ export class SSEProcessor {
       for (const deadConnection of deadConnections) {
         connections.delete(deadConnection);
       }
-      this.logger.debug("Dead connections removed", { 
-        channel, 
-        removedCount: deadConnections.length, 
-        remainingCount: connections.size 
+      childLogger?.debug("Dead connections removed", {
+        channel,
+        removedCount: deadConnections.length,
+        remainingCount: connections.size,
       });
     }
+
+    // Record SSE event metrics
+    TelemetryManagerProcessor.recordSSEEvent(
+      telemetry,
+      channel,
+      event.type || "message",
+      sentCount,
+      logger,
+    );
 
     return sentCount;
   }
@@ -542,19 +630,24 @@ export class SSEProcessor {
    *
    * @param event - Base event to broadcast
    * @param channels - Channel IDs to broadcast to
+   * @param logger - Optional logger instance
    * @returns Total number of clients the event was sent to
    */
   static broadcastEvent(
     event: Omit<SSEEvent, "channel">,
     channels: string[],
+    logger?: IgniterLogger,
   ): number {
     let totalSent = 0;
 
     for (const channel of channels) {
-      totalSent += this.publishEvent({
-        ...event,
-        channel,
-      });
+      totalSent += this.publishEvent(
+        {
+          ...event,
+          channel,
+        },
+        logger,
+      );
     }
 
     return totalSent;
@@ -562,79 +655,92 @@ export class SSEProcessor {
 
   /**
    * Close all connections and cleanup resources
+   * @param logger - Optional logger instance
    */
-  static closeAllConnections(): void {
-    this.logger.debug("All SSE connections closing");
+  static closeAllConnections(logger?: IgniterLogger): void {
+    const childLogger = logger?.child("RouteResolverProcessor");
+
+    childLogger?.debug("All SSE connections closing");
 
     // Get connection counts before cleanup
-    const channelCounts = Array.from(this.connections.entries()).map(([channel, conns]) =>
-      `${channel}: ${conns.size}`
+    const channelCounts = Array.from(this.connections.entries()).map(
+      ([channel, conns]) => `${channel}: ${conns.size}`,
     );
-    this.logger.debug("Current connections before cleanup", { channelCounts: channelCounts.join(', ') });
+    childLogger?.debug("Current connections before cleanup", {
+      channelCounts: channelCounts.join(", "),
+    });
 
     // Clear all connection handlers
     this.connections.clear();
 
     // Close all active streams
     let closedCount = 0;
-    this.activeStreams.forEach(stream => {
+    this.activeStreams.forEach((stream) => {
       try {
-        if (stream.locked && 'cancel' in stream) {
+        if (stream.locked && "cancel" in stream) {
           // @ts-ignore - TypeScript doesn't recognize cancel method but it exists
           stream.cancel("Server is shutting down all connections.");
           closedCount++;
         }
       } catch (error) {
-        this.logger.error("SSE stream closure failed", { error });
+        childLogger?.error("SSE stream closure failed", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
       }
     });
 
-    this.logger.debug("Closed active streams", { closedCount });
+    childLogger?.debug("Closed active streams", { closedCount });
     this.activeStreams.clear();
   }
 
   /**
    * Cleanup dead connections for all channels
    * This method can be called periodically to remove closed connections
+   * @param logger - Optional logger instance
    */
-  static cleanupDeadConnections(): number {
+  static cleanupDeadConnections(logger?: IgniterLogger): number {
+    const childLogger = logger?.child("RouteResolverProcessor");
+
     let totalRemoved = 0;
 
-    this.logger.debug("Dead connection cleanup started");
+    childLogger?.debug("Dead connection cleanup started");
     for (const [channel, connections] of this.connections.entries()) {
       const beforeCount = connections.size;
 
       // Test each connection with a harmless ping event
       const deadConnections: SSEConnectionHandler[] = [];
-      connections.forEach(connection => {
+      connections.forEach((connection) => {
         try {
           // Create a ping event just to test the connection
           const pingEvent: SSEEvent = {
             channel,
-            type: 'ping',
-            data: { timestamp: new Date().toISOString() }
+            type: "ping",
+            data: { timestamp: new Date().toISOString() },
           };
 
           // Try to send it - this will throw if the connection is dead
           connection.handler(pingEvent);
-        } catch (error) {
+        } catch {
           deadConnections.push(connection);
         }
       });
 
       // Remove dead connections
-      deadConnections.forEach(connection => {
+      deadConnections.forEach((connection) => {
         connections.delete(connection);
       });
 
       const removed = beforeCount - connections.size;
       if (removed > 0) {
-        this.logger.debug("Dead connections cleaned up", { channel, removedCount: removed });
+        childLogger?.debug("Dead connections cleaned up", {
+          channel,
+          removedCount: removed,
+        });
         totalRemoved += removed;
       }
     }
 
-    this.logger.debug("Dead connection cleanup completed", { totalRemoved });
+    childLogger?.debug("Dead connection cleanup completed", { totalRemoved });
     return totalRemoved;
   }
 
@@ -643,7 +749,6 @@ export class SSEProcessor {
    *
    * @param options - Message options
    * @returns Encoded message as Uint8Array
-   * @private
    */
   public static encodeSSEMessage(options: {
     id?: string;
@@ -703,5 +808,5 @@ export function encodeSSEMessage(options: {
     processedOptions.data = JSON.stringify(processedOptions.data);
   }
 
-  return SSEProcessor.encodeSSEMessage(processedOptions as any);
+  return SSEProcessor.encodeSSEMessage(processedOptions);
 }

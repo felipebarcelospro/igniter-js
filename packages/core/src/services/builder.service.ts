@@ -29,6 +29,7 @@ import type { IgniterLogger } from "../types/logger.interface";
 import type {
   JobsNamespaceProxy,
   MergedJobsExecutor,
+  JobsManagementProxy,
 } from "../types/jobs.interface";
 import type { IgniterTelemetryProvider } from "../types/telemetry.interface";
 import { IgniterRealtimeService } from "./realtime.service";
@@ -65,7 +66,7 @@ export class IgniterBuilder<
   TConfig extends IgniterBaseConfig,
   TStore extends IgniterStoreAdapter,
   TLogger extends IgniterLogger,
-  TJobs extends JobsNamespaceProxy<any>,
+  TJobs extends JobsNamespaceProxy<any> & JobsManagementProxy,
   TTelemetry extends IgniterTelemetryProvider,
   TRealtime extends IgniterRealtimeServiceType<any>,
   TPlugins extends Record<string, any>,
@@ -89,7 +90,7 @@ export class IgniterBuilder<
   private _plugins: TPlugins = {} as TPlugins;
   private _docs: TDocs = {} as TDocs;
 
-  constructor(    
+  constructor(
     config: IgniterBuilderConfig<
       TContext,
       TConfig,
@@ -110,7 +111,7 @@ export class IgniterBuilder<
   ) {
     this._config = config;
     this._store = store || ({} as TStore);
-    this._logger = logger || ({} as TLogger);
+    this._logger = logger as TLogger;
     this._jobs = jobs || ({} as TJobs);
     this._telemetry = telemetry || ({} as TTelemetry);
     this._realtime = realtime || ({} as TRealtime);
@@ -254,10 +255,13 @@ export class IgniterBuilder<
 
   /**
    * Configure a job queue adapter for background processing.
+   * The proxy includes both namespace access and management APIs ($queues, $job, $workers).
    */
   jobs<
     TJobs extends MergedJobsExecutor<any>,
-    TJobsProxy extends JobsNamespaceProxy<any> = ReturnType<Awaited<TJobs>["createProxy"]>
+    TJobsProxy extends JobsNamespaceProxy<any> & JobsManagementProxy = ReturnType<
+      Awaited<TJobs>["createProxy"]
+    >,
   >(jobsAdapter: TJobs) {
     const jobsProxy = jobsAdapter.createProxy() as TJobsProxy;
 
@@ -431,13 +435,12 @@ export class IgniterBuilder<
       /**
        * Creates a query action for retrieving data.
        */
-      /**
-       * Creates a query action for retrieving data.
-       */
       query: <
         TQueryPath extends string,
         TQueryQuery extends StandardSchemaV1 | undefined,
-        TQueryMiddlewares extends IgniterProcedure<any, any, unknown>[] | undefined,
+        TQueryMiddlewares extends
+          | IgniterProcedure<any, any, unknown>[]
+          | undefined,
         TQueryHandler extends IgniterActionHandler<
           IgniterActionContext<
             TInferedContext,
@@ -492,7 +495,9 @@ export class IgniterBuilder<
         TMutationMethod extends MutationMethod,
         TMutationBody extends StandardSchemaV1 | undefined,
         TMutationQuery extends StandardSchemaV1 | undefined,
-        TMutationMiddlewares extends IgniterProcedure<any, any, unknown>[] | undefined,
+        TMutationMiddlewares extends
+          | IgniterProcedure<any, any, unknown>[]
+          | undefined,
         TMutationHandler extends IgniterActionHandler<
           IgniterActionContext<
             TInferedContext,
@@ -546,19 +551,17 @@ export class IgniterBuilder<
       /**
        * Creates a controller to group related actions.
        */
-      controller: <TActions extends Record<string, IgniterControllerBaseAction>>(
+      controller: <
+        TActions extends Record<string, IgniterControllerBaseAction>,
+      >(
         config: IgniterControllerConfig<TActions>,
-      ) =>
-        createIgniterController<TActions>(config),
+      ) => createIgniterController<TActions>(config),
 
       /**
        * Creates a router with enhanced configuration.
        */
       router: <
-        TControllers extends Record<
-          string,
-          IgniterControllerConfig<any>
-        >,
+        TControllers extends Record<string, IgniterControllerConfig<any>>,
       >(config: {
         controllers: TControllers;
       }) => {
@@ -570,9 +573,13 @@ export class IgniterBuilder<
         >({
           context: this._config.context as TInferedContext,
           controllers: config.controllers,
-          config: { ...(this._config.config || ({} as TConfig)), docs: this._docs },
+          config: {
+            ...(this._config.config || ({} as TConfig)),
+            docs: this._docs,
+          },
           plugins: this._plugins,
           docs: this._docs,
+          logger: this._logger,
         });
       },
 
@@ -600,7 +607,7 @@ export class IgniterBuilder<
         realtime: {} as TRealtime,
         plugins: {} as TPlugins,
         docs: {} as TDocs,
-      }
+      },
     };
   }
 }
@@ -620,4 +627,3 @@ export class IgniterBuilder<
  *   .create();
  */
 export const Igniter = new IgniterBuilder();
-

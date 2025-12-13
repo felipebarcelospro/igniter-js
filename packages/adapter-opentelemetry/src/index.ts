@@ -1,8 +1,6 @@
 // Main factory functions
 export {
   createOpenTelemetryAdapter,
-  createSimpleOpenTelemetryAdapter,
-  createProductionOpenTelemetryAdapter,
 } from './factory';
 
 // Core implementation classes

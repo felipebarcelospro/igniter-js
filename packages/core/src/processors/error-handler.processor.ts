@@ -1,10 +1,8 @@
-import { IgniterLogLevel, type IgniterLogger } from "../types";
 import { IgniterError } from "../error";
 import type { ProcessedContext } from "./context-builder.processor";
 import type { TelemetrySpan } from "./telemetry-manager.processor";
 import { TelemetryManagerProcessor } from "./telemetry-manager.processor";
-import { IgniterConsoleLogger } from "../services/logger.service";
-import { resolveLogLevel, createLoggerContext } from "../utils/logger";
+import type { IgniterLogger } from "../types";
 
 /**
  * Error handling result
@@ -19,18 +17,6 @@ export interface ErrorHandlingResult {
  * Provides unified error handling for different types of errors.
  */
 export class ErrorHandlerProcessor {
-  private static _logger: IgniterLogger;
-
-  private static get logger(): IgniterLogger {
-    if (!this._logger) {
-      this._logger = IgniterConsoleLogger.create({
-        level: resolveLogLevel(),
-        context: createLoggerContext('ErrorHandler'),
-      });
-    }
-    return this._logger;
-  }
-
   /**
    * Handles validation errors (e.g., Zod validation).
    *
@@ -38,35 +24,41 @@ export class ErrorHandlerProcessor {
    * @param context - The processed context
    * @param telemetrySpan - The telemetry span for tracking
    * @param startTime - Request start time
+   * @param logger - Optional logger instance
    * @returns Standardized error response
    */
   static async handleValidationError(
     error: any,
     context: ProcessedContext,
     telemetrySpan: TelemetrySpan | null,
-    startTime: number
+    startTime: number,
+    logger?: IgniterLogger,
   ): Promise<ErrorHandlingResult> {
+    const childLogger = logger?.child("ErrorHandlerProcessor");
+
     const statusCode = 400;
     const normalizedError = this.normalizeError(error);
 
-    this.logger.warn("Request validation failed", {
-      error: {
-        code: normalizedError.code,
-        message: normalizedError.message,
-        details: normalizedError.details
-      },
-      request: {
-        path: context.request.path,
-        method: context.request.method
-      }
+    // Log validation errors - essential for debugging
+    childLogger?.warn("Request validation failed", {
+      component: "ErrorHandler",
+      code: normalizedError.code,
+      message: normalizedError.message,
+      path: context.request.path,
+      method: context.request.method,
     });
 
     // Track validation error for CLI dashboard
-    await this.trackError(context, startTime, statusCode, error);
+    await this.trackError(context, startTime, statusCode, error, logger);
 
     // Finish telemetry span with error
     if (telemetrySpan) {
-      TelemetryManagerProcessor.finishSpanError(telemetrySpan, statusCode, error);
+      TelemetryManagerProcessor.finishSpanError(
+        telemetrySpan,
+        statusCode,
+        error,
+        childLogger,
+      );
     }
 
     return {
@@ -82,7 +74,7 @@ export class ErrorHandlerProcessor {
         {
           status: statusCode,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       ),
       handled: true,
     };
@@ -95,35 +87,40 @@ export class ErrorHandlerProcessor {
    * @param context - The processed context
    * @param telemetrySpan - The telemetry span for tracking
    * @param startTime - Request start time
+   * @param logger - Optional logger instance
    * @returns Standardized error response
    */
   static async handleIgniterError(
     error: IgniterError,
     context: ProcessedContext,
     telemetrySpan: TelemetrySpan | null,
-    startTime: number
+    startTime: number,
+    logger?: IgniterLogger,
   ): Promise<ErrorHandlingResult> {
-    const statusCode = 500;
+    const childLogger = logger?.child("ErrorHandlerProcessor");
+
     const normalizedError = this.normalizeError(error);
 
-    this.logger.error("Igniter framework error", {
-      error: {
-        code: normalizedError.code,
-        message: normalizedError.message,
-        details: normalizedError.details
-      },
-      request: {
-        path: context.request.path,
-        method: context.request.method
-      }
+    // Log framework errors - essential for debugging
+    childLogger?.error("Igniter framework error", {
+      component: "ErrorHandler",
+      code: normalizedError.code,
+      message: normalizedError.message,
+      path: context.request.path,
+      method: context.request.method,
     });
 
     // Track igniter error for CLI dashboard
-    await this.trackError(context, startTime, statusCode, error);
+    await this.trackError(context, startTime, error.statusCode, error, logger);
 
     // Finish telemetry span with error
     if (telemetrySpan) {
-      TelemetryManagerProcessor.finishSpanError(telemetrySpan, statusCode, error);
+      TelemetryManagerProcessor.finishSpanError(
+        telemetrySpan,
+        error.statusCode,
+        error,
+        logger,
+      );
     }
 
     return {
@@ -137,9 +134,9 @@ export class ErrorHandlerProcessor {
           data: null,
         }),
         {
-          status: statusCode,
+          status: error.statusCode,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       ),
       handled: true,
     };
@@ -152,36 +149,49 @@ export class ErrorHandlerProcessor {
    * @param context - The processed context
    * @param telemetrySpan - The telemetry span for tracking
    * @param startTime - Request start time
+   * @param logger - Optional logger instance
    * @returns Standardized error response
    */
   static async handleGenericError(
     error: any,
     context: ProcessedContext,
     telemetrySpan: TelemetrySpan | null,
-    startTime: number
+    startTime: number,
+    logger?: IgniterLogger,
   ): Promise<ErrorHandlingResult> {
+    const childLogger = logger?.child("ErrorHandlerProcessor");
+
     const statusCode = 500;
     const normalizedError = this.normalizeError(error);
     const errorMessage = normalizedError.message || "Internal Server Error";
 
-    this.logger.error("Generic error occurred", {
-      error: {
-        code: normalizedError.code,
-        message: errorMessage,
-        stack: normalizedError.stack?.substring(0, 300) // Truncate stack
-      },
-      request: {
-        path: context.request.path,
-        method: context.request.method
-      }
+    // Log generic errors - essential for debugging
+    childLogger?.error("Unhandled error occurred", {
+      component: "ErrorHandler",
+      code: normalizedError.code,
+      message: errorMessage,
+      path: context.request.path,
+      method: context.request.method,
+      stack: normalizedError.stack,
     });
 
     // Track generic error for CLI dashboard
-    await this.trackError(context, startTime, statusCode, error as Error);
+    await this.trackError(
+      context,
+      startTime,
+      statusCode,
+      error as Error,
+      logger,
+    );
 
     // Finish telemetry span with error
     if (telemetrySpan) {
-      TelemetryManagerProcessor.finishSpanError(telemetrySpan, statusCode, error as Error);
+      TelemetryManagerProcessor.finishSpanError(
+        telemetrySpan,
+        statusCode,
+        error as Error,
+        childLogger,
+      );
     }
 
     return {
@@ -197,7 +207,7 @@ export class ErrorHandlerProcessor {
         {
           status: statusCode,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       ),
       handled: true,
     };
@@ -210,37 +220,49 @@ export class ErrorHandlerProcessor {
    * @param context - The processed context (may be partial)
    * @param telemetrySpan - The telemetry span for tracking
    * @param startTime - Request start time
+   * @param logger - Optional logger instance
    * @returns Standardized error response
    */
   static async handleInitializationError(
     error: any,
     context: ProcessedContext | null,
     telemetrySpan: TelemetrySpan | null,
-    startTime: number
+    startTime: number,
+    logger?: IgniterLogger,
   ): Promise<ErrorHandlingResult> {
+    const childLogger = logger?.child("ErrorHandlerProcessor");
+
     const statusCode = 500;
     const normalizedError = this.normalizeError(error);
 
-    this.logger.error("Context initialization failed", {
-      error: {
-        code: normalizedError.code,
-        message: normalizedError.message,
-        stack: normalizedError.stack?.substring(0, 300)
-      },
-      request: {
-        path: context?.request?.path,
-        method: context?.request?.method
-      }
+    // Log initialization errors - critical for debugging startup issues
+    childLogger?.error("Context initialization failed", {
+      component: "ErrorHandler",
+      code: normalizedError.code,
+      message: normalizedError.message,
+      path: context?.request?.path,
+      method: context?.request?.method,
     });
 
     // Clean up telemetry span if it exists
     if (telemetrySpan) {
-      TelemetryManagerProcessor.cleanupSpan(telemetrySpan, statusCode, error as Error);
+      TelemetryManagerProcessor.cleanupSpan(
+        telemetrySpan,
+        statusCode,
+        error as Error,
+        logger,
+      );
     }
 
     // Track initialization error (may not have full context)
     if (context) {
-      await this.trackError(context, startTime, statusCode, error as Error);
+      await this.trackError(
+        context,
+        startTime,
+        statusCode,
+        error as Error,
+        logger,
+      );
     }
 
     return {
@@ -249,15 +271,14 @@ export class ErrorHandlerProcessor {
           error: {
             message: "Request initialization failed",
             code: "INITIALIZATION_ERROR",
-            details:
-              process.env.NODE_ENV === "development" ? error : undefined,
+            details: process.env.NODE_ENV === "development" ? error : undefined,
           },
           data: null,
         }),
         {
           status: statusCode,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       ),
       handled: true,
     };
@@ -270,33 +291,58 @@ export class ErrorHandlerProcessor {
    * @param context - The processed context
    * @param telemetrySpan - The telemetry span for tracking
    * @param startTime - Request start time
+   * @param logger - Optional logger instance
    * @returns Standardized error response
    */
   static async handleError(
     error: any,
     context: ProcessedContext,
     telemetrySpan: TelemetrySpan | null,
-    startTime: number
+    startTime: number,
+    logger?: IgniterLogger,
   ): Promise<ErrorHandlingResult> {
     // Zod validation errors
-    if (error && typeof error === "object" && "issues" in error && Array.isArray(error.issues)) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "issues" in error &&
+      Array.isArray(error.issues)
+    ) {
       const zodError = {
         ...error,
-        name: 'ZodValidationError',
-        message: 'Request validation failed',
-        code: 'VALIDATION_ERROR',
-        details: error.issues
+        name: "ValidationError",
+        message: "Request validation failed",
+        code: "VALIDATION_ERROR",
+        details: error.issues,
       };
-      return this.handleValidationError(zodError, context, telemetrySpan, startTime);
+      return this.handleValidationError(
+        zodError,
+        context,
+        telemetrySpan,
+        startTime,
+        logger,
+      );
     }
 
     // IgniterError instances
     if (error instanceof IgniterError) {
-      return this.handleIgniterError(error, context, telemetrySpan, startTime);
+      return this.handleIgniterError(
+        error,
+        context,
+        telemetrySpan,
+        startTime,
+        logger,
+      );
     }
 
     // Generic errors
-    return this.handleGenericError(error, context, telemetrySpan, startTime);
+    return this.handleGenericError(
+      error,
+      context,
+      telemetrySpan,
+      startTime,
+      logger,
+    );
   }
 
   /**
@@ -312,18 +358,18 @@ export class ErrorHandlerProcessor {
     // Handle undefined/null
     if (error === null || error === undefined) {
       return {
-        message: 'Unknown error occurred',
-        code: 'UNKNOWN_ERROR',
-        stack: new Error().stack
+        message: "Unknown error occurred",
+        code: "UNKNOWN_ERROR",
+        stack: new Error().stack,
       };
     }
 
     // Handle string errors
-    if (typeof error === 'string') {
+    if (typeof error === "string") {
       return {
         message: error,
-        code: 'GENERIC_ERROR',
-        stack: new Error(error).stack
+        code: "GENERIC_ERROR",
+        stack: new Error(error).stack,
       };
     }
 
@@ -340,38 +386,38 @@ export class ErrorHandlerProcessor {
     if (error instanceof Error) {
       return {
         ...error,
-        message: error.message || 'Unknown error',
-        code: (error as any).code || 'GENERIC_ERROR',
+        message: error.message || "Unknown error",
+        code: (error as any).code || "GENERIC_ERROR",
         stack: error.stack,
       };
     }
 
     // Handle objects with message property
-    if (typeof error === 'object' && error !== null) {
+    if (typeof error === "object" && error !== null) {
       // Zod-like error
       if ("issues" in error && Array.isArray(error.issues)) {
         return {
-          message: error.message || 'Validation failed',
-          code: (error as any).code || 'VALIDATION_ERROR',
+          message: error.message || "Validation failed",
+          code: (error as any).code || "VALIDATION_ERROR",
           stack: (error as any).stack || new Error().stack,
           details: (error as any).issues,
-          ...error
+          ...error,
         };
       }
       return {
-        message: error.message || 'Object-based error',
-        code: error.code || 'GENERIC_ERROR',
+        message: error.message || "Object-based error",
+        code: error.code || "GENERIC_ERROR",
         stack: error.stack || new Error().stack,
         details: error.details || error,
-        ...error
+        ...error,
       };
     }
 
     // Fallback for any other type
     return {
       message: String(error),
-      code: 'UNKNOWN_ERROR',
-      stack: new Error().stack
+      code: "UNKNOWN_ERROR",
+      stack: new Error().stack,
     };
   }
 
@@ -382,21 +428,24 @@ export class ErrorHandlerProcessor {
     context: ProcessedContext,
     startTime: number,
     statusCode: number,
-    error: Error
+    error: Error,
+    logger?: IgniterLogger,
   ): Promise<void> {
+    const childLogger = logger?.child("ErrorHandlerProcessor");
+
     try {
       // Skip if context is not available
       if (!context?.request) {
-        this.logger.warn("Error tracking skipped", {
-          reason: "request context missing"
+        childLogger?.warn("Error tracking skipped", {
+          reason: "request context missing",
         });
         return;
       }
 
       // Skip if tracking is disabled
-      if (process.env.DISABLE_ERROR_TRACKING === 'true') {
-        this.logger.debug("Error tracking disabled", {
-          reason: "DISABLE_ERROR_TRACKING=true"
+      if (process.env.DISABLE_ERROR_TRACKING === "true") {
+        childLogger?.debug("Error tracking disabled", {
+          reason: "DISABLE_ERROR_TRACKING=true",
         });
         return;
       }
@@ -406,14 +455,16 @@ export class ErrorHandlerProcessor {
         path: context.request.path,
         method: context.request.method,
         // Headers can be large, only log keys
-        header_keys: context.request.headers ? Array.from(context.request.headers.keys()) : [],
+        header_keys: context.request.headers
+          ? Array.from(context.request.headers.keys())
+          : [],
         has_body: !!context.request.body,
       };
 
       const normalizedError = this.normalizeError(error);
 
       // Log the error with context
-      this.logger.debug("Error tracking completed", {
+      childLogger?.debug("Error tracking completed", {
         error: {
           code: normalizedError.code,
           message: normalizedError.message,
@@ -426,22 +477,16 @@ export class ErrorHandlerProcessor {
       // TODO: Implement actual error tracking integration
       // Example:
       // if (context.$plugins.errorTracker) {
-      //   await context.$plugins.errorTracker.captureException(normalizedError, {
+      //   await context.$plugins.errorTracker.captureException(error, {
       //     extra: {
-      //       request: requestInfo,
+      //       request: { path: requestInfo.path, method: requestInfo.method },
       //       statusCode,
       //       duration: Date.now() - startTime,
       //     }
       //   });
       // }
-    } catch (trackingError) {
-      // Use a fallback logger to avoid circular logging
-      // This creates a minimal logger that bypasses telemetry to prevent infinite loops
-      const fallbackLogger = IgniterConsoleLogger.create({
-        level: IgniterLogLevel.ERROR,
-        context: { component: 'ErrorHandler-Fallback' }
-      });
-      fallbackLogger.error('Error tracking system failure', { error: trackingError });
+    } catch {
+      // Silently fail error tracking to avoid cascading errors
     }
   }
 }

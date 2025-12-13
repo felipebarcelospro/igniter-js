@@ -1,15 +1,13 @@
 import { SSEProcessor, type SSEChannel } from "../processors/sse.processor";
 import { generateQueryKey } from "../utils/queryKey";
 import type {
+  IgniterLogger,
   IgniterRealtimeService as IgniterRealtimeServiceType,
   RealtimeBuilder,
   RealtimeEventPayload,
   RevalidationTarget,
 } from "../types";
 import type { IgniterStoreAdapter } from "../types/store.interface";
-import { IgniterError } from "../error";
-import { IgniterConsoleLogger } from "./logger.service";
-import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
  * Type-safe, fluent RealtimeBuilder implementation for Igniter.js.
@@ -39,7 +37,9 @@ import { resolveLogLevel, createLoggerContext } from "../utils/logger";
  *   .withData({ secret: "42" })
  *   .publish();
  */
-class RealtimeBuilderImpl<TContext = unknown> implements RealtimeBuilder<TContext> {
+class RealtimeBuilderImpl<
+  TContext = unknown,
+> implements RealtimeBuilder<TContext> {
   private payload: RealtimeEventPayload;
   private readonly store: IgniterStoreAdapter;
 
@@ -114,7 +114,10 @@ class RealtimeBuilderImpl<TContext = unknown> implements RealtimeBuilder<TContex
    * realtime.to("alerts").withDescription("Critical system alert")
    */
   withDescription(description: string): RealtimeBuilder<TContext> {
-    return new RealtimeBuilderImpl(this.store, { ...this.payload, description });
+    return new RealtimeBuilderImpl(this.store, {
+      ...this.payload,
+      description,
+    });
   }
 
   /**
@@ -129,7 +132,7 @@ class RealtimeBuilderImpl<TContext = unknown> implements RealtimeBuilder<TContex
    *   .withData({ secret: "shh" })
    */
   withScopes(
-    scopes: (context: TContext) => Promise<string[]> | string[]
+    scopes: (context: TContext) => Promise<string[]> | string[],
   ): RealtimeBuilder<TContext> {
     return new RealtimeBuilderImpl(this.store, { ...this.payload, scopes });
   }
@@ -149,12 +152,16 @@ class RealtimeBuilderImpl<TContext = unknown> implements RealtimeBuilder<TContex
    */
   async publish(): Promise<void> {
     if (!this.payload.channel) {
-      throw new Error("[RealtimeBuilder] Channel is required to publish an event.");
+      throw new Error(
+        "[RealtimeBuilder] Channel is required to publish an event.",
+      );
     }
     if (!SSEProcessor.channelExists(this.payload.channel)) {
       SSEProcessor.registerChannel({
         id: this.payload.channel,
-        description: this.payload.description || `Realtime events for ${this.payload.channel}`,
+        description:
+          this.payload.description ||
+          `Realtime events for ${this.payload.channel}`,
       });
     }
     SSEProcessor.publishEvent({
@@ -173,7 +180,7 @@ class RealtimeBuilderImpl<TContext = unknown> implements RealtimeBuilder<TContex
  *
  * @example
  * // Create the service (usually injected via builder)
- * const realtime = new IgniterRealtimeService(store);
+ * const realtime = new IgniterRealtimeService(store, logger);
  *
  * // Publish a simple event
  * await realtime.publish("chat:room-1", { text: "Hi!" });
@@ -188,21 +195,24 @@ class RealtimeBuilderImpl<TContext = unknown> implements RealtimeBuilder<TContex
  * // Broadcast to all channels
  * await realtime.broadcast({ system: "maintenance" });
  */
-export class IgniterRealtimeService<TContext = any>
-  implements IgniterRealtimeServiceType<TContext>
-{
+export class IgniterRealtimeService<
+  TContext = any,
+> implements IgniterRealtimeServiceType<TContext> {
   private readonly store: IgniterStoreAdapter;
+  private logger?: IgniterLogger;
 
   /**
    * Construct a new IgniterRealtimeService.
    *
    * @param store - The store adapter for event publishing (reserved for future use).
+   * @param logger - The logger instance for logging events.
    *
    * @example
-   * const realtime = new IgniterRealtimeService(store);
+   * const realtime = new IgniterRealtimeService(store, logger);
    */
-  constructor(store: IgniterStoreAdapter) {
+  constructor(store: IgniterStoreAdapter, logger?: IgniterLogger) {
     this.store = store;
+    this.logger = logger?.child("IgniterRealtimeService");
   }
 
   /**
@@ -225,7 +235,7 @@ export class IgniterRealtimeService<TContext = any>
   async publish(
     channel: string,
     data: unknown,
-    options?: Omit<RealtimeEventPayload<TContext>, "channel" | "data">
+    options?: Omit<RealtimeEventPayload<TContext>, "channel" | "data">,
   ): Promise<void> {
     if (!SSEProcessor.channelExists(channel)) {
       SSEProcessor.registerChannel({
@@ -275,7 +285,7 @@ export class IgniterRealtimeService<TContext = any>
   async broadcast(data: unknown): Promise<void> {
     const channels = SSEProcessor.getRegisteredChannels() || [];
     await Promise.all(
-      channels.map((channel: SSEChannel) => this.publish(channel.id, data))
+      channels.map((channel: SSEChannel) => this.publish(channel.id, data)),
     );
   }
 
@@ -292,19 +302,19 @@ export class IgniterRealtimeService<TContext = any>
   ): Promise<void> {
     const targetsArray = Array.isArray(targets) ? targets : [targets];
 
-    const eventsToPublish = new Map<string, { queryKeys: string[], data?: unknown }>();
+    const eventsToPublish = new Map<
+      string,
+      { queryKeys: string[]; data?: unknown }
+    >();
 
     for (const target of targetsArray) {
       const { path, params, query, scopes, data } = target;
-      const [controller, action] = path.split('.');
+      const [controller, action] = path.split(".");
 
       if (!controller || !action) {
-        // Potentially log this error, but don't throw, to allow other valid targets to proceed
-        const logger = IgniterConsoleLogger.create({
-          level: resolveLogLevel(),
-          context: createLoggerContext('Realtime')
+        this.logger?.error("Invalid path format in revalidate target:", {
+          path,
         });
-        logger.error('Invalid path format in revalidate target:', { path });
         continue;
       }
 
@@ -313,10 +323,14 @@ export class IgniterRealtimeService<TContext = any>
         ...(query && { query }),
       };
 
-      const queryKey = generateQueryKey(controller, action, Object.keys(input).length > 0 ? input : undefined);
+      const queryKey = generateQueryKey(
+        controller,
+        action,
+        Object.keys(input).length > 0 ? input : undefined,
+      );
 
       // Group by scopes to send minimal number of events
-      const scopeKey = (scopes || []).sort().join(',');
+      const scopeKey = (scopes || []).sort().join(",");
 
       if (!eventsToPublish.has(scopeKey)) {
         eventsToPublish.set(scopeKey, { queryKeys: [] });
@@ -332,20 +346,20 @@ export class IgniterRealtimeService<TContext = any>
     }
 
     // Register revalidation channel if it doesn't exist
-    if (!SSEProcessor.channelExists('revalidation')) {
+    if (!SSEProcessor.channelExists("revalidation")) {
       SSEProcessor.registerChannel({
-        id: 'revalidation',
-        description: 'Channel for query revalidation events',
+        id: "revalidation",
+        description: "Channel for query revalidation events",
       });
     }
 
     // Publish one event per scope group
     for (const [scopeKey, eventPayload] of eventsToPublish.entries()) {
-      const scopes = scopeKey ? scopeKey.split(',') : undefined;
+      const scopes = scopeKey ? scopeKey.split(",") : undefined;
 
       SSEProcessor.publishEvent({
-        channel: 'revalidation',
-        type: 'revalidate',
+        channel: "revalidation",
+        type: "revalidate",
         scopes: scopes,
         data: {
           queryKeys: eventPayload.queryKeys,

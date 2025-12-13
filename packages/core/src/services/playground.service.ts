@@ -1,4 +1,4 @@
-import { parseURL } from "@/utils";
+import { parseURL } from "../utils";
 import type { DocsConfig } from "../types";
 import { IgniterConsoleLogger } from "./logger.service";
 import { resolveLogLevel, createLoggerContext } from "../utils/logger";

@@ -1,5 +1,12 @@
 import type { Queue, Worker, Job, QueueOptions, WorkerOptions } from "bullmq";
-import type { IgniterLogger, IgniterStoreAdapter } from "@igniter-js/core";
+import type {
+  IgniterLogger,
+  IgniterStoreAdapter,
+  WorkerHandle,
+  WorkerMetrics,
+  JobDefinition,
+  JobLimiter,
+} from "@igniter-js/core";
 
 /**
  * Options for configuring the BullMQ Adapter.
@@ -39,7 +46,7 @@ export interface BullMQAdapterOptions {
    * Factory function to create application context for job execution.
    * This function will be called for each job to provide the runtime context.
    */
-  contextFactory?: () => any | Promise<any>;
+  context?: () => any | Promise<any>;
 
   /**
    * Auto-start worker configuration.
@@ -52,6 +59,20 @@ export interface BullMQAdapterOptions {
     concurrency?: number;
     /** Enable debug logging */
     debug?: boolean;
+    /**
+     * Rate limiter configuration for auto-started workers.
+     * Limits the number of jobs processed within a time window.
+     *
+     * @example
+     * ```typescript
+     * // Process maximum 1 job every 30 seconds (useful for API rate limits)
+     * limiter: {
+     *   max: 1,
+     *   duration: 30000,
+     * }
+     * ```
+     */
+    limiter?: JobLimiter;
   };
 }
 
@@ -60,17 +81,22 @@ export interface BullMQAdapterOptions {
  */
 export interface BullMQInstances {
   /**
-   * Map of active queues.
+   * Map of active queues (queueName -> Queue).
    */
   queues: Map<string, Queue>;
   /**
-   * Map of active workers.
+   * Map of active worker handles (workerKey -> BullMQWorkerHandle).
+   */
+  workerHandles: Map<string, BullMQWorkerHandle>;
+  /**
+   * Map of raw BullMQ worker instances (workerKey -> Worker).
+   * Used internally for direct BullMQ operations.
    */
   workers: Map<string, Worker>;
   /**
    * Registered jobs in the system.
    */
-  registeredJobs: Map<string, any>;
+  registeredJobs: Map<string, JobDefinition<any, any, any>>;
 }
 
 /**
@@ -79,3 +105,42 @@ export interface BullMQInstances {
 export type BullMQJob = Job;
 export type BullMQQueue = Queue;
 export type BullMQWorker = Worker;
+
+/**
+ * Extended WorkerHandle implementation for BullMQ.
+ * Includes BullMQ-specific properties and methods.
+ */
+export interface BullMQWorkerHandle extends WorkerHandle {
+  /** The underlying BullMQ Worker instance */
+  readonly worker: Worker;
+  /** Configuration used to create this worker */
+  readonly config: {
+    concurrency: number;
+    queues: string[];
+  };
+  /** Timestamp when the worker was started */
+  readonly startedAt: Date;
+}
+
+/**
+ * Internal state for tracking worker metrics.
+ */
+export interface BullMQWorkerMetricsState {
+  /** Total jobs processed */
+  processed: number;
+  /** Total jobs failed */
+  failed: number;
+  /** Total processing time in ms (for averaging) */
+  totalDuration: number;
+  /** Worker start time */
+  startedAt: Date;
+}
+
+/**
+ * Factory function type for creating worker handles.
+ */
+export type WorkerHandleFactory = (
+  worker: Worker,
+  queueName: string,
+  config: { concurrency: number; queues: string[] },
+) => BullMQWorkerHandle;

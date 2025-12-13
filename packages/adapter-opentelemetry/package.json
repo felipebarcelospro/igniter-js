@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/adapter-opentelemetry",
-  "version": "0.2.1",
+  "version": "0.2.55",
   "description": "OpenTelemetry adapter for Igniter.js telemetry system",
   "exports": {
     ".": {
@@ -24,14 +24,19 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@igniter-js/core": "*"
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.67.2",
+    "@opentelemetry/exporter-jaeger": "^2.2.0",
+    "@opentelemetry/exporter-otlp-http": "^0.26.0",
+    "@opentelemetry/exporter-prometheus": "^0.208.0",
+    "@opentelemetry/resources": "^2.2.0",
+    "@opentelemetry/sdk-metrics": "^2.2.0",
+    "@opentelemetry/sdk-node": "^0.208.0",
+    "@opentelemetry/sdk-trace-node": "^2.2.0",
+    "@opentelemetry/semantic-conventions": "^1.38.0"
   },
   "peerDependencies": {
-    "@opentelemetry/api": "^1.7.0",
-    "@opentelemetry/sdk-node": "^0.202.0",
-    "@opentelemetry/exporter-jaeger": "^1.25.0",
-    "@opentelemetry/exporter-prometheus": "^0.202.0",
-    "@opentelemetry/exporter-otlp-http": "^0.202.0"
+    "@igniter-js/core": "*"
   },
   "peerDependenciesMeta": {
     "@opentelemetry/exporter-jaeger": {
@@ -45,21 +50,12 @@
     }
   },
   "devDependencies": {
+    "@igniter-js/core": "*",
     "@types/node": "^20.0.0",
-    "@opentelemetry/api": "^1.7.0",
-    "@opentelemetry/sdk-node": "^0.202.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.60.0",
-    "@opentelemetry/resources": "^1.25.0",
-    "@opentelemetry/semantic-conventions": "^1.25.0",
-    "@opentelemetry/sdk-trace-node": "^1.25.0",
-    "@opentelemetry/exporter-jaeger": "^1.25.0",
-    "@opentelemetry/exporter-otlp-http": "latest",
-    "@opentelemetry/sdk-metrics": "^1.25.0",
-    "@opentelemetry/exporter-prometheus": "^0.202.0",
     "eslint": "^8.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
-    "vitest": "^1.0.0"
+    "vitest": "^4.0.14"
   },
   "keywords": [
     "igniter",

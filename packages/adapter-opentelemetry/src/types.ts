@@ -1,6 +1,7 @@
 import type {
   IgniterTelemetryProvider,
   IgniterTelemetryConfig,
+  IgniterLogger,
 } from '@igniter-js/core';
 
 /**
@@ -12,23 +13,29 @@ export type OpenTelemetryExporter = 'console' | 'jaeger' | 'otlp' | 'prometheus'
  * OpenTelemetry specific configuration
  */
 export interface OpenTelemetryConfig extends IgniterTelemetryConfig {
+  /** Logger */
+  logger?: IgniterLogger;
+  
   /** OpenTelemetry exporters to use */
   exporters?: OpenTelemetryExporter[];
   
   /** Jaeger configuration */
   jaeger?: {
+    host?: string;
     endpoint?: string;
     serviceName?: string;
   };
   
   /** OTLP configuration */
   otlp?: {
+    host?: string;
     endpoint?: string;
     headers?: Record<string, string>;
   };
   
   /** Prometheus configuration */
   prometheus?: {
+    host?: string;
     endpoint?: string;
     port?: number;
   };
@@ -51,9 +58,6 @@ export interface CreateOpenTelemetryAdapterOptions {
   /** OpenTelemetry configuration */
   config: OpenTelemetryConfig;
   
-  /** Auto-initialize SDK (default: true) */
-  autoInit?: boolean;
-  
   /** Graceful shutdown timeout in ms (default: 5000) */
   shutdownTimeout?: number;
 }
@@ -73,4 +77,7 @@ export interface OpenTelemetryAdapter extends IgniterTelemetryProvider {
   
   /** Force flush all pending telemetry data */
   forceFlush(): Promise<void>;
+
+  /** Initialize the OpenTelemetry adapter */
+  initialize(): Promise<void>;
 } 

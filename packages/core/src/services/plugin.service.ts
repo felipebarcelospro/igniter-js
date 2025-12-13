@@ -12,7 +12,10 @@ import type {
   PluginActionDefinition,
   PluginControllerAction,
 } from "../types/plugin.interface";
-import type { ContextCallback, IgniterBaseContext } from "../types/context.interface";
+import type {
+  ContextCallback,
+  IgniterBaseContext,
+} from "../types/context.interface";
 import type { StandardSchemaV1 } from "../types/schema.interface";
 import type { IgniterStoreAdapter } from "../types/store.interface";
 import { IgniterLogLevel, type IgniterLogger } from "../types";
@@ -47,9 +50,7 @@ import { resolveLogLevel, createLoggerContext } from "../utils/logger";
  * await pluginManager.emit('user:login', payload, context);
  * ```
  */
-export class IgniterPluginManager<
-  TContext extends object | ContextCallback,
-> {
+export class IgniterPluginManager<TContext extends object | ContextCallback> {
   // ============ PRIVATE PROPERTIES ============
   private readonly plugins: PluginRegistry<TContext> = new Map();
   private readonly dependencyGraph: Map<string, PluginDependencyNode> =
@@ -69,7 +70,7 @@ export class IgniterPluginManager<
 
   // ============ INJECTED DEPENDENCIES ============
   private readonly store: IgniterStoreAdapter;
-  private readonly logger: IgniterLogger;
+  private readonly logger?: IgniterLogger;
 
   // ============ CONSTRUCTOR ============
   constructor(params: {
@@ -78,12 +79,7 @@ export class IgniterPluginManager<
     config?: PluginManagerConfig<TContext>;
   }) {
     this.store = params.store;
-    this.logger =
-      params.logger ||
-      IgniterConsoleLogger.create({
-        level: resolveLogLevel(),
-        context: createLoggerContext("PluginManager"),
-      });
+    this.logger = params.logger?.child("IgniterPluginManager");
 
     this.config = {
       enableRuntimeValidation: true,
@@ -93,10 +89,7 @@ export class IgniterPluginManager<
       ...params.config,
     };
 
-    this.logger.debug(
-      "[PluginManager] Initialized with config:",
-      this.config,
-    );
+    this.logger?.debug("Initialized with config:", this.config);
   }
 
   // ============ PLUGIN REGISTRATION ============
@@ -163,15 +156,15 @@ export class IgniterPluginManager<
       // Trigger callback
       this.config.onPluginLoaded?.(plugin.name);
 
-      this.logger.debug(`[PluginManager] Registered plugin: ${plugin.name}`);
+      this.logger?.debug(`Registered plugin: ${plugin.name}`);
     } catch (error) {
       this.config.onPluginError?.(error as Error, plugin.name);
       throw error;
     } finally {
       if (this.config.enableMetrics) {
         const executionTime = performance.now() - startTime;
-        this.logger.debug(
-          `[PluginManager] Registration time for ${plugin.name}: ${executionTime.toFixed(2)}ms`,
+        this.logger?.debug(
+          `Registration time for ${plugin.name}: ${executionTime.toFixed(2)}ms`,
         );
       }
     }
@@ -221,7 +214,7 @@ export class IgniterPluginManager<
 
       this.config.onPluginUnloaded?.(pluginName);
 
-      this.logger.debug(`[PluginManager] Unregistered plugin: ${pluginName}`);
+      this.logger?.debug(`Unregistered plugin: ${pluginName}`);
     } catch (error) {
       this.config.onPluginError?.(error as Error, pluginName);
       throw error;
@@ -235,7 +228,7 @@ export class IgniterPluginManager<
    */
   async loadAll(): Promise<void> {
     if (this.isInitialized) {
-      this.logger.warn("[PluginManager] Already initialized");
+      this.logger?.warn("Already initialized");
       return;
     }
 
@@ -266,7 +259,7 @@ export class IgniterPluginManager<
         // Mark as loaded
         if (node) node.status = "loaded";
 
-        this.logger.debug(`[PluginManager] Loaded plugin: ${pluginName}`);
+        this.logger?.debug(`Loaded plugin: ${pluginName}`);
       } catch (error) {
         const node = this.dependencyGraph.get(pluginName);
         if (node) node.status = "failed";
@@ -279,7 +272,7 @@ export class IgniterPluginManager<
     }
 
     this.isInitialized = true;
-    this.logger.debug("[PluginManager] All plugins loaded successfully");
+    this.logger?.debug("All plugins loaded successfully");
   }
 
   /**
@@ -365,15 +358,13 @@ export class IgniterPluginManager<
 
       success = true;
 
-      this.logger.debug(
-        `[PluginManager] Executed ${pluginName}.${actionName} successfully`,
-      );
+      this.logger?.debug(`Executed ${pluginName}.${actionName} successfully`);
     } catch (err) {
       error = err as Error;
       this.config.onPluginError?.(error, pluginName);
 
-      this.logger.error(
-        `[PluginManager] Failed to execute ${pluginName}.${actionName}:`,
+      this.logger?.error(
+        `Failed to execute ${pluginName}.${actionName}:`,
         error.message,
       );
     } finally {
@@ -450,12 +441,12 @@ export class IgniterPluginManager<
               `Event listener ${listener.pluginName}.${eventName}`,
             );
 
-            this.logger.debug(
-              `[PluginManager] Local event ${eventName} handled by ${listener.pluginName}`,
+            this.logger?.debug(
+              `Local event ${eventName} handled by ${listener.pluginName}`,
             );
           } catch (error) {
-            this.logger.error(
-              `[PluginManager] Local event listener failed for ${eventName} in ${listener.pluginName}:`,
+            this.logger?.error(
+              `Local event listener failed for ${eventName} in ${listener.pluginName}:`,
               error,
             );
             this.config.onPluginError?.(error as Error, listener.pluginName);
@@ -476,14 +467,11 @@ export class IgniterPluginManager<
 
       await this.store.publish(eventChannel, eventMessage);
 
-      this.logger.debug(
-        `[PluginManager] Event ${eventName} published to channel: ${eventChannel}`,
+      this.logger?.debug(
+        `Event ${eventName} published to channel: ${eventChannel}`,
       );
     } catch (error) {
-      this.logger.error(
-        `[PluginManager] Failed to emit event ${eventName}:`,
-        error,
-      );
+      this.logger?.error(`Failed to emit event ${eventName}:`, error);
       throw error;
     }
   }
@@ -846,9 +834,7 @@ export class IgniterPluginManager<
       proxy as PluginSelfContext<TContext, TActions>,
     );
 
-    this.logger.debug(
-      `[PluginManager] Created self-reference proxy for ${plugin.name}`,
-    );
+    this.logger?.debug(`Created self-reference proxy for ${plugin.name}`);
   }
 
   /**
@@ -909,8 +895,8 @@ export class IgniterPluginManager<
           }
         }
       } catch (error) {
-        this.logger.error(
-          `[PluginManager] Context extension failed for plugin ${pluginName}:`,
+        this.logger?.error(
+          `Context extension failed for plugin ${pluginName}:`,
           error,
         );
         this.config.onPluginError?.(error as Error, pluginName);

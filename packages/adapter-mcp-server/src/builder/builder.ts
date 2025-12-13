@@ -1,7 +1,7 @@
 import type { IgniterRouter } from "@igniter-js/core";
 import type { ServerCapabilities } from "@modelcontextprotocol/sdk/types.js";
 import { createMcpAdapter } from "src/core/adapter";
-import type { ArgsRawShape, McpAdapterOptions, McpAdapterSpecificOptions, McpCustomTool, McpEventsOptions, McpOAuthConfig, McpPrompt, McpResource, McpResponseOptions, McpServerInfo, McpToolTransform } from "src/types";
+import type { ArgsRawShape, InferToolPaths, McpAdapterOptions, McpAdapterSpecificOptions, McpCustomTool, McpEventsOptions, McpOAuthConfig, McpPrompt, McpResource, McpResponseOptions, McpServerInfo, McpToolFilterMode, McpToolTransform } from "src/types";
 
 export class IgniterMcpServer<
   TRouter extends IgniterRouter<any, any, any, any, any>,
@@ -60,6 +60,35 @@ export class IgniterMcpServer<
       this._options.tools = { autoMap: true, custom: [] };
     }
     this._options.tools.transform = transform;
+    return new IgniterMcpServer<TRouter, TCustomTools, TCustomPrompts, TCustomResources>({
+      ...this._options,
+    });
+  }
+
+  /**
+   * Filter which tools to expose based on a type-safe list of tool paths.
+   * 
+   * @param paths - Array of tool paths in format "controller.action"
+   * @param mode - 'include' (only these tools) or 'exclude' (all except these). Default: 'include'
+   * 
+   * @example
+   * ```typescript
+   * // Only include specific tools
+   * .withToolFilter(['users.list', 'users.getById'])
+   * 
+   * // Exclude specific tools (include all others)
+   * .withToolFilter(['users.delete', 'users.dangerousAction'], 'exclude')
+   * ```
+   */
+  withToolFilter<TPaths extends InferToolPaths<TRouter>>(
+    paths: TPaths[],
+    mode: McpToolFilterMode = 'include'
+  ): IgniterMcpServer<TRouter, TCustomTools, TCustomPrompts, TCustomResources> {
+    if (!this._options.tools) {
+      this._options.tools = { autoMap: true, custom: [] };
+    }
+    this._options.tools.toolPaths = paths;
+    this._options.tools.filterMode = mode;
     return new IgniterMcpServer<TRouter, TCustomTools, TCustomPrompts, TCustomResources>({
       ...this._options,
     });

@@ -1,6 +1,7 @@
-import chalk from 'chalk';
-import { IgniterConsoleLogger } from '../services/logger.service';
-import { resolveLogLevel, createLoggerContext } from '../utils/logger';
+import chalk from "chalk";
+import { IgniterConsoleLogger } from "../services/logger.service";
+import { resolveLogLevel, createLoggerContext } from "../utils/logger";
+import { IgniterLogger } from "@/types";
 
 /**
  * Custom error class for Igniter Framework
@@ -8,6 +9,7 @@ import { resolveLogLevel, createLoggerContext } from '../utils/logger';
  */
 export class IgniterError extends Error {
   public readonly code: string;
+  public readonly statusCode: number;
   public readonly details?: unknown;
   public readonly metadata?: Record<string, unknown>;
   public readonly causer?: string;
@@ -16,94 +18,39 @@ export class IgniterError extends Error {
   constructor({
     message,
     code,
-    log = false,
+    statusCode,
     causer,
     details,
-    metadata
+    metadata,
+    logger,
   }: {
     message: string;
     code: string;
-    log?: boolean;
+    statusCode?: number;
     causer?: string;
     details?: unknown;
     metadata?: Record<string, unknown>;
+    logger?: IgniterLogger;
   }) {
     super(message);
 
-    this.name = 'IgniterError';
+    this.name = "IgniterError";
     this.code = code;
+    this.statusCode = statusCode ?? 500;
     this.details = details;
     this.metadata = metadata;
+    this.causer = causer;
     this.stackTrace = this.stack;
 
     // Business Rule: Log error with styled console output
-    if(log) this.logError();
-  }
-
-  /**
-   * Formats and logs the error with styled console output similar to NestJS
-   */
-  private async logError(): Promise<void> {
-    try {
-      const logger = new IgniterConsoleLogger({ 
-        level: resolveLogLevel(),
-        context: createLoggerContext('IgniterError')
+    if (logger) {
+      logger.error(this.message, {
+        statusCode: this.statusCode,
+        code: this.code,
+        details: this.details,
+        metadata: this.metadata,
+        stackTrace: this.stackTrace,
       });
-      
-      // Business Rule: Create a visually distinct error boundary
-      const separator = chalk.red('━'.repeat(50));
-      logger.error('\n' + separator);
-
-      // Business Rule: Display main error information in a structured format
-      logger.error(
-        chalk.red.bold('⚠ IGNITER ERROR\n')
-      );
-
-      // Business Rule: Show error code and message in separate lines for better readability
-      logger.error(
-        chalk.red('Code:    ') + chalk.yellow(`${this.code}`) +
-        '\n' + chalk.red('Message: ') + chalk.yellow(`${this.message}`)
-      );
-
-      // Business Rule: Log additional information in a structured format if available
-      if (this.details) {
-        logger.error('\n' + chalk.red('Details: '));
-        logger.error(chalk.gray(JSON.stringify(this.details, null, 2)));
-      }
-
-      if (this.metadata) {
-        logger.error('\n' + chalk.red('Metadata: '));
-        logger.error(chalk.gray(JSON.stringify(this.metadata, null, 2)));
-      }
-
-      if (this.stackTrace) {
-        logger.error('\n' + chalk.red('Stack Trace: '));
-        logger.error(chalk.gray(this.stackTrace));
-      }
-
-      logger.error(separator + '\n');
-    } catch (loggerError) {
-      // Fallback to console if logger fails
-      const separator = chalk.red('━'.repeat(50));
-      console.log('\n' + separator);
-      console.log(chalk.red.bold('⚠ IGNITER ERROR\n'));
-      console.log(
-        chalk.red('Code:    ') + chalk.yellow(`${this.code}`),
-        '\n' + chalk.red('Message: ') + chalk.yellow(`${this.message}`)
-      );
-      if (this.details) {
-        console.log('\n' + chalk.red('Details: '));
-        console.log(chalk.gray(JSON.stringify(this.details, null, 2)));
-      }
-      if (this.metadata) {
-        console.log('\n' + chalk.red('Metadata: '));
-        console.log(chalk.gray(JSON.stringify(this.metadata, null, 2)));
-      }
-      if (this.stackTrace) {
-        console.log('\n' + chalk.red('Stack Trace: '));
-        console.log(chalk.gray(this.stackTrace));
-      }
-      console.log(separator + '\n');
     }
   }
 
@@ -117,7 +64,7 @@ export class IgniterError extends Error {
       code: this.code,
       details: this.details,
       metadata: this.metadata,
-      stackTrace: this.stackTrace
+      stackTrace: this.stackTrace,
     };
   }
 }

@@ -4,8 +4,8 @@ applyTo: '**'
 
 # Lia - AI Agent for @igniter-js/new-cli
 
-> **Last Updated:** 2025-01-01
-> **Version:** 1.0
+> **Last Updated:** 2025-11-12
+> **Version:** 1.2
 
 ---
 
@@ -45,114 +45,128 @@ Maintain and extend the next-generation CLI tool for Igniter.js, ensuring reliab
 ```
 @igniter-js/new-cli/
 ├── bin/
-│   └── igniter           # Executable entry point
+│   └── igniter
+├── dist/
+│   ├── index.d.mts
+│   ├── index.mjs
+│   └── index.mjs.map
 ├── src/
-│   ├── commands/         # CLI command definitions
-│   │   ├── generate/     # Code generation commands
+│   ├── commands/
+│   │   ├── dev/
+│   │   │   ├── action.ts
+│   │   │   ├── components/
+│   │   │   │   ├── DevUI.tsx
+│   │   │   │   └── index.ts
+│   │   │   ├── index.ts
+│   │   │   └── types.ts
+│   │   ├── generate/
 │   │   │   ├── controller/
 │   │   │   │   ├── action.ts
 │   │   │   │   └── index.ts
 │   │   │   ├── docs/
 │   │   │   │   ├── action.ts
 │   │   │   │   └── index.ts
-│   │   │   ├── feature/    # App feature generation (NOT add-ons)
+│   │   │   ├── feature/
 │   │   │   │   ├── action.ts
 │   │   │   │   ├── feature.ts
 │   │   │   │   ├── index.ts
-│   │   │   │   ├── prompts.ts
-│   │   │   │   ├── providers/
-│   │   │   │   │   ├── base.ts
-│   │   │   │   │   ├── prisma.ts
-│   │   │   │   │   └── registry.ts
+│   │   │   │   └── prompts.ts
+│   │   │   ├── index.ts
 │   │   │   ├── procedure/
 │   │   │   │   ├── action.ts
 │   │   │   │   └── index.ts
-│   │   │   ├── schema/
-│   │   │   │   ├── action.ts
-│   │   │   │   └── index.ts
-│   │   │   └── index.ts
-│   │   └── init/        # Project initialization
+│   │   │   └── schema/
+│   │   │       ├── action.ts
+│   │   │       └── index.ts
+│   │   └── init/
 │   │       ├── action.ts
 │   │       ├── generator.ts
 │   │       ├── index.ts
 │   │       ├── prompts.ts
 │   │       └── types.ts
-│   ├── core/            # Core utilities and systems
-│   │   ├── registry/    # Base classes for registry items
-│   │   │   ├── add-ons/   # Add-on registry classes
-│   │   │   │   ├── base-addon.ts
-│   │   │   │   └── add-on-registry.ts
-│   │   │   └── starters/
-│   │   │       ├── base-starter.ts
-│   │   │       └── starter-registry.ts
+│   ├── core/
 │   │   ├── file-system.ts
 │   │   ├── framework.ts
 │   │   ├── handlebars-helpers.ts
 │   │   ├── logger.ts
 │   │   ├── openapi.ts
 │   │   ├── package-manager.ts
+│   │   ├── registry/
+│   │   │   ├── add-ons/
+│   │   │   │   ├── add-on-registry.ts
+│   │   │   │   └── base-addon.ts
+│   │   │   ├── schema-provider/
+│   │   │   │   ├── base-schema-provider.ts
+│   │   │   │   └── schema-provider-registry.ts
+│   │   │   └── starters/
+│   │   │       ├── base-starter.ts
+│   │   │       └── starter-registry.ts
 │   │   ├── router-instrospector.ts
 │   │   ├── template-engine.ts
+│   │   ├── terminal.ts
 │   │   └── watcher.ts
-│   ├── index.ts         # Main CLI entry point
-│   ├── registry/        # Registry of available items
-│   │   ├── add-ons/    # Add-on registry implementations
-│   │   │   ├── bots/
-│   │   │   │   └── index.ts
+│   ├── index.ts
+│   ├── registry/
+│   │   ├── add-ons/
+│   │   │   ├── auth.ts
+│   │   │   ├── bots.ts
+│   │   │   ├── database.ts
 │   │   │   ├── index.ts
-│   │   │   ├── jobs/
-│   │   │   │   └── index.ts
-│   │   │   ├── logging/
-│   │   │   │   └── index.ts
-│   │   │   ├── mcp/
-│   │   │   │   └── index.ts
-│   │   │   ├── store/
-│   │   │   │   └── index.ts
-│   │   │   └── telemetry/
-│   │   │       └── index.ts
-│   │   ├── types.ts    # Registry type definitions
-│   │   └── starters/    # Starter registry implementations
-│   │       ├── bun-api-starter.ts
-│   │       ├── bun-react-starter.ts
-│   │       ├── deno-starter.ts
-│   │       ├── express-starter.ts
-│   │       ├── index.ts
-│   │       ├── nextjs-starter.ts
-│   │       └── tanstack-start-starter.ts
-│   └── utils/           # Utility functions
+│   │   │   ├── jobs.ts
+│   │   │   ├── logging.ts
+│   │   │   ├── mcp.ts
+│   │   │   ├── shadcn.ts
+│   │   │   ├── store.ts
+│   │   │   └── telemetry.ts
+│   │   ├── schema-provider/
+│   │   │   ├── index.ts
+│   │   │   └── prisma.ts
+│   │   ├── starters/
+│   │   │   ├── bun-api-starter.ts
+│   │   │   ├── bun-react-starter.ts
+│   │   │   ├── deno-starter.ts
+│   │   │   ├── express-starter.ts
+│   │   │   ├── index.ts
+│   │   │   ├── nextjs-starter.ts
+│   │   │   └── tanstack-start-starter.ts
+│   │   └── types.ts
+│   └── utils/
 │       ├── casing.ts
 │       └── try-catch.ts
-├── templates/           # Handlebars templates
-│   ├── add-ons/        # Add-on specific templates (NEW)
-│   │   ├── bots/       # Bot framework templates
+├── templates/
+│   ├── add-ons/
+│   │   ├── auth/
+│   │   │   └── better-auth/
+│   │   │       └── auth.hbs
+│   │   ├── bots/
 │   │   │   ├── nextjs/
 │   │   │   │   └── route-handler.hbs
 │   │   │   ├── sample-bot.hbs
 │   │   │   └── tanstack-start/
 │   │   │       └── route-handler.hbs
-│   │   ├── jobs/       # Background job templates
+│   │   ├── database/
+│   │   │   ├── drizzle/
+│   │   │   └── prisma/
+│   │   │       ├── lib.hbs
+│   │   │       ├── prisma.config.hbs
+│   │   │       └── schema.hbs
+│   │   ├── jobs/
 │   │   │   ├── jobs.ts.hbs
 │   │   │   ├── redis.ts.hbs
 │   │   │   └── store.ts.hbs
-│   │   ├── logging/    # Logging templates
+│   │   ├── logging/
 │   │   │   └── logger.ts.hbs
-│   │   ├── mcp/        # MCP server templates
+│   │   ├── mcp/
 │   │   │   ├── mcp.ts.hbs
 │   │   │   ├── nextjs/
 │   │   │   │   └── route-handler.hbs
 │   │   │   └── tanstack-start/
 │   │   │       └── route-handler.hbs
-│   │   ├── store/      # Redis store templates
+│   │   ├── store/
 │   │   │   ├── redis.ts.hbs
 │   │   │   └── store.ts.hbs
-│   │   └── telemetry/  # Telemetry templates
+│   │   └── telemetry/
 │   │       └── telemetry.ts.hbs
-│   ├── scaffold/       # General scaffolding templates
-│   │   ├── example-feature/
-│   │   │   ├── example.controller.hbs
-│   │   │   ├── example.interfaces.hbs
-│   │   │   └── example.procedure.hbs
-│   │   └── igniter.schema.hbs
 │   ├── generate/
 │   │   └── feature/
 │   │       ├── empty.controller.hbs
@@ -161,7 +175,13 @@ Maintain and extend the next-generation CLI tool for Igniter.js, ensuring reliab
 │   │       ├── schema.controller.hbs
 │   │       ├── schema.interfaces.hbs
 │   │       └── schema.procedure.hbs
-│   └── starters/       # Starter-specific templates
+│   ├── scaffold/
+│   │   ├── example-feature/
+│   │   │   ├── example.controller.hbs
+│   │   │   ├── example.interfaces.hbs
+│   │   │   └── example.procedure.hbs
+│   │   └── igniter.schema.hbs
+│   └── starters/
 │       ├── igniter.client.hbs
 │       ├── igniter.context.hbs
 │       ├── igniter.hbs
@@ -202,6 +222,7 @@ igniter [command] [subcommand] [options]
    - `igniter generate procedure` - Create a procedure inside an existing or new feature
    - `igniter generate docs` - Generate OpenAPI specification
    - `igniter generate schema` - Generate client schema
+3. **`igniter dev`** - Watch router and feature changes to regenerate schema/docs and optionally run the app dev server with live Ink UI feedback
 
 ### 3.2. Command Implementation Pattern
 
@@ -243,7 +264,7 @@ export async function handleAction(arg: string, options: OptionsType) {
 - `--mode <mode>` - 'install' (in-place) or 'new-project' (new directory)
 - `--pm, --package-manager <manager>` - npm, yarn, pnpm, bun
 - `--template <template>` - Specific starter template
-- `--features <features>` - Comma-separated feature list
+- `--add-ons <add-ons>` - Comma-separated add-on list
 - `--database <database>` - Database provider
 - `--no-git` - Skip git initialization
 - `--no-install` - Skip dependency installation
@@ -255,6 +276,24 @@ export async function handleAction(arg: string, options: OptionsType) {
 2. **Configuration Building** - Assemble ProjectSetupConfig
 3. **Project Generation** - Use ProjectGenerator to create project
 4. **Post-processing** - Git init, dependency install, Docker setup
+
+### 3.4. Dev Command Deep Dive
+
+The `igniter dev` workflow keeps Igniter artefacts in sync while you iterate on your app.
+
+#### Command Options
+- `--router <path>` - Router entry file to introspect (`src/igniter.router.ts` by default)
+- `--output <path>` - Client schema output path (`src/igniter.schema.ts` by default)
+- `--docs-output <dir>` - Directory that receives `openapi.json` (`./src/docs` by default)
+- `--cmd <command>` - Custom command to boot your application dev server (falls back to `<pm> run dev`)
+
+#### Behaviour Overview
+- Performs an initial schema (`generateSchemaWatchMode`) and docs (`generateDocsWatchMode`) build before starting watchers
+- Watches the router file plus `src/features/**/*` (when the folder exists) using chokidar with 300 ms debounce
+- Re-runs schema/docs generation on each change and surfaces durations, counters, and errors inside an Ink dashboard
+- Streams your application dev server logs in a separate tab; toggle between Igniter/App logs with `1`/`2` or arrow keys
+- Detects the package manager to infer the default command (`npm run dev`, `pnpm dev`, `bun dev`, `yarn dev`) when `--cmd` is omitted
+- Gracefully handles exit signals (Ctrl+C / ESC) by tearing down the watcher and child process
 
 ---
 
@@ -287,17 +326,17 @@ type FeatureRegistry = AddOnRegistry
 
 #### Available Add-Ons
 
-| ID | Name | Description | Hint | Dependencies | Docker Services |
-|----|------|-------------|------|-------------|-----------------|
-| `store` | Store | Caching, sessions, and pub/sub messaging | Recommended | @igniter-js/adapter-redis, ioredis, @types/ioredis | redis:7-alpine |
-| `jobs` | Jobs | Background task processing and job queues | For background processing | @igniter-js/adapter-redis, @igniter-js/adapter-bullmq, bullmq, ioredis, @types/ioredis | redis:7-alpine |
-| `mcp` | MCP Server | AI assistant integration with Model Context Protocol | For AI integration | @igniter-js/adapter-mcp-server, ioredis, @types/ioredis | redis:7-alpine |
-| `logging` | Logging | Advanced console logging with structured output | For better observability | @igniter-js/core | - |
-| `telemetry` | Telemetry | Telemetry for tracking requests and errors | For observability | @igniter-js/core | - |
-| `bots` | Bots (Telegram, WhatsApp, Discord, etc.) | Multi-platform chatbot support | For multi-platform chatbot support | @igniter-js/bot | - |
-| `database` | Database | Database integration with multiple ORMs and providers | Essential for data persistence | Depends on ORM selection (Prisma/Drizzle) | Depends on provider (PostgreSQL/MySQL/SQLite) |
-| `auth` | Authentication | Authentication and authorization | Essential for user authentication and authorization | better-auth | - |
-| `shadcn-ui` | Shadcn/UI | Beautifully designed components built with Radix UI and Tailwind CSS | Production-grade UI built on top of Shadcn/UI and Radix primitives | shadcn@latest | - |
+| ID | Name | Description | Key assets | Docker services |
+|----|------|-------------|------------|-----------------|
+| `store` | Store | Caching, sessions, and pub/sub messaging | Templates: `src/services/redis.ts`, `src/services/store.ts`; dependencies: `@igniter-js/adapter-redis`, `ioredis@5.6.1`, `@types/ioredis@4.28.10`; env vars: `REDIS_*` | `redis:7-alpine` (auth via `${REDIS_PASSWORD}`) |
+| `jobs` | Jobs | Background task processing and job queues | Templates: jobs/store/redis services; dependencies: `@igniter-js/adapter-redis`, `@igniter-js/adapter-bullmq`, `bullmq@5.58.7`, `ioredis@5.6.1`, `@types/ioredis@4.28.10`; env vars: `REDIS_*`, `IGNITER_JOBS_QUEUE_PREFIX` | `redis:7-alpine` |
+| `mcp` | MCP Server | Model Context Protocol adapter for AI copilots | Templates: `src/igniter.mcp.ts` + Next.js/TanStack handlers; dependencies: `@igniter-js/adapter-mcp-server`, `ioredis@5.6.1`, `@types/ioredis@4.28.10`; env vars: `IGNITER_MCP_*`, `REDIS_*` | `redis:7-alpine` |
+| `logging` | Logging | Structured logging utilities | Template: `src/services/logger.ts`; dependency: `@igniter-js/core`; env var: `IGNITER_LOG_LEVEL` | - |
+| `telemetry` | Telemetry | Distributed tracing and metrics hooks | Template: `src/services/telemetry.ts`; dependency: `@igniter-js/core`; env vars: `IGNITER_TELEMETRY_ENABLE_*` | - |
+| `bots` | Bots | Multi-platform bot starter with HTTP handlers | Templates: `src/bots/sample-bot.ts`, framework-specific route handlers; dependency: `@igniter-js/bot@alpha`; env vars: `TELEGRAM_*` | - |
+| `database` | Database | Database integration with interactive ORM/provider selection | Options: `orm` (`prisma` adds `prisma@^6.19.0`, `@prisma/client@^6.19.0`, `dotenv`, plus `src/lib/database.ts`, `prisma.config.ts`, `prisma/schema.prisma`; `drizzle` scaffolds `src/lib/database.ts`); `provider` adds env vars and Docker services for PostgreSQL/MySQL plus Prisma/Drizzle CLI post-install (`prisma generate` / `drizzle init`) | PostgreSQL → `postgres:16-alpine`; MySQL → `mysql:8.0`; SQLite → none |
+| `auth` | Authentication | Better Auth setup with plugin selection | Template: `src/lib/auth.ts`; dependency: `better-auth@1.3.0`; runs `@better-auth/cli generate --config src/lib/auth.ts`; supports multi-select plugins written to template context | - |
+| `shadcn-ui` | Shadcn/UI | UI components bootstrap via official CLI | Post-install: runs `shadcn@latest init --base-color zinc --src-dir --silent --yes` using detected package manager | - |
 
 #### Add-On Implementation Pattern
 
@@ -796,11 +835,12 @@ igniter generate procedure <name> --feature <feature>
 
 #### Schema Provider Architecture
 
-- `SchemaProvider` (in `feature/providers/base.ts`) is an abstract class that encapsulates validation, interactive prompts, and feature generation for schema-backed workflows.
-- `SchemaProviderRegistry` uses a builder API (`SchemaProviderRegistry.create().register(...).build()`) similar to add-ons/starters to register providers.
-- Each provider can expose prompts (`promptForSelection`) and respects `--schema-path` overrides when resolving schema sources.
-- `PrismaSchemaProvider` implements CRUD scaffolding and lives entirely in `feature/providers/prisma.ts`, keeping provider-specific logic self-contained.
-- `FeaturePrompts` (in `feature/prompts.ts`) is an abstract helper that centralises all interactive questions for feature tooling.
+- `SchemaProvider` (in `src/core/registry/schema-provider/base-schema-provider.ts`) encapsulates schema validation, option parsing, interactive prompts, and feature generation contracts.
+- `SchemaProviderRegistry` (in `src/core/registry/schema-provider/schema-provider-registry.ts`) provides the builder API (`create().register(...).build()`) used to compose providers and detect availability.
+- The runtime registry (`src/registry/schema-provider/index.ts`) wires built-in providers; extend it to add custom sources.
+- `PrismaSchemaProvider` lives in `src/registry/schema-provider/prisma.ts` and generates fully wired controllers/procedures/interfaces from Prisma models with type-aware Zod schemas.
+- `FeaturePrompts` (in `src/commands/generate/feature/prompts.ts`) centralises human prompts, while `FeatureWorkspace` provides filesystem helpers and collision checks.
+- All providers honour the `--schema` and `--schema-path` CLI options and may contribute additional templates, env vars, or checks via the shared template engine abstraction.
 
 ---
 
@@ -831,9 +871,12 @@ function detectPackageManager(): PackageManager
 
 // Get installation command for package manager
 function getInstallCommand(pm: PackageManager): { command: string; args: string[] }
+
+// Resolve an executable helper for CLIs (npx/pnpx/bunx/yarn dlx)
+function getPackageManagerCommand(pm: PackageManager, command?: string): string
 ```
 
-The `detectPackageManager` function analyzes the `npm_config_user_agent` environment variable to determine which package manager initiated the CLI call. The `getInstallCommand` returns the appropriate command and arguments for installing dependencies.
+The `detectPackageManager` function analyzes the `npm_config_user_agent` environment variable to determine which package manager initiated the CLI call. `getInstallCommand` returns the appropriate command/args pair for installing dependencies, while `getPackageManagerCommand` resolves the executable prefix (`npx`, `pnpx`, `bunx`, `yarn dlx`) used when invoking secondary CLIs such as Prisma, Drizzle, Better Auth, or Shadcn.
 
 ### 7.3. Framework Detection
 
@@ -885,6 +928,17 @@ Key features:
 
 The `Casing` abstract class (`src/utils/casing.ts`) provides shared helpers for converting between kebab, camel, and Pascal cases, plus simple pluralisation. All generation logic relies on these helpers to keep export names and routes consistent.
 
+### 7.7. Terminal Utilities
+
+Located in `src/core/terminal.ts`:
+
+```typescript
+runCommand(command: string, options?: { cwd?: string }): Promise<{ success: boolean; errorMessage?: string }>
+parseCommandOptions(record: Record<string, string | string[] | undefined>): string
+```
+
+`runCommand` wraps cross-platform child-process spawning (used by add-on post-install hooks such as Better Auth, Prisma, Drizzle, and Shadcn). `parseCommandOptions` serialises CLI option dictionaries into `--flag=value` strings when delegating to companion CLIs.
+
 ---
 
 ## 8. Build & Deployment
@@ -913,8 +967,9 @@ The build configuration creates a single ESM bundle with TypeScript declarations
 #### TypeScript Configuration
 
 - **Base config** - Extends `@igniter-js/typescript-config/base.json`
-- **Module resolution** - Node.js compatible
-- **Output** - CommonJS for Node.js compatibility
+- **Module / resolution** - `module: NodeNext`, `moduleResolution: nodenext`
+- **Target** - ES2020 with React JSX support for the Ink dashboard
+- **Output directory** - `dist`, source root `src`
 - **Paths** - `@/*` mapped to `./src/*`
 
 ### 8.2. NPM Package Configuration
@@ -945,20 +1000,25 @@ The build configuration creates a single ESM bundle with TypeScript declarations
 #### Runtime Dependencies
 - **@clack/prompts** - Interactive CLI prompts and spinners
 - **commander** - CLI command framework with argument parsing
+- **chokidar** - Filesystem watcher for dev mode regeneration
 - **esbuild** - Bundle and compile router files for introspection
+- **execa** - Process execution for package managers and git
 - **handlebars** - Template engine for code generation
+- **ink** - React-based CLI UI toolkit powering the dev dashboard
 - **js-yaml** - YAML parsing for Docker Compose configuration
 - **@mrleebo/prisma-ast** - Prisma schema parsing for CRUD scaffolding
+- **picocolors** - Color utilities for CLI output
+- **react** - Render target for Ink components (bundled with Ink)
 - **zod** - Schema validation
 - **zod-to-json-schema** - Schema conversion for OpenAPI generation
-- **execa** - Process execution for package managers and git
-- **picocolors** - Color utilities for CLI output
 
 #### Development Dependencies
 - **@igniter-js/eslint-config** - Shared ESLint configuration
 - **@igniter-js/typescript-config** - Shared TypeScript configuration
-- **tsup** - TypeScript bundler for CLI build
+- **@types/handlebars** - Type definitions for handlebars helpers
 - **@types/js-yaml** - Type definitions for js-yaml
+- **@types/react** - Type definitions for Ink components
+- **tsup** - TypeScript bundler for CLI build
 - **@types/node** - Node.js type definitions
 - **typescript** - TypeScript compiler
 
@@ -1103,7 +1163,7 @@ templates/starters/new-starter/
 --}}
 
 {{!-- Imports with conditional includes --}}
-{{#if (includes enabledFeatures "store")}}
+{{#if (includes enabledAddOns "store")}}
 import { store } from "@/services/store"
 {{/if}}
 
@@ -1117,7 +1177,7 @@ export const {{camelCase projectName}}Service = {
 
 ```handlebars
 {{!-- Feature-based includes --}}
-{{#if (includes enabledFeatures "feature-name")}}
+{{#if (includes enabledAddOns "feature-name")}}
 // Feature-specific code
 {{/if}}
 
@@ -1212,49 +1272,46 @@ igniter generate feature --help  # Detailed help
 #### Feature Template Example
 
 ```handlebars
-{{!-- templates/features/auth/auth.service.hbs --}}
+{{!-- templates/add-ons/auth/better-auth/auth.hbs --}}
 {{!--
-  @description Authentication service with JWT support
-  @requires feature: "store"
-  @env-vars: JWT_SECRET, JWT_EXPIRES_IN
+  @description Better Auth configuration wired to the selected database adapter and plugins
+  @generated by @igniter-js/new-cli
 --}}
 
-import jwt from 'jsonwebtoken';
-import { store } from '@/services/store';
+import { betterAuth } from "better-auth"
+import { database } from "@/lib/database"
+{{#if (eq addOnOptions.database.orm "prisma")}}
+import { prismaAdapter } from "better-auth/adapters/prisma";
+{{/if}}
+{{#if (eq addOnOptions.database.orm "drizzle")}}
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+{{/if}}
+{{{generatePluginImports addOnOptions.auth.plugins}}}
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  role: string;
-}
+export const auth = betterAuth({
+  appName: process.env.IGNITER_APP_NAME,
+  appSecret: process.env.IGNITER_APP_SECRET,
+  baseURL: process.env.IGNITER_API_URL,
+  basePath: process.env.IGNITER_API_BASE_PATH,
 
-export const authService = {
-  async generateToken(user: AuthUser): Promise<string> {
-    return jwt.sign(
-      { sub: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
-    );
+  {{#if addOnOptions.database.orm}}
+  database: {{#if (eq addOnOptions.database.orm "prisma")}}prismaAdapter{{/if}}{{#if (eq addOnOptions.database.orm "drizzle")}}drizzleAdapter{{/if}}(database, {
+    provider: "{{addOnOptions.database.provider}}",
+  }),
+  {{/if}}
+
+  emailAndPassword: {
+    enabled: true,
   },
 
-  async verifyToken(token: string): Promise<AuthUser | null> {
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-      return decoded as AuthUser;
-    } catch {
-      return null;
-    }
-  },
-
-  async blacklistToken(token: string): Promise<void> {
-    await store.set(`blacklist:${token}`, '1', { ttl: 86400 });
-  },
-
-  async isTokenBlacklisted(token: string): Promise<boolean> {
-    const result = await store.get(`blacklist:${token}`);
-    return result !== null;
-  },
-};
+  {{#if addOnOptions.auth.plugins}}
+  plugins: [
+    {{#each addOnOptions.auth.plugins}}
+    {{camelCase this}}(){{#unless @last}},{{/unless}}
+    {{/each}}
+  ]
+  {{/if}}
+})
 ```
 
 #### Starter Template Example
@@ -1271,7 +1328,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 
-{{#if (includes enabledFeatures "logging")}}
+{{#if (includes enabledAddOns "logging")}}
 import { logger } from '@/services/logger'
 {{/if}}
 
@@ -1322,7 +1379,7 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
       body,
     })
 
-    {{#if (includes enabledFeatures "logging")}}
+    {{#if (includes enabledAddOns "logging")}}
     logger.info('API request processed', {
       method,
       path: url.pathname,
@@ -1335,7 +1392,7 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
       headers: result.headers,
     })
   } catch (error) {
-    {{#if (includes enabledFeatures "logging")}}
+    {{#if (includes enabledAddOns "logging")}}
     logger.error('API request failed', error)
     {{/if}}
 
@@ -1715,20 +1772,18 @@ Options:
   --mode <mode>              install | new-project (default: new-project)
   --pm, --package-manager    npm | yarn | pnpm | bun
   --template <template>      Specific starter template (nextjs, express-rest-api, etc.)
-  --features <features>      Comma-separated feature list (store,jobs,mcp,logging,telemetry,bots)
-  --database <database>      postgresql | mysql | sqlite | none
+  --add-ons <add-ons>        Comma-separated add-ons (store,jobs,mcp,logging,telemetry,bots,database,auth,shadcn-ui)
+  --database <database>      postgresql | mysql | sqlite | none (when not using interactive prompts)
   --no-git                  Skip git initialization
   --no-install              Skip dependency installation
   --no-docker               Skip Docker setup
 ```
 
-
-
 #### Generate Commands
 
 ```bash
 # Feature generation
-igniter generate feature [name] [--schema <provider:entity>]
+igniter generate feature [name] [--schema <provider:model>] [--schema-path <path>]
 
 # Controller generation
 igniter generate controller <name> --feature <feature>
@@ -1741,6 +1796,9 @@ igniter generate docs [--router <path>] [--output <dir>]
 
 # Schema generation
 igniter generate schema [--router <path>] [--output <path>]
+
+# Development mode
+igniter dev [--router <path>] [--output <path>] [--docs-output <dir>] [--cmd "<custom dev command>"]
 ```
 
 ### 20.2. Template Helpers
@@ -1755,7 +1813,7 @@ igniter generate schema [--router <path>] [--output <path>]
 {{capitalizeSlug "my-project"}} // string: "My Project"
 
 {{!-- Template context variables --}}
-{{addOns}}                     // Array of enabled add-ons (NEW)
+{{enabledAddOns}}               // Array of enabled add-on identifiers
 {{#if (includes enabledAddOns "store")}}  // Check for specific add-on
 ```
 
@@ -2215,6 +2273,13 @@ Before **ANY** commit:
 
 ## 24. Changelog
 
+### v1.2 (2025-11-12)
+- **🆕 Dev workflow** - Documented the `igniter dev` command, Ink dashboard shortcuts, chokidar debounce strategy, and default package-manager-aware boot commands
+- **📦 Add-on catalogue refresh** - Captured database/auth/shadcn option trees, dependencies, Docker assets, and env vars; updated template examples to match current Handlebars sources
+- **🧠 Schema providers** - Added coverage for the `src/core/registry/schema-provider` architecture and Prisma generator responsibilities
+- **⚙️ Build & deps** - Clarified ESM bundling, NodeNext TypeScript config, and new runtime dependencies (`chokidar`, `ink`, `react`)
+- **📘 Reference updates** - Synced command flags (`--add-ons`) and quick reference material with current CLI behaviour
+
 ### v1.1 (2025-01-01)
 - **🔄 MAJOR REFACTORING** - Features → Add-ons terminology
   - Changed CLI options: `--features` → `--add-ons`
@@ -2234,9 +2299,7 @@ Before **ANY** commit:
 - **📚 DOCUMENTATION** - Updated all references throughout codebase
   - Updated AGENTS.md with new terminology and structure
   - Added migration notes and backward compatibility information
-- **✅ QUALITY IMPROVEMENTS** - Fixed tsup configuration for proper CJS generation
-  - Changed format from `['esm']` to `['cjs']` for Node.js compatibility
-  - Maintained shebang banner for executable CLI
+- **✅ QUALITY IMPROVEMENTS** - Clarified tsup configuration and ensured CLI bundles ship with shebang-compatible ESM output
 
 ### v1.0 (Previous)
 - Initial release with complete CLI implementation

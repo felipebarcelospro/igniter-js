@@ -33,10 +33,14 @@ export function createMcpAdapter<
       (server) => {
         // Register router actions as tools
         for (const tool of tools) {
-          server.tool(
-            sanitizeMcpName(tool.name),
-            tool.description,
-            tool.schema || {},
+          server.registerTool(
+            sanitizeMcpName(tool.name), 
+            {
+              title: tool.annotations?.title,
+              description: tool.description,
+              inputSchema: tool.schema || {},
+              annotations: tool.annotations,
+            }, 
             async (args, extra) => {
               const startTime = Date.now();
               const context = await createMcpContext<TRouter>({ router, request });
@@ -79,16 +83,19 @@ export function createMcpAdapter<
                 };
               }
             }
-          );
+          )
         }
 
         // Register custom tools
         if (options.tools?.custom) {
           for (const customTool of options.tools.custom) {
-            server.tool(
+            server.registerTool(
               sanitizeMcpName(customTool.name),
-              customTool.description,
-              customTool.args,
+              {
+                description: customTool.description,
+                inputSchema: customTool.args,
+                annotations: customTool.annotations,
+              },  
               async (args: any) => {
                 const context = await createMcpContext<TRouter>({ router, request });
                 return await customTool.handler(args, context);

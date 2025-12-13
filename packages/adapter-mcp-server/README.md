@@ -365,6 +365,137 @@ export const GET = server;
 export const POST = server;
 ```
 
+### Type-Safe Tool Filtering
+
+Filter which tools to expose using a **type-safe** list of tool paths. The compiler will autocomplete and validate the paths based on your router definition.
+
+```typescript
+import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server';
+
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  // Only include specific tools (type-safe!)
+  .withToolFilter([
+    'users.list',      // ✅ Autocomplete available
+    'users.getById',   // ✅ Type-checked
+    'posts.list',
+  ])
+  .build();
+```
+
+**Exclude mode** - Include all tools except the specified ones:
+
+```typescript
+const { handler } = IgniterMcpServer
+  .create()
+  .router(AppRouter)
+  // Exclude dangerous tools
+  .withToolFilter([
+    'users.delete',
+    'users.dangerousAction',
+  ], 'exclude')
+  .build();
+```
+
+**Benefits:**
+- ✅ Full autocomplete for controller.action paths
+- ✅ Compile-time validation - typos are caught immediately
+- ✅ Refactoring-safe - renaming an action will show errors
+- ✅ Two modes: 'include' (whitelist) or 'exclude' (blacklist)
+
+### Automatic Tool Annotations
+
+The MCP adapter automatically infers [tool annotations](https://modelcontextprotocol.io/legacy/concepts/tools#available-tool-annotations) from HTTP methods and action metadata. These annotations help AI agents understand the behavior and side effects of each tool.
+
+**Automatic Inference Rules:**
+
+| HTTP Method | `readOnlyHint` | `destructiveHint` | `idempotentHint` |
+|-------------|----------------|-------------------|------------------|
+| GET         | `true`         | `false`           | `true`           |
+| POST        | `false`        | `false`           | `false`          |
+| PUT         | `false`        | `false`           | `true`           |
+| DELETE      | `false`        | `true`            | `true`           |
+| PATCH       | `false`        | `false`           | `false`          |
+
+**Example Generated Annotations:**
+
+```typescript
+// For: DELETE /users/:id
+{
+  name: "users_delete",
+  annotations: {
+    title: "Delete User",
+    readOnlyHint: false,      // Modifies state
+    destructiveHint: true,    // Permanently deletes data
+    idempotentHint: true,     // Deleting twice has same effect
+    openWorldHint: false      // Closed system (API)
+  }
+}
+
+// For: GET /users
+{
+  name: "users_list",
+  annotations: {
+    title: "List Users",
+    readOnlyHint: true,       // Read-only operation
+    destructiveHint: false,   // No data modification
+    idempotentHint: true,     // Safe to call multiple times
+    openWorldHint: false
+  }
+}
+```
+
+**Using the Utility Directly:**
+
+```typescript
+import { inferToolAnnotations } from '@igniter-js/adapter-mcp-server';
+
+const annotations = inferToolAnnotations('DELETE', 'Delete User');
+// { title: 'Delete User', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
+```
+
+### Automatic Path Parameter Extraction
+
+The MCP adapter automatically extracts path parameters from your Igniter.js routes and exposes them in the tool schema. This allows AI agents to understand what parameters are required for each endpoint.
+
+For example, given an Igniter.js route like:
+
+```typescript
+// Controller path: /users
+// Action path: /:id
+// Full path: /users/:id
+```
+
+The MCP adapter will:
+1. **Generate a params schema** with `id` as a required string parameter
+2. **Enhance the tool description** to include endpoint info and required path parameters
+3. **Provide proper JSON schema** to the AI agent
+
+**Example Tool Schema Generated:**
+```json
+{
+  "name": "users_getById",
+  "description": "Get user by ID [GET /users/:id]. Required path parameters: params.id",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "description": "Path parameter: id" }
+        },
+        "required": ["id"]
+      }
+    }
+  }
+}
+```
+
+This feature works automatically with no additional configuration needed. Path parameters are extracted from patterns like:
+- `/:id` → `{ id: string }`
+- `/:userId/posts/:postId` → `{ userId: string, postId: string }`
+
 ### Tool Configuration
 
 Both APIs support customizing how router actions are exposed as tools.

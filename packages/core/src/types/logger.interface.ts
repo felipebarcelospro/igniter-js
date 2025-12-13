@@ -3,12 +3,12 @@
  * These levels are used to categorize log messages by severity.
  */
 export enum IgniterLogLevel {
-  FATAL = 'fatal',
-  ERROR = 'error',
-  WARN = 'warn',
-  INFO = 'info',
-  DEBUG = 'debug',
-  TRACE = 'trace',
+  FATAL = "fatal",
+  ERROR = "error",
+  WARN = "warn",
+  INFO = "info",
+  DEBUG = "debug",
+  TRACE = "trace",
 }
 
 /**
@@ -41,6 +41,18 @@ export interface IgniterLoggerOptions {
    */
   showTimestamp?: boolean;
   /**
+   * Optional: App name to include in log messages
+   */
+  appName?: string;
+  /**
+   * Optional: Component name
+   */
+  component?: string;
+  /**
+   * Optional: Context to include with all log messages
+   */
+  context?: Record<string, unknown>;
+  /**
    * Optional: Additional provider-specific options.
    */
   [key: string]: unknown;
@@ -48,7 +60,7 @@ export interface IgniterLoggerOptions {
 
 /**
  * Interface for a robust, extensible logger provider for the Igniter framework.
- * 
+ *
  * Logger providers should implement this interface to support structured logging,
  * log levels, context, error objects, and optional child loggers.
  */
@@ -60,17 +72,22 @@ export interface IgniterLogger {
    * @param context Optional structured context (request, user, etc).
    * @param error Optional error object.
    */
-  log(level: IgniterLogLevel, message: string, context?: any, error?: Error | unknown): void;
+  log(
+    level: IgniterLogLevel,
+    message: string,
+    context?: any,
+    error?: Error | unknown,
+  ): void;
 
   /**
    * Log a fatal error (system crash, unrecoverable).
    */
-  fatal(message: string, context?: any, error?: Error | unknown): void;
+  fatal(message: string, error?: Error | unknown): void;
 
   /**
    * Log an error message.
    */
-  error(message: string, context?: any, error?: Error | unknown): void;
+  error(message: string, error?: Error | unknown): void;
 
   /**
    * Log a warning message.
@@ -112,7 +129,22 @@ export interface IgniterLogger {
    * Create a child logger with additional context (e.g., per-request).
    * @param context Context to bind to all log messages from this child logger.
    */
-  child(context: Record<string, unknown>): IgniterLogger;
+  child(
+    componentName: string,
+    context?: Record<string, unknown> | string,
+  ): IgniterLogger;
+
+  /**
+   * Set component name.
+   * @param componentName Optional component name to filter by.
+   */
+  setComponent(componentName: string | undefined): void;
+
+  /**
+   * Set application name.
+   * @param appName Optional application name to include in logs.
+   */
+  setAppName(appName: string | undefined): void;
 
   /**
    * Set the minimum log level at runtime.
@@ -134,8 +166,8 @@ export interface IgniterLogger {
   log(
     level: IgniterLogLevel,
     message: string,
-    context?: Record<string, unknown>,
-    error?: Error | unknown
+    context?: Record<string, unknown> | string,
+    error?: Error | unknown,
   ): void;
 
   /**

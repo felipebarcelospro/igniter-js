@@ -27,6 +27,25 @@ export interface McpContext<TContext = any> {
 export type InferZodRawShape<T> = T extends ZodObject<infer R> ? R : T extends ZodRawShape ? T : never
 
 /**
+ * MCP tool annotations that provide hints about tool behavior.
+ * These help clients understand how to present and manage tools.
+ * 
+ * @see https://modelcontextprotocol.io/legacy/concepts/tools#available-tool-annotations
+ */
+export interface McpToolAnnotations {
+  /** Human-readable title for the tool, useful for UI display */
+  title?: string;
+  /** If true, indicates the tool does not modify its environment */
+  readOnlyHint?: boolean;
+  /** If true, the tool may perform destructive updates (only meaningful when readOnlyHint is false) */
+  destructiveHint?: boolean;
+  /** If true, calling the tool repeatedly with the same arguments has no additional effect */
+  idempotentHint?: boolean;
+  /** If true, the tool may interact with an "open world" of external entities */
+  openWorldHint?: boolean;
+}
+
+/**
  * Information about an MCP tool.
  */
 export interface McpToolInfo {
@@ -44,6 +63,8 @@ export interface McpToolInfo {
   schema?: ZodRawShape;
   /** Tool tags */
   tags?: string[];
+  /** Tool annotations for behavior hints */
+  annotations?: McpToolAnnotations;
 }
 
 /**
@@ -66,6 +87,8 @@ export interface McpCustomTool<
   ) => Promise<CallToolResult> | CallToolResult;
   /** Tool tags */
   tags?: string[];
+  /** Tool annotations for behavior hints */
+  annotations?: McpToolAnnotations;
 }
 
 /**
@@ -169,12 +192,22 @@ export interface McpToolsOptions<TContext = any> {
   autoMap?: boolean;
   /** Custom naming strategy for tools */
   naming?: McpToolNaming;
-  /** Filter which actions to expose as tools */
+  /** Filter which actions to expose as tools (function-based) */
   filter?: McpToolFilter;
   /** Transform action configurations */
   transform?: McpToolTransform;
   /** Custom tools to add */
   custom?: McpCustomTool<any, TContext>[];
+  /** 
+   * List of tools to include/exclude in format "controller.action"
+   * Used with `filterMode` to determine behavior
+   */
+  toolPaths?: string[];
+  /**
+   * Filter mode: 'include' (only these tools) or 'exclude' (all except these)
+   * @default 'include'
+   */
+  filterMode?: McpToolFilterMode;
 }
 
 /**
@@ -294,6 +327,33 @@ export interface McpAdapterOptions<
 export type InferMcpContextFromRouter<TRouter> = TRouter extends IgniterRouter<any, any, any, any, any>
   ? TRouter['$Infer']['$context']
   : never;
+
+/**
+ * Utility type to infer all tool paths from router in format "controller.action".
+ * 
+ * @example
+ * ```typescript
+ * type Paths = InferToolPaths<typeof router>;
+ * // "users.list" | "users.getById" | "users.create" | "posts.list" | ...
+ * ```
+ */
+export type InferToolPaths<TRouter extends IgniterRouter<any, any, any, any, any>> = 
+  TRouter extends IgniterRouter<any, infer TControllers, any, any, any>
+    ? {
+        [C in keyof TControllers]: TControllers[C] extends { actions: infer TActions }
+          ? {
+              [A in keyof TActions]: `${C & string}.${A & string}`
+            }[keyof TActions]
+          : never
+      }[keyof TControllers]
+    : never;
+
+/**
+ * Filter mode for tool selection.
+ * - 'include': Only include the specified tools
+ * - 'exclude': Include all tools except the specified ones
+ */
+export type McpToolFilterMode = 'include' | 'exclude';
 
 /**
  * MCP handler with optional authentication for IgniterMcpServer
