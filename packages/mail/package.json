@@ -1,0 +1,91 @@
+{
+  "name": "@igniter-js/mail",
+  "version": "0.1.0",
+  "description": "Type-safe email library for Igniter.js with React Email templates and multiple provider adapters",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "igniter",
+    "igniterjs",
+    "mail",
+    "email",
+    "react-email",
+    "resend",
+    "postmark",
+    "sendgrid",
+    "smtp",
+    "transactional-email",
+    "typescript"
+  ],
+  "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/felipebarcelospro/igniter-js.git",
+    "directory": "packages/mail"
+  },
+  "bugs": {
+    "url": "https://github.com/felipebarcelospro/igniter-js/issues"
+  },
+  "homepage": "https://igniterjs.com",
+  "dependencies": {
+    "@react-email/components": "^0.0.25"
+  },
+  "devDependencies": {
+    "@igniter-js/core": "*",
+    "@types/node": "^22.7.5",
+    "@types/nodemailer": "^6.4.16",
+    "@types/react": "^18.3.12",
+    "nodemailer": "^6.9.15",
+    "postmark": "^4.0.5",
+    "react": "^18.3.1",
+    "resend": "^4.0.1",
+    "sendgrid": "^5.2.3",
+    "typescript": "^5.6.3",
+    "tsup": "^8.3.0",
+    "vitest": "^2.1.4"
+  },
+  "peerDependencies": {
+    "@igniter-js/core": "*",
+    "react": "^18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "nodemailer": {
+      "optional": true
+    },
+    "postmark": {
+      "optional": true
+    },
+    "resend": {
+      "optional": true
+    },
+    "sendgrid": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
