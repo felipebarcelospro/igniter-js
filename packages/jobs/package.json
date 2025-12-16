@@ -1,0 +1,111 @@
+{
+  "name": "@igniter-js/jobs",
+  "version": "0.0.1",
+  "description": "Type-safe jobs and worker builder for Igniter.js with adapter-based backends and BullMQ integration",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "AGENTS.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.mjs",
+      "require": "./dist/adapters/index.cjs"
+    },
+    "./adapters/*": {
+      "types": "./dist/adapters/*.d.ts",
+      "import": "./dist/adapters/*.mjs",
+      "require": "./dist/adapters/*.cjs"
+    }
+  },
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "igniter",
+    "igniterjs",
+    "jobs",
+    "queues",
+    "bullmq",
+    "worker",
+    "scheduler",
+    "typescript",
+    "type-safe"
+  ],
+  "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/felipebarcelospro/igniter-js.git",
+    "directory": "packages/jobs"
+  },
+  "bugs": {
+    "url": "https://github.com/felipebarcelospro/igniter-js/issues"
+  },
+  "homepage": "https://igniterjs.com",
+  "dependencies": {},
+  "devDependencies": {
+    "@igniter-js/adapter-bullmq": "*",
+    "@igniter-js/core": "*",
+    "@igniter-js/store": "*",
+    "@igniter-js/telemetry": "*",
+    "@types/node": "^22.7.5",
+    "bullmq": "4.18.3",
+    "ioredis": "^5.3.2",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4",
+    "zod": "3.23.8"
+  },
+  "peerDependencies": {
+    "@igniter-js/adapter-bullmq": ">=0.3.4",
+    "@igniter-js/core": ">=0.2.94",
+    "@igniter-js/store": ">=0.1.0",
+    "@igniter-js/telemetry": ">=0.1.0",
+    "bullmq": ">=4.18.3",
+    "ioredis": ">=5.3.2",
+    "zod": ">=3.23.8"
+  },
+  "peerDependenciesMeta": {
+    "@igniter-js/adapter-bullmq": {
+      "optional": true
+    },
+    "@igniter-js/store": {
+      "optional": true
+    },
+    "@igniter-js/telemetry": {
+      "optional": true
+    },
+    "bullmq": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
