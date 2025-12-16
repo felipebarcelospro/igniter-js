@@ -13,6 +13,7 @@ export class IgniterError extends Error {
   public readonly details?: unknown;
   public readonly metadata?: Record<string, unknown>;
   public readonly causer?: string;
+  public readonly cause?: Error;
   public readonly stackTrace?: string;
 
   constructor({
@@ -23,6 +24,7 @@ export class IgniterError extends Error {
     details,
     metadata,
     logger,
+    cause,
   }: {
     message: string;
     code: string;
@@ -31,6 +33,7 @@ export class IgniterError extends Error {
     details?: unknown;
     metadata?: Record<string, unknown>;
     logger?: IgniterLogger;
+    cause?: Error;
   }) {
     super(message);
 
@@ -41,6 +44,7 @@ export class IgniterError extends Error {
     this.metadata = metadata;
     this.causer = causer;
     this.stackTrace = this.stack;
+    this.cause = cause;
 
     // Business Rule: Log error with styled console output
     if (logger) {
