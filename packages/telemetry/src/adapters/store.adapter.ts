@@ -31,6 +31,9 @@
 import type { IgniterTelemetryTransportAdapter, TelemetryTransportMeta } from '../types/transport'
 import type { TelemetryEnvelope } from '../types/envelope'
 import { IgniterTelemetryError } from '../errors/igniter-telemetry.error'
+import { IgniterStore } from '@igniter-js/store'
+import type Redis from 'ioredis'
+import { RedisStoreAdapter } from '@igniter-js/store/adapters'
 
 /**
  * Minimal store interface required by the adapter.
@@ -64,7 +67,7 @@ export interface StoreStreamTransportConfig {
    * The store instance to use.
    * Must have a streams.append method.
    */
-  store: TelemetryStoreInterface
+  redis: Redis
 
   /**
    * The stream name to append events to.
@@ -133,10 +136,15 @@ export class StoreStreamTransportAdapter implements IgniterTelemetryTransportAda
   readonly type = 'store' as const
   private readonly config: Required<Omit<StoreStreamTransportConfig, 'streamBuilder'>> & Pick<StoreStreamTransportConfig, 'streamBuilder'>
   private meta?: TelemetryTransportMeta
+  private store: IgniterStore
 
   private constructor(config: StoreStreamTransportConfig) {
+    this.store = IgniterStore.create()
+      .withAdapter(RedisStoreAdapter.create({ redis: config.redis }))
+      .build()
+
     this.config = {
-      store: config.store,
+      redis: config.redis,
       stream: config.stream ?? 'telemetry:events',
       maxLen: config.maxLen ?? 10000,
       approximate: config.approximate ?? true,
@@ -188,7 +196,7 @@ export class StoreStreamTransportAdapter implements IgniterTelemetryTransportAda
       const data = this.buildStreamData(envelope)
 
       // Append to stream
-      await this.config.store.streams.append(stream, data, {
+      await this.store.streams.append(stream, data, {
         maxLen: this.config.maxLen,
         approximate: this.config.approximate,
       })

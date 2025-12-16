@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/telemetry",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Type-safe telemetry library for Igniter.js with session-based events, typed event registry, transport adapters, and sampling/redaction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

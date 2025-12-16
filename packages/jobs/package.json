@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/jobs",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Type-safe jobs and worker builder for Igniter.js with adapter-based backends and BullMQ integration",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

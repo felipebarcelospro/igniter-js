@@ -66,11 +66,11 @@
  */
 
 // Core
-export { IgniterTelemetry, IgniterTelemetryRuntime, type IgniterTelemetry as IgniterTelemetryInterface } from './core/igniter-telemetry'
+export { IgniterTelemetry as IgniterTelemetryCore, IgniterTelemetryRuntime, type IgniterTelemetry as IgniterTelemetryInterface } from './core/igniter-telemetry'
 export { createSession, getActiveSession, type IgniterTelemetrySession, type TelemetrySessionState } from './core/session'
 
 // Builders
-export { IgniterTelemetryBuilder, type IgniterTelemetryBuilderState } from './builders/igniter-telemetry.builder'
+export { IgniterTelemetryBuilder as IgniterTelemetry, type IgniterTelemetryBuilderState } from './builders/igniter-telemetry.builder'
 
 // Errors
 export { IgniterTelemetryError, IGNITER_TELEMETRY_ERROR_CODES, type IgniterTelemetryErrorCode, type IgniterTelemetryErrorPayload } from './errors/igniter-telemetry.error'

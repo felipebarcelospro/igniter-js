@@ -11,7 +11,7 @@ A type-safe, session-based telemetry system for Igniter.js with generic envelope
 - 🔒 **Redaction Pipeline** - PII/sensitive data protection
 - 📉 **Sampling** - Configurable sampling rates per log level
 - ✅ **Schema Validation** - Optional Zod schema validation for payloads
-- 🏗️ **Builder API** - Fluent, type-accumulating configuration
+- 🏗️ ** API** - Fluent, type-accumulating configuration
 
 ## Installation
 
@@ -28,10 +28,10 @@ bun add @igniter-js/telemetry
 ## Quick Start
 
 ```typescript
-import { IgniterTelemetryBuilder, LoggerTransportAdapter } from '@igniter-js/telemetry'
+import { IgniterTelemetry, LoggerTransportAdapter } from '@igniter-js/telemetry'
 
 // Create the telemetry instance
-const telemetry = IgniterTelemetryBuilder.create()
+const telemetry = IgniterTelemetry.create()
   .withService('my-api')
   .withEnvironment(process.env.NODE_ENV ?? 'development')
   .addTransport('logger', LoggerTransportAdapter.create())
@@ -43,12 +43,12 @@ telemetry.emit('app.started', { port: 3000 })
 
 ## API Reference
 
-### Builder Configuration
+### Configuration
 
 ```typescript
-import { IgniterTelemetryBuilder, LoggerTransportAdapter } from '@igniter-js/telemetry'
+import { IgniterTelemetry, LoggerTransportAdapter } from '@igniter-js/telemetry'
 
-const telemetry = IgniterTelemetryBuilder.create()
+const telemetry = IgniterTelemetry.create()
   // Required: Service name (identifies your application)
   .withService('my-api')
   
@@ -182,7 +182,7 @@ const authEvents = IgniterTelemetryEvents.create()
   .build()
 
 // Register with telemetry
-const telemetry = IgniterTelemetryBuilder.create()
+const telemetry = IgniterTelemetry.create()
   .withService('my-api')
   .addEventGroup(authEvents)
   .addTransport('logger', LoggerTransportAdapter.create())
@@ -218,14 +218,10 @@ Sends events to an IgniterStore stream:
 ```typescript
 import { StoreStreamTransportAdapter } from '@igniter-js/telemetry'
 import { IgniterStore } from '@igniter-js/store'
-
-const store = IgniterStore.create()
-  .withAdapter(redisAdapter)
-  .withService('my-api')
-  .build()
+import { redis } from ''
 
 const storeTransport = StoreStreamTransportAdapter.create({
-  store,
+  redis,
   streamKey: 'telemetry:events',
   maxLen: 10000,  // Optional: trim stream to max entries
 })
@@ -263,7 +259,7 @@ class MyCustomTransport implements TelemetryTransportAdapter {
 Protect sensitive data in event payloads:
 
 ```typescript
-const telemetry = IgniterTelemetryBuilder.create()
+const telemetry = IgniterTelemetry.create()
   .withService('my-api')
   .withRedaction({
     enabled: true,
@@ -289,7 +285,7 @@ telemetry.emit('user.register', {
 Configure sampling rates to reduce telemetry volume:
 
 ```typescript
-const telemetry = IgniterTelemetryBuilder.create()
+const telemetry = IgniterTelemetry.create()
   .withService('my-api')
   .withSampling({
     debugRate: 0.01,  // 1% of debug events
@@ -388,7 +384,7 @@ export const authEvents = IgniterTelemetryEvents.create()
   .build()
 
 // telemetry.ts
-const telemetry = IgniterTelemetryBuilder.create()
+const telemetry = IgniterTelemetry.create()
   .addEventGroup(authEvents)
   // ...
 ```
@@ -396,7 +392,7 @@ const telemetry = IgniterTelemetryBuilder.create()
 ### 3. Enable Redaction in Production
 
 ```typescript
-const telemetry = IgniterTelemetryBuilder.create()
+const telemetry = IgniterTelemetry.create()
   .withRedaction({
     enabled: process.env.NODE_ENV === 'production',
     fields: ['password', 'token', 'secret'],
@@ -407,7 +403,7 @@ const telemetry = IgniterTelemetryBuilder.create()
 ### 4. Use Multiple Transports
 
 ```typescript
-const telemetry = IgniterTelemetryBuilder.create()
+const telemetry = IgniterTelemetry.create()
   .addTransport('logger', LoggerTransportAdapter.create())
   .addTransport('store', StoreStreamTransportAdapter.create({ store }))
   // ...
@@ -424,7 +420,7 @@ process.on('SIGTERM', async () => {
 
 ## TypeScript Support
 
-This package is written in TypeScript and provides full type definitions. The builder API uses type accumulation to provide type-safe event names based on registered event groups.
+This package is written in TypeScript and provides full type definitions. The  API uses type accumulation to provide type-safe event names based on registered event groups.
 
 ## License
 
