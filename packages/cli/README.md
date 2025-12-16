@@ -129,6 +129,20 @@ igniter generate schema --router src/igniter.router.ts --output src/igniter.sche
 
 Generates a TypeScript client schema (const assertion + type) that mirrors your server endpoints.
 
+### `igniter generate caller`
+
+Generate Zod schemas and a ready-to-use Igniter Caller from an OpenAPI 3 spec.
+
+```
+# Remote spec
+igniter generate caller --name facebook --url https://api.example.com/openapi.json
+
+# Local spec
+igniter generate caller --name billing --path ./openapi.yaml --output src/callers/billing
+```
+
+Outputs `schema.ts` (Zod schemas with the provided prefix) and `index.ts` (preconfigured caller) under `src/callers/<hostname>` by default, ready to use with `@igniter-js/caller`.
+
 ### `igniter dev`
 
 Watch mode that keeps schema and docs regenerated while proxying your application’s dev server.
@@ -235,7 +249,6 @@ Useful tips:
 ## License
 
 MIT © Felipe Barcelos and the Igniter.js contributors.
-
 
 
 

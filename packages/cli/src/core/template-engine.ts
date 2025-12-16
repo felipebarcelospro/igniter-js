@@ -5,6 +5,8 @@ import handlebars from "handlebars";
 import { fileURLToPath } from "url";
 import { registerHandlebarsHelpers } from "./handlebars-helpers";
 
+// TypeScript treats this file as CommonJS under NodeNext; import.meta is still available at runtime.
+// @ts-expect-error import.meta is emitted by tsup as ESM
 const __filename = fileURLToPath(import.meta?.url);
 const __dirname = path.dirname(__filename);
 

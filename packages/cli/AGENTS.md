@@ -4,8 +4,8 @@ applyTo: '**'
 
 # Lia - AI Agent for @igniter-js/new-cli
 
-> **Last Updated:** 2025-11-12
-> **Version:** 1.2
+> **Last Updated:** 2025-12-13
+> **Version:** 1.3
 
 ---
 
@@ -61,6 +61,9 @@ Maintain and extend the next-generation CLI tool for Igniter.js, ensuring reliab
 │   │   │   └── types.ts
 │   │   ├── generate/
 │   │   │   ├── controller/
+│   │   │   │   ├── action.ts
+│   │   │   │   └── index.ts
+│   │   │   ├── caller/
 │   │   │   │   ├── action.ts
 │   │   │   │   └── index.ts
 │   │   │   ├── docs/
@@ -222,6 +225,7 @@ igniter [command] [subcommand] [options]
    - `igniter generate procedure` - Create a procedure inside an existing or new feature
    - `igniter generate docs` - Generate OpenAPI specification
    - `igniter generate schema` - Generate client schema
+   - `igniter generate caller` - Generate Igniter Caller schemas + ready-to-use caller from an OpenAPI spec
 3. **`igniter dev`** - Watch router and feature changes to regenerate schema/docs and optionally run the app dev server with live Ink UI feedback
 
 ### 3.2. Command Implementation Pattern
@@ -1797,6 +1801,9 @@ igniter generate docs [--router <path>] [--output <dir>]
 # Schema generation
 igniter generate schema [--router <path>] [--output <path>]
 
+# Caller generation
+igniter generate caller [--name <name>] [--url <url> | --path <path>] [--output <dir>]
+
 # Development mode
 igniter dev [--router <path>] [--output <path>] [--docs-output <dir>] [--cmd "<custom dev command>"]
 ```
@@ -2272,6 +2279,12 @@ Before **ANY** commit:
 ---
 
 ## 24. Changelog
+### v1.3 (2025-12-13)
+- **🆕 Caller generator** - Added `igniter generate caller` to build Zod schemas from OpenAPI 3 specs and emit ready-to-use IgniterCaller instances (`schema.ts` + `index.ts`)
+- **🧰 OpenAPI ingestion** - Support JSON/YAML, remote fetch or local path, `$ref` resolution via swagger-parser, and sensible defaults for output folder (`src/callers/<hostname>`)
+- **📖 Documentation** - Updated command references, tree structure, and examples to cover the new generator
+- **📦 Dependencies** - Added `@apidevtools/swagger-parser` and `openapi-types` for OpenAPI processing
+
 
 ### v1.2 (2025-11-12)
 - **🆕 Dev workflow** - Documented the `igniter dev` command, Ink dashboard shortcuts, chokidar debounce strategy, and default package-manager-aware boot commands

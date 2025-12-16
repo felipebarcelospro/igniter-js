@@ -4,6 +4,7 @@ import { docsCommand } from './docs';
 import { schemaCommand } from './schema';
 import { controllerCommand } from './controller';
 import { procedureCommand } from './procedure';
+import { callerCommand } from './caller';
 
 export const generateCommand = new Command()
   .command('generate')
@@ -12,4 +13,5 @@ export const generateCommand = new Command()
   .addCommand(controllerCommand)
   .addCommand(procedureCommand)
   .addCommand(docsCommand)
-  .addCommand(schemaCommand);
+  .addCommand(schemaCommand)
+  .addCommand(callerCommand);
