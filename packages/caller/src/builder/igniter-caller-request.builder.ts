@@ -1,4 +1,4 @@
-import type { IgniterLogger } from '@igniter-js/core'
+import type { IgniterLogger, StandardSchemaV1 } from '@igniter-js/core'
 import type { z } from 'zod'
 import { IgniterCallerError } from '../errors/igniter-caller.error'
 import type { IgniterCallerHttpMethod } from '../types/http'
@@ -10,6 +10,8 @@ import type { IgniterCallerRequestOptions } from '../types/request'
 import type {
   IgniterCallerApiResponse,
   IgniterCallerFileResponse,
+  IgniterCallerResponseContentType,
+  IgniterCallerValidatableContentType,
 } from '../types/response'
 import type { IgniterCallerRetryOptions } from '../types/retry'
 import type {
@@ -22,9 +24,107 @@ import { IgniterCallerSchemaUtils } from '../utils/schema'
 import { IgniterCallerUrlUtils } from '../utils/url'
 
 /**
- * Fluent request builder for `IgniterCaller`.
+ * Content types that support schema validation.
  */
-export class IgniterCallerRequestBuilder {
+const VALIDATABLE_CONTENT_TYPES: IgniterCallerValidatableContentType[] = [
+  'json',
+  'xml',
+  'csv',
+]
+
+/**
+ * Detects the response content type from headers.
+ */
+function detectContentType(
+  contentType: string | null,
+): IgniterCallerResponseContentType {
+  if (!contentType) return 'text'
+
+  const ct = contentType.toLowerCase()
+
+  if (ct.includes('application/json')) return 'json'
+  if (ct.includes('application/xml') || ct.includes('text/xml')) return 'xml'
+  if (ct.includes('text/csv')) return 'csv'
+  if (ct.includes('text/html')) return 'html'
+  if (ct.includes('text/plain')) return 'text'
+  if (ct.includes('multipart/form-data')) return 'formdata'
+  if (ct.includes('application/octet-stream')) return 'blob'
+
+  // Check for file-like content types
+  if (
+    ct.includes('image/') ||
+    ct.includes('audio/') ||
+    ct.includes('video/') ||
+    ct.includes('application/pdf') ||
+    ct.includes('application/zip')
+  ) {
+    return 'blob'
+  }
+
+  return 'text'
+}
+
+/**
+ * Checks if a content type supports schema validation.
+ */
+function isValidatableContentType(
+  contentType: IgniterCallerResponseContentType,
+): contentType is IgniterCallerValidatableContentType {
+  return VALIDATABLE_CONTENT_TYPES.includes(
+    contentType as IgniterCallerValidatableContentType,
+  )
+}
+
+/**
+ * Parse response data based on content type.
+ */
+async function parseResponseByContentType(
+  response: Response,
+  contentType: IgniterCallerResponseContentType,
+): Promise<unknown> {
+  switch (contentType) {
+    case 'json':
+      return response.json()
+    case 'xml':
+    case 'csv':
+    case 'html':
+    case 'text':
+      return response.text()
+    case 'blob':
+      return response.blob()
+    case 'stream':
+      return response.body
+    case 'arraybuffer':
+      return response.arrayBuffer()
+    case 'formdata':
+      return response.formData()
+    default:
+      return response.text()
+  }
+}
+
+/**
+ * Constructor params for the request builder.
+ */
+export interface IgniterCallerRequestBuilderParams {
+  baseURL?: string
+  defaultHeaders?: Record<string, string>
+  defaultCookies?: Record<string, string>
+  logger?: IgniterLogger
+  requestInterceptors?: IgniterCallerRequestInterceptor[]
+  responseInterceptors?: IgniterCallerResponseInterceptor[]
+  eventEmitter?: (url: string, method: string, result: any) => Promise<void>
+  schemas?: IgniterCallerSchemaMap
+  schemaValidation?: IgniterCallerSchemaValidationOptions
+}
+
+/**
+ * Fluent request builder for `IgniterCaller`.
+ *
+ * When created via specific HTTP methods (get, post, put, patch, delete),
+ * the method is already set and cannot be changed.
+ */
+export class IgniterCallerRequestBuilder<TResponse = unknown> {
   private options: IgniterCallerRequestOptions = {
     method: 'GET',
     url: '',
@@ -49,18 +149,9 @@ export class IgniterCallerRequestBuilder {
   ) => Promise<void>
   private schemas?: IgniterCallerSchemaMap
   private schemaValidation?: IgniterCallerSchemaValidationOptions
+  private responseTypeSchema?: z.ZodSchema<any> | StandardSchemaV1
 
-  constructor(params: {
-    baseURL?: string
-    defaultHeaders?: Record<string, string>
-    defaultCookies?: Record<string, string>
-    logger?: IgniterLogger
-    requestInterceptors?: IgniterCallerRequestInterceptor[]
-    responseInterceptors?: IgniterCallerResponseInterceptor[]
-    eventEmitter?: (url: string, method: string, result: any) => Promise<void>
-    schemas?: IgniterCallerSchemaMap
-    schemaValidation?: IgniterCallerSchemaValidationOptions
-  }) {
+  constructor(params: IgniterCallerRequestBuilderParams) {
     if (params.baseURL) this.options.baseURL = params.baseURL
 
     if (params.defaultHeaders) {
@@ -86,6 +177,24 @@ export class IgniterCallerRequestBuilder {
   }
 
   /**
+   * Sets the HTTP method for this request.
+   * @internal Used by IgniterCaller.request() for generic requests.
+   */
+  _setMethod(method: IgniterCallerHttpMethod): this {
+    this.options.method = method
+    return this
+  }
+
+  /**
+   * Sets the URL for this request.
+   * @internal Used when URL is passed to HTTP method directly.
+   */
+  _setUrl(url: string): this {
+    this.options.url = url
+    return this
+  }
+
+  /**
    * Overrides the logger for this request chain.
    */
   withLogger(logger: IgniterLogger): this {
@@ -93,36 +202,50 @@ export class IgniterCallerRequestBuilder {
     return this
   }
 
-  method(method: IgniterCallerHttpMethod): this {
-    this.options.method = method
-    return this
-  }
-
+  /**
+   * Sets the request URL.
+   */
   url(url: string): this {
     this.options.url = url
     return this
   }
 
+  /**
+   * Sets the request body.
+   * For GET/HEAD requests, body will be automatically converted to query params.
+   */
   body<TBody>(body: TBody): this {
     this.options.body = body
     return this
   }
 
+  /**
+   * Sets URL query parameters.
+   */
   params(params: Record<string, string | number | boolean>): this {
     this.options.params = params
     return this
   }
 
+  /**
+   * Merges additional headers into the request.
+   */
   headers(headers: Record<string, string>): this {
     this.options.headers = { ...this.options.headers, ...headers }
     return this
   }
 
+  /**
+   * Sets request timeout in milliseconds.
+   */
   timeout(timeout: number): this {
     this.options.timeout = timeout
     return this
   }
 
+  /**
+   * Sets cache strategy and optional cache key.
+   */
   cache(cache: RequestCache, key?: string): this {
     this.options.cache = cache
     this.cacheKey = key
@@ -156,13 +279,33 @@ export class IgniterCallerRequestBuilder {
     return this
   }
 
-  responseType<T>(schema?: z.ZodSchema<T>): this {
-    this.options.responseSchema = schema
-    return this
+  /**
+   * Sets the expected response type for TypeScript inference.
+   *
+   * - If a Zod/StandardSchema is passed, it will validate the response (only for JSON/XML/CSV)
+   * - If a type parameter is passed (e.g., `responseType<File>()`), it's for typing only
+   *
+   * The actual parsing is based on Content-Type headers, not this setting.
+   *
+   * @example
+   * ```ts
+   * // With Zod schema (validates JSON response)
+   * const result = await api.get('/users').responseType(UserSchema).execute()
+   *
+   * // With type marker (typing only, no validation)
+   * const result = await api.get('/file').responseType<Blob>().execute()
+   * ```
+   */
+  responseType<T>(schema?: z.ZodSchema<T> | StandardSchemaV1): IgniterCallerRequestBuilder<T> {
+    if (schema) {
+      this.responseTypeSchema = schema
+    }
+    return this as unknown as IgniterCallerRequestBuilder<T>
   }
 
   /**
    * Downloads a file via GET request.
+   * @deprecated Use `.responseType<File>().execute()` instead. The response type is auto-detected.
    */
   getFile(url: string) {
     this.options.method = 'GET'
@@ -274,11 +417,24 @@ export class IgniterCallerRequestBuilder {
     }
   }
 
-  async execute<T = unknown>(): Promise<IgniterCallerApiResponse<T>> {
+  /**
+   * Executes the HTTP request.
+   *
+   * Response parsing is automatic based on Content-Type headers:
+   * - `application/json` → parsed as JSON
+   * - `text/xml`, `application/xml` → returned as text (parse with your XML library)
+   * - `text/csv` → returned as text
+   * - `text/html`, `text/plain` → returned as text
+   * - `image/*`, `audio/*`, `video/*`, `application/pdf`, etc. → returned as Blob
+   * - `application/octet-stream` → returned as Blob
+   *
+   * Schema validation (if configured) only runs for validatable content types (JSON, XML, CSV).
+   */
+  async execute(): Promise<IgniterCallerApiResponse<TResponse>> {
     // Check cache first if cache key is provided
     const effectiveCacheKey = this.cacheKey || this.options.url
     if (effectiveCacheKey && this.staleTime) {
-      const cached = await IgniterCallerCacheUtils.get<T>(
+      const cached = await IgniterCallerCacheUtils.get<TResponse>(
         effectiveCacheKey,
         this.staleTime,
       )
@@ -286,7 +442,10 @@ export class IgniterCallerRequestBuilder {
         this.logger?.debug('IgniterCaller.execute cache hit', {
           key: effectiveCacheKey,
         })
-        const cachedResult = { data: cached, error: undefined }
+        const cachedResult: IgniterCallerApiResponse<TResponse> = {
+          data: cached,
+          error: undefined,
+        }
         // Emit event for cached response
         await this.emitEvent(cachedResult)
         return cachedResult
@@ -294,14 +453,17 @@ export class IgniterCallerRequestBuilder {
     }
 
     // Execute with retry logic
-    const result = await this.executeWithRetry<T>()
+    const result = await this.executeWithRetry()
 
     // Apply fallback if request failed
     if (result.error && this.fallbackFn) {
       this.logger?.debug('IgniterCaller.execute applying fallback', {
         error: result.error,
       })
-      const fallbackResult = { data: this.fallbackFn() as T, error: undefined }
+      const fallbackResult: IgniterCallerApiResponse<TResponse> = {
+        data: this.fallbackFn() as TResponse,
+        error: undefined,
+      }
       await this.emitEvent(fallbackResult)
       return fallbackResult
     }
@@ -321,7 +483,7 @@ export class IgniterCallerRequestBuilder {
     return result
   }
 
-  private async executeWithRetry<T>(): Promise<IgniterCallerApiResponse<T>> {
+  private async executeWithRetry(): Promise<IgniterCallerApiResponse<TResponse>> {
     const maxAttempts = this.retryOptions?.maxAttempts || 1
     const baseDelay = this.retryOptions?.baseDelay || 1000
     const backoff = this.retryOptions?.backoff || 'linear'
@@ -346,7 +508,7 @@ export class IgniterCallerRequestBuilder {
         await new Promise((resolve) => setTimeout(resolve, delay))
       }
 
-      const result = await this.executeSingleRequest<T>()
+      const result = await this.executeSingleRequest()
 
       // Success case
       if (!result.error) {
@@ -372,10 +534,7 @@ export class IgniterCallerRequestBuilder {
     }
   }
 
-  private async executeSingleRequest<T>(): Promise<
-    IgniterCallerApiResponse<T>
-  > {
-    const { responseSchema } = this.options
+  private async executeSingleRequest(): Promise<IgniterCallerApiResponse<TResponse>> {
     let { url, requestInit, controller, timeoutId } = this.buildRequest()
 
     this.logger?.debug('IgniterCaller.execute started', {
@@ -416,6 +575,7 @@ export class IgniterCallerRequestBuilder {
             this.logger,
           )
         } catch (error) {
+          clearTimeout(timeoutId)
           // Validation failed in strict mode
           return {
             data: undefined,
@@ -450,85 +610,135 @@ export class IgniterCallerRequestBuilder {
               url,
             },
           }),
+          status: httpResponse.status,
+          headers: httpResponse.headers,
         }
       }
 
-      const contentType = httpResponse.headers.get('content-type')
-      const data: unknown = contentType?.includes('application/json')
-        ? await httpResponse.json()
-        : await httpResponse.text()
+      // Detect content type from headers
+      const contentTypeHeader = httpResponse.headers.get('content-type')
+      const detectedContentType = detectContentType(contentTypeHeader)
 
-      // Validate response using StandardSchemaV1 if schemas exist
-      let validatedData: unknown = data
-      if (this.schemas) {
-        const { schema: endpointSchema } = IgniterCallerSchemaUtils.findSchema(
-          this.schemas,
-          url,
-          this.options.method,
-        )
+      // Parse response based on detected content type
+      let data = await parseResponseByContentType(httpResponse, detectedContentType)
 
-        const responseSchema =
-          endpointSchema?.responses?.[httpResponse.status]
+      // Validate response if:
+      // 1. Content type is validatable (json, xml, csv)
+      // 2. Either schemas are configured OR responseTypeSchema is set
+      const shouldValidate = isValidatableContentType(detectedContentType)
 
-        if (responseSchema) {
-          try {
-            validatedData = await IgniterCallerSchemaUtils.validateResponse(
-              data,
-              responseSchema,
-              httpResponse.status,
-              this.schemaValidation,
-              { url, method: this.options.method },
-              this.logger,
-            )
-          } catch (error) {
-            // Validation failed in strict mode
-            return {
-              data: undefined,
-              error: error as IgniterCallerError,
+      if (shouldValidate) {
+        // First, try schema map validation
+        if (this.schemas) {
+          const { schema: endpointSchema } = IgniterCallerSchemaUtils.findSchema(
+            this.schemas,
+            url,
+            this.options.method,
+          )
+
+          const responseSchema = endpointSchema?.responses?.[httpResponse.status]
+
+          if (responseSchema) {
+            try {
+              data = await IgniterCallerSchemaUtils.validateResponse(
+                data,
+                responseSchema,
+                httpResponse.status,
+                this.schemaValidation,
+                { url, method: this.options.method },
+                this.logger,
+              )
+            } catch (error) {
+              return {
+                data: undefined,
+                error: error as IgniterCallerError,
+                status: httpResponse.status,
+                headers: httpResponse.headers,
+              }
+            }
+          }
+        }
+
+        // Then, try responseType schema validation (Zod or StandardSchema)
+        if (this.responseTypeSchema) {
+          // Check if it's a Zod schema
+          if ('safeParse' in this.responseTypeSchema) {
+            const zodSchema = this.responseTypeSchema as z.ZodSchema<any>
+            const result = zodSchema.safeParse(data)
+            if (!result.success) {
+              return {
+                data: undefined,
+                error: new IgniterCallerError({
+                  code: 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED',
+                  operation: 'parseResponse',
+                  message: `Response validation failed: ${result.error.message}`,
+                  logger: this.logger,
+                  statusCode: httpResponse.status,
+                  metadata: {
+                    method: this.options.method,
+                    url,
+                  },
+                  cause: result.error,
+                }),
+                status: httpResponse.status,
+                headers: httpResponse.headers,
+              }
+            }
+            data = result.data
+          }
+          // Check if it's a StandardSchema
+          else if ('~standard' in this.responseTypeSchema) {
+            try {
+              const standardSchema = this.responseTypeSchema as StandardSchemaV1
+              const result = await standardSchema['~standard'].validate(data)
+              if (result.issues) {
+                return {
+                  data: undefined,
+                  error: new IgniterCallerError({
+                    code: 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED',
+                    operation: 'parseResponse',
+                    message: `Response validation failed`,
+                    logger: this.logger,
+                    statusCode: httpResponse.status,
+                    metadata: {
+                      method: this.options.method,
+                      url,
+                      issues: result.issues,
+                    },
+                  }),
+                  status: httpResponse.status,
+                  headers: httpResponse.headers,
+                }
+              }
+              data = result.value
+            } catch (error) {
+              return {
+                data: undefined,
+                error: new IgniterCallerError({
+                  code: 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED',
+                  operation: 'parseResponse',
+                  message: (error as Error)?.message || 'Response validation failed',
+                  logger: this.logger,
+                  statusCode: httpResponse.status,
+                  metadata: {
+                    method: this.options.method,
+                    url,
+                  },
+                  cause: error,
+                }),
+                status: httpResponse.status,
+                headers: httpResponse.headers,
+              }
             }
           }
         }
       }
 
-      // Legacy Zod support (if responseSchema option is used)
-      if (responseSchema) {
-        const result = responseSchema.safeParse(data)
-        if (!result.success) {
-          return {
-            data: undefined,
-            error: new IgniterCallerError({
-              code: 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED',
-              operation: 'parseResponse',
-              message: `Response validation failed: ${result.error.message}`,
-              logger: this.logger,
-              statusCode: 500,
-              metadata: {
-                method: this.options.method,
-                url,
-              },
-              cause: result.error,
-            }),
-          }
-        }
-
-        let response: IgniterCallerApiResponse<T> = {
-          data: result.data as T,
-          error: undefined,
-        }
-
-        // Apply response interceptors
-        if (this.responseInterceptors && this.responseInterceptors.length > 0) {
-          for (const interceptor of this.responseInterceptors) {
-            response = await interceptor(response)
-          }
-        }
-
-        return response
-      }
-
-      let response: IgniterCallerApiResponse<T> = {
-        data: validatedData as T,
+      let response: IgniterCallerApiResponse<TResponse> = {
+        data: data as TResponse,
         error: undefined,
+        status: httpResponse.status,
+        headers: httpResponse.headers,
       }
 
       // Apply response interceptors
@@ -584,23 +794,37 @@ export class IgniterCallerRequestBuilder {
     const { method, url, body, params, headers, timeout, baseURL, cache } =
       this.options
 
+    // For GET/HEAD requests, convert body to query params
+    let finalParams = params
+    if ((method === 'GET' || method === 'HEAD') && body && typeof body === 'object') {
+      const bodyParams: Record<string, string | number | boolean> = {}
+      for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+        if (value !== undefined && value !== null) {
+          bodyParams[key] = String(value)
+        }
+      }
+      finalParams = { ...bodyParams, ...params }
+    }
+
     const fullUrl = IgniterCallerUrlUtils.buildUrl({
       url,
       baseURL,
-      query: params,
+      query: finalParams,
     })
 
-    const rawBody = IgniterCallerBodyUtils.isRawBody(body)
+    // Only include body for non-GET/HEAD methods
+    const shouldIncludeBody = body && method !== 'GET' && method !== 'HEAD'
+    const rawBody = shouldIncludeBody && IgniterCallerBodyUtils.isRawBody(body)
     const finalHeaders = IgniterCallerBodyUtils.normalizeHeadersForBody(
       headers,
-      body,
+      shouldIncludeBody ? body : undefined,
     )
 
     const requestInit: RequestInit = {
       method,
       headers: finalHeaders,
       cache,
-      ...(body && method !== 'GET' && method !== 'HEAD'
+      ...(shouldIncludeBody
         ? { body: rawBody ? (body as any) : JSON.stringify(body) }
         : {}),
     }
@@ -619,8 +843,8 @@ export class IgniterCallerRequestBuilder {
   /**
    * Emits event for this response using injected emitter.
    */
-  private async emitEvent<T>(
-    result: IgniterCallerApiResponse<T>,
+  private async emitEvent(
+    result: IgniterCallerApiResponse<TResponse>,
   ): Promise<void> {
     if (this.eventEmitter) {
       try {
@@ -632,3 +856,24 @@ export class IgniterCallerRequestBuilder {
     }
   }
 }
+
+/**
+ * Request builder type without internal methods.
+ * Used when creating requests via specific HTTP methods (get, post, etc.)
+ */
+export type IgniterCallerMethodRequestBuilder<TResponse = unknown> = Omit<
+  IgniterCallerRequestBuilder<TResponse>,
+  '_setMethod' | '_setUrl'
+>
+
+/**
+ * Request builder with typed response based on schema inference.
+ * Used when creating requests via HTTP methods with URL that matches a schema.
+ *
+ * This type ensures that the execute() method returns the correct response type
+ * based on the schema map configuration.
+ */
+export type IgniterCallerTypedRequestBuilder<TResponse = unknown> = Omit<
+  IgniterCallerRequestBuilder<TResponse>,
+  '_setMethod' | '_setUrl'
+>

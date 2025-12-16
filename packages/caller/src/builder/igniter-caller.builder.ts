@@ -13,7 +13,7 @@ import type {
 } from '../types/store'
 
 export type IgniterCallerBuilderState<
-  TSchemas extends IgniterCallerSchemaMap = any,
+  TSchemas extends IgniterCallerSchemaMap = IgniterCallerSchemaMap,
 > = {
   baseURL?: string
   headers?: Record<string, string>
@@ -29,8 +29,17 @@ export type IgniterCallerBuilderState<
 
 export type IgniterCallerBuilderFactory<
   TCaller,
-  TSchemas extends IgniterCallerSchemaMap = any,
+  TSchemas extends IgniterCallerSchemaMap = IgniterCallerSchemaMap,
 > = (state: IgniterCallerBuilderState<TSchemas>) => TCaller
+
+/**
+ * Utility type to replace the schema type in a caller.
+ * Used by withSchemas to properly type the returned caller.
+ */
+export type ReplaceCallerSchema<TCaller, TNewSchemas extends IgniterCallerSchemaMap> =
+  TCaller extends { schemas?: infer _ }
+    ? Omit<TCaller, 'schemas'> & { schemas?: TNewSchemas }
+    : TCaller
 
 /**
  * Builder used by developers to initialize the `IgniterCaller` client.
