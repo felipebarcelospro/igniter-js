@@ -1,0 +1,79 @@
+{
+  "name": "@igniter-js/connectors",
+  "version": "0.1.0",
+  "description": "Type-safe, multi-tenant connector management library for Igniter.js with OAuth, encryption, and adapter support",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "AGENTS.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "igniter",
+    "igniterjs",
+    "connectors",
+    "integrations",
+    "oauth",
+    "multi-tenant",
+    "prisma",
+    "encryption",
+    "adapters",
+    "webhooks",
+    "typescript"
+  ],
+  "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/felipebarcelospro/igniter-js.git",
+    "directory": "packages/connectors"
+  },
+  "bugs": {
+    "url": "https://github.com/felipebarcelospro/igniter-js/issues"
+  },
+  "homepage": "https://igniterjs.com",
+  "dependencies": {},
+  "devDependencies": {
+    "@igniter-js/core": "*",
+    "@types/node": "^25.0.2",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4",
+    "zod": "^4.2.0"
+  },
+  "peerDependencies": {
+    "@igniter-js/core": ">=0.2.0",
+    "zod": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
