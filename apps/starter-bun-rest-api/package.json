@@ -14,11 +14,11 @@
     "@igniter-js/adapter-bullmq": "latest",
     "@igniter-js/adapter-mcp-server": "latest",
     "@igniter-js/adapter-redis": "latest",
-    "@igniter-js/core": "^0.2.6",
+    "@igniter-js/core": "^0.3.40",
     "@igniter-js/eslint-config": "^0.1.0",
     "@prisma/client": "^6.11.1",
     "bullmq": "^4",
-    "zod": "3.25.67"
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@types/bun": "latest"
