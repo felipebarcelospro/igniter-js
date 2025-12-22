@@ -16,6 +16,7 @@ export type IgniterMailErrorCode =
   | 'MAIL_PROVIDER_SCHEDULE_FAILED'
   | 'MAIL_ADAPTER_CONFIGURATION_INVALID'
   | 'MAIL_TEMPLATE_CONFIGURATION_INVALID'
+  | 'MAIL_PROVIDER_SCHEDULE_QUEUE_NOT_CONFIGURED'
 
 /**
  * Payload used to create an {@link IgniterMailError}.

@@ -9,8 +9,10 @@ Type-safe email library for Igniter.js applications with React Email templates a
 
 - ✅ **Type-Safe Templates** - Full TypeScript inference with template payload validation
 - ✅ **React Email** - Build beautiful emails with React components
-- ✅ **Multiple Providers** - Resend, Postmark, SendGrid, SMTP, Webhook
-- ✅ **Schema Validation** - Runtime validation with StandardSchema support
+- ✅ **Multiple Providers** - Resend, Postmark, SendGrid, SMTP
+- ✅ **Mock Adapter** - In-memory adapter for unit testing
+- ✅ **Schema Validation** - Runtime validation with StandardSchema (Zod 3.23+ or any StandardSchemaV1-compatible lib)
+- ✅ **Telemetry Ready** - Optional integration with `@igniter-js/telemetry`
 - ✅ **Queue Integration** - Schedule emails with BullMQ or custom queues
 - ✅ **Lifecycle Hooks** - React to send events (started, success, error)
 - ✅ **Builder Pattern** - Fluent API for configuration
@@ -41,19 +43,21 @@ Install the adapter you need:
 npm install resend
 ```
 
-**Postmark:**
-```bash
-npm install postmark
-```
-
-**SendGrid:**
-```bash
-npm install sendgrid
-```
-
 **SMTP:**
 ```bash
 npm install nodemailer @types/nodemailer
+```
+
+### Optional Dependencies
+
+**Telemetry:**
+```bash
+npm install @igniter-js/telemetry
+```
+
+**Validation (StandardSchemaV1-compatible):**
+```bash
+npm install zod
 ```
 
 ## Quick Start
@@ -117,7 +121,7 @@ await mail.send({
   },
 })
 
-// Schedule for later
+// Schedule for later (requires withQueue configured)
 await mail.schedule(
   {
     to: 'user@example.com',
@@ -143,7 +147,7 @@ import { z } from 'zod'
 
 const mail = IgniterMail.create()
   .withFrom('no-reply@example.com')
-  .withAdapter('resend', process.env.RESEND_API_KEY!)
+  .withAdapter('resend', process.env.IGNITER_MAIL_SECRET!)
   .addTemplate('resetPassword', {
     subject: 'Reset Your Password',
     schema: z.object({
@@ -197,7 +201,7 @@ await mail.send({
 
 ### Schema Validation
 
-Templates support StandardSchema for runtime validation:
+Templates support StandardSchemaV1 for runtime validation (Zod 3.23+ or any compatible library):
 
 ```typescript
 import { z } from 'zod'
@@ -269,8 +273,6 @@ const mail = IgniterMail.create()
 ### Postmark
 
 ```typescript
-import { PostmarkMailAdapterBuilder } from '@igniter-js/mail'
-
 const mail = IgniterMail.create()
   .withFrom('no-reply@example.com')
   .withAdapter('postmark', process.env.POSTMARK_SERVER_TOKEN!)
@@ -303,25 +305,14 @@ const mail = IgniterMail.create()
   .build()
 ```
 
-### Webhook
-
-For testing or custom integrations:
-
-```typescript
-const mail = IgniterMail.create()
-  .withFrom('no-reply@example.com')
-  .withAdapter('webhook', 'https://webhook.site/your-unique-url')
-  .build()
-```
-
-### Test Adapter
+### Mock Adapter
 
 For unit tests:
 
 ```typescript
-import { TestMailAdapter } from '@igniter-js/mail'
+import { MockMailAdapter } from '@igniter-js/mail/adapters'
 
-const adapter = new TestMailAdapter()
+const adapter = MockMailAdapter.create()
 
 const mail = IgniterMail.create()
   .withFrom('no-reply@example.com')
@@ -356,8 +347,8 @@ const mail = IgniterMail.create()
   .withFrom('no-reply@example.com')
   .withAdapter('resend', process.env.RESEND_API_KEY!)
   .withQueue(queueAdapter, {
-    namespace: 'mail',
-    task: 'send',
+    queue: 'mail',
+    job: 'send',
     attempts: 3,
     removeOnComplete: true,
   })
@@ -383,17 +374,36 @@ React to email sending events:
 const mail = IgniterMail.create()
   .withFrom('no-reply@example.com')
   .withAdapter('resend', process.env.RESEND_API_KEY!)
-  .withOnSendStarted(async (params) => {
+  .onSendStarted(async (params) => {
     console.log('Starting to send email:', params.template)
   })
-  .withOnSendSuccess(async (params) => {
+  .onSendSuccess(async (params) => {
     console.log('Email sent successfully:', params.template)
     // Log to analytics, update database, etc.
   })
-  .withOnSendError(async (params, error) => {
+  .onSendError(async (params, error) => {
     console.error('Failed to send email:', error)
     // Log error, send alert, etc.
   })
+  .build()
+```
+
+## Telemetry Integration
+
+Use `@igniter-js/telemetry` to capture mail events with a typed schema:
+
+```typescript
+import { IgniterTelemetry } from '@igniter-js/telemetry'
+import { IgniterMailTelemetryEvents } from '@igniter-js/mail/telemetry'
+
+const telemetry = IgniterTelemetry.create()
+  .withService('my-api')
+  .addEvents(IgniterMailTelemetryEvents)
+  .build()
+
+const mail = IgniterMail.create()
+  .withTelemetry(telemetry)
+  // ...
   .build()
 ```
 
@@ -420,7 +430,7 @@ await mail.send({
 
 ##### `schedule(params, date)`
 
-Schedules an email for a future date. Uses queue if configured, otherwise `setTimeout`.
+Schedules an email for a future date. Requires a queue adapter.
 
 ```typescript
 await mail.schedule(
@@ -482,8 +492,8 @@ Enables queue-based delivery.
 
 ```typescript
 builder.withQueue(queueAdapter, {
-  namespace: 'mail',
-  task: 'send',
+  queue: 'mail',
+  job: 'send',
   attempts: 3,
 })
 ```
@@ -500,32 +510,32 @@ builder.addTemplate('welcome', {
 })
 ```
 
-##### `withOnSendStarted(hook)`
+##### `onSendStarted(hook)`
 
 Registers a hook for send start events.
 
 ```typescript
-builder.withOnSendStarted(async (params) => {
+builder.onSendStarted(async (params) => {
   console.log('Sending:', params.template)
 })
 ```
 
-##### `withOnSendSuccess(hook)`
+##### `onSendSuccess(hook)`
 
 Registers a hook for send success events.
 
 ```typescript
-builder.withOnSendSuccess(async (params) => {
+builder.onSendSuccess(async (params) => {
   console.log('Sent:', params.template)
 })
 ```
 
-##### `withOnSendError(hook)`
+##### `onSendError(hook)`
 
 Registers a hook for send error events.
 
 ```typescript
-builder.withOnSendError(async (params, error) => {
+builder.onSendError(async (params, error) => {
   console.error('Failed:', error)
 })
 ```
@@ -560,6 +570,7 @@ try {
 - `MAIL_PROVIDER_TEMPLATE_DATA_INVALID` - Schema validation failed
 - `MAIL_PROVIDER_SEND_FAILED` - Failed to send email
 - `MAIL_PROVIDER_SCHEDULE_DATE_INVALID` - Schedule date is in the past
+- `MAIL_PROVIDER_SCHEDULE_QUEUE_NOT_CONFIGURED` - Queue adapter is required for scheduling
 - `MAIL_PROVIDER_SCHEDULE_FAILED` - Failed to schedule email
 - `MAIL_ADAPTER_CONFIGURATION_INVALID` - Adapter configuration error
 
@@ -591,7 +602,7 @@ type SendInput = typeof mail.$Infer.SendInput // Union of all send params
 2. **Use Schema Validation** - Always provide schemas for runtime safety
 3. **Leverage Hooks** - Use hooks for logging, analytics, and error tracking
 4. **Queue Heavy Loads** - Use queue integration for high-volume sending
-5. **Test Adapter First** - Use TestAdapter in unit tests before deploying
+5. **Mock Adapter First** - Use MockMailAdapter in unit tests before deploying
 6. **Environment Variables** - Store API keys and secrets in environment variables
 7. **Preview Emails** - Use React Email's preview feature during development
 
@@ -649,8 +660,8 @@ const mail = IgniterMail.create()
   .withFrom('orders@example.com')
   .withAdapter('postmark', process.env.POSTMARK_TOKEN!)
   .withQueue(queueAdapter, {
-    namespace: 'mail',
-    task: 'send',
+    queue: 'mail',
+    job: 'send',
     attempts: 5,
     priority: 10,
   })

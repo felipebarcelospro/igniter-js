@@ -1,75 +1,89 @@
 import { Resend } from 'resend'
 
-import { IgniterMailError } from '../errors/igniter-mail.error'
-import type { MailAdapter } from '../types/adapter'
-import type { LegacyIgniterMailOptions } from '../types/provider'
+import { IgniterMailError } from '../errors/mail.error'
+import type {
+  IgniterMailAdapter,
+  IgniterMailAdapterCredentials,
+  IgniterMailAdapterSendParams,
+} from '../types/adapter'
 
-export class ResendMailAdapterBuilder {
-  private secret?: string
-  private from?: string
-
-  /** Creates a new builder instance. */
-  static create() {
-    return new ResendMailAdapterBuilder()
+/**
+ * Resend adapter implementation.
+ *
+ * Notes:
+ * - Uses the Resend SDK.
+ * - Designed to be extracted to `@igniter-js/mail/adapters/resend`.
+ *
+ * @example
+ * ```ts
+ * const adapter = ResendMailAdapter.create({
+ *   secret: process.env.RESEND_API_KEY,
+ *   from: 'no-reply@example.com',
+ * })
+ * await adapter.send({ to: 'user@example.com', subject: 'Hi', html: '<p>Hi</p>', text: 'Hi' })
+ * ```
+ */
+export class ResendMailAdapter implements IgniterMailAdapter {
+  /**
+   * Creates a new adapter instance.
+   *
+   * @param credentials - Adapter credentials including API secret and default from.
+   * @returns A configured Resend adapter.
+   * @throws {IgniterMailError} Does not throw on creation; errors surface on send.
+   * @example
+   * ```ts
+   * const adapter = ResendMailAdapter.create({ secret: 'token', from: 'no-reply@acme.com' })
+   * ```
+   */
+  static create(credentials: IgniterMailAdapterCredentials) {
+    return new ResendMailAdapter(credentials)
   }
 
-  /** Sets the Resend API key. */
-  withSecret(secret: string) {
-    this.secret = secret
-    return this
-  }
+  /**
+   * Creates an adapter with credentials.
+   *
+   * @param credentials - Adapter credentials including API secret and default from.
+   * @throws {IgniterMailError} Does not throw on creation; errors surface on send.
+   */
+  constructor(private readonly credentials: IgniterMailAdapterCredentials = {}) {}
 
-  /** Sets the default FROM address used when sending emails via Resend. */
-  withFrom(from: string) {
-    this.from = from
-    return this
-  }
-
-  /** Builds the adapter instance. */
-  build(): MailAdapter {
-    if (!this.secret) {
+  /**
+   * Sends an email using Resend.
+   *
+   * @param params - Email payload to send.
+   * @returns Resolves when the email is accepted by Resend.
+   * @throws {IgniterMailError} When credentials are missing or Resend rejects the request.
+   *
+   * @example
+   * ```ts
+   * await adapter.send({ to: 'user@example.com', subject: 'Welcome', html: '<p>Hi</p>', text: 'Hi' })
+   * ```
+   */
+  async send(params: IgniterMailAdapterSendParams): Promise<void> {
+    if (!this.credentials.secret) {
       throw new IgniterMailError({
         code: 'MAIL_ADAPTER_CONFIGURATION_INVALID',
         message: 'Resend adapter secret is required',
       })
     }
 
-    if (!this.from) {
+    if (!this.credentials.from) {
       throw new IgniterMailError({
         code: 'MAIL_ADAPTER_CONFIGURATION_INVALID',
         message: 'Resend adapter from is required',
       })
     }
 
-    const resend = new Resend(this.secret)
-    const from = this.from
+    const resend = new Resend(this.credentials.secret)
+    const from = this.credentials.from
 
-    return {
-      /**
-       * Sends an email using Resend.
-       *
-       * Note: Resend accepts `scheduledAt` as an ISO string.
-       */
-      send: async ({ to, subject, html, text, scheduledAt }) => {
-        await resend.emails.create({
-          to,
-          from,
-          subject,
-          html,
-          text,
-          scheduledAt: scheduledAt?.toISOString(),
-        })
-      },
-    }
+    await resend.emails.create({
+      to: params.to,
+      from,
+      subject: params.subject,
+      html: params.html,
+      text: params.text,
+      scheduledAt: params.scheduledAt?.toISOString(),
+    })
   }
 }
-
-/**
- * Legacy adapter factory.
- */
-export const resendAdapter = (options: LegacyIgniterMailOptions) =>
-  ResendMailAdapterBuilder.create()
-    .withSecret(options.secret)
-    .withFrom(options.from)
-    .build()
-

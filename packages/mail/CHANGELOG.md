@@ -5,13 +5,13 @@ All notable changes to `@igniter-js/mail` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2025-01-13
+## [0.1.1] - 2025-12-22
 
-### 🎉 Initial Release
+### Initial Release
 
 First public release of `@igniter-js/mail` - a type-safe email library for Igniter.js with React Email templates.
 
-### ✨ Features
+### Features
 
 #### Core Functionality
 - **Type-Safe Templates** - Full TypeScript support with compile-time inference
@@ -33,8 +33,7 @@ First public release of `@igniter-js/mail` - a type-safe email library for Ignit
 - **Postmark Adapter** - Postmark email service
 - **SendGrid Adapter** - SendGrid email service
 - **SMTP Adapter** - Standard SMTP protocol support (Nodemailer)
-- **Webhook Adapter** - HTTP webhook for testing
-- **Test Adapter** - In-memory adapter for unit tests
+- **Mock Adapter** - In-memory adapter for unit tests
 
 #### Developer Experience
 - **Comprehensive Error Handling** - Typed `IgniterMailError` with stable error codes
@@ -49,14 +48,14 @@ First public release of `@igniter-js/mail` - a type-safe email library for Ignit
 - **Hook System** - Extensible hooks for monitoring and analytics
 - **Legacy API Support** - Backwards compatibility with older initialization
 
-### 📦 Package Configuration
+### Package Configuration
 - ESM and CJS exports
 - TypeScript declaration files
 - Tree-shakeable exports
 - Peer dependencies for adapters (optional)
 - Source maps included
 
-### 📚 Documentation
+### Documentation
 - Comprehensive README with examples
 - API reference documentation
 - Adapter configuration guides
@@ -65,7 +64,7 @@ First public release of `@igniter-js/mail` - a type-safe email library for Ignit
 - Type inference guide
 - AGENTS.md for AI agent development
 
-### 🧪 Testing
+### Testing
 - Unit tests for core functionality
 - Adapter-specific tests
 - Template validation tests

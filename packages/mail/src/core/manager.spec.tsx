@@ -1,8 +1,8 @@
 import type { StandardSchemaV1 } from '@igniter-js/core'
 import React from 'react'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
-import { IgniterMail } from './core/igniter-mail'
-import { IgniterMailError } from './errors/igniter-mail.error'
+import { IgniterMail } from '../builders/main.builder'
+import { IgniterMailError } from '../errors/mail.error'
 
 function createPassSchema(): StandardSchemaV1 {
   return {
@@ -109,7 +109,7 @@ describe('IgniterMail', () => {
     const mail = IgniterMail.create()
       .withFrom('no-reply@test.com')
       .withAdapter(adapter)
-      .withQueue(queueAdapter, { namespace: 'mail', task: 'send', name: 'send' })
+      .withQueue(queueAdapter, { queue: 'mail', job: 'send' })
       .addTemplate('t', {
         subject: 'T',
         schema: createPassSchema(),
@@ -125,7 +125,6 @@ describe('IgniterMail', () => {
     )
 
     expect(register).toHaveBeenCalledTimes(1)
-    expect(bulkRegister).toHaveBeenCalledTimes(1)
     expect(invoke).toHaveBeenCalledTimes(1)
   })
 

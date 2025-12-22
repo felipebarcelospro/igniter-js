@@ -1,19 +1,19 @@
 import type { StandardSchemaV1 } from '@igniter-js/core'
 import type { ReactElement } from 'react'
-import { IgniterMailError } from '../errors/igniter-mail.error'
-import type { IgniterMailTemplate } from '../types/templates'
+import { IgniterMailError } from '../errors/mail.error'
+import type { IgniterMailTemplateBuilt } from '../types/templates'
 
 /**
  * Builder for {@link IgniterMailTemplate}.
  */
-export class MailTemplateBuilder<TSchema extends StandardSchemaV1 = StandardSchemaV1> {
+export class IgniterMailTemplateBuilder<TSchema extends StandardSchemaV1 = StandardSchemaV1> {
   private subject?: string
   private schema?: StandardSchemaV1
   private render?: (data: any) => ReactElement
 
   /** Creates a new builder instance. */
   static create() {
-    return new MailTemplateBuilder<any>()
+    return new IgniterMailTemplateBuilder<any>()
   }
 
   /** Sets the default subject for the template. */
@@ -25,7 +25,7 @@ export class MailTemplateBuilder<TSchema extends StandardSchemaV1 = StandardSche
   /** Attaches the schema used to validate and infer payload types. */
   withSchema<TNextSchema extends StandardSchemaV1>(schema: TNextSchema) {
     this.schema = schema
-    return this as unknown as MailTemplateBuilder<TNextSchema>
+    return this as unknown as IgniterMailTemplateBuilder<TNextSchema>
   }
 
   /** Sets the React Email render function for the template. */
@@ -39,7 +39,7 @@ export class MailTemplateBuilder<TSchema extends StandardSchemaV1 = StandardSche
   }
 
   /** Builds the template definition. */
-  build(): IgniterMailTemplate<TSchema> {
+  build(): IgniterMailTemplateBuilt<TSchema> {
     if (!this.subject) {
       throw new IgniterMailError({
         code: 'MAIL_TEMPLATE_CONFIGURATION_INVALID',
@@ -64,8 +64,9 @@ export class MailTemplateBuilder<TSchema extends StandardSchemaV1 = StandardSche
     return {
       subject: this.subject,
       schema: this.schema as TSchema,
-      render: this.render as IgniterMailTemplate<TSchema>['render'],
+      render: this.render as IgniterMailTemplateBuilt<TSchema>['render'],
     }
   }
 }
 
+export const IgniterMailTemplate = IgniterMailTemplateBuilder

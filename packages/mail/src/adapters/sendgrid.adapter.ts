@@ -1,99 +1,112 @@
-import { IgniterMailError } from '../errors/igniter-mail.error'
-import type { MailAdapter } from '../types/adapter'
-import type { LegacyIgniterMailOptions } from '../types/provider'
+import { IgniterMailError } from '../errors/mail.error'
+import type {
+  IgniterMailAdapter,
+  IgniterMailAdapterCredentials,
+  IgniterMailAdapterSendParams,
+} from '../types/adapter'
 
 /**
- * SendGrid adapter builder.
+ * SendGrid adapter implementation.
  *
  * Notes:
  * - This implementation uses `fetch` (no SDK dependency).
  * - Designed to be extracted to `@igniter-js/mail/adapters/sendgrid`.
+ *
+ * @example
+ * ```ts
+ * const adapter = SendGridMailAdapter.create({
+ *   secret: process.env.SENDGRID_API_KEY,
+ *   from: 'no-reply@example.com',
+ * })
+ * await adapter.send({ to: 'user@example.com', subject: 'Hello', html: '<p>Hi</p>', text: 'Hi' })
+ * ```
  */
-export class SendGridMailAdapterBuilder {
-  private secret?: string
-  private from?: string
-
-  /** Creates a new builder instance. */
-  static create() {
-    return new SendGridMailAdapterBuilder()
+export class SendGridMailAdapter implements IgniterMailAdapter {
+  /**
+   * Creates a new adapter instance.
+   *
+   * @param credentials - Adapter credentials including API secret and default from.
+   * @returns A configured SendGrid adapter.
+   * @throws {IgniterMailError} Does not throw on creation; errors surface on send.
+   * @example
+   * ```ts
+   * const adapter = SendGridMailAdapter.create({ secret: 'token', from: 'no-reply@acme.com' })
+   * ```
+   */
+  static create(credentials: IgniterMailAdapterCredentials) {
+    return new SendGridMailAdapter(credentials)
   }
 
-  /** Sets the SendGrid API key. */
-  withSecret(secret: string) {
-    this.secret = secret
-    return this
-  }
+  /**
+   * Creates an adapter with credentials.
+   *
+   * @param credentials - Adapter credentials including API secret and default from.
+   * @throws {IgniterMailError} Does not throw on creation; errors surface on send.
+   */
+  constructor(private readonly credentials: IgniterMailAdapterCredentials = {}) {}
 
-  /** Sets the default FROM address used when sending emails via SendGrid. */
-  withFrom(from: string) {
-    this.from = from
-    return this
-  }
-
-  /** Builds the adapter instance. */
-  build(): MailAdapter {
-    if (!this.secret) {
+  /**
+   * Sends an email using SendGrid (HTTP API).
+   *
+   * @param params - Email payload to send.
+   * @returns Resolves when the email is accepted by SendGrid.
+   * @throws {IgniterMailError} When credentials are missing or the API fails.
+   *
+   * @example
+   * ```ts
+   * await adapter.send({ to: 'user@example.com', subject: 'Hi', html: '<p>Hi</p>', text: 'Hi' })
+   * ```
+   */
+  async send(params: IgniterMailAdapterSendParams): Promise<void> {
+    if (!this.credentials.secret) {
       throw new IgniterMailError({
         code: 'MAIL_ADAPTER_CONFIGURATION_INVALID',
         message: 'SendGrid adapter secret is required',
       })
     }
 
-    if (!this.from) {
+    if (!this.credentials.from) {
       throw new IgniterMailError({
         code: 'MAIL_ADAPTER_CONFIGURATION_INVALID',
         message: 'SendGrid adapter from is required',
       })
     }
 
-    const apiKey = this.secret
-    const from = this.from
+    const apiKey = this.credentials.secret
+    const from = this.credentials.from
 
-    return {
-      /** Sends an email using SendGrid (HTTP API). */
-      send: async ({ to, subject, html, text }) => {
-        const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            personalizations: [{
-              to: [{ email: to }],
-            }],
-            from: { email: from },
-            subject,
-            content: [
-              { type: 'text/plain', value: text },
-              { type: 'text/html', value: html },
-            ],
-          }),
-        })
-
-        // SendGrid typically returns 202 for accepted.
-        if (!response.ok) {
-          const body = await response.text().catch(() => '')
-
-          throw new IgniterMailError({
-            code: 'MAIL_PROVIDER_SEND_FAILED',
-            message: 'SendGrid send failed',
-            metadata: {
-              status: response.status,
-              body,
-            },
-          })
-        }
+    const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        personalizations: [
+          {
+            to: [{ email: params.to }],
+          },
+        ],
+        from: { email: from },
+        subject: params.subject,
+        content: [
+          { type: 'text/plain', value: params.text },
+          { type: 'text/html', value: params.html },
+        ],
+      }),
+    })
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '')
+
+      throw new IgniterMailError({
+        code: 'MAIL_PROVIDER_SEND_FAILED',
+        message: 'SendGrid send failed',
+        metadata: {
+          status: response.status,
+          body,
+        },
+      })
     }
   }
 }
-
-/**
- * Legacy adapter factory.
- */
-export const sendgridAdapter = (options: LegacyIgniterMailOptions) =>
-  SendGridMailAdapterBuilder.create()
-    .withSecret(options.secret)
-    .withFrom(options.from)
-    .build()

@@ -4,7 +4,7 @@ import type { ReactElement } from 'react'
 /**
  * Email template definition used by {@link IgniterMail}.
  */
-export interface IgniterMailTemplate<TSchema extends StandardSchemaV1> {
+export interface IgniterMailTemplateBuilt<TSchema extends StandardSchemaV1> {
   /** Default subject for the template (can be overridden per-send). */
   subject: string
   /** Schema used to validate and infer template payload. */
@@ -16,8 +16,8 @@ export interface IgniterMailTemplate<TSchema extends StandardSchemaV1> {
 /**
  * Extracts the valid template keys from a template map.
  */
-export type MailTemplateKey<TTemplates extends object> = {
-  [K in keyof TTemplates]: TTemplates[K] extends IgniterMailTemplate<any>
+export type IgniterMailTemplateKey<TTemplates extends object> = {
+  [K in keyof TTemplates]: TTemplates[K] extends IgniterMailTemplateBuilt<any>
     ? K
     : never
 }[keyof TTemplates] & string
@@ -25,7 +25,7 @@ export type MailTemplateKey<TTemplates extends object> = {
 /**
  * Extracts the payload type from a template.
  */
-export type MailTemplatePayload<TTemplate> =
-  TTemplate extends IgniterMailTemplate<infer TSchema>
+export type IgniterMailTemplatePayload<TTemplate> =
+  TTemplate extends IgniterMailTemplateBuilt<infer TSchema>
     ? StandardSchemaV1.InferInput<TSchema>
     : never

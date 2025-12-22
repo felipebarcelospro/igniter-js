@@ -1,7 +1,7 @@
 # @igniter-js/mail - AI Agent Instructions
 
-> **Package Version:** 0.1.0  
-> **Last Updated:** 2025-01-13  
+> **Package Version:** 0.1.1  
+> **Last Updated:** 2025-01-22  
 > **Status:** Ready for Publication
 
 ---
@@ -15,7 +15,8 @@
 ### Core Features
 - Type-safe email templates with React Email components
 - Runtime validation with StandardSchema support  
-- Multiple provider adapters (Resend, Postmark, SendGrid, SMTP, Webhook)
+- Multiple provider adapters (Resend, Postmark, SendGrid, SMTP)
+- Mock adapter for unit testing
 - Queue integration for async email delivery
 - Lifecycle hooks for monitoring and logging
 - Builder pattern for fluent configuration
@@ -56,42 +57,46 @@ packages/mail/
 ├── src/
 │   ├── index.ts                         # Public exports
 │   │
-│   ├── core/
-│   │   └── igniter-mail.tsx            # Core runtime logic
+│   ├── adapters/
+│   │   ├── index.ts                    # Adapters barrel
+│   │   ├── mock.adapter.ts             # In-memory mock adapter
+│   │   ├── mock.adapter.spec.ts        # Mock adapter tests
+│   │   ├── postmark.adapter.ts         # Postmark provider
+│   │   ├── postmark.adapter.spec.ts    # Postmark adapter tests
+│   │   ├── resend.adapter.ts           # Resend provider
+│   │   ├── resend.adapter.spec.ts      # Resend adapter tests
+│   │   ├── sendgrid.adapter.ts         # SendGrid provider
+│   │   ├── sendgrid.adapter.spec.ts    # SendGrid adapter tests
+│   │   ├── smtp.adapter.ts             # SMTP provider
+│   │   └── smtp.adapter.spec.ts        # SMTP adapter tests
 │   │
 │   ├── builders/
-│   │   ├── igniter-mail.builder.ts     # Main builder
-│   │   ├── mail-template.builder.ts    # Template builder
-│   │   └── mail-provider.builder.ts    # Provider builder
+│   │   ├── main.builder.ts             # Main builder
+│   │   ├── main.builder.spec.ts        # Builder tests
+│   │   ├── template.builder.ts         # Template builder
+│   │   └── template.builder.spec.ts    # Template builder tests
 │   │
-│   ├── adapters/
-│   │   ├── resend.adapter.ts           # Resend provider
-│   │   ├── postmark.adapter.ts         # Postmark provider
-│   │   ├── sendgrid.adapter.ts         # SendGrid provider
-│   │   ├── smtp.adapter.ts             # SMTP provider
-│   │   ├── webhook.adapter.ts          # Webhook testing adapter
-│   │   └── test.adapter.ts             # In-memory test adapter
+│   ├── core/
+│   │   ├── manager.tsx                 # Core runtime logic
+│   │   └── manager.spec.tsx            # Core tests
 │   │
 │   ├── errors/
-│   │   ├── igniter-mail.error.ts       # Main error class
-│   │   └── mail-provider.error.ts      # Provider-specific errors
-│   │
-│   ├── interfaces/
-│   │   ├── adapter.interface.ts        # Adapter contract (deprecated)
-│   │   └── provider.interface.ts       # Provider contract (deprecated)
+│   │   └── mail.error.ts               # Main error class
 │   │
 │   ├── types/
 │   │   ├── adapter.ts                  # Adapter types
 │   │   ├── provider.ts                 # Provider types
+│   │   ├── telemetry.ts                # Telemetry types
 │   │   └── templates.ts                # Template types
 │   │
-│   ├── utils/
-│   │   ├── get-adapter.ts              # Adapter resolution utility
-│   │   └── validate-standard-schema-input.ts # Schema validation
+│   ├── telemetry/
+│   │   └── index.ts                    # Telemetry events
 │   │
-│   ├── mail.provider.tsx               # Legacy provider (deprecated)
-│   ├── igniter-mail.spec.ts            # Unit tests
-│   └── adapters.spec.ts                # Adapter tests
+│   ├── utils/
+│   │   ├── schema.ts                   # StandardSchema utilities
+│   │   └── schema.spec.ts              # Schema tests
+│   │
+│   └── shim.ts                         # Browser/client shim
 │
 ├── package.json
 ├── tsconfig.json
@@ -113,9 +118,10 @@ The core class handles:
 - Template data validation using StandardSchema
 - React Email rendering (HTML + plain text)
 - Adapter orchestration
-- Queue integration for scheduled sends
+- Queue integration for scheduled sends (requires queue adapter)
 - Lifecycle hooks (onSendStarted, onSendSuccess, onSendError)
 - Error handling and normalization
+- Telemetry emission via `IgniterMailTelemetryEvents`
 
 **Key Invariants:**
 - All templates must have a `subject`, `schema`, and `render` function
@@ -155,18 +161,21 @@ Adapters **must**:
 
 ### Testing Strategy
 
-**Unit Tests** (`igniter-mail.spec.ts`):
-- Use `TestMailAdapter` for isolated core testing
+**Unit Tests** (`src/core/manager.spec.tsx`):
+- Use `MockMailAdapter` for isolated core testing
 - Test template validation (valid and invalid schemas)
 - Test hooks lifecycle (started, success, error)
-- Test queue integration (enqueue vs immediate send)
+- Test queue integration (enqueue)
 
-**Adapter Tests** (`adapters.spec.ts`):
-- Test each adapter's builder and configuration
+**Adapter Tests** (`src/adapters/*.spec.ts`):
+- Test mock adapter tracking behavior
 - Mock provider APIs
 - Test error handling
 
-**Type Tests** (future):
+**Builder Tests** (`src/builders/*.spec.ts`):
+- Test chaining, hooks, and template builder validation
+
+**Type Tests** (in manager spec):
 - Verify template key type inference
 - Verify payload type inference
 - Verify builder fluent API type safety
@@ -230,7 +239,7 @@ npm run test
 npm run test:watch
 
 # Run specific test file
-npm run test -- igniter-mail.spec.ts
+npm run test -- src/core/manager.spec.tsx
 ```
 
 ### Building
@@ -271,10 +280,10 @@ While the package doesn't directly read environment variables, adapters typicall
 - `SENDGRID_API_KEY` - SendGrid API key
 
 **SMTP:**
-- `SMTP_HOST` - SMTP server host
-- `SMTP_PORT` - SMTP server port
-- `SMTP_USER` - SMTP username
-- `SMTP_PASS` - SMTP password
+- Uses a connection URL passed via adapter credentials (e.g., `smtps://user:pass@host:465`)
+
+**Validation:**
+- Supports any validation library that implements `StandardSchemaV1` (Zod 3.23+ or compatible)
 
 ---
 
@@ -327,6 +336,7 @@ npm publish --access public
 | `MAIL_PROVIDER_TEMPLATE_DATA_INVALID` | Schema validation failed |
 | `MAIL_PROVIDER_SEND_FAILED` | Failed to send email |
 | `MAIL_PROVIDER_SCHEDULE_DATE_INVALID` | Schedule date is in the past |
+| `MAIL_PROVIDER_SCHEDULE_QUEUE_NOT_CONFIGURED` | Queue adapter is required |
 | `MAIL_PROVIDER_SCHEDULE_FAILED` | Failed to schedule email |
 | `MAIL_PROVIDER_FROM_REQUIRED` | FROM address not configured |
 | `MAIL_PROVIDER_ADAPTER_SECRET_REQUIRED` | Adapter secret not provided |
@@ -352,11 +362,14 @@ By design, this package does NOT:
 | File | Purpose |
 |------|---------|
 | `src/index.ts` | Public exports |
-| `src/core/igniter-mail.tsx` | Core runtime logic |
-| `src/builders/igniter-mail.builder.ts` | Builder API |
+| `src/core/manager.tsx` | Core runtime logic |
+| `src/builders/main.builder.ts` | Builder API |
+| `src/builders/template.builder.ts` | Template builder |
 | `src/adapters/*.adapter.ts` | Provider adapters |
+| `src/telemetry/index.ts` | Telemetry events |
+| `src/shim.ts` | Browser/client shim |
 | `src/types/*.ts` | Public types |
-| `src/errors/*.ts` | Error classes |
+| `src/errors/mail.error.ts` | Error classes |
 
 ### Key Commands
 
@@ -387,7 +400,7 @@ When working on this package:
 ### v0.1.0 (Initial Release)
 - Core email functionality with React Email
 - Type-safe templates with StandardSchema validation
-- Multiple adapters (Resend, Postmark, SendGrid, SMTP, Webhook, Test)
+- Multiple adapters (Resend, Postmark, SendGrid, SMTP) and mock adapter for tests
 - Queue integration for scheduled sends
 - Lifecycle hooks
 - Builder pattern API

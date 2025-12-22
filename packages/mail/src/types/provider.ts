@@ -2,95 +2,92 @@ import type {
   IgniterJobQueueAdapter,
   IgniterLogger,
   JobLimiter,
-  JobQueueConfig,
-  StandardSchemaV1,
-} from '@igniter-js/core'
-import type { MailAdapter } from './adapter'
-import type { IgniterMailTemplate, MailTemplateKey, MailTemplatePayload } from './templates'
+} from "@igniter-js/core";
+import type { IgniterMailAdapter } from "./adapter";
+import type { IgniterMailTelemetry } from "./telemetry";
+import type {
+  IgniterMailTemplateBuilt,
+  IgniterMailTemplateKey,
+  IgniterMailTemplatePayload,
+} from "./templates";
 
 /**
  * Type inference helper exposed by the runtime instance.
  */
 export type IgniterMailInfer<TTemplates extends object> = {
   /** Union of valid template keys. */
-  readonly Templates: MailTemplateKey<TTemplates>
+  readonly Templates: IgniterMailTemplateKey<TTemplates>;
   /** Payloads by template. */
   readonly Payloads: {
-    [K in MailTemplateKey<TTemplates>]: MailTemplatePayload<TTemplates[K]>
-  }
+    [K in IgniterMailTemplateKey<TTemplates>]: IgniterMailTemplatePayload<TTemplates[K]>;
+  };
 
   /**
    * Union of valid `mail.send()` inputs.
    * Useful for type-level consumption.
    */
   readonly SendInput: {
-    [K in MailTemplateKey<TTemplates>]: IgniterMailSendParams<TTemplates, K>
-  }[MailTemplateKey<TTemplates>]
+    [K in IgniterMailTemplateKey<TTemplates>]: IgniterMailSendParams<TTemplates, K>;
+  }[IgniterMailTemplateKey<TTemplates>];
 
   /**
    * Tuple form of `mail.schedule()` inputs.
    */
   readonly ScheduleInput: [
     {
-      [K in MailTemplateKey<TTemplates>]: IgniterMailSendParams<TTemplates, K>
-    }[MailTemplateKey<TTemplates>],
+      [K in IgniterMailTemplateKey<TTemplates>]: IgniterMailSendParams<TTemplates, K>;
+    }[IgniterMailTemplateKey<TTemplates>],
     Date,
-  ]
-}
+  ];
+};
 
 /**
  * Queue options used when scheduling or enqueuing send jobs.
  */
 export type IgniterMailQueueOptions = {
-  /** Namespace used to compose the job id (default: "mail"). */
-  namespace?: string
-  /** Task key used to compose the job id (default: "send"). */
-  task?: string
-  /** Human-readable job name (default: "send"). */
-  name?: string
-  /** Queue config for this job. */
-  queue?: JobQueueConfig
+  /** Job name (default: "send"). */
+  job?: string;
+  /** Queue name. */
+  queue?: string;
   /** Number of retry attempts on failure. */
-  attempts?: number
+  attempts?: number;
   /** Job priority (higher value = higher priority). */
-  priority?: number
+  priority?: number;
   /** Remove job after completion. */
-  removeOnComplete?: boolean | number
+  removeOnComplete?: boolean | number;
   /** Remove job after failure. */
-  removeOnFail?: boolean | number
+  removeOnFail?: boolean | number;
   /** Additional metadata. */
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>;
   /** Optional rate limiter config. */
-  limiter?: JobLimiter
-}
+  limiter?: JobLimiter;
+};
 
 /**
  * Normalized queue configuration consumed by the runtime.
  */
 export type IgniterMailQueueConfig = {
   /** Queue adapter instance. */
-  adapter: IgniterJobQueueAdapter<any>
-  /** Fully qualified job id. */
-  id: string
+  adapter: IgniterJobQueueAdapter<any>;
   /** Optional queue options. */
-  options?: IgniterMailQueueOptions
-}
+  options?: IgniterMailQueueOptions;
+};
 
 /**
  * Parameters required to send an email using a template.
  */
 export interface IgniterMailSendParams<
   TTemplates extends object,
-  TSelectedTemplate extends MailTemplateKey<TTemplates>,
+  TSelectedTemplate extends IgniterMailTemplateKey<TTemplates>,
 > {
   /** Recipient email address. */
-  to: string
+  to: string;
   /** Optional subject override. */
-  subject?: string
+  subject?: string;
   /** Template key. */
-  template: TSelectedTemplate
+  template: TSelectedTemplate;
   /** Template payload (validated using StandardSchema when provided). */
-  data: MailTemplatePayload<TTemplates[TSelectedTemplate]>
+  data: IgniterMailTemplatePayload<TTemplates[TSelectedTemplate]>;
 }
 
 /**
@@ -98,51 +95,38 @@ export interface IgniterMailSendParams<
  */
 export interface IgniterMailHooks<TTemplates extends object> {
   /** Invoked before rendering/sending. */
-  onSendStarted?: (params: IgniterMailSendParams<TTemplates, any>) => Promise<void>
+  onSendStarted?: (
+    params: IgniterMailSendParams<TTemplates, any>,
+  ) => Promise<void>;
   /** Invoked when sending fails. */
   onSendError?: (
     params: IgniterMailSendParams<TTemplates, any>,
     error: Error,
-  ) => Promise<void>
+  ) => Promise<void>;
   /** Invoked after a successful send. */
-  onSendSuccess?: (params: IgniterMailSendParams<TTemplates, any>) => Promise<void>
+  onSendSuccess?: (
+    params: IgniterMailSendParams<TTemplates, any>,
+  ) => Promise<void>;
 }
 
 /**
  * Options used to initialize {@link IgniterMail}.
  */
 export interface IgniterMailOptions<
-  TTemplates extends object = Record<string, IgniterMailTemplate<any>>,
+  TTemplates extends object = Record<string, IgniterMailTemplateBuilt<any>>,
 > extends IgniterMailHooks<TTemplates> {
   /** Default FROM address used by the adapter. */
-  from: string
+  from: string;
   /** Adapter implementation. */
-  adapter: MailAdapter
+  adapter: IgniterMailAdapter;
   /** Template registry. */
-  templates: TTemplates
-
+  templates: TTemplates;
   /** Optional logger used for debug/info/error logging. */
-  logger?: IgniterLogger
+  logger?: IgniterLogger;
+  /** Optional telemetry instance for observability. */
+  telemetry?: IgniterMailTelemetry;
   /** Optional queue configuration for asynchronous delivery. */
-  queue?: IgniterMailQueueConfig
-}
-
-/**
- * Legacy initializer options.
- *
- * Kept for backwards compatibility with older integrations.
- */
-export interface LegacyIgniterMailOptions<
-  TTemplates extends object = Record<string, IgniterMailTemplate<any>>,
-> extends IgniterMailHooks<TTemplates> {
-  /** Provider secret/token. */
-  secret: string
-  /** Default FROM address. */
-  from: string
-  /** Adapter factory. */
-  adapter: (options: LegacyIgniterMailOptions<any>) => MailAdapter
-  /** Template registry. */
-  templates: TTemplates
+  queue?: IgniterMailQueueConfig;
 }
 
 /**
@@ -153,29 +137,16 @@ export interface IIgniterMail<TTemplates extends object> {
    * Type inference helper.
    * Access via `typeof mail.$Infer` (type-level only).
    */
-  readonly $Infer: IgniterMailInfer<TTemplates>
+  readonly $Infer: IgniterMailInfer<TTemplates>;
 
   /** Sends an email immediately. */
-  send: <TSelectedTemplate extends MailTemplateKey<TTemplates>>(
+  send: <TSelectedTemplate extends IgniterMailTemplateKey<TTemplates>>(
     params: IgniterMailSendParams<TTemplates, TSelectedTemplate>,
-  ) => Promise<void>
+  ) => Promise<void>;
 
-  /** Schedules an email for a future date (queue if configured, otherwise setTimeout). */
-  schedule: <TSelectedTemplate extends MailTemplateKey<TTemplates>>(
+  /** Schedules an email for a future date (requires queue adapter). */
+  schedule: <TSelectedTemplate extends IgniterMailTemplateKey<TTemplates>>(
     params: IgniterMailSendParams<TTemplates, TSelectedTemplate>,
     date: Date,
-  ) => Promise<void>
-}
-
-/**
- * Helper for creating a passthrough `StandardSchemaV1` validator.
- */
-export function createPassthroughSchema(): StandardSchemaV1 {
-  return {
-    '~standard': {
-      vendor: '@igniter-js/mail',
-      version: 1,
-      validate: async (value: unknown) => ({ value }),
-    },
-  } satisfies StandardSchemaV1
+  ) => Promise<void>;
 }

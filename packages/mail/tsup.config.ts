@@ -1,7 +1,12 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: {
+    index: 'src/index.ts',
+    'adapters/index': 'src/adapters/index.ts',
+    'telemetry/index': 'src/telemetry/index.ts',
+    shim: 'src/shim.ts',
+  },
   format: ['esm', 'cjs'],
   dts: true,
   splitting: false,
@@ -10,6 +15,7 @@ export default defineConfig({
   treeshake: true,
   external: [
     '@igniter-js/core',
+    '@igniter-js/telemetry',
     '@react-email/components',
     'react',
     'resend',
