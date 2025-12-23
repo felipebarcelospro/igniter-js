@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/storage",
-  "version": "0.2.0",
+  "version": "0.1.1",
   "description": "Type-safe, adapter-based file storage library for Igniter.js with S3 and Google Cloud Storage support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
