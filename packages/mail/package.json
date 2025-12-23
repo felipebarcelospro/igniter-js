@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/mail",
-  "version": "0.1.1",
+  "version": "0.1.11",
   "description": "Type-safe email library for Igniter.js with React Email templates and multiple provider adapters",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -87,25 +87,25 @@
     "vitest": "^2.1.4"
   },
   "peerDependencies": {
-    "@igniter-js/core": "*",
+    "@igniter-js/core": ">=0.3.40",
     "@igniter-js/telemetry": "*",
     "react": "^18.0.0",
-    "zod": ">=3.25.42"
+    "zod": ">=4.2.1"
   },
   "peerDependenciesMeta": {
     "@igniter-js/telemetry": {
       "optional": true
     },
-    "nodemailer": {
+    "@igniter-js/core": {
       "optional": true
     },
-    "postmark": {
+    "nodemailer": {
       "optional": true
     },
     "resend": {
       "optional": true
     },
-    "sendgrid": {
+    "zod": {
       "optional": true
     }
   },
