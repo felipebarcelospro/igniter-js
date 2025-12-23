@@ -1,10 +1,53 @@
-export * from './adapters'
-export * from './builder/igniter-storage.builder'
-export * from './errors/igniter-storage.error'
-export * from './igniter-storage'
+/**
+ * @fileoverview Main entry point for @igniter-js/storage
+ * @module @igniter-js/storage
+ */
 
-export * from './types/file'
-export * from './types/hooks'
-export * from './types/policies'
-export * from './types/replace'
-export * from './types/scopes'
+// =============================================================================
+// CORE EXPORTS
+// =============================================================================
+
+export * from "./core";
+export type * from "./core";
+
+// =============================================================================
+// BUILDER EXPORTS
+// =============================================================================
+
+export * from "./builders";
+export type * from "./builders";
+
+// =============================================================================
+// ADAPTER EXPORTS
+// =============================================================================
+
+export * from "./adapters";
+export type * from "./adapters";
+
+// =============================================================================
+// TELEMETRY EXPORTS
+// =============================================================================
+
+export * from "./telemetry";
+export type * from "./telemetry";
+
+// =============================================================================
+// ERROR EXPORTS
+// =============================================================================
+
+export * from "./errors";
+export type * from "./errors";
+
+// =============================================================================
+// UTIL EXPORTS
+// =============================================================================
+
+export * from "./utils";
+export type * from "./utils";
+
+// =============================================================================
+// TYPE EXPORTS
+// =============================================================================
+
+export * from "./types";
+export type * from "./types";

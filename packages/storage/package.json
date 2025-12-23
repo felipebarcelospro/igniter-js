@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/storage",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Type-safe, adapter-based file storage library for Igniter.js with S3 and Google Cloud Storage support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,14 +14,33 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
+      "browser": "./dist/shim.js",
+      "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
     "./adapters": {
       "types": "./dist/adapters/index.d.ts",
-      "import": "./dist/adapters/index.js",
+      "browser": "./dist/shim.js",
+      "import": "./dist/adapters/index.mjs",
       "require": "./dist/adapters/index.js"
+    },
+    "./telemetry": {
+      "types": "./dist/telemetry/index.d.ts",
+      "browser": "./dist/shim.js",
+      "import": "./dist/telemetry/index.mjs",
+      "require": "./dist/telemetry/index.js"
+    },
+    "./adapters/*": {
+      "types": "./dist/adapters/*.d.ts",
+      "browser": "./dist/shim.js",
+      "import": "./dist/adapters/*.mjs",
+      "require": "./dist/adapters/*.js"
     }
+  },
+  "browser": {
+    "./dist/index.js": "./dist/shim.js",
+    "./dist/adapters/index.js": "./dist/shim.js",
+    "./dist/telemetry/index.js": "./dist/shim.js"
   },
   "scripts": {
     "dev": "tsup --watch",
@@ -62,15 +81,18 @@
     "@aws-sdk/lib-storage": "^3.645.0",
     "@google-cloud/storage": "^7.12.1",
     "@igniter-js/core": "*",
+    "@igniter-js/telemetry": "*",
     "@types/mime-types": "^3.0.1",
     "@types/node": "^22.7.5",
-    "mime-types": "^3.0.2",
     "tsup": "^8.3.0",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "zod": "^4.2.1"
   },
   "peerDependencies": {
-    "@igniter-js/core": "*"
+    "@igniter-js/core": ">=0.3.40",
+    "@igniter-js/telemetry": ">=0.1.0",
+    "zod": ">=4.2.1"
   },
   "peerDependenciesMeta": {
     "@aws-sdk/client-s3": {
@@ -80,6 +102,12 @@
       "optional": true
     },
     "@google-cloud/storage": {
+      "optional": true
+    },
+    "@igniter-js/telemetry": {
+      "optional": true
+    },
+    "zod": {
       "optional": true
     }
   },
