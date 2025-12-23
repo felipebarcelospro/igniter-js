@@ -1,5 +1,5 @@
 /**
- * @fileoverview Scope and Actor types for @igniter-js/store multi-tenant support
+ * @fileoverview Scope types for @igniter-js/store multi-tenant support
  * @module @igniter-js/store/types/scope
  */
 
@@ -14,27 +14,10 @@ export interface IgniterStoreScopeOptions {
 }
 
 /**
- * Options for actor definition.
- */
-export interface IgniterStoreActorOptions {
-  /** Whether this actor type is required (default: false) */
-  required?: boolean
-  /** Description of the actor for documentation */
-  description?: string
-}
-
-/**
  * Scope definition registry type.
  */
 export type IgniterStoreScopeDefinition = {
   [key: string]: IgniterStoreScopeOptions
-}
-
-/**
- * Actor definition registry type.
- */
-export type IgniterStoreActorDefinition = {
-  [key: string]: IgniterStoreActorOptions
 }
 
 /**
@@ -52,16 +35,6 @@ export interface IgniterStoreScopeEntry {
   /** The scope key (e.g., 'organization', 'workspace', 'project') */
   key: string
   /** The scope identifier (e.g., 'org_123') */
-  identifier: string
-}
-
-/**
- * Actor entry representing the current actor.
- */
-export interface IgniterStoreActorEntry {
-  /** The actor type (e.g., 'user', 'system', 'bot') */
-  key: string
-  /** The actor identifier (e.g., 'usr_123') */
   identifier: string
 }
 
@@ -88,4 +61,3 @@ export type IgniterStoreScopeChain = IgniterStoreScopeEntry[]
  * ```
  */
 export type IgniterStoreScopeIdentifier = string | number
-

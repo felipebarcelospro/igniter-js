@@ -7,7 +7,7 @@ import {
   IgniterStoreError,
   IGNITER_STORE_ERROR_CODES,
   type IgniterStoreErrorCode,
-} from './igniter-store.error'
+} from './store.error'
 
 describe('IgniterStoreError', () => {
   describe('constructor', () => {
@@ -85,11 +85,12 @@ describe('IgniterStoreError', () => {
       const expectedCodes: IgniterStoreErrorCode[] = [
         'STORE_ADAPTER_REQUIRED',
         'STORE_SERVICE_REQUIRED',
-        'STORE_ENVIRONMENT_REQUIRED',
         'STORE_CONFIGURATION_INVALID',
         'STORE_SCOPE_KEY_REQUIRED',
         'STORE_SCOPE_IDENTIFIER_REQUIRED',
         'STORE_SCOPE_INVALID',
+        'STORE_DUPLICATE_SCOPE',
+        'STORE_INVALID_SCOPE_KEY',
         'STORE_KEY_REQUIRED',
         'STORE_VALUE_REQUIRED',
         'STORE_TTL_INVALID',
@@ -120,6 +121,12 @@ describe('IgniterStoreError', () => {
         'STORE_SCAN_PATTERN_REQUIRED',
         'STORE_CONNECTION_FAILED',
         'STORE_NOT_CONNECTED',
+        'STORE_INVALID_NAMESPACE',
+        'STORE_RESERVED_NAMESPACE',
+        'STORE_DUPLICATE_NAMESPACE',
+        'STORE_INVALID_EVENT_NAME',
+        'STORE_DUPLICATE_EVENT',
+        'STORE_MISSING_NAMESPACE',
       ]
 
       for (const code of expectedCodes) {

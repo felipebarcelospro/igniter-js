@@ -2,11 +2,13 @@
  * @fileoverview Tests for IgniterStoreBuilder
  */
 
-import { describe, it, expect, vi } from 'vitest'
-import { IgniterStoreBuilder } from './igniter-store.builder'
-import { IgniterStoreError } from '../errors/igniter-store.error'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { IgniterStore, IgniterStoreBuilder } from './main.builder'
+import { IgniterStoreError } from '../errors/store.error'
 import type { IgniterStoreAdapter } from '../types/adapter'
 import type { IgniterLogger } from '@igniter-js/core'
+import { IgniterStoreEvents } from './events.builder'
+import { z } from 'zod'
 
 // Mock adapter
 const createMockAdapter = (): IgniterStoreAdapter => ({
@@ -31,9 +33,20 @@ const createMockAdapter = (): IgniterStoreAdapter => ({
 })
 
 describe('IgniterStoreBuilder', () => {
+  let adapter: IgniterStoreAdapter
+  
+  beforeEach(() => {
+    adapter = createMockAdapter()
+  })
+
   describe('create()', () => {
     it('should create a new builder instance', () => {
       const builder = IgniterStoreBuilder.create()
+      expect(builder).toBeInstanceOf(IgniterStoreBuilder)
+    })
+
+    it('should expose IgniterStore.create()', () => {
+      const builder = IgniterStore.create()
       expect(builder).toBeInstanceOf(IgniterStoreBuilder)
     })
   })
@@ -65,24 +78,6 @@ describe('IgniterStoreBuilder', () => {
     })
   })
 
-  describe('withEnvironment()', () => {
-    it('should set the environment', () => {
-      const builder = IgniterStoreBuilder.create()
-        .withEnvironment('production')
-
-      expect(builder).toBeInstanceOf(IgniterStoreBuilder)
-    })
-  })
-
-  describe('withKeyPrefix()', () => {
-    it('should set the key prefix', () => {
-      const builder = IgniterStoreBuilder.create()
-        .withKeyPrefix('myapp:cache')
-
-      expect(builder).toBeInstanceOf(IgniterStoreBuilder)
-    })
-  })
-
   describe('withSerializer()', () => {
     it('should set custom serializer', () => {
       const serializer = {
@@ -99,28 +94,33 @@ describe('IgniterStoreBuilder', () => {
 
   describe('addEvents()', () => {
     it('should add events for a namespace', () => {
-      const events = { created: {} as any, deleted: {} as any }
+      const UserEvents = IgniterStoreEvents.create('user')
+        .event('created', z.object({ id: z.string() }))
+        .build()
       const builder = IgniterStoreBuilder.create()
-        .addEvents('user', events)
+        .addEvents(UserEvents)
 
       expect(builder).toBeInstanceOf(IgniterStoreBuilder)
     })
 
     it('should add events with validation options', () => {
-      const events = { created: {} as any }
+      const UserEvents = IgniterStoreEvents.create('user')
+        .event('created', z.object({ id: z.string() }))
+        .build()
       const builder = IgniterStoreBuilder.create()
-        .addEvents('user', events, { validatePublish: true })
+        .addEvents(UserEvents, { validatePublish: true })
 
       expect(builder).toBeInstanceOf(IgniterStoreBuilder)
     })
 
     it('should add multiple namespaces', () => {
-      const userEvents = { created: {} as any }
-      const orderEvents = { placed: {} as any }
-      const builder = IgniterStoreBuilder.create()
-        .addEvents('user', userEvents)
-        .addEvents('order', orderEvents)
-
+      const userEvents = IgniterStoreEvents.create('user')
+        .event('created', z.object({ id: z.string() }))
+        .build()
+      const orderEvents = IgniterStoreEvents.create('order')
+        .event('placed', z.object({ id: z.string() }))
+        .build()
+      const builder = IgniterStoreBuilder.create().addEvents(userEvents).addEvents(orderEvents)
       expect(builder).toBeInstanceOf(IgniterStoreBuilder)
     })
   })
@@ -182,8 +182,6 @@ describe('IgniterStoreBuilder', () => {
       const store = IgniterStoreBuilder.create()
         .withAdapter(adapter)
         .withService('my-api')
-        .withEnvironment('production')
-        .withKeyPrefix('myapp')
         .withSerializer({ encode: JSON.stringify, decode: JSON.parse })
         .build()
 
@@ -227,42 +225,50 @@ describe('IgniterStoreBuilder', () => {
     })
   })
 
-  describe('addActor()', () => {
-    it('should add an actor definition', () => {
-      const builder = IgniterStoreBuilder.create()
-        .addActor('user', { description: 'Human user' })
-
-      expect(builder).toBeInstanceOf(IgniterStoreBuilder)
-    })
-
-    it('should add multiple actors', () => {
-      const builder = IgniterStoreBuilder.create()
-        .addActor('user', { description: 'Human user' })
-        .addActor('system', { description: 'System process' })
-
-      expect(builder).toBeInstanceOf(IgniterStoreBuilder)
-    })
-
-    it('should throw on duplicate actor key', () => {
-      expect(() => {
-        IgniterStoreBuilder.create()
-          .addActor('user')
-          .addActor('user')
-      }).toThrow(IgniterStoreError)
-    })
-  })
-
   describe('immutability', () => {
     it('should create new builder on each method call', () => {
       const adapter = createMockAdapter()
       const builder1 = IgniterStoreBuilder.create()
       const builder2 = builder1.withAdapter(adapter)
       const builder3 = builder2.withService('api')
-      const builder4 = builder3.withEnvironment('prod')
 
       expect(builder1).not.toBe(builder2)
       expect(builder2).not.toBe(builder3)
-      expect(builder3).not.toBe(builder4)
+    })
+  })
+
+
+
+  describe('typed scopes with addScope()', () => {
+    let typedStore: ReturnType<typeof createTypedStore>
+
+    function createTypedStore() {
+      return IgniterStoreBuilder.create()
+        .withAdapter(adapter)
+        .withService('typed-api')
+        .addScope('organization', { required: true })
+        .addScope('workspace')
+        .build()
+    }
+
+    beforeEach(() => {
+      typedStore = createTypedStore()
+    })
+
+    it('should accept defined scope keys', async () => {
+      const orgStore = typedStore.scope('organization', 'org_123')
+      await orgStore.kv.get('settings')
+
+      expect(adapter.get).toHaveBeenCalledWith(
+        'igniter:store:typed-api:organization:org_123:kv:settings',
+      )
+    })
+
+    it('should throw on undefined scope keys', () => {
+      expect(() => {
+        // @ts-expect-error - Testing runtime validation for undefined scope
+        typedStore.scope('invalid', 'id')
+      }).toThrow(IgniterStoreError)
     })
   })
 })

@@ -1,7 +1,7 @@
 # AGENTS.md - @igniter-js/store
 
-> **Last Updated:** 2025-01-14
-> **Version:** 0.1.0
+> **Last Updated:** 2025-01-22
+> **Version:** 0.1.2
 
 ---
 
@@ -20,7 +20,7 @@
 - Redis Streams support with consumer groups
 - Multi-tenant scoping with hierarchical isolation
 - Typed scope definitions with runtime validation
-- Actor identification for event tracing
+- Telemetry event emission for all operations
 
 ---
 
@@ -32,32 +32,40 @@
 packages/store/
 ├── src/
 │   ├── adapters/
-│   │   ├── redis.adapter.ts       # Redis implementation
-│   │   └── index.ts               # Adapter exports
+│   │   ├── redis.adapter.ts        # Redis implementation
+│   │   └── index.ts                # Adapter exports
 │   ├── builders/
-│   │   ├── igniter-store.builder.ts      # Fluent builder
-│   │   ├── igniter-store.builder.spec.ts # Builder tests
+│   │   ├── main.builder.ts         # Fluent builder
+│   │   ├── main.builder.spec.ts    # Builder tests
+│   │   ├── events.builder.ts       # Typed events builder
+│   │   ├── events-group.builder.ts # Typed events group builder
+│   │   ├── events-group.builder.spec.ts
+│   │   ├── store-key.builder.ts    # Key builder
+│   │   ├── store-key.builder.spec.ts
 │   │   └── index.ts
 │   ├── core/
-│   │   ├── igniter-store.ts       # Main store class
-│   │   ├── igniter-store.spec.ts  # Core tests
+│   │   ├── manager.ts             # Main store class
+│   │   ├── manager.spec.ts        # Core tests
 │   │   └── index.ts
 │   ├── errors/
-│   │   ├── igniter-store.error.ts # Error definitions
-│   │   ├── igniter-store.error.spec.ts
+│   │   ├── store.error.ts         # Error definitions
+│   │   ├── store.error.spec.ts
 │   │   └── index.ts
+│   ├── telemetry/
+│   │   └── index.ts               # Telemetry event registry
 │   ├── types/
 │   │   ├── adapter.ts             # Adapter interface
 │   │   ├── config.ts              # Configuration types
 │   │   ├── events.ts              # Event context types
+│   │   ├── manager.ts             # Manager interfaces
 │   │   ├── schema.ts              # Schema inference types
-│   │   ├── scope.ts               # Scope and actor types
+│   │   ├── scope.ts               # Scope types
 │   │   ├── serializer.ts          # Serializer interface
+│   │   ├── telemetry.ts           # Telemetry types
 │   │   └── index.ts
 │   ├── utils/
-│   │   ├── key-builder.ts         # Key generation utility
-│   │   ├── key-builder.spec.ts
-│   │   ├── schema.ts              # IgniterStoreEventsSchema
+│   │   ├── events.ts              # Namespace validation
+│   │   ├── schema.ts              # Legacy schema builder
 │   │   ├── schema.spec.ts
 │   │   └── index.ts
 │   └── index.ts                   # Main entry point
@@ -74,12 +82,14 @@ packages/store/
 
 | Component | File | Responsibility |
 |-----------|------|----------------|
-| `IgniterStore` | `core/igniter-store.ts` | Main store class with all operations |
-| `IgniterStoreBuilder` | `builders/igniter-store.builder.ts` | Fluent configuration builder with type accumulation |
+| `IgniterStore` | `builders/main.builder.ts` | Builder entry point (`IgniterStore.create()`) |
+| `IgniterStoreManager` | `core/manager.ts` | Runtime store implementation |
+| `IgniterStoreBuilder` | `builders/main.builder.ts` | Fluent configuration builder |
+| `IgniterStoreEvents` | `builders/events.builder.ts` | Typed events builder |
 | `IgniterStoreRedisAdapter` | `adapters/redis.adapter.ts` | Redis implementation |
-| `IgniterStoreEventsSchema` | `utils/schema.ts` | Typed pub/sub schema builder |
-| `StoreKeyBuilder` | `utils/key-builder.ts` | Consistent key generation |
-| `IgniterStoreError` | `errors/igniter-store.error.ts` | Typed error handling |
+| `IgniterStoreTelemetryEvents` | `telemetry/index.ts` | Telemetry registry |
+| `IgniterStoreKeyBuilder` | `builders/store-key.builder.ts` | Consistent key generation |
+| `IgniterStoreError` | `errors/store.error.ts` | Typed error handling |
 
 ---
 
@@ -94,18 +104,13 @@ The store uses an immutable fluent builder with TypeScript type accumulation:
 const store = IgniterStore.create()
   .withAdapter(adapter)     // Returns IgniterStoreBuilder<TRegistry, TScopes, TActors>
   .withService('my-api')    
-  .withEnvironment('prod')  
   .addScope('organization', { required: true })  // TScopes accumulates: 'organization'
   .addScope('workspace')                          // TScopes accumulates: 'organization' | 'workspace'
-  .addActor('user')                               // TActors accumulates: 'user'
-  .addActor('system')                             // TActors accumulates: 'user' | 'system'
-  .build()                  // Returns IgniterStore with typed scope/actor
+  .build()                  // Returns IgniterStore with typed scopes
 
 // TypeScript enforces valid keys
 store.scope('organization', 'org_123')  // ✅ Valid
 store.scope('invalid', 'id')            // ❌ Type error
-store.actor('user', 'user_123')         // ✅ Valid
-store.actor('invalid', 'id')            // ❌ Type error
 ```
 
 ### 3.2 Key Naming Convention
@@ -113,13 +118,12 @@ store.actor('invalid', 'id')            // ❌ Type error
 Keys follow this hierarchical pattern:
 
 ```
-<prefix>:<env>:<service>[:<scope>:<id>...]:<namespace>:<key>
+<prefix>:<service>[:<scope>:<id>...]:<namespace>:<key>
 ```
 
 | Segment | Description | Example |
 |---------|-------------|---------|
-| prefix | Base prefix (default: `ign:store`) | `ign:store` |
-| env | Environment name | `production` |
+| prefix | Base prefix (default: `igniter:store`) | `igniter:store` |
 | service | Service identifier | `my-api` |
 | scope:id | Optional scope segments | `org:123:ws:456` |
 | namespace | Operation namespace | `kv`, `counter`, `claim`, etc. |
@@ -141,7 +145,7 @@ const wsStore = orgStore.scope('workspace', 'ws_456')
 
 // All operations are isolated
 await wsStore.kv.set('key', value)
-// Key: ign:store:prod:api:org:org_123:workspace:ws_456:kv:key
+// Key: igniter:store:api:org:org_123:workspace:ws_456:kv:key
 ```
 
 ### 3.4 Typed Pub/Sub
@@ -149,17 +153,24 @@ await wsStore.kv.set('key', value)
 Schema-based type inference for pub/sub:
 
 ```typescript
-const schemas = IgniterStoreEventsSchema.create()
-  .channel('user:created', z.object({ id: z.string() }))
+const UserEvents = IgniterStoreEvents
+  .create('user')
+  .event('created', z.object({ id: z.string() }))
   .group('notifications', (g) =>
-    g.channel('email', z.object({ to: z.string() }))
+    g.event('email', z.object({ to: z.string() }))
   )
   .build()
 
 // Results in types:
 // 'user:created' -> { id: string }
-// 'notifications:email' -> { to: string }
+// 'user:notifications:email' -> { to: string }
 ```
+
+### 3.5 Telemetry Coverage
+
+`IgniterStoreManager` emits telemetry events for every operation (kv, counter,
+batch, claim, events, streams, dev scan). See `src/telemetry/index.ts` for the
+full registry and ensure attributes never include PII.
 
 ---
 
@@ -180,7 +191,8 @@ const schemas = IgniterStoreEventsSchema.create()
 
 | Method | Description |
 |--------|-------------|
-| `bump(key, amount?)` | Increment counter (default: 1) |
+| `increment(key)` | Increment counter (default: 1) |
+| `decrement(key)` | Decrement counter (default: 1) |
 | `expire(key, ttl)` | Set counter expiration |
 
 ### 4.3 `store.claim` - Distributed Locks
@@ -204,7 +216,6 @@ Events now include a context envelope with metadata:
 |--------|-------------|
 | `publish(channel, message)` | Publish to channel (wraps in context envelope) |
 | `subscribe(channel, callback)` | Subscribe with context handler |
-| `unsubscribe(channel, callback)` | Unsubscribe |
 
 #### Event Context Structure
 
@@ -217,21 +228,17 @@ interface EventContext<TData> {
     key: string           // Scope type (e.g., 'organization')
     identifier: string    // Scope value (e.g., 'org_123')
   }
-  actor?: {
-    key: string           // Actor type (e.g., 'user')
-    identifier: string    // Actor ID (e.g., 'user_456')
-  }
 }
 ```
 
-### 4.6 `store.stream` - Redis Streams
+### 4.6 `store.streams` - Redis Streams
 
 | Method | Description |
 |--------|-------------|
 | `append(stream, data, opts?)` | Add to stream |
 | `group(name, consumer)` | Create consumer group API |
 
-#### Consumer Group API (`store.stream.group(...)`)
+#### Consumer Group API (`store.streams.group(...)`)
 
 | Method | Description |
 |--------|-------------|
@@ -251,49 +258,14 @@ interface EventContext<TData> {
 |--------|-------------|
 | `scope(type, id)` | Create scoped store instance |
 
-### 4.9 `store.actor` - Actor Identification
-
-| Method | Description |
-|--------|-------------|
-| `actor(key, identifier)` | Create store with actor context for events |
-
-#### Usage Example
-
-```typescript
-// Set actor for all events published from this store instance
-const userStore = store.actor('user', 'user_123')
-await userStore.events.publish('document:created', { docId: 'doc_1' })
-// Event context includes: { actor: { key: 'user', identifier: 'user_123' } }
-
-// Combine with scope
-const scopedUserStore = store
-  .scope('organization', 'org_123')
-  .actor('user', 'user_456')
-await scopedUserStore.events.publish('event', data)
-// Event context includes both scope and actor
-```
-
 ---
 
 ## 5. Error Handling
 
 ### Error Codes
 
-All errors are `IgniterStoreError` instances with specific codes:
-
-| Code | Description |
-|------|-------------|
-| `STORE_ADAPTER_REQUIRED` | No adapter configured |
-| `STORE_SERVICE_REQUIRED` | No service name configured |
-| `STORE_NOT_CONFIGURED` | Builder not complete |
-| `STORE_CONNECTION_FAILED` | Adapter connection error |
-| `STORE_OPERATION_FAILED` | Generic operation error |
-| `STORE_KEY_NOT_FOUND` | Key doesn't exist |
-| `STORE_SERIALIZATION_ERROR` | Encode/decode failed |
-| `STORE_SUBSCRIPTION_FAILED` | Pub/sub subscription error |
-| `STORE_PUBLISH_FAILED` | Pub/sub publish error |
-| `STORE_SCOPE_INVALID_TYPE` | Invalid scope type |
-| `STORE_SCOPE_INVALID_ID` | Invalid scope ID |
+All errors are `IgniterStoreError` instances. The authoritative list lives in:
+`src/errors/store.error.ts` (`IGNITER_STORE_ERROR_CODES`).
 | `STORE_STREAM_OPERATION_FAILED` | Stream error |
 | `STORE_DUPLICATE_SCOPE` | Duplicate scope key in builder |
 | `STORE_INVALID_SCOPE_KEY` | Invalid scope key at runtime |
@@ -387,7 +359,7 @@ cd packages/store
 bun test
 
 # Run specific test file
-bun test src/core/igniter-store.spec.ts
+bun test src/core/manager.spec.ts
 
 # Watch mode
 bun test --watch
@@ -455,7 +427,7 @@ bun test --watch
 
 ### Adding New Error Code
 
-1. Add to `IGNITER_STORE_ERROR_CODES` in `errors/igniter-store.error.ts`
+1. Add to `IGNITER_STORE_ERROR_CODES` in `errors/store.error.ts`
 2. Use in appropriate error throws
 3. Document in this file's error codes section
 

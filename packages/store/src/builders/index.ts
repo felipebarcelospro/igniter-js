@@ -3,5 +3,7 @@
  * @module @igniter-js/store/builders
  */
 
-export { IgniterStoreBuilder } from './igniter-store.builder'
-export type { IgniterStoreBuilderState } from './igniter-store.builder'
+export { IgniterStore, IgniterStoreBuilder } from './main.builder'
+export { IgniterStoreKeyBuilder } from './store-key.builder'
+export type { IgniterStoreKeyBuilderOptions } from './store-key.builder'
+export { IgniterStoreEvents, IgniterStoreEventsGroup } from './events.builder'

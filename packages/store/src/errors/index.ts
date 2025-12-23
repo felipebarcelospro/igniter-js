@@ -1,1 +1,1 @@
-export * from './igniter-store.error'
+export * from './store.error'

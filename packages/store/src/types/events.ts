@@ -6,34 +6,6 @@
 import type { StandardSchemaV1 } from '@igniter-js/core'
 
 /**
- * Reserved namespace prefixes that cannot be used by user code.
- * These are reserved for internal Igniter.js packages.
- */
-export const RESERVED_NAMESPACES = [
-  'igniter',
-  'ign',
-  'telemetry',
-  'jobs',
-  'wf',
-  'workflow',
-  'mail',
-  'notify',
-  'bot',
-  'mcp',
-  'auth',
-  '__internal',
-] as const
-
-export type ReservedNamespace = (typeof RESERVED_NAMESPACES)[number]
-
-/**
- * Reserved key prefixes in Redis.
- */
-export const RESERVED_KEY_PREFIXES = ['ign:', 'igniter:'] as const
-
-export type ReservedKeyPrefix = (typeof RESERVED_KEY_PREFIXES)[number]
-
-/**
  * Schema definition for a single event.
  * Can be a StandardSchemaV1 (like Zod) for the message payload.
  *
@@ -53,9 +25,20 @@ export type IgniterStoreEventSchema = StandardSchemaV1
  * Event descriptor built from IgniterStoreEvents.build()
  * Contains the schema and metadata for an event.
  */
-export interface IgniterStoreEventDescriptor<TSchema extends IgniterStoreEventSchema = IgniterStoreEventSchema> {
+export interface IgniterStoreEventDescriptor<
+  TSchema extends IgniterStoreEventSchema = IgniterStoreEventSchema,
+  TEvents extends IgniterStoreEventsDirectory = {},
+> {
+  /** The full event name (namespace:eventName) */
   readonly schema: TSchema
-  readonly name: string
+  /** The namespace this event belongs to */
+  readonly namespace: string
+  /** Type inference helper */
+  readonly $Infer: {
+    namespace: string
+    events: TEvents
+    keys: IgniterStoreFlattenEventKeys<TEvents>
+  }
 }
 
 /**
@@ -66,7 +49,7 @@ export interface IgniterStoreEventDescriptor<TSchema extends IgniterStoreEventSc
  * ```typescript
  * import { z } from 'zod'
  *
- * const schemas: IgniterStoreEventsMap = {
+ * const schemas: IgniterStoreEventsDirectory = {
  *   created: z.object({ userId: z.string() }),
  *   updated: z.object({ userId: z.string(), changes: z.record(z.any()) }),
  *   notifications: {
@@ -76,8 +59,8 @@ export interface IgniterStoreEventDescriptor<TSchema extends IgniterStoreEventSc
  * }
  * ```
  */
-export type IgniterStoreEventsMap = {
-  [key: string]: IgniterStoreEventSchema | IgniterStoreEventsMap
+export type IgniterStoreEventsDirectory = {
+  [key: string]: IgniterStoreEventSchema | IgniterStoreEventsDirectory
 }
 
 /**
@@ -85,7 +68,7 @@ export type IgniterStoreEventsMap = {
  * Maps namespace to their event maps.
  */
 export type IgniterStoreEventsRegistry = {
-  [namespace: string]: IgniterStoreEventsMap
+  [namespace: string]: IgniterStoreEventsDirectory
 }
 
 /**
@@ -104,13 +87,13 @@ export type IgniterStoreEventsRegistry = {
  * // 'user:created' | 'user:notifications:email'
  * ```
  */
-export type IgniterStoreFlattenEventKeys<T, Prefix extends string = ''> = T extends IgniterStoreEventsMap
+export type IgniterStoreFlattenEventKeys<T, Prefix extends string = ''> = T extends IgniterStoreEventsDirectory
   ? {
       [K in keyof T]: T[K] extends IgniterStoreEventSchema
         ? Prefix extends ''
           ? K & string
           : `${Prefix}:${K & string}`
-        : T[K] extends IgniterStoreEventsMap
+        : T[K] extends IgniterStoreEventsDirectory
           ? IgniterStoreFlattenEventKeys<
               T[K],
               Prefix extends '' ? K & string : `${Prefix}:${K & string}`
@@ -145,14 +128,14 @@ export type IgniterStoreGetEventSchema<
     : never
   : never
 
-type GetNestedSchema<T extends IgniterStoreEventsMap, TKey extends string> =
+type GetNestedSchema<T extends IgniterStoreEventsDirectory, TKey extends string> =
   TKey extends keyof T
     ? T[TKey] extends IgniterStoreEventSchema
       ? T[TKey]
       : never
     : TKey extends `${infer First}:${infer Rest}`
       ? First extends keyof T
-        ? T[First] extends IgniterStoreEventsMap
+        ? T[First] extends IgniterStoreEventsDirectory
           ? GetNestedSchema<T[First], Rest>
           : never
         : never
@@ -210,11 +193,6 @@ export interface IgniterStoreEventContext<TEvent extends string = string, TPaylo
   timestamp: string
   /** The current scope information (if scoped) */
   scope?: {
-    key: string
-    identifier: string
-  }
-  /** The actor that triggered the event (if set) */
-  actor?: {
     key: string
     identifier: string
   }
@@ -328,10 +306,10 @@ export interface IgniterStoreEventAccessor<TPayload> {
 /**
  * Build proxy type for a single namespace's events.
  */
-export type IgniterStoreEventsProxy<TEvents extends IgniterStoreEventsMap> = {
+export type IgniterStoreEventsProxy<TEvents extends IgniterStoreEventsDirectory> = {
   [K in keyof TEvents]: TEvents[K] extends IgniterStoreEventSchema
     ? IgniterStoreEventAccessor<IgniterStoreInferEventSchema<TEvents[K]>>
-    : TEvents[K] extends IgniterStoreEventsMap
+    : TEvents[K] extends IgniterStoreEventsDirectory
       ? IgniterStoreEventsProxy<TEvents[K]>
       : never
 }

@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2025-01-22
+
+### Added
+- `IgniterStore.create()` as the official builder entry point
+- Typed events builder via `IgniterStoreEvents.create('namespace')`
+- Telemetry registry at `@igniter-js/store/telemetry` with full coverage for store operations
+- Typed-event validation (only when schemas are registered)
+
+### Changed
+- Key prefix is fixed to `igniter:store` (no environment/keyPrefix configuration)
+- Streams API is `store.streams`
+- Counter API uses `increment()` and `decrement()`
+
+### Improved
+- Documentation aligned with current runtime behavior
+- Expanded test coverage for builders, utils, core, and adapters
+
 ## [0.1.0] - 2025-01-14
 
 ### Added
@@ -25,7 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `touch(key, ttl)` - Refresh TTL on existing key
 
 #### Counter Operations (`store.counter`)
-- `bump(key, amount?)` - Atomic increment/decrement
+- `increment(key)` - Atomic increment
+- `decrement(key)` - Atomic decrement
 - `expire(key, seconds)` - Set counter expiration
 
 #### Claim Operations (`store.claim`)
@@ -37,10 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Pub/Sub Operations (`store.events`)
 - `publish(channel, message)` - Publish typed messages
-- `subscribe(channel, callback)` - Subscribe with typed handlers
-- `unsubscribe(channel, callback?)` - Unsubscribe from channels
+- `subscribe(channel, callback)` - Subscribe with typed handlers (returns unsubscribe)
 
-#### Stream Operations (`store.stream`)
+#### Stream Operations (`store.streams`)
 - `append(stream, data, { maxLen?, approximate? })` - XADD with trimming
 - `group(name, consumer)` - Consumer group API
   - `ensure(stream, { startId? })` - Create consumer group
@@ -73,6 +90,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Notes
 
 - Redis adapter includes support for Redis Streams (XADD, XGROUP, XREADGROUP, XACK)
-- Key naming follows pattern: `<prefix>:<env>:<service>[:<scope>:<id>...]:<namespace>:<key>`
-- Default key prefix is `ign:store`
-- Default environment is `development`
+- Key naming follows pattern: `<prefix>:<service>[:<scope>:<id>...]:<namespace>:<key>`
+- Default key prefix is `igniter:store`

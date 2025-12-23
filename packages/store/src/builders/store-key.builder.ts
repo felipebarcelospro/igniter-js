@@ -1,6 +1,6 @@
 /**
  * @fileoverview Key builder utility for @igniter-js/store
- * @module @igniter-js/store/utils/key-builder
+ * @module @igniter-js/store/builders/store-key
  *
  * @description
  * Provides utilities for building consistent, namespaced keys
@@ -13,11 +13,7 @@ import type { IgniterStoreKeyNamespace } from '../types/config'
 /**
  * Options for building a store key.
  */
-export interface StoreKeyBuilderOptions {
-  /** Base key prefix (default: 'ign:store') */
-  keyPrefix: string
-  /** Environment name */
-  environment: string
+export interface IgniterStoreKeyBuilderOptions {
   /** Service name */
   service: string
   /** Current scope chain */
@@ -28,34 +24,31 @@ export interface StoreKeyBuilderOptions {
  * Builds consistent, namespaced keys for store operations.
  *
  * Key format:
- * `<prefix>:<env>:<service>[:<scope>:<id>...]:namespace:<key>`
+ * `<prefix>:<service>[:<scope>:<id>...]:namespace:<key>`
  *
  * @example
  * ```typescript
- * const builder = new StoreKeyBuilder({
- *   keyPrefix: 'ign:store',
- *   environment: 'production',
+ * const builder = new IgniterStoreKeyBuilder({
  *   service: 'my-api',
  *   scopeChain: [{ key: 'organization', identifier: 'org_123' }],
  * })
  *
  * builder.build('kv', 'user:123')
- * // Returns: 'ign:store:production:my-api:organization:org_123:kv:user:123'
+ * // Returns: 'igniter:store:my-api:organization:org_123:kv:user:123'
  * ```
  */
-export class StoreKeyBuilder {
+export class IgniterStoreKeyBuilder {
   private readonly prefix: string
 
   /**
-   * Creates a new StoreKeyBuilder.
+   * Creates a new IgniterStoreKeyBuilder.
    *
    * @param options - The builder options
    */
-  constructor(private readonly options: StoreKeyBuilderOptions) {
+  constructor(private readonly options: IgniterStoreKeyBuilderOptions) {
     // Build the base prefix once
     const parts: string[] = [
-      options.keyPrefix,
-      options.environment,
+      'igniter:store',
       options.service,
     ]
 
@@ -77,10 +70,10 @@ export class StoreKeyBuilder {
    * @example
    * ```typescript
    * builder.build('kv', 'user:123')
-   * // 'ign:store:production:my-api:kv:user:123'
+   * // 'igniter:store:my-api:kv:user:123'
    *
    * builder.build('events', 'user:created')
-   * // 'ign:store:production:my-api:events:user:created'
+   * // 'igniter:store:my-api:events:user:created'
    * ```
    */
   build(namespace: IgniterStoreKeyNamespace, key: string): string {
@@ -97,7 +90,7 @@ export class StoreKeyBuilder {
    * @example
    * ```typescript
    * builder.pattern('kv', 'user:*')
-   * // 'ign:store:production:my-api:kv:user:*'
+   * // 'igniter:store:my-api:kv:user:*'
    * ```
    */
   pattern(namespace: IgniterStoreKeyNamespace, pattern: string): string {
@@ -115,11 +108,11 @@ export class StoreKeyBuilder {
    * ```typescript
    * const scopedBuilder = builder.withScope('workspace', 'ws_456')
    * scopedBuilder.build('kv', 'settings')
-   * // 'ign:store:production:my-api:organization:org_123:workspace:ws_456:kv:settings'
+   * // 'igniter:store:my-api:organization:org_123:workspace:ws_456:kv:settings'
    * ```
    */
-  withScope(key: string, identifier: string | number): StoreKeyBuilder {
-    return new StoreKeyBuilder({
+  withScope(key: string, identifier: string | number): IgniterStoreKeyBuilder {
+    return new IgniterStoreKeyBuilder({
       ...this.options,
       scopeChain: [
         ...this.options.scopeChain,

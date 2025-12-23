@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/store",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Type-safe distributed store library for Igniter.js with Redis support, scoped operations, and typed pub/sub",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,6 +16,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./telemetry": {
+      "types": "./dist/telemetry/index.d.ts",
+      "import": "./dist/telemetry/index.js",
+      "require": "./dist/telemetry/index.js"
     },
     "./adapters": {
       "types": "./dist/adapters/index.d.ts",
@@ -34,7 +39,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src",
+    "lint": "eslint ./src/**/*.{ts,tsx}",
     "clean": "rm -rf dist"
   },
   "keywords": [
@@ -64,17 +69,25 @@
   "dependencies": {},
   "devDependencies": {
     "@igniter-js/core": "*",
+    "@igniter-js/telemetry": "*",
     "@types/node": "^22.7.5",
     "ioredis": "^5.3.2",
     "tsup": "^8.3.0",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "zod": "^4.2.1"
   },
   "peerDependencies": {
-    "@igniter-js/core": ">=0.2.0"
+    "@igniter-js/core": ">=0.3.40",
+    "@igniter-js/telemetry": ">=0.1.0",
+    "zod": ">=4.2.1",
+    "ioredis": ">=5.3.2"
   },
   "peerDependenciesMeta": {
     "ioredis": {
+      "optional": true
+    },
+    "@igniter-js/telemetry": {
       "optional": true
     }
   },

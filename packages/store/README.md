@@ -45,7 +45,6 @@ const redis = new Redis()
 const store = IgniterStore.create()
   .withAdapter(IgniterStoreRedisAdapter.create({ redis }))
   .withService('my-api')
-  .withEnvironment(process.env.NODE_ENV ?? 'development')
   .build()
 
 // Use key-value operations
@@ -65,12 +64,6 @@ const store = IgniterStore.create()
   // Required: Service name (used in key prefix)
   .withService('my-api')
   
-  // Optional: Environment (default: 'development')
-  .withEnvironment('production')
-  
-  // Optional: Key prefix (default: 'ign:store')
-  .withKeyPrefix('myapp')
-  
   // Optional: Custom serializer (default: JSON)
   .withSerializer({
     encode: JSON.stringify,
@@ -80,16 +73,15 @@ const store = IgniterStore.create()
   // Optional: Typed scope definitions (see Typed Scopes section)
   .addScope('organization', { required: true })
   .addScope('workspace', { description: 'Project workspace' })
-  
-  // Optional: Typed actor definitions (see Actor Identification section)
-  .addActor('user', { description: 'Human user' })
-  .addActor('system', { description: 'System process' })
-  
-  // Optional: Typed schemas for pub/sub
-  .withSchemas(schemas)
+
+  // Optional: Typed events (see Typed Events section)
+  .addEvents(UserEvents)
   
   // Optional: Logger
   .withLogger(logger)
+  
+  // Optional: Telemetry (see Observability section)
+  .withTelemetry(telemetry)
   
   .build()
 ```
@@ -120,16 +112,13 @@ await store.kv.touch('user:123', 3600)
 
 ```typescript
 // Increment by 1 (default)
-const count = await store.counter.increment('page-views' 1)
-
-// Increment by custom amount
-const views = await store.counter.increment('downloads', 10)
+const count = await store.counter.increment('page-views')
 
 // Decrement by 1 (default)
 const views = await store.counter.decrement('credits')
 
-// Decrement by 10 (default)
-const views = await store.counter.decrement('credits', 10)
+// Decrement by 10
+const views = await store.counter.decrement('credits')
 
 // Set expiration on counter
 await store.counter.expire('daily-limit', 86400)
@@ -173,19 +162,18 @@ Events now include a rich context envelope with metadata:
 
 ```typescript
 // Subscribe to a channel - ctx includes full context
-await store.events.subscribe('user:created', (ctx) => {
+const unsubscribe = await store.events.subscribe('user:created', (ctx) => {
   console.log('Event type:', ctx.type)        // 'user:created'
   console.log('Event data:', ctx.data)        // { userId: '123', email: '...' }
   console.log('Timestamp:', ctx.timestamp)    // ISO timestamp
   console.log('Scope:', ctx.scope)            // { key: 'org', identifier: 'org_123' } or undefined
-  console.log('Actor:', ctx.actor)            // { key: 'user', identifier: 'user_1' } or undefined
 })
 
 // Publish to a channel
 await store.events.publish('user:created', { userId: '123', email: 'test@example.com' })
 
 // Unsubscribe
-await store.events.unsubscribe('user:created', callback)
+await unsubscribe()
 ```
 
 #### Event Context Structure
@@ -199,24 +187,20 @@ interface EventContext<TData> {
     key: string           // Scope type (e.g., 'organization')
     identifier: string    // Scope value (e.g., 'org_123')
   }
-  actor?: {
-    key: string           // Actor type (e.g., 'user')
-    identifier: string    // Actor ID (e.g., 'user_456')
-  }
 }
 ```
 
-### Stream Operations (`store.stream`)
+### Stream Operations (`store.streams`)
 
 ```typescript
 // Append to a stream
-const messageId = await store.stream.append('events', { type: 'click', x: 100, y: 200 }, {
+const messageId = await store.streams.append('events', { type: 'click', x: 100, y: 200 }, {
   maxLen: 10000,
   approximate: true,
 })
 
 // Create consumer group and read
-const consumer = store.stream.group('processors', 'worker-1')
+const consumer = store.streams.group('processors', 'worker-1')
 await consumer.ensure('events', { startId: '0' })
 
 const messages = await consumer.read('events', { count: 10, blockMs: 5000 })
@@ -248,39 +232,16 @@ Multi-tenant isolation with hierarchical scopes:
 // Single scope
 const orgStore = store.scope('organization', 'org_123')
 await orgStore.kv.set('settings', { theme: 'dark' })
-// Key: ign:store:production:my-api:organization:org_123:kv:settings
+// Key: igniter:store:my-api:organization:org_123:kv:settings
 
 // Chained scopes
 const wsStore = orgStore.scope('workspace', 'ws_456')
 await wsStore.kv.set('config', { ... })
-// Key: ign:store:production:my-api:organization:org_123:workspace:ws_456:kv:config
+// Key: igniter:store:my-api:organization:org_123:workspace:ws_456:kv:config
 
 // Each scoped store has all the same APIs
-await wsStore.counter.bump('api-calls')
+await wsStore.counter.increment('api-calls')
 await wsStore.events.publish('event', data)
-```
-
-### Actor Identification (`store.actor`)
-
-Track who performed actions in event context:
-
-```typescript
-// Set the actor for a store
-const userStore = store.actor('user', 'user_123')
-
-// All events published include the actor context
-await userStore.events.publish('document:created', { docId: 'doc_1' })
-// Event context includes: { actor: { key: 'user', identifier: 'user_123' } }
-
-// Combine with scope for full context
-const scopedUserStore = store
-  .scope('organization', 'org_123')
-  .actor('user', 'user_456')
-
-await scopedUserStore.events.publish('payment:processed', { amount: 100 })
-// Event context includes:
-// - scope: { key: 'organization', identifier: 'org_123' }
-// - actor: { key: 'user', identifier: 'user_456' }
 ```
 
 ### Typed Scopes with `addScope()`
@@ -303,54 +264,36 @@ store.scope('invalid', 'id')            // ❌ TypeScript error + Runtime error
 // With required scopes, runtime validation ensures proper usage
 ```
 
-### Typed Actors with `addActor()`
-
-Define allowed actor types for type-safe actor identification:
-
-```typescript
-const store = IgniterStore.create()
-  .withAdapter(adapter)
-  .withService('my-api')
-  .addActor('user', { description: 'Human user' })
-  .addActor('system', { description: 'System process' })
-  .addActor('api_key', { description: 'API key authentication' })
-  .build()
-
-// TypeScript enforces valid actor keys
-store.actor('user', 'user_123')     // ✅ Valid
-store.actor('system', 'cron-job')   // ✅ Valid
-store.actor('invalid', 'id')        // ❌ TypeScript error + Runtime error
-```
-
-## Typed Events with Schemas
+## Typed Events
 
 Define schemas for compile-time type safety on pub/sub channels:
 
 ```typescript
 import { z } from 'zod'
-import { IgniterStore, IgniterStoreEventsSchema, IgniterStoreRedisAdapter } from '@igniter-js/store'
+import { IgniterStore, IgniterStoreEvents, IgniterStoreRedisAdapter } from '@igniter-js/store'
 
-// Define your schemas
-const schemas = IgniterStoreEventsSchema.create()
-  .channel('user:created', z.object({
+// Define events per feature
+const UserEvents = IgniterStoreEvents
+  .create('user')
+  .event('created', z.object({
     userId: z.string(),
     email: z.string().email(),
   }))
-  .channel('user:deleted', z.object({
+  .event('deleted', z.object({
     userId: z.string(),
   }))
   .group('notifications', (group) =>
     group
-      .channel('email', z.object({ to: z.string(), subject: z.string() }))
-      .channel('push', z.object({ token: z.string(), title: z.string() }))
+      .event('email', z.object({ to: z.string(), subject: z.string() }))
+      .event('push', z.object({ token: z.string(), title: z.string() }))
   )
   .build()
 
-// Create store with schemas
+// Create store with typed events
 const store = IgniterStore.create()
   .withAdapter(IgniterStoreRedisAdapter.create({ redis }))
   .withService('igniter-app')
-  .withSchemas(schemas)
+  .addEvents(UserEvents)
   .build()
 
 // Now publish/subscribe are fully typed!
@@ -365,17 +308,38 @@ await store.events.subscribe('user:created', (ctx) => {
   // ctx.data is typed as { userId: string, email: string }
   // ctx.timestamp is always available
   console.log(`User ${ctx.data.userId} created at ${ctx.timestamp}`)
-  
-  // Scope and actor are available if set
+
+  // Scope is available if set
   if (ctx.scope) console.log(`In scope: ${ctx.scope.key}:${ctx.scope.identifier}`)
-  if (ctx.actor) console.log(`By actor: ${ctx.actor.key}:${ctx.actor.identifier}`)
 })
 
 // Group channels use colon prefix
-await store.events.publish('notifications:email', {
+await store.events.publish('user:notifications:email', {
   to: 'user@example.com',
   subject: 'Welcome!',
 })
+```
+
+Schemas must implement the `StandardSchemaV1` interface (Zod is supported).
+Only events registered with `addEvents()` are validated.
+
+## Observability (Telemetry)
+
+```typescript
+import { IgniterTelemetry } from '@igniter-js/telemetry'
+import { IgniterStore } from '@igniter-js/store'
+import { IgniterStoreTelemetryEvents } from '@igniter-js/store/telemetry'
+
+const telemetry = IgniterTelemetry.create()
+  .withService('my-api')
+  .addEvents(IgniterStoreTelemetryEvents)
+  .build()
+
+const store = IgniterStore.create()
+  .withAdapter(IgniterStoreRedisAdapter.create({ redis }))
+  .withService('my-api')
+  .withTelemetry(telemetry)
+  .build()
 ```
 
 ## Key Naming Convention
@@ -383,19 +347,19 @@ await store.events.publish('notifications:email', {
 Keys are automatically namespaced with this pattern:
 
 ```
-<prefix>:<env>:<service>[:<scope>:<id>...]:<namespace>:<key>
+<prefix>:<service>[:<scope>:<id>...]:<namespace>:<key>
 ```
 
 Examples:
 
 | Operation | Generated Key |
 |-----------|---------------|
-| `store.kv.get('user:123')` | `ign:store:prod:api:kv:user:123` |
-| `store.counter.bump('views')` | `ign:store:prod:api:counter:views` |
-| `store.claim.once('lock:x', ...)` | `ign:store:prod:api:claim:lock:x` |
-| `store.events.publish('event', ...)` | `ign:store:prod:api:events:event` |
-| `store.stream.append('events', ...)` | `ign:store:prod:api:streams:events` |
-| `orgStore.kv.get('settings')` | `ign:store:prod:api:org:123:kv:settings` |
+| `store.kv.get('user:123')` | `igniter:store:api:kv:user:123` |
+| `store.counter.increment('views')` | `igniter:store:api:counter:views` |
+| `store.claim.once('lock:x', ...)` | `igniter:store:api:claim:lock:x` |
+| `store.events.publish('event', ...)` | `igniter:store:api:events:event` |
+| `store.streams.append('events', ...)` | `igniter:store:api:streams:events` |
+| `orgStore.kv.get('settings')` | `igniter:store:api:org:123:kv:settings` |
 
 ## Error Handling
 
@@ -462,4 +426,4 @@ const adapter = IgniterStoreRedisAdapter.create({ redis })
 
 ## License
 
-MIT © [Felipe Barcelos](https://github.com/felipebarcelospro)
+MIT © [Felipe Barcelos](https://github.com/felipebarcelospro/igniter-js)

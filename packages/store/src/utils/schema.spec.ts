@@ -3,16 +3,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
+import { z } from 'zod'
 import { IgniterStoreEventsSchema, IgniterStoreEventsSchemaGroup } from './schema'
-
-// Mock schema implementation for testing
-const createMockSchema = <T>() => ({
-  '~standard': {
-    version: 1,
-    vendor: 'test',
-    validate: (value: unknown) => ({ value: value as T }),
-  },
-}) as any
 
 describe('IgniterStoreEventsSchema', () => {
   describe('create()', () => {
@@ -26,7 +18,7 @@ describe('IgniterStoreEventsSchema', () => {
 
   describe('channel()', () => {
     it('should add a channel with schema', () => {
-      const userSchema = createMockSchema<{ userId: string }>()
+      const userSchema = z.object({ userId: z.string() })
       const schemas = IgniterStoreEventsSchema.create()
         .channel('user:created', userSchema)
         .build()
@@ -36,8 +28,8 @@ describe('IgniterStoreEventsSchema', () => {
     })
 
     it('should add multiple channels', () => {
-      const userCreatedSchema = createMockSchema<{ userId: string }>()
-      const userDeletedSchema = createMockSchema<{ userId: string }>()
+      const userCreatedSchema = z.object({ userId: z.string() })
+      const userDeletedSchema = z.object({ userId: z.string() })
 
       const schemas = IgniterStoreEventsSchema.create()
         .channel('user:created', userCreatedSchema)
@@ -52,8 +44,8 @@ describe('IgniterStoreEventsSchema', () => {
 
   describe('group()', () => {
     it('should create nested group', () => {
-      const emailSchema = createMockSchema<{ to: string }>()
-      const pushSchema = createMockSchema<{ token: string }>()
+      const emailSchema = z.object({ to: z.string() })
+      const pushSchema = z.object({ token: z.string() })
 
       const schemas = IgniterStoreEventsSchema.create()
         .group('notifications', (group) =>
@@ -69,8 +61,8 @@ describe('IgniterStoreEventsSchema', () => {
     })
 
     it('should combine channels and groups', () => {
-      const userSchema = createMockSchema<{ userId: string }>()
-      const emailSchema = createMockSchema<{ to: string }>()
+      const userSchema = z.object({ userId: z.string() })
+      const emailSchema = z.object({ to: z.string() })
 
       const schemas = IgniterStoreEventsSchema.create()
         .channel('user:created', userSchema)
@@ -88,13 +80,13 @@ describe('IgniterStoreEventsSchema', () => {
   describe('merge()', () => {
     it('should merge existing schemas', () => {
       const baseSchemas = {
-        'event:a': createMockSchema<{ a: string }>(),
-        'event:b': createMockSchema<{ b: string }>(),
+        'event:a': z.object({ a: z.string() }),
+        'event:b': z.object({ b: z.string() }),
       }
 
       const schemas = IgniterStoreEventsSchema.create()
         .merge(baseSchemas)
-        .channel('event:c', createMockSchema<{ c: string }>())
+        .channel('event:c', z.object({ c: z.string() }))
         .build()
 
       expect(schemas).toHaveProperty('event:a')
@@ -103,8 +95,8 @@ describe('IgniterStoreEventsSchema', () => {
     })
 
     it('should override existing keys', () => {
-      const originalSchema = createMockSchema<{ original: true }>()
-      const newSchema = createMockSchema<{ new: true }>()
+      const originalSchema = z.object({ original: z.literal(true) })
+      const newSchema = z.object({ new: z.literal(true) })
 
       const schemas = IgniterStoreEventsSchema.create()
         .channel('event', originalSchema)
@@ -117,7 +109,7 @@ describe('IgniterStoreEventsSchema', () => {
 
   describe('build()', () => {
     it('should return immutable schema map', () => {
-      const schema = createMockSchema<{ test: true }>()
+      const schema = z.object({ test: z.literal(true) })
       const builder = IgniterStoreEventsSchema.create()
         .channel('test', schema)
 
@@ -132,7 +124,7 @@ describe('IgniterStoreEventsSchema', () => {
 describe('IgniterStoreEventsSchemaGroup', () => {
   describe('channel()', () => {
     it('should add channels to group', () => {
-      const schema = createMockSchema<{ test: true }>()
+      const schema = z.object({ test: z.literal(true) })
       const group = new IgniterStoreEventsSchemaGroup({})
         .channel('test', schema)
         .build()
@@ -142,8 +134,8 @@ describe('IgniterStoreEventsSchemaGroup', () => {
     })
 
     it('should chain multiple channels', () => {
-      const schemaA = createMockSchema<{ a: true }>()
-      const schemaB = createMockSchema<{ b: true }>()
+      const schemaA = z.object({ a: z.literal(true) })
+      const schemaB = z.object({ b: z.literal(true) })
 
       const group = new IgniterStoreEventsSchemaGroup({})
         .channel('a', schemaA)

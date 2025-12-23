@@ -3,9 +3,8 @@
  * @module @igniter-js/store/utils/schema
  *
  * @description
- * Provides utilities for building typed schemas for pub/sub channels.
- * The `IgniterStoreEventsSchema` class allows declarative schema definitions
- * with full TypeScript inference.
+ * Provides legacy utilities for building flat typed schemas for pub/sub channels.
+ * Prefer {@link IgniterStoreEvents} for new projects.
  *
  * @example
  * ```typescript
@@ -24,9 +23,8 @@
  * ```
  */
 
-import type { StandardSchemaV1 } from '@igniter-js/core'
 import type { IgniterStoreSchemaMap } from '../types/schema'
-import type { IgniterStoreEventSchema } from 'src/types'
+import type { IgniterStoreEventSchema } from '../types/events'
 
 /**
  * Builder for a nested group of channels.
@@ -110,19 +108,7 @@ export class IgniterStoreEventsSchemaGroup<
  *   )
  *   .build()
  *
- * // Use with IgniterStore for typed pub/sub
- * const store = IgniterStore.create()
- *   .withAdapter(adapter)
- *   .withService('my-api')
- *   .withSchemas(schemas)
- *   .build()
- *
- * // Now publish/subscribe are fully typed
- * await store.events.publish('user:created', { userId: '123', email: 'test@example.com' })
- * await store.events.subscribe('orders:created', (msg) => {
- *   // msg is typed as { orderId: string, total: number }
- *   console.log(msg.orderId)
- * })
+ * // For new projects, prefer IgniterStoreEvents.create('namespace')
  * ```
  */
 export class IgniterStoreEventsSchema<

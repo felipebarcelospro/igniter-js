@@ -3,9 +3,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { IgniterStore } from './igniter-store'
-import { IgniterStoreError } from '../errors/igniter-store.error'
+import { IgniterStoreManager } from './manager'
+import { IgniterStoreError } from '../errors/store.error'
 import type { IgniterStoreAdapter } from '../types/adapter'
+import { DEFAULT_SERIALIZER, type IIgniterStoreManager } from '../types'
+import { z } from 'zod'
+import { IgniterStoreEvents } from '../builders/events.builder'
+import { IGNITER_STORE_TELEMETRY_EVENTS } from '../types/telemetry'
 
 // Mock adapter factory
 const createMockAdapter = (): IgniterStoreAdapter<any> => ({
@@ -31,25 +35,15 @@ const createMockAdapter = (): IgniterStoreAdapter<any> => ({
 
 describe('IgniterStore', () => {
   let adapter: IgniterStoreAdapter
-  let store: IgniterStore
+  let store: IIgniterStoreManager<any, any>
 
   beforeEach(() => {
     adapter = createMockAdapter()
-    // @ts-expect-error -- Ignore for test setup
-    store = IgniterStore.create()
-      .withAdapter(adapter)
-      .withService('test-api')
-      .withEnvironment('test')
-      .withKeyPrefix('ign:store')
-      .build()
-  })
-
-  describe('create()', () => {
-    it('should return a builder', () => {
-      const builder = IgniterStore.create()
-      expect(builder.withAdapter).toBeDefined()
-      expect(builder.withService).toBeDefined()
-      expect(builder.build).toBeDefined()
+    store = new IgniterStoreManager({
+      adapter,
+      service: 'test-api',
+      scopeChain: [],
+      serializer: DEFAULT_SERIALIZER,
     })
   })
 
@@ -59,7 +53,7 @@ describe('IgniterStore', () => {
 
       const result = await store.kv.get('user:123')
 
-      expect(adapter.get).toHaveBeenCalledWith('ign:store:test:test-api:kv:user:123')
+      expect(adapter.get).toHaveBeenCalledWith('igniter:store:test-api:kv:user:123')
       expect(result).toEqual({ name: 'Alice' })
     })
 
@@ -67,7 +61,7 @@ describe('IgniterStore', () => {
       await store.kv.set('user:123', { name: 'Alice' })
 
       expect(adapter.set).toHaveBeenCalledWith(
-        'ign:store:test:test-api:kv:user:123',
+        'igniter:store:test-api:kv:user:123',
         { name: 'Alice' },
         undefined,
       )
@@ -77,7 +71,7 @@ describe('IgniterStore', () => {
       await store.kv.set('session:abc', { token: 'xyz' }, { ttl: 3600 })
 
       expect(adapter.set).toHaveBeenCalledWith(
-        'ign:store:test:test-api:kv:session:abc',
+        'igniter:store:test-api:kv:session:abc',
         { token: 'xyz' },
         { ttl: 3600 },
       )
@@ -86,7 +80,7 @@ describe('IgniterStore', () => {
     it('should remove value with correct key', async () => {
       await store.kv.remove('user:123')
 
-      expect(adapter.delete).toHaveBeenCalledWith('ign:store:test:test-api:kv:user:123')
+      expect(adapter.delete).toHaveBeenCalledWith('igniter:store:test-api:kv:user:123')
     })
 
     it('should check existence with correct key', async () => {
@@ -94,7 +88,7 @@ describe('IgniterStore', () => {
 
       const result = await store.kv.exists('user:123')
 
-      expect(adapter.has).toHaveBeenCalledWith('ign:store:test:test-api:kv:user:123')
+      expect(adapter.has).toHaveBeenCalledWith('igniter:store:test-api:kv:user:123')
       expect(result).toBe(true)
     })
 
@@ -102,7 +96,7 @@ describe('IgniterStore', () => {
       await store.kv.expire('user:123', 1800)
 
       expect(adapter.expire).toHaveBeenCalledWith(
-        'ign:store:test:test-api:kv:user:123',
+        'igniter:store:test-api:kv:user:123',
         1800,
       )
     })
@@ -111,7 +105,7 @@ describe('IgniterStore', () => {
       await store.kv.touch('user:123', 3600)
 
       expect(adapter.expire).toHaveBeenCalledWith(
-        'ign:store:test:test-api:kv:user:123',
+        'igniter:store:test-api:kv:user:123',
         3600,
       )
     })
@@ -124,7 +118,7 @@ describe('IgniterStore', () => {
       const result = await store.counter.increment('page-views')
 
       expect(adapter.increment).toHaveBeenCalledWith(
-        'ign:store:test:test-api:counter:page-views',
+        'igniter:store:test-api:counter:page-views',
         1,
       )
       expect(result).toBe(5)
@@ -136,7 +130,7 @@ describe('IgniterStore', () => {
       const result = await store.counter.decrement('page-views')
 
       expect(adapter.increment).toHaveBeenCalledWith(
-        'ign:store:test:test-api:counter:page-views',
+        'igniter:store:test-api:counter:page-views',
         -1,
       )
       expect(result).toBe(-1)
@@ -146,7 +140,7 @@ describe('IgniterStore', () => {
       await store.counter.expire('daily-count', 86400)
 
       expect(adapter.expire).toHaveBeenCalledWith(
-        'ign:store:test:test-api:counter:daily-count',
+        'igniter:store:test-api:counter:daily-count',
         86400,
       )
     })
@@ -159,7 +153,7 @@ describe('IgniterStore', () => {
       const result = await store.claim.once('lock:process', 'worker-1')
 
       expect(adapter.setNX).toHaveBeenCalledWith(
-        'ign:store:test:test-api:claim:lock:process',
+        'igniter:store:test-api:claim:lock:process',
         'worker-1',
         undefined,
       )
@@ -170,7 +164,7 @@ describe('IgniterStore', () => {
       await store.claim.once('lock:process', 'worker-1', { ttl: 30 })
 
       expect(adapter.setNX).toHaveBeenCalledWith(
-        'ign:store:test:test-api:claim:lock:process',
+        'igniter:store:test-api:claim:lock:process',
         'worker-1',
         { ttl: 30 },
       )
@@ -192,9 +186,9 @@ describe('IgniterStore', () => {
       const result = await store.batch.get(['user:1', 'user:2', 'user:3'])
 
       expect(adapter.mget).toHaveBeenCalledWith([
-        'ign:store:test:test-api:kv:user:1',
-        'ign:store:test:test-api:kv:user:2',
-        'ign:store:test:test-api:kv:user:3',
+        'igniter:store:test-api:kv:user:1',
+        'igniter:store:test-api:kv:user:2',
+        'igniter:store:test-api:kv:user:3',
       ])
       expect(result).toEqual([{ id: 1 }, { id: 2 }, null])
     })
@@ -213,8 +207,8 @@ describe('IgniterStore', () => {
       ])
 
       expect(adapter.mset).toHaveBeenCalledWith([
-        { key: 'ign:store:test:test-api:kv:user:1', value: { name: 'Alice' }, ttl: 3600 },
-        { key: 'ign:store:test:test-api:kv:user:2', value: { name: 'Bob' }, ttl: undefined },
+        { key: 'igniter:store:test-api:kv:user:1', value: { name: 'Alice' }, ttl: 3600 },
+        { key: 'igniter:store:test-api:kv:user:2', value: { name: 'Bob' }, ttl: undefined },
       ])
     })
 
@@ -235,7 +229,7 @@ describe('IgniterStore', () => {
         await store.events.publish('user:created', { userId: '123' })
 
         expect(adapter.publish).toHaveBeenCalledWith(
-          'ign:store:test:test-api:events:user:created',
+          'igniter:store:test-api:events:user:created',
           {
             type: 'user:created',
             data: { userId: '123' },
@@ -253,7 +247,7 @@ describe('IgniterStore', () => {
 
       // Adapter receives a wrapped handler, not the original callback
       expect(adapter.subscribe).toHaveBeenCalledWith(
-        'ign:store:test:test-api:events:user:created',
+        'igniter:store:test-api:events:user:created',
         expect.any(Function),
       )
     })
@@ -268,7 +262,7 @@ describe('IgniterStore', () => {
 
       // Adapter receives a wrapped handler, not the original callback
       expect(adapter.unsubscribe).toHaveBeenCalledWith(
-        'ign:store:test:test-api:events:user:created',
+        'igniter:store:test-api:events:user:created',
         expect.any(Function),
       )
     })
@@ -290,7 +284,6 @@ describe('IgniterStore', () => {
         data: { userId: '123' },
         timestamp: '2025-01-01T00:00:00.000Z',
         scope: { key: 'org', identifier: 'org-1' },
-        actor: { key: 'user', identifier: 'user-1' },
       }
 
       await wrappedHandler(envelope)
@@ -335,7 +328,7 @@ describe('IgniterStore', () => {
         await scopedStore.events.publish('user:created', { userId: '456' })
 
         expect(adapter.publish).toHaveBeenCalledWith(
-          'ign:store:test:test-api:organization:org-123:events:user:created',
+          'igniter:store:test-api:organization:org-123:events:user:created',
           {
             type: 'user:created',
             data: { userId: '456' },
@@ -346,6 +339,89 @@ describe('IgniterStore', () => {
       } finally {
         Date.prototype.toISOString = originalToISOString
       }
+    })
+
+    it('should validate typed events on publish', async () => {
+      const events = IgniterStoreEvents.create('user')
+        .event('created', z.object({ id: z.string() }))
+        .build()
+      const typedStore = new IgniterStoreManager({
+        adapter,
+        service: 'test-api',
+        scopeChain: [],
+        serializer: DEFAULT_SERIALIZER,
+        eventsRegistry: { [events.namespace]: events.events },
+      })
+
+      await expect(
+        typedStore.events.publish('user:created', { id: 123 }),
+      ).rejects.toMatchObject({ code: 'STORE_SCHEMA_VALIDATION_FAILED' })
+    })
+
+    it('should skip validation for untyped events', async () => {
+      const events = IgniterStoreEvents.create('user')
+        .event('created', z.object({ id: z.string() }))
+        .build()
+      const typedStore = new IgniterStoreManager({
+        adapter,
+        service: 'test-api',
+        scopeChain: [],
+        serializer: DEFAULT_SERIALIZER,
+        eventsRegistry: { [events.namespace]: events.events },
+      })
+
+      await expect(
+        typedStore.events.publish('other:created', { any: true }),
+      ).resolves.toBeUndefined()
+    })
+
+    it('should validate typed events on subscribe when enabled', async () => {
+      const events = IgniterStoreEvents.create('user')
+        .event('created', z.object({ id: z.string() }))
+        .build()
+      const typedStore = new IgniterStoreManager({
+        adapter,
+        service: 'test-api',
+        scopeChain: [],
+        serializer: DEFAULT_SERIALIZER,
+        eventsRegistry: { [events.namespace]: events.events },
+        eventsValidation: { validateSubscribe: true },
+      })
+
+      await typedStore.events.subscribe('user:created', async () => undefined)
+      const wrappedHandler = (adapter.subscribe as any).mock.calls[0][1]
+
+      await expect(
+        wrappedHandler({
+          type: 'user:created',
+          data: { id: 123 },
+          timestamp: new Date().toISOString(),
+        }),
+      ).rejects.toMatchObject({ code: 'STORE_SCHEMA_VALIDATION_FAILED' })
+    })
+  })
+
+  describe('telemetry', () => {
+    it('should emit telemetry events for kv.get', async () => {
+      const telemetry = { emit: vi.fn() }
+      const telemetryStore = new IgniterStoreManager({
+        adapter,
+        service: 'test-api',
+        scopeChain: [],
+        serializer: DEFAULT_SERIALIZER,
+        telemetry: telemetry as any,
+      })
+
+      await telemetryStore.kv.get('user:123')
+
+      expect(telemetry.emit).toHaveBeenCalledWith(
+        IGNITER_STORE_TELEMETRY_EVENTS.KV_GET_STARTED,
+        expect.any(Object),
+      )
+      expect(telemetry.emit).toHaveBeenCalledWith(
+        IGNITER_STORE_TELEMETRY_EVENTS.KV_GET_SUCCESS,
+        expect.any(Object),
+      )
     })
   })
 
@@ -359,7 +435,7 @@ describe('IgniterStore', () => {
       const result = await store.dev.scan('user:*')
 
       expect(adapter.scan).toHaveBeenCalledWith(
-        'ign:store:test:test-api:kv:user:*',
+        'igniter:store:test-api:kv:user:*',
         undefined,
       )
       expect(result.keys).toHaveLength(2)
@@ -369,7 +445,7 @@ describe('IgniterStore', () => {
       await store.dev.scan('user:*', { cursor: '10', count: 100 })
 
       expect(adapter.scan).toHaveBeenCalledWith(
-        'ign:store:test:test-api:kv:user:*',
+        'igniter:store:test-api:kv:user:*',
         { cursor: '10', count: 100 },
       )
     })
@@ -382,7 +458,7 @@ describe('IgniterStore', () => {
       const id = await store.streams.append('events', { type: 'click' })
 
       expect(adapter.xadd).toHaveBeenCalledWith(
-        'ign:store:test:test-api:streams:events',
+        'igniter:store:test-api:streams:events',
         { type: 'click' },
         undefined,
       )
@@ -396,7 +472,7 @@ describe('IgniterStore', () => {
       })
 
       expect(adapter.xadd).toHaveBeenCalledWith(
-        'ign:store:test:test-api:streams:events',
+        'igniter:store:test-api:streams:events',
         { type: 'click' },
         { maxLen: 10000, approximate: true },
       )
@@ -408,7 +484,7 @@ describe('IgniterStore', () => {
         await consumer.ensure('events')
 
         expect(adapter.xgroupCreate).toHaveBeenCalledWith(
-          'ign:store:test:test-api:streams:events',
+          'igniter:store:test-api:streams:events',
           'processors',
           '0',
         )
@@ -419,7 +495,7 @@ describe('IgniterStore', () => {
         await consumer.ensure('events', { startId: '$' })
 
         expect(adapter.xgroupCreate).toHaveBeenCalledWith(
-          'ign:store:test:test-api:streams:events',
+          'igniter:store:test-api:streams:events',
           'processors',
           '$',
         )
@@ -434,7 +510,7 @@ describe('IgniterStore', () => {
         const messages = await consumer.read('events', { count: 10 })
 
         expect(adapter.xreadgroup).toHaveBeenCalledWith(
-          'ign:store:test:test-api:streams:events',
+          'igniter:store:test-api:streams:events',
           'processors',
           'worker-1',
           { count: 10 },
@@ -447,7 +523,7 @@ describe('IgniterStore', () => {
         await consumer.ack('events', ['1-0', '2-0'])
 
         expect(adapter.xack).toHaveBeenCalledWith(
-          'ign:store:test:test-api:streams:events',
+          'igniter:store:test-api:streams:events',
           'processors',
           ['1-0', '2-0'],
         )
@@ -462,7 +538,7 @@ describe('IgniterStore', () => {
       await orgStore.kv.set('settings', { theme: 'dark' })
 
       expect(adapter.set).toHaveBeenCalledWith(
-        'ign:store:test:test-api:organization:org_123:kv:settings',
+        'igniter:store:test-api:organization:org_123:kv:settings',
         { theme: 'dark' },
         undefined,
       )
@@ -476,7 +552,7 @@ describe('IgniterStore', () => {
       await wsStore.kv.get('config')
 
       expect(adapter.get).toHaveBeenCalledWith(
-        'ign:store:test:test-api:organization:org_123:workspace:ws_456:kv:config',
+        'igniter:store:test-api:organization:org_123:workspace:ws_456:kv:config',
       )
     })
 
@@ -496,7 +572,7 @@ describe('IgniterStore', () => {
       await userStore.kv.get('profile')
 
       expect(adapter.get).toHaveBeenCalledWith(
-        'ign:store:test:test-api:user:42:kv:profile',
+        'igniter:store:test-api:user:42:kv:profile',
       )
     })
 
@@ -506,152 +582,11 @@ describe('IgniterStore', () => {
       await store.kv.get('global')
       await orgStore.kv.get('local')
 
-      expect(adapter.get).toHaveBeenNthCalledWith(1, 'ign:store:test:test-api:kv:global')
+      expect(adapter.get).toHaveBeenNthCalledWith(1, 'igniter:store:test-api:kv:global')
       expect(adapter.get).toHaveBeenNthCalledWith(
         2,
-        'ign:store:test:test-api:organization:org_123:kv:local',
+        'igniter:store:test-api:organization:org_123:kv:local',
       )
-    })
-  })
-
-  describe('actor()', () => {
-    it('should create store with actor set', async () => {
-      const mockTimestamp = '2025-01-01T00:00:00.000Z'
-      const originalToISOString = Date.prototype.toISOString
-      Date.prototype.toISOString = vi.fn().mockReturnValue(mockTimestamp)
-
-      try {
-        const actorStore = store.actor('user', 'user_123')
-        await actorStore.events.publish('user:created', { userId: '456' })
-
-        expect(adapter.publish).toHaveBeenCalledWith(
-          'ign:store:test:test-api:events:user:created',
-          {
-            type: 'user:created',
-            data: { userId: '456' },
-            timestamp: mockTimestamp,
-            actor: { key: 'user', identifier: 'user_123' },
-          },
-        )
-      } finally {
-        Date.prototype.toISOString = originalToISOString
-      }
-    })
-
-    it('should throw if actor key is empty', () => {
-      expect(() => store.actor('', 'id')).toThrow(IgniterStoreError)
-      expect(() => store.actor('', 'id')).toThrow(/actor key/i)
-    })
-
-    it('should throw if actor identifier is empty', () => {
-      expect(() => store.actor('user', '')).toThrow(IgniterStoreError)
-      expect(() => store.actor('user', '')).toThrow(/identifier/i)
-    })
-
-    it('should work together with scope', async () => {
-      const mockTimestamp = '2025-01-01T00:00:00.000Z'
-      const originalToISOString = Date.prototype.toISOString
-      Date.prototype.toISOString = vi.fn().mockReturnValue(mockTimestamp)
-
-      try {
-        const scopedActorStore = store
-          .scope('organization', 'org_123')
-          .actor('user', 'user_456')
-
-        await scopedActorStore.events.publish('user:created', { userId: '789' })
-
-        expect(adapter.publish).toHaveBeenCalledWith(
-          'ign:store:test:test-api:organization:org_123:events:user:created',
-          {
-            type: 'user:created',
-            data: { userId: '789' },
-            timestamp: mockTimestamp,
-            scope: { key: 'organization', identifier: 'org_123' },
-            actor: { key: 'user', identifier: 'user_456' },
-          },
-        )
-      } finally {
-        Date.prototype.toISOString = originalToISOString
-      }
-    })
-  })
-
-  describe('typed scopes with addScope()', () => {
-    let typedStore: ReturnType<typeof createTypedStore>
-
-    function createTypedStore() {
-      return IgniterStore.create()
-        .withAdapter(adapter)
-        .withService('typed-api')
-        .withEnvironment('test')
-        .addScope('organization', { required: true })
-        .addScope('workspace')
-        .build()
-    }
-
-    beforeEach(() => {
-      typedStore = createTypedStore()
-    })
-
-    it('should accept defined scope keys', async () => {
-      const orgStore = typedStore.scope('organization', 'org_123')
-      await orgStore.kv.get('settings')
-
-      expect(adapter.get).toHaveBeenCalledWith(
-        'ign:store:test:typed-api:organization:org_123:kv:settings',
-      )
-    })
-
-    it('should throw on undefined scope keys', () => {
-      expect(() => {
-        // @ts-expect-error - Testing runtime validation for undefined scope
-        typedStore.scope('invalid', 'id')
-      }).toThrow(IgniterStoreError)
-    })
-  })
-
-  describe('typed actors with addActor()', () => {
-    let typedStore: ReturnType<typeof createTypedStore>
-
-    function createTypedStore() {
-      return IgniterStore.create()
-        .withAdapter(adapter)
-        .withService('typed-api')
-        .withEnvironment('test')
-        .addActor('user', { description: 'Human user' })
-        .addActor('system', { description: 'System process' })
-        .build()
-    }
-
-    beforeEach(() => {
-      typedStore = createTypedStore()
-    })
-
-    it('should accept defined actor keys', async () => {
-      const mockTimestamp = '2025-01-01T00:00:00.000Z'
-      const originalToISOString = Date.prototype.toISOString
-      Date.prototype.toISOString = vi.fn().mockReturnValue(mockTimestamp)
-
-      try {
-        const userStore = typedStore.actor('user', 'user_123')
-        await userStore.events.publish('test:event', { data: 'test' })
-
-        expect(adapter.publish).toHaveBeenCalledWith(
-          expect.any(String),
-          expect.objectContaining({
-            actor: { key: 'user', identifier: 'user_123' },
-          }),
-        )
-      } finally {
-        Date.prototype.toISOString = originalToISOString
-      }
-    })
-
-    it('should throw on undefined actor keys', () => {
-      expect(() => {
-        // @ts-expect-error - Testing runtime validation for undefined actor
-        typedStore.actor('invalid', 'id')
-      }).toThrow(IgniterStoreError)
     })
   })
 })

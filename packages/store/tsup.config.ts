@@ -9,7 +9,10 @@ export default defineConfig({
     'adapters/index': 'src/adapters/index.ts',
 
     // Individual adapters (for @igniter-js/bot/adapters/*)
-    'adapters/redis.adapter': 'src/adapters/redis.adapter.ts'
+    'adapters/redis.adapter': 'src/adapters/redis.adapter.ts',
+
+    // Telemetry events
+    'telemetry/index': 'src/telemetry/index.ts'
   },
   format: ['esm', 'cjs'],
   dts: true,

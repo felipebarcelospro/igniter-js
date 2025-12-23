@@ -9,12 +9,13 @@
  *
  * @example
  * ```typescript
- * import { IgniterStore, RedisStoreAdapter, IgniterStoreEvents } from '@igniter-js/store'
+ * import { IgniterStore, IgniterStoreRedisAdapter, IgniterStoreEvents } from '@igniter-js/store'
  * import { z } from 'zod'
  * import Redis from 'ioredis'
  *
  * // 1. Define events per feature (recommended pattern)
  * const UserEvents = IgniterStoreEvents
+ *   .create('user')
  *   .event('created', z.object({
  *     userId: z.string(),
  *     email: z.string().email(),
@@ -31,14 +32,13 @@
  *
  * // 2. Create Redis client and adapter
  * const redis = new Redis()
- * const adapter = RedisStoreAdapter.create({ redis })
+ * const adapter = IgniterStoreRedisAdapter.create({ redis })
  *
  * // 3. Create the store instance with events
  * const store = IgniterStore.create()
  *   .withAdapter(adapter)
  *   .withService('my-api')
- *   .withEnvironment(process.env.NODE_ENV ?? 'development')
- *   .addEvents('user', UserEvents)
+ *   .addEvents(UserEvents)
  *   .build()
  *
  * // 4. Use key-value operations
@@ -84,7 +84,7 @@
 // CORE EXPORTS
 // =============================================================================
 
-export { IgniterStore } from './core/igniter-store'
+export { IgniterStoreManager } from './core/manager'
 export type {
   IgniterStoreKV,
   IgniterStoreCounter,
@@ -94,14 +94,19 @@ export type {
   IgniterStoreEvents,
   IgniterStoreDev,
   IgniterStoreStreams,
-} from './core/igniter-store'
+} from './core/manager'
+
+// Alias for backwards compatibility and cleaner API
+export { IgniterStore } from './builders/main.builder'
 
 // =============================================================================
 // BUILDER EXPORTS
 // =============================================================================
 
-export { IgniterStoreBuilder } from './builders/igniter-store.builder'
-export type { IgniterStoreBuilderState } from './builders/igniter-store.builder'
+export { IgniterStoreBuilder } from './builders/main.builder'
+export { IgniterStoreKeyBuilder } from './builders/store-key.builder'
+export type { IgniterStoreKeyBuilderOptions } from './builders/store-key.builder'
+export type { IgniterStoreBuilderState, RESERVED_NAMESPACE_PREFIXES } from './types/builder'
 
 // =============================================================================
 // ADAPTER EXPORTS
@@ -115,13 +120,14 @@ export type { IgniterStoreRedisAdapterOptions } from './adapters/redis.adapter'
 // =============================================================================
 
 // New events API
-export { IgniterStoreEvents as IgniterStoreEventsBuilder, IgniterStoreEventsGroup } from './utils/events'
+export { IgniterStoreEvents, IgniterStoreEventsGroup } from './builders/events.builder'
 
 // Legacy exports (backwards compatibility)
-export { IgniterStoreEventsSchema, IgniterStoreEventsSchemaGroup } from './utils/events'
+export { IgniterStoreEventsSchema, IgniterStoreEventsSchemaGroup } from './utils/schema'
 
-export { StoreKeyBuilder } from './utils/key-builder'
-export type { StoreKeyBuilderOptions } from './utils/key-builder'
+// Legacy key builder exports (backwards compatibility - use IgniterStoreKeyBuilder from builders)
+export { IgniterStoreKeyBuilder as StoreKeyBuilder } from './builders/store-key.builder'
+export type { IgniterStoreKeyBuilderOptions as StoreKeyBuilderOptions } from './builders/store-key.builder'
 
 // =============================================================================
 // ERROR EXPORTS
@@ -130,12 +136,12 @@ export type { StoreKeyBuilderOptions } from './utils/key-builder'
 export {
   IgniterStoreError,
   IGNITER_STORE_ERROR_CODES,
-} from './errors/igniter-store.error'
+} from './errors/store.error'
 export type {
   IgniterStoreErrorCode,
   IgniterStoreErrorMetadata,
   IgniterStoreErrorPayload,
-} from './errors/igniter-store.error'
+} from './errors/store.error'
 
 // =============================================================================
 // TYPE EXPORTS
@@ -180,10 +186,6 @@ export type {
   IgniterStoreEventAccessor,
   IgniterStoreEventsProxy,
   IgniterStoreEventsRegistryProxy,
-  ReservedNamespace,
-  ReservedKeyPrefix,
-  RESERVED_NAMESPACES,
-  RESERVED_KEY_PREFIXES,
 } from './types/events'
 
 // Legacy schema exports (backwards compatibility)
@@ -201,10 +203,7 @@ export type {
   IgniterStoreScopeChain,
   IgniterStoreScopeIdentifier,
   IgniterStoreScopeOptions,
-  IgniterStoreActorOptions,
   IgniterStoreScopeDefinition,
-  IgniterStoreActorDefinition,
-  IgniterStoreActorEntry,
 } from './types/scope'
 
 export type {
@@ -213,3 +212,9 @@ export type {
 } from './types/serializer'
 
 export { DEFAULT_SERIALIZER } from './types/serializer'
+
+// =============================================================================
+// TELEMETRY EXPORTS
+// =============================================================================
+
+export type { IgniterStoreTelemetry } from './types/telemetry'

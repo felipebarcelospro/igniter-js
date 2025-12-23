@@ -4,10 +4,7 @@
  */
 
 // New events API
-export { IgniterStoreEvents, IgniterStoreEventsGroup } from './events'
+export { IgniterStoreEvents } from '../builders/events.builder'
 
 // Legacy exports (backwards compatibility)
-export { IgniterStoreEventsSchema, IgniterStoreEventsSchemaGroup } from './events'
-
-export { StoreKeyBuilder } from './key-builder'
-export type { StoreKeyBuilderOptions } from './key-builder'
+export { IgniterStoreEventsSchema, IgniterStoreEventsSchemaGroup } from './schema'
