@@ -11,13 +11,22 @@ export type IgniterCallerSchemaMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELE
  * Maps status codes to response schemas with optional request schema.
  */
 export type IgniterCallerEndpointSchema<
-  TRequest extends StandardSchemaV1 = any,
-  TResponses extends Record<number, StandardSchemaV1> = Record<number, StandardSchemaV1>,
+  TRequest extends StandardSchemaV1 | undefined = StandardSchemaV1 | undefined,
+  TResponses extends Record<number | string, StandardSchemaV1> = Record<
+    number | string,
+    StandardSchemaV1
+  >,
 > = {
   /** Request body schema (optional) */
   request?: TRequest
   /** Response schemas by status code */
   responses: TResponses
+  /** Optional summary or description for docs */
+  doc?: string
+  /** Optional tags for grouping */
+  tags?: string[]
+  /** Optional operation identifier */
+  operationId?: string
 }
 
 /**
@@ -60,6 +69,14 @@ export type IgniterCallerSchemaMap = Record<
 >
 
 /**
+ * Resolves a status key against a response map.
+ */
+export type ResolveStatusKey<
+  TResponses extends Record<number | string, StandardSchemaV1>,
+  TStatus extends number | string,
+> = Extract<keyof TResponses, TStatus | `${TStatus}`>
+
+/**
  * Extract path parameters from a URL pattern.
  *
  * @example
@@ -89,11 +106,13 @@ export type InferRequestType<T> = T extends IgniterCallerEndpointSchema<infer R,
  */
 export type InferResponseType<
   T,
-  Status extends number,
+  Status extends number | string,
 > = T extends IgniterCallerEndpointSchema<any, infer Responses>
-  ? Status extends keyof Responses
-    ? Responses[Status] extends StandardSchemaV1
-      ? StandardSchemaV1.InferOutput<Responses[Status]>
+  ? ResolveStatusKey<Responses, Status> extends keyof Responses
+    ? Responses[ResolveStatusKey<Responses, Status>] extends StandardSchemaV1
+      ? StandardSchemaV1.InferOutput<
+          Responses[ResolveStatusKey<Responses, Status>]
+        >
       : never
     : never
   : never
@@ -102,13 +121,17 @@ export type InferResponseType<
  * Infer the success response type (status 200 or 201) from endpoint schema.
  */
 export type InferSuccessResponseType<T> = T extends IgniterCallerEndpointSchema<any, infer Responses>
-  ? 200 extends keyof Responses
-    ? Responses[200] extends StandardSchemaV1
-      ? StandardSchemaV1.InferOutput<Responses[200]>
+  ? ResolveStatusKey<Responses, 200> extends keyof Responses
+    ? Responses[ResolveStatusKey<Responses, 200>] extends StandardSchemaV1
+      ? StandardSchemaV1.InferOutput<
+          Responses[ResolveStatusKey<Responses, 200>]
+        >
       : never
-    : 201 extends keyof Responses
-      ? Responses[201] extends StandardSchemaV1
-        ? StandardSchemaV1.InferOutput<Responses[201]>
+    : ResolveStatusKey<Responses, 201> extends keyof Responses
+      ? Responses[ResolveStatusKey<Responses, 201>] extends StandardSchemaV1
+        ? StandardSchemaV1.InferOutput<
+            Responses[ResolveStatusKey<Responses, 201>]
+          >
         : never
       : never
   : never
@@ -120,7 +143,7 @@ export type InferAllResponseTypes<T> = T extends IgniterCallerEndpointSchema<
   any,
   infer Responses
 >
-  ? Responses extends Record<number, StandardSchemaV1>
+  ? Responses extends Record<number | string, StandardSchemaV1>
     ? {
         [K in keyof Responses]: Responses[K] extends StandardSchemaV1
           ? { status: K; data: StandardSchemaV1.InferOutput<Responses[K]> }
@@ -198,11 +221,13 @@ export type SchemaMapResponseType<
   TSchemas extends IgniterCallerSchemaMap,
   TPath extends keyof TSchemas,
   TMethod extends keyof TSchemas[TPath],
-  TStatus extends number = 200,
+  TStatus extends number | string = 200,
 > = TSchemas[TPath][TMethod] extends IgniterCallerEndpointSchema<any, infer Responses>
-  ? TStatus extends keyof Responses
-    ? Responses[TStatus] extends StandardSchemaV1
-      ? StandardSchemaV1.InferOutput<Responses[TStatus]>
+  ? ResolveStatusKey<Responses, TStatus> extends keyof Responses
+    ? Responses[ResolveStatusKey<Responses, TStatus>] extends StandardSchemaV1
+      ? StandardSchemaV1.InferOutput<
+          Responses[ResolveStatusKey<Responses, TStatus>]
+        >
       : never
     : never
   : never

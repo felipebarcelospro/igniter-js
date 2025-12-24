@@ -1,4 +1,13 @@
+/**
+ * URL utilities for `IgniterCaller`.
+ */
 export class IgniterCallerUrlUtils {
+  /**
+   * Builds a full URL with optional base URL and query parameters.
+   *
+   * @param params - URL construction parameters.
+   * @returns Full URL string.
+   */
   static buildUrl(params: {
     url: string
     baseURL?: string

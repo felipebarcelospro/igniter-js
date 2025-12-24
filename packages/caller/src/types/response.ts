@@ -2,7 +2,9 @@
  * Response object containing either successful data or an error.
  */
 export interface IgniterCallerApiResponse<T> {
+  /** Parsed response data when the request succeeds. */
   data?: T
+  /** Error instance when the request fails. */
   error?: Error
   /** HTTP status code from the response */
   status?: number
@@ -15,7 +17,9 @@ export interface IgniterCallerApiResponse<T> {
  * @deprecated Use execute() with responseType<File>() instead
  */
 export interface IgniterCallerFileResponse {
+  /** File instance when download succeeds. */
   file: File | null
+  /** Error instance when download fails. */
   error: Error | null
 }
 

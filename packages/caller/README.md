@@ -14,7 +14,8 @@ Type-safe HTTP client for Igniter.js apps. Built on top of `fetch`, it gives you
 - ✅ **Retries** - linear or exponential backoff + status-based retry
 - ✅ **Caching** - in-memory cache + optional persistent store adapter
 - ✅ **Schema Validation** - validate request/response using `StandardSchemaV1`
-- ✅ **Zod Support** - optional per-request `responseType(zodSchema)` validation
+- ✅ **StandardSchema Support** - Zod or any library that implements `StandardSchemaV1`
+- ✅ **Telemetry-ready** - optional integration with `@igniter-js/telemetry`
 - ✅ **Global Events** - observe responses for logging/telemetry/cache invalidation
 - ✅ **Auto query encoding** - body in GET requests converts to query params
 
@@ -22,19 +23,29 @@ Type-safe HTTP client for Igniter.js apps. Built on top of `fetch`, it gives you
 
 ```bash
 # npm
-npm install @igniter-js/caller @igniter-js/core zod
+npm install @igniter-js/caller @igniter-js/core
 
 # pnpm
-pnpm add @igniter-js/caller @igniter-js/core zod
+pnpm add @igniter-js/caller @igniter-js/core
 
 # yarn
-yarn add @igniter-js/caller @igniter-js/core zod
+yarn add @igniter-js/caller @igniter-js/core
 
 # bun
-bun add @igniter-js/caller @igniter-js/core zod
+bun add @igniter-js/caller @igniter-js/core
 ```
 
-> `@igniter-js/core` and `zod` are peer dependencies.
+Optional dependencies:
+
+```bash
+# Telemetry (optional)
+npm install @igniter-js/telemetry
+
+# Schema validation (optional - Zod or any StandardSchemaV1-compatible lib)
+npm install zod
+```
+
+> `@igniter-js/core` is required. `@igniter-js/telemetry` and `zod` are optional peer dependencies.
 
 ## Quick Start
 
@@ -230,9 +241,66 @@ const api = IgniterCaller.create()
   .build()
 ```
 
+## Adapters
+
+The package ships a mock store adapter for tests and local development:
+
+```ts
+import { MockCallerStoreAdapter } from '@igniter-js/caller/adapters'
+import { IgniterCaller } from '@igniter-js/caller'
+
+const store = MockCallerStoreAdapter.create()
+
+const api = IgniterCaller.create()
+  .withStore(store)
+  .build()
+```
+
 ## Schema Validation (StandardSchemaV1)
 
 If you already use schemas in your Igniter.js app, you can validate requests and responses automatically.
+Schemas must implement `StandardSchemaV1` (Zod is supported, and any compatible library works).
+
+### Preferred: IgniterCallerSchema builder
+
+```ts
+import { IgniterCaller, IgniterCallerSchema } from '@igniter-js/caller'
+import { z } from 'zod'
+
+const UserSchema = z.object({ id: z.string(), name: z.string() })
+const ErrorSchema = z.object({ message: z.string() })
+
+const callerSchemas = IgniterCallerSchema.create()
+  .schema('User', UserSchema)
+  .schema('Error', ErrorSchema)
+  .path('/users/:id', (path) =>
+    path.get({
+      responses: {
+        200: path.ref('User').schema,
+        404: path.ref('Error').schema,
+      },
+      doc: 'Get user by id',
+      tags: ['users'],
+      operationId: 'users.get',
+    }),
+  )
+  .build()
+
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withSchemas(callerSchemas, { mode: 'strict' })
+  .build()
+
+type UserResponse = ReturnType<
+  typeof callerSchemas.$Infer.Response<'/users/:id', 'GET', 200>
+>
+```
+
+`callerSchemas.get` exposes runtime helpers (`path`, `endpoint`, `request`, `response`, `schema`) and
+`callerSchemas.$Infer` provides type inference without extra imports. `path.ref()` helpers use Zod
+wrappers; when using a different StandardSchema implementation, use `ref().schema` directly.
+
+### Manual object literal (still supported)
 
 ```ts
 import { IgniterCaller } from '@igniter-js/caller'
@@ -270,9 +338,16 @@ By default this outputs `src/callers/<hostname>/schema.ts` and `index.ts`:
 
 ```ts
 import { facebookCaller } from './src/callers/api.example.com'
+import { facebookCallerSchemas } from './src/callers/api.example.com/schema'
 
 const result = await facebookCaller.get('/products').execute()
+type ProductsResponse = ReturnType<
+  typeof facebookCallerSchemas.$Infer.Response<'/products', 'GET', 200>
+>
 ```
+
+The generated `schema.ts` uses `IgniterCallerSchema` (path-first builder), registers reusable
+schemas, and includes derived type aliases for each endpoint.
 
 ## `responseType()` for Typing and Validation
 
@@ -296,12 +371,12 @@ const result = await api.get('/file').responseType<Blob>().execute()
 
 ## Global Events
 
-You can observe responses globally using `IgniterCaller.on()`:
+You can observe responses globally using `IgniterCallerManager.on()`:
 
 ```ts
-import { IgniterCaller } from '@igniter-js/caller'
+import { IgniterCallerManager } from '@igniter-js/caller'
 
-const unsubscribe = IgniterCaller.on(/^\/users/, (result, ctx) => {
+const unsubscribe = IgniterCallerManager.on(/^\/users/, (result, ctx) => {
   console.log(`[${ctx.method}] ${ctx.url}`, {
     ok: !result.error,
     status: result.status,
@@ -310,6 +385,24 @@ const unsubscribe = IgniterCaller.on(/^\/users/, (result, ctx) => {
 
 // later
 unsubscribe()
+```
+
+## Observability (Telemetry)
+
+```ts
+import { IgniterTelemetry } from '@igniter-js/telemetry'
+import { IgniterCaller } from '@igniter-js/caller'
+import { IgniterCallerTelemetryEvents } from '@igniter-js/caller/telemetry'
+
+const telemetry = IgniterTelemetry.create()
+  .withService('my-api')
+  .addEvents(IgniterCallerTelemetryEvents)
+  .build()
+
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withTelemetry(telemetry)
+  .build()
 ```
 
 ## Error Handling
@@ -351,6 +444,7 @@ Creates a new caller builder.
 | `.withResponseInterceptor(fn)` | Adds a response interceptor |
 | `.withStore(store, options)` | Configures a persistent store |
 | `.withSchemas(schemas, options)` | Configures schema validation |
+| `.withTelemetry(telemetry)` | Attaches telemetry manager |
 | `.build()` | Builds the caller instance |
 
 ### Request Methods
@@ -385,11 +479,11 @@ Creates a new caller builder.
 
 | Method | Description |
 |--------|-------------|
-| `IgniterCaller.on(pattern, callback)` | Registers event listener |
-| `IgniterCaller.off(pattern, callback?)` | Removes event listener |
-| `IgniterCaller.invalidate(key)` | Invalidates cache entry |
-| `IgniterCaller.invalidatePattern(pattern)` | Invalidates cache by pattern |
-| `IgniterCaller.batch(requests)` | Executes requests in parallel |
+| `IgniterCallerManager.on(pattern, callback)` | Registers event listener |
+| `IgniterCallerManager.off(pattern, callback?)` | Removes event listener |
+| `IgniterCallerManager.invalidate(key)` | Invalidates cache entry |
+| `IgniterCallerManager.invalidatePattern(pattern)` | Invalidates cache by pattern |
+| `IgniterCallerManager.batch(requests)` | Executes requests in parallel |
 
 ## Contributing
 

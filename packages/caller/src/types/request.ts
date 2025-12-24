@@ -1,3 +1,4 @@
+import type { StandardSchemaV1 } from '@igniter-js/core'
 import type { z } from 'zod'
 import type { IgniterCallerHttpMethod } from './http'
 import type { IgniterCallerRetryOptions } from './retry'
@@ -24,7 +25,7 @@ export interface IgniterCallerRequestOptions<TBody = unknown>
   url: string
   body?: TBody
   params?: Record<string, string | number | boolean>
-  responseSchema?: z.ZodSchema<any>
+  responseSchema?: z.ZodSchema<any> | StandardSchemaV1
   cache?: RequestCache
 }
 
@@ -44,8 +45,8 @@ export interface IgniterCallerDirectRequestOptions<TBody = unknown>
   params?: Record<string, string | number | boolean>
   /** Cookies to send with the request */
   cookies?: Record<string, string>
-  /** Response validation schema (Zod) */
-  responseSchema?: z.ZodSchema<any>
+  /** Response validation schema (Zod or any StandardSchemaV1 implementation) */
+  responseSchema?: z.ZodSchema<any> | StandardSchemaV1
   /** Cache strategy */
   cache?: RequestCache
   /** Cache key for stale-while-revalidate */

@@ -1,15 +1,15 @@
-import type { IgniterLogger, StandardSchemaV1 } from '@igniter-js/core'
-import { IgniterCallerBuilder } from '../builder/igniter-caller.builder'
-import {
-  IgniterCallerRequestBuilder,
-  type IgniterCallerMethodRequestBuilder,
-  type IgniterCallerRequestBuilderParams,
-  type IgniterCallerTypedRequestBuilder,
-} from '../builder/igniter-caller-request.builder'
+import type { IgniterLogger } from '@igniter-js/core'
+import type { IgniterTelemetryManager } from '@igniter-js/telemetry'
+import { IgniterCallerRequestBuilder } from '../builders/request.builder'
+import type {
+  IgniterCallerRequestBuilderParams,
+  IgniterCallerTypedRequestBuilder,
+} from '../types/builder'
 import type {
   IgniterCallerEventCallback,
   IgniterCallerUrlPattern,
 } from '../types/events'
+import type { IIgniterCallerManager } from '../types/manager'
 import type {
   IgniterCallerRequestInterceptor,
   IgniterCallerResponseInterceptor,
@@ -18,84 +18,17 @@ import type { IgniterCallerDirectRequestOptions } from '../types/request'
 import type { IgniterCallerApiResponse } from '../types/response'
 import type {
   DeletePaths,
-  EndpointInfo,
-  ExtractPathParams,
   GetPaths,
   HeadPaths,
-  IgniterCallerEndpointSchema,
   IgniterCallerSchemaMap,
-  IgniterCallerSchemaMethod,
   IgniterCallerSchemaValidationOptions,
   PatchPaths,
   PostPaths,
   PutPaths,
 } from '../types/schemas'
+import type { InferResponse, TypedRequestBuilder } from '../types/infer'
 import { IgniterCallerCacheUtils } from '../utils/cache'
-import { IgniterCallerEvents } from './igniter-caller-events'
-
-/**
- * Infer success response type from endpoint schema (200 or 201).
- */
-type InferSuccessResponse<T> = T extends IgniterCallerEndpointSchema<any, infer R>
-  ? 200 extends keyof R
-    ? R[200] extends StandardSchemaV1
-      ? StandardSchemaV1.InferOutput<R[200]>
-      : unknown
-    : 201 extends keyof R
-      ? R[201] extends StandardSchemaV1
-        ? StandardSchemaV1.InferOutput<R[201]>
-        : unknown
-      : unknown
-  : unknown
-
-/**
- * Get the endpoint schema for a path and method from a schema map.
- */
-type GetEndpoint<
-  TSchemas extends IgniterCallerSchemaMap,
-  TPath extends string,
-  TMethod extends IgniterCallerSchemaMethod,
-> = TPath extends keyof TSchemas
-  ? TMethod extends keyof TSchemas[TPath]
-    ? TSchemas[TPath][TMethod]
-    : undefined
-  : undefined
-
-/**
- * Infer the response type for a given path and method.
- * Returns `unknown` if the path/method is not in the schema.
- */
-type InferResponse<
-  TSchemas extends IgniterCallerSchemaMap,
-  TPath extends string,
-  TMethod extends IgniterCallerSchemaMethod,
-> = InferSuccessResponse<GetEndpoint<TSchemas, TPath, TMethod>>
-
-/**
- * Typed request builder with inferred body and params types.
- */
-export type TypedRequestBuilder<
-  TSchemas extends IgniterCallerSchemaMap,
-  TPath extends string,
-  TMethod extends IgniterCallerSchemaMethod,
-> = Omit<
-  IgniterCallerMethodRequestBuilder<EndpointInfo<TSchemas, TPath, TMethod>['response']>,
-  'body' | 'params'
-> & {
-  /**
-   * Sets the request body with type inference from schema.
-   */
-  body: EndpointInfo<TSchemas, TPath, TMethod>['request'] extends never
-    ? <TBody>(body: TBody) => TypedRequestBuilder<TSchemas, TPath, TMethod>
-    : (body: EndpointInfo<TSchemas, TPath, TMethod>['request']) => TypedRequestBuilder<TSchemas, TPath, TMethod>
-  
-  /**
-   * Sets URL path parameters with type inference from URL pattern.
-   */
-  params: keyof EndpointInfo<TSchemas, TPath, TMethod>['params'] extends never
-    ? (params: Record<string, string | number | boolean>) => TypedRequestBuilder<TSchemas, TPath, TMethod>
-    : (params: EndpointInfo<TSchemas, TPath, TMethod>['params'] & Record<string, string | number | boolean>) => TypedRequestBuilder<TSchemas, TPath, TMethod>
-}
+import { IgniterCallerEvents } from './events'
 
 /**
  * HTTP client runtime for Igniter.js.
@@ -105,7 +38,9 @@ export type TypedRequestBuilder<
  *
  * @template TSchemas - The schema map type for type-safe requests/responses.
  */
-export class IgniterCaller<TSchemas extends IgniterCallerSchemaMap> {
+export class IgniterCallerManager<
+  TSchemas extends IgniterCallerSchemaMap,
+> implements IIgniterCallerManager<TSchemas> {
   /** Global event emitter for observing HTTP responses */
   private static readonly events = new IgniterCallerEvents()
 
@@ -113,17 +48,25 @@ export class IgniterCaller<TSchemas extends IgniterCallerSchemaMap> {
   private headers?: Record<string, string>
   private cookies?: Record<string, string>
   private logger?: IgniterLogger
+  private telemetry?: IgniterTelemetryManager
   private requestInterceptors?: IgniterCallerRequestInterceptor[]
   private responseInterceptors?: IgniterCallerResponseInterceptor[]
   private schemas?: TSchemas
   private schemaValidation?: IgniterCallerSchemaValidationOptions
 
+  /**
+   * Creates a new manager instance.
+   *
+   * @param baseURL - Base URL prefix for requests.
+   * @param opts - Optional configuration (headers, cookies, telemetry, schemas).
+   */
   constructor(
     baseURL?: string,
     opts?: {
       headers?: Record<string, string>
       cookies?: Record<string, string>
       logger?: IgniterLogger
+      telemetry?: IgniterTelemetryManager
       requestInterceptors?: IgniterCallerRequestInterceptor[]
       responseInterceptors?: IgniterCallerResponseInterceptor[]
       schemas?: TSchemas
@@ -134,64 +77,11 @@ export class IgniterCaller<TSchemas extends IgniterCallerSchemaMap> {
     this.headers = opts?.headers
     this.cookies = opts?.cookies
     this.logger = opts?.logger
+    this.telemetry = opts?.telemetry
     this.requestInterceptors = opts?.requestInterceptors
     this.responseInterceptors = opts?.responseInterceptors
     this.schemas = opts?.schemas
     this.schemaValidation = opts?.schemaValidation
-  }
-
-  /**
-   * Canonical initialization entrypoint.
-   *
-   * This is designed to remain stable when extracted to `@igniter-js/caller`.
-   */
-  static create<TInitSchemas extends IgniterCallerSchemaMap>(): IgniterCallerBuilder<IgniterCaller<TInitSchemas>, TInitSchemas> {
-    return IgniterCallerBuilder.create<IgniterCaller<any>, any>((state) => {
-      // Configure store if provided
-      if (state.store) {
-        IgniterCallerCacheUtils.setStore(state.store, state.storeOptions)
-      }
-
-      return new IgniterCaller(state.baseURL, {
-        headers: state.headers,
-        cookies: state.cookies,
-        logger: state.logger,
-        requestInterceptors: state.requestInterceptors,
-        responseInterceptors: state.responseInterceptors,
-        schemas: state.schemas,
-        schemaValidation: state.schemaValidation,
-      })
-    }) as IgniterCallerBuilder<IgniterCaller<TInitSchemas>, TInitSchemas>
-  }
-
-  /**
-   * Returns a new client with the same config and a new logger.
-   */
-  withLogger(logger: IgniterLogger): IgniterCaller<TSchemas> {
-    return new IgniterCaller<TSchemas>(this.baseURL, {
-      headers: this.headers,
-      cookies: this.cookies,
-      logger,
-      requestInterceptors: this.requestInterceptors,
-      responseInterceptors: this.responseInterceptors,
-      schemas: this.schemas,
-      schemaValidation: this.schemaValidation,
-    })
-  }
-
-  setBaseURL(baseURL: string): this {
-    this.baseURL = baseURL
-    return this
-  }
-
-  setHeaders(headers: Record<string, string>): this {
-    this.headers = headers
-    return this
-  }
-
-  setCookies(cookies: Record<string, string>): this {
-    this.cookies = cookies
-    return this
   }
 
   /**
@@ -203,10 +93,11 @@ export class IgniterCaller<TSchemas extends IgniterCallerSchemaMap> {
       defaultHeaders: this.headers,
       defaultCookies: this.cookies,
       logger: this.logger,
+      telemetry: this.telemetry,
       requestInterceptors: this.requestInterceptors,
       responseInterceptors: this.responseInterceptors,
       eventEmitter: async (url, method, result) => {
-        await IgniterCaller.emitEvent(url, method, result)
+        await IgniterCallerManager.emitEvent(url, method, result)
       },
       schemas: this.schemas,
       schemaValidation: this.schemaValidation,
@@ -246,10 +137,6 @@ export class IgniterCaller<TSchemas extends IgniterCallerSchemaMap> {
   /**
    * Creates a POST request.
    *
-   * When a URL is provided and matches a schema, the response type is automatically inferred.
-  /**
-   * Creates a POST request.
-   *
    * When a URL is provided and matches a schema, the response, body, and params types
    * are automatically inferred from the schema definition.
    *
@@ -263,8 +150,12 @@ export class IgniterCaller<TSchemas extends IgniterCallerSchemaMap> {
    *   .execute()
    * ```
    */
-  post<TPath extends PostPaths<TSchemas>>(url: TPath): TypedRequestBuilder<TSchemas, TPath, 'POST'>
-  post<TPath extends string>(url?: TPath): IgniterCallerTypedRequestBuilder<InferResponse<TSchemas, TPath, 'POST'>>
+  post<TPath extends PostPaths<TSchemas>>(
+    url: TPath,
+  ): TypedRequestBuilder<TSchemas, TPath, 'POST'>
+  post<TPath extends string>(
+    url?: TPath,
+  ): IgniterCallerTypedRequestBuilder<InferResponse<TSchemas, TPath, 'POST'>>
   post<TPath extends string>(url?: TPath): any {
     const builder = new IgniterCallerRequestBuilder(this.createBuilderParams())
     builder._setMethod('POST')
@@ -369,6 +260,9 @@ export class IgniterCaller<TSchemas extends IgniterCallerSchemaMap> {
    * This is a convenience method for making requests without using the builder pattern.
    * Useful for dynamic requests where options are constructed programmatically.
    *
+   * @param options - Request configuration for method, url, and behavior.
+   * @returns Response envelope with data or error.
+   *
    * @example
    * ```ts
    * const result = await api.request({
@@ -457,6 +351,9 @@ export class IgniterCaller<TSchemas extends IgniterCallerSchemaMap> {
    * Executes multiple requests in parallel and returns results as an array.
    *
    * This is useful for batching independent API calls.
+   *
+   * @param requests - Array of request promises.
+   * @returns Array of resolved results in the same order.
    */
   static async batch<
     T extends readonly Promise<IgniterCallerApiResponse<any>>[],
@@ -484,7 +381,7 @@ export class IgniterCaller<TSchemas extends IgniterCallerSchemaMap> {
    * @example
    * ```ts
    * // Listen to all user endpoints
-   * const cleanup = IgniterCaller.on(/^\/users/, (result, context) => {
+   * const cleanup = IgniterCallerManager.on(/^\/users/, (result, context) => {
    *   console.log(`${context.method} ${context.url}`, result)
    * })
    *
@@ -496,17 +393,20 @@ export class IgniterCaller<TSchemas extends IgniterCallerSchemaMap> {
     pattern: IgniterCallerUrlPattern,
     callback: IgniterCallerEventCallback,
   ): () => void {
-    return IgniterCaller.events.on(pattern, callback)
+    return IgniterCallerManager.events.on(pattern, callback)
   }
 
   /**
    * Removes event listeners for a pattern.
+   *
+   * @param pattern - URL string or RegExp pattern.
+   * @param callback - Callback to remove (optional).
    */
   static off(
     pattern: IgniterCallerUrlPattern,
     callback?: IgniterCallerEventCallback,
   ): void {
-    IgniterCaller.events.off(pattern, callback)
+    IgniterCallerManager.events.off(pattern, callback)
   }
 
   /**
@@ -514,11 +414,13 @@ export class IgniterCaller<TSchemas extends IgniterCallerSchemaMap> {
    *
    * This is useful after mutations to ensure fresh data on next fetch.
    *
+   * @param key - Cache key to invalidate.
+   *
    * @example
    * ```ts
    * // After creating a user
    * await api.post('/users').body(newUser).execute()
-   * await IgniterCaller.invalidate('/users') // Clear users list cache
+   * await IgniterCallerManager.invalidate('/users') // Clear users list cache
    * ```
    */
   static async invalidate(key: string): Promise<void> {
@@ -529,11 +431,12 @@ export class IgniterCaller<TSchemas extends IgniterCallerSchemaMap> {
    * Invalidates all cache entries matching a pattern.
    *
    * @param pattern Glob pattern (e.g., '/users/*') or exact key
+   * @returns Promise that resolves when invalidation completes.
    *
    * @example
    * ```ts
    * // Invalidate all user-related caches
-   * await IgniterCaller.invalidatePattern('/users/*')
+   * await IgniterCallerManager.invalidatePattern('/users/*')
    * ```
    */
   static async invalidatePattern(pattern: string): Promise<void> {
@@ -544,12 +447,16 @@ export class IgniterCaller<TSchemas extends IgniterCallerSchemaMap> {
    * Emits an event to all registered listeners.
    *
    * @internal
+   *
+   * @param url - Request URL (resolved).
+   * @param method - HTTP method.
+   * @param result - Response envelope.
    */
   static async emitEvent(
     url: string,
     method: string,
     result: IgniterCallerApiResponse<any>,
   ): Promise<void> {
-    await IgniterCaller.events.emit(url, method, result)
+    await IgniterCallerManager.events.emit(url, method, result)
   }
 }

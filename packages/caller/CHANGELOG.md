@@ -2,6 +2,19 @@
 
 All notable changes to this package will be documented in this file.
 
+## 0.1.3
+
+### Added
+
+- Telemetry integration via `@igniter-js/telemetry` with a dedicated subpath export.
+- Mock store adapter in `@igniter-js/caller/adapters` for testing.
+- Expanded test coverage for core, builders, adapters, and utils.
+
+### Changed
+
+- Standardized builders/core structure and public entrypoint pattern.
+- Updated documentation to match the current API and telemetry events.
+
 ## 0.1.1
 
 ### New Features

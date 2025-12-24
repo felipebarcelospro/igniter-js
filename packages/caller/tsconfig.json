@@ -7,8 +7,8 @@
     "skipDefaultLibCheck": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "paths": {
-      "@igniter-js/core": ["../core/src"],
-      "@igniter-js/*": ["../*/src"]
+      "@igniter-js/core": ["../core/dist"],
+      "@igniter-js/telemetry": ["../telemetry/dist"]
     }
   },
   "include": ["src/**/*"],

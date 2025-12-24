@@ -10,16 +10,18 @@ export interface IgniterCallerStoreAdapter<TClient = any> {
 
   /**
    * Retrieves a value from the store by its key.
-   * @param key The key to retrieve.
+   *
+   * @param key - The key to retrieve.
    * @returns The value if found (auto-deserialized), otherwise null.
    */
   get<T = any>(key: string): Promise<T | null>
 
   /**
    * Stores a value in the store.
-   * @param key The key to store the value under.
-   * @param value The value to store (will be auto-serialized).
-   * @param options Configuration options, such as TTL.
+   *
+   * @param key - The key to store the value under.
+   * @param value - The value to store (will be auto-serialized).
+   * @param options - Configuration options, such as TTL.
    */
   set(
     key: string,
@@ -29,13 +31,15 @@ export interface IgniterCallerStoreAdapter<TClient = any> {
 
   /**
    * Deletes a key from the store.
-   * @param key The key to delete.
+   *
+   * @param key - The key to delete.
    */
   delete(key: string): Promise<void>
 
   /**
    * Checks if a key exists in the store.
-   * @param key The key to check.
+   *
+   * @param key - The key to check.
    * @returns `true` if the key exists, otherwise `false`.
    */
   has(key: string): Promise<boolean>

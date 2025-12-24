@@ -1,6 +1,7 @@
 import type { IgniterLogger, StandardSchemaV1 } from '@igniter-js/core'
+import type { IgniterTelemetryManager } from '@igniter-js/telemetry'
 import type { z } from 'zod'
-import { IgniterCallerError } from '../errors/igniter-caller.error'
+import { IgniterCallerError } from '../errors/caller.error'
 import type { IgniterCallerHttpMethod } from '../types/http'
 import type {
   IgniterCallerRequestInterceptor,
@@ -18,10 +19,12 @@ import type {
   IgniterCallerSchemaMap,
   IgniterCallerSchemaValidationOptions,
 } from '../types/schemas'
+import type { IgniterCallerRequestBuilderParams } from '../types/builder'
 import { IgniterCallerBodyUtils } from '../utils/body'
 import { IgniterCallerCacheUtils } from '../utils/cache'
 import { IgniterCallerSchemaUtils } from '../utils/schema'
 import { IgniterCallerUrlUtils } from '../utils/url'
+import { IgniterCallerTelemetryEvents } from '../telemetry'
 
 /**
  * Content types that support schema validation.
@@ -104,21 +107,6 @@ async function parseResponseByContentType(
 }
 
 /**
- * Constructor params for the request builder.
- */
-export interface IgniterCallerRequestBuilderParams {
-  baseURL?: string
-  defaultHeaders?: Record<string, string>
-  defaultCookies?: Record<string, string>
-  logger?: IgniterLogger
-  requestInterceptors?: IgniterCallerRequestInterceptor[]
-  responseInterceptors?: IgniterCallerResponseInterceptor[]
-  eventEmitter?: (url: string, method: string, result: any) => Promise<void>
-  schemas?: IgniterCallerSchemaMap
-  schemaValidation?: IgniterCallerSchemaValidationOptions
-}
-
-/**
  * Fluent request builder for `IgniterCaller`.
  *
  * When created via specific HTTP methods (get, post, put, patch, delete),
@@ -136,6 +124,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
   }
 
   private logger?: IgniterLogger
+  private telemetry?: IgniterTelemetryManager
   private retryOptions?: IgniterCallerRetryOptions
   private fallbackFn?: () => any
   private cacheKey?: string
@@ -151,6 +140,11 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
   private schemaValidation?: IgniterCallerSchemaValidationOptions
   private responseTypeSchema?: z.ZodSchema<any> | StandardSchemaV1
 
+  /**
+   * Creates a new request builder instance.
+   *
+   * @param params - Builder configuration from the manager.
+   */
   constructor(params: IgniterCallerRequestBuilderParams) {
     if (params.baseURL) this.options.baseURL = params.baseURL
 
@@ -169,6 +163,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
     }
 
     this.logger = params.logger
+    this.telemetry = params.telemetry
     this.requestInterceptors = params.requestInterceptors
     this.responseInterceptors = params.responseInterceptors
     this.eventEmitter = params.eventEmitter
@@ -179,6 +174,8 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
   /**
    * Sets the HTTP method for this request.
    * @internal Used by IgniterCaller.request() for generic requests.
+   *
+   * @param method - HTTP method for the request.
    */
   _setMethod(method: IgniterCallerHttpMethod): this {
     this.options.method = method
@@ -188,6 +185,8 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
   /**
    * Sets the URL for this request.
    * @internal Used when URL is passed to HTTP method directly.
+   *
+   * @param url - Request URL or path.
    */
   _setUrl(url: string): this {
     this.options.url = url
@@ -196,6 +195,8 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
 
   /**
    * Overrides the logger for this request chain.
+   *
+   * @param logger - Logger implementation from `@igniter-js/core`.
    */
   withLogger(logger: IgniterLogger): this {
     this.logger = logger
@@ -204,6 +205,8 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
 
   /**
    * Sets the request URL.
+   *
+   * @param url - Request URL or path.
    */
   url(url: string): this {
     this.options.url = url
@@ -213,6 +216,8 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
   /**
    * Sets the request body.
    * For GET/HEAD requests, body will be automatically converted to query params.
+   *
+   * @param body - Body payload for the request.
    */
   body<TBody>(body: TBody): this {
     this.options.body = body
@@ -221,6 +226,8 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
 
   /**
    * Sets URL query parameters.
+   *
+   * @param params - Query string parameters.
    */
   params(params: Record<string, string | number | boolean>): this {
     this.options.params = params
@@ -229,6 +236,8 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
 
   /**
    * Merges additional headers into the request.
+   *
+   * @param headers - Header map merged into existing headers.
    */
   headers(headers: Record<string, string>): this {
     this.options.headers = { ...this.options.headers, ...headers }
@@ -237,6 +246,8 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
 
   /**
    * Sets request timeout in milliseconds.
+   *
+   * @param timeout - Timeout in milliseconds.
    */
   timeout(timeout: number): this {
     this.options.timeout = timeout
@@ -245,6 +256,9 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
 
   /**
    * Sets cache strategy and optional cache key.
+   *
+   * @param cache - Cache strategy for the request.
+   * @param key - Optional cache key override.
    */
   cache(cache: RequestCache, key?: string): this {
     this.options.cache = cache
@@ -254,6 +268,9 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
 
   /**
    * Configures retry behavior for failed requests.
+   *
+   * @param maxAttempts - Maximum number of attempts.
+   * @param options - Retry options excluding `maxAttempts`.
    */
   retry(
     maxAttempts: number,
@@ -265,6 +282,8 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
 
   /**
    * Provides a fallback value if the request fails.
+   *
+   * @param fn - Fallback factory called when the request fails.
    */
   fallback<T>(fn: () => T): this {
     this.fallbackFn = fn
@@ -273,6 +292,8 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
 
   /**
    * Sets cache stale time in milliseconds.
+   *
+   * @param milliseconds - Stale time in milliseconds.
    */
   stale(milliseconds: number): this {
     this.staleTime = milliseconds
@@ -287,6 +308,8 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
    *
    * The actual parsing is based on Content-Type headers, not this setting.
    *
+   * @param schema - Zod/StandardSchema instance for validation (optional).
+   *
    * @example
    * ```ts
    * // With Zod schema (validates JSON response)
@@ -296,7 +319,9 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
    * const result = await api.get('/file').responseType<Blob>().execute()
    * ```
    */
-  responseType<T>(schema?: z.ZodSchema<T> | StandardSchemaV1): IgniterCallerRequestBuilder<T> {
+  responseType<T>(
+    schema?: z.ZodSchema<T> | StandardSchemaV1,
+  ): IgniterCallerRequestBuilder<T> {
     if (schema) {
       this.responseTypeSchema = schema
     }
@@ -306,6 +331,8 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
   /**
    * Downloads a file via GET request.
    * @deprecated Use `.responseType<File>().execute()` instead. The response type is auto-detected.
+   *
+   * @param url - URL or path to download.
    */
   getFile(url: string) {
     this.options.method = 'GET'
@@ -396,7 +423,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
                 statusCode: 408,
                 logger: this.logger,
                 metadata: { url: finalUrl },
-                cause: error,
+                cause: error instanceof Error ? error : undefined,
               }),
             }
           }
@@ -409,7 +436,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
               message: (error as Error)?.message || 'Failed to download file',
               logger: this.logger,
               metadata: { url: finalUrl },
-              cause: error,
+              cause: error instanceof Error ? error : undefined,
             }),
           }
         }
@@ -429,8 +456,35 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
    * - `application/octet-stream` → returned as Blob
    *
    * Schema validation (if configured) only runs for validatable content types (JSON, XML, CSV).
+   *
+   * @returns Response envelope with data or error.
    */
   async execute(): Promise<IgniterCallerApiResponse<TResponse>> {
+    const startTime = Date.now()
+    const { safeUrl } = this.resolveUrl()
+    const method = this.options.method
+    const baseURL = this.options.baseURL
+    const timeoutMs = this.options.timeout
+
+    this.telemetry?.emit(
+      IgniterCallerTelemetryEvents.get.key('request.execute.started'),
+      {
+        level: 'debug',
+        attributes: {
+          'ctx.request.method': method,
+          'ctx.request.url': safeUrl,
+          'ctx.request.baseUrl': baseURL,
+          'ctx.request.timeoutMs': timeoutMs,
+        },
+      },
+    )
+
+    this.logger?.debug('IgniterCaller.request.execute started', {
+      method,
+      url: safeUrl,
+      baseURL,
+    })
+
     // Check cache first if cache key is provided
     const effectiveCacheKey = this.cacheKey || this.options.url
     if (effectiveCacheKey && this.staleTime) {
@@ -439,8 +493,38 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
         this.staleTime,
       )
       if (cached !== undefined) {
-        this.logger?.debug('IgniterCaller.execute cache hit', {
+        this.telemetry?.emit(
+          IgniterCallerTelemetryEvents.get.key('cache.read.hit'),
+          {
+            level: 'debug',
+            attributes: {
+              'ctx.request.method': method,
+              'ctx.request.url': safeUrl,
+              'ctx.cache.key': effectiveCacheKey,
+              'ctx.cache.staleTime': this.staleTime,
+            },
+          },
+        )
+
+        const durationMs = Date.now() - startTime
+        this.telemetry?.emit(
+          IgniterCallerTelemetryEvents.get.key('request.execute.success'),
+          {
+            level: 'info',
+            attributes: {
+              'ctx.request.method': method,
+              'ctx.request.url': safeUrl,
+              'ctx.request.durationMs': durationMs,
+              'ctx.cache.hit': true,
+            },
+          },
+        )
+
+        this.logger?.info('IgniterCaller.request.execute success (cache)', {
           key: effectiveCacheKey,
+          method,
+          url: safeUrl,
+          durationMs,
         })
         const cachedResult: IgniterCallerApiResponse<TResponse> = {
           data: cached,
@@ -457,13 +541,33 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
 
     // Apply fallback if request failed
     if (result.error && this.fallbackFn) {
-      this.logger?.debug('IgniterCaller.execute applying fallback', {
+      this.logger?.debug('IgniterCaller.request.execute applying fallback', {
+        method,
+        url: safeUrl,
         error: result.error,
       })
       const fallbackResult: IgniterCallerApiResponse<TResponse> = {
         data: this.fallbackFn() as TResponse,
         error: undefined,
       }
+      const durationMs = Date.now() - startTime
+      this.telemetry?.emit(
+        IgniterCallerTelemetryEvents.get.key('request.execute.success'),
+        {
+          level: 'info',
+          attributes: {
+            'ctx.request.method': method,
+            'ctx.request.url': safeUrl,
+            'ctx.request.durationMs': durationMs,
+            'ctx.request.fallback': true,
+          },
+        },
+      )
+      this.logger?.info('IgniterCaller.request.execute success (fallback)', {
+        method,
+        url: safeUrl,
+        durationMs,
+      })
       await this.emitEvent(fallbackResult)
       return fallbackResult
     }
@@ -477,6 +581,55 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
       )
     }
 
+    const durationMs = Date.now() - startTime
+    if (result.error) {
+      this.telemetry?.emit(
+        IgniterCallerTelemetryEvents.get.key('request.execute.error'),
+        {
+          level: 'error',
+          attributes: {
+            'ctx.request.method': method,
+            'ctx.request.url': safeUrl,
+            'ctx.request.durationMs': durationMs,
+            'ctx.error.code':
+              result.error instanceof IgniterCallerError
+                ? result.error.code
+                : 'IGNITER_CALLER_UNKNOWN_ERROR',
+            'ctx.error.message': result.error.message,
+            'ctx.response.status': result.status,
+          },
+        },
+      )
+      this.logger?.error('IgniterCaller.request.execute failed', {
+        method,
+        url: safeUrl,
+        durationMs,
+        error: result.error,
+      })
+    } else {
+      const contentType = result.headers?.get('content-type') || undefined
+      this.telemetry?.emit(
+        IgniterCallerTelemetryEvents.get.key('request.execute.success'),
+        {
+          level: 'info',
+          attributes: {
+            'ctx.request.method': method,
+            'ctx.request.url': safeUrl,
+            'ctx.request.durationMs': durationMs,
+            'ctx.response.status': result.status,
+            'ctx.response.contentType': contentType,
+            'ctx.cache.hit': false,
+          },
+        },
+      )
+      this.logger?.info('IgniterCaller.request.execute success', {
+        method,
+        url: safeUrl,
+        durationMs,
+        status: result.status,
+      })
+    }
+
     // Emit event for response
     await this.emitEvent(result)
 
@@ -485,11 +638,13 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
 
   private async executeWithRetry(): Promise<IgniterCallerApiResponse<TResponse>> {
     const maxAttempts = this.retryOptions?.maxAttempts || 1
-    const baseDelay = this.retryOptions?.baseDelay || 1000
+    const baseDelay = this.retryOptions?.baseDelay ?? 1000
     const backoff = this.retryOptions?.backoff || 'linear'
     const retryOnStatus = this.retryOptions?.retryOnStatus || [
       408, 429, 500, 502, 503, 504,
     ]
+    const { safeUrl } = this.resolveUrl()
+    const method = this.options.method
 
     let lastError: Error | undefined
 
@@ -500,9 +655,24 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
             ? baseDelay * 2 ** (attempt - 1)
             : baseDelay * attempt
 
-        this.logger?.debug('IgniterCaller.execute retrying', {
-          attempt,
-          delay,
+        this.telemetry?.emit(
+          IgniterCallerTelemetryEvents.get.key('retry.attempt.started'),
+          {
+            level: 'debug',
+            attributes: {
+              'ctx.request.method': method,
+              'ctx.request.url': safeUrl,
+              'ctx.retry.attempt': attempt + 1,
+              'ctx.retry.maxAttempts': maxAttempts,
+              'ctx.retry.delayMs': delay,
+            },
+          },
+        )
+        this.logger?.debug('IgniterCaller.request.execute retrying', {
+          method,
+          url: safeUrl,
+          attempt: attempt + 1,
+          delayMs: delay,
         })
 
         await new Promise((resolve) => setTimeout(resolve, delay))
@@ -536,11 +706,8 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
 
   private async executeSingleRequest(): Promise<IgniterCallerApiResponse<TResponse>> {
     let { url, requestInit, controller, timeoutId } = this.buildRequest()
-
-    this.logger?.debug('IgniterCaller.execute started', {
-      method: this.options.method,
-      url,
-    })
+    const { safeUrl } = this.resolveUrl()
+    const method = this.options.method
 
     // Apply request interceptors
     if (this.requestInterceptors && this.requestInterceptors.length > 0) {
@@ -576,10 +743,28 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
           )
         } catch (error) {
           clearTimeout(timeoutId)
+          const err = error as IgniterCallerError
+          this.telemetry?.emit(
+            IgniterCallerTelemetryEvents.get.key('validation.request.error'),
+            {
+              level: 'error',
+              attributes: {
+                'ctx.request.method': method,
+                'ctx.request.url': safeUrl,
+                'ctx.validation.type': 'request',
+                'ctx.validation.error': err.message,
+              },
+            },
+          )
+          this.logger?.error('IgniterCaller.request.validation failed', {
+            method,
+            url: safeUrl,
+            error: err,
+          })
           // Validation failed in strict mode
           return {
             data: undefined,
-            error: error as IgniterCallerError,
+            error: err,
           }
         }
       }
@@ -649,9 +834,29 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
                 this.logger,
               )
             } catch (error) {
+              const err = error as IgniterCallerError
+              this.telemetry?.emit(
+                IgniterCallerTelemetryEvents.get.key('validation.response.error'),
+                {
+                  level: 'error',
+                  attributes: {
+                    'ctx.request.method': method,
+                    'ctx.request.url': safeUrl,
+                    'ctx.validation.type': 'response',
+                    'ctx.validation.error': err.message,
+                    'ctx.response.status': httpResponse.status,
+                  },
+                },
+              )
+              this.logger?.error('IgniterCaller.response.validation failed', {
+                method,
+                url: safeUrl,
+                status: httpResponse.status,
+                error: err,
+              })
               return {
                 data: undefined,
-                error: error as IgniterCallerError,
+                error: err,
                 status: httpResponse.status,
                 headers: httpResponse.headers,
               }
@@ -666,20 +871,40 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
             const zodSchema = this.responseTypeSchema as z.ZodSchema<any>
             const result = zodSchema.safeParse(data)
             if (!result.success) {
+              const err = new IgniterCallerError({
+                code: 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED',
+                operation: 'parseResponse',
+                message: `Response validation failed: ${result.error.message}`,
+                logger: this.logger,
+                statusCode: httpResponse.status,
+                metadata: {
+                  method: this.options.method,
+                  url,
+                },
+                cause: result.error,
+              })
+              this.telemetry?.emit(
+                IgniterCallerTelemetryEvents.get.key('validation.response.error'),
+                {
+                  level: 'error',
+                  attributes: {
+                    'ctx.request.method': method,
+                    'ctx.request.url': safeUrl,
+                    'ctx.validation.type': 'response',
+                    'ctx.validation.error': err.message,
+                    'ctx.response.status': httpResponse.status,
+                  },
+                },
+              )
+              this.logger?.error('IgniterCaller.response.validation failed', {
+                method,
+                url: safeUrl,
+                status: httpResponse.status,
+                error: err,
+              })
               return {
                 data: undefined,
-                error: new IgniterCallerError({
-                  code: 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED',
-                  operation: 'parseResponse',
-                  message: `Response validation failed: ${result.error.message}`,
-                  logger: this.logger,
-                  statusCode: httpResponse.status,
-                  metadata: {
-                    method: this.options.method,
-                    url,
-                  },
-                  cause: result.error,
-                }),
+                error: err,
                 status: httpResponse.status,
                 headers: httpResponse.headers,
               }
@@ -692,40 +917,80 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
               const standardSchema = this.responseTypeSchema as StandardSchemaV1
               const result = await standardSchema['~standard'].validate(data)
               if (result.issues) {
+                const err = new IgniterCallerError({
+                  code: 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED',
+                  operation: 'parseResponse',
+                  message: `Response validation failed`,
+                  logger: this.logger,
+                  statusCode: httpResponse.status,
+                  metadata: {
+                    method: this.options.method,
+                    url,
+                    issues: result.issues,
+                  },
+                })
+                this.telemetry?.emit(
+                  IgniterCallerTelemetryEvents.get.key('validation.response.error'),
+                  {
+                    level: 'error',
+                    attributes: {
+                      'ctx.request.method': method,
+                      'ctx.request.url': safeUrl,
+                      'ctx.validation.type': 'response',
+                      'ctx.validation.error': err.message,
+                      'ctx.response.status': httpResponse.status,
+                    },
+                  },
+                )
+                this.logger?.error('IgniterCaller.response.validation failed', {
+                  method,
+                  url: safeUrl,
+                  status: httpResponse.status,
+                  error: err,
+                })
                 return {
                   data: undefined,
-                  error: new IgniterCallerError({
-                    code: 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED',
-                    operation: 'parseResponse',
-                    message: `Response validation failed`,
-                    logger: this.logger,
-                    statusCode: httpResponse.status,
-                    metadata: {
-                      method: this.options.method,
-                      url,
-                      issues: result.issues,
-                    },
-                  }),
+                  error: err,
                   status: httpResponse.status,
                   headers: httpResponse.headers,
                 }
               }
               data = result.value
             } catch (error) {
+              const err = new IgniterCallerError({
+                code: 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED',
+                operation: 'parseResponse',
+                message: (error as Error)?.message || 'Response validation failed',
+                logger: this.logger,
+                statusCode: httpResponse.status,
+                metadata: {
+                  method: this.options.method,
+                  url,
+                },
+                cause: error instanceof Error ? error : undefined,
+              })
+              this.telemetry?.emit(
+                IgniterCallerTelemetryEvents.get.key('validation.response.error'),
+                {
+                  level: 'error',
+                  attributes: {
+                    'ctx.request.method': method,
+                    'ctx.request.url': safeUrl,
+                    'ctx.validation.type': 'response',
+                    'ctx.validation.error': err.message,
+                    'ctx.response.status': httpResponse.status,
+                  },
+                },
+              )
+              this.logger?.error('IgniterCaller.response.validation failed', {
+                method,
+                url: safeUrl,
+                status: httpResponse.status,
+                error: err,
+              })
               return {
                 data: undefined,
-                error: new IgniterCallerError({
-                  code: 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED',
-                  operation: 'parseResponse',
-                  message: (error as Error)?.message || 'Response validation failed',
-                  logger: this.logger,
-                  statusCode: httpResponse.status,
-                  metadata: {
-                    method: this.options.method,
-                    url,
-                  },
-                  cause: error,
-                }),
+                error: err,
                 status: httpResponse.status,
                 headers: httpResponse.headers,
               }
@@ -753,20 +1018,38 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
       clearTimeout(timeoutId)
 
       if (error instanceof Error && error.name === 'AbortError') {
+        const err = new IgniterCallerError({
+          code: 'IGNITER_CALLER_TIMEOUT',
+          operation: 'execute',
+          message: `Request timeout after ${this.options.timeout || 30000}ms`,
+          statusCode: 408,
+          logger: this.logger,
+          metadata: {
+            method: this.options.method,
+            url,
+          },
+          cause: error instanceof Error ? error : undefined,
+        })
+        this.telemetry?.emit(
+          IgniterCallerTelemetryEvents.get.key('request.timeout.error'),
+          {
+            level: 'error',
+            attributes: {
+              'ctx.request.method': method,
+              'ctx.request.url': safeUrl,
+              'ctx.request.timeoutMs': this.options.timeout || 30000,
+            },
+          },
+        )
+        this.logger?.error('IgniterCaller.request.execute timeout', {
+          method,
+          url: safeUrl,
+          timeoutMs: this.options.timeout || 30000,
+          error: err,
+        })
         return {
           data: undefined,
-          error: new IgniterCallerError({
-            code: 'IGNITER_CALLER_TIMEOUT',
-            operation: 'execute',
-            message: `Request timeout after ${this.options.timeout || 30000}ms`,
-            statusCode: 408,
-            logger: this.logger,
-            metadata: {
-              method: this.options.method,
-              url,
-            },
-            cause: error,
-          }),
+          error: err,
         }
       }
 
@@ -784,15 +1067,14 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
             method: this.options.method,
             url,
           },
-          cause: error,
+          cause: error instanceof Error ? error : undefined,
         }),
       }
     }
   }
 
-  private buildRequest() {
-    const { method, url, body, params, headers, timeout, baseURL, cache } =
-      this.options
+  private resolveUrl(): { url: string; safeUrl: string } {
+    const { method, url, body, params, baseURL } = this.options
 
     // For GET/HEAD requests, convert body to query params
     let finalParams = params
@@ -811,6 +1093,16 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
       baseURL,
       query: finalParams,
     })
+
+    return {
+      url: fullUrl,
+      safeUrl: fullUrl.split('?')[0],
+    }
+  }
+
+  private buildRequest() {
+    const { method, body, headers, timeout, cache } = this.options
+    const { url } = this.resolveUrl()
 
     // Only include body for non-GET/HEAD methods
     const shouldIncludeBody = body && method !== 'GET' && method !== 'HEAD'
@@ -833,7 +1125,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
     const timeoutId = setTimeout(() => controller.abort(), timeout || 30000)
 
     return {
-      url: fullUrl,
+      url,
       requestInit,
       controller,
       timeoutId,
@@ -856,24 +1148,3 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
     }
   }
 }
-
-/**
- * Request builder type without internal methods.
- * Used when creating requests via specific HTTP methods (get, post, etc.)
- */
-export type IgniterCallerMethodRequestBuilder<TResponse = unknown> = Omit<
-  IgniterCallerRequestBuilder<TResponse>,
-  '_setMethod' | '_setUrl'
->
-
-/**
- * Request builder with typed response based on schema inference.
- * Used when creating requests via HTTP methods with URL that matches a schema.
- *
- * This type ensures that the execute() method returns the correct response type
- * based on the schema map configuration.
- */
-export type IgniterCallerTypedRequestBuilder<TResponse = unknown> = Omit<
-  IgniterCallerRequestBuilder<TResponse>,
-  '_setMethod' | '_setUrl'
->

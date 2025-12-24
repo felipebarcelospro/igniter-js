@@ -1,19 +1,52 @@
-export * from './builder/igniter-caller.builder'
-export * from './builder/igniter-caller-request.builder'
-export * from './core/igniter-caller'
-export * from './core/igniter-caller-events'
-export * from './errors/igniter-caller.error'
-export * from './types/events'
-export * from './types/http'
-export * from './types/interceptors'
-export * from './types/request'
-export * from './types/response'
-export * from './types/retry'
-export * from './types/schemas'
-export * from './types/store'
-export * from './utils/body'
-export * from './utils/cache'
-export * from './utils/schema'
-export * from './utils/testing'
-export * from './utils/url'
+/**
+ * @fileoverview Main entry point for @igniter-js/caller
+ * @module @igniter-js/caller
+ */
 
+// =============================================================================
+// CORE EXPORTS
+// =============================================================================
+
+export * from "./core";
+export type * from "./core";
+
+// =============================================================================
+// BUILDER EXPORTS
+// =============================================================================
+
+export * from "./builders";
+export type * from "./builders";
+
+// =============================================================================
+// ADAPTER EXPORTS
+// =============================================================================
+
+export * from "./adapters";
+export type * from "./adapters";
+
+// =============================================================================
+// TELEMETRY EXPORTS
+// =============================================================================
+
+export * from "./telemetry";
+export type * from "./telemetry";
+
+// =============================================================================
+// ERROR EXPORTS
+// =============================================================================
+
+export * from "./errors";
+export type * from "./errors";
+
+// =============================================================================
+// UTIL EXPORTS
+// =============================================================================
+
+export * from "./utils";
+export type * from "./utils";
+
+// =============================================================================
+// TYPE EXPORTS
+// =============================================================================
+
+export type * from "./types";

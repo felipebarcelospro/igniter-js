@@ -83,6 +83,9 @@ export class IgniterCallerEvents {
 
   /**
    * Removes a specific listener or all listeners for a pattern.
+   *
+   * @param pattern - URL string or RegExp pattern.
+   * @param callback - Optional specific callback to remove.
    */
   off(pattern: IgniterCallerUrlPattern, callback?: IgniterCallerEventCallback): void {
     if (typeof pattern === 'string') {
@@ -104,6 +107,10 @@ export class IgniterCallerEvents {
    * Emits an event to all matching listeners.
    *
    * @internal
+   *
+   * @param url - Request URL to match listeners against.
+   * @param method - HTTP method.
+   * @param result - Response envelope.
    */
   async emit(url: string, method: string, result: any): Promise<void> {
     const context = {
@@ -140,6 +147,8 @@ export class IgniterCallerEvents {
 
   /**
    * Removes all listeners.
+   *
+   * @returns Nothing.
    */
   clear(): void {
     this.listeners.clear()

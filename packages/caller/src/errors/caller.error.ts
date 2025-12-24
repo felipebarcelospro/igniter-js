@@ -1,12 +1,20 @@
 import { IgniterError, type IgniterLogger } from '@igniter-js/core'
 
+/**
+ * Stable error codes emitted by `IgniterCaller`.
+ */
 export type IgniterCallerErrorCode =
   | 'IGNITER_CALLER_HTTP_ERROR'
   | 'IGNITER_CALLER_TIMEOUT'
   | 'IGNITER_CALLER_REQUEST_VALIDATION_FAILED'
   | 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED'
+  | 'IGNITER_CALLER_SCHEMA_DUPLICATE'
+  | 'IGNITER_CALLER_SCHEMA_INVALID'
   | 'IGNITER_CALLER_UNKNOWN_ERROR'
 
+/**
+ * Operation identifiers used to describe where an error happened.
+ */
 export type IgniterCallerOperation =
   | 'execute'
   | 'download'
@@ -14,6 +22,7 @@ export type IgniterCallerOperation =
   | 'parseResponse'
   | 'validateRequest'
   | 'validateResponse'
+  | 'buildSchema'
 
 /**
  * Payload used to create an {@link IgniterCallerError}.
@@ -34,7 +43,7 @@ export type IgniterCallerErrorPayload = {
   /** Arbitrary metadata for debugging. */
   metadata?: Record<string, unknown>
   /** Optional original cause. */
-  cause?: unknown
+  cause?: Error
   /** Optional logger used by IgniterError. */
   logger?: IgniterLogger
 }
@@ -45,11 +54,20 @@ export type IgniterCallerErrorPayload = {
  * Designed to be extracted into `@igniter-js/caller`.
  */
 export class IgniterCallerError extends IgniterError {
+  /** Machine-readable error code. */
   declare readonly code: IgniterCallerErrorCode
+  /** Operation that produced the error. */
   readonly operation: IgniterCallerOperation
+  /** Optional HTTP status text. */
   readonly statusText?: string
-  readonly cause?: unknown
+  /** Optional original error cause. */
+  readonly cause?: Error
 
+  /**
+   * Creates a new typed caller error.
+   *
+   * @param payload - Error payload with code, message, and metadata.
+   */
   constructor(payload: IgniterCallerErrorPayload) {
     const metadata = {
       ...payload.metadata,
@@ -69,6 +87,7 @@ export class IgniterCallerError extends IgniterError {
       details,
       metadata,
       logger: payload.logger,
+      cause: payload.cause,
     })
 
     this.name = 'IgniterCallerError'
@@ -77,8 +96,12 @@ export class IgniterCallerError extends IgniterError {
     this.cause = payload.cause
   }
 
+  /**
+   * Type guard for `IgniterCallerError`.
+   *
+   * @param error - Value to check.
+   */
   static is(error: unknown): error is IgniterCallerError {
     return error instanceof IgniterCallerError
   }
 }
-

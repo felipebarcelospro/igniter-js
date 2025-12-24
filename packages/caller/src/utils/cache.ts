@@ -25,6 +25,9 @@ export class IgniterCallerCacheUtils {
    *
    * When configured, cache operations will use the store (e.g., Redis)
    * instead of in-memory cache, enabling persistent cache across deployments.
+   *
+   * @param store - Store adapter implementation.
+   * @param options - Store options such as ttl and key prefix.
    */
   static setStore(
     store: IgniterCallerStoreAdapter,
@@ -41,6 +44,8 @@ export class IgniterCallerCacheUtils {
 
   /**
    * Gets the configured store adapter.
+   *
+   * @returns Store adapter or null when unset.
    */
   static getStore(): IgniterCallerStoreAdapter | null {
     return IgniterCallerCacheUtils.store
@@ -48,6 +53,10 @@ export class IgniterCallerCacheUtils {
 
   /**
    * Gets cached data if it exists and is not stale.
+   *
+   * @param key - Cache key (without prefix).
+   * @param staleTime - Optional stale time in milliseconds.
+   * @returns Cached value or undefined when missing/stale.
    */
   static async get<T>(key: string, staleTime?: number): Promise<T | undefined> {
     const prefixedKey = IgniterCallerCacheUtils.getPrefixedKey(key)
@@ -79,6 +88,10 @@ export class IgniterCallerCacheUtils {
 
   /**
    * Stores data in cache with current timestamp.
+   *
+   * @param key - Cache key (without prefix).
+   * @param data - Data to cache.
+   * @param ttl - Optional TTL override in seconds.
    */
   static async set(key: string, data: unknown, ttl?: number): Promise<void> {
     const prefixedKey = IgniterCallerCacheUtils.getPrefixedKey(key)
@@ -106,6 +119,8 @@ export class IgniterCallerCacheUtils {
 
   /**
    * Clears a specific cache entry.
+   *
+   * @param key - Cache key (without prefix).
    */
   static async clear(key: string): Promise<void> {
     const prefixedKey = IgniterCallerCacheUtils.getPrefixedKey(key)
@@ -150,6 +165,8 @@ export class IgniterCallerCacheUtils {
 
   /**
    * Clears all cache entries.
+   *
+   * @returns Promise that resolves when in-memory cache is cleared.
    */
   static async clearAll(): Promise<void> {
     IgniterCallerCacheUtils.cache.clear()

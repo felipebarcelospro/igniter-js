@@ -1,7 +1,7 @@
 import {
   IgniterCallerError,
   type IgniterCallerErrorCode,
-} from '../errors/igniter-caller.error'
+} from '../errors/caller.error'
 import type {
   IgniterCallerApiResponse,
   IgniterCallerFileResponse,
@@ -15,6 +15,8 @@ import type {
 export class IgniterCallerMock {
   /**
    * Creates a successful mock response.
+   *
+   * @param data - Mock response data.
    */
   static mockResponse<T>(data: T): IgniterCallerApiResponse<T> {
     return { data, error: undefined }
@@ -22,6 +24,9 @@ export class IgniterCallerMock {
 
   /**
    * Creates an error mock response.
+   *
+   * @param code - Error code to use.
+   * @param message - Optional error message.
    */
   static mockError<T = never>(
     code: IgniterCallerErrorCode,
@@ -39,6 +44,9 @@ export class IgniterCallerMock {
 
   /**
    * Creates a successful file download mock.
+   *
+   * @param filename - File name for the mock.
+   * @param content - File contents as string or Blob.
    */
   static mockFile(
     filename: string,
@@ -52,6 +60,8 @@ export class IgniterCallerMock {
 
   /**
    * Creates a failed file download mock.
+   *
+   * @param message - Optional error message.
    */
   static mockFileError(message = 'Mock file error'): IgniterCallerFileResponse {
     return {

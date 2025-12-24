@@ -1,5 +1,5 @@
 import type { IgniterLogger, StandardSchemaV1 } from '@igniter-js/core'
-import { IgniterCallerError } from '../errors/igniter-caller.error'
+import { IgniterCallerError } from '../errors/caller.error'
 import type {
   IgniterCallerEndpointSchema,
   IgniterCallerSchemaMap,
@@ -15,6 +15,10 @@ import type {
 export class IgniterCallerSchemaUtils {
   /**
    * Matches a URL path against schema map paths (supports path parameters).
+   *
+   * @param actualPath - Incoming request path.
+   * @param schemaPath - Schema path pattern.
+   * @returns Match result with params when matched.
    *
    * @example
    * ```ts
@@ -58,6 +62,11 @@ export class IgniterCallerSchemaUtils {
 
   /**
    * Finds the schema for a given path and method from the schema map.
+   *
+   * @param schemaMap - Schema map from the builder.
+   * @param path - Request path to match.
+   * @param method - HTTP method to match.
+   * @returns Matching schema and extracted params.
    */
   static findSchema(
     schemaMap: IgniterCallerSchemaMap | undefined,
@@ -96,6 +105,10 @@ export class IgniterCallerSchemaUtils {
    *
    * If the schema provides `~standard.validate`, it will be used.
    * Otherwise, returns the input as-is.
+   *
+   * @param schema - StandardSchema instance.
+   * @param input - Input value to validate.
+   * @returns Validated input value.
    */
   private static async validateWithStandardSchema<
     TSchema extends StandardSchemaV1,
@@ -133,7 +146,12 @@ export class IgniterCallerSchemaUtils {
   /**
    * Validates request body against schema.
    *
-   * @returns Validated data or throws/logs error based on validation mode
+   * @param data - Request body data.
+   * @param schema - Request schema (if any).
+   * @param options - Validation options.
+   * @param context - Request context for error reporting.
+   * @param logger - Optional logger instance.
+   * @returns Validated data or throws/logs error based on validation mode.
    */
   static async validateRequest<T>(
     data: unknown,
@@ -179,7 +197,13 @@ export class IgniterCallerSchemaUtils {
   /**
    * Validates response data against schema.
    *
-   * @returns Validated data or throws/logs error based on validation mode
+   * @param data - Response payload to validate.
+   * @param schema - Response schema (if any).
+   * @param statusCode - HTTP status code.
+   * @param options - Validation options.
+   * @param context - Request context for error reporting.
+   * @param logger - Optional logger instance.
+   * @returns Validated data or throws/logs error based on validation mode.
    */
   static async validateResponse<T>(
     data: unknown,

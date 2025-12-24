@@ -11,7 +11,9 @@
 
 import { describe, it, expect, expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { IgniterCaller } from './core/igniter-caller'
+import { IgniterCaller } from './main.builder'
+import { IgniterCallerManager } from '../core/manager'
+import type { IgniterCallerApiResponse } from '../types/response'
 
 // Define test schemas
 const UserSchema = z.object({
@@ -71,23 +73,44 @@ const api = IgniterCaller.create()
   .build()
 
 describe('IgniterCaller Type Inference', () => {
+  it('builds a manager instance', () => {
+    const builder = IgniterCaller.create().withBaseUrl('https://api.test')
+    const api = builder.build()
+    expect(api).toBeInstanceOf(IgniterCallerManager)
+  })
+
   it('should infer GET response type from schema', () => {
     // This is a compile-time check - the test passes if it compiles
     const builder = api.get('/users')
     expect(builder).toBeDefined()
     expect(typeof builder.execute).toBe('function')
+    type Response = Awaited<ReturnType<typeof builder.execute>>
+    expectTypeOf<Response>().toEqualTypeOf<IgniterCallerApiResponse<Array<{
+      id: string
+      name: string
+      email: string
+    }>>>()
   })
 
   it('should infer POST request body type from schema', () => {
     const builder = api.post('/users').body({ name: 'John', email: 'john@example.com' })
     expect(builder).toBeDefined()
     expect(typeof builder.execute).toBe('function')
+    type Response = Awaited<ReturnType<typeof builder.execute>>
+    expectTypeOf<Response>().toEqualTypeOf<IgniterCallerApiResponse<{
+      id: string
+      name: string
+      email: string
+    }>>()
   })
 
   it('should infer path params from URL pattern', () => {
     const builder = api.get('/users/:id').params({ id: '123' })
     expect(builder).toBeDefined()
     expect(typeof builder.execute).toBe('function')
+    expectTypeOf(builder.params)
+      .parameter(0)
+      .toEqualTypeOf<{ id: string } & Record<string, string | number | boolean>>()
   })
 
   it('should infer DELETE response type', () => {

@@ -1,6 +1,12 @@
+/**
+ * Body utilities for `IgniterCaller`.
+ */
 export class IgniterCallerBodyUtils {
   /**
    * Returns true when the request body should be passed to `fetch` as-is.
+   *
+   * @param body - Request body to inspect.
+   * @returns True if the body should be sent as raw data.
    */
   static isRawBody(body: unknown): boolean {
     if (!body) return false
@@ -29,6 +35,10 @@ export class IgniterCallerBodyUtils {
 
   /**
    * Removes Content-Type for FormData so fetch can set boundaries automatically.
+   *
+   * @param headers - Request headers map.
+   * @param body - Request body.
+   * @returns Updated headers without Content-Type when needed.
    */
   static normalizeHeadersForBody(
     headers: Record<string, string> | undefined,
