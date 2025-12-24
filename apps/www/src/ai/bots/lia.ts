@@ -10,8 +10,6 @@ export const bot = IgniterBot
   .withHandle('@igniterjs_bot')
   .addAdapter('telegram', telegram())
   .onMessage(async (ctx) => {
-    console.log('Message', ctx);
-
     // Show typing indicator while processing
     await ctx.sendTyping?.()
 

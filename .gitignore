@@ -11,7 +11,10 @@ lerna-debug.log*
 
 # Caches
 .cache
-.spec
+.specs/
+.spec/
+.github/lia/
+.cursor/
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
@@ -160,9 +163,7 @@ bun.lock
 .zed
 
 # IDE specific
-.vscode/settings.json
-.vscode/launch.json
-.vscode/tasks.json
+.vscode
 
 # OS specific
 Thumbs.db
