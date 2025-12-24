@@ -8,7 +8,7 @@ describe("IgniterAgentToolBuilder", () => {
   it("builds a named tool definition", () => {
     const tool = IgniterAgentToolBuilder.create("greet")
       .withDescription("Greets a user")
-      .withInputSchema(z.object({ name: z.string() }))
+      .withInput(z.object({ name: z.string() }))
       .withExecute(async ({ name }) => { return { greeting: `Hello, ${name}!` }; })
       .build();
 
@@ -20,8 +20,8 @@ describe("IgniterAgentToolBuilder", () => {
   it("adds a built tool into a toolset", () => {
     const tool = IgniterAgentTool.create("greet")
       .withDescription("Greets a user")
-      .withInputSchema(z.object({ name: z.string() }))
-      .withOutputSchema(z.object({ greeting: z.string() }))
+      .withInput(z.object({ name: z.string() }))
+      .withOutput(z.object({ greeting: z.string() }))
       .withExecute(async ({ name }) => ({ greeting: `Hello, ${name}!` }))
       .build();
 

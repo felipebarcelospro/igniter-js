@@ -15,7 +15,7 @@
  * const createIssue = IgniterAgentTool
  *   .create('createIssue')
  *   .withDescription('Creates a new issue in a GitHub repository')
- *   .withInputSchema(z.object({
+ *   .withInput(z.object({
  *     repo: z.string().describe('Repository name (owner/repo)'),
  *     title: z.string().describe('Issue title'),
  *     body: z.string().optional().describe('Issue body')
@@ -28,7 +28,7 @@
  * const listRepos = IgniterAgentTool
  *   .create('listRepos')
  *   .withDescription('Lists repositories for a user')
- *   .withInputSchema(z.object({
+ *   .withInputect({
  *     username: z.string().describe('GitHub username')
  *   }))
  *   .withExecute(async ({ username }) => {
@@ -89,7 +89,7 @@ import { IgniterAgentConfigError } from "../errors";
  * const getCurrent = IgniterAgentTool
  *   .create('getCurrent')
  *   .withDescription('Gets current weather for a location')
- *   .withInputSchema(z.object({
+ *   .withInputect({
  *     city: z.string(),
  *     units: z.enum(['celsius', 'fahrenheit']).default('celsius')
  *   }))
@@ -106,7 +106,7 @@ import { IgniterAgentConfigError } from "../errors";
  * const getForecast = IgniterAgentTool
  *   .create('getForecast')
  *   .withDescription('Gets 5-day weather forecast')
- *   .withInputSchema(z.object({
+ *   .withInputect({
  *     city: z.string(),
  *     days: z.number().min(1).max(7).default(5)
  *   }))
@@ -178,7 +178,7 @@ export class IgniterAgentToolsetBuilder<
  * const tool = IgniterAgentTool
  *   .create('doSomething')
  *   .withDescription('Does something')
- *   .withInputSchema(z.object({}))
+ *   .withInputect({}))
  *   .withExecute(async () => ({ ok: true }))
  *   .build();
  *
@@ -257,7 +257,7 @@ export class IgniterAgentToolsetBuilder<
    * ```typescript
    * const greetTool = IgniterAgentTool.create('greet')
    *   .withDescription('Greets a user')
-   *   .withInputSchema(z.object({ name: z.string() }))
+   *   .withInputect({ name: z.string() }))
    *   .withExecute(async ({ name }) => `Hello, ${name}!`)
    *   .build();
    *
@@ -445,7 +445,7 @@ export class IgniterAgentToolsetBuilder<
  * const sayHello = IgniterAgentTool
  *   .create('sayHello')
  *   .withDescription('Says hello')
- *   .withInputSchema(z.object({ name: z.string() }))
+ *   .withInputect({ name: z.string() }))
  *   .withExecute(async ({ name }) => `Hello, ${name}!`)
  *   .build();
  *

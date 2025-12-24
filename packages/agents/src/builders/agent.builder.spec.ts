@@ -10,7 +10,7 @@ const createToolset = () =>
     .addTool(
       IgniterAgentTool.create("echo")
         .withDescription("Echo")
-        .withInputSchema(z.object({ message: z.string() }))
+        .withInput(z.object({ message: z.string() }))
         .withExecute(async ({ message }) => message)
         .build(),
     )

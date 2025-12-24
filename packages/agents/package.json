@@ -70,35 +70,40 @@
     "url": "https://github.com/felipebarcelospro/igniter-js/issues"
   },
   "homepage": "https://igniterjs.com",
-  "dependencies": {},
   "devDependencies": {
+    "@ai-sdk/mcp": "^0.0.12",
     "@igniter-js/core": "*",
     "@igniter-js/telemetry": "*",
+    "@modelcontextprotocol/sdk": "^1.25.1",
     "@types/node": "^22.7.5",
+    "ai": "^6.0.3",
     "tsup": "^8.3.0",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.4",
-    "@ai-sdk/mcp": "^0.0.12",
-    "@modelcontextprotocol/sdk": "^1.25.1",
-    "ai": "^6.0.0-beta.164",
+    "vitest": "^4.0.16",
     "zod": "^4.2.1"
   },
   "peerDependencies": {
+    "@ai-sdk/mcp": "^0.0.12",
     "@igniter-js/core": ">=0.2.0",
     "@igniter-js/telemetry": ">=0.1.0",
-    "@ai-sdk/mcp": "^0.0.12",
     "@modelcontextprotocol/sdk": "^1.25.1",
-    "ai": "^6.0.0-beta.164",
+    "ai": "^6.0.3",
     "zod": "^4.2.1"
   },
   "peerDependenciesMeta": {
     "@igniter-js/telemetry": {
       "optional": true
     },
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
     "@ai-sdk/mcp": {
       "optional": true
     },
-    "@modelcontextprotocol/sdk": {
+    "ai": {
+      "optional": false
+    },
+    "zod": {
       "optional": true
     }
   },
@@ -106,6 +111,6 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   }
 }

@@ -477,11 +477,6 @@ export type IgniterAgentMCPClientInterface<
  * @internal
  */
 export interface IgniterAgentMCPStdioClientInterface<TName extends string> {
-  /** Set the configuration name */
-  withName<TNewName extends string>(
-    name: TNewName,
-  ): IgniterAgentMCPStdioClientInterface<TNewName>;
-
   /** Set the command to execute */
   withCommand(command: string): IgniterAgentMCPStdioClientInterface<TName>;
 

@@ -7,7 +7,7 @@ describe("IgniterAgentToolsetBuilder", () => {
   it("adds tools built with the tool builder", () => {
     const tool = IgniterAgentToolBuilder.create("echo")
       .withDescription("Echoes input")
-      .withInputSchema(z.object({ message: z.string() }))
+      .withInput(z.object({ message: z.string() }))
       .withExecute(async ({ message }) => ({ message }))
       .build();
 
@@ -22,7 +22,7 @@ describe("IgniterAgentToolsetBuilder", () => {
   it("renames toolsets", () => {
     const tool = IgniterAgentToolBuilder.create("ping")
       .withDescription("Ping")
-      .withInputSchema(z.object({}))
+      .withInput(z.object({})) 
       .withExecute(async () => "pong")
       .build();
 

@@ -27,7 +27,7 @@ export interface IgniterAgentHooks {
   /**
    * Fired when a tool call completes successfully.
    */
-  onToolCallComplete?: (
+  onToolCallEnd?: (
     agentName: string,
     toolName: string,
     output: unknown,

@@ -106,14 +106,14 @@ import type { IgniterAgentMemoryConfig } from "../types/memory";
  * const runCodeTool = IgniterAgentTool
  *   .create('runCode')
  *   .withDescription('Runs code')
- *   .withInputSchema(z.object({ code: z.string() }))
+ *   .withInput(z.object({ code: z.string() }))
  *   .withExecute(async ({ code }) => codeRunner(code))
  *   .build();
  *
  * const searchDocsTool = IgniterAgentTool
  *   .create('searchDocs')
  *   .withDescription('Searches docs')
- *   .withInputSchema(z.object({ query: z.string() }))
+ *   .withInput(z.object({ query: z.string() }))
  *   .withExecute(async ({ query }) => docSearcher(query))
  *   .build();
  *
@@ -473,7 +473,7 @@ export class IgniterAgentBuilder<
    * Callback when a tool call completes.
    */
   onToolCallEnd(
-    callback: IgniterAgentHooks["onToolCallComplete"],
+    callback: IgniterAgentHooks["onToolCallEnd"],
   ): IgniterAgentBuilder<
     TAgentName,
     TAgentModel,
@@ -486,7 +486,7 @@ export class IgniterAgentBuilder<
       ...this._config,
       hooks: {
         ...this._config.hooks,
-        onToolCallComplete: callback,
+        onToolCallEnd: callback,
       },
     });
   }

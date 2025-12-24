@@ -26,7 +26,7 @@ export class IgniterAgentManagerBuilder<
       onAgentStart: this._manager.onAgentStart,
       onAgentError: this._manager.onAgentError,
       onToolCallStart: this._manager.onToolCallStart,
-      onToolCallComplete: this._manager.onToolCallComplete,
+      onToolCallEnd: this._manager.onToolCallEnd,
       onToolCallError: this._manager.onToolCallError,
       onMCPStart: this._manager.onMCPStart,
       onMCPError: this._manager.onMCPError,
@@ -99,7 +99,7 @@ export class IgniterAgentManagerBuilder<
   ): IgniterAgentManagerBuilder<TAgentRegistry> {
     const manager = new IgniterAgentManagerBuilder({
       ...this._manager,
-      onToolCallComplete: callback
+      onToolCallEnd: callback
     });
 
     return manager as unknown as IgniterAgentManagerBuilder<TAgentRegistry>;

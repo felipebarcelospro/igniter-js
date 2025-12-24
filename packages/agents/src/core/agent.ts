@@ -124,7 +124,7 @@ export class IgniterAgentCore<
       onAgentStart: merge(this.hooks.onAgentStart, hooks.onAgentStart),
       onAgentError: merge(this.hooks.onAgentError, hooks.onAgentError),
       onToolCallStart: merge(this.hooks.onToolCallStart, hooks.onToolCallStart),
-      onToolCallComplete: merge(this.hooks.onToolCallComplete, hooks.onToolCallComplete),
+      onToolCallEnd: merge(this.hooks.onToolCallEnd, hooks.onToolCallEnd),
       onToolCallError: merge(this.hooks.onToolCallError, hooks.onToolCallError),
       onMCPStart: merge(this.hooks.onMCPStart, hooks.onMCPStart),
       onMCPError: merge(this.hooks.onMCPError, hooks.onMCPError),
@@ -531,7 +531,7 @@ export class IgniterAgentCore<
         try {
           const result = await execute(input as any, options as any);
           const durationMs = Date.now() - startTime;
-          this.hooks.onToolCallComplete?.(agentName, fullName, result);
+          this.hooks.onToolCallEnd?.(agentName, fullName, result);
           this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("tool.execute.success"), {
             level: "debug",
             attributes: {

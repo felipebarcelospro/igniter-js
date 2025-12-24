@@ -133,7 +133,7 @@ export class IgniterAgentManagerCore<
       onAgentStart: options.onAgentStart ?? (() => {}),
       onAgentError: options.onAgentError ?? (() => {}),
       onToolCallStart: options.onToolCallStart ?? (() => {}),
-      onToolCallComplete: options.onToolCallComplete ?? (() => {}),
+      onToolCallEnd: options.onToolCallEnd ?? (() => {}),
       onToolCallError: options.onToolCallError ?? (() => {}),
       onMCPStart: options.onMCPStart ?? (() => {}),
       onMCPError: options.onMCPError ?? (() => {}),
@@ -168,7 +168,7 @@ export class IgniterAgentManagerCore<
 
     agent.attachHooks?.({
       onToolCallStart: this._options.onToolCallStart,
-      onToolCallComplete: this._options.onToolCallComplete,
+      onToolCallEnd: this._options.onToolCallEnd,
       onToolCallError: this._options.onToolCallError,
       onMCPStart: this._options.onMCPStart,
       onMCPError: this._options.onMCPError,

@@ -15,7 +15,7 @@
  * const greetTool = IgniterAgentTool
  *   .create('greet')
  *   .withDescription('Greets a user by name')
- *   .withInputSchema(z.object({ name: z.string() }))
+ *   .withInput(z.object({ name: z.string() }))
  *   .withExecute(async ({ name }) => `Hello, ${name}!`)
  *   .build();
  * ```
@@ -150,7 +150,7 @@ export class IgniterAgentToolBuilder<
    *
    * @public
    */
-  withInputSchema<TNewParams>(
+  withInput<TNewParams>(
     inputSchema: z.ZodSchema<TNewParams>,
   ): IgniterAgentToolBuilder<TName, TNewParams, TOutputSchema> {
     if (!inputSchema) {
@@ -182,7 +182,7 @@ export class IgniterAgentToolBuilder<
    *
    * @public
    */
-  withOutputSchema<TNewResult>(
+  withOutput<TNewResult>(
     outputSchema: z.ZodSchema<TNewResult>,
   ): IgniterAgentToolBuilder<TName, TInputSchema, TNewResult> {
     if (!outputSchema) {

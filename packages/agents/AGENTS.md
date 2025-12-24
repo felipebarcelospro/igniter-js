@@ -156,7 +156,7 @@ Agent Execution Flow:
 5. Tool Execution Loop:
    - Hook: onToolCallStart
    - Tool validation and execution
-   - Hook: onToolCallComplete
+   - Hook: onToolCallEnd
    - Telemetry: tool.called event
 6. Memory: Persist conversation state
 7. Telemetry: agent.completed event
@@ -490,6 +490,135 @@ const agent = IgniterAgent.create("mcp-agent").withMCPClient(mcpClient).build();
 
 ---
 
+### 9.1 Memory Adapters Guide
+
+The @igniter-js/agents package provides multiple memory adapter implementations for different use cases:
+
+#### IgniterAgentInMemoryAdapter
+
+Simple, fast in-memory storage. Data is lost on process restart.
+
+**Best for:** Development, testing, short-lived applications, prototyping.
+
+```typescript
+import { IgniterAgentInMemoryAdapter } from "@igniter-js/agents/adapters";
+
+const adapter = IgniterAgentInMemoryAdapter.create({
+  namespace: "myapp",
+  maxMessages: 500,
+  maxChats: 50,
+});
+
+const agent = IgniterAgent.create("my-agent")
+  .withMemory(adapter)
+  .build();
+```
+
+#### IgniterAgentJSONFileAdapter
+
+File-based storage using JSON files. Data persists across process restarts.
+
+**Best for:** Single-machine deployments, development with persistence, offline-first apps, simple local storage.
+
+**Directory structure created:**
+```
+{dataDir}/
+  ├── working-memory.json     # All working memory entries
+  ├── chats.json              # All chat sessions
+  └── messages/
+      ├── {chatId}.json       # Messages for specific chat
+      └── ...
+```
+
+```typescript
+import { IgniterAgentJSONFileAdapter } from "@igniter-js/agents/adapters";
+
+// Create adapter (creates data directory automatically)
+const adapter = IgniterAgentJSONFileAdapter.create({
+  dataDir: "./data/agent-memory",
+  namespace: "myapp",
+  autoSync: true,  // Save to disk automatically
+  maxMessages: 1000,
+  maxChats: 100,
+});
+
+// Must connect before using
+await adapter.connect();
+
+// Use with agent
+const agent = IgniterAgent.create("my-agent")
+  .withMemory(adapter)
+  .build();
+
+// Generate conversation (auto-saves to JSON files)
+await agent.generate({
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+
+// Disconnect when done (syncs remaining data)
+await adapter.disconnect();
+```
+
+**Features:**
+- Automatic file synchronization (optional)
+- Working memory, chat sessions, and message history
+- Namespace support for multi-tenant apps
+- Debug logging
+- Data limit enforcement
+
+**Example with persistence across restarts:**
+
+```typescript
+import { IgniterAgentJSONFileAdapter } from "@igniter-js/agents/adapters";
+
+// First session - create and save data
+{
+  const adapter = IgniterAgentJSONFileAdapter.create({
+    dataDir: "./memory"
+  });
+  await adapter.connect();
+  
+  await adapter.updateWorkingMemory({
+    scope: 'chat',
+    identifier: 'chat_123',
+    content: 'User prefers concise responses'
+  });
+  
+  await adapter.saveChat({
+    chatId: 'chat_123',
+    userId: 'user_456',
+    title: 'TypeScript Questions',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    messageCount: 0
+  });
+  
+  await adapter.disconnect();
+}
+
+// Second session (different process) - data is loaded
+{
+  const adapter = IgniterAgentJSONFileAdapter.create({
+    dataDir: "./memory"
+  });
+  await adapter.connect();
+  
+  // Data from previous session is available
+  const memory = await adapter.getWorkingMemory({
+    scope: 'chat',
+    identifier: 'chat_123'
+  });
+  console.log(memory?.content); // "User prefers concise responses"
+  
+  const chat = await adapter.getChat('chat_123');
+  console.log(chat?.title); // "TypeScript Questions"
+  
+  await adapter.disconnect();
+}
+```
+
+---
+
 ### 10. Real-World Use Case Library
 
 #### Case A: Customer Support Chatbot (E-commerce)
@@ -662,7 +791,7 @@ const reviewAgent = IgniterAgent.create("code-reviewer")
   `,
   )
   .withMemory(MemoryAdapter.create())
-  .onToolCallComplete((result, context) => {
+  .onToolCallEnd((result, context) => {
     // Log review metrics
     console.log(`Review completed for PR #${context.prNumber}`);
   })
@@ -1080,7 +1209,7 @@ const tutorAgent = IgniterAgent.create("ai-tutor")
     const studentData = await loadStudentProfile(context.userId);
     context.studentProfile = studentData;
   })
-  .onToolCallComplete(async (result, context) => {
+  .onToolCallEnd(async (result, context) => {
     // Update learning analytics
     await updateLearningAnalytics(context.userId, result);
   })
@@ -1181,7 +1310,7 @@ const supportAgent = IgniterAgent.create("customer-support")
 | ✅ **Use typed tool schemas**         | Prevents runtime errors and ensures data consistency | `withInput(z.object({ id: z.string() }))`          |
 | ✅ **Implement memory persistence**   | Maintains context across interactions                | `withMemory(MemoryAdapter.create())`               |
 | ✅ **Add comprehensive telemetry**    | Enables observability and debugging                  | `withTelemetry(telemetryManager)`                  |
-| ✅ **Use agent hooks**                | Enables custom logic and monitoring                  | `onToolCallComplete(handler)`                      |
+| ✅ **Use agent hooks**                | Enables custom logic and monitoring                  | `onToolCallEnd(handler)`                      |
 | ✅ **Validate all inputs/outputs**    | Ensures data integrity                               | `withOutput(z.object({ result: z.string() }))`     |
 | ❌ **Don't overuse memory**           | Can impact performance and costs                     | Only store essential conversation data             |
 | ❌ **Don't create monolithic agents** | Harder to maintain and test                          | Use specialized agents with clear responsibilities |
@@ -2570,7 +2699,7 @@ const rateLimitedAgent = IgniterAgent.create("rate-limited-agent")
 | `onAgentComplete()`    | `(hook: AgentHook) => IgniterAgentBuilder`                    | Add complete hook           |
 | `onAgentError()`       | `(hook: AgentHook) => IgniterAgentBuilder`                    | Add error hook              |
 | `onToolCallStart()`    | `(hook: ToolHook) => IgniterAgentBuilder`                     | Add tool call start hook    |
-| `onToolCallComplete()` | `(hook: ToolHook) => IgniterAgentBuilder`                     | Add tool call complete hook |
+| `onToolCallEnd()` | `(hook: ToolHook) => IgniterAgentBuilder`                     | Add tool call complete hook |
 | `build()`              | `() => IgniterAgentCore`                                      | Build agent instance        |
 
 #### IgniterAgentCore

@@ -9,3 +9,6 @@
 
 export * from "./memory.adapter";
 export type * from "./memory.adapter";
+
+export * from "./json-file.adapter";
+export type * from "./json-file.adapter";
