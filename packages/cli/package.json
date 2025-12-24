@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/cli",
-  "version": "0.4.93",
+  "version": "0.4.94",
   "description": "The next-generation command-line interface for Igniter.js",
   "bin": {
     "igniter": "./dist/index.mjs"

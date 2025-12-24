@@ -1,14 +1,14 @@
-# @igniter-js/new-cli
+# @igniter-js/cli
 
 The official Igniter.js command-line interface for scaffolding projects, generating features, wiring add-ons, and keeping your API docs in sync. It is designed for a fast developer experience, type-safe defaults, and seamless automation.
 
 ## Highlights
 
-- 🚀 **Project bootstrapper** with interactive wizards, starter templates, and add-on setup (store, jobs, auth, bots, telemetry, MCP, database, Shadcn/UI).
-- 🛠️ **Code generators** for features, controllers, procedures, schemas, and OpenAPI specs, all backed by Handlebars templates.
-- 🧠 **Schema-aware workflow** with pluggable providers (Prisma out of the box) that produce strongly typed controllers, procedures, and interfaces.
-- 👀 **Development dashboard** powered by Ink that automatically regenerates schema/docs and streams app logs in a split view.
-- 🧩 **Template engine + registries** to extend starters, add-ons, and schema providers without touching the core.
+- **Project bootstrapper** with interactive wizards, starter templates, and add-on setup (store, jobs, auth, bots, telemetry, MCP, database, Shadcn/UI).
+- **Code generators** for features, controllers, procedures, schemas, and OpenAPI specs, all backed by Handlebars templates.
+- **Schema-aware workflow** with pluggable providers (Prisma out of the box) that produce strongly typed controllers, procedures, and interfaces.
+- **Development dashboard** powered by Ink that automatically regenerates schema/docs and streams app logs in a split view.
+- **Template engine + registries** to extend starters, add-ons, and schema providers without touching the core.
 
 ---
 
