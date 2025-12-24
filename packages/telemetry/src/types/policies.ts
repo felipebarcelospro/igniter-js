@@ -11,7 +11,7 @@
  *
  * @example
  * ```typescript
- * const redactionPolicy: TelemetryRedactionPolicy = {
+ * const redactionPolicy: IgniterTelemetryRedactionPolicy = {
  *   // Keys that will be completely removed from attributes
  *   denylistKeys: ['authorization', 'cookie', 'password', 'secret'],
  *
@@ -23,7 +23,7 @@
  * }
  * ```
  */
-export interface TelemetryRedactionPolicy {
+export interface IgniterTelemetryRedactionPolicy {
   /**
    * Keys that will be completely removed from attributes.
    * Case-insensitive matching is applied.
@@ -58,7 +58,7 @@ export interface TelemetryRedactionPolicy {
  *
  * @example
  * ```typescript
- * const samplingPolicy: TelemetrySamplingPolicy = {
+ * const samplingPolicy: IgniterTelemetrySamplingPolicy = {
  *   // Sample 1% of debug events
  *   debugRate: 0.01,
  *
@@ -77,7 +77,7 @@ export interface TelemetryRedactionPolicy {
  * }
  * ```
  */
-export interface TelemetrySamplingPolicy {
+export interface IgniterTelemetrySamplingPolicy {
   /**
    * Sampling rate for debug-level events (0.0 to 1.0).
    * @default 0.01 (1%)
@@ -122,7 +122,7 @@ export interface TelemetrySamplingPolicy {
 /**
  * Default redaction policy values.
  */
-export const DEFAULT_REDACTION_POLICY: Required<TelemetryRedactionPolicy> = {
+export const IGNITER_TELEMETRY_DEFAULT_REDACTION_POLICY: Required<IgniterTelemetryRedactionPolicy> = {
   denylistKeys: [],
   hashKeys: [],
   maxStringLength: 5000,
@@ -131,7 +131,7 @@ export const DEFAULT_REDACTION_POLICY: Required<TelemetryRedactionPolicy> = {
 /**
  * Default sampling policy values.
  */
-export const DEFAULT_SAMPLING_POLICY: Required<TelemetrySamplingPolicy> = {
+export const IGNITER_TELEMETRY_DEFAULT_SAMPLING_POLICY: Required<IgniterTelemetrySamplingPolicy> = {
   debugRate: 0.01,
   infoRate: 0.1,
   warnRate: 1.0,

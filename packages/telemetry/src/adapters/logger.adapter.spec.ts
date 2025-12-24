@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { LoggerTransportAdapter } from './logger.adapter'
-import type { TelemetryEnvelope } from '../types/envelope'
+import type { IgniterTelemetryEnvelope } from '../types/envelope'
 
 describe('LoggerTransportAdapter', () => {
   let consoleSpy: {
@@ -29,7 +29,7 @@ describe('LoggerTransportAdapter', () => {
     vi.restoreAllMocks()
   })
 
-  const createEnvelope = (overrides: Partial<TelemetryEnvelope> = {}): TelemetryEnvelope => ({
+  const createEnvelope = (overrides: Partial<IgniterTelemetryEnvelope> = {}): IgniterTelemetryEnvelope => ({
     name: 'test.event',
     time: '2025-01-01T00:00:00.000Z',
     level: 'info',

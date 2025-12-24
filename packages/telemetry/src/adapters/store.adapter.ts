@@ -28,12 +28,12 @@
  * ```
  */
 
-import type { IgniterTelemetryTransportAdapter, TelemetryTransportMeta } from '../types/transport'
-import type { TelemetryEnvelope } from '../types/envelope'
-import { IgniterTelemetryError } from '../errors/igniter-telemetry.error'
-import { IgniterStore } from '@igniter-js/store'
+import type { IgniterTelemetryTransportAdapter, IgniterTelemetryTransportMeta } from '../types/transport'
+import type { IgniterTelemetryEnvelope } from '../types/envelope'
+import { IgniterTelemetryError } from '../errors/telemetry.error'
+import { IgniterStore, type IgniterStoreManager } from '@igniter-js/store'
 import type Redis from 'ioredis'
-import { RedisStoreAdapter } from '@igniter-js/store/adapters'
+import { IgniterStoreRedisAdapter } from '@igniter-js/store/adapters'
 
 /**
  * Minimal store interface required by the adapter.
@@ -103,7 +103,7 @@ export interface StoreStreamTransportConfig {
    * streamBuilder: (envelope) => `telemetry:${envelope.service}:${envelope.level}`
    * ```
    */
-  streamBuilder?: (envelope: TelemetryEnvelope) => string
+  streamBuilder?: (envelope: IgniterTelemetryEnvelope) => string
 }
 
 /**
@@ -135,12 +135,12 @@ export interface StoreStreamTransportConfig {
 export class StoreStreamTransportAdapter implements IgniterTelemetryTransportAdapter {
   readonly type = 'store' as const
   private readonly config: Required<Omit<StoreStreamTransportConfig, 'streamBuilder'>> & Pick<StoreStreamTransportConfig, 'streamBuilder'>
-  private meta?: TelemetryTransportMeta
-  private store: IgniterStore
+  private meta?: IgniterTelemetryTransportMeta
+  private store: IgniterStoreManager
 
   private constructor(config: StoreStreamTransportConfig) {
     this.store = IgniterStore.create()
-      .withAdapter(RedisStoreAdapter.create({ redis: config.redis }))
+      .withAdapter(IgniterStoreRedisAdapter.create({ redis: config.redis }))
       .build()
 
     this.config = {
@@ -176,7 +176,7 @@ export class StoreStreamTransportAdapter implements IgniterTelemetryTransportAda
    *
    * @param meta - The service metadata
    */
-  init(meta: TelemetryTransportMeta): void {
+  init(meta: IgniterTelemetryTransportMeta): void {
     this.meta = meta
   }
 
@@ -185,7 +185,7 @@ export class StoreStreamTransportAdapter implements IgniterTelemetryTransportAda
    *
    * @param envelope - The telemetry envelope to store
    */
-  async handle(envelope: TelemetryEnvelope): Promise<void> {
+  async handle(envelope: IgniterTelemetryEnvelope): Promise<void> {
     try {
       // Determine stream name
       const stream = this.config.streamBuilder
@@ -213,7 +213,7 @@ export class StoreStreamTransportAdapter implements IgniterTelemetryTransportAda
   /**
    * Builds the stream data object from the envelope.
    */
-  private buildStreamData(envelope: TelemetryEnvelope): Record<string, unknown> {
+  private buildStreamData(envelope: IgniterTelemetryEnvelope): Record<string, unknown> {
     const data: Record<string, unknown> = {
       name: envelope.name,
       time: envelope.time,

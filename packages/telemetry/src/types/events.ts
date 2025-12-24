@@ -9,7 +9,7 @@ import type { StandardSchemaV1 } from '@igniter-js/core'
  * Base schema interface that supports both Zod and StandardSchemaV1 schemas.
  * This allows flexibility in schema libraries while maintaining type safety.
  */
-export interface TelemetryBaseSchema {
+export interface IgniterTelemetryBaseSchema {
   /** Parse method (Zod-style) */
   parse?: (value: unknown) => unknown
   /** Safe parse method (Zod-style) */
@@ -31,18 +31,18 @@ export interface TelemetryBaseSchema {
  * ```typescript
  * import { z } from 'zod'
  *
- * const schema: TelemetryEventSchema = z.object({
+ * const schema: IgniterTelemetryEventSchema = z.object({
  *   'ctx.user.id': z.string(),
  *   'ctx.user.email': z.string().email(),
  * })
  * ```
  */
-export type TelemetryEventSchema = StandardSchemaV1 | TelemetryBaseSchema
+export type IgniterTelemetryEventSchema = StandardSchemaV1 | IgniterTelemetryBaseSchema
 
 /**
  * Descriptor for a telemetry event containing schema and metadata.
  */
-export interface TelemetryEventDescriptor<TSchema extends TelemetryEventSchema = TelemetryEventSchema> {
+export interface IgniterTelemetryEventDescriptor<TSchema extends IgniterTelemetryEventSchema = IgniterTelemetryEventSchema> {
   /** The full event name (namespace.path) */
   readonly name: string
   /** The schema for validating event attributes */
@@ -55,7 +55,7 @@ export interface TelemetryEventDescriptor<TSchema extends TelemetryEventSchema =
  *
  * @example
  * ```typescript
- * const eventsMap: TelemetryEventsMap = {
+ * const eventsMap: IgniterTelemetryEventsMap = {
  *   'worker.started': z.object({ workerId: z.string() }),
  *   job: {
  *     start: z.object({ jobId: z.string() }),
@@ -64,16 +64,16 @@ export interface TelemetryEventDescriptor<TSchema extends TelemetryEventSchema =
  * }
  * ```
  */
-export type TelemetryEventsMap = {
-  [key: string]: TelemetryEventSchema | TelemetryEventsMap
+export type IgniterTelemetryEventsMap = {
+  [key: string]: IgniterTelemetryEventSchema | IgniterTelemetryEventsMap
 }
 
 /**
  * Registry of all events added via addEvents().
  * Maps namespace to their event maps.
  */
-export type TelemetryEventsRegistry = {
-  [namespace: string]: TelemetryEventsMap
+export type IgniterTelemetryEventsRegistry = {
+  [namespace: string]: IgniterTelemetryEventsMap
 }
 
 /**
@@ -87,18 +87,18 @@ export type TelemetryEventsRegistry = {
  *     start: z.ZodObject<...>,
  *   },
  * }
- * type Keys = TelemetryFlattenEventKeys<Events, 'igniter.jobs'>
+ * type Keys = IgniterTelemetryFlattenEventKeys<Events, 'igniter.jobs'>
  * // 'igniter.jobs.worker.started' | 'igniter.jobs.job.start'
  * ```
  */
-export type TelemetryFlattenEventKeys<T, Prefix extends string = ''> = T extends TelemetryEventsMap
+export type IgniterTelemetryFlattenEventKeys<T, Prefix extends string = ''> = T extends IgniterTelemetryEventsMap
   ? {
-      [K in keyof T]: T[K] extends TelemetryEventSchema
+      [K in keyof T]: T[K] extends IgniterTelemetryEventSchema
         ? Prefix extends ''
           ? K & string
           : `${Prefix}.${K & string}`
-        : T[K] extends TelemetryEventsMap
-          ? TelemetryFlattenEventKeys<
+        : T[K] extends IgniterTelemetryEventsMap
+          ? IgniterTelemetryFlattenEventKeys<
               T[K],
               Prefix extends '' ? K & string : `${Prefix}.${K & string}`
             >
@@ -109,15 +109,15 @@ export type TelemetryFlattenEventKeys<T, Prefix extends string = ''> = T extends
 /**
  * Flatten a full registry to get all event keys.
  */
-export type TelemetryFlattenRegistryKeys<TRegistry extends TelemetryEventsRegistry> = {
-  [K in keyof TRegistry]: TelemetryFlattenEventKeys<TRegistry[K], K & string>
+export type IgniterTelemetryFlattenRegistryKeys<TRegistry extends IgniterTelemetryEventsRegistry> = {
+  [K in keyof TRegistry]: IgniterTelemetryFlattenEventKeys<TRegistry[K], K & string>
 }[keyof TRegistry]
 
 /**
  * Get the schema type for a specific event key from a registry.
  */
-export type TelemetryGetEventSchema<
-  TRegistry extends TelemetryEventsRegistry,
+export type IgniterTelemetryGetEventSchema<
+  TRegistry extends IgniterTelemetryEventsRegistry,
   TKey extends string,
 > = TKey extends `${infer Namespace}.${infer Rest}`
   ? Namespace extends keyof TRegistry
@@ -125,14 +125,14 @@ export type TelemetryGetEventSchema<
     : never
   : never
 
-type GetNestedSchema<T extends TelemetryEventsMap, TKey extends string> =
+type GetNestedSchema<T extends IgniterTelemetryEventsMap, TKey extends string> =
   TKey extends keyof T
-    ? T[TKey] extends TelemetryEventSchema
+    ? T[TKey] extends IgniterTelemetryEventSchema
       ? T[TKey]
       : never
     : TKey extends `${infer First}.${infer Rest}`
       ? First extends keyof T
-        ? T[First] extends TelemetryEventsMap
+        ? T[First] extends IgniterTelemetryEventsMap
           ? GetNestedSchema<T[First], Rest>
           : never
         : never
@@ -141,7 +141,7 @@ type GetNestedSchema<T extends TelemetryEventsMap, TKey extends string> =
 /**
  * Infer the output type from a schema.
  */
-export type TelemetryInferEventSchema<T extends TelemetryEventSchema> =
+export type IgniterTelemetryInferEventSchema<T extends IgniterTelemetryEventSchema> =
   T extends StandardSchemaV1<infer _TInput, infer TOutput>
     ? TOutput
     : never
@@ -151,7 +151,7 @@ export type TelemetryInferEventSchema<T extends TelemetryEventSchema> =
  *
  * @example
  * ```typescript
- * const options: TelemetryEventsValidationOptions = {
+ * const options: IgniterTelemetryEventsValidationOptions = {
  *   // Only validate in development
  *   mode: process.env.NODE_ENV === 'development' ? 'development' : 'none',
  *
@@ -160,7 +160,7 @@ export type TelemetryInferEventSchema<T extends TelemetryEventSchema> =
  * }
  * ```
  */
-export interface TelemetryEventsValidationOptions {
+export interface IgniterTelemetryEventsValidationOptions {
   /**
    * Validation mode:
    * - `development`: Validate only when NODE_ENV !== 'production'
@@ -183,9 +183,24 @@ export interface TelemetryEventsValidationOptions {
 /**
  * Built descriptor from IgniterTelemetryEvents.build()
  */
-export interface TelemetryEventsDescriptor<TEvents extends TelemetryEventsMap = TelemetryEventsMap> {
+export interface IgniterTelemetryEventsDescriptor<TNamespace extends string, TEvents extends IgniterTelemetryEventsMap = IgniterTelemetryEventsMap> {
   /** The namespace for these events */
-  readonly namespace: string
+  readonly namespace: TNamespace
   /** The events map */
   readonly events: TEvents
+  /** The options */
+  readonly options?: IgniterTelemetryEventsValidationOptions
+  /** Helpers to get event keys and schemas */
+  readonly get: {
+    /** Get full event key by short key */
+    key: <TKey extends IgniterTelemetryFlattenEventKeys<TEvents>>(key: TKey) => `${TNamespace}.${TKey}`
+    /** Get event schema by short key */
+    schema: <TKey extends IgniterTelemetryFlattenEventKeys<TEvents>>(key: TKey) => GetNestedSchema<TEvents, TKey>
+  }
+  /** Type inference helper */
+  readonly $Infer: {
+    namespace: string
+    events: TEvents
+    keys: IgniterTelemetryFlattenEventKeys<TEvents>
+  }
 }

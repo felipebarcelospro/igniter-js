@@ -1,10 +1,9 @@
 {
   "extends": "../../tooling/typescript-config/base.json",
   "compilerOptions": {
-    "outDir": "./dist",
     "rootDir": "./src",
-    "declaration": true,
-    "declarationMap": true,
+    "declaration": false,
+    "declarationMap": false,
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]

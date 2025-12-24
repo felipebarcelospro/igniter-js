@@ -3,7 +3,14 @@
  * @module @igniter-js/telemetry/utils
  */
 
-export { IgniterTelemetryEvents, IgniterTelemetryEventsGroup } from './events'
-export { generateSessionId, generateSpanId, generateTraceId, isValidSessionId } from './id'
-export { createRedactor, createSyncRedactor, redactEnvelope } from './redaction'
-export { createSampler, matchesPattern, shouldSample } from './sampling'
+export * from './id'
+export type * from './id'
+
+export * from './redaction'
+export type * from './redaction'
+
+export * from './sampling'
+export type * from './sampling'
+
+export * from './validator'
+export type * from './validator'

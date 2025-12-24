@@ -1,27 +1,17 @@
 /**
- * @fileoverview Tests for IgniterTelemetry and IgniterTelemetryRuntime
+ * @fileoverview Tests for IgniterTelemetry and IgniterTelemetryManager
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { z } from 'zod'
-// Import igniter-telemetry first to register the runtime factory
-import { IgniterTelemetry, IgniterTelemetryRuntime } from './igniter-telemetry'
-import { IgniterTelemetryBuilder } from '../builders/igniter-telemetry.builder'
-import { IgniterTelemetryEvents } from '../utils/events'
+import { IgniterTelemetryManager } from './manager'
+import { IgniterTelemetryBuilder } from '../builders/main.builder'
+import { IgniterTelemetryEvents } from '../builders/event-registry.builder'
 import type { IgniterTelemetryTransportAdapter } from '../types/transport'
 import type { TelemetryEnvelope } from '../types/envelope'
 
-describe('IgniterTelemetry', () => {
-  describe('create()', () => {
-    it('should return a builder instance', () => {
-      const builder = IgniterTelemetry.create()
-      expect(builder).toBeInstanceOf(IgniterTelemetryBuilder)
-    })
-  })
-})
-
-describe('IgniterTelemetryRuntime', () => {
-  let runtime: IgniterTelemetryRuntime<any>
+describe('IgniterTelemetryManager', () => {
+  let runtime: IgniterTelemetryManager<any>
   let mockTransport: IgniterTelemetryTransportAdapter
   let handledEnvelopes: TelemetryEnvelope[]
 
@@ -54,7 +44,7 @@ describe('IgniterTelemetryRuntime', () => {
         warnRate: 1.0,
         errorRate: 1.0,
       })
-      .build() as IgniterTelemetryRuntime<any>
+      .build() as IgniterTelemetryManager<any>
   })
 
   afterEach(async () => {

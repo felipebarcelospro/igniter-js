@@ -8,4 +8,4 @@ export {
   IGNITER_TELEMETRY_ERROR_CODES,
   type IgniterTelemetryErrorCode,
   type IgniterTelemetryErrorPayload,
-} from './igniter-telemetry.error'
+} from './telemetry.error'

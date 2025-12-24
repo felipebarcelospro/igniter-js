@@ -3,7 +3,7 @@
  * @module @igniter-js/telemetry/types/transport
  */
 
-import type { TelemetryEnvelope } from './envelope'
+import type { IgniterTelemetryEnvelope } from "./envelope";
 
 /**
  * Built-in transport types for telemetry events.
@@ -18,34 +18,45 @@ import type { TelemetryEnvelope } from './envelope'
  * @example
  * ```typescript
  * // Built-in types
- * const loggerType: TelemetryTransportType = 'logger'
- * const storeType: TelemetryTransportType = 'store'
+ * const loggerType: IgniterTelemetryTransportType = 'logger'
+ * const storeType: IgniterTelemetryTransportType = 'store'
  *
  * // Custom type
- * const customType: TelemetryTransportType = 'datadog'
+ * const customType: IgniterTelemetryTransportType = 'datadog'
  * ```
  */
-export type TelemetryTransportType = 'logger' | 'store' | 'tracing' | 'errors' | (string & {})
+export type IgniterTelemetryTransportType =
+  | "logger"
+  | "store"
+  | "file"
+  | "http"
+  | "memory"
+  | "sentry"
+  | "slack"
+  | "discord"
+  | "telegram"
+  | "otlp"
+  | (string & {});
 
 /**
  * Metadata passed to transport adapters during initialization.
  *
  * @example
  * ```typescript
- * const meta: TelemetryTransportMeta = {
+ * const meta: IgniterTelemetryTransportMeta = {
  *   service: 'my-api',
  *   environment: 'production',
  *   version: '1.0.0',
  * }
  * ```
  */
-export interface TelemetryTransportMeta {
+export interface IgniterTelemetryTransportMeta {
   /** The service name */
-  service: string
+  service: string;
   /** The environment name */
-  environment: string
+  environment: string;
   /** Optional service version */
-  version?: string
+  version?: string;
 }
 
 /**
@@ -62,12 +73,12 @@ export interface TelemetryTransportMeta {
  * class MyCustomAdapter implements IgniterTelemetryTransportAdapter {
  *   readonly type = 'custom'
  *
- *   async init(meta: TelemetryTransportMeta): Promise<void> {
+ *   async init(meta: IgniterTelemetryTransportMeta): Promise<void> {
  *     // Initialize connection, validate config, etc.
  *     console.log(`Initializing custom adapter for ${meta.service}`)
  *   }
  *
- *   async handle(envelope: TelemetryEnvelope): Promise<void> {
+ *   async handle(envelope: IgniterTelemetryEnvelope): Promise<void> {
  *     // Send event to external system
  *     await sendToExternalSystem(envelope)
  *   }
@@ -89,7 +100,7 @@ export interface IgniterTelemetryTransportAdapter {
    * The transport type identifier.
    * Must be unique within a telemetry instance.
    */
-  readonly type: TelemetryTransportType
+  readonly type: IgniterTelemetryTransportType;
 
   /**
    * Optional initialization method called when the telemetry instance is built.
@@ -97,7 +108,7 @@ export interface IgniterTelemetryTransportAdapter {
    *
    * @param meta - Service metadata for the telemetry instance
    */
-  init?(meta: TelemetryTransportMeta): Promise<void> | void
+  init?(meta: IgniterTelemetryTransportMeta): Promise<void> | void;
 
   /**
    * Handle a telemetry event.
@@ -105,27 +116,29 @@ export interface IgniterTelemetryTransportAdapter {
    *
    * @param envelope - The processed telemetry envelope
    */
-  handle(envelope: TelemetryEnvelope): Promise<void> | void
+  handle(envelope: IgniterTelemetryEnvelope): Promise<void> | void;
 
   /**
    * Optional method to flush any buffered events.
    * Called when the telemetry instance is flushed.
    */
-  flush?(): Promise<void>
+  flush?(): Promise<void>;
 
   /**
    * Optional cleanup method called during shutdown.
    * Use this to close connections, flush remaining events, etc.
    */
-  shutdown?(): Promise<void>
+  shutdown?(): Promise<void>;
 }
 
 /**
  * Configuration for transport registration.
  */
-export interface TelemetryTransportConfig<T extends IgniterTelemetryTransportAdapter = IgniterTelemetryTransportAdapter> {
+export interface IgniterTelemetryTransportConfig<
+  T extends IgniterTelemetryTransportAdapter = IgniterTelemetryTransportAdapter,
+> {
   /** The transport type */
-  type: TelemetryTransportType
+  type: IgniterTelemetryTransportType;
   /** The transport adapter instance */
-  adapter: T
+  adapter: T;
 }

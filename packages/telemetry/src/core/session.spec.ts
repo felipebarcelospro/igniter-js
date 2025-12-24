@@ -3,15 +3,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import {
-  createSession,
-  getActiveSession,
-  runWithSession,
-  type IgniterTelemetrySession,
-  type TelemetrySessionState,
-} from './session'
+import { IgniterTelemetrySession } from './session'
+import type { IgniterTelemetrySessionState } from '../types/session'
 
-describe('Session Management', () => {
+describe('IgniterTelemetrySession', () => {
   // Mock emit function
   const mockEmit = vi.fn()
 
@@ -19,9 +14,9 @@ describe('Session Management', () => {
     mockEmit.mockClear()
   })
 
-  describe('createSession', () => {
+  describe('create()', () => {
     it('should create a session with unique ID', () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       const state = session.getState()
 
       expect(state.sessionId).toMatch(/^ses_/)
@@ -30,8 +25,8 @@ describe('Session Management', () => {
     })
 
     it('should create sessions with unique IDs', () => {
-      const session1 = createSession(mockEmit)
-      const session2 = createSession(mockEmit)
+      const session1 = IgniterTelemetrySession.create(mockEmit)
+      const session2 = IgniterTelemetrySession.create(mockEmit)
 
       expect(session1.getState().sessionId).not.toBe(session2.getState().sessionId)
     })
@@ -39,14 +34,14 @@ describe('Session Management', () => {
 
   describe('session.id()', () => {
     it('should allow setting custom session ID', () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       session.id('custom-session-id')
 
       expect(session.getState().sessionId).toBe('custom-session-id')
     })
 
     it('should be chainable', () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       const result = session.id('custom-id')
       expect(result).toBe(session)
     })
@@ -54,7 +49,7 @@ describe('Session Management', () => {
 
   describe('session.actor()', () => {
     it('should set actor information', () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       session.actor('user', 'usr_456')
 
       const state = session.getState()
@@ -63,7 +58,7 @@ describe('Session Management', () => {
     })
 
     it('should support tags', () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       session.actor('user', 'usr_456', { role: 'admin' })
 
       const state = session.getState()
@@ -71,7 +66,7 @@ describe('Session Management', () => {
     })
 
     it('should be chainable', () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       const result = session.actor('user', 'usr_123')
       expect(result).toBe(session)
     })
@@ -79,7 +74,7 @@ describe('Session Management', () => {
 
   describe('session.scope()', () => {
     it('should set scope information', () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       session.scope('organization', 'org_789')
 
       const state = session.getState()
@@ -88,7 +83,7 @@ describe('Session Management', () => {
     })
 
     it('should support tags', () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       session.scope('organization', 'org_789', { plan: 'enterprise' })
 
       const state = session.getState()
@@ -98,7 +93,7 @@ describe('Session Management', () => {
 
   describe('session.attributes()', () => {
     it('should set attributes', () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       session.attributes({ 'ctx.feature': 'checkout' })
 
       const state = session.getState()
@@ -106,7 +101,7 @@ describe('Session Management', () => {
     })
 
     it('should merge multiple attribute calls', () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       session.attributes({ 'ctx.feature': 'checkout' })
       session.attributes({ 'ctx.version': '2.0' })
 
@@ -118,7 +113,7 @@ describe('Session Management', () => {
 
   describe('session.emit()', () => {
     it('should call emit function with session state', () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       session.actor('user', 'usr_123')
 
       session.emit('user.login', { level: 'info', attributes: { 'ctx.user.id': 'usr_123' } })
@@ -136,7 +131,7 @@ describe('Session Management', () => {
 
   describe('session.end()', () => {
     it('should mark session as ended', async () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       expect(session.getState().ended).toBe(false)
 
       await session.end()
@@ -144,7 +139,7 @@ describe('Session Management', () => {
     })
 
     it('should prevent further modifications after end', async () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       await session.end()
 
       expect(() => session.actor('user', 'usr_123')).toThrow()
@@ -153,7 +148,7 @@ describe('Session Management', () => {
     })
 
     it('should prevent emit after end', async () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       await session.end()
 
       expect(() => session.emit('test', { level: 'info' })).toThrow()
@@ -162,7 +157,7 @@ describe('Session Management', () => {
 
   describe('session.run()', () => {
     it('should execute callback and return result', async () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
 
       const result = await session.run(async () => {
         return 42
@@ -171,21 +166,21 @@ describe('Session Management', () => {
       expect(result).toBe(42)
     })
 
-    it('should make session accessible via getActiveSession', async () => {
-      const session = createSession(mockEmit)
+    it('should make session accessible via getActive()', async () => {
+      const session = IgniterTelemetrySession.create(mockEmit)
       const sessionState = session.getState()
 
-      let capturedState: TelemetrySessionState | undefined
+      let capturedState: IgniterTelemetrySessionState | undefined
 
       await session.run(async () => {
-        capturedState = getActiveSession()
+        capturedState = IgniterTelemetrySession.getActive()
       })
 
       expect(capturedState?.sessionId).toBe(sessionState.sessionId)
     })
 
     it('should propagate errors', async () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
 
       await expect(
         session.run(async () => {
@@ -197,7 +192,7 @@ describe('Session Management', () => {
 
   describe('session.getState()', () => {
     it('should return copy of state', () => {
-      const session = createSession(mockEmit)
+      const session = IgniterTelemetrySession.create(mockEmit)
       const state1 = session.getState()
       const state2 = session.getState()
 
@@ -207,30 +202,30 @@ describe('Session Management', () => {
   })
 })
 
-describe('runWithSession', () => {
+describe('IgniterTelemetrySession.runWith()', () => {
   it('should make session state available in callback', async () => {
-    const state: TelemetrySessionState = {
+    const state: IgniterTelemetrySessionState = {
       sessionId: 'test-session',
       ended: false,
       startedAt: new Date().toISOString(),
     }
 
-    let capturedState: TelemetrySessionState | undefined
+    let capturedState: IgniterTelemetrySessionState | undefined
 
-    await runWithSession(state, async () => {
-      capturedState = getActiveSession()
+    await IgniterTelemetrySession.runWith(state, async () => {
+      capturedState = IgniterTelemetrySession.getActive()
     })
 
     expect(capturedState?.sessionId).toBe('test-session')
   })
 
   it('should isolate sessions between concurrent runs', async () => {
-    const state1: TelemetrySessionState = {
+    const state1: IgniterTelemetrySessionState = {
       sessionId: 'session-1',
       ended: false,
       startedAt: new Date().toISOString(),
     }
-    const state2: TelemetrySessionState = {
+    const state2: IgniterTelemetrySessionState = {
       sessionId: 'session-2',
       ended: false,
       startedAt: new Date().toISOString(),
@@ -239,13 +234,13 @@ describe('runWithSession', () => {
     const results: string[] = []
 
     await Promise.all([
-      runWithSession(state1, async () => {
+      IgniterTelemetrySession.runWith(state1, async () => {
         await new Promise((r) => setTimeout(r, 5))
-        const active = getActiveSession()
+        const active = IgniterTelemetrySession.getActive()
         results.push(`run1: ${active?.sessionId}`)
       }),
-      runWithSession(state2, async () => {
-        const active = getActiveSession()
+      IgniterTelemetrySession.runWith(state2, async () => {
+        const active = IgniterTelemetrySession.getActive()
         results.push(`run2: ${active?.sessionId}`)
       }),
     ])
@@ -256,13 +251,13 @@ describe('runWithSession', () => {
   })
 
   it('should return the callback result', async () => {
-    const state: TelemetrySessionState = {
+    const state: IgniterTelemetrySessionState = {
       sessionId: 'test',
       ended: false,
       startedAt: new Date().toISOString(),
     }
 
-    const result = await runWithSession(state, async () => {
+    const result = await IgniterTelemetrySession.runWith(state, async () => {
       return 'hello'
     })
 
@@ -270,8 +265,8 @@ describe('runWithSession', () => {
   })
 })
 
-describe('getActiveSession', () => {
+describe('IgniterTelemetrySession.getActive()', () => {
   it('should return undefined outside of session context', () => {
-    expect(getActiveSession()).toBeUndefined()
+    expect(IgniterTelemetrySession.getActive()).toBeUndefined()
   })
 })

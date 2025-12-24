@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { IgniterTelemetryError, IGNITER_TELEMETRY_ERROR_CODES } from './igniter-telemetry.error'
+import { IgniterTelemetryError, IGNITER_TELEMETRY_ERROR_CODES } from './telemetry.error'
 
 describe('IgniterTelemetryError', () => {
   describe('constructor', () => {

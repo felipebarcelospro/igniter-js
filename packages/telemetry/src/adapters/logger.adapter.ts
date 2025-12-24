@@ -17,9 +17,9 @@
  * ```
  */
 
-import type { IgniterTelemetryTransportAdapter, TelemetryTransportMeta } from '../types/transport'
-import type { TelemetryEnvelope } from '../types/envelope'
-import type { TelemetryLevel } from '../types/levels'
+import type { IgniterTelemetryTransportAdapter, IgniterTelemetryTransportMeta } from '../types/transport'
+import type { IgniterTelemetryEnvelope } from '../types/envelope'
+import type { IgniterTelemetryLevel } from '../types/levels'
 
 /**
  * Logger interface compatible with console and most logging libraries.
@@ -72,13 +72,13 @@ export interface LoggerTransportConfig {
    *
    * @default 'debug'
    */
-  minLevel?: TelemetryLevel
+  minLevel?: IgniterTelemetryLevel
 }
 
 /**
  * Level priority for filtering.
  */
-const LEVEL_PRIORITY: Record<TelemetryLevel, number> = {
+const LEVEL_PRIORITY: Record<IgniterTelemetryLevel, number> = {
   debug: 0,
   info: 1,
   warn: 2,
@@ -112,7 +112,7 @@ const LEVEL_PRIORITY: Record<TelemetryLevel, number> = {
 export class LoggerTransportAdapter implements IgniterTelemetryTransportAdapter {
   readonly type = 'logger' as const
   private readonly config: Required<LoggerTransportConfig>
-  private meta?: TelemetryTransportMeta
+  private meta?: IgniterTelemetryTransportMeta
 
   private constructor(config: LoggerTransportConfig) {
     this.config = {
@@ -143,7 +143,7 @@ export class LoggerTransportAdapter implements IgniterTelemetryTransportAdapter 
    *
    * @param meta - The service metadata
    */
-  init(meta: TelemetryTransportMeta): void {
+  init(meta: IgniterTelemetryTransportMeta): void {
     this.meta = meta
   }
 
@@ -152,7 +152,7 @@ export class LoggerTransportAdapter implements IgniterTelemetryTransportAdapter 
    *
    * @param envelope - The telemetry envelope to log
    */
-  handle(envelope: TelemetryEnvelope): void {
+  handle(envelope: IgniterTelemetryEnvelope): void {
     // Check level filter
     const eventPriority = LEVEL_PRIORITY[envelope.level]
     const minPriority = LEVEL_PRIORITY[this.config.minLevel]
@@ -184,7 +184,7 @@ export class LoggerTransportAdapter implements IgniterTelemetryTransportAdapter 
   /**
    * Formats the envelope for output.
    */
-  private formatOutput(envelope: TelemetryEnvelope): string | object {
+  private formatOutput(envelope: IgniterTelemetryEnvelope): string | object {
     if (this.config.format === 'json') {
       return JSON.stringify(this.buildLogObject(envelope))
     }
@@ -195,7 +195,7 @@ export class LoggerTransportAdapter implements IgniterTelemetryTransportAdapter 
   /**
    * Builds the log object for JSON output.
    */
-  private buildLogObject(envelope: TelemetryEnvelope): object {
+  private buildLogObject(envelope: IgniterTelemetryEnvelope): object {
     const obj: Record<string, unknown> = {
       name: envelope.name,
       level: envelope.level,
@@ -262,7 +262,7 @@ export class LoggerTransportAdapter implements IgniterTelemetryTransportAdapter 
   /**
    * Formats the envelope for pretty output.
    */
-  private formatPretty(envelope: TelemetryEnvelope): string {
+  private formatPretty(envelope: IgniterTelemetryEnvelope): string {
     const parts: string[] = []
 
     // Level and name

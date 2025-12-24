@@ -5,6 +5,9 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.spec.ts'],
+    alias: {
+      '@': './src',
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

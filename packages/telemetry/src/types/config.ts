@@ -4,8 +4,8 @@
  */
 
 import type { IgniterLogger } from '@igniter-js/core'
-import type { TelemetryEventsRegistry, TelemetryEventsValidationOptions } from './events'
-import type { TelemetryRedactionPolicy, TelemetrySamplingPolicy } from './policies'
+import type { IgniterTelemetryEventsRegistry, IgniterTelemetryEventsValidationOptions } from './events'
+import type { IgniterTelemetryRedactionPolicy, IgniterTelemetrySamplingPolicy } from './policies'
 import type { IgniterTelemetryTransportAdapter } from './transport'
 
 /**
@@ -13,13 +13,13 @@ import type { IgniterTelemetryTransportAdapter } from './transport'
  *
  * @example
  * ```typescript
- * const options: TelemetryActorOptions = {
+ * const options: IgniterTelemetryActorOptions = {
  *   description: 'Human user of the application',
  *   required: false,
  * }
  * ```
  */
-export interface TelemetryActorOptions {
+export interface IgniterTelemetryActorOptions {
   /** Description of this actor type */
   description?: string
   /** Whether this actor is required for all events */
@@ -31,13 +31,13 @@ export interface TelemetryActorOptions {
  *
  * @example
  * ```typescript
- * const options: TelemetryScopeOptions = {
+ * const options: IgniterTelemetryScopeOptions = {
  *   description: 'Organization-level tenant isolation',
  *   required: true,
  * }
  * ```
  */
-export interface TelemetryScopeOptions {
+export interface IgniterTelemetryScopeOptions {
   /** Description of this scope type */
   description?: string
   /** Whether this scope is required for all events */
@@ -47,8 +47,8 @@ export interface TelemetryScopeOptions {
 /**
  * Internal configuration for the telemetry instance.
  */
-export interface TelemetryConfig<
-  TRegistry extends TelemetryEventsRegistry = TelemetryEventsRegistry,
+export interface IgniterTelemetryConfig<
+  TRegistry extends IgniterTelemetryEventsRegistry = IgniterTelemetryEventsRegistry,
   TScopes extends string = never,
   TActors extends string = never,
 > {
@@ -61,17 +61,17 @@ export interface TelemetryConfig<
   /** Events registry */
   eventsRegistry: TRegistry
   /** Events validation options */
-  eventsValidation: TelemetryEventsValidationOptions
+  eventsValidation: IgniterTelemetryEventsValidationOptions
   /** Registered transports */
   transports: Map<string, IgniterTelemetryTransportAdapter>
   /** Scope definitions */
-  scopeDefinitions: Record<string, TelemetryScopeOptions>
+  scopeDefinitions: Record<string, IgniterTelemetryScopeOptions>
   /** Actor definitions */
-  actorDefinitions: Record<string, TelemetryActorOptions>
+  actorDefinitions: Record<string, IgniterTelemetryActorOptions>
   /** Sampling policy */
-  sampling: Required<TelemetrySamplingPolicy>
+  sampling: Required<IgniterTelemetrySamplingPolicy>
   /** Redaction policy */
-  redaction: Required<TelemetryRedactionPolicy>
+  redaction: Required<IgniterTelemetryRedactionPolicy>
   /** Logger instance */
   logger?: IgniterLogger
 }

@@ -14,19 +14,19 @@
  *
  * @example
  * ```typescript
- * const level: TelemetryLevel = 'info'
+ * const level: IgniterTelemetryLevel = 'info'
  *
  * // Use in emit
  * telemetry.emit('user.login', { level: 'info', attributes: { userId: '123' } })
  * ```
  */
-export type TelemetryLevel = 'debug' | 'info' | 'warn' | 'error'
+export type IgniterTelemetryLevel = 'debug' | 'info' | 'warn' | 'error'
 
 /**
  * Numeric priority for telemetry levels.
  * Higher values indicate more severe levels.
  */
-export const TELEMETRY_LEVEL_PRIORITY: Record<TelemetryLevel, number> = {
+export const IGNITER_TELEMETRY_LEVEL_PRIORITY: Record<IgniterTelemetryLevel, number> = {
   debug: 0,
   info: 1,
   warn: 2,
@@ -36,20 +36,20 @@ export const TELEMETRY_LEVEL_PRIORITY: Record<TelemetryLevel, number> = {
 /**
  * All telemetry levels as an array (ordered by severity).
  */
-export const TELEMETRY_LEVELS: readonly TelemetryLevel[] = ['debug', 'info', 'warn', 'error'] as const
+export const IGNITER_TELEMETRY_LEVELS: readonly IgniterTelemetryLevel[] = ['debug', 'info', 'warn', 'error'] as const
 
 /**
  * Check if a value is a valid telemetry level.
  *
  * @param value - The value to check
- * @returns True if the value is a valid TelemetryLevel
+ * @returns True if the value is a valid IgniterTelemetryLevel
  *
  * @example
  * ```typescript
- * isTelemetryLevel('info') // true
- * isTelemetryLevel('trace') // false
+ * isIgniterTelemetryLevel('info') // true
+ * isIgniterTelemetryLevel('trace') // false
  * ```
  */
-export function isTelemetryLevel(value: unknown): value is TelemetryLevel {
-  return typeof value === 'string' && TELEMETRY_LEVELS.includes(value as TelemetryLevel)
+export function isIgniterTelemetryLevel(value: unknown): value is IgniterTelemetryLevel {
+  return typeof value === 'string' && IGNITER_TELEMETRY_LEVELS.includes(value as IgniterTelemetryLevel)
 }

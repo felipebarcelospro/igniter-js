@@ -7,11 +7,11 @@ A type-safe, session-based telemetry system for Igniter.js with generic envelope
 - 📊 **Generic Envelope** - Standardized event structure for logs, traces, errors, and domain events
 - 🎯 **Type-Safe Events** - Full TypeScript inference with typed event registry
 - 🔄 **Session Management** - Three DX modes with AsyncLocalStorage for request isolation
-- 🚚 **Multi-Transport** - Pluggable transport adapters (logger, store streams, etc.)
+- 🚚 **Multi-Transport** - Pluggable transport adapters (Sentry, OTLP, Slack, Discord, etc.)
 - 🔒 **Redaction Pipeline** - PII/sensitive data protection
 - 📉 **Sampling** - Configurable sampling rates per log level
 - ✅ **Schema Validation** - Optional Zod schema validation for payloads
-- 🏗️ ** API** - Fluent, type-accumulating configuration
+- 🏗️ **Fluent API** - Fluent, type-accumulating configuration
 
 ## Installation
 
@@ -19,292 +19,226 @@ A type-safe, session-based telemetry system for Igniter.js with generic envelope
 npm install @igniter-js/telemetry
 # or
 pnpm add @igniter-js/telemetry
-# or
-yarn add @igniter-js/telemetry
-# or
-bun add @igniter-js/telemetry
 ```
 
 ## Quick Start
 
 ```typescript
-import { IgniterTelemetry, LoggerTransportAdapter } from '@igniter-js/telemetry'
+import {
+  IgniterTelemetry,
+  LoggerTransportAdapter,
+} from "@igniter-js/telemetry";
 
 // Create the telemetry instance
 const telemetry = IgniterTelemetry.create()
-  .withService('my-api')
-  .withEnvironment(process.env.NODE_ENV ?? 'development')
-  .addTransport('logger', LoggerTransportAdapter.create())
-  .build()
+  .withService("my-api")
+  .withEnvironment(process.env.NODE_ENV ?? "development")
+  .addTransport("logger", LoggerTransportAdapter.create({ format: "pretty" }))
+  .build();
 
 // Emit events
-telemetry.emit('app.started', { port: 3000 })
+telemetry.emit("app.started", { attributes: { port: 3000 } });
 ```
 
-## API Reference
+## Transport Adapters
 
-### Configuration
+The library comes with several built-in transport adapters. You can use multiple transports simultaneously.
+
+### 1. Console Logger (Default)
+
+Useful for development and debugging.
 
 ```typescript
-import { IgniterTelemetry, LoggerTransportAdapter } from '@igniter-js/telemetry'
+import { LoggerTransportAdapter } from "@igniter-js/telemetry";
 
+const logger = LoggerTransportAdapter.create({
+  format: "pretty", // 'pretty' | 'json'
+  minLevel: "debug",
+});
+```
+
+### 2. Sentry (Error Monitoring)
+
+Captures errors and adds breadcrumbs for other events.
+
+```typescript
+import * as Sentry from "@sentry/node";
+import { SentryTransportAdapter } from "@igniter-js/telemetry";
+
+// Initialize Sentry as usual
+Sentry.init({ dsn: "..." });
+
+const sentryTransport = SentryTransportAdapter.create({
+  sentry: Sentry,
+});
+```
+
+### 3. OpenTelemetry (OTLP)
+
+Sends events to OTLP-compatible collectors (Jaeger, Honeycomb, Datadog, etc.) via HTTP/JSON.
+
+```typescript
+import { OtlpTransportAdapter } from "@igniter-js/telemetry";
+
+const otlp = OtlpTransportAdapter.create({
+  // URL for OTLP Logs ingestion
+  url: "http://localhost:4318/v1/logs",
+  headers: {
+    "x-api-key": process.env.OTEL_API_KEY,
+  },
+});
+```
+
+### 4. Slack / Discord / Telegram (Notifications)
+
+Great for alerting on critical errors or business events.
+
+```typescript
+import {
+  SlackTransportAdapter,
+  DiscordTransportAdapter,
+  TelegramTransportAdapter,
+} from "@igniter-js/telemetry";
+
+// Slack
+const slack = SlackTransportAdapter.create({
+  webhookUrl: process.env.SLACK_WEBHOOK_URL,
+  minLevel: "error", // Only send errors
+  username: "My Bot",
+});
+
+// Discord
+const discord = DiscordTransportAdapter.create({
+  webhookUrl: process.env.DISCORD_WEBHOOK_URL,
+  minLevel: "warn",
+});
+
+// Telegram
+const telegram = TelegramTransportAdapter.create({
+  botToken: process.env.TELEGRAM_TOKEN,
+  chatId: process.env.TELEGRAM_CHAT_ID,
+});
+```
+
+### 5. File System
+
+Writes events to a local file (NDJSON format).
+
+```typescript
+import { FileTransportAdapter } from "@igniter-js/telemetry";
+
+const file = FileTransportAdapter.create({
+  path: "./logs/telemetry.log",
+});
+```
+
+### 6. Generic HTTP
+
+Sends events to any HTTP endpoint (e.g., Zapier, n8n, custom backend).
+
+```typescript
+import { HttpTransportAdapter } from "@igniter-js/telemetry";
+
+const http = HttpTransportAdapter.create({
+  url: "https://webhook.site/...",
+  headers: { Authorization: "Bearer ..." },
+  timeout: 5000,
+});
+```
+
+### 7. In-Memory (Testing)
+
+Stores events in an array. Useful for unit tests.
+
+```typescript
+import { InMemoryTransportAdapter } from "@igniter-js/telemetry";
+
+const memory = InMemoryTransportAdapter.create();
+
+// Access events later
+const events = memory.getEvents();
+```
+
+## Advanced Usage
+
+### Full Configuration Example
+
+```typescript
 const telemetry = IgniterTelemetry.create()
-  // Required: Service name (identifies your application)
-  .withService('my-api')
-  
-  // Optional: Environment (default: 'development')
-  .withEnvironment('production')
-  
-  // Required: At least one transport adapter
-  .addTransport('logger', LoggerTransportAdapter.create())
-  
-  // Optional: Typed event groups (see Event Registry section)
-  .addEventGroup(myEventGroup)
-  
-  // Optional: Redaction policy for sensitive data
+  .withService("payment-service")
+  .withEnvironment("production")
+  // 1. Log everything to console in JSON
+  .addTransport("console", LoggerTransportAdapter.create({ format: "json" }))
+  // 2. Send errors to Sentry
+  .addTransport("sentry", SentryTransportAdapter.create({ sentry: Sentry }))
+  // 3. Alert critical failures to Slack
+  .addTransport(
+    "slack",
+    SlackTransportAdapter.create({
+      webhookUrl: process.env.SLACK_URL,
+      minLevel: "error",
+    }),
+  )
+  // 4. Archive all events to OTLP collector
+  .addTransport(
+    "otlp",
+    OtlpTransportAdapter.create({
+      url: "http://otel-collector:4318/v1/logs",
+    }),
+  )
+  .build();
+```
+
+### Redaction
+
+Protect sensitive data in event payloads.
+
+```typescript
+const telemetry = IgniterTelemetry.create()
   .withRedaction({
     enabled: true,
-    fields: ['password', 'token', 'secret', 'apiKey'],
-    patterns: [/credit_card/i],
-    replacement: '[REDACTED]',
+    // Field names to redact (case-insensitive, deep)
+    fields: ["password", "token", "secret", "apiKey", "creditCard"],
+    // Regex patterns to match field names
+    patterns: [/auth.*token/i, /api[-_]?key/i],
+    // Replacement string (default: '[REDACTED]')
+    replacement: "***",
   })
-  
-  // Optional: Sampling rates per log level (0.0 to 1.0)
-  .withSampling({
-    debugRate: 0.1,   // 10% of debug events
-    infoRate: 0.5,    // 50% of info events
-    warnRate: 1.0,    // 100% of warnings
-    errorRate: 1.0,   // 100% of errors
-  })
-  
-  // Optional: Schema validation mode
-  .withValidation({
-    mode: 'development',  // 'always' | 'development' | 'never'
-  })
-  
-  .build()
+  .build();
 ```
 
-### Emitting Events
-
-```typescript
-// Basic emit with auto-generated sessionId
-telemetry.emit('user.login', {
-  userId: 'user_123',
-  method: 'password',
-})
-
-// Emit with explicit level
-telemetry.emit('payment.failed', {
-  orderId: 'order_456',
-  reason: 'insufficient_funds',
-}, {
-  level: 'error',
-})
-
-// Emit with metadata
-telemetry.emit('api.request', {
-  method: 'GET',
-  path: '/users',
-}, {
-  level: 'info',
-  metadata: {
-    traceId: 'trace_789',
-    spanId: 'span_abc',
-  },
-})
-```
-
-### Session Management
+## Session Management
 
 The telemetry provides three modes for session context:
 
-#### Mode 1: Direct Emit (Implicit Session)
+### Mode 1: Direct Emit (Implicit Session)
 
 ```typescript
 // Each emit gets its own sessionId
-telemetry.emit('event.one', { data: 'value' })
-telemetry.emit('event.two', { data: 'value' })
-// These events have different sessionIds
+telemetry.emit("event.one", { attributes: { data: "value" } });
 ```
 
-#### Mode 2: Manual Session Handle
+### Mode 2: Manual Session Handle
 
 ```typescript
 // Create a session and use it explicitly
-const session = telemetry.session()
+const session = telemetry.session();
+session.actor("user", "usr_123");
 
-session.emit('event.one', { data: 'value' })
-session.emit('event.two', { data: 'value' })
-// These events share the same sessionId
+session.emit("event.one", { attributes: { data: "value" } });
+// These events share the same sessionId and actor
 ```
 
-#### Mode 3: Scoped Execution (Recommended)
+### Mode 3: Scoped Execution (Recommended)
 
 ```typescript
 // Run code within a session scope
 await telemetry.session().run(async () => {
   // All emits in this scope share the same sessionId
-  telemetry.emit('request.started', { path: '/api/users' })
-  
-  const users = await fetchUsers()
-  
-  telemetry.emit('request.completed', { 
-    path: '/api/users',
-    count: users.length,
-  })
-})
-```
+  telemetry.emit("request.started", { attributes: { path: "/api/users" } });
 
-### Typed Event Registry
-
-Use `IgniterTelemetryEvents` to define type-safe event schemas with full TypeScript inference:
-
-```typescript
-import { IgniterTelemetryEvents } from '@igniter-js/telemetry'
-import { z } from 'zod'
-
-// Define your event schemas
-const authEvents = IgniterTelemetryEvents.create()
-  .group('auth')
-  .event('login.started', z.object({
-    email: z.string(),
-    method: z.enum(['password', 'oauth', 'magic_link']),
-  }))
-  .event('login.succeeded', z.object({
-    userId: z.string(),
-    sessionId: z.string(),
-  }))
-  .event('login.failed', z.object({
-    email: z.string(),
-    reason: z.string(),
-  }))
-  .build()
-
-// Register with telemetry
-const telemetry = IgniterTelemetry.create()
-  .withService('my-api')
-  .addEventGroup(authEvents)
-  .addTransport('logger', LoggerTransportAdapter.create())
-  .build()
-
-// TypeScript infers valid event names
-telemetry.emit('auth.login.started', {
-  email: 'user@example.com',
-  method: 'password',
-})  // ✅ Valid
-
-telemetry.emit('auth.invalid', {})  // ❌ Type error
-```
-
-### Transport Adapters
-
-#### Logger Transport
-
-Logs events to the console with formatting:
-
-```typescript
-import { LoggerTransportAdapter } from '@igniter-js/telemetry'
-
-const loggerTransport = LoggerTransportAdapter.create({
-  pretty: true,  // Enable pretty printing (default: false)
-})
-```
-
-#### Store Stream Transport
-
-Sends events to an IgniterStore stream:
-
-```typescript
-import { StoreStreamTransportAdapter } from '@igniter-js/telemetry'
-import { IgniterStore } from '@igniter-js/store'
-import { redis } from ''
-
-const storeTransport = StoreStreamTransportAdapter.create({
-  redis,
-  streamKey: 'telemetry:events',
-  maxLen: 10000,  // Optional: trim stream to max entries
-})
-```
-
-#### Custom Transport
-
-Implement the `TelemetryTransportAdapter` interface:
-
-```typescript
-import type { TelemetryTransportAdapter, TelemetryEnvelope } from '@igniter-js/telemetry'
-
-class MyCustomTransport implements TelemetryTransportAdapter {
-  async handle(envelope: TelemetryEnvelope): Promise<void> {
-    // Send to your custom destination
-    await sendToDatadog(envelope)
-  }
-  
-  async init(): Promise<void> {
-    // Optional: Initialize connection
-  }
-  
-  async flush(): Promise<void> {
-    // Optional: Flush buffered events
-  }
-  
-  async shutdown(): Promise<void> {
-    // Optional: Clean up resources
-  }
-}
-```
-
-### Redaction
-
-Protect sensitive data in event payloads:
-
-```typescript
-const telemetry = IgniterTelemetry.create()
-  .withService('my-api')
-  .withRedaction({
-    enabled: true,
-    // Field names to redact (case-insensitive, deep)
-    fields: ['password', 'token', 'secret', 'apiKey', 'creditCard'],
-    // Regex patterns to match field names
-    patterns: [/auth.*token/i, /api[-_]?key/i],
-    // Replacement string (default: '[REDACTED]')
-    replacement: '***',
-  })
-  .addTransport('logger', LoggerTransportAdapter.create())
-  .build()
-
-// Sensitive data is automatically redacted
-telemetry.emit('user.register', {
-  email: 'user@example.com',
-  password: 'supersecret',  // Will appear as '***' in logs
-})
-```
-
-### Sampling
-
-Configure sampling rates to reduce telemetry volume:
-
-```typescript
-const telemetry = IgniterTelemetry.create()
-  .withService('my-api')
-  .withSampling({
-    debugRate: 0.01,  // 1% of debug events
-    infoRate: 0.1,    // 10% of info events
-    warnRate: 0.5,    // 50% of warnings
-    errorRate: 1.0,   // 100% of errors (never drop errors)
-  })
-  .addTransport('logger', LoggerTransportAdapter.create())
-  .build()
-```
-
-### Lifecycle Methods
-
-```typescript
-// Flush all buffered events to transports
-await telemetry.flush()
-
-// Graceful shutdown (flush + cleanup)
-await telemetry.shutdown()
+  await next();
+});
 ```
 
 ## Envelope Structure
@@ -313,114 +247,20 @@ All emitted events follow this envelope structure:
 
 ```typescript
 interface TelemetryEnvelope<T = unknown> {
-  eventName: string           // Event name (e.g., 'auth.login.succeeded')
-  timestamp: string           // ISO 8601 timestamp
-  level: TelemetryLevel       // 'debug' | 'info' | 'warn' | 'error'
-  sessionId: string           // Session identifier
-  service: string             // Service name from config
-  environment: string         // Environment from config
-  payload: T                  // Event-specific data
-  metadata?: Record<string, unknown>  // Optional extra context
+  name: string; // Event name (e.g., 'auth.login.succeeded')
+  time: string; // ISO 8601 timestamp
+  level: TelemetryLevel; // 'debug' | 'info' | 'warn' | 'error'
+  sessionId: string; // Session identifier
+  service: string; // Service name from config
+  environment: string; // Environment from config
+  traceId?: string; // Distributed tracing ID
+  spanId?: string; // Span ID
+  actor?: { type: string; id?: string; tags?: Record<string, any> };
+  scope?: { type: string; id: string; tags?: Record<string, any> };
+  attributes?: T; // Event-specific data
+  error?: TelemetryError; // Error details
 }
 ```
-
-## Error Handling
-
-The package uses typed errors extending `IgniterTelemetryError`:
-
-```typescript
-import { IgniterTelemetryError, TelemetryErrorCode } from '@igniter-js/telemetry'
-
-try {
-  // ... telemetry operations
-} catch (error) {
-  if (error instanceof IgniterTelemetryError) {
-    switch (error.code) {
-      case TelemetryErrorCode.SERVICE_REQUIRED:
-        // Handle missing service
-        break
-      case TelemetryErrorCode.TRANSPORT_EXISTS:
-        // Handle duplicate transport
-        break
-      case TelemetryErrorCode.VALIDATION_ERROR:
-        // Handle schema validation failure
-        break
-    }
-  }
-}
-```
-
-## Best Practices
-
-### 1. Use Scoped Sessions for Request Handlers
-
-```typescript
-app.use(async (req, res, next) => {
-  await telemetry.session().run(async () => {
-    telemetry.emit('http.request.started', {
-      method: req.method,
-      path: req.path,
-    })
-    
-    await next()
-    
-    telemetry.emit('http.request.completed', {
-      method: req.method,
-      path: req.path,
-      statusCode: res.statusCode,
-    })
-  })
-})
-```
-
-### 2. Define Event Schemas for Type Safety
-
-```typescript
-// events/auth.ts
-export const authEvents = IgniterTelemetryEvents.create()
-  .group('auth')
-  .event('login', LoginPayloadSchema)
-  .event('logout', LogoutPayloadSchema)
-  .build()
-
-// telemetry.ts
-const telemetry = IgniterTelemetry.create()
-  .addEventGroup(authEvents)
-  // ...
-```
-
-### 3. Enable Redaction in Production
-
-```typescript
-const telemetry = IgniterTelemetry.create()
-  .withRedaction({
-    enabled: process.env.NODE_ENV === 'production',
-    fields: ['password', 'token', 'secret'],
-  })
-  // ...
-```
-
-### 4. Use Multiple Transports
-
-```typescript
-const telemetry = IgniterTelemetry.create()
-  .addTransport('logger', LoggerTransportAdapter.create())
-  .addTransport('store', StoreStreamTransportAdapter.create({ store }))
-  // ...
-```
-
-### 5. Graceful Shutdown
-
-```typescript
-process.on('SIGTERM', async () => {
-  await telemetry.shutdown()
-  process.exit(0)
-})
-```
-
-## TypeScript Support
-
-This package is written in TypeScript and provides full type definitions. The  API uses type accumulation to provide type-safe event names based on registered event groups.
 
 ## License
 

@@ -4,8 +4,8 @@
 
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { IgniterTelemetryEvents, IgniterTelemetryEventsGroup } from './events'
-import { IgniterTelemetryError } from '../errors/igniter-telemetry.error'
+import { IgniterTelemetryError } from '../errors/telemetry.error'
+import { IgniterTelemetryEvents } from './event-registry.builder'
 
 describe('IgniterTelemetryEvents', () => {
   describe('namespace()', () => {
@@ -112,36 +112,50 @@ describe('IgniterTelemetryEvents', () => {
       expect(descriptor.namespace).toBe('app')
     })
   })
-})
 
-describe('IgniterTelemetryEventsGroup', () => {
-  describe('create()', () => {
-    it('should create an empty group', () => {
-      const group = IgniterTelemetryEventsGroup.create()
-      expect(group.build()).toEqual({})
-    })
-  })
+  describe('get.key() and get.schema()', () => {
+    it('should retrieve full event key and schema', () => {
+      const builder = IgniterTelemetryEvents
+        .namespace('app')
+        .event('user.login', z.object({ 'ctx.user.id': z.string() }))
 
-  describe('event()', () => {
-    it('should add events to the group', () => {
-      const schema = z.object({ id: z.string() })
-      const group = IgniterTelemetryEventsGroup.create()
-        .event('test', schema)
-        .build()
+      const registry = builder.build()
 
-      expect(group.test).toBe(schema)
+      const fullKey = registry.get.key('user.login')
+      expect(fullKey).toBe('app.user.login')
+
+      const schema = registry.get.schema('user.login')
+      expect(schema).toBeInstanceOf(z.ZodObject)
     })
 
-    it('should chain multiple events', () => {
-      const events = IgniterTelemetryEventsGroup.create()
-        .event('a', z.object({}))
-        .event('b', z.object({}))
-        .event('c', z.object({}))
+    it('should throw when retrieving undefined event key', () => {
+      const builder = IgniterTelemetryEvents
+        .namespace('app')
+        .event('user.login', z.object({ 'ctx.user.id': z.string() }))
         .build()
 
-      expect(events.a).toBeDefined()
-      expect(events.b).toBeDefined()
-      expect(events.c).toBeDefined()
+      // @ts-expect-error Testing error case
+      expect(() => builder.get.key('non.existent')).toThrow(Error)
+
+      // @ts-expect-error Testing error case
+      expect(() => builder.get.schema('non.existent')).toThrow(Error) 
+    })
+
+    it('should work with nested group events', () => {
+      const builder = IgniterTelemetryEvents
+        .namespace('igniter.jobs')
+        .group('job', (g) =>
+          g.event('completed', z.object({ 'ctx.job.id': z.string() }))
+           .event('failed', z.object({ 'ctx.job.id': z.string(), 'ctx.error.message': z.string() }))
+        )
+        .build()
+
+      const fullKey = builder.get.key('job.completed')
+      expect(fullKey).toBe('igniter.jobs.job.completed')
+
+      const schema = builder.get.schema('job.failed')
+      expect(schema.shape).toHaveProperty('ctx.job.id')
+      expect(schema.shape).toHaveProperty('ctx.error.message')
     })
   })
 })

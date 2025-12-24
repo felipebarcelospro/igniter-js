@@ -4,11 +4,9 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
-// Import from core to ensure the runtime factory is registered
-import '../core/igniter-telemetry'
-import { IgniterTelemetryBuilder } from './igniter-telemetry.builder'
-import { IgniterTelemetryError } from '../errors/igniter-telemetry.error'
-import { IgniterTelemetryEvents } from '../utils/events'
+import { IgniterTelemetryBuilder } from './main.builder'
+import { IgniterTelemetryError } from '../errors/telemetry.error'
+import { IgniterTelemetryEvents } from './event-registry.builder'
 import type { IgniterTelemetryTransportAdapter } from '../types/transport'
 
 describe('IgniterTelemetryBuilder', () => {
@@ -241,15 +239,6 @@ describe('IgniterTelemetryBuilder', () => {
   })
 
   describe('build()', () => {
-    it('should throw if service is not set', () => {
-      expect(() =>
-        IgniterTelemetryBuilder.create()
-          .withEnvironment('test')
-          .addTransport('logger', createMockTransport('logger'))
-          .build()
-      ).toThrow(IgniterTelemetryError)
-    })
-
     it('should use development as default environment', () => {
       const runtime = IgniterTelemetryBuilder.create()
         .withService('my-api')

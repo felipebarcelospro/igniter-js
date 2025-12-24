@@ -3,12 +3,8 @@
  * @module @igniter-js/telemetry/core
  */
 
-export { IgniterTelemetry, IgniterTelemetryRuntime, type IgniterTelemetry as IgniterTelemetryInterface } from './igniter-telemetry'
-export {
-  createSession,
-  getActiveSession,
-  runWithSession,
-  type IgniterTelemetrySession,
-  type TelemetrySessionState,
-  type SessionEmitFn,
-} from './session'
+export * from './manager'
+export type * from './manager'
+
+export * from './session'
+export type * from './session'

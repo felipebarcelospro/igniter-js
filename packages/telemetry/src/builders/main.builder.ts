@@ -41,76 +41,16 @@
  */
 
 import type { IgniterLogger } from '@igniter-js/core'
-import type { TelemetryConfig, TelemetryActorOptions, TelemetryScopeOptions } from '../types/config'
-import type { TelemetryEventsDescriptor, TelemetryEventsMap, TelemetryEventsRegistry, TelemetryEventsValidationOptions } from '../types/events'
-import type { TelemetryRedactionPolicy, TelemetrySamplingPolicy } from '../types/policies'
-import type { IgniterTelemetryTransportAdapter, TelemetryTransportType } from '../types/transport'
-import { DEFAULT_REDACTION_POLICY, DEFAULT_SAMPLING_POLICY } from '../types/policies'
-import { IgniterTelemetryError } from '../errors/igniter-telemetry.error'
-import type { IgniterTelemetry } from '../core/igniter-telemetry'
-
-/**
- * Reserved namespace prefixes that cannot be used by user code.
- */
-const RESERVED_NAMESPACE_PREFIXES = ['__', '__internal'] as const
-
-/**
- * Validates that a key does not use reserved prefixes.
- *
- * @param key - The key to validate
- * @param context - Context for error messages
- */
-function validateKey(key: string, context: string): void {
-  if (!key || typeof key !== 'string') {
-    throw new IgniterTelemetryError({
-      code: 'TELEMETRY_CONFIGURATION_INVALID',
-      message: `${context} must be a non-empty string`,
-      statusCode: 400,
-    })
-  }
-
-  if (key.includes(' ')) {
-    throw new IgniterTelemetryError({
-      code: 'TELEMETRY_CONFIGURATION_INVALID',
-      message: `${context} "${key}" cannot contain spaces`,
-      statusCode: 400,
-      details: { key, context },
-    })
-  }
-
-  const lowerKey = key.toLowerCase()
-  for (const reserved of RESERVED_NAMESPACE_PREFIXES) {
-    if (lowerKey.startsWith(reserved)) {
-      throw new IgniterTelemetryError({
-        code: 'TELEMETRY_RESERVED_NAMESPACE',
-        message: `${context} "${key}" uses reserved prefix "${reserved}"`,
-        statusCode: 400,
-        details: { key, reserved, context },
-      })
-    }
-  }
-}
-
-/**
- * Builder state for IgniterTelemetry configuration.
- */
-export interface IgniterTelemetryBuilderState<
-  TRegistry extends TelemetryEventsRegistry = TelemetryEventsRegistry,
-  TScopes extends string = never,
-  TActors extends string = never,
-> {
-  service?: string
-  environment?: string
-  version?: string
-  eventsRegistry: TRegistry
-  eventsValidation: TelemetryEventsValidationOptions
-  transports: Map<string, IgniterTelemetryTransportAdapter>
-  scopeDefinitions: Record<string, TelemetryScopeOptions>
-  actorDefinitions: Record<string, TelemetryActorOptions>
-  sampling: TelemetrySamplingPolicy
-  redaction: TelemetryRedactionPolicy
-  logger?: IgniterLogger
-}
+import type { IgniterTelemetryActorOptions, IgniterTelemetryConfig, IgniterTelemetryScopeOptions } from '../types/config'
+import type { IgniterTelemetryEventsDescriptor, IgniterTelemetryEventsMap, IgniterTelemetryEventsRegistry, IgniterTelemetryEventsValidationOptions } from '../types/events'
+import type { IgniterTelemetryRedactionPolicy, IgniterTelemetrySamplingPolicy } from '../types/policies'
+import type { IgniterTelemetryTransportAdapter, IgniterTelemetryTransportType } from '../types/transport'
+import { IGNITER_TELEMETRY_DEFAULT_REDACTION_POLICY, IGNITER_TELEMETRY_DEFAULT_SAMPLING_POLICY } from '../types/policies'
+import { IgniterTelemetryError } from '../errors/telemetry.error'
+import { IgniterTelemetryManager } from '../core/manager'
+import type { IIgniterTelemetryManager } from '../types/manager'
+import { IgniterTelemetryKeyValidator } from '../types/keys'
+import type { IgniterTelemetryBuilderState } from '../types/builder'
 
 /**
  * Builder class for creating IgniterTelemetry instances.
@@ -133,13 +73,13 @@ export interface IgniterTelemetryBuilderState<
  * ```
  */
 export class IgniterTelemetryBuilder<
-  TRegistry extends TelemetryEventsRegistry = {},
+  TRegistry extends IgniterTelemetryEventsRegistry = {},
   TScopes extends string = never,
   TActors extends string = never,
 > {
   private readonly state: IgniterTelemetryBuilderState<TRegistry, TScopes, TActors>
 
-  private constructor(state: IgniterTelemetryBuilderState<TRegistry, TScopes, TActors>) {
+  constructor(state: IgniterTelemetryBuilderState<TRegistry, TScopes, TActors>) {
     this.state = state
   }
 
@@ -150,7 +90,7 @@ export class IgniterTelemetryBuilder<
    *
    * @example
    * ```typescript
-   * const builder = IgniterTelemetryBuilder.create()
+   * const builder = IgniterTelemetry.create()
    * ```
    */
   static create(): IgniterTelemetryBuilder<{}, never, never> {
@@ -239,9 +179,9 @@ export class IgniterTelemetryBuilder<
    */
   addActor<TKey extends string>(
     key: TKey,
-    options?: TelemetryActorOptions,
+    options?: IgniterTelemetryActorOptions,
   ): IgniterTelemetryBuilder<TRegistry, TScopes, TActors | TKey> {
-    validateKey(key, 'Actor key')
+    IgniterTelemetryKeyValidator.validateKey(key, 'Actor key')
 
     if (key in this.state.actorDefinitions) {
       throw new IgniterTelemetryError({
@@ -279,9 +219,9 @@ export class IgniterTelemetryBuilder<
    */
   addScope<TKey extends string>(
     key: TKey,
-    options?: TelemetryScopeOptions,
+    options?: IgniterTelemetryScopeOptions,
   ): IgniterTelemetryBuilder<TRegistry, TScopes | TKey, TActors> {
-    validateKey(key, 'Scope key')
+    IgniterTelemetryKeyValidator.validateKey(key, 'Scope key')
 
     if (key in this.state.scopeDefinitions) {
       throw new IgniterTelemetryError({
@@ -319,9 +259,9 @@ export class IgniterTelemetryBuilder<
    * builder.addEvents(JobsEvents)
    * ```
    */
-  addEvents<TEvents extends TelemetryEventsMap, TNamespace extends string>(
-    descriptor: TelemetryEventsDescriptor<TEvents> & { namespace: TNamespace },
-    options?: TelemetryEventsValidationOptions,
+  addEvents<TEvents extends IgniterTelemetryEventsMap, TNamespace extends string>(
+    descriptor: IgniterTelemetryEventsDescriptor<TNamespace, TEvents> & { namespace: TNamespace },
+    options?: IgniterTelemetryEventsValidationOptions,
   ): IgniterTelemetryBuilder<TRegistry & { [K in TNamespace]: TEvents }, TScopes, TActors> {
     const namespace = descriptor.namespace
 
@@ -369,7 +309,7 @@ export class IgniterTelemetryBuilder<
    * ```
    */
   addTransport(
-    type: TelemetryTransportType,
+    type: IgniterTelemetryTransportType,
     adapter: IgniterTelemetryTransportAdapter,
   ): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
     if (this.state.transports.has(type)) {
@@ -418,7 +358,7 @@ export class IgniterTelemetryBuilder<
    * })
    * ```
    */
-  withSampling(policy: TelemetrySamplingPolicy): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
+  withSampling(policy: IgniterTelemetrySamplingPolicy): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
     return new IgniterTelemetryBuilder({
       ...this.state,
       transports: new Map(this.state.transports),
@@ -441,7 +381,7 @@ export class IgniterTelemetryBuilder<
    * })
    * ```
    */
-  withRedaction(policy: TelemetryRedactionPolicy): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
+  withRedaction(policy: IgniterTelemetryRedactionPolicy): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
     return new IgniterTelemetryBuilder({
       ...this.state,
       transports: new Map(this.state.transports),
@@ -463,7 +403,7 @@ export class IgniterTelemetryBuilder<
    * })
    * ```
    */
-  withValidation(options: TelemetryEventsValidationOptions): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
+  withValidation(options: IgniterTelemetryEventsValidationOptions): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
     return new IgniterTelemetryBuilder({
       ...this.state,
       transports: new Map(this.state.transports),
@@ -504,10 +444,17 @@ export class IgniterTelemetryBuilder<
    *   .build()
    * ```
    */
-  build(): IgniterTelemetry<TRegistry, TScopes, TActors> {
-    // We need to return synchronously but avoid circular imports
-    // Solution: use a deferred import that resolves at runtime
-    return this.buildSync()
+  build(): IIgniterTelemetryManager<TRegistry, TScopes, TActors> {
+    const config = this.buildConfig()
+
+    if (config.logger) {
+      config.logger.info('[IgniterTelemetry] Building telemetry manager', {
+        service: config.service,
+        environment: config.environment,
+      })
+    }
+
+    return new IgniterTelemetryManager<TRegistry, TScopes, TActors>(config)
   }
 
   /**
@@ -517,14 +464,9 @@ export class IgniterTelemetryBuilder<
    * @returns The telemetry configuration
    * @throws IgniterTelemetryError if required configuration is missing
    */
-  buildConfig(): TelemetryConfig<TRegistry, TScopes, TActors> {
-    if (!this.state.service) {
-      throw new IgniterTelemetryError({
-        code: 'TELEMETRY_SERVICE_REQUIRED',
-        message: 'Service name is required. Use .withService("my-service") to set it.',
-        statusCode: 400,
-      })
-    }
+  buildConfig(): IgniterTelemetryConfig<TRegistry, TScopes, TActors> {
+    // Set default service if not set
+    this.state.service ??= 'igniter-app'
 
     // Default environment to 'development' if not set
     const environment = this.state.environment ?? 'development'
@@ -538,37 +480,13 @@ export class IgniterTelemetryBuilder<
       transports: this.state.transports,
       scopeDefinitions: this.state.scopeDefinitions,
       actorDefinitions: this.state.actorDefinitions,
-      sampling: { ...DEFAULT_SAMPLING_POLICY, ...this.state.sampling },
-      redaction: { ...DEFAULT_REDACTION_POLICY, ...this.state.redaction },
+      sampling: { ...IGNITER_TELEMETRY_DEFAULT_SAMPLING_POLICY, ...this.state.sampling },
+      redaction: { ...IGNITER_TELEMETRY_DEFAULT_REDACTION_POLICY, ...this.state.redaction },
       logger: this.state.logger,
     }
   }
+}
 
-  /**
-   * Synchronously builds the telemetry instance.
-   * Uses a runtime factory that's set during module initialization.
-   */
-  private buildSync(): IgniterTelemetry<TRegistry, TScopes, TActors> {
-    const config = this.buildConfig()
-
-    // The runtime factory is set by the core module to avoid circular imports
-    if (!IgniterTelemetryBuilder._runtimeFactory) {
-      throw new IgniterTelemetryError({
-        code: 'TELEMETRY_RUNTIME_NOT_INITIALIZED',
-        message: 'Telemetry runtime factory not initialized. Import from @igniter-js/telemetry first.',
-        statusCode: 500,
-      })
-    }
-
-    return IgniterTelemetryBuilder._runtimeFactory(config)
-  }
-
-  /**
-   * @internal
-   * Factory function to create runtime instances.
-   * Set by the core module during initialization.
-   */
-  static _runtimeFactory: (<R extends TelemetryEventsRegistry, S extends string, A extends string>(
-    config: TelemetryConfig<R, S, A>,
-  ) => IgniterTelemetry<R, S, A>) | null = null
+export const IgniterTelemetry = {
+  create: IgniterTelemetryBuilder.create,
 }

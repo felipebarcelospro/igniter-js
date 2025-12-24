@@ -1,3 +1,5 @@
+import './shim'
+
 /**
  * @fileoverview Main entry point for @igniter-js/telemetry
  * @module @igniter-js/telemetry
@@ -65,82 +67,34 @@
  * ```
  */
 
-// Core
-export { IgniterTelemetry as IgniterTelemetryCore, IgniterTelemetryRuntime, type IgniterTelemetry as IgniterTelemetryInterface } from './core/igniter-telemetry'
-export { createSession, getActiveSession, type IgniterTelemetrySession, type TelemetrySessionState } from './core/session'
-
 // Builders
-export { IgniterTelemetryBuilder as IgniterTelemetry, type IgniterTelemetryBuilderState } from './builders/igniter-telemetry.builder'
+export * from "./builders";
+export type * from "./builders";
+
+import { IgniterTelemetryBuilder } from "./builders";
+
+/**
+ * Main entry point for IgniterTelemetry.
+ * Alias for IgniterTelemetryBuilder.
+ */
+export const IgniterTelemetry = IgniterTelemetryBuilder;
+
+// Core
+export * from './core'
+export type * from './core'
 
 // Errors
-export { IgniterTelemetryError, IGNITER_TELEMETRY_ERROR_CODES, type IgniterTelemetryErrorCode, type IgniterTelemetryErrorPayload } from './errors/igniter-telemetry.error'
+export * from "./errors";
+export type * from "./errors";
 
 // Types
-export type { TelemetryLevel } from './types/levels'
-export type {
-  TelemetryTags,
-  TelemetryAttributes,
-  TelemetryActor,
-  TelemetryScope,
-  TelemetryError,
-  TelemetrySource,
-  TelemetryEnvelope,
-} from './types/envelope'
-
-export type {
-  TelemetryEmitInput,
-  TelemetryActorInput,
-  TelemetryScopeInput,
-} from './types/emit'
-
-export type {
-  TelemetryEventSchema,
-  TelemetryEventDescriptor,
-  TelemetryEventsMap,
-  TelemetryEventsRegistry,
-  TelemetryEventsDescriptor,
-  TelemetryEventsValidationOptions,
-  TelemetryFlattenEventKeys,
-  TelemetryFlattenRegistryKeys,
-  TelemetryGetEventSchema,
-  TelemetryInferEventSchema,
-} from './types/events'
-
-export type {
-  TelemetryRedactionPolicy,
-  TelemetrySamplingPolicy,
-} from './types/policies'
-
-export {
-  DEFAULT_REDACTION_POLICY,
-  DEFAULT_SAMPLING_POLICY,
-} from './types/policies'
-
-export type {
-  TelemetryTransportType,
-  TelemetryTransportMeta,
-  IgniterTelemetryTransportAdapter,
-  TelemetryTransportConfig,
-} from './types/transport'
-
-export type {
-  TelemetryActorOptions,
-  TelemetryScopeOptions,
-  TelemetryConfig,
-} from './types/config'
-
-export {
-  TELEMETRY_LEVELS,
-  TELEMETRY_LEVEL_PRIORITY,
-  isTelemetryLevel,
-} from './types/levels'
+export * from "./types";
+export type * from "./types";
 
 // Utils
-export { IgniterTelemetryEvents, IgniterTelemetryEventsGroup } from './utils/events'
-export { generateSessionId, generateSpanId, generateTraceId, isValidSessionId } from './utils/id'
-export { createRedactor, createSyncRedactor, redactEnvelope } from './utils/redaction'
-export { createSampler, matchesPattern, shouldSample } from './utils/sampling'
+export * from "./utils";
+export type * from "./utils";
 
 // Adapters (also available via @igniter-js/telemetry/adapters)
-export { LoggerTransportAdapter, type LoggerTransportConfig, type TelemetryLogger } from './adapters/logger.adapter'
-export { StoreStreamTransportAdapter, type StoreStreamTransportConfig, type TelemetryStoreInterface } from './adapters/store.adapter'
+export * from "./adapters";
+export type * from "./adapters";

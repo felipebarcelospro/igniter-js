@@ -3,8 +3,8 @@
  * @module @igniter-js/telemetry/types/emit
  */
 
-import type { TelemetryLevel } from './levels'
-import type { TelemetryActor, TelemetryAttributes, TelemetryError, TelemetryScope, TelemetrySource, TelemetryTags } from './envelope'
+import type { IgniterTelemetryLevel } from './levels'
+import type { IgniterTelemetryActor, IgniterTelemetryAttributes, IgniterTelemetryErrorInfo, IgniterTelemetryScope, IgniterTelemetrySource, IgniterTelemetryTags } from './envelope'
 
 /**
  * Input type for emitting telemetry events.
@@ -36,12 +36,12 @@ import type { TelemetryActor, TelemetryAttributes, TelemetryError, TelemetryScop
  * })
  * ```
  */
-export interface TelemetryEmitInput<TName extends string = string> {
+export interface IgniterTelemetryEmitInput<TName extends string = string> {
   /**
    * Severity level for this event.
    * @default 'info'
    */
-  level?: TelemetryLevel
+  level?: IgniterTelemetryLevel
 
   /**
    * Override the session ID for this event.
@@ -53,30 +53,30 @@ export interface TelemetryEmitInput<TName extends string = string> {
    * Actor information for this event.
    * If not provided, uses the active session's actor.
    */
-  actor?: TelemetryActor
+  actor?: IgniterTelemetryActor
 
   /**
    * Scope information for this event.
    * If not provided, uses the active session's scope.
    */
-  scope?: TelemetryScope
+  scope?: IgniterTelemetryScope
 
   /**
    * Domain-specific attributes for this event.
    * Will be merged with session attributes if present.
    */
-  attributes?: TelemetryAttributes
+  attributes?: IgniterTelemetryAttributes
 
   /**
    * Error information for this event.
    * Typically used with `level: 'error'`.
    */
-  error?: TelemetryError
+  error?: IgniterTelemetryErrorInfo
 
   /**
    * Source information for debugging.
    */
-  source?: TelemetrySource
+  source?: IgniterTelemetrySource
 
   /**
    * Override the timestamp for this event.
@@ -91,20 +91,20 @@ export interface TelemetryEmitInput<TName extends string = string> {
  *
  * @example
  * ```typescript
- * const actorInput: TelemetryActorInput = {
+ * const actorInput: IgniterTelemetryActorInput = {
  *   type: 'user',
  *   id: 'usr_123',
  *   tags: { role: 'admin' },
  * }
  * ```
  */
-export interface TelemetryActorInput {
+export interface IgniterTelemetryActorInput {
   /** The actor type (must be registered with addActor) */
   type: string
   /** Optional actor identifier */
   id?: string
   /** Optional actor tags */
-  tags?: TelemetryTags
+  tags?: IgniterTelemetryTags
 }
 
 /**
@@ -112,18 +112,18 @@ export interface TelemetryActorInput {
  *
  * @example
  * ```typescript
- * const scopeInput: TelemetryScopeInput = {
+ * const scopeInput: IgniterTelemetryScopeInput = {
  *   type: 'organization',
  *   id: 'org_456',
  *   tags: { plan: 'enterprise' },
  * }
  * ```
  */
-export interface TelemetryScopeInput {
+export interface IgniterTelemetryScopeInput {
   /** The scope type (must be registered with addScope) */
   type: string
   /** The scope identifier */
   id: string
   /** Optional scope tags */
-  tags?: TelemetryTags
+  tags?: IgniterTelemetryTags
 }

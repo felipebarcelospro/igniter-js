@@ -3,7 +3,7 @@
  * @module @igniter-js/telemetry/types/envelope
  */
 
-import type { TelemetryLevel } from './levels'
+import type { IgniterTelemetryLevel } from "./levels";
 
 /**
  * Tags are key-value pairs for categorization and filtering.
@@ -11,14 +11,14 @@ import type { TelemetryLevel } from './levels'
  *
  * @example
  * ```typescript
- * const tags: TelemetryTags = {
+ * const tags: IgniterTelemetryTags = {
  *   role: 'admin',
  *   verified: true,
  *   loginCount: 42,
  * }
  * ```
  */
-export type TelemetryTags = Record<string, string | number | boolean>
+export type IgniterTelemetryTags = Record<string, string | number | boolean>;
 
 /**
  * Attributes contain domain-specific data about the event.
@@ -26,7 +26,7 @@ export type TelemetryTags = Record<string, string | number | boolean>
  *
  * @example
  * ```typescript
- * const attributes: TelemetryAttributes = {
+ * const attributes: IgniterTelemetryAttributes = {
  *   'ctx.post.id': 'p-123',
  *   'ctx.post.title': 'Hello World',
  *   'ctx.post.published': true,
@@ -34,27 +34,30 @@ export type TelemetryTags = Record<string, string | number | boolean>
  * }
  * ```
  */
-export type TelemetryAttributes = Record<string, string | number | boolean | null>
+export type IgniterTelemetryAttributes = Record<
+  string,
+  string | number | boolean | null | undefined
+>;
 
 /**
  * Actor information identifying who triggered the event.
  *
  * @example
  * ```typescript
- * const actor: TelemetryActor = {
+ * const actor: IgniterTelemetryActor = {
  *   type: 'user',
  *   id: 'usr_123',
  *   tags: { role: 'admin', plan: 'pro' },
  * }
  * ```
  */
-export interface TelemetryActor {
+export interface IgniterTelemetryActor {
   /** The type of actor (e.g., 'user', 'system', 'agent') */
-  type: string
+  type: string;
   /** Optional unique identifier for the actor */
-  id?: string
+  id?: string;
   /** Optional tags for additional actor metadata */
-  tags?: TelemetryTags
+  tags?: IgniterTelemetryTags;
 }
 
 /**
@@ -62,20 +65,20 @@ export interface TelemetryActor {
  *
  * @example
  * ```typescript
- * const scope: TelemetryScope = {
+ * const scope: IgniterTelemetryScope = {
  *   type: 'organization',
  *   id: 'org_456',
  *   tags: { plan: 'enterprise', region: 'us-east' },
  * }
  * ```
  */
-export interface TelemetryScope {
+export interface IgniterTelemetryScope {
   /** The type of scope (e.g., 'organization', 'workspace', 'project') */
-  type: string
+  type: string;
   /** Unique identifier for the scope */
-  id: string
+  id: string;
   /** Optional tags for additional scope metadata */
-  tags?: TelemetryTags
+  tags?: IgniterTelemetryTags;
 }
 
 /**
@@ -83,7 +86,7 @@ export interface TelemetryScope {
  *
  * @example
  * ```typescript
- * const error: TelemetryError = {
+ * const error: IgniterTelemetryErrorInfo = {
  *   name: 'ValidationError',
  *   message: 'Invalid email format',
  *   code: 'VALIDATION_FAILED',
@@ -92,17 +95,17 @@ export interface TelemetryScope {
  * }
  * ```
  */
-export interface TelemetryError {
+export interface IgniterTelemetryErrorInfo {
   /** The error class/type name */
-  name: string
+  name: string;
   /** Human-readable error message */
-  message: string
+  message: string;
   /** Optional machine-readable error code */
-  code?: string
+  code?: string;
   /** Optional stack trace */
-  stack?: string
+  stack?: string;
   /** Optional description of the underlying cause */
-  cause?: string
+  cause?: string;
 }
 
 /**
@@ -110,20 +113,20 @@ export interface TelemetryError {
  *
  * @example
  * ```typescript
- * const source: TelemetrySource = {
+ * const source: IgniterTelemetrySource = {
  *   causer: '@igniter-js/core',
  *   file: 'router.ts',
  *   line: 42,
  * }
  * ```
  */
-export interface TelemetrySource {
+export interface IgniterTelemetrySource {
   /** The package or module that caused the event */
-  causer?: string
+  causer?: string;
   /** The source file name */
-  file?: string
+  file?: string;
   /** The line number in the source file */
-  line?: number
+  line?: number;
 }
 
 /**
@@ -138,7 +141,7 @@ export interface TelemetrySource {
  *
  * @example
  * ```typescript
- * const envelope: TelemetryEnvelope = {
+ * const envelope: IgniterTelemetryEnvelope = {
  *   name: 'user.login',
  *   time: '2025-01-15T10:30:00.000Z',
  *   level: 'info',
@@ -155,46 +158,49 @@ export interface TelemetrySource {
  * }
  * ```
  */
-export interface TelemetryEnvelope<TName extends string = string> {
+export interface IgniterTelemetryEnvelope<TName extends string = string> {
   /** The event name (e.g., 'user.login', 'igniter.jobs.job.completed') */
-  name: TName
+  name: TName;
 
   /** ISO 8601 timestamp when the event occurred */
-  time: string
+  time: string;
 
   /** Severity level of the event */
-  level: TelemetryLevel
+  level: IgniterTelemetryLevel;
 
   /** Service name that emitted the event */
-  service: string
+  service: string;
 
   /** Environment where the event occurred (e.g., 'production', 'development') */
-  environment: string
+  environment: string;
 
   /** Optional version of the service */
-  version?: string
+  version?: string;
 
   /** Session identifier for correlating related events */
-  sessionId: string
+  sessionId: string;
+
+  /** Optional trace ID for distributed tracing */
+  traceId?: string;
 
   /** Optional span ID for distributed tracing */
-  spanId?: string
+  spanId?: string;
 
   /** Optional parent span ID for distributed tracing */
-  parentSpanId?: string
+  parentSpanId?: string;
 
   /** Optional actor information */
-  actor?: TelemetryActor
+  actor?: IgniterTelemetryActor;
 
   /** Optional scope information */
-  scope?: TelemetryScope
+  scope?: IgniterTelemetryScope;
 
   /** Optional domain-specific attributes */
-  attributes?: TelemetryAttributes
+  attributes?: IgniterTelemetryAttributes;
 
   /** Optional error information (for error-level events) */
-  error?: TelemetryError
+  error?: IgniterTelemetryErrorInfo;
 
   /** Optional source information */
-  source?: TelemetrySource
+  source?: IgniterTelemetrySource;
 }
