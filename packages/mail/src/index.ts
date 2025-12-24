@@ -1,8 +1,17 @@
-export * from './builders/main.builder'
-export * from './builders/template.builder'
-export * from './core/manager'
-export * from './errors/mail.error'
-export * from './types/adapter'
-export * from './types/provider'
-export * from './types/templates'
-export * from './utils/schema'
+export * from './builders'
+export type * from './builders'
+
+export * from './core'
+export type * from './core'
+
+export * from './errors'
+export type * from './errors'
+
+export * from './types'
+export type * from './types'
+
+export * from './utils'
+export type * from './utils'
+
+export * from './adapters'
+export type * from './adapters'

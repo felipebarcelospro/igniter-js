@@ -11,9 +11,9 @@ import type {
   IgniterMailSendParams,
   IIgniterMail,
 } from "../types/provider";
-import type { IgniterMailTelemetry } from "../types/telemetry";
 import type { IgniterMailTemplateBuilt } from "../types/templates";
 import { IgniterMailManagerCore } from "../core/manager";
+import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 
 /**
  * Builder for {@link IgniterMail}.
@@ -27,7 +27,7 @@ export class IgniterMailBuilder<
   private adapter?: IgniterMailAdapter;
   private templates: TTemplates = {} as TTemplates;
   private logger?: IgniterLogger;
-  private telemetry?: IgniterMailTelemetry;
+  private telemetry?: IgniterTelemetryManager;
   private queue?: {
     adapter: IgniterJobQueueAdapter<any>;
     options?: IgniterMailQueueOptions;
@@ -94,7 +94,7 @@ export class IgniterMailBuilder<
   }
 
   /** Attaches a telemetry instance for observability. */
-  withTelemetry(telemetry: IgniterMailTelemetry) {
+  withTelemetry(telemetry: IgniterTelemetryManager) {
     this.telemetry = telemetry;
     return this;
   }

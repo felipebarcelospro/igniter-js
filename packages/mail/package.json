@@ -15,19 +15,19 @@
     ".": {
       "types": "./dist/index.d.ts",
       "browser": "./dist/shim.js",
-      "import": "./dist/index.js",
+      "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
     "./telemetry": {
       "types": "./dist/telemetry/index.d.ts",
       "browser": "./dist/shim.js",
-      "import": "./dist/telemetry/index.js",
+      "import": "./dist/telemetry/index.mjs",
       "require": "./dist/telemetry/index.js"
     },
     "./adapters": {
       "types": "./dist/adapters/index.d.ts",
       "browser": "./dist/shim.js",
-      "import": "./dist/adapters/index.js",
+      "import": "./dist/adapters/index.mjs",
       "require": "./dist/adapters/index.js"
     }
   },

@@ -4,12 +4,12 @@ import type {
   JobLimiter,
 } from "@igniter-js/core";
 import type { IgniterMailAdapter } from "./adapter";
-import type { IgniterMailTelemetry } from "./telemetry";
 import type {
   IgniterMailTemplateBuilt,
   IgniterMailTemplateKey,
   IgniterMailTemplatePayload,
 } from "./templates";
+import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 
 /**
  * Type inference helper exposed by the runtime instance.
@@ -124,7 +124,7 @@ export interface IgniterMailOptions<
   /** Optional logger used for debug/info/error logging. */
   logger?: IgniterLogger;
   /** Optional telemetry instance for observability. */
-  telemetry?: IgniterMailTelemetry;
+  telemetry?: IgniterTelemetryManager;
   /** Optional queue configuration for asynchronous delivery. */
   queue?: IgniterMailQueueConfig;
 }

@@ -1,407 +1,523 @@
-# @igniter-js/mail - AI Agent Instructions
+# AGENTS.md - @igniter-js/mail
 
-> **Package Version:** 0.1.1  
-> **Last Updated:** 2025-01-22  
-> **Status:** Ready for Publication
-
----
-
-## Package Overview
-
-**Name:** `@igniter-js/mail`  
-**Purpose:** Type-safe email library for Igniter.js with React Email templates and multiple provider adapters  
-**Type:** Standalone Library (can be used independently or with Igniter.js)
-
-### Core Features
-- Type-safe email templates with React Email components
-- Runtime validation with StandardSchema support  
-- Multiple provider adapters (Resend, Postmark, SendGrid, SMTP)
-- Mock adapter for unit testing
-- Queue integration for async email delivery
-- Lifecycle hooks for monitoring and logging
-- Builder pattern for fluent configuration
-- Server-first design (Node.js, Bun, Deno)
+> **Last Updated:** 2025-12-23
+> **Version:** 0.1.11
+> **Goal:** This document serves as the complete operational manual for Code Agents working on the @igniter-js/mail package.
 
 ---
 
-## Architecture
+## 1. Package Vision & Context
 
-### Design Principles
+**@igniter-js/mail** is the definitive transactional email solution for the Igniter.js ecosystem. It is built on the premise that email templates should be as maintainable, type-safe, and expressive as the rest of an application's UI. By marrying **React Email** components with **StandardSchemaV1** validation and a robust **Adapter pattern**, this package ensures that sending an email is as predictable as rendering a web page.
 
-1. **Type Safety First**
-   - End-to-end TypeScript inference from templates to send params
-   - Template payload validation with StandardSchema
-   - No `any` types in public APIs
+### The Problem Space
 
-2. **React Email Integration**
-   - Templates are React components
-   - Automatic HTML and plain-text rendering
-   - Leverage React Email's component library
+In traditional backend development, email management is often an afterthought, leading to:
 
-3. **Adapter-Based Architecture**
-   - Core defines interfaces, adapters provide implementations
-   - Easy to add new email providers
-   - Adapters are peer dependencies (optional)
+- **String Concatenation Mess:** Building HTML emails with string templates is error-prone and hard to debug.
+- **Payload Uncertainty:** Backend services often pass data to templates that doesn't match the expected structure, resulting in broken emails.
+- **Provider Rigidity:** Changing from one ESP (Email Service Provider) to another usually involves breaking changes across the codebase.
+- **Observability Gaps:** Developers often don't know when an email fails, why it failed, or how long it took to render.
 
-4. **Builder Pattern**
-   - Fluent API for configuration
-   - Type-safe template registration
-   - Compile-time validation of configuration
+### The Igniter.js Vision
+
+@igniter-js/mail provides a unified interface that abstracts away the complexities of email delivery:
+
+1. **Expressive Templates:** Leverage the full power of React and Tailwind CSS (via React Email) to build beautiful, responsive emails.
+2. **Contract-Based Sending:** Every template defines a schema. The package enforces this contract at the boundaries, ensuring that only valid data reaches your templates.
+3. **Provider Agnostic:** Swap adapters (Resend, Postmark, SendGrid, SMTP) with a single line of configuration.
+4. **Mission-Critical Reliability:** Built-in hooks for success/error tracking and deep integration with @igniter-js/jobs for guaranteed delivery via background queues.
 
 ---
 
-## File Structure
+## I. MAINTAINER GUIDE (Internal Architecture)
 
-```
-packages/mail/
-├── src/
-│   ├── index.ts                         # Public exports
-│   │
-│   ├── adapters/
-│   │   ├── index.ts                    # Adapters barrel
-│   │   ├── mock.adapter.ts             # In-memory mock adapter
-│   │   ├── mock.adapter.spec.ts        # Mock adapter tests
-│   │   ├── postmark.adapter.ts         # Postmark provider
-│   │   ├── postmark.adapter.spec.ts    # Postmark adapter tests
-│   │   ├── resend.adapter.ts           # Resend provider
-│   │   ├── resend.adapter.spec.ts      # Resend adapter tests
-│   │   ├── sendgrid.adapter.ts         # SendGrid provider
-│   │   ├── sendgrid.adapter.spec.ts    # SendGrid adapter tests
-│   │   ├── smtp.adapter.ts             # SMTP provider
-│   │   └── smtp.adapter.spec.ts        # SMTP adapter tests
-│   │
-│   ├── builders/
-│   │   ├── main.builder.ts             # Main builder
-│   │   ├── main.builder.spec.ts        # Builder tests
-│   │   ├── template.builder.ts         # Template builder
-│   │   └── template.builder.spec.ts    # Template builder tests
-│   │
-│   ├── core/
-│   │   ├── manager.tsx                 # Core runtime logic
-│   │   └── manager.spec.tsx            # Core tests
-│   │
-│   ├── errors/
-│   │   └── mail.error.ts               # Main error class
-│   │
-│   ├── types/
-│   │   ├── adapter.ts                  # Adapter types
-│   │   ├── provider.ts                 # Provider types
-│   │   ├── telemetry.ts                # Telemetry types
-│   │   └── templates.ts                # Template types
-│   │
-│   ├── telemetry/
-│   │   └── index.ts                    # Telemetry events
-│   │
-│   ├── utils/
-│   │   ├── schema.ts                   # StandardSchema utilities
-│   │   └── schema.spec.ts              # Schema tests
-│   │
-│   └── shim.ts                         # Browser/client shim
-│
-├── package.json
-├── tsconfig.json
-├── tsup.config.ts
-├── vitest.config.ts
-├── README.md
-├── AGENTS.md                            # This file
-└── CHANGELOG.md
+### 2. FileSystem Topology (Maintenance)
+
+Maintaining `@igniter-js/mail` requires understanding its modular structure. The package is divided into functional domains that strictly separate configuration, logic, and infrastructure.
+
+#### Directory Breakdown
+
+- **`src/adapters/`**: Infrastructure layer.
+  - `index.ts`: Central export for all built-in adapters.
+  - `resend.adapter.ts`: Wrapper for the Resend SDK.
+  - `postmark.adapter.ts`: Native fetch-based implementation for Postmark (minimal dependency footprint).
+  - `sendgrid.adapter.ts`: Native fetch-based implementation for SendGrid.
+  - `smtp.adapter.ts`: Nodemailer-based implementation for traditional SMTP servers.
+  - `mock.adapter.ts`: In-memory implementation that records all outgoing emails for assertion in unit tests.
+
+- **`src/builders/`**: The Configuration API.
+  - `main.builder.ts`: Implements `IgniterMailBuilder`. This is the entry point where `from`, `adapter`, and `queue` are configured. It uses a recursive generic pattern to accumulate template types.
+  - `template.builder.ts`: Implements `IgniterMailTemplateBuilder`. A specialized builder for defining a template's metadata (subject, schema) and its React renderer.
+
+- **`src/core/`**: The Processing Engine.
+  - `manager.tsx`: Home of `IgniterMailManagerCore`. This class is the heart of the package. It handles the template registry, executes rendering, coordinates validation, and manages the execution of lifecycle hooks.
+
+- **`src/errors/`**: Standardization of Failures.
+  - `mail.error.ts`: Defines the `IgniterMailError` class and the `IgniterMailErrorCode` union. All errors within the package are normalized to this format.
+
+- **`src/telemetry/`**: Observability Registry.
+  - `index.ts`: Defines the `IgniterMailTelemetryEvents` namespace. It captures the start, success, and error states of both immediate (`send`) and scheduled (`schedule`) operations.
+
+- **`src/types/`**: Pure Type Definitions.
+  - `adapter.ts`: Defines the `IgniterMailAdapter` interface and associated parameter types.
+  - `templates.ts`: Defines the structure of built templates and helper types for key/payload extraction.
+  - `provider.ts`: Defines the main public interfaces (`IIgniterMail`) and initialization options.
+
+- **`src/utils/`**: Shared Utilities.
+  - `schema.ts`: Implements the `IgniterMailSchema` class, which provides agnostic handling of StandardSchemaV1 (supporting Zod and others).
+
+- **`src/index.ts`**: The public entry point. It follows a strict barrel pattern with grouping comments.
+
+- **`src/shim.ts`**: A critical file that prevents server-only logic from being included in client-side bundles.
+
+---
+
+### 3. Architecture Deep-Dive
+
+#### 3.1 The Builder Accumulation Pattern
+
+The `IgniterMailBuilder` is designed as an immutable state machine.
+
+```typescript
+export class IgniterMailBuilder<
+  TTemplates extends Record<string, IgniterMailTemplateBuilt<any>>,
+> {
+  // ...
+  addTemplate<
+    TKey extends string,
+    TTemplate extends IgniterMailTemplateBuilt<any>,
+  >(
+    key: TKey,
+    template: TTemplate,
+  ): IgniterMailBuilder<TTemplates & { [K in TKey]: TTemplate }> {
+    // ...
+  }
+}
 ```
 
----
+Each call to `addTemplate` returns a **new instance** of the builder where the generic `TTemplates` is extended. This ensures that:
 
-## Key Responsibilities
+1. The final `build()` method returns a manager instance that is fully aware of its registered templates.
+2. The user gets perfect IDE autocomplete for template keys.
+3. The `data` parameter in `mail.send()` is typed specifically to the selected template's schema.
 
-### `IgniterMail` (Core Runtime)
+#### 3.2 The Rendering Pipeline Internals
 
-The core class handles:
-- Template registration and management
-- Template data validation using StandardSchema
-- React Email rendering (HTML + plain text)
-- Adapter orchestration
-- Queue integration for scheduled sends (requires queue adapter)
-- Lifecycle hooks (onSendStarted, onSendSuccess, onSendError)
-- Error handling and normalization
-- Telemetry emission via `IgniterMailTelemetryEvents`
+Rendering is a two-pass process handled within `IgniterMailManagerCore`:
 
-**Key Invariants:**
-- All templates must have a `subject`, `schema`, and `render` function
-- Template data is validated before rendering
-- All predictable failures throw `IgniterMailError` with stable `code`
-- Hooks are always invoked (started → success/error)
+1. **React Element Creation:** The template's `render` function is called with the validated data.
+2. **HTML Generation:** `@react-email/components`' `render` is called on the element.
+3. **Text Generation:** The same element is passed to `render` with the `plainText: true` option.
 
-### `MailAdapter` (Infrastructure-only)
+This duality ensures high deliverability, as many email clients and spam filters penalize emails that lack a plain-text version.
 
-Adapters **must**:
-- Implement the `send` method with `MailAdapterSendParams`
-- Handle provider-specific API calls and authentication
-- NOT implement business logic (no validation, no hooks, no queuing)
-- Return cleanly or throw errors (which core will normalize)
+#### 3.3 Queue Integration Logic
 
-**Mental Model:**
-- **Core** decides *what* to send and *when*
-- **Adapter** executes *how* to talk to the provider
+The `schedule` method provides a seamless bridge to `@igniter-js/jobs`.
+
+- If a queue adapter is provided, the manager automatically registers a "send" job on that queue.
+- This job handler is a simple wrapper that calls `manager.send()` with the provided payload.
+- This allows developers to move heavy email rendering and network calls out of the request lifecycle with zero boilerplate.
+
+#### 3.4 Telemetry and Observability
+
+The package integrates deeply with `@igniter-js/telemetry`. Every public method emits a `started` event, followed by either a `success` or `error` event.
+
+- **Attributes:** Events carry normalized attributes like `mail.to`, `mail.template`, and `mail.duration_ms`.
+- **Privacy:** By default, PII (like email content or raw data objects) is **never** included in telemetry attributes.
 
 ---
 
-## Development Guidelines
+### 4. Operational Flow Mapping (Pipelines)
 
-### Adding New Features
+#### Method: `IgniterMailBuilder.create()`
 
-1. **Business Logic → Core**
-   - If it's a rule or decision, it belongs in `IgniterMail`
-   - Examples: validation, hooks, queuing
+1. **Intent:** Initialize a fresh configuration chain.
+2. **Execution:** Creates a new `IgniterMailBuilder` with default empty state.
+3. **State:** `templates` is `{}`.
 
-2. **Infrastructure Logic → Adapter**
-   - If it's provider-specific, it belongs in the adapter
-   - Examples: API calls, authentication, retry logic
+#### Method: `IgniterMailBuilder.withAdapter(provider, secret)`
 
-3. **Public API → Builder or Core**
-   - If users need to configure it, add to `IgniterMailBuilder`
-   - If users need to call it at runtime, add to `IgniterMail`
+1. **Validation:** Checks if `provider` is a known string ('resend', 'postmark', etc.).
+2. **Instantiation:** Calls the static `create()` method of the corresponding adapter class.
+3. **Assignment:** Stores the adapter instance in the builder's state.
+4. **Returns:** The updated builder instance.
 
-### Testing Strategy
+#### Method: `IgniterMailBuilder.addTemplate(key, template)`
 
-**Unit Tests** (`src/core/manager.spec.tsx`):
-- Use `MockMailAdapter` for isolated core testing
-- Test template validation (valid and invalid schemas)
-- Test hooks lifecycle (started, success, error)
-- Test queue integration (enqueue)
+1. **Type Mapping:** Takes a `key` string and a template object (built via `IgniterMailTemplate.create()`).
+2. **Merging:** Clones the current registry and adds the new template.
+3. **Casting:** Returns a new builder instance cast to the intersection of the old templates and the new one.
 
-**Adapter Tests** (`src/adapters/*.spec.ts`):
-- Test mock adapter tracking behavior
-- Mock provider APIs
-- Test error handling
+#### Method: `IgniterMailManagerCore.send(params)`
 
-**Builder Tests** (`src/builders/*.spec.ts`):
-- Test chaining, hooks, and template builder validation
+1. **Entry:** User calls `mail.send({ to: '...', template: '...', data: { ... } })`.
+2. **Telemetry (Started):** Emits `igniter.mail.send.started`.
+3. **Hook (Started):** Awaits the execution of the `onSendStarted` hook.
+4. **Template Retrieval:** Checks if the template exists. If not, throws `MAIL_PROVIDER_TEMPLATE_NOT_FOUND`.
+5. **Validation:** Passes `params.data` through the template's schema.
+   - If validation fails, throws `MAIL_PROVIDER_TEMPLATE_DATA_INVALID` with the schema issues in the `details` property.
+6. **Rendering:** Executes the React component and generates HTML and Text strings.
+7. **Adapter Execution:** Awaits `adapter.send()`.
+   - If the adapter throws, the manager catches it, normalizes it to `MAIL_PROVIDER_SEND_FAILED`, and proceeds to the error flow.
+8. **Telemetry (Success):** Emits `igniter.mail.send.success` with the calculated duration.
+9. **Hook (Success):** Awaits the `onSendSuccess` hook.
 
-**Type Tests** (in manager spec):
-- Verify template key type inference
-- Verify payload type inference
-- Verify builder fluent API type safety
+#### Method: `IgniterMailManagerCore.schedule(params, date)`
 
-### Code Style
-
-- Follow ESLint rules (`npm run lint`)
-- Use JSDoc comments for public APIs (in English)
-- Prefer explicit types over inference in public APIs
-- Use `readonly` for immutable properties
-- Use `async/await` over raw Promises
-
-### Error Handling
-
-- All predictable errors must throw `IgniterMailError`
-- Use stable error codes (e.g., `MAIL_PROVIDER_TEMPLATE_NOT_FOUND`)
-- Include relevant context in `error.metadata`
-
-### Commit Messages
-
-Follow Conventional Commits:
-```
-feat(mail): add SendGrid adapter
-fix(mail): handle schema validation errors correctly
-docs(mail): update README with queue examples
-test(mail): add tests for template validation
-```
+1. **Entry:** User calls `mail.schedule(params, futureDate)`.
+2. **Validation:** Ensures `futureDate` is > `now()`.
+3. **Queue Check:** Ensures `this.queue` is configured.
+4. **Idempotent Registration:** Calls `ensureQueueJobRegistered()`. If the job isn't yet registered on the queue adapter, it does so now.
+5. **Invocation:** Calls `queue.adapter.invoke()` with a delay calculated from the target date.
+6. **Telemetry:** Emits `igniter.mail.schedule.success`.
 
 ---
 
-## Adding a New Adapter
+### 5. Dependency & Type Graph
 
-1. Create new file in `src/adapters/` (e.g., `aws-ses.adapter.ts`)
-2. Create builder class extending pattern (e.g., `AwsSesMailAdapterBuilder`)
-3. Implement `send` method with provider API calls
-4. Export adapter and builder from `src/index.ts`
-5. Add provider to `IgniterMailBuilder.withAdapter()` shorthand (optional)
-6. Add tests for adapter-specific behavior
-7. Update README with adapter documentation
-8. Add peer dependency to `package.json`
+Understanding the type flow is essential for maintaining the "automatic" feel of the package.
 
-**Adapter Checklist:**
-- ✅ Implement `MailAdapter` interface
-- ✅ Handle provider authentication
-- ✅ Support `to`, `subject`, `html`, `text` fields
-- ✅ Optionally support `scheduledAt` if provider supports it
-- ✅ Throw descriptive errors
-- ✅ Export builder with `create()` factory
+#### 5.1 Type Architecture
 
----
+- **`IgniterMailAdapter`**: The base interface. Any object with a `send` method matching the signature can be used as an adapter.
+- **`IgniterMailTemplateBuilt<TSchema>`**: Represents a template that is ready for consumption. It carries the generic `TSchema` so it can be extracted later.
+- **`IgniterMailInfer<TTemplates>`**: This is a utility type that transforms the template registry into a consumable format for other packages:
+  - `.Templates`: A union of string literal keys (e.g., `'welcome' | 'goodbye'`).
+  - `.Payloads`: A map of keys to their inferred schema input types.
 
-## Common Tasks
+#### 5.2 Dependency Management
 
-### Running Tests
+The package keeps a "Zero-Bloat" policy for production:
 
-```bash
-# Run all tests
-npm run test
-
-# Watch mode
-npm run test:watch
-
-# Run specific test file
-npm run test -- src/core/manager.spec.tsx
-```
-
-### Building
-
-```bash
-# Build once
-npm run build
-
-# Build and watch
-npm run dev
-```
-
-### Type Checking
-
-```bash
-npm run typecheck
-```
-
-### Linting
-
-```bash
-npm run lint
-```
+- **`react` and `@react-email/components`**: Required for template rendering.
+- **`resend`, `nodemailer`**: Peer dependencies. They are not bundled, keeping the core package small.
+- **`@igniter-js/core`**: Provides the foundational error class and job interfaces.
+- **`@igniter-js/telemetry`**: Optional peer dependency. If missing, telemetry emission is safely skipped.
 
 ---
 
-## Environment Variables
+### 6. Maintenance Checklist
 
-While the package doesn't directly read environment variables, adapters typically require:
+#### Feature Addition Workflow
 
-**Resend:**
-- `RESEND_API_KEY` - Resend API key
+1. [ ] Define the interface in `src/types/`.
+2. [ ] Add configuration method to `IgniterMailBuilder` (ensure immutability).
+3. [ ] Implement the logic in `IgniterMailManagerCore`.
+4. [ ] If the feature involves a new error state, add the code to `IgniterMailErrorCode`.
+5. [ ] Define new telemetry events if needed.
+6. [ ] Add unit tests in the corresponding `.spec.ts` file.
+7. [ ] Run `npm run build` to verify that types are correctly exported.
 
-**Postmark:**
-- `POSTMARK_SERVER_TOKEN` - Postmark server token
+#### Bugfix Workflow
 
-**SendGrid:**
-- `SENDGRID_API_KEY` - SendGrid API key
-
-**SMTP:**
-- Uses a connection URL passed via adapter credentials (e.g., `smtps://user:pass@host:465`)
-
-**Validation:**
-- Supports any validation library that implements `StandardSchemaV1` (Zod 3.23+ or compatible)
+1. [ ] Create a reproduction test case in `src/core/manager.spec.tsx`.
+2. [ ] Identify the layer (Builder, Core, or Adapter).
+3. [ ] Apply the fix.
+4. [ ] Verify that `npm run typecheck` still passes (inference is fragile).
+5. [ ] Update `CHANGELOG.md` with a descriptive message following Conventional Commits.
 
 ---
 
-## Publishing Workflow
+### 7. Maintainer Troubleshooting
 
-### Pre-Publish Checklist
+#### Q: The `schedule` method is throwing "Job not found".
 
-- [ ] All tests passing (`npm run test`)
-- [ ] Build succeeds (`npm run build`)
-- [ ] TypeScript compiles (`npm run typecheck`)
-- [ ] Linting passes (`npm run lint`)
-- [ ] README.md is up-to-date
-- [ ] CHANGELOG.md is updated with version changes
-- [ ] Version in `package.json` is correct
-- [ ] All exports in `src/index.ts` are correct
+**A:** This usually happens if the queue adapter's name resolution is inconsistent. Check `manager.tsx`'s `ensureQueueJobRegistered` method. Ensure that the name used in `register` matches exactly the name used in `invoke`.
 
-### Version Update Process
+#### Q: TypeScript is complaining that `TTemplates` is not assignable.
 
-**NEVER update version without user approval.**
+**A:** This happens in the `addTemplate` method of the builder. Because we are using an intersection type (`TTemplates & { ... }`), sometimes TypeScript gets lost if the registry gets too deep. Ensure you are using `as any` only where strictly necessary to "bridge" the generic transition.
 
-When changes are ready:
-1. Review changes made
-2. Suggest version bump options (patch/minor/major)
-3. Wait for user approval
-4. Update `package.json` version
-5. Update `CHANGELOG.md`
-6. Run quality checks
-7. Ask about publishing
+#### Q: StandardSchemaV1 validation is being skipped.
 
-### Publishing
+**A:** Check `src/utils/schema.ts`. It looks for the `~standard` property on the schema object. If the user provided a plain object instead of a Zod schema (or a compatible one), the package defaults to a "passthrough" mode.
 
-```bash
-# Login to npm (if not already)
-npm login
+---
 
-# Publish (from package directory)
-cd packages/mail
-npm publish --access public
+## II. CONSUMER GUIDE (Developer Manual)
+
+### 8. Distribution Anatomy (Consumption)
+
+`@igniter-js/mail` is architected to be runtime-agnostic but server-safe.
+
+#### 8.1 Module Formats
+
+- **ESM (`.mjs`)**: For modern Node.js, Bun, and Edge runtimes.
+- **CommonJS (`.js`)**: For legacy Node.js support.
+- **DTS (`.d.ts`)**: Full type definitions including all internal interfaces.
+
+#### 8.2 Subpath Exports
+
+We provide dedicated subpaths to optimize bundle size and organization:
+
+- `@igniter-js/mail`: Main entry point (Builder, Manager).
+- `@igniter-js/mail/adapters`: Direct access to adapter classes.
+- `@igniter-js/mail/telemetry`: Telemetry event definitions.
+
+#### 8.3 Browser Shim
+
+The `shim.ts` ensures that your frontend bundle doesn't accidentally include `nodemailer` or other heavy server dependencies. If you see a "Server-only" error in your browser console, you've imported the mail service into a client component.
+
+---
+
+### 9. Quick Start & Common Patterns
+
+#### Initializing the Service
+
+```typescript
+import { IgniterMail } from "@igniter-js/mail";
+import { z } from "zod";
+import { WelcomeEmail } from "./emails/WelcomeEmail";
+
+export const mail = IgniterMail.create()
+  .withFrom("system@myapp.com")
+  .withAdapter("resend", process.env.RESEND_API_KEY!)
+  .addTemplate("welcome", {
+    subject: "Welcome to the Team!",
+    schema: z.object({ name: z.string() }),
+    render: WelcomeEmail,
+  })
+  .build();
+```
+
+#### Sending an Email
+
+```typescript
+await mail.send({
+  to: "user@example.com",
+  template: "welcome",
+  data: { name: "John Doe" },
+});
+```
+
+#### Overriding Subjects
+
+```typescript
+await mail.send({
+  to: "user@example.com",
+  template: "welcome",
+  subject: "Special welcome for John!", // This overrides the default 'Welcome to the Team!'
+  data: { name: "John" },
+});
 ```
 
 ---
 
-## Error Codes Reference
+### 10. Real-World Use Case Library
 
-| Code | Reason |
-|------|--------|
-| `MAIL_PROVIDER_ADAPTER_REQUIRED` | No adapter configured |
-| `MAIL_PROVIDER_TEMPLATES_REQUIRED` | No templates registered |
-| `MAIL_PROVIDER_TEMPLATE_NOT_FOUND` | Template key doesn't exist |
-| `MAIL_PROVIDER_TEMPLATE_DATA_INVALID` | Schema validation failed |
-| `MAIL_PROVIDER_SEND_FAILED` | Failed to send email |
-| `MAIL_PROVIDER_SCHEDULE_DATE_INVALID` | Schedule date is in the past |
-| `MAIL_PROVIDER_SCHEDULE_QUEUE_NOT_CONFIGURED` | Queue adapter is required |
-| `MAIL_PROVIDER_SCHEDULE_FAILED` | Failed to schedule email |
-| `MAIL_PROVIDER_FROM_REQUIRED` | FROM address not configured |
-| `MAIL_PROVIDER_ADAPTER_SECRET_REQUIRED` | Adapter secret not provided |
-| `MAIL_PROVIDER_ADAPTER_NOT_FOUND` | Unknown adapter provider |
-| `MAIL_ADAPTER_CONFIGURATION_INVALID` | Adapter configuration error |
+#### Case 1: High-Performance Verification Emails
+
+**Scenario:** A user signs up and needs an OTP code immediately.
+**Solution:** Use the Resend adapter for ultra-low latency and send directly in the request.
+
+```typescript
+await mail.send({
+  to: user.email,
+  template: "verifyCode",
+  data: { code: "123456" },
+});
+```
+
+#### Case 2: Bulk Newsletter Delivery
+
+**Scenario:** Sending a weekly update to 10,000 users.
+**Solution:** Use `.withQueue()` and `mail.schedule()` to avoid timing out the main server.
+
+```typescript
+for (const user of subscribers) {
+  await mail.schedule(
+    {
+      to: user.email,
+      template: "weeklyUpdate",
+      data: { content: updateContent },
+    },
+    new Date(),
+  ); // Immediate but async via queue
+}
+```
+
+#### Case 3: SaaS Multi-Tenant Support
+
+**Scenario:** Different companies using the same platform need different "From" addresses.
+**Solution:** Use a dynamic adapter instance or the `subject` override.
+
+#### Case 4: Healthcare Compliance Reminders
+
+**Scenario:** Patients must receive a HIPAA notice exactly 48 hours before surgery.
+**Solution:** Use `mail.schedule()` with a precise target date.
+
+```typescript
+const surgeryDate = new Date(...);
+const reminderDate = new Date(surgeryDate.getTime() - (48 * 60 * 60 * 1000));
+await mail.schedule(params, reminderDate);
+```
+
+#### Case 5: E-commerce Order Tracking
+
+**Scenario:** Providing real-time updates as a package moves.
+**Solution:** Use hooks to update the database state when an email is successfully sent.
+
+```typescript
+.onSendSuccess(async (params) => {
+  if (params.template === 'shippingUpdate') {
+    await db.orders.update({ where: { id: params.data.orderId }, data: { notified: true } });
+  }
+})
+```
+
+#### Case 6: Education Platform Course Onboarding
+
+**Scenario:** A sequence of 5 emails over 5 days.
+**Solution:** Use `mail.schedule()` for each day in the sequence upon enrollment.
+
+#### Case 7: Social Media Mention Alerts
+
+**Scenario:** Frequent, small emails.
+**Solution:** Use the Postmark adapter for its excellent deliverability and simple JSON API.
+
+#### Case 8: HR Portal Application Status
+
+**Scenario:** High PII (Personally Identifiable Information) sensitivity.
+**Solution:** Use the SMTP adapter with a private company mail server to keep traffic internal.
+
+#### Case 9: Logistics "Proof of Delivery"
+
+**Scenario:** Attaching a link to a signed document.
+**Solution:** React Email's `Link` component and Zod's `.url()` validation.
+
+#### Case 10: Fintech Fraud Alerts
+
+**Scenario:** Every millisecond counts.
+**Solution:** Use the `onSendStarted` hook to immediately log the attempt to a high-speed audit log.
 
 ---
 
-## Non-Goals
+### 11. Domain-Specific Guidance
 
-By design, this package does NOT:
-- Implement business rules in adapters (that's the core's job)
-- Provide browser-side email sending (server-first)
-- Bundle all adapter dependencies (they're peer dependencies)
-- Support synchronous email sending (always async)
+#### Fintech and Security
 
----
+- **Strict Validation:** Use `z.object({ ... }).strict()` in your templates to prevent passing extra data that might be logged.
+- **Telemetry:** Avoid putting transaction IDs or account numbers in the subject line, as they will be captured by telemetry.
 
-## Quick Reference
+#### Marketing and Newsletters
 
-### Key Files
+- **Spam Score:** Always provide a plain-text fallback. Igniter.js does this automatically, but ensure your component renders meaningful text (no "click here" only).
+- **Unsubscribe:** Use the `headers` property (coming soon) to add the `List-Unsubscribe` header.
 
-| File | Purpose |
-|------|---------|
-| `src/index.ts` | Public exports |
-| `src/core/manager.tsx` | Core runtime logic |
-| `src/builders/main.builder.ts` | Builder API |
-| `src/builders/template.builder.ts` | Template builder |
-| `src/adapters/*.adapter.ts` | Provider adapters |
-| `src/telemetry/index.ts` | Telemetry events |
-| `src/shim.ts` | Browser/client shim |
-| `src/types/*.ts` | Public types |
-| `src/errors/mail.error.ts` | Error classes |
+#### E-commerce
 
-### Key Commands
-
-| Command | Purpose |
-|---------|---------|
-| `npm run dev` | Build and watch |
-| `npm run build` | Build once |
-| `npm run test` | Run tests |
-| `npm run typecheck` | Check types |
-| `npm run lint` | Lint code |
+- **HTML Size:** Some email clients (like Gmail) clip emails larger than 1024KB. Keep your React components lean and use hosted images instead of base64.
 
 ---
 
-## Support & Communication
+### 12. Best Practices & Anti-Patterns
 
-When working on this package:
-- **Read this file first** before making changes
-- **Follow existing patterns** - consistency is key
-- **Update documentation** after every code change
-- **Write tests** for new features and bug fixes
-- **Ask for clarification** if requirements are unclear
-- **Suggest improvements** to this AGENTS.md if needed
+| Practice                             | Why?                                              | Example                           |
+| ------------------------------------ | ------------------------------------------------- | --------------------------------- |
+| ✅ **Always define schemas**         | Prevents runtime rendering errors.                | `z.object({ name: z.string() })`  |
+| ✅ **Use `MockMailAdapter` in CI**   | Fast, deterministic, and free.                    | `MockMailAdapter.create()`        |
+| ✅ **Await `send` calls**            | Ensures errors are caught in the current context. | `await mail.send(...)`            |
+| ✅ **Set `scheduledAt` for queues**  | Better visibility in your job manager.            | `mail.schedule(p, date)`          |
+| ❌ **Don't use `any` in data**       | Breaks the primary value of this package.         | `data: { name: 123 } as any`      |
+| ❌ **Don't put secrets in subjects** | Telemetry and logs will expose them.              | `subject: 'Your secret: 123'`     |
+| ❌ **Don't hardcode FROM addresses** | Makes it hard to change environments.             | `withFrom(process.env.MAIL_FROM)` |
 
 ---
 
-## Changelog History
+## III. TECHNICAL REFERENCE & RESILIENCE
 
-### v0.1.0 (Initial Release)
-- Core email functionality with React Email
-- Type-safe templates with StandardSchema validation
-- Multiple adapters (Resend, Postmark, SendGrid, SMTP) and mock adapter for tests
-- Queue integration for scheduled sends
-- Lifecycle hooks
-- Builder pattern API
-- Comprehensive documentation
+### 13. Exhaustive API Reference
+
+#### Core Classes
+
+| Symbol                   | Responsibility       | Key Methods                                         |
+| ------------------------ | -------------------- | --------------------------------------------------- |
+| `IgniterMail`            | Primary entry point  | `create()`                                          |
+| `IgniterMailBuilder`     | Configuration engine | `withAdapter`, `withFrom`, `addTemplate`, `build`   |
+| `IgniterMailManagerCore` | Runtime engine       | `send`, `schedule`, `$Infer`                        |
+| `IgniterMailTemplate`    | Template definition  | `create`, `withSubject`, `withSchema`, `withRender` |
+
+#### Adapters
+
+| Adapter               | Provider         | Required Credential          |
+| --------------------- | ---------------- | ---------------------------- |
+| `ResendMailAdapter`   | Resend.com       | API Key                      |
+| `PostmarkMailAdapter` | Postmarkapp.com  | Server Token                 |
+| `SendGridMailAdapter` | Sendgrid.com     | API Key                      |
+| `SmtpMailAdapter`     | Generic SMTP     | Connection URL (smtps://...) |
+| `MockMailAdapter`     | Memory (Testing) | None                         |
+
+#### Type Helpers
+
+| Type               | Purpose                  | Usage                                                |
+| ------------------ | ------------------------ | ---------------------------------------------------- |
+| `$Infer.Templates` | Union of valid keys      | `type Keys = typeof mail.$Infer.Templates`           |
+| `$Infer.Payloads`  | Map of payloads          | `type Data = typeof mail.$Infer.Payloads['welcome']` |
+| `$Infer.SendInput` | Union of all send params | For reusable utility functions                       |
+
+---
+
+### 14. Telemetry & Observability Registry
+
+The package exposes the following events via the `igniter.mail` namespace:
+
+#### Group: `send`
+
+| Event     | Attributes                    | Context                                   |
+| --------- | ----------------------------- | ----------------------------------------- |
+| `started` | `mail.to`, `mail.template`    | Emitted when `.send()` is called.         |
+| `success` | `mail.to`, `mail.duration_ms` | Emitted when the ESP accepts the email.   |
+| `error`   | `mail.to`, `mail.error.code`  | Emitted on validation or network failure. |
+
+#### Group: `schedule`
+
+| Event     | Attributes                      | Context                               |
+| --------- | ------------------------------- | ------------------------------------- |
+| `started` | `mail.to`, `mail.scheduled_at`  | Emitted when `.schedule()` is called. |
+| `success` | `mail.to`, `mail.queue_id`      | Emitted when the job is enqueued.     |
+| `error`   | `mail.to`, `mail.error.message` | Emitted if the queue adapter fails.   |
+
+---
+
+### 15. Troubleshooting & Error Code Library
+
+#### `MAIL_PROVIDER_ADAPTER_REQUIRED`
+
+- **Context:** Occurs during `.build()`.
+- **Cause:** You called `build()` before telling the service how to actually send emails.
+- **Mitigation:** Ensure `.withAdapter()` is present in your builder chain.
+- **Solution:** `mail.withAdapter('resend', 'key').build()`.
+
+#### `MAIL_PROVIDER_TEMPLATE_NOT_FOUND`
+
+- **Context:** Occurs during `.send()`.
+- **Cause:** The string key provided for `template` does not exist in the builder's registry.
+- **Mitigation:** Double-check typos and ensure `addTemplate` was called for that key.
+- **Solution:** Check the `mail.addTemplate('welcom', ...)` typo.
+
+#### `MAIL_PROVIDER_TEMPLATE_DATA_INVALID`
+
+- **Context:** Occurs before rendering.
+- **Cause:** The data object does not satisfy the template's schema (e.g., missing required fields).
+- **Mitigation:** Check the `details` array of the error to see which Zod/Schema path failed.
+- **Solution:** `data: { name: 'Valid String' }`.
+
+#### `MAIL_PROVIDER_SEND_FAILED`
+
+- **Context:** Occurs after rendering, during adapter execution.
+- **Cause:** The ESP rejected the request (e.g., invalid API key, bounce, suppression list).
+- **Mitigation:** Check the `metadata` property of the error for the raw provider response.
+- **Solution:** Verify your API key and sender domain authorization.
+
+#### `MAIL_PROVIDER_SCHEDULE_DATE_INVALID`
+
+- **Context:** Occurs during `.schedule()`.
+- **Cause:** The date provided is in the past.
+- **Mitigation:** Ensure your scheduling logic accounts for clock drift and processing time.
+- **Solution:** `mail.schedule(params, new Date(Date.now() + 5000))`.
+
+---
+
+**End of AGENTS.md for @igniter-js/mail**
