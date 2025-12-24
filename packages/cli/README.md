@@ -131,7 +131,7 @@ Generates a TypeScript client schema (const assertion + type) that mirrors your 
 
 ### `igniter generate caller`
 
-Generate Zod schemas and a ready-to-use Igniter Caller from an OpenAPI 3 spec.
+Generate an `IgniterCallerSchema` builder plus a ready-to-use Igniter Caller from an OpenAPI 3 spec.
 
 ```
 # Remote spec
@@ -141,7 +141,19 @@ igniter generate caller --name facebook --url https://api.example.com/openapi.js
 igniter generate caller --name billing --path ./openapi.yaml --output src/callers/billing
 ```
 
-Outputs `schema.ts` (Zod schemas with the provided prefix) and `index.ts` (preconfigured caller) under `src/callers/<hostname>` by default, ready to use with `@igniter-js/caller`.
+Outputs `schema.ts` (path-first schema builder with registry, `$Infer` helpers, and derived types) and
+`index.ts` (preconfigured caller) under `src/callers/<hostname>` by default, ready to use with
+`@igniter-js/caller`.
+
+Example usage:
+
+```
+import { facebookCallerSchemas } from "./src/callers/api.example.com/schema"
+
+type ProductsResponse = ReturnType<
+  typeof facebookCallerSchemas.$Infer.Response<"/products", "GET", 200>
+>
+```
 
 ### `igniter dev`
 
@@ -249,8 +261,6 @@ Useful tips:
 ## License
 
 MIT © Felipe Barcelos and the Igniter.js contributors.
-
-
 
 
 

@@ -15,7 +15,7 @@ type GenerateCallerOptions = {
   output?: string;
 };
 
-const SUPPORTED_METHODS = ["get", "post", "put", "patch", "delete"] as const;
+const SUPPORTED_METHODS = ["get", "post", "put", "patch", "delete", "head"] as const;
 type SupportedMethod = (typeof SUPPORTED_METHODS)[number];
 
 export async function handleGenerateCallerAction(
@@ -41,9 +41,13 @@ export async function handleGenerateCallerAction(
     const converter = new SchemaConverter(prefix, parsedDoc.components);
 
     const componentsCode = converter.renderComponentSchemas();
-    const schemasObject = buildSchemasObject(parsedDoc, converter);
-    const schemaConstName = `${prefix}Schema`;
-    const schemaTypeName = `${prefix}SchemaType`;
+    const schemaConstName = `${Casing.toCamelCase(callerName)}CallerSchemas`;
+    const schemaTypeName = `${prefix}CallerSchemas`;
+    const { builderCode, typeAliases } = buildSchemaBuilder(
+      parsedDoc,
+      converter,
+      schemaConstName,
+    );
 
     const schemaFileContents = [
       "/* eslint-disable */",
@@ -54,11 +58,11 @@ export async function handleGenerateCallerAction(
       " * Do not edit manually; regenerate via `igniter generate caller`.",
       " */",
       'import { z } from "zod";',
+      'import { IgniterCallerSchema } from "@igniter-js/caller";',
       componentsCode,
-      `const schemas = ${schemasObject} as const;`,
-      "",
-      `export const ${schemaConstName} = schemas;`,
+      builderCode,
       `export type ${schemaTypeName} = typeof ${schemaConstName};`,
+      typeAliases,
       "",
     ]
       .filter(Boolean)
@@ -264,13 +268,35 @@ class SchemaConverter {
 
   public renderComponentSchemas(): string {
     const entries: string[] = [];
-    const names = Object.keys(this.components?.schemas ?? {}).sort();
+    const names = this.listComponents();
     for (const name of names) {
       const identifier = this.componentIdentifier(name);
       const expression = this.convertWithCache(name);
-      entries.push(`const ${identifier} = ${expression};`);
+      const registryKey = this.registryKey(name);
+      entries.push(
+        [
+          "/**",
+          ` * Schema: ${registryKey}`,
+          ` * Source: openapi#/components/schemas/${name}`,
+          " */",
+          `const ${identifier} = ${expression};`,
+          "",
+        ].join("\n"),
+      );
     }
-    return entries.length ? `${entries.join("\n")}\n\n` : "";
+    return entries.length ? `${entries.join("\n")}\n` : "";
+  }
+
+  public listComponents(): string[] {
+    return Object.keys(this.components?.schemas ?? {}).sort();
+  }
+
+  public registryKey(name: string): string {
+    return Casing.toPascalCase(name);
+  }
+
+  public componentName(name: string): string {
+    return this.componentIdentifier(name);
   }
 
   public convert(schema: OpenAPIV3.ReferenceObject | OpenAPIV3.SchemaObject | OpenAPIV3_1.SchemaObject): string {
@@ -398,61 +424,219 @@ class SchemaConverter {
   }
 }
 
-function buildSchemasObject(
+type ResponseDocEntry = {
+  status: string;
+  statusLiteral: string;
+  label: string;
+};
+
+type SchemaExpression = {
+  expression: string;
+  label: string;
+  usesVoid: boolean;
+};
+
+type OperationDescriptor = {
+  path: string;
+  method: string;
+  request: boolean;
+  responses: ResponseDocEntry[];
+  typeName: string;
+};
+
+function buildSchemaBuilder(
   doc: OpenApiDoc,
   converter: SchemaConverter,
-): string {
-  const builder = new CodeBuilder();
-  builder.line("{");
+  schemaConstName: string,
+): { builderCode: string; typeAliases: string } {
+  const usedNames = new Map<string, number>();
+  const operations: OperationDescriptor[] = [];
+  const pathBlocks: string[] = [];
+  let needsVoid = false;
 
   const sortedPaths = Object.keys(doc.paths || {}).sort();
   for (const rawPath of sortedPaths) {
     const pathItem = doc.paths?.[rawPath];
     if (!pathItem) continue;
 
-    const methodEntries: string[] = [];
+    const methodBlocks: string[] = [];
     for (const method of SUPPORTED_METHODS) {
-      const operation = (pathItem as Record<SupportedMethod, OpenAPIV3.OperationObject | OpenAPIV3_1.OperationObject | undefined>)[method];
+      const operation = (pathItem as Record<
+        SupportedMethod,
+        OpenAPIV3.OperationObject | OpenAPIV3_1.OperationObject | undefined
+      >)[method];
       if (!operation) continue;
 
+      const normalizedPath = normalizePath(rawPath);
+      const requestBody = buildRequestBody(
+        operation.requestBody,
+        converter,
+        doc,
+      );
       const responses = buildResponses(operation.responses, converter, doc);
-      const requestBody = buildRequestBody(operation.requestBody, converter, doc);
 
-      const block: string[] = [];
-      block.push(`${method.toUpperCase()}: {`);
-      if (requestBody) {
-        block.push(indent(`request: ${requestBody},`, 1));
-      }
-      block.push(indent("responses: {", 1));
-      block.push(responses);
-      block.push(indent("},", 1));
-      block.push("},");
+      const typeBaseName = ensureUniqueTypeName(
+        buildOperationTypeName(rawPath, method, operation.operationId),
+        usedNames,
+      );
 
-      methodEntries.push(indent(block.join("\n"), 2));
+      operations.push({
+        path: normalizedPath,
+        method: method.toUpperCase(),
+        request: Boolean(requestBody),
+        responses: responses.entries,
+        typeName: typeBaseName,
+      });
+
+      const docBlock = buildMethodDocBlock({
+        method: method.toUpperCase(),
+        path: normalizedPath,
+        summary: operation.summary ?? operation.description,
+        tags: operation.tags,
+        operationId: operation.operationId,
+        requestLabel: requestBody?.label,
+        responses: responses.entries,
+        source: `openapi#/paths/${encodeJsonPointerPath(rawPath)}/${method}`,
+      });
+
+      const methodCall = buildMethodCall(method, {
+        request: requestBody?.expression,
+        responses: responses.code,
+        doc: operation.summary ?? operation.description,
+        tags: operation.tags,
+        operationId: operation.operationId,
+      });
+
+      methodBlocks.push(indent(`${docBlock}\n${methodCall}`, 3));
+      needsVoid = needsVoid || responses.usesVoid;
     }
 
-    if (!methodEntries.length) continue;
+    if (!methodBlocks.length) continue;
 
     const normalizedPath = normalizePath(rawPath);
-    builder.line(`  ${JSON.stringify(normalizedPath)}: {`);
-    builder.line(methodEntries.join("\n"));
-    builder.line("  },");
+    const pathLines = [
+      `  .path(${JSON.stringify(normalizedPath)}, (path) =>`,
+      "    path",
+      methodBlocks.join("\n"),
+      "  )",
+    ];
+
+    pathBlocks.push(pathLines.join("\n"));
   }
 
-  builder.line("}");
-  return builder.toString();
+  const builderLines: string[] = [];
+  builderLines.push(`export const ${schemaConstName} = IgniterCallerSchema.create()`);
+
+  const componentNames = converter.listComponents();
+  for (const name of componentNames) {
+    const registryKey = converter.registryKey(name);
+    const identifier = converter.componentName(name);
+    builderLines.push(`  .schema(${JSON.stringify(registryKey)}, ${identifier})`);
+  }
+
+  if (needsVoid) {
+    builderLines.push(`  .schema("Void", z.void(), { internal: true })`);
+  }
+
+  if (pathBlocks.length) {
+    builderLines.push(pathBlocks.join("\n"));
+  }
+
+  builderLines.push("  .build()");
+
+  return {
+    builderCode: `${builderLines.join("\n")}\n`,
+    typeAliases: buildTypeAliases(operations, schemaConstName),
+  };
+}
+
+function buildMethodDocBlock(params: {
+  method: string;
+  path: string;
+  summary?: string;
+  tags?: string[];
+  operationId?: string;
+  requestLabel?: string;
+  responses: ResponseDocEntry[];
+  source: string;
+}): string {
+  const lines: string[] = [];
+  lines.push("/**");
+  lines.push(` * ${params.method} ${params.path}`);
+  if (params.summary) {
+    lines.push(` * Summary: ${params.summary}`);
+  }
+  if (params.tags?.length) {
+    lines.push(` * Tags: ${params.tags.join(", ")}`);
+  }
+  if (params.operationId) {
+    lines.push(` * OperationId: ${params.operationId}`);
+  }
+  if (params.requestLabel) {
+    lines.push(` * Request: ${params.requestLabel}`);
+  }
+  if (params.responses.length) {
+    lines.push(" * Responses:");
+    for (const response of params.responses) {
+      lines.push(` *  - ${response.status}: ${response.label}`);
+    }
+  }
+  lines.push(` * Source: ${params.source}`);
+  lines.push(" */");
+  return lines.join("\n");
+}
+
+function buildMethodCall(
+  method: SupportedMethod,
+  params: {
+    request?: string;
+    responses: string;
+    doc?: string;
+    tags?: string[];
+    operationId?: string;
+  },
+): string {
+  const lines: string[] = [];
+  lines.push(`.${method}({`);
+  if (params.request) {
+    lines.push(`  request: ${params.request},`);
+  }
+  lines.push("  responses: {");
+  lines.push(params.responses);
+  lines.push("  },");
+  if (params.doc) {
+    lines.push(`  doc: ${JSON.stringify(params.doc)},`);
+  }
+  if (params.tags?.length) {
+    lines.push(`  tags: ${JSON.stringify(params.tags)},`);
+  }
+  if (params.operationId) {
+    lines.push(`  operationId: ${JSON.stringify(params.operationId)},`);
+  }
+  lines.push("})");
+  return lines.join("\n");
 }
 
 function buildResponses(
   responses: OpenAPIV3.ResponsesObject | OpenAPIV3_1.ResponsesObject | undefined,
   converter: SchemaConverter,
   doc: OpenApiDoc,
-): string {
+): { code: string; entries: ResponseDocEntry[]; usesVoid: boolean } {
+  const builder = new CodeBuilder();
+  const entries: ResponseDocEntry[] = [];
+  let usesVoid = false;
+
   if (!responses || !Object.keys(responses).length) {
-    return indent("", 2);
+    const expression = `path.ref("Void").schema`;
+    builder.line(indent(`200: ${expression},`, 2));
+    entries.push({
+      status: "200",
+      statusLiteral: "200",
+      label: "Void",
+    });
+    return { code: builder.toString(), entries, usesVoid: true };
   }
 
-  const builder = new CodeBuilder();
   const sorted = Object.keys(responses).sort();
   for (const status of sorted) {
     const responseOrRef = responses[status];
@@ -460,12 +644,18 @@ function buildResponses(
 
     const resolved = resolveResponse(responseOrRef, doc);
     const schema = resolveSchemaFromResponse(resolved);
-    const expression = schema ? converter.convert(schema) : "z.unknown()";
+    const resolvedSchema = resolveSchemaExpression(schema, converter);
 
-    builder.line(indent(`${formatStatusKey(status)}: ${expression},`, 3));
+    builder.line(indent(`${formatStatusKey(status)}: ${resolvedSchema.expression},`, 2));
+    entries.push({
+      status: String(status),
+      statusLiteral: formatStatusType(status),
+      label: resolvedSchema.label,
+    });
+    usesVoid = usesVoid || resolvedSchema.usesVoid;
   }
 
-  return builder.toString();
+  return { code: builder.toString(), entries, usesVoid };
 }
 
 function buildRequestBody(
@@ -477,7 +667,7 @@ function buildRequestBody(
     | undefined,
   converter: SchemaConverter,
   doc: OpenApiDoc,
-): string | null {
+): SchemaExpression | null {
   if (!requestBody) return null;
 
   const resolved =
@@ -487,7 +677,158 @@ function buildRequestBody(
   const schema = selectJsonSchema(resolved.content);
   if (!schema) return null;
 
-  return converter.convert(schema);
+  return resolveSchemaExpression(schema, converter);
+}
+
+function resolveSchemaExpression(
+  schema:
+    | OpenAPIV3.SchemaObject
+    | OpenAPIV3.ReferenceObject
+    | OpenAPIV3_1.SchemaObject
+    | OpenAPIV3_1.ReferenceObject
+    | undefined,
+  converter: SchemaConverter,
+): SchemaExpression {
+  if (!schema) {
+    return {
+      expression: `path.ref("Void").schema`,
+      label: "Void",
+      usesVoid: true,
+    };
+  }
+
+  const refName = extractSchemaRef(schema);
+  if (refName) {
+    const registryKey = converter.registryKey(refName);
+    const base = `path.ref(${JSON.stringify(registryKey)}).schema`;
+    return {
+      expression: wrapNullable(base, isNullable(schema)),
+      label: registryKey,
+      usesVoid: false,
+    };
+  }
+
+  const arrayRefName = extractArraySchemaRef(schema);
+  if (arrayRefName) {
+    const registryKey = converter.registryKey(arrayRefName);
+    const base = `path.ref(${JSON.stringify(registryKey)}).array()`;
+    return {
+      expression: wrapNullable(base, isNullable(schema)),
+      label: `${registryKey}[]`,
+      usesVoid: false,
+    };
+  }
+
+  return {
+    expression: converter.convert(schema),
+    label: "InlineSchema",
+    usesVoid: false,
+  };
+}
+
+function buildTypeAliases(
+  operations: OperationDescriptor[],
+  schemaConstName: string,
+): string {
+  if (!operations.length) return "";
+
+  const lines: string[] = [];
+  lines.push("// Derived types");
+
+  for (const operation of operations) {
+    const pathLiteral = JSON.stringify(operation.path);
+    const methodLiteral = JSON.stringify(operation.method);
+
+    if (operation.request) {
+      lines.push(
+        `export type ${operation.typeName}Request = ReturnType<typeof ${schemaConstName}.$Infer.Request<${pathLiteral}, ${methodLiteral}>>;`,
+      );
+    }
+
+    lines.push(
+      `export type ${operation.typeName}Responses = ReturnType<typeof ${schemaConstName}.$Infer.Responses<${pathLiteral}, ${methodLiteral}>>;`,
+    );
+
+    for (const response of operation.responses) {
+      const suffix = formatStatusSuffix(response.status);
+      lines.push(
+        `export type ${operation.typeName}Response${suffix} = ReturnType<typeof ${schemaConstName}.$Infer.Response<${pathLiteral}, ${methodLiteral}, ${response.statusLiteral}>>;`,
+      );
+    }
+
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+function buildOperationTypeName(
+  rawPath: string,
+  method: SupportedMethod,
+  operationId?: string,
+): string {
+  if (operationId) {
+    return Casing.toPascalCase(operationId);
+  }
+
+  const normalizedPath = normalizePath(rawPath);
+  const segments = normalizedPath
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => (segment.startsWith(":") ? `by-${segment.slice(1)}` : segment));
+
+  return Casing.toPascalCase([...segments, method].join("-"));
+}
+
+function ensureUniqueTypeName(
+  baseName: string,
+  used: Map<string, number>,
+): string {
+  const count = used.get(baseName) ?? 0;
+  if (count === 0) {
+    used.set(baseName, 1);
+    return baseName;
+  }
+
+  const next = `${baseName}${count + 1}`;
+  used.set(baseName, count + 1);
+  return next;
+}
+
+function encodeJsonPointerPath(pathname: string): string {
+  return pathname.replace(/~/g, "~0").replace(/\//g, "~1");
+}
+
+function extractSchemaRef(
+  schema:
+    | OpenAPIV3.SchemaObject
+    | OpenAPIV3.ReferenceObject
+    | OpenAPIV3_1.SchemaObject
+    | OpenAPIV3_1.ReferenceObject,
+): string | null {
+  if (!schema || typeof schema !== "object") return null;
+  if (!("$ref" in schema)) return null;
+  return extractComponentSchemaName(schema.$ref);
+}
+
+function extractArraySchemaRef(
+  schema:
+    | OpenAPIV3.SchemaObject
+    | OpenAPIV3.ReferenceObject
+    | OpenAPIV3_1.SchemaObject
+    | OpenAPIV3_1.ReferenceObject,
+): string | null {
+  if (!schema || typeof schema !== "object") return null;
+  if ((schema as OpenAPIV3.SchemaObject).type !== "array") return null;
+  const items = (schema as OpenAPIV3.ArraySchemaObject).items;
+  if (!items || typeof items !== "object") return null;
+  if (!("$ref" in items)) return null;
+  return extractComponentSchemaName((items as OpenAPIV3.ReferenceObject).$ref);
+}
+
+function extractComponentSchemaName(ref: string): string | null {
+  const match = ref.match(/^#\/components\/schemas\/(.+)$/);
+  return match ? match[1] : null;
 }
 
 function selectJsonSchema(
@@ -538,6 +879,16 @@ function formatStatusKey(status: string): string {
     return trimmed;
   }
   return JSON.stringify(trimmed);
+}
+
+function formatStatusType(status: string): string {
+  return formatStatusKey(status);
+}
+
+function formatStatusSuffix(status: string): string {
+  const safe = String(status).replace(/[^a-zA-Z0-9]+/g, "-");
+  const pascal = Casing.toPascalCase(safe);
+  return pascal || "Unknown";
 }
 
 function resolveResponse(
