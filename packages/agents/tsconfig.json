@@ -1,0 +1,15 @@
+{
+  "extends": "../../tooling/typescript-config/base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "paths": {
+      "@igniter-js/core": ["../core/src"],
+      "@igniter-js/*": ["../*/src"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "../core"]
+}
