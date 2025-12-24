@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/jobs",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Type-safe jobs and worker builder for Igniter.js with adapter-based backends and BullMQ integration",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,17 +13,42 @@
   ],
   "exports": {
     ".": {
+      "browser": "./dist/shim.js",
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.js"
+      "node": {
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./telemetry": {
+      "browser": "./dist/shim.js",
+      "types": "./dist/telemetry/index.d.ts",
+      "node": {
+        "import": "./dist/telemetry/index.mjs",
+        "require": "./dist/telemetry/index.cjs"
+      },
+      "import": "./dist/telemetry/index.mjs",
+      "require": "./dist/telemetry/index.cjs"
     },
     "./adapters": {
+      "browser": "./dist/shim.js",
       "types": "./dist/adapters/index.d.ts",
+      "node": {
+        "import": "./dist/adapters/index.mjs",
+        "require": "./dist/adapters/index.cjs"
+      },
       "import": "./dist/adapters/index.mjs",
       "require": "./dist/adapters/index.cjs"
     },
     "./adapters/*": {
+      "browser": "./dist/shim.js",
       "types": "./dist/adapters/*.d.ts",
+      "node": {
+        "import": "./dist/adapters/*.mjs",
+        "require": "./dist/adapters/*.cjs"
+      },
       "import": "./dist/adapters/*.mjs",
       "require": "./dist/adapters/*.cjs"
     }

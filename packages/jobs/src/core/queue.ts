@@ -3,7 +3,7 @@
  * @module @igniter-js/jobs/core/igniter-queue
  */
 
-import { IgniterQueueBuilder } from '../builders/igniter-queue.builder'
+import { IgniterQueueBuilder } from '../builders/queue.builder'
 
 /**
  * Queue facade that exposes the fluent queue builder API.

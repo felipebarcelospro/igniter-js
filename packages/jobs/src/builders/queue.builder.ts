@@ -79,24 +79,6 @@ export class IgniterQueueBuilder<
     })
   }
 
-  /**
-   * Re-types this builder with the application context type.
-   *
-   * This is a type-level helper; it does not mutate runtime state.
-   *
-   * @example
-   * ```typescript
-   * const queue = IgniterQueue.create('email')
-   *   .withContext<AppContext>()
-   *   .addJob('send', { handler: async ({ context }) => context.mailer.send() })
-   * ```
-   */
-  public withContext<TNewContext>(
-    this: IgniterQueueBuilder<unknown, {}, {}, TName>,
-  ): IgniterQueueBuilder<TNewContext, {}, {}, TName> {
-    return this as unknown as IgniterQueueBuilder<TNewContext, {}, {}, TName>
-  }
-
   private clone<
     TNewJobs extends Record<string, IgniterJobDefinition<TContext, any, any>> = TJobs,
     TNewCron extends Record<string, IgniterCronDefinition<TContext, any>> = TCron,

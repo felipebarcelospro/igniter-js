@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { IgniterJobs } from "./igniter-jobs";
-import { IgniterQueueBuilder } from "../builders/igniter-queue.builder";
+import { IgniterJobs } from "../builders/main.builder";
+import { IgniterQueueBuilder } from "../builders/queue.builder";
 import { IgniterJobsMemoryAdapter } from "../adapters/memory.adapter";
 import type { IgniterJobsTelemetry } from "../types/events";
 
