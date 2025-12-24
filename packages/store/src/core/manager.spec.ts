@@ -9,7 +9,7 @@ import type { IgniterStoreAdapter } from '../types/adapter'
 import { DEFAULT_SERIALIZER, type IIgniterStoreManager } from '../types'
 import { z } from 'zod'
 import { IgniterStoreEvents } from '../builders/events.builder'
-import { IGNITER_STORE_TELEMETRY_EVENTS } from '../types/telemetry'
+import { IgniterStoreTelemetryEvents } from 'src/telemetry'
 
 // Mock adapter factory
 const createMockAdapter = (): IgniterStoreAdapter<any> => ({
@@ -354,6 +354,7 @@ describe('IgniterStore', () => {
       })
 
       await expect(
+        // @ts-expect-error - Testing runtime validation for incorrect payload --- IGNORE ---
         typedStore.events.publish('user:created', { id: 123 }),
       ).rejects.toMatchObject({ code: 'STORE_SCHEMA_VALIDATION_FAILED' })
     })
@@ -402,26 +403,981 @@ describe('IgniterStore', () => {
   })
 
   describe('telemetry', () => {
-    it('should emit telemetry events for kv.get', async () => {
+    const createTelemetryStore = () => {
       const telemetry = { emit: vi.fn() }
+      const localAdapter = createMockAdapter()
       const telemetryStore = new IgniterStoreManager({
-        adapter,
+        adapter: localAdapter,
         service: 'test-api',
         scopeChain: [],
         serializer: DEFAULT_SERIALIZER,
         telemetry: telemetry as any,
       })
 
-      await telemetryStore.kv.get('user:123')
+      return { telemetry, telemetryStore, adapter: localAdapter }
+    }
 
-      expect(telemetry.emit).toHaveBeenCalledWith(
-        IGNITER_STORE_TELEMETRY_EVENTS.KV_GET_STARTED,
-        expect.any(Object),
-      )
-      expect(telemetry.emit).toHaveBeenCalledWith(
-        IGNITER_STORE_TELEMETRY_EVENTS.KV_GET_SUCCESS,
-        expect.any(Object),
-      )
+    const expectEmitted = (
+      telemetry: { emit: ReturnType<typeof vi.fn> },
+      event: string,
+      level: 'debug' | 'error',
+      attributes?: Record<string, unknown>,
+      position: 'first' | 'last' = 'last',
+    ) => {
+      const calls = telemetry.emit.mock.calls.filter(([key]) => key === event)
+      expect(calls.length).toBeGreaterThan(0)
+      const call = position === 'first' ? calls[0] : calls[calls.length - 1]
+      expect(call?.[1]?.level).toBe(level)
+      if (attributes) {
+        expect(call?.[1]).toMatchObject({ attributes })
+      }
+    }
+
+    describe('telemetry.kv', () => {
+      it('emits kv.get.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.kv.get('user:123')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('kv.get.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'kv',
+          },
+          'first',
+        )
+      })
+
+      it('emits kv.get.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.kv.get('user:123')
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('kv.get.success'), 'debug', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'kv',
+          'ctx.kv.found': false,
+        })
+      })
+
+      it('emits kv.get.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.get as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(telemetryStore.kv.get('user:123')).rejects.toBeInstanceOf(Error)
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('kv.get.error'), 'error', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'kv',
+        })
+      })
+
+      it('emits kv.set.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.kv.set('user:123', { name: 'Alice' }, { ttl: 300 })
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('kv.set.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'kv',
+            'ctx.kv.ttl': 300,
+          },
+          'first',
+        )
+      })
+
+      it('emits kv.set.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.kv.set('user:123', { name: 'Alice' }, { ttl: 300 })
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('kv.set.success'), 'debug', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'kv',
+          'ctx.kv.ttl': 300,
+        })
+      })
+
+      it('emits kv.set.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.set as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(
+          telemetryStore.kv.set('user:123', { name: 'Alice' }),
+        ).rejects.toBeInstanceOf(Error)
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('kv.set.error'), 'error', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'kv',
+        })
+      })
+
+      it('emits kv.remove.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.kv.remove('user:123')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('kv.remove.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'kv',
+          },
+          'first',
+        )
+      })
+
+      it('emits kv.remove.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.kv.remove('user:123')
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('kv.remove.success'), 'debug', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'kv',
+        })
+      })
+
+      it('emits kv.remove.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.delete as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(telemetryStore.kv.remove('user:123')).rejects.toBeInstanceOf(Error)
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('kv.remove.error'), 'error', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'kv',
+        })
+      })
+
+      it('emits kv.exists.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.kv.exists('user:123')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('kv.exists.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'kv',
+          },
+          'first',
+        )
+      })
+
+      it('emits kv.exists.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.kv.exists('user:123')
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('kv.exists.success'), 'debug', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'kv',
+          'ctx.kv.existed': false,
+        })
+      })
+
+      it('emits kv.exists.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.has as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(telemetryStore.kv.exists('user:123')).rejects.toBeInstanceOf(Error)
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('kv.exists.error'), 'error', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'kv',
+        })
+      })
+
+      it('emits kv.expire.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.kv.expire('user:123', 300)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('kv.expire.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'kv',
+            'ctx.kv.ttl': 300,
+          },
+          'first',
+        )
+      })
+
+      it('emits kv.expire.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.kv.expire('user:123', 300)
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('kv.expire.success'), 'debug', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'kv',
+          'ctx.kv.ttl': 300,
+        })
+      })
+
+      it('emits kv.expire.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.expire as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(telemetryStore.kv.expire('user:123', 300)).rejects.toBeInstanceOf(
+          Error,
+        )
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('kv.expire.error'), 'error', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'kv',
+          'ctx.kv.ttl': 300,
+        })
+      })
+
+      it('emits kv.touch.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.kv.touch('user:123', 300)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('kv.touch.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'kv',
+            'ctx.kv.ttl': 300,
+          },
+          'first',
+        )
+      })
+
+      it('emits kv.touch.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.kv.touch('user:123', 300)
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('kv.touch.success'), 'debug', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'kv',
+          'ctx.kv.ttl': 300,
+        })
+      })
+
+      it('emits kv.touch.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.expire as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(telemetryStore.kv.touch('user:123', 300)).rejects.toBeInstanceOf(
+          Error,
+        )
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('kv.touch.error'), 'error', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'kv',
+          'ctx.kv.ttl': 300,
+        })
+      })
+    })
+
+    describe('telemetry.counter', () => {
+      it('emits counter.increment.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.counter.increment('page-views')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('counter.increment.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'counter',
+            'ctx.counter.delta': 1,
+          },
+          'first',
+        )
+      })
+
+      it('emits counter.increment.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.counter.increment('page-views')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('counter.increment.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'counter',
+            'ctx.counter.delta': 1,
+          },
+        )
+      })
+
+      it('emits counter.increment.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.increment as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(telemetryStore.counter.increment('page-views')).rejects.toBeInstanceOf(
+          Error,
+        )
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('counter.increment.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'counter',
+            'ctx.counter.delta': 1,
+          },
+        )
+      })
+
+      it('emits counter.decrement.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.counter.decrement('page-views')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('counter.decrement.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'counter',
+            'ctx.counter.delta': -1,
+          },
+          'first',
+        )
+      })
+
+      it('emits counter.decrement.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.counter.decrement('page-views')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('counter.decrement.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'counter',
+            'ctx.counter.delta': -1,
+          },
+        )
+      })
+
+      it('emits counter.decrement.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.increment as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(telemetryStore.counter.decrement('page-views')).rejects.toBeInstanceOf(
+          Error,
+        )
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('counter.decrement.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'counter',
+            'ctx.counter.delta': -1,
+          },
+        )
+      })
+
+      it('emits counter.expire.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.counter.expire('page-views', 300)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('counter.expire.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'counter',
+            'ctx.counter.ttl': 300,
+          },
+          'first',
+        )
+      })
+
+      it('emits counter.expire.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.counter.expire('page-views', 300)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('counter.expire.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'counter',
+            'ctx.counter.ttl': 300,
+          },
+        )
+      })
+
+      it('emits counter.expire.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.expire as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(telemetryStore.counter.expire('page-views', 300)).rejects.toBeInstanceOf(
+          Error,
+        )
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('counter.expire.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'counter',
+            'ctx.counter.ttl': 300,
+          },
+        )
+      })
+    })
+
+    describe('telemetry.claim', () => {
+      it('emits claim.acquire.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.claim.once('process:1', 'worker-1', { ttl: 30 })
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('claim.acquire.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'claim',
+            'ctx.claim.ttl': 30,
+          },
+          'first',
+        )
+      })
+
+      it('emits claim.acquire.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.claim.once('process:1', 'worker-1', { ttl: 30 })
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('claim.acquire.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'claim',
+            'ctx.claim.ttl': 30,
+            'ctx.claim.acquired': true,
+          },
+        )
+      })
+
+      it('emits claim.acquire.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.setNX as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(
+          telemetryStore.claim.once('process:1', 'worker-1', { ttl: 30 }),
+        ).rejects.toBeInstanceOf(Error)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('claim.acquire.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'claim',
+            'ctx.claim.ttl': 30,
+          },
+        )
+      })
+    })
+
+    describe('telemetry.batch', () => {
+      it('emits batch.get.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.batch.get(['user:1', 'user:2'])
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('batch.get.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'batch',
+            'ctx.batch.count': 2,
+          },
+          'first',
+        )
+      })
+
+      it('emits batch.get.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.batch.get(['user:1', 'user:2'])
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('batch.get.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'batch',
+            'ctx.batch.count': 2,
+            'ctx.batch.found': 0,
+          },
+        )
+      })
+
+      it('emits batch.get.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.mget as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(telemetryStore.batch.get(['user:1', 'user:2'])).rejects.toBeInstanceOf(
+          Error,
+        )
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('batch.get.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'batch',
+            'ctx.batch.count': 2,
+          },
+        )
+      })
+
+      it('emits batch.set.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.batch.set([
+          { key: 'user:1', value: { name: 'Alice' } },
+          { key: 'user:2', value: { name: 'Bob' }, ttl: 120 },
+        ])
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('batch.set.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'batch',
+            'ctx.batch.count': 2,
+          },
+          'first',
+        )
+      })
+
+      it('emits batch.set.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.batch.set([
+          { key: 'user:1', value: { name: 'Alice' } },
+          { key: 'user:2', value: { name: 'Bob' }, ttl: 120 },
+        ])
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('batch.set.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'batch',
+            'ctx.batch.count': 2,
+          },
+        )
+      })
+
+      it('emits batch.set.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.mset as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(
+          telemetryStore.batch.set([{ key: 'user:1', value: { name: 'Alice' } }]),
+        ).rejects.toBeInstanceOf(Error)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('batch.set.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'batch',
+            'ctx.batch.count': 1,
+          },
+        )
+      })
+    })
+
+    describe('telemetry.events', () => {
+      it('emits events.publish.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.events.publish('user:created', { id: 'user-1' })
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('events.publish.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'events',
+            'ctx.events.channel': 'user:created',
+          },
+          'first',
+        )
+      })
+
+      it('emits events.publish.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.events.publish('user:created', { id: 'user-1' })
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('events.publish.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'events',
+            'ctx.events.channel': 'user:created',
+          },
+        )
+      })
+
+      it('emits events.publish.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.publish as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(
+          telemetryStore.events.publish('user:created', { id: 'user-1' }),
+        ).rejects.toBeInstanceOf(Error)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('events.publish.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'events',
+            'ctx.events.channel': 'user:created',
+          },
+        )
+      })
+
+      it('emits events.subscribe.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        const off = await telemetryStore.events.subscribe('user:*', async () => undefined)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('events.subscribe.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'events',
+            'ctx.events.channel': 'user:*',
+            'ctx.events.wildcard': true,
+          },
+          'first',
+        )
+        await off()
+      })
+
+      it('emits events.subscribe.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        const off = await telemetryStore.events.subscribe('user:*', async () => undefined)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('events.subscribe.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'events',
+            'ctx.events.channel': 'user:*',
+            'ctx.events.wildcard': true,
+          },
+        )
+        await off()
+      })
+
+      it('emits events.subscribe.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.subscribe as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(
+          telemetryStore.events.subscribe('user:*', async () => undefined),
+        ).rejects.toBeInstanceOf(Error)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('events.subscribe.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'events',
+            'ctx.events.channel': 'user:*',
+            'ctx.events.wildcard': true,
+          },
+        )
+      })
+
+      it('emits events.unsubscribe.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        const off = await telemetryStore.events.subscribe('user:*', async () => undefined)
+        await off()
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('events.unsubscribe.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'events',
+            'ctx.events.channel': 'user:*',
+            'ctx.events.wildcard': true,
+          },
+          'first',
+        )
+      })
+
+      it('emits events.unsubscribe.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        const off = await telemetryStore.events.subscribe('user:*', async () => undefined)
+        await off()
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('events.unsubscribe.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'events',
+            'ctx.events.channel': 'user:*',
+            'ctx.events.wildcard': true,
+          },
+        )
+      })
+
+      it('emits events.unsubscribe.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        const off = await telemetryStore.events.subscribe('user:*', async () => undefined)
+        ;(localAdapter.unsubscribe as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(off()).rejects.toBeInstanceOf(Error)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('events.unsubscribe.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'events',
+            'ctx.events.channel': 'user:*',
+            'ctx.events.wildcard': true,
+          },
+        )
+      })
+    })
+
+    describe('telemetry.stream', () => {
+      it('emits stream.append.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.streams.append('events', { type: 'click' })
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.append.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+          },
+          'first',
+        )
+      })
+
+      it('emits stream.append.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.streams.append('events', { type: 'click' })
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.append.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+          },
+        )
+      })
+
+      it('emits stream.append.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.xadd as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(
+          telemetryStore.streams.append('events', { type: 'click' }),
+        ).rejects.toBeInstanceOf(Error)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.append.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+          },
+        )
+      })
+
+      it('emits stream.group.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        const group = telemetryStore.streams.group('processors', 'worker-1')
+        await group.ensure('events')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.group.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+            'ctx.stream.group': 'processors',
+            'ctx.stream.consumer': 'worker-1',
+          },
+          'first',
+        )
+      })
+
+      it('emits stream.group.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        const group = telemetryStore.streams.group('processors', 'worker-1')
+        await group.ensure('events')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.group.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+            'ctx.stream.group': 'processors',
+            'ctx.stream.consumer': 'worker-1',
+          },
+        )
+      })
+
+      it('emits stream.group.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        const group = telemetryStore.streams.group('processors', 'worker-1')
+        ;(localAdapter.xgroupCreate as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(group.ensure('events')).rejects.toBeInstanceOf(Error)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.group.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+            'ctx.stream.group': 'processors',
+            'ctx.stream.consumer': 'worker-1',
+          },
+        )
+      })
+
+      it('emits stream.read.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        const group = telemetryStore.streams.group('processors', 'worker-1')
+        await group.read('events')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.read.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+            'ctx.stream.group': 'processors',
+            'ctx.stream.consumer': 'worker-1',
+          },
+          'first',
+        )
+      })
+
+      it('emits stream.read.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        const group = telemetryStore.streams.group('processors', 'worker-1')
+        await group.read('events')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.read.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+            'ctx.stream.group': 'processors',
+            'ctx.stream.consumer': 'worker-1',
+            'ctx.stream.count': 0,
+          },
+        )
+      })
+
+      it('emits stream.read.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        const group = telemetryStore.streams.group('processors', 'worker-1')
+        ;(localAdapter.xreadgroup as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(group.read('events')).rejects.toBeInstanceOf(Error)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.read.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+            'ctx.stream.group': 'processors',
+            'ctx.stream.consumer': 'worker-1',
+          },
+        )
+      })
+
+      it('emits stream.ack.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        const group = telemetryStore.streams.group('processors', 'worker-1')
+        await group.ack('events', ['1-0'])
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.ack.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+            'ctx.stream.group': 'processors',
+            'ctx.stream.consumer': 'worker-1',
+            'ctx.stream.count': 1,
+          },
+          'first',
+        )
+      })
+
+      it('emits stream.ack.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        const group = telemetryStore.streams.group('processors', 'worker-1')
+        await group.ack('events', ['1-0'])
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.ack.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+            'ctx.stream.group': 'processors',
+            'ctx.stream.consumer': 'worker-1',
+            'ctx.stream.count': 1,
+          },
+        )
+      })
+
+      it('emits stream.ack.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        const group = telemetryStore.streams.group('processors', 'worker-1')
+        ;(localAdapter.xack as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(group.ack('events', ['1-0'])).rejects.toBeInstanceOf(Error)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.ack.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+            'ctx.stream.group': 'processors',
+            'ctx.stream.consumer': 'worker-1',
+            'ctx.stream.count': 1,
+          },
+        )
+      })
+    })
+
+    describe('telemetry.dev', () => {
+      it('emits dev.scan.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.dev.scan('user:*')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('dev.scan.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'dev',
+          },
+          'first',
+        )
+      })
+
+      it('emits dev.scan.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.dev.scan('user:*')
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('dev.scan.success'), 'debug', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'dev',
+        })
+      })
+
+      it('emits dev.scan.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.scan as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(telemetryStore.dev.scan('user:*')).rejects.toBeInstanceOf(Error)
+        expectEmitted(telemetry, IgniterStoreTelemetryEvents.get.key('dev.scan.error'), 'error', {
+          'ctx.store.service': 'test-api',
+          'ctx.store.namespace': 'dev',
+        })
+      })
     })
   })
 

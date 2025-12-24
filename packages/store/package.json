@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/store",
-  "version": "0.1.2",
+  "version": "0.1.21",
   "description": "Type-safe distributed store library for Igniter.js with Redis support, scoped operations, and typed pub/sub",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,30 +13,35 @@
   ],
   "exports": {
     ".": {
+      "browser": "./dist/shim.js",
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
+      "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
     "./telemetry": {
+      "browser": "./dist/shim.js",
       "types": "./dist/telemetry/index.d.ts",
-      "import": "./dist/telemetry/index.js",
+      "import": "./dist/telemetry/index.mjs",
       "require": "./dist/telemetry/index.js"
     },
     "./adapters": {
+      "browser": "./dist/shim.js",
       "types": "./dist/adapters/index.d.ts",
       "import": "./dist/adapters/index.mjs",
-      "require": "./dist/adapters/index.cjs"
+      "require": "./dist/adapters/index.js"
     },
     "./adapters/*": {
+      "browser": "./dist/shim.js",
       "types": "./dist/adapters/*.d.ts",
       "import": "./dist/adapters/*.mjs",
-      "require": "./dist/adapters/*.cjs"
+      "require": "./dist/adapters/*.js"
     }
   },
   "scripts": {
     "dev": "tsup --watch",
     "build": "tsup",
     "test": "vitest run",
+    "test:ui": "vitest --ui",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ./src/**/*.{ts,tsx}",
@@ -66,11 +71,11 @@
     "url": "https://github.com/felipebarcelospro/igniter-js/issues"
   },
   "homepage": "https://igniterjs.com",
-  "dependencies": {},
   "devDependencies": {
     "@igniter-js/core": "*",
     "@igniter-js/telemetry": "*",
     "@types/node": "^22.7.5",
+    "@vitest/ui": "^2.1.9",
     "ioredis": "^5.3.2",
     "tsup": "^8.3.0",
     "typescript": "^5.6.3",
@@ -80,14 +85,20 @@
   "peerDependencies": {
     "@igniter-js/core": ">=0.3.40",
     "@igniter-js/telemetry": ">=0.1.0",
-    "zod": ">=4.2.1",
-    "ioredis": ">=5.3.2"
+    "ioredis": ">=5.3.2",
+    "zod": ">=4.2.1"
   },
   "peerDependenciesMeta": {
     "ioredis": {
       "optional": true
     },
     "@igniter-js/telemetry": {
+      "optional": true
+    },
+    "@igniter-js/core": {
+      "optional": false
+    },
+    "zod": {
       "optional": true
     }
   },

@@ -4,7 +4,6 @@
  */
 
 import type { IgniterLogger } from "@igniter-js/core";
-import type { IgniterStoreTelemetry } from "./telemetry";
 import type { IgniterStoreAdapter } from "./adapter";
 import type {
   IgniterStoreEventsRegistry,
@@ -12,6 +11,7 @@ import type {
 } from "./events";
 import type { IgniterStoreScopeOptions } from "./scope";
 import type { IgniterStoreSerializer } from "./serializer";
+import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 
 /**
  * Reserved namespace prefixes that cannot be used by user code.
@@ -54,5 +54,5 @@ export interface IgniterStoreBuilderState<
   /** Logger instance */
   logger?: IgniterLogger;
   /** Telemetry instance for observability */
-  telemetry?: IgniterStoreTelemetry;
+  telemetry?: IgniterTelemetryManager;
 }

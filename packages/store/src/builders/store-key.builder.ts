@@ -61,6 +61,24 @@ export class IgniterStoreKeyBuilder {
   }
 
   /**
+   * Creates a new IgniterStoreKeyBuilder instance.
+   *
+   * @param options - The builder options
+   * @returns A new IgniterStoreKeyBuilder
+   *
+   * @example
+   * ```typescript
+   * const builder = IgniterStoreKeyBuilder.create({
+   *   service: 'my-api',
+   *   scopeChain: [],
+   * })
+   * ```
+   */
+  static create(options: IgniterStoreKeyBuilderOptions): IgniterStoreKeyBuilder {
+    return new IgniterStoreKeyBuilder(options)
+  }
+
+  /**
    * Builds a complete key with namespace and suffix.
    *
    * @param namespace - The key namespace (kv, counter, claim, events, streams)
@@ -129,4 +147,23 @@ export class IgniterStoreKeyBuilder {
   getPrefix(): string {
     return this.prefix
   }
+}
+
+/**
+ * Alias for IgniterStoreKeyBuilder.
+ *
+ * Provides a more concise name for the key builder utility.
+ *
+ * @example
+ * ```typescript
+ * import { IgniterStoreKey } from '@igniter-js/store'
+ *
+ * const builder = new IgniterStoreKey({
+ *   service: 'my-api',
+ *   scopeChain: [],
+ * })
+ * ```
+ */
+export const IgniterStoreKey = {
+  create: IgniterStoreKeyBuilder.create
 }

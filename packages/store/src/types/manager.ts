@@ -4,7 +4,7 @@
  */
 
 import type { IgniterLogger } from "@igniter-js/core";
-import type { IgniterStoreEventAccessor, IgniterStoreEventContextHandler, IgniterStoreEventsRegistry, IgniterStoreEventsRegistryProxy, IgniterStoreFlattenRegistryKeys, IgniterStoreGetEventSchema, IgniterStoreInferEventSchema, IgniterStoreUnsubscribeFn, IgniterStoreWildcardEventContext } from "./events";
+import type { IgniterStoreEventContextHandler, IgniterStoreEventsRegistry, IgniterStoreEventsRegistryProxy, IgniterStoreFlattenRegistryKeys, IgniterStoreGetEventSchema, IgniterStoreInferEventSchema, IgniterStoreUnsubscribeFn, IgniterStoreWildcardEventContext } from "./events";
 import type { IgniterStoreScopeIdentifier } from "./scope";
 import type { IgniterStoreScanOptions, IgniterStoreScanResult, IgniterStoreStreamAppendOptions, IgniterStoreStreamConsumerGroup } from "./adapter";
 
@@ -111,7 +111,7 @@ export interface IgniterStoreEventsAPI<TRegistry extends IgniterStoreEventsRegis
 /**
  * Combined events interface that has both the API methods and the proxy accessors.
  */
-export type IgniterStoreEvents<TRegistry extends IgniterStoreEventsRegistry> =
+export type IgniterStoreEventsManager<TRegistry extends IgniterStoreEventsRegistry> =
   IgniterStoreEventsAPI<TRegistry> & IgniterStoreEventsRegistryProxy<TRegistry>
 
 /**

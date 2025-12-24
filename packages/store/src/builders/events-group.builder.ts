@@ -13,7 +13,7 @@ import { IgniterStoreEventValidator } from "../utils/events"
  *   .event('push', pushSchema)
  * ```
  */
-export class IgniterStoreEventsGroup<TEvents extends IgniterStoreEventsDirectory = {}> {
+export class IgniterStoreEventsGroupBuilder<TEvents extends IgniterStoreEventsDirectory = {}> {
   private readonly events: TEvents
 
   private constructor(events: TEvents = {} as TEvents) {
@@ -22,9 +22,15 @@ export class IgniterStoreEventsGroup<TEvents extends IgniterStoreEventsDirectory
 
   /**
    * Creates a new empty group builder.
+   * @returns A new IgniterStoreEventsGroupBuilder instance
+   *
+   * @example
+   * ```typescript
+   * const group = IgniterStoreEventsGroup.create()
+   * ```
    */
-  static create(): IgniterStoreEventsGroup<{}> {
-    return new IgniterStoreEventsGroup({})
+  static create(): IgniterStoreEventsGroupBuilder<{}> {
+    return new IgniterStoreEventsGroupBuilder({})
   }
 
   /**
@@ -42,10 +48,10 @@ export class IgniterStoreEventsGroup<TEvents extends IgniterStoreEventsDirectory
   event<TName extends string, TSchema extends IgniterStoreEventSchema>(
     name: TName,
     schema: TSchema,
-  ): IgniterStoreEventsGroup<TEvents & { [K in TName]: TSchema }> {
+  ): IgniterStoreEventsGroupBuilder<TEvents & { [K in TName]: TSchema }> {
     IgniterStoreEventValidator.ensureValidName(name, 'Event')
 
-    return new IgniterStoreEventsGroup({
+    return new IgniterStoreEventsGroupBuilder({
       ...this.events,
       [name]: schema,
     } as TEvents & { [K in TName]: TSchema })
@@ -59,4 +65,25 @@ export class IgniterStoreEventsGroup<TEvents extends IgniterStoreEventsDirectory
   build(): TEvents {
     return this.events
   }
+}
+
+/**
+ * Alias for the IgniterStoreEventsGroupBuilder class.
+ * 
+ * Used to create and build groups of events with their associated schemas.
+ * Provides a fluent API for building event groups with type-safe schema validation.
+ * 
+ * @see IgniterStoreEventsGroupBuilder
+ * 
+ * @example
+ * ```typescript
+ * const eventGroup = IgniterStoreEventsGroup
+ *   .create()
+ *   .event('user_created', z.object({ userId: z.string(), email: z.string() }))
+ *   .event('user_updated', z.object({ userId: z.string(), changes: z.record(z.unknown()) }))
+ *   .build()
+ * ```
+ */
+export const IgniterStoreEventsGroup = {
+  create: IgniterStoreEventsGroupBuilder.create
 }

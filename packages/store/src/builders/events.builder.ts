@@ -43,7 +43,7 @@
 import type { IgniterStoreEventSchema, IgniterStoreEventsDirectory } from '../types/events'
 import { IgniterStoreError } from '../errors/store.error'
 import { IgniterStoreEventValidator } from '../utils/events'
-import { IgniterStoreEventsGroup } from './events-group.builder'
+import { IgniterStoreEventsGroup, type IgniterStoreEventsGroupBuilder } from './events-group.builder'
 
 
 /**
@@ -102,13 +102,31 @@ import { IgniterStoreEventsGroup } from './events-group.builder'
  * await off()
  * ```
  */
-export class IgniterStoreEvents<
+export class IgniterStoreEventsBuilder<
   TNamespace,
   TEvents extends IgniterStoreEventsDirectory = {}
 > {
+  /**
+   * The accumulated events directory containing all defined events and groups.
+   * @readonly
+   */
   readonly events: TEvents
+
+  /**
+   * The namespace for this events builder.
+   * @readonly
+   */
   readonly namespace: TNamespace
 
+  /**
+   * Private constructor for creating a new IgniterStoreEventsBuilder instance.
+   * Use {@link IgniterStoreEventsBuilder.create} to instantiate.
+   *
+   * @param namespace - The namespace identifier for events
+   * @param events - The events directory (defaults to empty object)
+   *
+   * @internal
+   */
   private constructor(
     namespace: TNamespace,
     events: TEvents = {} as TEvents
@@ -117,9 +135,21 @@ export class IgniterStoreEvents<
     this.events = events
   }
   
-  static create<TNewNamespace extends string>(namespace: TNewNamespace): IgniterStoreEvents<TNewNamespace, {}> {
+  /**
+   * Creates a new IgniterStoreEventsBuilder instance with the specified namespace.
+   *
+   * @param namespace - The namespace identifier for events
+   * @returns A new IgniterStoreEventsBuilder
+   *
+   * @example
+   * ```typescript
+   * const events = IgniterStoreEvents
+   *   .create('user')
+   * ```
+   */
+  static create<TNewNamespace extends string>(namespace: TNewNamespace): IgniterStoreEventsBuilder<TNewNamespace, {}> {
     IgniterStoreEventValidator.ensureValidName(namespace, 'Namespace')
-    return new IgniterStoreEvents<TNewNamespace, {}>(namespace, {})
+    return new IgniterStoreEventsBuilder<TNewNamespace, {}>(namespace, {})
   }
 
   /**
@@ -142,7 +172,7 @@ export class IgniterStoreEvents<
   event<TName extends string, TSchema extends IgniterStoreEventSchema>(
     name: TName,
     schema: TSchema,
-  ): IgniterStoreEvents<
+  ): IgniterStoreEventsBuilder<
     TNamespace, 
     TEvents & { [K in TName]: TSchema }
   > {
@@ -158,7 +188,7 @@ export class IgniterStoreEvents<
       })
     }
 
-    return new IgniterStoreEvents(this.namespace, {
+    return new IgniterStoreEventsBuilder(this.namespace, {
       ...this.events,
       [name]: schema,
     } as TEvents & { [K in TName]: TSchema })
@@ -190,8 +220,8 @@ export class IgniterStoreEvents<
    */
   group<TName extends string, TGroupEvents extends IgniterStoreEventsDirectory>(
     name: TName,
-    builder: (group: IgniterStoreEventsGroup<{}>) => IgniterStoreEventsGroup<TGroupEvents>,
-  ): IgniterStoreEvents<TNamespace, TEvents & { [K in TName]: TGroupEvents }> {
+    builder: (group: IgniterStoreEventsGroupBuilder<{}>) => IgniterStoreEventsGroupBuilder<TGroupEvents>,
+  ): IgniterStoreEventsBuilder<TNamespace, TEvents & { [K in TName]: TGroupEvents }> {
     IgniterStoreEventValidator.ensureValidName(name, 'Group')
 
     // Check for duplicate
@@ -207,7 +237,7 @@ export class IgniterStoreEvents<
     const group = IgniterStoreEventsGroup.create()
     const builtGroup = builder(group).build()
 
-    return new IgniterStoreEvents(this.namespace, {
+    return new IgniterStoreEventsBuilder(this.namespace, {
       ...this.events,
       [name]: builtGroup,
     } as TEvents & { [K in TName]: TGroupEvents })
@@ -246,4 +276,64 @@ export class IgniterStoreEvents<
       }
     }
   }
+}
+
+/**
+ * Factory export for creating typed event schemas.
+ *
+ * This is an alias to {@link IgniterStoreEventsBuilder} that provides
+ * a convenient API for declaratively building event definitions with
+ * full TypeScript type inference.
+ *
+ * @type {typeof IgniterStoreEventsBuilder}
+ *
+ * @example
+ * ```typescript
+ * // Basic usage
+ * import { IgniterStoreEvents } from '@igniter-js/store'
+ * import { z } from 'zod'
+ *
+ * export const UserEvents = IgniterStoreEvents
+ *   .create('user')
+ *   .event('created', z.object({
+ *     userId: z.string(),
+ *     email: z.string().email(),
+ *     createdAt: z.date(),
+ *   }))
+ *   .event('updated', z.object({
+ *     userId: z.string(),
+ *     updatedAt: z.date(),
+ *   }))
+ *   .event('deleted', z.object({
+ *     userId: z.string(),
+ *     deletedAt: z.date(),
+ *   }))
+ *   .build()
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // With nested groups
+ * export const OrderEvents = IgniterStoreEvents
+ *   .create('order')
+ *   .event('created', orderCreatedSchema)
+ *   .group('fulfillment', (group) =>
+ *     group
+ *       .event('shipped', orderShippedSchema)
+ *       .event('delivered', orderDeliveredSchema)
+ *   )
+ *   .group('payments', (group) =>
+ *     group
+ *       .event('authorized', paymentAuthorizedSchema)
+ *       .event('captured', paymentCapturedSchema)
+ *       .event('refunded', paymentRefundedSchema)
+ *   )
+ *   .build()
+ * ```
+ *
+ * @see {@link IgniterStoreEventsBuilder} for detailed method documentation
+ * @see {@link IgniterStoreEventsGroup} for nested group definitions
+ */
+export const IgniterStoreEvents = {
+  create: IgniterStoreEventsBuilder.create
 }

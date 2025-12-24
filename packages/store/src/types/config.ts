@@ -4,7 +4,6 @@
  */
 
 import type { IgniterLogger } from "@igniter-js/core";
-import type { IgniterStoreTelemetry } from "./telemetry";
 import type { IgniterStoreAdapter } from "./adapter";
 import type {
   IgniterStoreEventsRegistry,
@@ -12,6 +11,7 @@ import type {
 } from "./events";
 import type { IgniterStoreScopeChain, IgniterStoreScopeDefinition } from "./scope";
 import type { IgniterStoreSerializer } from "./serializer";
+import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 
 /**
  * Internal configuration for IgniterStore.
@@ -53,7 +53,7 @@ export interface IgniterStoreConfig<
   logger?: IgniterLogger;
 
   /** Telemetry manager for observability */
-  telemetry?: IgniterStoreTelemetry;
+  telemetry?: IgniterTelemetryManager;
 
   /** Current scope chain (for scoped instances) */
   scopeChain: IgniterStoreScopeChain;

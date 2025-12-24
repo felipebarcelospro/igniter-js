@@ -11,4 +11,3 @@ export * from "./manager";
 export * from "./schema";
 export * from "./scope";
 export * from "./serializer";
-export * from "./telemetry";

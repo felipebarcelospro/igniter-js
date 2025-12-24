@@ -76,7 +76,7 @@
  * // 11. Use scoped stores for multi-tenancy
  * const orgStore = store.scope('organization', 'org_123')
  * await orgStore.kv.set('settings', { theme: 'dark' })
- * // Key: ign:store:development:my-api:organization:org_123:kv:settings
+ * // Key: igniter:store:my-api:organization:org_123:kv:settings
  * ```
  */
 
@@ -84,137 +84,40 @@
 // CORE EXPORTS
 // =============================================================================
 
-export { IgniterStoreManager } from './core/manager'
-export type {
-  IgniterStoreKV,
-  IgniterStoreCounter,
-  IgniterStoreClaim,
-  IgniterStoreBatch,
-  IgniterStoreEventsAPI,
-  IgniterStoreEvents,
-  IgniterStoreDev,
-  IgniterStoreStreams,
-} from './core/manager'
-
-// Alias for backwards compatibility and cleaner API
-export { IgniterStore } from './builders/main.builder'
+export * from './core'
+export type * from './core'
 
 // =============================================================================
 // BUILDER EXPORTS
 // =============================================================================
 
-export { IgniterStoreBuilder } from './builders/main.builder'
-export { IgniterStoreKeyBuilder } from './builders/store-key.builder'
-export type { IgniterStoreKeyBuilderOptions } from './builders/store-key.builder'
-export type { IgniterStoreBuilderState, RESERVED_NAMESPACE_PREFIXES } from './types/builder'
+export * from './builders'
+export type * from './builders'
 
 // =============================================================================
 // ADAPTER EXPORTS
 // =============================================================================
 
-export { IgniterStoreRedisAdapter, createIgniterStoreRedisAdapter } from './adapters/redis.adapter'
-export type { IgniterStoreRedisAdapterOptions } from './adapters/redis.adapter'
-
-// =============================================================================
-// UTILITY EXPORTS
-// =============================================================================
-
-// New events API
-export { IgniterStoreEvents, IgniterStoreEventsGroup } from './builders/events.builder'
-
-// Legacy exports (backwards compatibility)
-export { IgniterStoreEventsSchema, IgniterStoreEventsSchemaGroup } from './utils/schema'
-
-// Legacy key builder exports (backwards compatibility - use IgniterStoreKeyBuilder from builders)
-export { IgniterStoreKeyBuilder as StoreKeyBuilder } from './builders/store-key.builder'
-export type { IgniterStoreKeyBuilderOptions as StoreKeyBuilderOptions } from './builders/store-key.builder'
-
-// =============================================================================
-// ERROR EXPORTS
-// =============================================================================
-
-export {
-  IgniterStoreError,
-  IGNITER_STORE_ERROR_CODES,
-} from './errors/store.error'
-export type {
-  IgniterStoreErrorCode,
-  IgniterStoreErrorMetadata,
-  IgniterStoreErrorPayload,
-} from './errors/store.error'
-
-// =============================================================================
-// TYPE EXPORTS
-// =============================================================================
-
-export type {
-  // Adapter types
-  IgniterStoreAdapter,
-  IgniterStoreKeyValueOptions,
-  IgniterStoreEventCallback,
-  IgniterStoreBatchEntry,
-  IgniterStoreScanResult,
-  IgniterStoreScanOptions,
-  IgniterStoreStreamAppendOptions,
-  IgniterStoreStreamReadOptions,
-  IgniterStoreStreamMessage,
-  IgniterStoreStreamConsumerGroup,
-  IgniterStoreAdapterFactory,
-} from './types/adapter'
-
-export type {
-  // Config types
-  IgniterStoreConfig,
-  IgniterStoreKeyNamespace,
-} from './types/config'
-
-export type {
-  // Events types
-  IgniterStoreEventSchema,
-  IgniterStoreEventsMap,
-  IgniterStoreEventsRegistry,
-  IgniterStoreFlattenEventKeys,
-  IgniterStoreFlattenRegistryKeys,
-  IgniterStoreGetEventSchema,
-  IgniterStoreInferEventSchema,
-  IgniterStoreEventsValidationOptions,
-  IgniterStoreEventContext,
-  IgniterStoreEventContextHandler,
-  IgniterStoreUnsubscribeFn,
-  IgniterStoreMatchingEventKeys,
-  IgniterStoreWildcardEventContext,
-  IgniterStoreEventAccessor,
-  IgniterStoreEventsProxy,
-  IgniterStoreEventsRegistryProxy,
-} from './types/events'
-
-// Legacy schema exports (backwards compatibility)
-export type {
-  IgniterStoreSchemaMap,
-  IgniterStoreFlattenKeys,
-  IgniterStoreGetSchema,
-  IgniterStoreInferSchema,
-  IgniterStoreSchemaValidationOptions,
-} from './types/schema'
-
-export type {
-  // Scope types
-  IgniterStoreScopeEntry,
-  IgniterStoreScopeChain,
-  IgniterStoreScopeIdentifier,
-  IgniterStoreScopeOptions,
-  IgniterStoreScopeDefinition,
-} from './types/scope'
-
-export type {
-  // Serializer types
-  IgniterStoreSerializer,
-} from './types/serializer'
-
-export { DEFAULT_SERIALIZER } from './types/serializer'
+export * from './adapters'
+export type * from './adapters'
 
 // =============================================================================
 // TELEMETRY EXPORTS
 // =============================================================================
 
-export type { IgniterStoreTelemetry } from './types/telemetry'
+export * from './telemetry'
+export type * from './telemetry'
+
+// =============================================================================
+// ERROR EXPORTS
+// =============================================================================
+
+export * from './errors'
+export type * from './errors'
+
+// =============================================================================
+// TYPE EXPORTS
+// =============================================================================
+
+export * from './types'
+export type * from './types'

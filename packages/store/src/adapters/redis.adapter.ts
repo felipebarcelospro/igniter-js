@@ -33,7 +33,7 @@ import type {
   IgniterStoreStreamAppendOptions,
   IgniterStoreStreamReadOptions,
   IgniterStoreStreamMessage,
-} from '../types/adapter'
+} from '../types'
 
 /**
  * Options for creating a Redis store adapter.

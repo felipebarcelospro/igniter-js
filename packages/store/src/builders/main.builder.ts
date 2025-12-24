@@ -55,7 +55,6 @@ import type {
   IgniterStoreEventsRegistry,
   IgniterStoreEventsValidationOptions,
 } from "../types/events";
-import type { IgniterStoreTelemetry } from "../types/telemetry";
 import type {
   IgniterStoreScopeOptions,
 } from "../types/scope";
@@ -64,6 +63,7 @@ import { DEFAULT_SERIALIZER } from "../types/serializer";
 import { IgniterStoreError } from "../errors/store.error";
 import { IgniterStoreManager } from "../core/manager";
 import { IgniterStoreEventValidator } from "../utils/events";
+import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 
 
 /**
@@ -378,7 +378,7 @@ export class IgniterStoreBuilder<
    * ```
    */
   withTelemetry(
-    telemetry: IgniterStoreTelemetry,
+    telemetry: IgniterTelemetryManager,
   ): IgniterStoreBuilder<TRegistry, TScopes> {
     return new IgniterStoreBuilder({ ...this.state, telemetry });
   }
@@ -437,4 +437,50 @@ export class IgniterStoreBuilder<
   }
 }
 
-export const IgniterStore = IgniterStoreBuilder;
+/**
+ * Factory for creating and configuring IgniterStore instances.
+ *
+ * This is the main entry point for creating a store with a fluent builder API.
+ * It provides type-safe configuration for adapters, events, scopes, and telemetry.
+ *
+ * @typeParam TRegistry - The events registry type for typed pub/sub
+ * @typeParam TScopes - The typed scope keys (from addScope)
+ *
+ * @example
+ * ```typescript
+ * import { IgniterStore, IgniterStoreRedisAdapter, IgniterStoreEvents } from '@igniter-js/store'
+ * import { z } from 'zod'
+ * import Redis from 'ioredis'
+ *
+ * // Define typed events
+ * const UserEvents = IgniterStoreEvents
+ *   .create('user')
+ *   .event('created', z.object({ userId: z.string(), email: z.string().email() }))
+ *   .event('deleted', z.object({ userId: z.string() }))
+ *   .build()
+ *
+ * // Configure and build store
+ * const store = IgniterStore.create()
+ *   .withAdapter(IgniterStoreRedisAdapter.create({ redis: new Redis() }))
+ *   .withService('my-api')
+ *   .addScope('organization', { required: true })
+ *   .addScope('workspace')
+ *   .addEvents(UserEvents)
+ *   .build()
+ *
+ * // Publish events
+ * await store.events.publish('user:created', { userId: '123', email: 'a@b.com' })
+ *
+ * // Or use proxy-based typed API
+ * await store.events.user.created.publish({ userId: '123', email: 'a@b.com' })
+ *
+ * // Use with scopes
+ * const orgStore = store.scope('organization', 'org-123')
+ * await orgStore.events.user.created.publish({ userId: '456', email: 'b@c.com' })
+ * ```
+ *
+ * @see {@link IgniterStoreBuilder} for detailed method documentation
+ */
+export const IgniterStore = {
+  create: IgniterStoreBuilder.create
+};

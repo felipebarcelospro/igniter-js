@@ -3,4 +3,4 @@
  * @module @igniter-js/store/core
  */
 
-export { IgniterStoreManager } from './manager'
+export * from './manager'
