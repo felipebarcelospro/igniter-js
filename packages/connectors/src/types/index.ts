@@ -4,14 +4,34 @@
  */
 
 // =============================================================================
+// BUILDER TYPES
+// =============================================================================
+
+export type { IgniterConnectorBuilderState, IgniterConnectorMap } from "./builder";
+
+// =============================================================================
+// MANAGER TYPES
+// =============================================================================
+
+export type {
+  IgniterConnectorManagerConfig,
+  IgniterConnectorOAuthConnectParams,
+  IgniterConnectorOAuthCallbackParamsExt,
+  IgniterConnectorWebhookParams,
+  IgniterConnectorHandleParams,
+  IIgniterConnectorsManager,
+} from "./manager";
+
+// =============================================================================
 // ADAPTER TYPES
 // =============================================================================
+
 export type {
   IgniterConnectorRecord,
   IgniterConnectorAdapterOptions,
   IgniterConnectorUpdateData,
   IgniterConnectorAdapter,
-} from './adapter'
+} from "./adapter";
 
 // =============================================================================
 // CONFIG TYPES
@@ -24,7 +44,7 @@ export type {
   IgniterConnectorEncryptionConfig,
   InferSchemaOutput,
   InferSchemaInput,
-} from './config'
+} from "./config";
 
 // =============================================================================
 // CONNECTOR TYPES
@@ -37,33 +57,49 @@ export type {
   IgniterConnectorActionMap,
   IgniterConnectorDefinition,
   IgniterConnectorInstance,
+  IgniterConnectorActionBuilder,
   IgniterConnectorActionResult,
   ExtractConnectorConfig,
   ExtractConnectorMetadata,
   ExtractConnectorActions,
   ExtractActionInput,
   ExtractActionOutput,
-} from './connector'
+} from "./connector";
 
 // =============================================================================
 // EVENT TYPES
 // =============================================================================
 export type {
   IgniterConnectorEventBase,
+  // Connector lifecycle
   IgniterConnectorConnectedEvent,
   IgniterConnectorDisconnectedEvent,
   IgniterConnectorEnabledEvent,
   IgniterConnectorDisabledEvent,
-  IgniterConnectorActionEvent,
+  IgniterConnectorUpdatedEvent,
+  // OAuth
   IgniterConnectorOAuthStartedEvent,
   IgniterConnectorOAuthCompletedEvent,
   IgniterConnectorOAuthRefreshedEvent,
+  IgniterConnectorOAuthFailedEvent,
+  // Actions
+  IgniterConnectorActionStartedEvent,
+  IgniterConnectorActionCompletedEvent,
+  IgniterConnectorActionFailedEvent,
+  // Webhooks
   IgniterConnectorWebhookReceivedEvent,
+  IgniterConnectorWebhookProcessedEvent,
+  IgniterConnectorWebhookFailedEvent,
+  // Errors
   IgniterConnectorErrorEvent,
+  // Legacy (deprecated)
+  IgniterConnectorActionEvent,
+  // Union types
+  IgniterConnectorEventType,
   IgniterConnectorEvent,
   IgniterConnectorEventHandler,
   IgniterConnectorEventSubscription,
-} from './events'
+} from "./events";
 
 // =============================================================================
 // HOOK TYPES
@@ -81,7 +117,7 @@ export type {
   IgniterConnectorManagerOnErrorHook,
   IgniterConnectorHooks,
   IgniterConnectorManagerHooks,
-} from './hooks'
+} from "./hooks";
 
 // =============================================================================
 // OAUTH TYPES
@@ -97,7 +133,7 @@ export type {
   IgniterConnectorOAuthConnectResult,
   IgniterConnectorOAuthCallbackParams,
   IgniterConnectorOAuthCallbackResult,
-} from './oauth'
+} from "./oauth";
 
 // =============================================================================
 // SCOPE TYPES
@@ -108,7 +144,7 @@ export type {
   IgniterConnectorScopeMap,
   IgniterConnectorScopeKeys,
   IgniterConnectorScopeRequiresIdentifier,
-} from './scope'
+} from "./scope";
 
 // =============================================================================
 // WEBHOOK TYPES
@@ -119,4 +155,4 @@ export type {
   IgniterConnectorWebhookOptions,
   IgniterConnectorWebhookRequest,
   IgniterConnectorWebhookDefinition,
-} from './webhook'
+} from "./webhook";

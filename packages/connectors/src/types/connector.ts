@@ -277,6 +277,19 @@ export interface IgniterConnectorActionResult<TOutput> {
   error?: Error
 }
 
+/**
+ * Action builder for fluent action execution.
+ *
+ * @typeParam TInput - The action input type
+ * @typeParam TOutput - The action output type
+ */
+export interface IgniterConnectorActionBuilder<TInput, TOutput> {
+  /**
+   * Execute the action with the provided input.
+   */
+  call(input: TInput): Promise<IgniterConnectorActionResult<TOutput>>
+}
+
 // =============================================================================
 // TYPE HELPERS
 // =============================================================================

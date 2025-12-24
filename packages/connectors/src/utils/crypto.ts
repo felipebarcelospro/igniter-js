@@ -7,7 +7,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import {
   IgniterConnectorError,
   IGNITER_CONNECTOR_ERROR_CODES,
-} from '../errors/igniter-connector.error'
+} from '../errors/connector.error'
 
 /**
  * Encryption algorithm used by default.

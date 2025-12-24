@@ -3,10 +3,10 @@
  * @module @igniter-js/connectors/types/hooks
  */
 
-import type { IgniterConnectorError } from '../errors/igniter-connector.error'
+import type { IgniterConnectorError } from '../errors/connector.error'
 
 // =============================================================================
-// CONNECTOR HOOKS (used in Connector.create())
+// CONNECTOR HOOKS (used in IgniterConnector.create())
 // =============================================================================
 
 /**
@@ -77,7 +77,7 @@ export type IgniterConnectorOnValidateHook<TConfig> = (
 ) => Promise<void> | void
 
 // =============================================================================
-// MANAGER HOOKS (used in IgniterConnector.create())
+// MANAGER HOOKS (used in IgniterConnectorManager.create())
 // =============================================================================
 
 /**
@@ -154,6 +154,8 @@ export interface IgniterConnectorManagerOnErrorParams {
   scope?: string
   /** The scope identifier (if known) */
   identity?: string
+  /** The action key (if applicable) */
+  action?: string
 }
 
 /**

@@ -7,7 +7,7 @@ import type {
   IgniterConnectorRecord,
   IgniterConnectorAdapterOptions,
 } from '../types/adapter'
-import { IgniterConnectorBaseAdapter } from './igniter-connector.adapter'
+import { IgniterConnectorBaseAdapter } from './connector.adapter'
 
 /**
  * Prisma client type.
@@ -63,14 +63,14 @@ export interface IgniterConnectorPrismaAdapterOptions<TPrismaClient>
  *
  * @example
  * ```typescript
- * import { PrismaAdapter } from '@igniter-js/connectors'
+ * import { IgniterConnectorPrismaAdapter } from '@igniter-js/connectors'
  * import { prisma } from './prisma'
  *
  * // With default model name (Integration)
- * const adapter = PrismaAdapter.create(prisma)
+ * const adapter = IgniterConnectorPrismaAdapter.create(prisma)
  *
  * // With custom model name
- * const adapter = PrismaAdapter.create(prisma, { model: 'Connector' })
+ * const adapter = IgniterConnectorPrismaAdapter.create(prisma, { model: 'Connector' })
  *
  * // Use with IgniterConnector
  * const connectors = IgniterConnector.create()
@@ -78,7 +78,9 @@ export interface IgniterConnectorPrismaAdapterOptions<TPrismaClient>
  *   .build()
  * ```
  */
-export class PrismaAdapter<TPrismaClient extends PrismaClient> extends IgniterConnectorBaseAdapter  {
+export class IgniterConnectorPrismaAdapter<
+  TPrismaClient extends PrismaClient
+> extends IgniterConnectorBaseAdapter {
   /** Prisma client instance */
   private prisma: TPrismaClient
 
@@ -89,7 +91,7 @@ export class PrismaAdapter<TPrismaClient extends PrismaClient> extends IgniterCo
   private model: PrismaModelDelegate
 
   /**
-   * Private constructor. Use `PrismaAdapter.create()` instead.
+   * Private constructor. Use `IgniterConnectorPrismaAdapter.create()` instead.
    *
    * @param prisma - Prisma client instance
    * @param options - Adapter options
@@ -124,19 +126,19 @@ export class PrismaAdapter<TPrismaClient extends PrismaClient> extends IgniterCo
    *
    * @param prisma - Prisma client instance
    * @param options - Adapter options
-   * @returns New PrismaAdapter instance
+   * @returns New IgniterConnectorPrismaAdapter instance
    *
    * @example
    * ```typescript
-   * const adapter = PrismaAdapter.create(prisma)
-   * const adapter = PrismaAdapter.create(prisma, { model: 'Connector' })
+   * const adapter = IgniterConnectorPrismaAdapter.create(prisma)
+   * const adapter = IgniterConnectorPrismaAdapter.create(prisma, { model: 'Connector' })
    * ```
    */
   static create<TPrismaClient extends PrismaClient>(
     prisma: TPrismaClient,
     options?: IgniterConnectorPrismaAdapterOptions<TPrismaClient>
-  ): PrismaAdapter<TPrismaClient> {
-    return new PrismaAdapter(prisma, options)
+  ): IgniterConnectorPrismaAdapter<TPrismaClient> {
+    return new IgniterConnectorPrismaAdapter(prisma, options)
   }
 
   /**

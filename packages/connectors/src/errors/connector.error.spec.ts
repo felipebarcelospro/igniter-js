@@ -1,6 +1,6 @@
 /**
  * @fileoverview Tests for IgniterConnectorError
- * @module @igniter-js/connectors/errors/igniter-connector.error.spec
+ * @module @igniter-js/connectors/errors/connector.error.spec
  */
 
 import { describe, it, expect } from 'vitest'
@@ -8,7 +8,7 @@ import {
   IgniterConnectorError, 
   IGNITER_CONNECTOR_ERROR_CODES,
   type IgniterConnectorErrorCode,
-} from './igniter-connector.error'
+} from './connector.error'
 
 describe('IgniterConnectorError', () => {
   describe('constructor', () => {

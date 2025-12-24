@@ -1,12 +1,12 @@
 /**
- * @fileoverview Tests for IgniterConnectorBuilder
- * @module @igniter-js/connectors/builders/igniter-connector.builder.spec
+ * @fileoverview Tests for IgniterConnectorManagerBuilder
+ * @module @igniter-js/connectors/builders/main.builder.spec
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { IgniterConnectorBuilder } from './igniter-connector.builder'
-import { Connector } from './connector.builder'
+import { IgniterConnectorManagerBuilder } from './main.builder'
+import { IgniterConnector } from './connector.builder'
 import type { IgniterConnectorAdapter, IgniterConnectorRecord } from '../types/adapter'
 
 // Mock adapter for testing
@@ -114,14 +114,14 @@ class MockAdapter implements IgniterConnectorAdapter {
 
 // Test connector
 const createTestConnector = () => {
-  return Connector.create()
+  return IgniterConnector.create()
     .withConfig(z.object({
       apiKey: z.string(),
       baseUrl: z.string().optional(),
     }))
     .withMetadata(
       z.object({ name: z.string() }),
-      { name: 'Test Connector' }
+      { name: 'Test IgniterConnector' }
     )
     .addAction('testAction', {
       input: z.object({ data: z.string() }),
@@ -130,7 +130,7 @@ const createTestConnector = () => {
     .build()
 }
 
-describe('IgniterConnectorBuilder', () => {
+describe('IgniterConnectorManagerBuilder', () => {
   let adapter: MockAdapter
 
   beforeEach(() => {
@@ -139,14 +139,14 @@ describe('IgniterConnectorBuilder', () => {
 
   describe('create()', () => {
     it('should create a new builder instance', () => {
-      const builder = IgniterConnectorBuilder.create()
+      const builder = IgniterConnectorManagerBuilder.create()
       expect(builder).toBeDefined()
     })
   })
 
   describe('withDatabase()', () => {
     it('should set the database adapter', () => {
-      const builder = IgniterConnectorBuilder.create()
+      const builder = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
       
       expect(builder).toBeDefined()
@@ -162,7 +162,7 @@ describe('IgniterConnectorBuilder', () => {
         error: vi.fn(),
       }
 
-      const builder = IgniterConnectorBuilder.create()
+      const builder = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .withLogger(logger)
 
@@ -172,7 +172,7 @@ describe('IgniterConnectorBuilder', () => {
 
   describe('withEncrypt()', () => {
     it('should set encryption fields', () => {
-      const builder = IgniterConnectorBuilder.create()
+      const builder = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .withEncrypt(['apiKey', 'accessToken', 'refreshToken'])
 
@@ -183,7 +183,7 @@ describe('IgniterConnectorBuilder', () => {
       const encrypt = vi.fn().mockImplementation((v: string) => `enc:${v}`)
       const decrypt = vi.fn().mockImplementation((v: string) => v.replace('enc:', ''))
 
-      const builder = IgniterConnectorBuilder.create()
+      const builder = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .withEncrypt(['apiKey'], { encrypt, decrypt })
 
@@ -193,7 +193,7 @@ describe('IgniterConnectorBuilder', () => {
 
   describe('addScope()', () => {
     it('should add a required scope', () => {
-      const builder = IgniterConnectorBuilder.create()
+      const builder = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .addScope('organization', { required: true })
 
@@ -201,7 +201,7 @@ describe('IgniterConnectorBuilder', () => {
     })
 
     it('should add an optional scope', () => {
-      const builder = IgniterConnectorBuilder.create()
+      const builder = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .addScope('system', { required: false })
 
@@ -209,7 +209,7 @@ describe('IgniterConnectorBuilder', () => {
     })
 
     it('should add multiple scopes', () => {
-      const builder = IgniterConnectorBuilder.create()
+      const builder = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .addScope('organization', { required: true })
         .addScope('user', { required: true })
@@ -223,7 +223,7 @@ describe('IgniterConnectorBuilder', () => {
     it('should add a connector definition', () => {
       const connector = createTestConnector()
 
-      const builder = IgniterConnectorBuilder.create()
+      const builder = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .addScope('organization', { required: true })
         .addConnector('test', connector)
@@ -233,11 +233,11 @@ describe('IgniterConnectorBuilder', () => {
 
     it('should add multiple connectors', () => {
       const connector1 = createTestConnector()
-      const connector2 = Connector.create()
+      const connector2 = IgniterConnector.create()
         .withConfig(z.object({ token: z.string() }))
         .build()
 
-      const builder = IgniterConnectorBuilder.create()
+      const builder = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .addScope('organization', { required: true })
         .addConnector('first', connector1)
@@ -251,7 +251,7 @@ describe('IgniterConnectorBuilder', () => {
     it('should set connect hook', () => {
       const onConnect = vi.fn()
 
-      const builder = IgniterConnectorBuilder.create()
+      const builder = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .onConnect(onConnect)
 
@@ -263,7 +263,7 @@ describe('IgniterConnectorBuilder', () => {
     it('should set disconnect hook', () => {
       const onDisconnect = vi.fn()
 
-      const builder = IgniterConnectorBuilder.create()
+      const builder = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .onDisconnect(onDisconnect)
 
@@ -275,7 +275,7 @@ describe('IgniterConnectorBuilder', () => {
     it('should set error hook', () => {
       const onError = vi.fn()
 
-      const builder = IgniterConnectorBuilder.create()
+      const builder = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .onError(onError)
 
@@ -287,7 +287,7 @@ describe('IgniterConnectorBuilder', () => {
     it('should build a complete manager instance', () => {
       const connector = createTestConnector()
 
-      const manager = IgniterConnectorBuilder.create()
+      const manager = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .addScope('organization', { required: true })
         .addConnector('test', connector)
@@ -301,7 +301,7 @@ describe('IgniterConnectorBuilder', () => {
       const connector = createTestConnector()
 
       expect(() => {
-        IgniterConnectorBuilder.create()
+        IgniterConnectorManagerBuilder.create()
           .addScope('organization', { required: true })
           .addConnector('test', connector)
           .build()
@@ -317,7 +317,7 @@ describe('IgniterConnectorBuilder', () => {
         error: vi.fn(),
       }
 
-      const manager = IgniterConnectorBuilder.create()
+      const manager = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .withLogger(logger)
         .withEncrypt(['apiKey', 'accessToken'])
@@ -335,14 +335,14 @@ describe('IgniterConnectorBuilder', () => {
 
   describe('complete workflow', () => {
     it('should create a functional manager', () => {
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(z.object({
           apiKey: z.string(),
           endpoint: z.string(),
         }))
         .withMetadata(
           z.object({ name: z.string(), category: z.string() }),
-          { name: 'API Connector', category: 'utility' }
+          { name: 'API IgniterConnector', category: 'utility' }
         )
         .addAction('fetch', {
           description: 'Fetch data from API',
@@ -354,7 +354,7 @@ describe('IgniterConnectorBuilder', () => {
         })
         .build()
 
-      const manager = IgniterConnectorBuilder.create()
+      const manager = IgniterConnectorManagerBuilder.create()
         .withDatabase(adapter)
         .withEncrypt(['apiKey'])
         .addScope('organization', { required: true })

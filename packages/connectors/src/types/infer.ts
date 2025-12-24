@@ -1,5 +1,5 @@
 /**
- * @fileoverview $Infer type helper for extracting types from IgniterConnector instances
+ * @fileoverview $Infer type helper for extracting types from IgniterConnectorManager instances
  * @module @igniter-js/connectors/types/infer
  *
  * @description
@@ -8,9 +8,9 @@
  *
  * @example
  * ```typescript
- * import { IgniterConnector, $Infer } from '@igniter-js/connectors'
+ * import { IgniterConnectorManager, $Infer } from '@igniter-js/connectors'
  *
- * const connectors = IgniterConnector.create()
+ * const connectors = IgniterConnectorManager.create()
  *   .addScope('organization', { required: true })
  *   .addConnector('telegram', telegramConnector)
  *   .addConnector('discord', discordConnector)
@@ -27,8 +27,8 @@
  * ```
  */
 
-import type { IgniterConnector } from '../core/igniter-connector'
-import type { IgniterConnectorScoped } from '../core/igniter-connector-scoped'
+import type { IgniterConnectorManagerCore } from '../core/manager'
+import type { IgniterConnectorScoped } from '../core/scoped'
 import type {
   ExtractConnectorConfig,
   ExtractConnectorActions,
@@ -42,13 +42,13 @@ import type {
 // =============================================================================
 
 /**
- * Extracts comprehensive type information from an IgniterConnector instance.
+ * Extracts comprehensive type information from an IgniterConnectorManager instance.
  *
- * @typeParam T - The IgniterConnector instance type
+ * @typeParam T - The IgniterConnectorManager instance type
  *
  * @example
  * ```typescript
- * const connectors = IgniterConnector.create()
+ * const connectors = IgniterConnectorManager.create()
  *   .addScope('organization', { required: true })
  *   .addScope('user', { required: false })
  *   .addConnector('telegram', telegramConnector)
@@ -67,7 +67,10 @@ import type {
  * type SendMessageOutput = Types['ActionOutput']['telegram']['sendMessage']
  * ```
  */
-export type $Infer<T> = T extends IgniterConnector<infer TScopes, infer TConnectors>
+export type $Infer<T> = T extends IgniterConnectorManagerCore<
+  infer TScopes,
+  infer TConnectors
+>
   ? {
       /**
        * Union of all scope keys defined in the connector manager.
@@ -150,7 +153,7 @@ export type $Infer<T> = T extends IgniterConnector<infer TScopes, infer TConnect
   : never
 
 /**
- * Extracts the scoped instance type from an IgniterConnector.
+ * Extracts the scoped instance type from an IgniterConnectorManager.
  * Shorthand for $Infer<T>['Scoped'].
  *
  * @example
@@ -162,12 +165,15 @@ export type $Infer<T> = T extends IgniterConnector<infer TScopes, infer TConnect
  * }
  * ```
  */
-export type $InferScoped<T> = T extends IgniterConnector<any, infer TConnectors>
+export type $InferScoped<T> = T extends IgniterConnectorManagerCore<
+  any,
+  infer TConnectors
+>
   ? IgniterConnectorScoped<TConnectors>
   : never
 
 /**
- * Extracts the connector keys from an IgniterConnector.
+ * Extracts the connector keys from an IgniterConnectorManager.
  * Shorthand for $Infer<T>['ConnectorKey'].
  *
  * @example
@@ -175,12 +181,15 @@ export type $InferScoped<T> = T extends IgniterConnector<any, infer TConnectors>
  * type ConnectorKey = $InferConnectorKey<typeof connectors> // 'telegram' | 'discord'
  * ```
  */
-export type $InferConnectorKey<T> = T extends IgniterConnector<any, infer TConnectors>
+export type $InferConnectorKey<T> = T extends IgniterConnectorManagerCore<
+  any,
+  infer TConnectors
+>
   ? keyof TConnectors & string
   : never
 
 /**
- * Extracts the scope keys from an IgniterConnector.
+ * Extracts the scope keys from an IgniterConnectorManager.
  * Shorthand for $Infer<T>['ScopeKey'].
  *
  * @example
@@ -188,7 +197,10 @@ export type $InferConnectorKey<T> = T extends IgniterConnector<any, infer TConne
  * type ScopeKey = $InferScopeKey<typeof connectors> // 'organization' | 'user'
  * ```
  */
-export type $InferScopeKey<T> = T extends IgniterConnector<infer TScopes, any>
+export type $InferScopeKey<T> = T extends IgniterConnectorManagerCore<
+  infer TScopes,
+  any
+>
   ? keyof TScopes & string
   : never
 
@@ -201,7 +213,10 @@ export type $InferScopeKey<T> = T extends IgniterConnector<infer TScopes, any>
  * // { botToken: string; chatId: string }
  * ```
  */
-export type $InferConfig<T, K extends string> = T extends IgniterConnector<any, infer TConnectors>
+export type $InferConfig<T, K extends string> = T extends IgniterConnectorManagerCore<
+  any,
+  infer TConnectors
+>
   ? K extends keyof TConnectors
     ? ExtractConnectorConfig<TConnectors[K]>
     : never
@@ -216,7 +231,10 @@ export type $InferConfig<T, K extends string> = T extends IgniterConnector<any, 
  * // 'sendMessage' | 'sendPhoto'
  * ```
  */
-export type $InferActionKeys<T, K extends string> = T extends IgniterConnector<any, infer TConnectors>
+export type $InferActionKeys<T, K extends string> = T extends IgniterConnectorManagerCore<
+  any,
+  infer TConnectors
+>
   ? K extends keyof TConnectors
     ? ExtractConnectorActionKeys<TConnectors[K]>
     : never

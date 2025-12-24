@@ -14,10 +14,28 @@
   ],
   "exports": {
     ".": {
+      "browser": "./dist/shim.js",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./adapters": {
+      "browser": "./dist/shim.js",
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.js",
+      "require": "./dist/adapters/index.js"
+    },
+    "./telemetry": {
+      "browser": "./dist/shim.js",
+      "types": "./dist/telemetry/index.d.ts",
+      "import": "./dist/telemetry/index.js",
+      "require": "./dist/telemetry/index.js"
     }
+  },
+  "browser": {
+    "./dist/index.js": "./dist/shim.js",
+    "./dist/adapters/index.js": "./dist/shim.js",
+    "./dist/telemetry/index.js": "./dist/shim.js"
   },
   "scripts": {
     "dev": "tsup --watch",
@@ -55,6 +73,7 @@
   "dependencies": {},
   "devDependencies": {
     "@igniter-js/core": "*",
+    "@igniter-js/telemetry": "*",
     "@types/node": "^25.0.2",
     "tsup": "^8.3.0",
     "typescript": "^5.6.3",
@@ -63,9 +82,13 @@
   },
   "peerDependencies": {
     "@igniter-js/core": ">=0.2.0",
+    "@igniter-js/telemetry": ">=0.1.0",
     "zod": ">=3.0.0"
   },
   "peerDependenciesMeta": {
+    "@igniter-js/telemetry": {
+      "optional": true
+    },
     "zod": {
       "optional": true
     }

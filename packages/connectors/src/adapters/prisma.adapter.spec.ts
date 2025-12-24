@@ -1,18 +1,18 @@
 /**
- * @fileoverview Tests for PrismaAdapter
+ * @fileoverview Tests for IgniterConnectorPrismaAdapter
  * @module @igniter-js/connectors/adapters/prisma.adapter.spec
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Since PrismaAdapter requires a real Prisma client, we'll test the interface
+// Since IgniterConnectorPrismaAdapter requires a real Prisma client, we'll test the interface
 // and behavior patterns. Full integration tests would require a database.
 
-describe('PrismaAdapter', () => {
+describe('IgniterConnectorPrismaAdapter', () => {
   describe('static create()', () => {
     it('should throw error when model does not exist', async () => {
       // Dynamic import to handle the test
-      const { PrismaAdapter } = await import('./prisma.adapter')
+      const { IgniterConnectorPrismaAdapter } = await import('./prisma.adapter')
       
       const mockPrisma = {
         $connect: vi.fn(),
@@ -21,12 +21,12 @@ describe('PrismaAdapter', () => {
       }
 
       expect(() => {
-        PrismaAdapter.create(mockPrisma)
+        IgniterConnectorPrismaAdapter.create(mockPrisma)
       }).toThrow('Prisma model "Connector" not found')
     })
 
     it('should create adapter with default model name', async () => {
-      const { PrismaAdapter } = await import('./prisma.adapter')
+      const { IgniterConnectorPrismaAdapter } = await import('./prisma.adapter')
       
       const mockModel = {
         findUnique: vi.fn(),
@@ -44,12 +44,12 @@ describe('PrismaAdapter', () => {
         Connector: mockModel,
       }
 
-      const adapter = PrismaAdapter.create(mockPrisma)
+      const adapter = IgniterConnectorPrismaAdapter.create(mockPrisma)
       expect(adapter).toBeDefined()
     })
 
     it('should create adapter with custom model name', async () => {
-      const { PrismaAdapter } = await import('./prisma.adapter')
+      const { IgniterConnectorPrismaAdapter } = await import('./prisma.adapter')
       
       const mockModel = {
         findUnique: vi.fn(),
@@ -67,7 +67,9 @@ describe('PrismaAdapter', () => {
         Integration: mockModel,
       }
 
-      const adapter = PrismaAdapter.create(mockPrisma, { model: 'Integration' })
+      const adapter = IgniterConnectorPrismaAdapter.create(mockPrisma, {
+        model: 'Integration',
+      })
       expect(adapter).toBeDefined()
     })
   })
@@ -77,7 +79,7 @@ describe('PrismaAdapter', () => {
     let mockModel: any
 
     beforeEach(async () => {
-      const { PrismaAdapter } = await import('./prisma.adapter')
+      const { IgniterConnectorPrismaAdapter } = await import('./prisma.adapter')
       
       mockModel = {
         findUnique: vi.fn(),
@@ -95,7 +97,7 @@ describe('PrismaAdapter', () => {
         Connector: mockModel,
       }
 
-      adapter = PrismaAdapter.create(mockPrisma)
+      adapter = IgniterConnectorPrismaAdapter.create(mockPrisma)
     })
 
     describe('get()', () => {

@@ -6,6 +6,7 @@
 import type {
   IgniterConnectorAdapter,
   IgniterConnectorRecord,
+  IgniterConnectorUpdateData,
 } from '../types/adapter'
 
 /**
@@ -84,7 +85,7 @@ export abstract class IgniterConnectorBaseAdapter
     scope: string,
     identity: string,
     provider: string,
-    data: Partial<Pick<IgniterConnectorRecord, 'value' | 'enabled'>>
+    data: IgniterConnectorUpdateData
   ): Promise<IgniterConnectorRecord>
 
   /**

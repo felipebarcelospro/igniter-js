@@ -1,5 +1,5 @@
 /**
- * @fileoverview Connector builder for creating connector definitions
+ * @fileoverview IgniterConnector builder for creating connector definitions
  * @module @igniter-js/connectors/builders/connector
  */
 
@@ -31,10 +31,10 @@ import type { IgniterConnectorWebhookOptions } from '../types/webhook'
  *
  * @example
  * ```typescript
- * import { Connector } from '@igniter-js/connectors'
+ * import { IgniterConnector } from '@igniter-js/connectors'
  * import { z } from 'zod'
  *
- * const telegram = Connector.create()
+ * const telegram = IgniterConnector.create()
  *   .withConfig(z.object({
  *     botToken: z.string(),
  *     chatId: z.string(),
@@ -54,7 +54,7 @@ import type { IgniterConnectorWebhookOptions } from '../types/webhook'
  *   .build()
  * ```
  */
-export class ConnectorBuilder<
+export class IgniterConnectorBuilder<
   TConfigSchema extends StandardSchemaV1 = StandardSchemaV1<
     Record<string, unknown>,
     Record<string, unknown>
@@ -97,29 +97,29 @@ export class ConnectorBuilder<
   /** Actions map */
   private actions: TActions = {} as TActions
 
-  /** Connector hooks */
+  /** IgniterConnector hooks */
   private hooks: IgniterConnectorHooks<
     InferSchemaOutput<TConfigSchema>,
     TContext
   > = {}
 
   /**
-   * Private constructor. Use `Connector.create()` instead.
+   * Private constructor. Use `IgniterConnector.create()` instead.
    */
   private constructor() {}
 
   /**
    * Create a new connector builder.
    *
-   * @returns A new ConnectorBuilder instance
+   * @returns A new IgniterConnectorBuilder instance
    *
    * @example
    * ```typescript
-   * const builder = Connector.create()
+   * const builder = IgniterConnector.create()
    * ```
    */
-  static create(): ConnectorBuilder {
-    return new ConnectorBuilder()
+  static create(): IgniterConnectorBuilder {
+    return new IgniterConnectorBuilder()
   }
 
   /**
@@ -139,7 +139,7 @@ export class ConnectorBuilder<
    */
   withConfig<TNewConfigSchema extends StandardSchemaV1>(
     schema: TNewConfigSchema
-  ): ConnectorBuilder<
+  ): IgniterConnectorBuilder<
     TNewConfigSchema,
     TMetadataSchema,
     TMetadataValue,
@@ -149,7 +149,7 @@ export class ConnectorBuilder<
     TOAuth
   > {
     // Data Transform: Store config schema
-    const self = this as unknown as ConnectorBuilder<
+    const self = this as unknown as IgniterConnectorBuilder<
       TNewConfigSchema,
       TMetadataSchema,
       TMetadataValue,
@@ -194,7 +194,7 @@ export class ConnectorBuilder<
   >(
     schema: TNewMetadataSchema,
     value: TNewMetadataValue
-  ): ConnectorBuilder<
+  ): IgniterConnectorBuilder<
     TConfigSchema,
     TNewMetadataSchema,
     TNewMetadataValue,
@@ -203,7 +203,7 @@ export class ConnectorBuilder<
     TOAuth
   > {
     // Data Transform: Store metadata schema and value
-    const self = this as unknown as ConnectorBuilder<
+    const self = this as unknown as IgniterConnectorBuilder<
       TConfigSchema,
       TNewMetadataSchema,
       TNewMetadataValue,
@@ -233,7 +233,7 @@ export class ConnectorBuilder<
    */
   withDefaultConfig(
     config: InferSchemaOutput<TConfigSchema>
-  ): ConnectorBuilder<
+  ): IgniterConnectorBuilder<
     TConfigSchema,
     TMetadataSchema,
     TMetadataValue,
@@ -267,7 +267,7 @@ export class ConnectorBuilder<
    */
   withOAuth<TOAuth extends IgniterConnectorOAuthOptions>(
     options: TOAuth
-  ): ConnectorBuilder<
+  ): IgniterConnectorBuilder<
     TConfigSchema,
     TMetadataSchema,
     TMetadataValue,
@@ -277,7 +277,7 @@ export class ConnectorBuilder<
   > {
     // @ts-expect-error - Expected Data Transform: Store OAuth options
     this.oauthOptions = options 
-    return this as unknown as ConnectorBuilder<
+    return this as unknown as IgniterConnectorBuilder<
       TConfigSchema,
       TMetadataSchema,
       TMetadataValue,
@@ -317,7 +317,7 @@ export class ConnectorBuilder<
       InferSchemaOutput<TConfigSchema>,
       TContext
     >
-  ): ConnectorBuilder<
+  ): IgniterConnectorBuilder<
     TConfigSchema,
     TMetadataSchema,
     TMetadataValue,
@@ -379,7 +379,7 @@ export class ConnectorBuilder<
         }
       ) => Promise<THandlerOutput> | THandlerOutput
     }
-  ): ConnectorBuilder<
+  ): IgniterConnectorBuilder<
     TConfigSchema,
     TMetadataSchema,
     TMetadataValue,
@@ -417,7 +417,7 @@ export class ConnectorBuilder<
     // @ts-expect-error - Dynamic action key assignment
     this.actions[key] = actionDef
 
-    return this as unknown as ConnectorBuilder<
+    return this as unknown as IgniterConnectorBuilder<
       TConfigSchema,
       TMetadataSchema,
       TMetadataValue,
@@ -455,7 +455,7 @@ export class ConnectorBuilder<
       InferSchemaOutput<TConfigSchema>,
       TNewContext
     >
-  ): ConnectorBuilder<
+  ): IgniterConnectorBuilder<
     TConfigSchema,
     TMetadataSchema,
     TMetadataValue,
@@ -466,7 +466,7 @@ export class ConnectorBuilder<
     TOAuth
   > {
     // Data Transform: Store context hook
-    const self = this as unknown as ConnectorBuilder<
+    const self = this as unknown as IgniterConnectorBuilder<
       TConfigSchema,
       TMetadataSchema,
       TMetadataValue,
@@ -504,7 +504,7 @@ export class ConnectorBuilder<
    */
   onValidate(
     handler: IgniterConnectorOnValidateHook<InferSchemaOutput<TConfigSchema>>
-  ): ConnectorBuilder<
+  ): IgniterConnectorBuilder<
     TConfigSchema,
     TMetadataSchema,
     TMetadataValue,
@@ -526,7 +526,7 @@ export class ConnectorBuilder<
    *
    * @example
    * ```typescript
-   * const telegram = Connector.create()
+   * const telegram = IgniterConnector.create()
    *   .withConfig(configSchema)
    *   .addAction('sendMessage', actionOptions)
    *   .build()
@@ -543,7 +543,7 @@ export class ConnectorBuilder<
     // Validation: Config schema is required
     if (!this.configSchema) {
       throw new Error(
-        'Connector configuration schema is required. Use .withConfig() to set it.'
+        'IgniterConnector configuration schema is required. Use .withConfig() to set it.'
       )
     }
 
@@ -582,19 +582,19 @@ export class ConnectorBuilder<
  *
  * @example
  * ```typescript
- * import { Connector } from '@igniter-js/connectors'
+ * import { IgniterConnector } from '@igniter-js/connectors'
  *
- * const myConnector = Connector.create()
+ * const myConnector = IgniterConnector.create()
  *   .withConfig(schema)
  *   .addAction('doSomething', { ... })
  *   .build()
  * ```
  */
-export const Connector = {
+export const IgniterConnector = {
   /**
    * Create a new connector builder.
    *
-   * @returns A new ConnectorBuilder instance
+   * @returns A new IgniterConnectorBuilder instance
    */
-  create: () => ConnectorBuilder.create(),
+  create: () => IgniterConnectorBuilder.create(),
 }

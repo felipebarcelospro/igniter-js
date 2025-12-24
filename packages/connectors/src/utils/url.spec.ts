@@ -1,10 +1,10 @@
 /**
  * @fileoverview Tests for IgniterConnectorUrl
- * @module @igniter-js/connectors/utils/igniter-connector-url.spec
+ * @module @igniter-js/connectors/utils/url.spec
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { IgniterConnectorUrl } from './igniter-connector-url'
+import { IgniterConnectorUrl } from './url'
 
 describe('IgniterConnectorUrl', () => {
   const originalEnv = { ...process.env }

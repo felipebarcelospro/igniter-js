@@ -1,11 +1,11 @@
 /**
  * @fileoverview Tests for IgniterConnectorSchema utilities
- * @module @igniter-js/connectors/utils/igniter-connector-schema.spec
+ * @module @igniter-js/connectors/utils/schema.spec
  */
 
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { IgniterConnectorSchema } from './igniter-connector-schema'
+import { IgniterConnectorSchema } from './schema'
 
 describe('IgniterConnectorSchema', () => {
   describe('validate()', () => {

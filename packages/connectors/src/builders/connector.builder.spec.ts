@@ -1,16 +1,16 @@
 /**
- * @fileoverview Tests for ConnectorBuilder
+ * @fileoverview Tests for IgniterConnectorBuilder
  * @module @igniter-js/connectors/builders/connector.builder.spec
  */
 
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
-import { Connector } from './connector.builder'
+import { IgniterConnector } from './connector.builder'
 
-describe('ConnectorBuilder', () => {
+describe('IgniterConnectorBuilder', () => {
   describe('create()', () => {
     it('should create a new builder instance', () => {
-      const builder = Connector.create()
+      const builder = IgniterConnector.create()
       expect(builder).toBeDefined()
     })
   })
@@ -22,7 +22,7 @@ describe('ConnectorBuilder', () => {
         baseUrl: z.string().url(),
       })
 
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(configSchema)
         .build()
 
@@ -37,11 +37,11 @@ describe('ConnectorBuilder', () => {
         icon: z.string(),
       })
       const metadataValue = {
-        name: 'Test Connector',
+        name: 'Test IgniterConnector',
         icon: 'test.svg',
       }
 
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(z.object({ apiKey: z.string() }))
         .withMetadata(metadataSchema, metadataValue)
         .build()
@@ -58,7 +58,7 @@ describe('ConnectorBuilder', () => {
         baseUrl: 'https://api.example.com',
       }
 
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(z.object({
           apiKey: z.string(),
           baseUrl: z.string(),
@@ -80,7 +80,7 @@ describe('ConnectorBuilder', () => {
         scopes: ['read', 'write'],
       }
 
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(z.object({ workspace: z.string() }))
         .withOAuth(oauthOptions)
         .build()
@@ -97,7 +97,7 @@ describe('ConnectorBuilder', () => {
         data: z.unknown(),
       })
 
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(z.object({ webhookSecret: z.string() }))
         .withWebhook({
           description: 'Receive events',
@@ -116,7 +116,7 @@ describe('ConnectorBuilder', () => {
     it('should add a single action', () => {
       const handler = vi.fn().mockResolvedValue({ success: true })
 
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(z.object({ apiKey: z.string() }))
         .addAction('sendMessage', {
           description: 'Send a message',
@@ -133,7 +133,7 @@ describe('ConnectorBuilder', () => {
     })
 
     it('should add multiple actions', () => {
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(z.object({ apiKey: z.string() }))
         .addAction('action1', {
           input: z.object({ data: z.string() }),
@@ -161,7 +161,7 @@ describe('ConnectorBuilder', () => {
         priority: z.enum(['low', 'high']),
       })
 
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(z.object({ apiKey: z.string() }))
         .addAction('send', {
           input: inputSchema,
@@ -177,7 +177,7 @@ describe('ConnectorBuilder', () => {
     it('should set context hook', () => {
       const contextHook = vi.fn().mockResolvedValue({ client: {} })
 
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(z.object({ apiUrl: z.string() }))
         .onContext(contextHook)
         .build()
@@ -190,7 +190,7 @@ describe('ConnectorBuilder', () => {
     it('should set validation hook', () => {
       const validateHook = vi.fn().mockResolvedValue(undefined)
 
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(z.object({ apiKey: z.string() }))
         .onValidate(validateHook)
         .build()
@@ -201,7 +201,7 @@ describe('ConnectorBuilder', () => {
 
   describe('build()', () => {
     it('should return a complete connector definition', () => {
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(z.object({
           apiKey: z.string(),
           baseUrl: z.string(),
@@ -223,7 +223,7 @@ describe('ConnectorBuilder', () => {
     })
 
     it('should return connector without optional fields', () => {
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(z.object({ apiKey: z.string() }))
         .build()
 
@@ -241,7 +241,7 @@ describe('ConnectorBuilder', () => {
         chatId: z.string(),
       })
 
-      const connector = Connector.create()
+      const connector = IgniterConnector.create()
         .withConfig(configSchema)
         .withMetadata(
           z.object({ name: z.string(), icon: z.string() }),

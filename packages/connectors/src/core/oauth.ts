@@ -10,8 +10,8 @@ import type {
   IgniterConnectorOAuthData,
   IgniterConnectorOAuthCallbackParams,
 } from '../types/oauth'
-import { IgniterConnectorError } from '../errors/igniter-connector.error'
-import { IgniterConnectorOAuthUtils } from '../utils/igniter-connector-oauth'
+import { IgniterConnectorError } from '../errors/connector.error'
+import { IgniterConnectorOAuthUtils } from '../utils/oauth'
 
 /**
  * Internal state storage for OAuth flow.

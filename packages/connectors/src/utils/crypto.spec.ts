@@ -1,6 +1,6 @@
 /**
  * @fileoverview Tests for IgniterConnectorCrypto utilities
- * @module @igniter-js/connectors/utils/igniter-connector-crypto.spec
+ * @module @igniter-js/connectors/utils/crypto.spec
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -24,7 +24,7 @@ describe('IgniterConnectorCrypto', () => {
 
   describe('encrypt()', () => {
     it('should encrypt a string value', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const plaintext = 'my-secret-api-key'
       const encrypted = await IgniterConnectorCrypto.encrypt(plaintext)
@@ -35,7 +35,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should produce different ciphertexts for same plaintext', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const plaintext = 'same-value'
       const encrypted1 = await IgniterConnectorCrypto.encrypt(plaintext)
@@ -46,7 +46,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should encrypt with different IVs for same plaintext', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
 
       // Test that encryption produces different results due to random IV
       const plaintext = 'test-value'
@@ -59,7 +59,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should handle empty strings', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const encrypted = await IgniterConnectorCrypto.encrypt('')
       expect(encrypted).toBeDefined()
@@ -67,7 +67,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should handle special characters', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const specialChars = '!@#$%^&*()_+-=[]{}|;:\'",.<>?/\\`~'
       const encrypted = await IgniterConnectorCrypto.encrypt(specialChars)
@@ -77,7 +77,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should handle unicode characters', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const unicode = '🔐 密码 пароль 🎉'
       const encrypted = await IgniterConnectorCrypto.encrypt(unicode)
@@ -87,7 +87,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should handle long strings', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const longString = 'a'.repeat(10000)
       const encrypted = await IgniterConnectorCrypto.encrypt(longString)
@@ -98,7 +98,7 @@ describe('IgniterConnectorCrypto', () => {
 
   describe('decrypt()', () => {
     it('should decrypt an encrypted value', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const plaintext = 'my-secret-api-key'
       const encrypted = await IgniterConnectorCrypto.encrypt(plaintext)
@@ -108,7 +108,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should correctly decrypt values with special characters', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const specialChars = '!@#$%^&*()_+-=[]{}|;:\'",.<>?/\\`~'
       const encrypted = await IgniterConnectorCrypto.encrypt(specialChars)
@@ -118,7 +118,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should correctly decrypt unicode characters', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const unicode = '🔐 密码 пароль 🎉'
       const encrypted = await IgniterConnectorCrypto.encrypt(unicode)
@@ -128,7 +128,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should correctly decrypt empty strings', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const encrypted = await IgniterConnectorCrypto.encrypt('')
       const decrypted = await IgniterConnectorCrypto.decrypt(encrypted)
@@ -137,7 +137,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should correctly decrypt long strings', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const longString = 'a'.repeat(10000)
       const encrypted = await IgniterConnectorCrypto.encrypt(longString)
@@ -147,7 +147,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should throw error for invalid encrypted format', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
 
       await expect(
         IgniterConnectorCrypto.decrypt('invalid-format')
@@ -155,7 +155,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should throw error for tampered ciphertext', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const encrypted = await IgniterConnectorCrypto.encrypt('test')
       const parts = encrypted.split(':')
@@ -170,7 +170,7 @@ describe('IgniterConnectorCrypto', () => {
 
   describe('encryptFields()', () => {
     it('should encrypt specified fields in an object', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const config = {
         apiKey: 'secret-key',
@@ -189,7 +189,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should handle nested objects', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const config = {
         apiKey: 'secret',
@@ -208,7 +208,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should skip non-existent fields', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const config = {
         existingField: 'value',
@@ -224,7 +224,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should handle empty fields array', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const config = {
         field1: 'value1',
@@ -237,7 +237,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should handle empty object', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const encrypted = await IgniterConnectorCrypto.encryptFields(
         {},
@@ -250,7 +250,7 @@ describe('IgniterConnectorCrypto', () => {
 
   describe('decryptFields()', () => {
     it('should decrypt specified fields in an object', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const original = {
         apiKey: 'secret-key',
@@ -274,7 +274,7 @@ describe('IgniterConnectorCrypto', () => {
     })
 
     it('should handle missing encrypted fields gracefully', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const config = {
         plainField: 'not-encrypted',
@@ -291,7 +291,7 @@ describe('IgniterConnectorCrypto', () => {
 
   describe('round-trip encryption', () => {
     it('should maintain data integrity through encrypt/decrypt cycle', async () => {
-      const { IgniterConnectorCrypto } = await import('./igniter-connector-crypto')
+      const { IgniterConnectorCrypto } = await import('./crypto')
       
       const testCases = [
         'simple-string',

@@ -1,10 +1,10 @@
 /**
  * @fileoverview Tests for IgniterConnectorOAuthUtils
- * @module @igniter-js/connectors/utils/igniter-connector-oauth.spec
+ * @module @igniter-js/connectors/utils/oauth.spec
  */
 
 import { describe, it, expect } from 'vitest'
-import { IgniterConnectorOAuthUtils } from './igniter-connector-oauth'
+import { IgniterConnectorOAuthUtils } from './oauth'
 
 describe('IgniterConnectorOAuthUtils', () => {
   describe('parseTokenResponse()', () => {

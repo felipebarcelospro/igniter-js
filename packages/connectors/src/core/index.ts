@@ -1,8 +1,25 @@
 /**
- * @fileoverview Core exports for IgniterConnector
+ * @fileoverview Core exports for @igniter-js/connectors
  * @module @igniter-js/connectors/core
  */
 
-export { IgniterConnectorOAuth } from './igniter-connector-oauth'
-export { IgniterConnector } from './igniter-connector'
-export { IgniterConnectorScoped } from './igniter-connector-scoped'
+// =============================================================================
+// MANAGER
+// =============================================================================
+
+export * from "./manager";
+export type * from "./manager";
+
+// =============================================================================
+// SCOPED
+// =============================================================================
+
+export * from "./scoped";
+export type * from "./scoped";
+
+// =============================================================================
+// OAUTH
+// =============================================================================
+
+export * from "./oauth";
+export type * from "./oauth";

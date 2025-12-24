@@ -1,9 +1,24 @@
 /**
- * @fileoverview Utility exports for IgniterConnector
+ * @fileoverview Utility exports for @igniter-js/connectors
  * @module @igniter-js/connectors/utils
  */
 
-export { IgniterConnectorCrypto } from './igniter-connector-crypto'
-export { IgniterConnectorSchema } from './igniter-connector-schema'
-export { IgniterConnectorFields } from './igniter-connector-fields'
-export { IgniterConnectorOAuthUtils } from './igniter-connector-oauth'
+// =============================================================================
+// CRYPTO + VALIDATION
+// =============================================================================
+
+export * from "./crypto";
+export type * from "./crypto";
+export * from "./schema";
+export type * from "./schema";
+
+// =============================================================================
+// CONNECTOR HELPERS
+// =============================================================================
+
+export * from "./fields";
+export type * from "./fields";
+export * from "./oauth";
+export type * from "./oauth";
+export * from "./url";
+export type * from "./url";

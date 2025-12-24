@@ -1,11 +1,11 @@
 /**
  * @fileoverview Tests for IgniterConnectorFields
- * @module @igniter-js/connectors/utils/igniter-connector-fields.spec
+ * @module @igniter-js/connectors/utils/fields.spec
  */
 
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { IgniterConnectorFields } from './igniter-connector-fields'
+import { IgniterConnectorFields } from './fields'
 
 describe('IgniterConnectorFields', () => {
   describe('fromSchema()', () => {
