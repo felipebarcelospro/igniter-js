@@ -1,7 +1,7 @@
 # AGENTS.md - @igniter-js/storage
 
 > **Last Updated:** 2025-12-23  
-> **Version:** 0.2.0  
+> **Version:** 0.1.1  
 > **Goal:** This document serves as the complete operational manual for Code Agents maintaining and consuming the @igniter-js/storage package. It is designed to be hyper-robust, training-ready, and exhaustive, aiming for 1,500 lines of high-quality technical intelligence.
 
 ---
