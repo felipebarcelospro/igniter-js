@@ -74,6 +74,7 @@
   },
   "homepage": "https://igniterjs.com",
   "dependencies": {
+    "@igniter-js/telemetry": ">=0.1.12",
     "mime-types": "^3.0.2"
   },
   "devDependencies": {
@@ -91,7 +92,7 @@
   },
   "peerDependencies": {
     "@igniter-js/core": ">=0.3.40",
-    "@igniter-js/telemetry": ">=0.1.0",
+    "@igniter-js/telemetry": ">=0.1.12",
     "zod": ">=4.2.1"
   },
   "peerDependenciesMeta": {
@@ -102,9 +103,6 @@
       "optional": true
     },
     "@google-cloud/storage": {
-      "optional": true
-    },
-    "@igniter-js/telemetry": {
       "optional": true
     },
     "zod": {
