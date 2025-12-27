@@ -1,3 +1,5 @@
+import type { IgniterError } from "@igniter-js/core"
+
 /**
  * Response object containing either successful data or an error.
  */
@@ -5,7 +7,7 @@ export interface IgniterCallerApiResponse<T> {
   /** Parsed response data when the request succeeds. */
   data?: T
   /** Error instance when the request fails. */
-  error?: Error
+  error?: IgniterError
   /** HTTP status code from the response */
   status?: number
   /** Response headers */

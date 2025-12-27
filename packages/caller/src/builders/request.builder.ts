@@ -1,4 +1,4 @@
-import type { IgniterLogger, StandardSchemaV1 } from '@igniter-js/core'
+import type { IgniterError, IgniterLogger, StandardSchemaV1 } from '@igniter-js/core'
 import type { IgniterTelemetryManager } from '@igniter-js/telemetry'
 import type { z } from 'zod'
 import { IgniterCallerError } from '../errors/caller.error'
@@ -123,7 +123,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
   }
 
   private logger?: IgniterLogger
-  private telemetry?: IgniterTelemetryManager<any>
+  private telemetry?: IgniterTelemetryManager<{}>
   private retryOptions?: IgniterCallerRetryOptions
   private fallbackFn?: () => any
   private cacheKey?: string
@@ -646,7 +646,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
     const { safeUrl } = this.resolveUrl()
     const method = this.options.method
 
-    let lastError: Error | undefined
+    let lastError: IgniterError | undefined
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) {
