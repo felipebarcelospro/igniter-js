@@ -7,7 +7,7 @@
  * All errors extend the base `IgniterError` from `@igniter-js/core`.
  */
 
-import { IgniterError, type IgniterLogger } from '@igniter-js/core'
+import { IgniterError, type IgniterLogger } from "@igniter-js/core";
 
 /**
  * All possible error codes for IgniterTelemetry.
@@ -33,48 +33,48 @@ import { IgniterError, type IgniterLogger } from '@igniter-js/core'
  */
 export const IGNITER_TELEMETRY_ERROR_CODES = {
   // Configuration errors
-  TELEMETRY_SERVICE_REQUIRED: 'TELEMETRY_SERVICE_REQUIRED',
-  TELEMETRY_ENVIRONMENT_REQUIRED: 'TELEMETRY_ENVIRONMENT_REQUIRED',
-  TELEMETRY_CONFIGURATION_INVALID: 'TELEMETRY_CONFIGURATION_INVALID',
+  TELEMETRY_SERVICE_REQUIRED: "TELEMETRY_SERVICE_REQUIRED",
+  TELEMETRY_ENVIRONMENT_REQUIRED: "TELEMETRY_ENVIRONMENT_REQUIRED",
+  TELEMETRY_CONFIGURATION_INVALID: "TELEMETRY_CONFIGURATION_INVALID",
 
   // Transport errors
-  TELEMETRY_INVALID_TRANSPORT: 'TELEMETRY_INVALID_TRANSPORT',
-  TELEMETRY_TRANSPORT_FAILED: 'TELEMETRY_TRANSPORT_FAILED',
-  TELEMETRY_TRANSPORT_INIT_FAILED: 'TELEMETRY_TRANSPORT_INIT_FAILED',
+  TELEMETRY_INVALID_TRANSPORT: "TELEMETRY_INVALID_TRANSPORT",
+  TELEMETRY_TRANSPORT_FAILED: "TELEMETRY_TRANSPORT_FAILED",
+  TELEMETRY_TRANSPORT_INIT_FAILED: "TELEMETRY_TRANSPORT_INIT_FAILED",
 
   // Event errors
-  TELEMETRY_INVALID_EVENT_NAME: 'TELEMETRY_INVALID_EVENT_NAME',
-  TELEMETRY_UNKNOWN_EVENT: 'TELEMETRY_UNKNOWN_EVENT',
-  TELEMETRY_DUPLICATE_EVENT: 'TELEMETRY_DUPLICATE_EVENT',
+  TELEMETRY_INVALID_EVENT_NAME: "TELEMETRY_INVALID_EVENT_NAME",
+  TELEMETRY_UNKNOWN_EVENT: "TELEMETRY_UNKNOWN_EVENT",
+  TELEMETRY_DUPLICATE_EVENT: "TELEMETRY_DUPLICATE_EVENT",
 
   // Schema/validation errors
-  TELEMETRY_SCHEMA_VALIDATION_FAILED: 'TELEMETRY_SCHEMA_VALIDATION_FAILED',
-  TELEMETRY_INVALID_NAMESPACE: 'TELEMETRY_INVALID_NAMESPACE',
-  TELEMETRY_RESERVED_NAMESPACE: 'TELEMETRY_RESERVED_NAMESPACE',
-  TELEMETRY_DUPLICATE_NAMESPACE: 'TELEMETRY_DUPLICATE_NAMESPACE',
+  TELEMETRY_SCHEMA_VALIDATION_FAILED: "TELEMETRY_SCHEMA_VALIDATION_FAILED",
+  TELEMETRY_INVALID_NAMESPACE: "TELEMETRY_INVALID_NAMESPACE",
+  TELEMETRY_RESERVED_NAMESPACE: "TELEMETRY_RESERVED_NAMESPACE",
+  TELEMETRY_DUPLICATE_NAMESPACE: "TELEMETRY_DUPLICATE_NAMESPACE",
 
   // Session errors
-  TELEMETRY_SESSION_ENDED: 'TELEMETRY_SESSION_ENDED',
-  TELEMETRY_SESSION_INVALID: 'TELEMETRY_SESSION_INVALID',
+  TELEMETRY_SESSION_ENDED: "TELEMETRY_SESSION_ENDED",
+  TELEMETRY_SESSION_INVALID: "TELEMETRY_SESSION_INVALID",
 
   // Scope and actor errors
-  TELEMETRY_DUPLICATE_SCOPE: 'TELEMETRY_DUPLICATE_SCOPE',
-  TELEMETRY_INVALID_SCOPE: 'TELEMETRY_INVALID_SCOPE',
-  TELEMETRY_DUPLICATE_ACTOR: 'TELEMETRY_DUPLICATE_ACTOR',
-  TELEMETRY_INVALID_ACTOR: 'TELEMETRY_INVALID_ACTOR',
+  TELEMETRY_DUPLICATE_SCOPE: "TELEMETRY_DUPLICATE_SCOPE",
+  TELEMETRY_INVALID_SCOPE: "TELEMETRY_INVALID_SCOPE",
+  TELEMETRY_DUPLICATE_ACTOR: "TELEMETRY_DUPLICATE_ACTOR",
+  TELEMETRY_INVALID_ACTOR: "TELEMETRY_INVALID_ACTOR",
 
   // Emit errors
-  TELEMETRY_EMIT_FAILED: 'TELEMETRY_EMIT_FAILED',
+  TELEMETRY_EMIT_FAILED: "TELEMETRY_EMIT_FAILED",
 
   // Runtime errors
-  TELEMETRY_RUNTIME_NOT_INITIALIZED: 'TELEMETRY_RUNTIME_NOT_INITIALIZED',
-} as const
+  TELEMETRY_RUNTIME_NOT_INITIALIZED: "TELEMETRY_RUNTIME_NOT_INITIALIZED",
+} as const;
 
 /**
  * Type representing all valid telemetry error codes.
  */
 export type IgniterTelemetryErrorCode =
-  (typeof IGNITER_TELEMETRY_ERROR_CODES)[keyof typeof IGNITER_TELEMETRY_ERROR_CODES]
+  (typeof IGNITER_TELEMETRY_ERROR_CODES)[keyof typeof IGNITER_TELEMETRY_ERROR_CODES];
 
 /**
  * Payload used to create an {@link IgniterTelemetryError}.
@@ -91,19 +91,19 @@ export type IgniterTelemetryErrorCode =
  */
 export interface IgniterTelemetryErrorPayload {
   /** Machine-readable error code */
-  code: IgniterTelemetryErrorCode
+  code: IgniterTelemetryErrorCode;
   /** Human-readable error message */
-  message: string
+  message: string;
   /** Optional HTTP status code (for API boundaries) */
-  statusCode?: number
+  statusCode?: number;
   /** Optional original cause */
-  cause?: unknown
+  cause?: unknown;
   /** Extra diagnostic details */
-  details?: unknown
+  details?: unknown;
   /** Arbitrary metadata for debugging */
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>;
   /** Optional logger for error logging */
-  logger?: IgniterLogger
+  logger?: IgniterLogger;
 }
 
 /**
@@ -133,20 +133,20 @@ export interface IgniterTelemetryErrorPayload {
  * ```
  */
 export class IgniterTelemetryError extends IgniterError {
-  declare readonly code: IgniterTelemetryErrorCode
+  declare readonly code: IgniterTelemetryErrorCode;
 
   constructor(payload: IgniterTelemetryErrorPayload) {
     super({
       code: payload.code,
       message: payload.message,
       statusCode: payload.statusCode,
-      causer: '@igniter-js/telemetry',
+      causer: "@igniter-js/telemetry",
       details: payload.details,
       metadata: payload.metadata,
       logger: payload.logger,
-    })
+    });
 
-    this.name = 'IgniterTelemetryError'
+    this.name = "IgniterTelemetryError";
   }
 
   /**
@@ -168,7 +168,7 @@ export class IgniterTelemetryError extends IgniterError {
    * ```
    */
   static is(error: unknown): error is IgniterTelemetryError {
-    return error instanceof IgniterTelemetryError
+    return error instanceof IgniterTelemetryError;
   }
 
   /**
@@ -185,6 +185,6 @@ export class IgniterTelemetryError extends IgniterError {
    * ```
    */
   hasCode(code: IgniterTelemetryErrorCode): boolean {
-    return this.code === code
+    return this.code === code;
   }
 }
