@@ -54,15 +54,30 @@ Apps (in `apps/*`) live in the repo but are not workspace packages in the root `
 
 ### 2.2 High-level Structure
 
-```
+```text
 igniter-js/
-├── packages/                 # publishable packages
-├── apps/                     # website + starters + samples
-├── plugins/                  # plugin implementations
-├── tooling/                  # shared configs (eslint/typescript)
-├── .github/                  # workflows + prompts + instructions
-├── package.json              # turbo + changesets scripts
-└── AGENTS.md                 # this file
+├── apps/                        # Website, Starters, and References
+│   ├── sample-realtime-chat/    # Real-time chat example via SSE
+│   ├── starter-*/               # Base templates for new projects
+│   └── www/                     # Official documentation (Fumadocs)
+├── packages/                    # Core and Libraries (Workspaces)
+│   ├── core/                    # Main engine and Request Pipeline
+│   ├── agents/                  # AI Framework (Lia Engine)
+│   ├── caller/                  # Type-safe HTTP client
+│   ├── cli/                     # Command-line tool (igniter)
+│   ├── storage/                 # File Storage abstraction
+│   ├── store/                   # Cache and Distributed State
+│   ├── mail/                    # Transactional emails (React Email)
+│   ├── bot/                     # Multi-platform Bot framework
+│   ├── telemetry/               # Observability and Tracing
+│   ├── connectors/              # Multi-tenant third-party integrations
+│   └── adapter-*/               # Specific implementations (Redis, BullMQ, OTEL)
+├── plugins/                     # Official plugins (e.g., better-auth)
+├── tooling/                     # Shared configurations (ESLint, TS)
+├── .github/                     # Workflows and Agent Instructions
+├── AGENTS.md                    # This master manual
+├── turbo.json                   # Build pipeline configuration
+└── package.json                 # Monorepo scripts and workspaces
 ```
 
 ### 2.3 What to Touch (and When)
@@ -157,7 +172,7 @@ Use these search strategies in order:
 1. **Semantic search** (best for "where is X implemented?")
    - Example queries:
      - "IgniterStorage.create() pattern"
-     - "telemetry subpath export @igniter-js/*/telemetry"
+     - "telemetry subpath export @igniter-js/\*/telemetry"
      - "shim.ts browser export"
      - "builder immutable state pattern withAdapter build()"
 
@@ -225,7 +240,9 @@ export interface IgniterXBuilderState<TConfig> {
 }
 
 export class IgniterXBuilder<TConfig = {}> {
-  private constructor(private readonly state: IgniterXBuilderState<TConfig> = {}) {}
+  private constructor(
+    private readonly state: IgniterXBuilderState<TConfig> = {},
+  ) {}
 
   static create(): IgniterXBuilder<{}> {
     return new IgniterXBuilder({});
@@ -236,7 +253,7 @@ export class IgniterXBuilder<TConfig = {}> {
   }
 
   build(): IgniterXManager {
-    if (!this.state.adapter) throw new IgniterXError('ADAPTER_REQUIRED');
+    if (!this.state.adapter) throw new IgniterXError("ADAPTER_REQUIRED");
     return new IgniterXManager(this.state);
   }
 }
@@ -262,7 +279,11 @@ Example adapter contract:
 
 ```ts
 export interface IgniterXAdapter {
-  send(params: { to: string; subject: string; html: string }): Promise<{ id: string }>;
+  send(params: {
+    to: string;
+    subject: string;
+    html: string;
+  }): Promise<{ id: string }>;
 }
 ```
 
@@ -279,13 +300,14 @@ Telemetry should be consistent across packages:
 Example telemetry definition:
 
 ```ts
-export const IgniterXTelemetryEvents = IgniterTelemetryEvents
-  .namespace('igniter.x')
-  .group('operation', (g) =>
+export const IgniterXTelemetryEvents = IgniterTelemetryEvents.namespace(
+  "igniter.x",
+)
+  .group("operation", (g) =>
     g
-      .event('started', z.object({ 'ctx.x.operation_id': z.string() }))
-      .event('success', z.object({ 'ctx.x.duration_ms': z.number() }))
-      .event('error', z.object({ 'ctx.x.error.code': z.string() }))
+      .event("started", z.object({ "ctx.x.operation_id": z.string() }))
+      .event("success", z.object({ "ctx.x.duration_ms": z.number() }))
+      .event("error", z.object({ "ctx.x.error.code": z.string() })),
   )
   .build();
 ```
@@ -313,7 +335,7 @@ Unless the package is explicitly client-safe (for example, a pure caller), add a
 
 When changing docs-site behavior, read `apps/www/AGENTS.md` first.
 
-### 7.2 Starters (apps/starter-*)
+### 7.2 Starters (apps/starter-\*)
 
 Starters must remain runnable:
 
@@ -322,7 +344,7 @@ Starters must remain runnable:
 
 If you change a starter, update its `README.md` and ensure any env examples still work.
 
-### 7.3 Samples (apps/sample-*)
+### 7.3 Samples (apps/sample-\*)
 
 Samples are "truthy demos": do not "simplify" them unless the user requests it.
 
@@ -392,6 +414,7 @@ Lia's memory is a **living knowledge base** that grows with the project. Think o
 ### 11.1 Memory Philosophy
 
 **Core Principles:**
+
 - Memory is not a dump—it's a curated knowledge system
 - Every memory entry must be actionable and verifiable
 - Memories become stale—review and update regularly
@@ -402,6 +425,7 @@ Lia's memory is a **living knowledge base** that grows with the project. Think o
 ### 11.2 What to Remember
 
 **High-Priority (Always Remember):**
+
 - Maintainer preferences (PR structure, breaking change policies, communication style)
 - Architectural decisions affecting multiple packages
 - Recurring patterns that save time ("always check X before Y")
@@ -409,12 +433,14 @@ Lia's memory is a **living knowledge base** that grows with the project. Think o
 - User feedback patterns (what works, what doesn't)
 
 **Medium-Priority (Context-Dependent):**
+
 - Package-specific conventions not in AGENTS.md
 - Experimental approaches and their outcomes
 - Tool configurations that worked well
 - Content roadmap and priorities
 
 **Never Remember:**
+
 - Secrets, tokens, credentials, API keys
 - Private user data or PII
 - One-off debugging noise
@@ -450,8 +476,10 @@ Organize memories into clear categories:
    - Does this contradict previous memories? (If yes, resolve it)
 
 3. **Write** (Concise & Actionable)
+
    ```md
    ## [Date HH:MM] - [Category]: [Title]
+
    **Context:** What was happening
    **Decision/Pattern:** What was learned
    **Application:** How to use this knowledge
@@ -467,6 +495,7 @@ Organize memories into clear categories:
 ### 11.5 Memory Update Triggers
 
 **Update memory when:**
+
 - User corrects you (capture the correction)
 - A pattern changes in the codebase (update the pattern)
 - Feedback reveals a gap (fill the gap)
@@ -474,6 +503,7 @@ Organize memories into clear categories:
 - Documentation is updated (sync memory with docs)
 
 **Example trigger flow:**
+
 ```
 User corrects approach
   ↓
@@ -489,53 +519,66 @@ Apply: Use this preference in future tasks
 ### 11.6 Memory Examples
 
 **Good Memory Entry:**
+
 ```md
 ## 2025-12-23 17:00 - Pattern: Telemetry Attributes Naming
+
 **Context:** Standardizing telemetry across packages
 **Pattern:** Always use `ctx.<domain>.<field>` format
-**Application:** 
+**Application:**
+
 - ✅ `ctx.kv.key`, `ctx.batch.count`
 - ❌ `key`, `batchCount`, `value`
-**Rationale:** Prevents PII leaks, ensures consistency
-**Source:** packages/store/src/telemetry/index.ts
-**Time Spent:** 15 minutes
+  **Rationale:** Prevents PII leaks, ensures consistency
+  **Source:** packages/store/src/telemetry/index.ts
+  **Time Spent:** 15 minutes
 ```
 
 **Bad Memory Entry:**
+
 ```md
 ## Some fix
+
 Fixed a thing in the store package.
 ```
+
 (Too vague, not actionable, no context)
 
 ### 11.7 Memory Maintenance Schedule
 
 **After every task:**
+
 - Quick capture: Did I learn something worth remembering?
 
 **Every 5 tasks:**
+
 - Review recent captures: Can they be better organized?
 
 **Every 20 tasks:**
+
 - Deep review: Are memories still accurate? Any to archive?
 
 **Before major work:**
+
 - Query memory: What do I know about this area?
 
 ### 11.8 Memory-First Workflow
 
 **Before starting any task:**
+
 1. Query memory: "What do I know about [package/feature]?"
 2. Read relevant memory files
 3. If patterns exist, follow them
 4. If gaps exist, note them for later
 
 **During task:**
+
 - Notice patterns → flag for memory
 - Receive feedback → flag for memory
 - Make decisions → flag for memory
 
 **After task:**
+
 - Process flags → create/update memory entries
 - Verify against source of truth (code/docs)
 - Ensure no contradictions
@@ -545,16 +588,19 @@ Fixed a thing in the store package.
 Use memory like a search engine:
 
 **Before package work:**
+
 - "What patterns exist for [package-type]?"
 - "What pitfalls should I avoid in [package]?"
 - "What preferences apply to [area]?"
 
 **Before content creation:**
+
 - "What content have I created recently?"
 - "What feedback did I receive on [content-type]?"
 - "What's on the content roadmap?"
 
 **After feedback:**
+
 - "Does this contradict existing memory?"
 - "Should this update an existing pattern?"
 - "Is this a new preference to remember?"
@@ -567,12 +613,14 @@ Track how you evolve over time:
 ## Evolution Log
 
 ### 2025-12-23 10:15: Learned to check implementation first
+
 - **Before:** Sometimes assumed API behavior
 - **After:** Always search packages/ and verify
 - **Impact:** Zero API documentation errors
 - **Time Spent:** 45 minutes
 
 ### 2025-12-23 17:20: Added Time Tracking to Memory System
+
 - **Before:** Only date-based tracking
 - **After:** Full timestamp tracking with time spent estimates
 - **Impact:** Better perception of time, more realistic capacity estimates
@@ -582,6 +630,7 @@ Track how you evolve over time:
 ### 11.11 Memory Health Indicators
 
 **Healthy Memory System:**
+
 - Memories are dated and sourced
 - No contradictions between entries
 - Patterns are validated against current code
@@ -589,6 +638,7 @@ Track how you evolve over time:
 - Evolution is visible over time
 
 **Unhealthy Memory System:**
+
 - Vague or undated entries
 - Contradictory patterns
 - Memories never updated
@@ -596,6 +646,7 @@ Track how you evolve over time:
 - No visible learning
 
 **If memory feels unhealthy:**
+
 1. Audit all entries
 2. Remove obsolete/vague ones
 3. Verify remaining against code

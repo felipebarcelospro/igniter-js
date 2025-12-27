@@ -252,6 +252,38 @@ export const IgniterXTelemetryEvents = IgniterTelemetryEvents.namespace(
 - **Mandatory Sequence:** Telemetry events for a new feature or method MUST be defined in `src/telemetry/index.ts` BEFORE the internal logic is implemented.
 - **Observability Parity:** Every new public method must have at least one `started` event and a `success` or `error` event.
 
+### 4.6) Optional Telemetry & Circular Dependency Prevention
+
+When telemetry is marked as **optional** in `peerDependenciesMeta`:
+
+- **MUST NOT** export telemetry from the main `src/index.ts` (root entrypoint).
+- **MUST** be exported **ONLY** via the subpath `@igniter-js/<package>/telemetry`.
+- **Rationale:** Exporting from the main entry forces telemetry load on all consumers, creating circular dependencies when telemetry itself depends on the package (e.g., store adapter).
+
+✅ **Correct:**
+```json
+{
+  "exports": {
+    ".": { /* main exports WITHOUT telemetry */ },
+    "./telemetry": { /* ONLY telemetry here */ }
+  },
+  "peerDependenciesMeta": {
+    "@igniter-js/telemetry": { "optional": true }
+  }
+}
+```
+
+❌ **Incorrect:**
+```typescript
+// In src/index.ts - DO NOT DO THIS for optional telemetry
+export * from './telemetry'
+```
+
+Reference:
+- `packages/store/package.json`
+- `packages/caller/package.json`
+- `packages/storage/package.json`
+
 ---
 
 ## 5) Client-import protections (server-only safety)
@@ -369,7 +401,7 @@ Reference:
 
 ### 11.1 AGENTS.md (Hyper-Robust & Training-Ready)
 
-The `AGENTS.md` is the primary source of truth and "training data" for Code Agents. It must be **extremely robust, detailed, and exhaustive**, aiming for at least **1,500 lines** of high-quality content to ensure the agent fully dominates the package's domain, architecture, and usage.
+The `AGENTS.md` is the primary source of truth and "training data" for Code Agents. It must be **extremely robust, detailed, and exhaustive**, aiming for at least **1,000 lines** of high-quality content to ensure the agent fully dominates the package's domain, architecture, and usage.
 
 #### Mandatory Sections & Structure
 
@@ -394,7 +426,7 @@ The file must be divided into two main sections with deep-dives:
       - **Mitigation:** How to prevent it.
       - **Solution:** Code snippet to fix it.
 
-#### AGENTS.md Template (The 1,500-Line Blueprint)
+#### AGENTS.md Template (The 1,000-Line Blueprint)
 
 ```markdown
 # AGENTS.md - @igniter-js/[package-name]
