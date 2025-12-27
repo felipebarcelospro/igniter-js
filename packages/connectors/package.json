@@ -70,7 +70,9 @@
     "url": "https://github.com/felipebarcelospro/igniter-js/issues"
   },
   "homepage": "https://igniterjs.com",
-  "dependencies": {},
+  "dependencies": {
+    "@igniter-js/telemetry": ">=0.1.12"
+  },
   "devDependencies": {
     "@igniter-js/core": "*",
     "@igniter-js/telemetry": "*",
@@ -82,13 +84,10 @@
   },
   "peerDependencies": {
     "@igniter-js/core": ">=0.2.0",
-    "@igniter-js/telemetry": ">=0.1.0",
+    "@igniter-js/telemetry": ">=0.1.12",
     "zod": ">=3.0.0"
   },
   "peerDependenciesMeta": {
-    "@igniter-js/telemetry": {
-      "optional": true
-    },
     "zod": {
       "optional": true
     }
@@ -97,6 +96,6 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   }
 }
