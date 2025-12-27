@@ -73,7 +73,7 @@ export type IgniterTelemetryEventsMap = {
  * Maps namespace to their event maps.
  */
 export type IgniterTelemetryEventsRegistry = {
-  [namespace: string]: IgniterTelemetryEventsMap
+  [namespace: (string & {})]: IgniterTelemetryEventsMap
 }
 
 /**
