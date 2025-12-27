@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/store",
-  "version": "0.1.21",
+  "version": "0.1.24",
   "description": "Type-safe distributed store library for Igniter.js with Redis support, scoped operations, and typed pub/sub",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -71,6 +71,9 @@
     "url": "https://github.com/felipebarcelospro/igniter-js/issues"
   },
   "homepage": "https://igniterjs.com",
+  "dependencies": {
+    "@igniter-js/telemetry": ">=0.1.12"
+  },
   "devDependencies": {
     "@igniter-js/core": "*",
     "@igniter-js/telemetry": "*",
@@ -84,15 +87,12 @@
   },
   "peerDependencies": {
     "@igniter-js/core": ">=0.3.40",
-    "@igniter-js/telemetry": ">=0.1.0",
+    "@igniter-js/telemetry": ">=0.1.12",
     "ioredis": ">=5.3.2",
     "zod": ">=4.2.1"
   },
   "peerDependenciesMeta": {
     "ioredis": {
-      "optional": true
-    },
-    "@igniter-js/telemetry": {
       "optional": true
     },
     "@igniter-js/core": {
@@ -106,6 +106,6 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   }
 }
