@@ -465,7 +465,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
     const baseURL = this.options.baseURL
     const timeoutMs = this.options.timeout
 
-    // TODO: DTS build hit TS2589 (type instantiation too deep) on this emit call.
+    // TODO: @ts-expect-error DTS build hit TS2589 (type instantiation too deep) on this emit call.
     this.telemetry?.emit(
       'igniter.caller.request.execute.started',
       {
