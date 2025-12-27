@@ -249,9 +249,23 @@ export interface BotSendOptions {
   disableWebPagePreview?: boolean
   /** Disable notifications */
   disableNotification?: boolean
-  /** Parse mode (HTML, Markdown, MarkdownV2, etc) */
+  /** 
+   * Parse mode (HTML, Markdown, MarkdownV2, etc)
+   * 
+   * When not set, Telegram adapter will automatically convert standard Markdown to HTML.
+   * Set explicitly if you have pre-formatted content.
+   */
   parseMode?: 'HTML' | 'Markdown' | 'MarkdownV2'
   /** Protect content from forwarding */
   protectContent?: boolean
+  /**
+   * Automatically format Markdown content for the platform (default: true)
+   * 
+   * When true (default), standard Markdown like **bold**, *italic*, `code`, etc.
+   * will be converted to the platform's native format (e.g., HTML for Telegram).
+   * 
+   * Set to false to send raw text without any formatting.
+   */
+  autoFormat?: boolean
 }
 
