@@ -183,7 +183,10 @@ export interface IgniterTelemetryEventsValidationOptions {
 /**
  * Built descriptor from IgniterTelemetryEvents.build()
  */
-export interface IgniterTelemetryEventsDescriptor<TNamespace extends string, TEvents extends IgniterTelemetryEventsMap = IgniterTelemetryEventsMap> {
+export interface IgniterTelemetryEventsDescriptor<
+  TNamespace extends string, 
+  TEvents extends IgniterTelemetryEventsMap = IgniterTelemetryEventsMap
+> {
   /** The namespace for these events */
   readonly namespace: TNamespace
   /** The events map */
@@ -199,8 +202,11 @@ export interface IgniterTelemetryEventsDescriptor<TNamespace extends string, TEv
   }
   /** Type inference helper */
   readonly $Infer: {
-    namespace: string
+    namespace: TNamespace
     events: TEvents
     keys: IgniterTelemetryFlattenEventKeys<TEvents>
+    registry: {
+      [K in TNamespace]: TEvents
+    }
   }
 }

@@ -124,7 +124,7 @@ export interface IgniterMailOptions<
   /** Optional logger used for debug/info/error logging. */
   logger?: IgniterLogger;
   /** Optional telemetry instance for observability. */
-  telemetry?: IgniterTelemetryManager;
+  telemetry?: IgniterTelemetryManager<any>;
   /** Optional queue configuration for asynchronous delivery. */
   queue?: IgniterMailQueueConfig;
 }

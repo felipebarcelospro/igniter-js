@@ -124,7 +124,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
   }
 
   private logger?: IgniterLogger
-  private telemetry?: IgniterTelemetryManager
+  private telemetry?: IgniterTelemetryManager<any>
   private retryOptions?: IgniterCallerRetryOptions
   private fallbackFn?: () => any
   private cacheKey?: string

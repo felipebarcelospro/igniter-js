@@ -259,7 +259,7 @@ export class IgniterStorageBuilder<TScopes extends {
    * @param telemetry - An implementation of IgniterTelemetryManager.
    */
   withTelemetry(
-    telemetry: IgniterTelemetryManager,
+    telemetry: IgniterTelemetryManager<any>,
   ): IgniterStorageBuilder<TScopes> {
     return new IgniterStorageBuilder({
       ...this.state,

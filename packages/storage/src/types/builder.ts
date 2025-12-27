@@ -29,7 +29,7 @@ export type IgniterStorageBuilderState = {
   /** Logger instance for operational tracing. */
   logger?: IgniterLogger;
   /** Telemetry manager for event emission. */
-  telemetry?: IgniterTelemetryManager;
+  telemetry?: IgniterTelemetryManager<any>;
   /** Lifecycle hooks for storage operations. */
   hooks?: IgniterStorageHooks;
   /** Upload policies for size, types, and extensions. */

@@ -217,7 +217,8 @@ export class IgniterTelemetryEvents<
       $Infer: {
         namespace: {} as TNamespace,
         events: {} as TEvents,
-        keys: {} as IgniterTelemetryFlattenEventKeys<TEvents>,        
+        keys: {} as IgniterTelemetryFlattenEventKeys<TEvents>,      
+        registry: {} as { [K in TNamespace]: TEvents }
       }
     }
   }

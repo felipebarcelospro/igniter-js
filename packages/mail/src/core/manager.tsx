@@ -17,6 +17,7 @@ import type {
 } from "../types/templates";
 import { IgniterMailSchema } from "../utils/schema";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
+import type { IgniterMailTelemetryEventsType } from "../telemetry";
 import { IgniterMailTelemetryEvents } from "src/telemetry";
 
 /**
@@ -30,7 +31,9 @@ export class IgniterMailManagerCore<
   private readonly adapter: IgniterMailAdapter;
   private readonly templates: TTemplates;
   private readonly logger?: IgniterLogger;
-  private readonly telemetry?: IgniterTelemetryManager;
+  private readonly telemetry?: IgniterTelemetryManager<{
+    "igniter.mail": IgniterMailTelemetryEventsType;
+  }>;
   private readonly queue?: IgniterMailQueueConfig;
   private queueJobRegistered = false;
   private queueJobRegistering?: Promise<void>;

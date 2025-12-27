@@ -88,7 +88,7 @@ import type {
 import { IgniterStoreKeyBuilder } from '../builders/store-key.builder'
 import { IgniterStoreError } from '../errors/store.error'
 import type { IgniterTelemetryAttributes, IgniterTelemetryManager } from '@igniter-js/telemetry'
-import { IgniterStoreTelemetryEvents } from 'src/telemetry'
+import type { IgniterStoreTelemetryEvents } from '../telemetry'
 
 
 /**
@@ -114,7 +114,7 @@ export class IgniterStoreManager<
   private readonly config: IgniterStoreConfig<TRegistry, TScopes>
   private readonly adapter: IgniterStoreAdapter
   private readonly keyBuilder: IgniterStoreKeyBuilder
-  private readonly telemetry?: IgniterTelemetryManager
+  private readonly telemetry?: IgniterTelemetryManager<IgniterStoreTelemetryEvents>
 
   /** Key-value operations */
   public readonly kv: IgniterStoreKV
@@ -353,14 +353,14 @@ export class IgniterStoreManager<
           ...this.getBaseAttributes('kv'),
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.get.started'), {
+        this.telemetry?.emit('igniter.store.kv.get.started', {
           level: 'debug',
           attributes: attributes as IgniterTelemetryAttributes,
         })
 
         try {
           const value = await this.adapter.get<T>(fullKey)
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.get.success'), {
+          this.telemetry?.emit('igniter.store.kv.get.success', {
             level: 'debug',
             attributes: {
               ...attributes,
@@ -369,7 +369,7 @@ export class IgniterStoreManager<
           })
           return value
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.get.error'), {
+          this.telemetry?.emit('igniter.store.kv.get.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -387,19 +387,19 @@ export class IgniterStoreManager<
           'ctx.kv.ttl': options?.ttl,
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.set.started'), {
+        this.telemetry?.emit('igniter.store.kv.set.started', {
           level: 'debug',
           attributes,
         })
 
         try {
           await this.adapter.set(fullKey, value, options)
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.set.success'), {
+          this.telemetry?.emit('igniter.store.kv.set.success', {
             level: 'debug',
             attributes,
           })
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.set.error'), {
+          this.telemetry?.emit('igniter.store.kv.set.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -414,19 +414,19 @@ export class IgniterStoreManager<
         const fullKey = this.keyBuilder.build('kv', key)
         const attributes = this.getBaseAttributes('kv')
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.remove.started'), {
+        this.telemetry?.emit('igniter.store.kv.remove.started', {
           level: 'debug',
           attributes: attributes as IgniterTelemetryAttributes,
         })
 
         try {
           await this.adapter.delete(fullKey)
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.remove.success'), {
+          this.telemetry?.emit('igniter.store.kv.remove.success', {
             level: 'debug',
             attributes: attributes as IgniterTelemetryAttributes,
           })
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.remove.error'), {
+          this.telemetry?.emit('igniter.store.kv.remove.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -441,14 +441,14 @@ export class IgniterStoreManager<
         const fullKey = this.keyBuilder.build('kv', key)
         const attributes = this.getBaseAttributes('kv')
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.exists.started'), {
+        this.telemetry?.emit('igniter.store.kv.exists.started', {
           level: 'debug',
           attributes: attributes as IgniterTelemetryAttributes,
         })
 
         try {
           const exists = await this.adapter.has(fullKey)
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.exists.success'), {
+          this.telemetry?.emit('igniter.store.kv.exists.success', {
             level: 'debug',
             attributes: {
               ...attributes,
@@ -457,7 +457,7 @@ export class IgniterStoreManager<
           })
           return exists
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.exists.error'), {
+          this.telemetry?.emit('igniter.store.kv.exists.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -475,19 +475,19 @@ export class IgniterStoreManager<
           'ctx.kv.ttl': ttlSeconds,
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.expire.started'), {
+        this.telemetry?.emit('igniter.store.kv.expire.started', {
           level: 'debug',
           attributes,
         })
 
         try {
           await this.adapter.expire(fullKey, ttlSeconds)
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.expire.success'), {
+          this.telemetry?.emit('igniter.store.kv.expire.success', {
             level: 'debug',
             attributes,
           })
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.expire.error'), {
+          this.telemetry?.emit('igniter.store.kv.expire.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -505,19 +505,19 @@ export class IgniterStoreManager<
           'ctx.kv.ttl': ttlSeconds,
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.touch.started'), {
+        this.telemetry?.emit('igniter.store.kv.touch.started', {
           level: 'debug',
           attributes,
         })
 
         try {
           await this.adapter.expire(fullKey, ttlSeconds)
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.touch.success'), {
+          this.telemetry?.emit('igniter.store.kv.touch.success', {
             level: 'debug',
             attributes,
           })
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('kv.touch.error'), {
+          this.telemetry?.emit('igniter.store.kv.touch.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -539,14 +539,14 @@ export class IgniterStoreManager<
           'ctx.counter.delta': 1,
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('counter.increment.started'), {
+        this.telemetry?.emit('igniter.store.counter.increment.started', {
           level: 'debug',
           attributes,
         })
 
         try {
           const value = await this.adapter.increment(fullKey, 1)
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('counter.increment.success'), {
+          this.telemetry?.emit('igniter.store.counter.increment.success', {
             level: 'debug',
             attributes: {
               ...attributes,
@@ -555,7 +555,7 @@ export class IgniterStoreManager<
           })
           return value
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('counter.increment.error'), {
+          this.telemetry?.emit('igniter.store.counter.increment.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -573,14 +573,14 @@ export class IgniterStoreManager<
           'ctx.counter.delta': -1,
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('counter.decrement.started'), {
+        this.telemetry?.emit('igniter.store.counter.decrement.started', {
           level: 'debug',
           attributes,
         })
 
         try {
           const value = await this.adapter.increment(fullKey, -1)
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('counter.decrement.success'), {
+          this.telemetry?.emit('igniter.store.counter.decrement.success', {
             level: 'debug',
             attributes: {
               ...attributes,
@@ -589,7 +589,7 @@ export class IgniterStoreManager<
           })
           return value
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('counter.decrement.error'), {
+          this.telemetry?.emit('igniter.store.counter.decrement.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -607,7 +607,7 @@ export class IgniterStoreManager<
           'ctx.counter.ttl': ttlSeconds,
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('counter.expire.started'), {
+        this.telemetry?.emit('igniter.store.counter.expire.started', {
           level: 'debug',
           attributes,
         })
@@ -615,12 +615,12 @@ export class IgniterStoreManager<
         try {
           await this.adapter.expire(fullKey, ttlSeconds)
 
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('counter.expire.success'), {
+          this.telemetry?.emit('igniter.store.counter.expire.success', {
             level: 'debug',
             attributes,
           })
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('counter.expire.error'), {
+          this.telemetry?.emit('igniter.store.counter.expire.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -642,7 +642,7 @@ export class IgniterStoreManager<
           'ctx.claim.ttl': options?.ttl,
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('claim.acquire.started'), {
+        this.telemetry?.emit('igniter.store.claim.acquire.started', {
           level: 'debug',
           attributes,
         })
@@ -650,7 +650,7 @@ export class IgniterStoreManager<
         try {
           const acquired = await this.adapter.setNX(fullKey, value, options)
 
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('claim.acquire.success'), {
+          this.telemetry?.emit('igniter.store.claim.acquire.success', {
             level: 'debug',
             attributes: {
               ...attributes,
@@ -659,7 +659,7 @@ export class IgniterStoreManager<
           })
           return acquired
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('claim.acquire.error'), {
+          this.telemetry?.emit('igniter.store.claim.acquire.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -684,7 +684,7 @@ export class IgniterStoreManager<
           'ctx.batch.count': keys.length,
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('batch.get.started'), {
+        this.telemetry?.emit('igniter.store.batch.get.started', {
           level: 'debug',
           attributes,
         })
@@ -693,7 +693,7 @@ export class IgniterStoreManager<
           const result = await this.adapter.mget<T>(fullKeys)
           const found = result.filter((value) => value !== null).length
 
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('batch.get.success'), {
+          this.telemetry?.emit('igniter.store.batch.get.success', {
             level: 'debug',
             attributes: {
               ...attributes,
@@ -702,7 +702,7 @@ export class IgniterStoreManager<
           })
           return result
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('batch.get.error'), {
+          this.telemetry?.emit('igniter.store.batch.get.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -727,19 +727,19 @@ export class IgniterStoreManager<
           'ctx.batch.count': entries.length,
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('batch.set.started'), {
+        this.telemetry?.emit('igniter.store.batch.set.started', {
           level: 'debug',
           attributes,
         })
 
         try {
           await this.adapter.mset(fullEntries)
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('batch.set.success'), {
+          this.telemetry?.emit('igniter.store.batch.set.success', {
             level: 'debug',
             attributes,
           })
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('batch.set.error'), {
+          this.telemetry?.emit('igniter.store.batch.set.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -779,7 +779,7 @@ export class IgniterStoreManager<
             identifier: lastScope.identifier,
           }
         }
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.publish.started'), {
+        this.telemetry?.emit('igniter.store.events.publish.started', {
           level: 'debug',
           attributes,
         })
@@ -787,12 +787,12 @@ export class IgniterStoreManager<
         try {
           await this.validateEventPayload('publish', event, message)
           await this.adapter.publish(fullChannel, envelope)
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.publish.success'), {
+          this.telemetry?.emit('igniter.store.events.publish.success', {
             level: 'debug',
             attributes,
           })
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.publish.error'), {
+          this.telemetry?.emit('igniter.store.events.publish.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -834,7 +834,7 @@ export class IgniterStoreManager<
             .then(() => handler(ctx))
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.subscribe.started'), {
+        this.telemetry?.emit('igniter.store.events.subscribe.started', {
           level: 'debug',
           attributes,
         })
@@ -842,12 +842,12 @@ export class IgniterStoreManager<
         try {
           await this.adapter.subscribe(fullChannel, wrappedHandler)
 
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.subscribe.success'), {
+          this.telemetry?.emit('igniter.store.events.subscribe.success', {
             level: 'debug',
             attributes,
           })
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.subscribe.error'), {
+          this.telemetry?.emit('igniter.store.events.subscribe.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -860,7 +860,7 @@ export class IgniterStoreManager<
 
         // Return unsubscribe function
         return async () => {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.unsubscribe.started'), {
+          this.telemetry?.emit('igniter.store.events.unsubscribe.started', {
             level: 'debug',
             attributes,
           })
@@ -868,12 +868,12 @@ export class IgniterStoreManager<
           try {
             await this.adapter.unsubscribe(fullChannel, wrappedHandler)
 
-            this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.unsubscribe.success'), {
+            this.telemetry?.emit('igniter.store.events.unsubscribe.success', {
               level: 'debug',
               attributes,
             })
           } catch (error) {
-            this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.unsubscribe.error'), {
+            this.telemetry?.emit('igniter.store.events.unsubscribe.error', {
               level: 'error',
               attributes: {
                 ...attributes,
@@ -965,7 +965,7 @@ export class IgniterStoreManager<
           }
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.publish.started'), {
+        this.telemetry?.emit('igniter.store.events.publish.started', {
           level: 'debug',
           attributes,
         })
@@ -974,12 +974,12 @@ export class IgniterStoreManager<
           await this.validateEventPayload('publish', eventPath, message)
           await this.adapter.publish(fullChannel, envelope)
 
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.publish.success'), {
+          this.telemetry?.emit('igniter.store.events.publish.success', {
             level: 'debug',
             attributes,
           })
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.publish.error'), {
+          this.telemetry?.emit('igniter.store.events.publish.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -1017,7 +1017,7 @@ export class IgniterStoreManager<
             .then(() => handler(ctx))
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.subscribe.started'), {
+        this.telemetry?.emit('igniter.store.events.subscribe.started', {
           level: 'debug',
           attributes,
         })
@@ -1025,12 +1025,12 @@ export class IgniterStoreManager<
         try {
           await this.adapter.subscribe(fullChannel, wrappedHandler)
 
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.subscribe.success'), {
+          this.telemetry?.emit('igniter.store.events.subscribe.success', {
             level: 'debug',
             attributes,
           })
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.subscribe.error'), {
+          this.telemetry?.emit('igniter.store.events.subscribe.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -1041,19 +1041,19 @@ export class IgniterStoreManager<
         }
 
         return async () => {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.unsubscribe.started'), {
+          this.telemetry?.emit('igniter.store.events.unsubscribe.started', {
             level: 'debug',
             attributes,
           })
 
           try {
             await this.adapter.unsubscribe(fullChannel, wrappedHandler)
-            this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.unsubscribe.success'), {
+            this.telemetry?.emit('igniter.store.events.unsubscribe.success', {
               level: 'debug',
               attributes,
             })
           } catch (error) {
-            this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('events.unsubscribe.error'), {
+            this.telemetry?.emit('igniter.store.events.unsubscribe.error', {
               level: 'error',
               attributes: {
                 ...attributes,
@@ -1102,20 +1102,20 @@ export class IgniterStoreManager<
           ...this.getBaseAttributes('dev'),
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('dev.scan.started'), {
+        this.telemetry?.emit('igniter.store.dev.scan.started', {
           level: 'debug',
           attributes: attributes as IgniterTelemetryAttributes,
         })
 
         try {
           const result = await this.adapter.scan(fullPattern, options)
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('dev.scan.success'), {
+          this.telemetry?.emit('igniter.store.dev.scan.success', {
             level: 'debug',
             attributes: attributes as IgniterTelemetryAttributes,
           })
           return result
         } catch (error) {
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('dev.scan.error'), {
+          this.telemetry?.emit('igniter.store.dev.scan.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -1142,7 +1142,7 @@ export class IgniterStoreManager<
           'ctx.stream.count': 1,
         }
 
-        this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('stream.append.started'), {
+        this.telemetry?.emit('igniter.store.stream.append.started', {
           level: 'debug',
           attributes,
         })
@@ -1150,14 +1150,14 @@ export class IgniterStoreManager<
         try {
           const result = await this.adapter.xadd(fullStream, message, options)
 
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('stream.append.success'), {
+          this.telemetry?.emit('igniter.store.stream.append.success', {
             level: 'debug',
             attributes,
           })
           return result
         } catch (error) {
 
-          this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('stream.append.error'), {
+          this.telemetry?.emit('igniter.store.stream.append.error', {
             level: 'error',
             attributes: {
               ...attributes,
@@ -1183,7 +1183,7 @@ export class IgniterStoreManager<
               'ctx.stream.consumer': consumer,
             }
 
-            this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('stream.group.started'), {
+            this.telemetry?.emit('igniter.store.stream.group.started', {
               level: 'debug',
               attributes,
             })
@@ -1191,12 +1191,12 @@ export class IgniterStoreManager<
             try {
               await this.adapter.xgroupCreate(fullStream, group, options?.startId ?? '0')
 
-              this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('stream.group.success'), {
+              this.telemetry?.emit('igniter.store.stream.group.success', {
                 level: 'debug',
                 attributes,
               })
             } catch (error) {
-              this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('stream.group.error'), {
+              this.telemetry?.emit('igniter.store.stream.group.error', {
                 level: 'error',
                 attributes: {
                   ...attributes,
@@ -1220,7 +1220,7 @@ export class IgniterStoreManager<
               'ctx.stream.consumer': consumer,
             }
 
-            this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('stream.read.started'), {
+            this.telemetry?.emit('igniter.store.stream.read.started', {
               level: 'debug',
               attributes,
             })
@@ -1228,7 +1228,7 @@ export class IgniterStoreManager<
             try {
               const messages = await this.adapter.xreadgroup<T>(fullStream, group, consumer, options)
               
-              this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('stream.read.success'), {
+              this.telemetry?.emit('igniter.store.stream.read.success', {
                 level: 'debug',
                 attributes: {
                   ...attributes,
@@ -1237,7 +1237,7 @@ export class IgniterStoreManager<
               })
               return messages
             } catch (error) {
-              this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('stream.read.error'), {
+              this.telemetry?.emit('igniter.store.stream.read.error', {
                 level: 'error',
                 attributes: {
                   ...attributes,
@@ -1259,7 +1259,7 @@ export class IgniterStoreManager<
               'ctx.stream.count': ids.length,
             }
 
-            this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('stream.ack.started'), {
+            this.telemetry?.emit('igniter.store.stream.ack.started', {
               level: 'debug',
               attributes,
             })
@@ -1267,12 +1267,12 @@ export class IgniterStoreManager<
             try {
               await this.adapter.xack(fullStream, group, ids)
 
-              this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('stream.ack.success'), {
+              this.telemetry?.emit('igniter.store.stream.ack.success', {
                 level: 'debug',
                 attributes,
               })
             } catch (error) {
-              this.telemetry?.emit(IgniterStoreTelemetryEvents.get.key('stream.ack.error'), {
+              this.telemetry?.emit('igniter.store.stream.ack.error', {
                 level: 'error',
                 attributes: {
                   ...attributes,

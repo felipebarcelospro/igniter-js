@@ -353,4 +353,4 @@ export const IgniterStoreTelemetryEvents = IgniterTelemetryEvents.namespace(
 /**
  * Type for the telemetry events registry.
  */
-export type IgniterStoreTelemetryEventsType = typeof IgniterStoreTelemetryEvents.$Infer;
+export type IgniterStoreTelemetryEvents = typeof IgniterStoreTelemetryEvents.$Infer.registry;

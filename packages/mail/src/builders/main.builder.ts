@@ -27,7 +27,7 @@ export class IgniterMailBuilder<
   private adapter?: IgniterMailAdapter;
   private templates: TTemplates = {} as TTemplates;
   private logger?: IgniterLogger;
-  private telemetry?: IgniterTelemetryManager;
+  private telemetry?: IgniterTelemetryManager<any>;
   private queue?: {
     adapter: IgniterJobQueueAdapter<any>;
     options?: IgniterMailQueueOptions;
@@ -94,7 +94,7 @@ export class IgniterMailBuilder<
   }
 
   /** Attaches a telemetry instance for observability. */
-  withTelemetry(telemetry: IgniterTelemetryManager) {
+  withTelemetry(telemetry: IgniterTelemetryManager<any>) {
     this.telemetry = telemetry;
     return this;
   }

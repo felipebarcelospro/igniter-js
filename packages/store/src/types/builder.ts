@@ -54,5 +54,5 @@ export interface IgniterStoreBuilderState<
   /** Logger instance */
   logger?: IgniterLogger;
   /** Telemetry instance for observability */
-  telemetry?: IgniterTelemetryManager;
+  telemetry?: IgniterTelemetryManager<any>;
 }

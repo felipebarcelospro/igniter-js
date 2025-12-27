@@ -43,7 +43,7 @@ export type IgniterStorageManagerConfig<
   /**
    * Optional telemetry manager for tracing and metrics.
    */
-  telemetry?: IgniterTelemetryManager;
+  telemetry?: IgniterTelemetryManager<any>;
 
   /**
    * The public base URL (CDN) for serving files.

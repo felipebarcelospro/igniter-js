@@ -209,7 +209,7 @@ export class IgniterCallerBuilder<
    * ```
    */
   withTelemetry(
-    telemetry: IgniterTelemetryManager,
+    telemetry: IgniterTelemetryManager<any>,
   ): IgniterCallerBuilder<TSchemas> {
     return new IgniterCallerBuilder({ ...this.state, telemetry });
   }

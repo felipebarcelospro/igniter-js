@@ -53,7 +53,7 @@ export interface IgniterStoreConfig<
   logger?: IgniterLogger;
 
   /** Telemetry manager for observability */
-  telemetry?: IgniterTelemetryManager;
+  telemetry?: IgniterTelemetryManager<any>;
 
   /** Current scope chain (for scoped instances) */
   scopeChain: IgniterStoreScopeChain;

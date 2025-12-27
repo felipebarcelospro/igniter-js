@@ -26,7 +26,7 @@ export type IgniterCallerBuilderState<
   /** Logger instance for request lifecycle logs. */
   logger?: IgniterLogger;
   /** Telemetry manager for emitting events. */
-  telemetry?: IgniterTelemetryManager;
+  telemetry?: IgniterTelemetryManager<any>;
   /** Request interceptors executed before the request. */
   requestInterceptors?: IgniterCallerRequestInterceptor[];
   /** Response interceptors executed after the request. */
@@ -54,7 +54,7 @@ export interface IgniterCallerRequestBuilderParams {
   /** Logger instance for request lifecycle logs. */
   logger?: IgniterLogger;
   /** Telemetry manager for emitting events. */
-  telemetry?: IgniterTelemetryManager;
+  telemetry?: IgniterTelemetryManager<any>;
   /** Request interceptors executed before the request. */
   requestInterceptors?: IgniterCallerRequestInterceptor[];
   /** Response interceptors executed after the request. */

@@ -70,7 +70,7 @@ export class IgniterConnectorManagerBuilder<
   private logger?: IgniterLogger;
 
   /** Telemetry runtime */
-  private telemetry?: IgniterTelemetryManager;
+  private telemetry?: IgniterTelemetryManager<any>;
 
   /** Encryption fields */
   private encryptFields: string[] = [];
@@ -250,7 +250,7 @@ export class IgniterConnectorManagerBuilder<
    * @see {@link https://igniterjs.com/docs/telemetry} for telemetry documentation
    */
   withTelemetry(
-    telemetry: IgniterTelemetryManager,
+    telemetry: IgniterTelemetryManager<any>,
   ): IgniterConnectorManagerBuilder<TScopes, TConnectors> {
     this.telemetry = telemetry;
     return this;

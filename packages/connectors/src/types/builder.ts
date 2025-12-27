@@ -40,7 +40,7 @@ export interface IgniterConnectorBuilderState {
   /** Logger instance */
   logger?: IgniterLogger;
   /** Telemetry runtime */
-  telemetry?: IgniterTelemetryManager;
+  telemetry?: IgniterTelemetryManager<any>;
   /** Encryption configuration */
   encryption: IgniterConnectorEncryptionConfig;
   /** Scope definitions */

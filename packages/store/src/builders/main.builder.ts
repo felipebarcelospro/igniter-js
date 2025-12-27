@@ -378,7 +378,7 @@ export class IgniterStoreBuilder<
    * ```
    */
   withTelemetry(
-    telemetry: IgniterTelemetryManager,
+    telemetry: IgniterTelemetryManager<any>,
   ): IgniterStoreBuilder<TRegistry, TScopes> {
     return new IgniterStoreBuilder({ ...this.state, telemetry });
   }

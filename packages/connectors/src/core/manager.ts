@@ -5,6 +5,7 @@
 
 import type { IgniterLogger, StandardSchemaV1 } from "@igniter-js/core";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
+import type { IgniterConnectorsTelemetryEventsType } from "../telemetry";
 import type { IgniterConnectorAdapter } from "../types/adapter";
 import type {
   IgniterConnectorDefinition,
@@ -93,7 +94,9 @@ export class IgniterConnectorManagerCore<
   private logger?: IgniterLogger;
 
   /** Telemetry runtime */
-  private telemetry?: IgniterConnectorManagerConfig["telemetry"];
+  private telemetry?: IgniterTelemetryManager<{
+    "igniter.connectors": IgniterConnectorsTelemetryEventsType;
+  }>;
 
   /** Encryption configuration */
   private encryption: IgniterConnectorEncryptionConfig;
@@ -192,7 +195,7 @@ export class IgniterConnectorManagerCore<
    *
    * @returns The telemetry instance or undefined
    */
-  getTelemetry(): IgniterTelemetryManager | undefined {
+  getTelemetry(): IgniterTelemetryManager<any> | undefined {
     return this.telemetry;
   }
 

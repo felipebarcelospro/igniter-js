@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/store",
-  "version": "0.1.24",
+  "version": "0.1.25",
   "description": "Type-safe distributed store library for Igniter.js with Redis support, scoped operations, and typed pub/sub",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

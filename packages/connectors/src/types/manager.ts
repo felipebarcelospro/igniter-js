@@ -104,7 +104,7 @@ export interface IgniterConnectorManagerConfig {
   /** Logger instance */
   logger?: IgniterLogger;
   /** Telemetry runtime */
-  telemetry?: IgniterTelemetryManager;
+  telemetry?: IgniterTelemetryManager<any>;
   /** Encryption configuration */
   encryption: IgniterConnectorEncryptionConfig;
   /** Scope definitions */
@@ -134,7 +134,7 @@ export interface IIgniterConnectorsManager<
   getLogger(): IgniterLogger | undefined;
 
   /** Get the telemetry runtime. */
-  getTelemetry(): IgniterTelemetryManager | undefined;
+  getTelemetry(): IgniterTelemetryManager<any> | undefined;
 
   /** Get scope definitions. */
   getScopes(): Map<string, IgniterConnectorScopeDefinition>;
