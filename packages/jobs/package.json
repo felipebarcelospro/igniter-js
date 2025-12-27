@@ -84,7 +84,9 @@
     "url": "https://github.com/felipebarcelospro/igniter-js/issues"
   },
   "homepage": "https://igniterjs.com",
-  "dependencies": {},
+  "dependencies": {
+    "@igniter-js/telemetry": ">=0.1.12"
+  },
   "devDependencies": {
     "@igniter-js/adapter-bullmq": "*",
     "@igniter-js/core": "*",
@@ -102,7 +104,7 @@
     "@igniter-js/adapter-bullmq": ">=0.3.4",
     "@igniter-js/core": ">=0.2.94",
     "@igniter-js/store": ">=0.1.0",
-    "@igniter-js/telemetry": ">=0.1.0",
+    "@igniter-js/telemetry": ">=0.1.12",
     "bullmq": ">=4.18.3",
     "ioredis": ">=5.3.2",
     "zod": ">=3.23.8"
@@ -112,9 +114,6 @@
       "optional": true
     },
     "@igniter-js/store": {
-      "optional": true
-    },
-    "@igniter-js/telemetry": {
       "optional": true
     },
     "bullmq": {
@@ -131,6 +130,6 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   }
 }

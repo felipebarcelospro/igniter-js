@@ -14,9 +14,6 @@ export * from "./core";
 // Builders
 export * from "./builders";
 
-// Telemetry
-export * from "./telemetry";
-
 // Adapters
 export * from "./adapters";
 
