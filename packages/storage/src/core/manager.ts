@@ -2,10 +2,9 @@ import { Buffer } from "node:buffer";
 import type Stream from "node:stream";
 import type { IgniterLogger } from "@igniter-js/core";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
-import type { IgniterStorageTelemetryEventsType } from "../telemetry";
+import type { IgniterStorageTelemetryEvents } from "../telemetry";
 import { IgniterStorageAdapter } from "../adapters/storage.adapter";
 import { IgniterStorageError } from "../errors/storage.error";
-import { IgniterStorageTelemetryEvents } from "../telemetry";
 import type { IgniterStorageFile } from "../types/file";
 import type { IgniterStorageHooks } from "../types/hooks";
 import type {
@@ -56,9 +55,7 @@ export class IgniterStorageManager<
   /**
    * Telemetry manager for typed internal emissions.
    */
-  private readonly telemetryInternal?: IgniterTelemetryManager<{
-    "igniter.storage": IgniterStorageTelemetryEventsType;
-  }>;
+  private readonly telemetryInternal?: IgniterTelemetryManager<IgniterStorageTelemetryEvents>;
 
   /**
    * The public base URL used to generate accessible file links.
@@ -93,9 +90,8 @@ export class IgniterStorageManager<
     this.adapter = config.adapter;
     this.logger = config.logger;
     this.telemetry = config.telemetry;
-    this.telemetryInternal = config.telemetry as IgniterTelemetryManager<{
-      "igniter.storage": IgniterStorageTelemetryEventsType;
-    }>;
+    this.telemetryInternal =
+      config.telemetry as IgniterTelemetryManager<IgniterStorageTelemetryEvents>;
     this.baseUrl = config.baseUrl;
     this.basePath = config.basePath;
     this.scopes = config.scopes;
@@ -202,7 +198,7 @@ export class IgniterStorageManager<
 
     try {
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("get.started"),
+        "igniter.storage.get.started",
         {
           level: "debug",
           attributes: {
@@ -217,7 +213,7 @@ export class IgniterStorageManager<
       if (!exists) {
         this.logger?.warn(`get: file not found`, { key });
         this.telemetryInternal?.emit(
-          IgniterStorageTelemetryEvents.get.key("get.success"),
+          "igniter.storage.get.success",
           {
             level: "info",
             attributes: {
@@ -232,7 +228,7 @@ export class IgniterStorageManager<
 
       const file = this.fileFromKey(key);
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("get.success"),
+        "igniter.storage.get.success",
         {
           level: "info",
           attributes: {
@@ -255,7 +251,7 @@ export class IgniterStorageManager<
       const errorMessage =
         (error as Error)?.message ?? "IGNITER_STORAGE_GET_FAILED";
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("get.error"),
+        "igniter.storage.get.error",
         {
           level: "error",
           attributes: {
@@ -296,7 +292,7 @@ export class IgniterStorageManager<
 
     try {
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("delete.started"),
+        "igniter.storage.delete.started",
         {
           level: "debug",
           attributes: {
@@ -313,7 +309,7 @@ export class IgniterStorageManager<
 
       const duration = Date.now() - startTime;
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("delete.success"),
+        "igniter.storage.delete.success",
         {
           level: "info",
           attributes: {
@@ -339,7 +335,7 @@ export class IgniterStorageManager<
       const errorMessage =
         (error as Error)?.message ?? "IGNITER_STORAGE_DELETE_FAILED";
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("delete.error"),
+        "igniter.storage.delete.error",
         {
           level: "error",
           attributes: {
@@ -389,7 +385,7 @@ export class IgniterStorageManager<
 
     try {
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("list.started"),
+        "igniter.storage.list.started",
         {
           level: "debug",
           attributes: resolvedPrefix
@@ -403,7 +399,7 @@ export class IgniterStorageManager<
       const duration = Date.now() - startTime;
 
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("list.success"),
+        "igniter.storage.list.success",
         {
           level: "info",
           attributes: {
@@ -424,7 +420,7 @@ export class IgniterStorageManager<
       const errorMessage =
         (error as Error)?.message ?? "IGNITER_STORAGE_LIST_FAILED";
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("list.error"),
+        "igniter.storage.list.error",
         {
           level: "error",
           attributes: {
@@ -465,7 +461,7 @@ export class IgniterStorageManager<
 
     try {
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("stream.started"),
+        "igniter.storage.stream.started",
         {
           level: "debug",
           attributes: {
@@ -476,7 +472,7 @@ export class IgniterStorageManager<
       const stream = await this.adapter.stream(key);
 
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("stream.success"),
+        "igniter.storage.stream.success",
         {
           level: "info",
           attributes: {
@@ -495,7 +491,7 @@ export class IgniterStorageManager<
       const errorMessage =
         (error as Error)?.message ?? "IGNITER_STORAGE_STREAM_FAILED";
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("stream.error"),
+        "igniter.storage.stream.error",
         {
           level: "error",
           attributes: {
@@ -679,7 +675,7 @@ export class IgniterStorageManager<
       });
 
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("upload.started"),
+        "igniter.storage.upload.started",
         {
           level: "debug",
           attributes: {
@@ -713,7 +709,7 @@ export class IgniterStorageManager<
 
       const duration = Date.now() - startTime;
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("upload.success"),
+        "igniter.storage.upload.success",
         {
           level: "info",
           attributes: {
@@ -746,7 +742,7 @@ export class IgniterStorageManager<
       const errorMessage =
         (error as Error)?.message ?? "IGNITER_STORAGE_UPLOAD_FAILED";
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("upload.error"),
+        "igniter.storage.upload.error",
         {
           level: "error",
           attributes: {
@@ -806,7 +802,7 @@ export class IgniterStorageManager<
 
     try {
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("copy.started"),
+        "igniter.storage.copy.started",
         {
           level: "debug",
           attributes: {
@@ -827,7 +823,7 @@ export class IgniterStorageManager<
 
       const duration = Date.now() - startTime;
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("copy.success"),
+        "igniter.storage.copy.success",
         {
           level: "info",
           attributes: {
@@ -856,7 +852,7 @@ export class IgniterStorageManager<
       const errorMessage =
         (error as Error)?.message ?? "IGNITER_STORAGE_COPY_FAILED";
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("copy.error"),
+        "igniter.storage.copy.error",
         {
           level: "error",
           attributes: {
@@ -914,7 +910,7 @@ export class IgniterStorageManager<
 
     try {
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("move.started"),
+        "igniter.storage.move.started",
         {
           level: "debug",
           attributes: {
@@ -935,7 +931,7 @@ export class IgniterStorageManager<
 
       const duration = Date.now() - startTime;
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("move.success"),
+        "igniter.storage.move.success",
         {
           level: "info",
           attributes: {
@@ -964,7 +960,7 @@ export class IgniterStorageManager<
       const errorMessage =
         (error as Error)?.message ?? "IGNITER_STORAGE_MOVE_FAILED";
       this.telemetryInternal?.emit(
-        IgniterStorageTelemetryEvents.get.key("move.error"),
+        "igniter.storage.move.error",
         {
           level: "error",
           attributes: {

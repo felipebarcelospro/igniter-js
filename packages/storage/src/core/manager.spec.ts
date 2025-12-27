@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { IgniterStorageBuilder } from "../builders/main.builder";
 import { MockStorageAdapter } from "../adapters/mock.adapter";
-import { IgniterStorageTelemetryEvents } from "../telemetry/index";
 
 describe("IgniterStorage (Comprehensive Suite)", () => {
   const mockAdapter = new MockStorageAdapter();
@@ -167,7 +166,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("get.started"),
+          "igniter.storage.get.started",
           "first",
         );
         expect(payload).toMatchObject({
@@ -189,7 +188,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("get.success"),
+          "igniter.storage.get.success",
         );
         expect(payload.level).toBe("info");
         expect(payload.attributes).toMatchObject({
@@ -209,7 +208,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("get.error"),
+          "igniter.storage.get.error",
         );
         expect(payload.level).toBe("error");
         expect(payload.attributes).toMatchObject({
@@ -227,7 +226,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("delete.started"),
+          "igniter.storage.delete.started",
           "first",
         );
         expect(payload).toMatchObject({
@@ -245,7 +244,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("delete.success"),
+          "igniter.storage.delete.success",
         );
         expect(payload.level).toBe("info");
         expect(payload.attributes).toMatchObject({
@@ -264,7 +263,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("delete.error"),
+          "igniter.storage.delete.error",
         );
         expect(payload.level).toBe("error");
         expect(payload.attributes).toMatchObject({
@@ -282,7 +281,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("list.started"),
+          "igniter.storage.list.started",
           "first",
         );
         expect(payload.level).toBe("debug");
@@ -295,7 +294,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("list.success"),
+          "igniter.storage.list.success",
         );
         expect(payload.level).toBe("info");
         expect(payload.attributes).toMatchObject({
@@ -314,7 +313,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("list.error"),
+          "igniter.storage.list.error",
         );
         expect(payload.level).toBe("error");
         expect(payload.attributes).toMatchObject({
@@ -335,7 +334,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("stream.started"),
+          "igniter.storage.stream.started",
           "first",
         );
         expect(payload).toMatchObject({
@@ -357,7 +356,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("stream.success"),
+          "igniter.storage.stream.success",
         );
         expect(payload.level).toBe("info");
         expect(payload.attributes).toMatchObject({
@@ -376,7 +375,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("stream.error"),
+          "igniter.storage.stream.error",
         );
         expect(payload.level).toBe("error");
         expect(payload.attributes).toMatchObject({
@@ -394,7 +393,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("upload.started"),
+          "igniter.storage.upload.started",
           "first",
         );
         expect(payload).toMatchObject({
@@ -413,7 +412,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("upload.success"),
+          "igniter.storage.upload.success",
         );
         expect(payload.level).toBe("info");
         expect(payload.attributes).toMatchObject({
@@ -434,7 +433,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("upload.error"),
+          "igniter.storage.upload.error",
         );
         expect(payload.level).toBe("error");
         expect(payload.attributes).toMatchObject({
@@ -456,7 +455,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("copy.started"),
+          "igniter.storage.copy.started",
           "first",
         );
         expect(payload).toMatchObject({
@@ -479,7 +478,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("copy.success"),
+          "igniter.storage.copy.success",
         );
         expect(payload.level).toBe("info");
         expect(payload.attributes).toMatchObject({
@@ -499,7 +498,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("copy.error"),
+          "igniter.storage.copy.error",
         );
         expect(payload.level).toBe("error");
         expect(payload.attributes).toMatchObject({
@@ -522,7 +521,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("move.started"),
+          "igniter.storage.move.started",
           "first",
         );
         expect(payload).toMatchObject({
@@ -545,7 +544,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("move.success"),
+          "igniter.storage.move.success",
         );
         expect(payload.level).toBe("info");
         expect(payload.attributes).toMatchObject({
@@ -565,7 +564,7 @@ describe("IgniterStorage (Comprehensive Suite)", () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterStorageTelemetryEvents.get.key("move.error"),
+          "igniter.storage.move.error",
         );
         expect(payload.level).toBe("error");
         expect(payload.attributes).toMatchObject({

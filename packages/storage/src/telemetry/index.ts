@@ -204,5 +204,5 @@ export const IgniterStorageTelemetryEvents = IgniterTelemetryEvents.namespace(
   )
   .build();
 
-export type IgniterStorageTelemetryEventsType =
-  typeof IgniterStorageTelemetryEvents.$Infer;
+export type IgniterStorageTelemetryEvents =
+  typeof IgniterStorageTelemetryEvents.$Infer.registry;
