@@ -1,6 +1,6 @@
 import type { IgniterLogger } from '@igniter-js/core'
 import type { IgniterTelemetryManager } from '@igniter-js/telemetry'
-import type { IgniterCallerTelemetryEventsType } from '../telemetry'
+import type { IgniterCallerTelemetryEvents } from '../telemetry'
 import { IgniterCallerRequestBuilder } from '../builders/request.builder'
 import type {
   IgniterCallerRequestBuilderParams,
@@ -49,9 +49,7 @@ export class IgniterCallerManager<
   private headers?: Record<string, string>
   private cookies?: Record<string, string>
   private logger?: IgniterLogger
-  private telemetry?: IgniterTelemetryManager<{
-    'igniter.caller': IgniterCallerTelemetryEventsType
-  }>
+  private telemetry?: IgniterTelemetryManager<IgniterCallerTelemetryEvents>
   private requestInterceptors?: IgniterCallerRequestInterceptor[]
   private responseInterceptors?: IgniterCallerResponseInterceptor[]
   private schemas?: TSchemas

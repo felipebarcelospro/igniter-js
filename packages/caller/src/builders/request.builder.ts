@@ -24,7 +24,6 @@ import { IgniterCallerBodyUtils } from '../utils/body'
 import { IgniterCallerCacheUtils } from '../utils/cache'
 import { IgniterCallerSchemaUtils } from '../utils/schema'
 import { IgniterCallerUrlUtils } from '../utils/url'
-import { IgniterCallerTelemetryEvents } from '../telemetry'
 
 /**
  * Content types that support schema validation.
@@ -466,8 +465,9 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
     const baseURL = this.options.baseURL
     const timeoutMs = this.options.timeout
 
+    // TODO: DTS build hit TS2589 (type instantiation too deep) on this emit call.
     this.telemetry?.emit(
-      IgniterCallerTelemetryEvents.get.key('request.execute.started'),
+      'igniter.caller.request.execute.started',
       {
         level: 'debug',
         attributes: {
@@ -494,7 +494,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
       )
       if (cached !== undefined) {
         this.telemetry?.emit(
-          IgniterCallerTelemetryEvents.get.key('cache.read.hit'),
+          'igniter.caller.cache.read.hit',
           {
             level: 'debug',
             attributes: {
@@ -508,7 +508,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
 
         const durationMs = Date.now() - startTime
         this.telemetry?.emit(
-          IgniterCallerTelemetryEvents.get.key('request.execute.success'),
+          'igniter.caller.request.execute.success',
           {
             level: 'info',
             attributes: {
@@ -552,7 +552,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
       }
       const durationMs = Date.now() - startTime
       this.telemetry?.emit(
-        IgniterCallerTelemetryEvents.get.key('request.execute.success'),
+        'igniter.caller.request.execute.success',
         {
           level: 'info',
           attributes: {
@@ -584,7 +584,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
     const durationMs = Date.now() - startTime
     if (result.error) {
       this.telemetry?.emit(
-        IgniterCallerTelemetryEvents.get.key('request.execute.error'),
+        'igniter.caller.request.execute.error',
         {
           level: 'error',
           attributes: {
@@ -609,7 +609,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
     } else {
       const contentType = result.headers?.get('content-type') || undefined
       this.telemetry?.emit(
-        IgniterCallerTelemetryEvents.get.key('request.execute.success'),
+        'igniter.caller.request.execute.success',
         {
           level: 'info',
           attributes: {
@@ -656,7 +656,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
             : baseDelay * attempt
 
         this.telemetry?.emit(
-          IgniterCallerTelemetryEvents.get.key('retry.attempt.started'),
+          'igniter.caller.retry.attempt.started',
           {
             level: 'debug',
             attributes: {
@@ -745,7 +745,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
           clearTimeout(timeoutId)
           const err = error as IgniterCallerError
           this.telemetry?.emit(
-            IgniterCallerTelemetryEvents.get.key('validation.request.error'),
+            'igniter.caller.validation.request.error',
             {
               level: 'error',
               attributes: {
@@ -836,7 +836,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
             } catch (error) {
               const err = error as IgniterCallerError
               this.telemetry?.emit(
-                IgniterCallerTelemetryEvents.get.key('validation.response.error'),
+                'igniter.caller.validation.response.error',
                 {
                   level: 'error',
                   attributes: {
@@ -884,7 +884,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
                 cause: result.error,
               })
               this.telemetry?.emit(
-                IgniterCallerTelemetryEvents.get.key('validation.response.error'),
+                'igniter.caller.validation.response.error',
                 {
                   level: 'error',
                   attributes: {
@@ -930,7 +930,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
                   },
                 })
                 this.telemetry?.emit(
-                  IgniterCallerTelemetryEvents.get.key('validation.response.error'),
+                  'igniter.caller.validation.response.error',
                   {
                     level: 'error',
                     attributes: {
@@ -970,7 +970,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
                 cause: error instanceof Error ? error : undefined,
               })
               this.telemetry?.emit(
-                IgniterCallerTelemetryEvents.get.key('validation.response.error'),
+                'igniter.caller.validation.response.error',
                 {
                   level: 'error',
                   attributes: {
@@ -1031,7 +1031,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
           cause: error instanceof Error ? error : undefined,
         })
         this.telemetry?.emit(
-          IgniterCallerTelemetryEvents.get.key('request.timeout.error'),
+          'igniter.caller.request.timeout.error',
           {
             level: 'error',
             attributes: {

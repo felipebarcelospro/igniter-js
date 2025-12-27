@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/caller",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Type-safe HTTP client for Igniter.js with interceptors, retries, caching, and StandardSchema validation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

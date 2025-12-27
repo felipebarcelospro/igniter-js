@@ -103,8 +103,5 @@ export const IgniterCallerTelemetryEvents = IgniterTelemetryEvents.namespace(
   )
   .build();
 
-/**
- * Inferred attribute types for `IgniterCallerTelemetryEvents`.
- */
-export type IgniterCallerTelemetryEventsType =
-  typeof IgniterCallerTelemetryEvents.$Infer;
+export type IgniterCallerTelemetryEvents =
+  typeof IgniterCallerTelemetryEvents.$Infer.registry;

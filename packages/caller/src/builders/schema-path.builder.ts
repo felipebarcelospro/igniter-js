@@ -66,8 +66,10 @@ export class IgniterCallerSchemaPathBuilder<
         zodSchema.nullable() as unknown as SchemaNullable<TRegistry[TKey]>,
       optional: () =>
         zodSchema.optional() as unknown as SchemaOptional<TRegistry[TKey]>,
+      // TODO: Fix DTS build error: ZodType<unknown> is not assignable to $ZodRecordKey in z.record.
       record: (keyType?: StandardSchemaV1) =>
         z.record(
+          // @ts-expect-error - Fix DTS build error
           (keyType ?? z.string()) as unknown as z.ZodTypeAny,
           zodSchema,
         ) as unknown as SchemaRecord<TRegistry[TKey]>,

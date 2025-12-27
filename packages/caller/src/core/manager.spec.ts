@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { IgniterCallerManager } from './manager'
 import { IgniterCallerError } from '../errors/caller.error'
-import { IgniterCallerTelemetryEvents } from '../telemetry/index'
 
 describe('IgniterCaller', () => {
   const originalFetch = globalThis.fetch
@@ -308,7 +307,7 @@ describe('IgniterCaller', () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterCallerTelemetryEvents.get.key('request.execute.started'),
+          'igniter.caller.request.execute.started',
           'first',
         )
         expect(payload).toMatchObject({
@@ -335,7 +334,7 @@ describe('IgniterCaller', () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterCallerTelemetryEvents.get.key('request.execute.success'),
+          'igniter.caller.request.execute.success',
         )
         expect(payload.level).toBe('info')
         expect(payload.attributes).toMatchObject({
@@ -362,7 +361,7 @@ describe('IgniterCaller', () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterCallerTelemetryEvents.get.key('request.execute.error'),
+          'igniter.caller.request.execute.error',
         )
         expect(payload.level).toBe('error')
         expect(payload.attributes).toMatchObject({
@@ -398,7 +397,7 @@ describe('IgniterCaller', () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterCallerTelemetryEvents.get.key('request.timeout.error'),
+          'igniter.caller.request.timeout.error',
         )
         expect(payload.level).toBe('error')
         expect(payload.attributes).toMatchObject({
@@ -425,7 +424,7 @@ describe('IgniterCaller', () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterCallerTelemetryEvents.get.key('cache.read.hit'),
+          'igniter.caller.cache.read.hit',
         )
         expect(payload.level).toBe('debug')
         expect(payload.attributes).toMatchObject({
@@ -473,7 +472,7 @@ describe('IgniterCaller', () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterCallerTelemetryEvents.get.key('retry.attempt.started'),
+          'igniter.caller.retry.attempt.started',
         )
         expect(payload.level).toBe('debug')
         expect(payload.attributes).toMatchObject({
@@ -520,7 +519,7 @@ describe('IgniterCaller', () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterCallerTelemetryEvents.get.key('validation.request.error'),
+          'igniter.caller.validation.request.error',
         )
         expect(payload.level).toBe('error')
         expect(payload.attributes).toMatchObject({
@@ -567,7 +566,7 @@ describe('IgniterCaller', () => {
 
         const payload = findEmitPayload(
           telemetry,
-          IgniterCallerTelemetryEvents.get.key('validation.response.error'),
+          'igniter.caller.validation.response.error',
         )
         expect(payload.level).toBe('error')
         expect(payload.attributes).toMatchObject({
