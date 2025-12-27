@@ -438,13 +438,6 @@ session.emit("pipeline.stage_completed", {
 - **Mitigation:** Call `.withService('my-app')` in your initialization code.
 - **Solution:** `telemetry.withService('api')`
 
-#### `TELEMETRY_DUPLICATE_TRANSPORT`
-
-- **Context:** Occurs during registration.
-- **Cause:** Attempted to add two adapters with the same type (e.g., two 'logger' adapters).
-- **Mitigation:** Ensure each transport key is unique.
-- **Solution:** `.addTransport('console', log1).addTransport('file', log2)`
-
 #### `TELEMETRY_SESSION_ENDED`
 
 - **Context:** Occurs during `emit` or context modification.

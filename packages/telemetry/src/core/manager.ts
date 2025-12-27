@@ -14,7 +14,7 @@
  *   .withService('my-api')
  *   .withEnvironment('production')
  *   .addEvents(MyEvents)
- *   .addTransport('logger', loggerAdapter)
+ *   .addTransport(loggerAdapter)
  *   .build()
  *
  * // Mode A: Direct emit
@@ -38,105 +38,124 @@
  * ```
  */
 
-import type { IgniterTelemetryConfig } from '../types/config'
-import type { IgniterTelemetryEmitInput } from '../types/emit'
-import type { IgniterTelemetryAttributes, IgniterTelemetryEnvelope } from '../types/envelope'
-import type { IgniterTelemetryEventsRegistry, IgniterTelemetryFlattenRegistryKeys } from '../types/events'
-import type { IgniterTelemetryLevel } from '../types/levels'
-import { IgniterTelemetryError } from '../errors/telemetry.error'
-import { IgniterTelemetrySession } from './session'
-import { IgniterTelemetryId } from '../utils/id'
-import { IgniterTelemetrySampling } from '../utils/sampling'
-import { IgniterTelemetryRedaction } from '../utils/redaction'
-import type { IIgniterTelemetrySession, IgniterTelemetrySessionState } from '../types/session'
-import { IIgniterTelemetryManager } from '@/types/manager'
+import type { IgniterTelemetryConfig } from "../types/config";
+import type { IgniterTelemetryEmitInput } from "../types/emit";
+import type {
+  IgniterTelemetryAttributes,
+  IgniterTelemetryEnvelope,
+} from "../types/envelope";
+import type {
+  IgniterTelemetryEventsRegistry,
+  IgniterTelemetryFlattenRegistryKeys,
+} from "../types/events";
+import type { IgniterTelemetryLevel } from "../types/levels";
+import { IgniterTelemetryError } from "../errors/telemetry.error";
+import { IgniterTelemetrySession } from "./session";
+import { IgniterTelemetryId } from "../utils/id";
+import { IgniterTelemetrySampling } from "../utils/sampling";
+import { IgniterTelemetryRedaction } from "../utils/redaction";
+import type {
+  IIgniterTelemetrySession,
+  IgniterTelemetrySessionState,
+} from "../types/session";
+import { IIgniterTelemetryManager } from "@/types/manager";
 
 /**
  * Runtime implementation of IgniterTelemetry.
  */
 export class IgniterTelemetryManager<
-  TRegistry extends IgniterTelemetryEventsRegistry = IgniterTelemetryEventsRegistry,
+  TRegistry extends IgniterTelemetryEventsRegistry =
+    IgniterTelemetryEventsRegistry,
   TScopes extends string = string,
   TActors extends string = string,
 > implements IIgniterTelemetryManager<TRegistry, TScopes, TActors> {
-  private readonly config: IgniterTelemetryConfig<TRegistry, TScopes, TActors>
-  private readonly sampler: (eventName: string, level: IgniterTelemetryLevel) => boolean
-  private readonly redactor: (attributes: IgniterTelemetryAttributes) => Promise<IgniterTelemetryAttributes>
-  private initialized = false
+  private readonly config: IgniterTelemetryConfig<TRegistry, TScopes, TActors>;
+  private readonly sampler: (
+    eventName: string,
+    level: IgniterTelemetryLevel,
+  ) => boolean;
+  private readonly redactor: (
+    attributes: IgniterTelemetryAttributes,
+  ) => Promise<IgniterTelemetryAttributes>;
+  private initialized = false;
 
   constructor(config: IgniterTelemetryConfig<TRegistry, TScopes, TActors>) {
-    this.config = config
-    this.sampler = IgniterTelemetrySampling.createSampler(config.sampling)
-    this.redactor = IgniterTelemetryRedaction.createRedactor(config.redaction)
+    this.config = config;
+    this.sampler = IgniterTelemetrySampling.createSampler(config.sampling);
+    this.redactor = IgniterTelemetryRedaction.createRedactor(config.redaction);
 
     if (this.config.logger) {
-      this.config.logger.info('[IgniterTelemetry] Initializing manager', {
+      this.config.logger.info("[IgniterTelemetry] Initializing manager", {
         service: config.service,
         environment: config.environment,
-        transports: Array.from(config.transports.keys()),
-      })
+        transports: config.transports.map((t) => t.type),
+      });
     }
 
     // Initialize transports
-    this.initTransports()
+    this.initTransports();
   }
 
   /**
    * Initializes all registered transports.
    */
   private async initTransports(): Promise<void> {
-    if (this.initialized) return
+    if (this.initialized) return;
 
     const meta = {
       service: this.config.service,
       environment: this.config.environment,
       version: this.config.version,
-    }
+    };
 
-    for (const [type, adapter] of this.config.transports) {
+    for (const adapter of this.config.transports) {
       try {
         if (adapter.init) {
-          await adapter.init(meta)
+          await adapter.init(meta);
         }
       } catch (error) {
         if (this.config.logger) {
-          this.config.logger.error(`[IgniterTelemetry] Failed to initialize transport "${type}"`, { error })
+          this.config.logger.error(
+            `[IgniterTelemetry] Failed to initialize transport "${adapter.type}"`,
+            { error },
+          );
         }
         throw new IgniterTelemetryError({
-          code: 'TELEMETRY_TRANSPORT_INIT_FAILED',
-          message: `Failed to initialize transport "${type}"`,
+          code: "TELEMETRY_TRANSPORT_INIT_FAILED",
+          message: `Failed to initialize transport "${adapter.type}"`,
           statusCode: 500,
-          details: { type, error },
-        })
+          details: { type: adapter.type, error },
+        });
       }
     }
 
-    this.initialized = true
+    this.initialized = true;
 
     if (this.config.logger) {
-      this.config.logger.info('[IgniterTelemetry] All transports initialized')
+      this.config.logger.info("[IgniterTelemetry] All transports initialized");
     }
   }
 
   get service(): string {
-    return this.config.service
+    return this.config.service;
   }
 
   get environment(): string {
-    return this.config.environment
+    return this.config.environment;
   }
 
   get version(): string | undefined {
-    return this.config.version
+    return this.config.version;
   }
 
-  emit<TName extends IgniterTelemetryFlattenRegistryKeys<TRegistry> | (string & {})>(
-    name: TName,
-    input?: IgniterTelemetryEmitInput<TName>,
-  ): void {
+  emit<
+    TName extends
+      | IgniterTelemetryFlattenRegistryKeys<TRegistry>
+      | (string & {}),
+  >(name: TName, input?: IgniterTelemetryEmitInput<TName>): void {
     // Check for active session from AsyncLocalStorage
-    const activeSession = IgniterTelemetrySession.getActive()
-    this.internalEmit(name, input, activeSession)
+    const activeSession = IgniterTelemetrySession.getActive();
+    this.internalEmit(name, input, activeSession);
   }
 
   /**
@@ -147,23 +166,23 @@ export class IgniterTelemetryManager<
     input?: IgniterTelemetryEmitInput,
     sessionState?: IgniterTelemetrySessionState,
   ): void {
-    const level = input?.level ?? 'info'
+    const level = input?.level ?? "info";
 
     // Apply sampling
     if (!this.sampler(name, level)) {
-      return
+      return;
     }
 
     // Build the envelope
-    const envelope = this.buildEnvelope(name, input, sessionState)
+    const envelope = this.buildEnvelope(name, input, sessionState);
 
     // Send to transports (async but don't wait)
     this.sendToTransports(envelope).catch((error) => {
       // Log transport errors but don't throw
       if (this.config.logger) {
-        this.config.logger.error('Transport error', { error, eventName: name })
+        this.config.logger.error("Transport error", { error, eventName: name });
       }
-    })
+    });
   }
 
   /**
@@ -174,25 +193,28 @@ export class IgniterTelemetryManager<
     input?: IgniterTelemetryEmitInput,
     sessionState?: IgniterTelemetrySessionState,
   ): IgniterTelemetryEnvelope {
-    const now = input?.time ?? new Date().toISOString()
+    const now = input?.time ?? new Date().toISOString();
 
     // Determine session ID
-    const sessionId = input?.sessionId ?? sessionState?.sessionId ?? IgniterTelemetryId.generateSessionId()
+    const sessionId =
+      input?.sessionId ??
+      sessionState?.sessionId ??
+      IgniterTelemetryId.generateSessionId();
 
     // Merge attributes (session + input)
     const attributes: IgniterTelemetryAttributes = {
       ...sessionState?.attributes,
       ...input?.attributes,
-    }
+    };
 
     // Use input actor/scope or fall back to session
-    const actor = input?.actor ?? sessionState?.actor
-    const scope = input?.scope ?? sessionState?.scope
+    const actor = input?.actor ?? sessionState?.actor;
+    const scope = input?.scope ?? sessionState?.scope;
 
     const envelope: IgniterTelemetryEnvelope = {
       name,
       time: now,
-      level: input?.level ?? 'info',
+      level: input?.level ?? "info",
       service: this.config.service,
       environment: this.config.environment,
       version: this.config.version,
@@ -202,58 +224,65 @@ export class IgniterTelemetryManager<
       attributes: Object.keys(attributes).length > 0 ? attributes : undefined,
       error: input?.error,
       source: input?.source,
-    }
+    };
 
-    return envelope
+    return envelope;
   }
 
   /**
    * Sends an envelope to all registered transports.
    */
-  private async sendToTransports(envelope: IgniterTelemetryEnvelope): Promise<void> {
+  private async sendToTransports(
+    envelope: IgniterTelemetryEnvelope,
+  ): Promise<void> {
     // Apply redaction
-    let processedEnvelope = envelope
+    let processedEnvelope = envelope;
     if (envelope.attributes) {
-      const redactedAttributes = await this.redactor(envelope.attributes)
-      processedEnvelope = { ...envelope, attributes: redactedAttributes }
+      const redactedAttributes = await this.redactor(envelope.attributes);
+      processedEnvelope = { ...envelope, attributes: redactedAttributes };
     }
 
-    const errors: Array<{ type: string; error: unknown }> = []
+    const errors: Array<{ type: string; error: unknown }> = [];
 
-    for (const [type, adapter] of this.config.transports) {
+    for (const adapter of this.config.transports) {
       try {
-        await adapter.handle(processedEnvelope)
+        await adapter.handle(processedEnvelope);
       } catch (error) {
-        errors.push({ type, error })
+        errors.push({ type: adapter.type, error });
       }
     }
 
     // If all transports failed, throw an error
-    if (errors.length > 0 && errors.length === this.config.transports.size) {
+    if (errors.length > 0 && errors.length === this.config.transports.length) {
       throw new IgniterTelemetryError({
-        code: 'TELEMETRY_TRANSPORT_FAILED',
-        message: 'All transports failed to handle event',
+        code: "TELEMETRY_TRANSPORT_FAILED",
+        message: "All transports failed to handle event",
         statusCode: 500,
         details: { errors, eventName: envelope.name },
-      })
+      });
     }
   }
 
   session(): IIgniterTelemetrySession<TActors, TScopes> {
-    return IgniterTelemetrySession.create<TActors, TScopes>((name, input, sessionState) => {
-      this.internalEmit(name, input, sessionState)
-    })
+    return IgniterTelemetrySession.create<TActors, TScopes>(
+      (name, input, sessionState) => {
+        this.internalEmit(name, input, sessionState);
+      },
+    );
   }
 
   async flush(): Promise<void> {
-    for (const [type, adapter] of this.config.transports) {
+    for (const adapter of this.config.transports) {
       try {
         if (adapter.flush) {
-          await adapter.flush()
+          await adapter.flush();
         }
       } catch (error) {
         if (this.config.logger) {
-          this.config.logger.error('Flush error', { type, error })
+          this.config.logger.error("Flush error", {
+            type: adapter.type,
+            error,
+          });
         }
       }
     }
@@ -261,17 +290,20 @@ export class IgniterTelemetryManager<
 
   async shutdown(): Promise<void> {
     // Flush first
-    await this.flush()
+    await this.flush();
 
     // Then shutdown
-    for (const [type, adapter] of this.config.transports) {
+    for (const adapter of this.config.transports) {
       try {
         if (adapter.shutdown) {
-          await adapter.shutdown()
+          await adapter.shutdown();
         }
       } catch (error) {
         if (this.config.logger) {
-          this.config.logger.error('Shutdown error', { type, error })
+          this.config.logger.error("Shutdown error", {
+            type: adapter.type,
+            error,
+          });
         }
       }
     }

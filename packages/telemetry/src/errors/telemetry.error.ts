@@ -38,7 +38,6 @@ export const IGNITER_TELEMETRY_ERROR_CODES = {
   TELEMETRY_CONFIGURATION_INVALID: 'TELEMETRY_CONFIGURATION_INVALID',
 
   // Transport errors
-  TELEMETRY_DUPLICATE_TRANSPORT: 'TELEMETRY_DUPLICATE_TRANSPORT',
   TELEMETRY_INVALID_TRANSPORT: 'TELEMETRY_INVALID_TRANSPORT',
   TELEMETRY_TRANSPORT_FAILED: 'TELEMETRY_TRANSPORT_FAILED',
   TELEMETRY_TRANSPORT_INIT_FAILED: 'TELEMETRY_TRANSPORT_INIT_FAILED',
@@ -125,7 +124,7 @@ export interface IgniterTelemetryErrorPayload {
  *
  * // Catching and handling
  * try {
- *   telemetry.addTransport('logger', adapter)
+ *   telemetry.addTransport(adapter)
  * } catch (error) {
  *   if (IgniterTelemetryError.is(error)) {
  *     console.error(`Telemetry error [${error.code}]:`, error.message)

@@ -35,7 +35,7 @@ import './shim'
  *   .addScope('organization')
  *   .addScope('workspace')
  *   .addEvents(JobsTelemetryEvents)
- *   .addTransport('logger', LoggerTransportAdapter.create({ logger: console }))
+ *   .addTransport(LoggerTransportAdapter.create({ logger: console }))
  *   .withSampling({ debugRate: 0.01, errorRate: 1.0 })
  *   .withRedaction({ denylistKeys: ['password', 'secret'] })
  *   .build()

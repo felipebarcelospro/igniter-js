@@ -12,23 +12,26 @@
  *
  * const telemetry = IgniterTelemetry.create()
  *   .withService('my-api')
- *   .addTransport('logger', LoggerTransportAdapter.create({ logger: console }))
+ *   .addTransport(sportAdapter.create({ logger: console }))
  *   .build()
  * ```
  */
 
-import type { IgniterTelemetryTransportAdapter, IgniterTelemetryTransportMeta } from '../types/transport'
-import type { IgniterTelemetryEnvelope } from '../types/envelope'
-import type { IgniterTelemetryLevel } from '../types/levels'
+import type {
+  IgniterTelemetryTransportAdapter,
+  IgniterTelemetryTransportMeta,
+} from "../types/transport";
+import type { IgniterTelemetryEnvelope } from "../types/envelope";
+import type { IgniterTelemetryLevel } from "../types/levels";
 
 /**
  * Logger interface compatible with console and most logging libraries.
  */
 export interface TelemetryLogger {
-  debug(...args: unknown[]): void
-  info(...args: unknown[]): void
-  warn(...args: unknown[]): void
-  error(...args: unknown[]): void
+  debug(...args: unknown[]): void;
+  info(...args: unknown[]): void;
+  warn(...args: unknown[]): void;
+  error(...args: unknown[]): void;
 }
 
 /**
@@ -49,7 +52,7 @@ export interface LoggerTransportConfig {
    * The logger instance to use.
    * Must have debug, info, warn, and error methods.
    */
-  logger: TelemetryLogger
+  logger: TelemetryLogger;
 
   /**
    * Output format.
@@ -58,13 +61,13 @@ export interface LoggerTransportConfig {
    *
    * @default 'json'
    */
-  format?: 'json' | 'pretty'
+  format?: "json" | "pretty";
 
   /**
    * Whether to include timestamps in the output.
    * @default true
    */
-  includeTimestamp?: boolean
+  includeTimestamp?: boolean;
 
   /**
    * Minimum level to log.
@@ -72,7 +75,7 @@ export interface LoggerTransportConfig {
    *
    * @default 'debug'
    */
-  minLevel?: IgniterTelemetryLevel
+  minLevel?: IgniterTelemetryLevel;
 }
 
 /**
@@ -83,7 +86,7 @@ const LEVEL_PRIORITY: Record<IgniterTelemetryLevel, number> = {
   info: 1,
   warn: 2,
   error: 3,
-}
+};
 
 /**
  * Logger transport adapter for telemetry events.
@@ -105,22 +108,22 @@ const LEVEL_PRIORITY: Record<IgniterTelemetryLevel, number> = {
  * // Use in telemetry
  * const telemetry = IgniterTelemetry.create()
  *   .withService('my-api')
- *   .addTransport('logger', adapter)
+ *   .addTransport(adapter)
  *   .build()
  * ```
  */
 export class LoggerTransportAdapter implements IgniterTelemetryTransportAdapter {
-  readonly type = 'logger' as const
-  private readonly config: Required<LoggerTransportConfig>
-  private meta?: IgniterTelemetryTransportMeta
+  readonly type = "logger" as const;
+  private readonly config: Required<LoggerTransportConfig>;
+  private meta?: IgniterTelemetryTransportMeta;
 
   private constructor(config: LoggerTransportConfig) {
     this.config = {
       logger: config.logger,
-      format: config.format ?? 'json',
+      format: config.format ?? "json",
       includeTimestamp: config.includeTimestamp ?? true,
-      minLevel: config.minLevel ?? 'debug',
-    }
+      minLevel: config.minLevel ?? "debug",
+    };
   }
 
   /**
@@ -135,7 +138,7 @@ export class LoggerTransportAdapter implements IgniterTelemetryTransportAdapter 
    * ```
    */
   static create(config: LoggerTransportConfig): LoggerTransportAdapter {
-    return new LoggerTransportAdapter(config)
+    return new LoggerTransportAdapter(config);
   }
 
   /**
@@ -144,7 +147,7 @@ export class LoggerTransportAdapter implements IgniterTelemetryTransportAdapter 
    * @param meta - The service metadata
    */
   init(meta: IgniterTelemetryTransportMeta): void {
-    this.meta = meta
+    this.meta = meta;
   }
 
   /**
@@ -154,30 +157,30 @@ export class LoggerTransportAdapter implements IgniterTelemetryTransportAdapter 
    */
   handle(envelope: IgniterTelemetryEnvelope): void {
     // Check level filter
-    const eventPriority = LEVEL_PRIORITY[envelope.level]
-    const minPriority = LEVEL_PRIORITY[this.config.minLevel]
+    const eventPriority = LEVEL_PRIORITY[envelope.level];
+    const minPriority = LEVEL_PRIORITY[this.config.minLevel];
 
     if (eventPriority < minPriority) {
-      return
+      return;
     }
 
     // Format the output
-    const output = this.formatOutput(envelope)
+    const output = this.formatOutput(envelope);
 
     // Log at the appropriate level
     switch (envelope.level) {
-      case 'debug':
-        this.config.logger.debug(output)
-        break
-      case 'info':
-        this.config.logger.info(output)
-        break
-      case 'warn':
-        this.config.logger.warn(output)
-        break
-      case 'error':
-        this.config.logger.error(output)
-        break
+      case "debug":
+        this.config.logger.debug(output);
+        break;
+      case "info":
+        this.config.logger.info(output);
+        break;
+      case "warn":
+        this.config.logger.warn(output);
+        break;
+      case "error":
+        this.config.logger.error(output);
+        break;
     }
   }
 
@@ -185,11 +188,11 @@ export class LoggerTransportAdapter implements IgniterTelemetryTransportAdapter 
    * Formats the envelope for output.
    */
   private formatOutput(envelope: IgniterTelemetryEnvelope): string | object {
-    if (this.config.format === 'json') {
-      return JSON.stringify(this.buildLogObject(envelope))
+    if (this.config.format === "json") {
+      return JSON.stringify(this.buildLogObject(envelope));
     }
 
-    return this.formatPretty(envelope)
+    return this.formatPretty(envelope);
   }
 
   /**
@@ -202,45 +205,45 @@ export class LoggerTransportAdapter implements IgniterTelemetryTransportAdapter 
       service: envelope.service,
       environment: envelope.environment,
       sessionId: envelope.sessionId,
-    }
+    };
 
     if (this.config.includeTimestamp) {
-      obj.time = envelope.time
+      obj.time = envelope.time;
     }
 
     if (envelope.version) {
-      obj.version = envelope.version
+      obj.version = envelope.version;
     }
 
     if (envelope.actor) {
-      obj.actor = envelope.actor
+      obj.actor = envelope.actor;
     }
 
     if (envelope.scope) {
-      obj.scope = envelope.scope
+      obj.scope = envelope.scope;
     }
 
     if (envelope.attributes) {
-      obj.attributes = envelope.attributes
+      obj.attributes = envelope.attributes;
     }
 
     if (envelope.error) {
-      obj.error = envelope.error
+      obj.error = envelope.error;
     }
 
     if (envelope.source) {
-      obj.source = envelope.source
+      obj.source = envelope.source;
     }
 
     if (envelope.spanId) {
-      obj.spanId = envelope.spanId
+      obj.spanId = envelope.spanId;
     }
 
     if (envelope.parentSpanId) {
-      obj.parentSpanId = envelope.parentSpanId
+      obj.parentSpanId = envelope.parentSpanId;
     }
 
-    return obj
+    return obj;
   }
 
   /**
@@ -263,48 +266,48 @@ export class LoggerTransportAdapter implements IgniterTelemetryTransportAdapter 
    * Formats the envelope for pretty output.
    */
   private formatPretty(envelope: IgniterTelemetryEnvelope): string {
-    const parts: string[] = []
+    const parts: string[] = [];
 
     // Level and name
-    const levelBadge = `[${envelope.level.toUpperCase()}]`
-    parts.push(`${levelBadge} ${envelope.name}`)
+    const levelBadge = `[${envelope.level.toUpperCase()}]`;
+    parts.push(`${levelBadge} ${envelope.name}`);
 
     // Session
-    parts.push(`session=${envelope.sessionId}`)
+    parts.push(`session=${envelope.sessionId}`);
 
     // Actor
     if (envelope.actor) {
       const actorStr = envelope.actor.id
         ? `${envelope.actor.type}:${envelope.actor.id}`
-        : envelope.actor.type
-      parts.push(`actor=${actorStr}`)
+        : envelope.actor.type;
+      parts.push(`actor=${actorStr}`);
     }
 
     // Scope
     if (envelope.scope) {
-      parts.push(`scope=${envelope.scope.type}:${envelope.scope.id}`)
+      parts.push(`scope=${envelope.scope.type}:${envelope.scope.id}`);
     }
 
     // Attributes
     if (envelope.attributes) {
       const attrStr = Object.entries(envelope.attributes)
         .map(([k, v]) => `${k}=${String(v)}`)
-        .join(' ')
+        .join(" ");
       if (attrStr) {
-        parts.push(attrStr)
+        parts.push(attrStr);
       }
     }
 
     // Error
     if (envelope.error) {
-      parts.push(`error=${envelope.error.name}: ${envelope.error.message}`)
+      parts.push(`error=${envelope.error.name}: ${envelope.error.message}`);
     }
 
     // Timestamp
     if (this.config.includeTimestamp) {
-      parts.push(`time=${envelope.time}`)
+      parts.push(`time=${envelope.time}`);
     }
 
-    return parts.join(' | ')
+    return parts.join(" | ");
   }
 }

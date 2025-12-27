@@ -28,7 +28,7 @@
  *   .addActor('system')
  *   .addScope('organization')
  *   .addEvents(JobsEvents)
- *   .addTransport('logger', LoggerTransportAdapter.create({ logger: console }))
+ *   .addTransport(LoggerTransportAdapter.create({ logger: console }))
  *   .withSampling({ debugRate: 0.01, errorRate: 1.0 })
  *   .withRedaction({ denylistKeys: ['password', 'secret'] })
  *   .build()
@@ -40,17 +40,35 @@
  * ```
  */
 
-import type { IgniterLogger } from '@igniter-js/core'
-import type { IgniterTelemetryActorOptions, IgniterTelemetryConfig, IgniterTelemetryScopeOptions } from '../types/config'
-import type { IgniterTelemetryEventsDescriptor, IgniterTelemetryEventsMap, IgniterTelemetryEventsRegistry, IgniterTelemetryEventsValidationOptions } from '../types/events'
-import type { IgniterTelemetryRedactionPolicy, IgniterTelemetrySamplingPolicy } from '../types/policies'
-import type { IgniterTelemetryTransportAdapter, IgniterTelemetryTransportType } from '../types/transport'
-import { IGNITER_TELEMETRY_DEFAULT_REDACTION_POLICY, IGNITER_TELEMETRY_DEFAULT_SAMPLING_POLICY } from '../types/policies'
-import { IgniterTelemetryError } from '../errors/telemetry.error'
-import { IgniterTelemetryManager } from '../core/manager'
-import type { IIgniterTelemetryManager } from '../types/manager'
-import { IgniterTelemetryKeyValidator } from '../types/keys'
-import type { IgniterTelemetryBuilderState } from '../types/builder'
+import type { IgniterLogger } from "@igniter-js/core";
+import type {
+  IgniterTelemetryActorOptions,
+  IgniterTelemetryConfig,
+  IgniterTelemetryScopeOptions,
+} from "../types/config";
+import type {
+  IgniterTelemetryEventsDescriptor,
+  IgniterTelemetryEventsMap,
+  IgniterTelemetryEventsRegistry,
+  IgniterTelemetryEventsValidationOptions,
+} from "../types/events";
+import type {
+  IgniterTelemetryRedactionPolicy,
+  IgniterTelemetrySamplingPolicy,
+} from "../types/policies";
+import type {
+  IgniterTelemetryTransportAdapter,
+  IgniterTelemetryTransportType,
+} from "../types/transport";
+import {
+  IGNITER_TELEMETRY_DEFAULT_REDACTION_POLICY,
+  IGNITER_TELEMETRY_DEFAULT_SAMPLING_POLICY,
+} from "../types/policies";
+import { IgniterTelemetryError } from "../errors/telemetry.error";
+import { IgniterTelemetryManager } from "../core/manager";
+import type { IIgniterTelemetryManager } from "../types/manager";
+import { IgniterTelemetryKeyValidator } from "../types/keys";
+import type { IgniterTelemetryBuilderState } from "../types/builder";
 
 /**
  * Builder class for creating IgniterTelemetry instances.
@@ -68,7 +86,7 @@ import type { IgniterTelemetryBuilderState } from '../types/builder'
  *   .addActor('user')
  *   .addScope('organization')
  *   .addEvents(JobsEvents)
- *   .addTransport('logger', loggerAdapter)
+ *   .addTransport(loggerAdapter)
  *   .build()
  * ```
  */
@@ -77,10 +95,16 @@ export class IgniterTelemetryBuilder<
   TScopes extends string = never,
   TActors extends string = never,
 > {
-  private readonly state: IgniterTelemetryBuilderState<TRegistry, TScopes, TActors>
+  private readonly state: IgniterTelemetryBuilderState<
+    TRegistry,
+    TScopes,
+    TActors
+  >;
 
-  constructor(state: IgniterTelemetryBuilderState<TRegistry, TScopes, TActors>) {
-    this.state = state
+  constructor(
+    state: IgniterTelemetryBuilderState<TRegistry, TScopes, TActors>,
+  ) {
+    this.state = state;
   }
 
   /**
@@ -96,13 +120,13 @@ export class IgniterTelemetryBuilder<
   static create(): IgniterTelemetryBuilder<{}, never, never> {
     return new IgniterTelemetryBuilder({
       eventsRegistry: {},
-      eventsValidation: { mode: 'development', strict: false },
-      transports: new Map(),
+      eventsValidation: { mode: "development", strict: false },
+      transports: [],
       scopeDefinitions: {},
       actorDefinitions: {},
       sampling: {},
       redaction: {},
-    })
+    });
   }
 
   /**
@@ -116,12 +140,14 @@ export class IgniterTelemetryBuilder<
    * builder.withService('my-api')
    * ```
    */
-  withService(service: string): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
+  withService(
+    service: string,
+  ): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
     return new IgniterTelemetryBuilder({
       ...this.state,
-      transports: new Map(this.state.transports),
+      transports: [...this.state.transports],
       service,
-    })
+    });
   }
 
   /**
@@ -135,12 +161,14 @@ export class IgniterTelemetryBuilder<
    * builder.withEnvironment(process.env.NODE_ENV ?? 'development')
    * ```
    */
-  withEnvironment(environment: string): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
+  withEnvironment(
+    environment: string,
+  ): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
     return new IgniterTelemetryBuilder({
       ...this.state,
-      transports: new Map(this.state.transports),
+      transports: [...this.state.transports],
       environment,
-    })
+    });
   }
 
   /**
@@ -154,12 +182,14 @@ export class IgniterTelemetryBuilder<
    * builder.withVersion(process.env.APP_VERSION ?? 'unknown')
    * ```
    */
-  withVersion(version: string): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
+  withVersion(
+    version: string,
+  ): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
     return new IgniterTelemetryBuilder({
       ...this.state,
-      transports: new Map(this.state.transports),
+      transports: [...this.state.transports],
       version,
-    })
+    });
   }
 
   /**
@@ -181,25 +211,25 @@ export class IgniterTelemetryBuilder<
     key: TKey,
     options?: IgniterTelemetryActorOptions,
   ): IgniterTelemetryBuilder<TRegistry, TScopes, TActors | TKey> {
-    IgniterTelemetryKeyValidator.validateKey(key, 'Actor key')
+    IgniterTelemetryKeyValidator.validateKey(key, "Actor key");
 
     if (key in this.state.actorDefinitions) {
       throw new IgniterTelemetryError({
-        code: 'TELEMETRY_DUPLICATE_ACTOR',
+        code: "TELEMETRY_DUPLICATE_ACTOR",
         message: `Actor "${key}" is already defined`,
         statusCode: 400,
         details: { key },
-      })
+      });
     }
 
     return new IgniterTelemetryBuilder({
       ...this.state,
-      transports: new Map(this.state.transports),
+      transports: [...this.state.transports],
       actorDefinitions: {
         ...this.state.actorDefinitions,
         [key]: options ?? {},
       },
-    })
+    });
   }
 
   /**
@@ -221,25 +251,25 @@ export class IgniterTelemetryBuilder<
     key: TKey,
     options?: IgniterTelemetryScopeOptions,
   ): IgniterTelemetryBuilder<TRegistry, TScopes | TKey, TActors> {
-    IgniterTelemetryKeyValidator.validateKey(key, 'Scope key')
+    IgniterTelemetryKeyValidator.validateKey(key, "Scope key");
 
     if (key in this.state.scopeDefinitions) {
       throw new IgniterTelemetryError({
-        code: 'TELEMETRY_DUPLICATE_SCOPE',
+        code: "TELEMETRY_DUPLICATE_SCOPE",
         message: `Scope "${key}" is already defined`,
         statusCode: 400,
         details: { key },
-      })
+      });
     }
 
     return new IgniterTelemetryBuilder({
       ...this.state,
-      transports: new Map(this.state.transports),
+      transports: [...this.state.transports],
       scopeDefinitions: {
         ...this.state.scopeDefinitions,
         [key]: options ?? {},
       },
-    })
+    });
   }
 
   /**
@@ -259,85 +289,86 @@ export class IgniterTelemetryBuilder<
    * builder.addEvents(JobsEvents)
    * ```
    */
-  addEvents<TEvents extends IgniterTelemetryEventsMap, TNamespace extends string>(
-    descriptor: IgniterTelemetryEventsDescriptor<TNamespace, TEvents> & { namespace: TNamespace },
+  addEvents<
+    TEvents extends IgniterTelemetryEventsMap,
+    TNamespace extends string,
+  >(
+    descriptor: IgniterTelemetryEventsDescriptor<TNamespace, TEvents> & {
+      namespace: TNamespace;
+    },
     options?: IgniterTelemetryEventsValidationOptions,
-  ): IgniterTelemetryBuilder<TRegistry & { [K in TNamespace]: TEvents }, TScopes, TActors> {
-    const namespace = descriptor.namespace
+  ): IgniterTelemetryBuilder<
+    TRegistry & { [K in TNamespace]: TEvents },
+    TScopes,
+    TActors
+  > {
+    const namespace = descriptor.namespace;
 
     if (namespace in this.state.eventsRegistry) {
       throw new IgniterTelemetryError({
-        code: 'TELEMETRY_DUPLICATE_NAMESPACE',
+        code: "TELEMETRY_DUPLICATE_NAMESPACE",
         message: `Namespace "${namespace}" is already registered`,
         statusCode: 400,
         details: { namespace },
-      })
+      });
     }
 
     const newRegistry = {
       ...this.state.eventsRegistry,
       [namespace]: descriptor.events,
-    } as TRegistry & { [K in TNamespace]: TEvents }
+    } as TRegistry & { [K in TNamespace]: TEvents };
 
     const validation = options
       ? { ...this.state.eventsValidation, ...options }
-      : this.state.eventsValidation
+      : this.state.eventsValidation;
 
     return new IgniterTelemetryBuilder({
       ...this.state,
-      transports: new Map(this.state.transports),
+      transports: [...this.state.transports],
       eventsRegistry: newRegistry,
       eventsValidation: validation,
-    })
+    });
   }
 
   /**
    * Adds a transport adapter.
    *
-   * Only one transport per type is allowed. Adding a duplicate type
-   * will throw an error.
-   *
-   * @param type - The transport type
-   * @param adapter - The transport adapter instance
+   * @param typeOrAdapter - The transport type or the transport adapter instance
+   * @param maybeAdapter - The transport adapter instance (if type is provided as first argument)
    * @returns A new builder with the transport added
    *
    * @example
    * ```typescript
    * builder
-   *   .addTransport('logger', LoggerTransportAdapter.create({ logger: console }))
-   *   .addTransport('store', StoreStreamTransportAdapter.create({ store }))
+   *   .addTransport(LoggerTransportAdapter.create({ logger: console }))
+   *   // Legacy signature support:
+   *   .addTransport(LoggerTransportAdapter.create({ logger: console }))
    * ```
    */
   addTransport(
-    type: IgniterTelemetryTransportType,
-    adapter: IgniterTelemetryTransportAdapter,
+    typeOrAdapter:
+      | IgniterTelemetryTransportType
+      | IgniterTelemetryTransportAdapter,
+    maybeAdapter?: IgniterTelemetryTransportAdapter,
   ): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
-    if (this.state.transports.has(type)) {
-      throw new IgniterTelemetryError({
-        code: 'TELEMETRY_DUPLICATE_TRANSPORT',
-        message: `Transport type "${type}" is already registered`,
-        statusCode: 400,
-        details: { type },
-      })
-    }
+    const adapter = (
+      typeof typeOrAdapter === "object" ? typeOrAdapter : maybeAdapter
+    )!;
 
-    // Validate adapter type matches
-    if (adapter.type !== type) {
+    // Validate adapter type matches if legacy signature used
+    if (typeof typeOrAdapter === "string" && adapter.type !== typeOrAdapter) {
       throw new IgniterTelemetryError({
-        code: 'TELEMETRY_INVALID_TRANSPORT',
-        message: `Transport adapter type "${adapter.type}" does not match registered type "${type}"`,
+        code: "TELEMETRY_INVALID_TRANSPORT",
+        message: `Transport adapter type "${adapter.type}" does not match provided type "${typeOrAdapter}"`,
         statusCode: 400,
-        details: { expectedType: type, actualType: adapter.type },
-      })
+        details: { expectedType: typeOrAdapter, actualType: adapter.type },
+      });
     }
-
-    const newTransports = new Map(this.state.transports)
-    newTransports.set(type, adapter)
 
     return new IgniterTelemetryBuilder({
       ...this.state,
-      transports: newTransports,
-    })
+      transports: [...this.state.transports, adapter],
+    });
   }
 
   /**
@@ -358,12 +389,14 @@ export class IgniterTelemetryBuilder<
    * })
    * ```
    */
-  withSampling(policy: IgniterTelemetrySamplingPolicy): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
+  withSampling(
+    policy: IgniterTelemetrySamplingPolicy,
+  ): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
     return new IgniterTelemetryBuilder({
       ...this.state,
-      transports: new Map(this.state.transports),
+      transports: [...this.state.transports],
       sampling: { ...this.state.sampling, ...policy },
-    })
+    });
   }
 
   /**
@@ -381,12 +414,14 @@ export class IgniterTelemetryBuilder<
    * })
    * ```
    */
-  withRedaction(policy: IgniterTelemetryRedactionPolicy): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
+  withRedaction(
+    policy: IgniterTelemetryRedactionPolicy,
+  ): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
     return new IgniterTelemetryBuilder({
       ...this.state,
-      transports: new Map(this.state.transports),
+      transports: [...this.state.transports],
       redaction: { ...this.state.redaction, ...policy },
-    })
+    });
   }
 
   /**
@@ -403,12 +438,14 @@ export class IgniterTelemetryBuilder<
    * })
    * ```
    */
-  withValidation(options: IgniterTelemetryEventsValidationOptions): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
+  withValidation(
+    options: IgniterTelemetryEventsValidationOptions,
+  ): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
     return new IgniterTelemetryBuilder({
       ...this.state,
-      transports: new Map(this.state.transports),
+      transports: [...this.state.transports],
       eventsValidation: { ...this.state.eventsValidation, ...options },
-    })
+    });
   }
 
   /**
@@ -422,12 +459,14 @@ export class IgniterTelemetryBuilder<
    * builder.withLogger(myLogger)
    * ```
    */
-  withLogger(logger: IgniterLogger): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
+  withLogger(
+    logger: IgniterLogger,
+  ): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
     return new IgniterTelemetryBuilder({
       ...this.state,
-      transports: new Map(this.state.transports),
+      transports: [...this.state.transports],
       logger,
-    })
+    });
   }
 
   /**
@@ -445,16 +484,16 @@ export class IgniterTelemetryBuilder<
    * ```
    */
   build(): IIgniterTelemetryManager<TRegistry, TScopes, TActors> {
-    const config = this.buildConfig()
+    const config = this.buildConfig();
 
     if (config.logger) {
-      config.logger.info('[IgniterTelemetry] Building telemetry manager', {
+      config.logger.info("[IgniterTelemetry] Building telemetry manager", {
         service: config.service,
         environment: config.environment,
-      })
+      });
     }
 
-    return new IgniterTelemetryManager<TRegistry, TScopes, TActors>(config)
+    return new IgniterTelemetryManager<TRegistry, TScopes, TActors>(config);
   }
 
   /**
@@ -466,10 +505,10 @@ export class IgniterTelemetryBuilder<
    */
   buildConfig(): IgniterTelemetryConfig<TRegistry, TScopes, TActors> {
     // Set default service if not set
-    this.state.service ??= 'igniter-app'
+    this.state.service ??= "igniter-app";
 
     // Default environment to 'development' if not set
-    const environment = this.state.environment ?? 'development'
+    const environment = this.state.environment ?? "development";
 
     return {
       service: this.state.service,
@@ -480,13 +519,19 @@ export class IgniterTelemetryBuilder<
       transports: this.state.transports,
       scopeDefinitions: this.state.scopeDefinitions,
       actorDefinitions: this.state.actorDefinitions,
-      sampling: { ...IGNITER_TELEMETRY_DEFAULT_SAMPLING_POLICY, ...this.state.sampling },
-      redaction: { ...IGNITER_TELEMETRY_DEFAULT_REDACTION_POLICY, ...this.state.redaction },
+      sampling: {
+        ...IGNITER_TELEMETRY_DEFAULT_SAMPLING_POLICY,
+        ...this.state.sampling,
+      },
+      redaction: {
+        ...IGNITER_TELEMETRY_DEFAULT_REDACTION_POLICY,
+        ...this.state.redaction,
+      },
       logger: this.state.logger,
-    }
+    };
   }
 }
 
 export const IgniterTelemetry = {
   create: IgniterTelemetryBuilder.create,
-}
+};

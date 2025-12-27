@@ -33,7 +33,7 @@ import {
 const telemetry = IgniterTelemetry.create()
   .withService("my-api")
   .withEnvironment(process.env.NODE_ENV ?? "development")
-  .addTransport("logger", LoggerTransportAdapter.create({ format: "pretty" }))
+  .addTransport(LoggerTransportAdapter.create({ format: "pretty" }))
   .build();
 
 // Emit events
@@ -168,12 +168,11 @@ const telemetry = IgniterTelemetry.create()
   .withService("payment-service")
   .withEnvironment("production")
   // 1. Log everything to console in JSON
-  .addTransport("console", LoggerTransportAdapter.create({ format: "json" }))
+  .addTransport(LoggerTransportAdapter.create({ format: "json" }))
   // 2. Send errors to Sentry
-  .addTransport("sentry", SentryTransportAdapter.create({ sentry: Sentry }))
+  .addTransport(SentryTransportAdapter.create({ sentry: Sentry }))
   // 3. Alert critical failures to Slack
   .addTransport(
-    "slack",
     SlackTransportAdapter.create({
       webhookUrl: process.env.SLACK_URL,
       minLevel: "error",
@@ -181,7 +180,6 @@ const telemetry = IgniterTelemetry.create()
   )
   // 4. Archive all events to OTLP collector
   .addTransport(
-    "otlp",
     OtlpTransportAdapter.create({
       url: "http://otel-collector:4318/v1/logs",
     }),

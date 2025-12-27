@@ -37,7 +37,7 @@ describe('IgniterTelemetryManager', () => {
       .withService('test-service')
       .withEnvironment('test')
       .addEvents(events)
-      .addTransport('logger', mockTransport)
+      .addTransport(mockTransport)
       .withSampling({
         debugRate: 1.0,
         infoRate: 1.0,
