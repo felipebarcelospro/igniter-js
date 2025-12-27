@@ -609,4 +609,5 @@ export const IgniterConnectorsTelemetryEvents = IgniterTelemetryEvents.namespace
  * Type export for the events descriptor.
  * Use this type when registering with IgniterTelemetry.
  */
-export type IgniterConnectorsTelemetryEventsType = typeof IgniterConnectorsTelemetryEvents;
+export type IgniterConnectorsTelemetryEvents =
+  typeof IgniterConnectorsTelemetryEvents.$Infer.registry;

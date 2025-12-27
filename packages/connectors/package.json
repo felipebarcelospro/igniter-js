@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/connectors",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Type-safe, multi-tenant connector management library for Igniter.js with OAuth, encryption, and adapter support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
