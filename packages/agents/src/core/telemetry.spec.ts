@@ -69,8 +69,8 @@ vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
 
 import { IgniterAgent } from "../builders/agent.builder";
 import { IgniterAgentMCPClient } from "../builders/mcp.builder";
-import { IgniterAgentTelemetryEvents } from "../telemetry";
 import { IgniterAgentInMemoryAdapter } from "../adapters/memory.adapter";
+import { IgniterAgentTelemetryEvents } from "../telemetry";
 
 const createTelemetry = () => ({ emit: vi.fn() });
 
@@ -226,6 +226,7 @@ describe("telemetry.lifecycle", () => {
     await agent.start();
 
     const toolsets = agent.getToolsets();
+    // @ts-expect-error - test manipulation
     const mcpToolset = toolsets.remote as any;
     mcpToolset.disconnect = () => {
       throw new Error("disconnect failed");
@@ -324,6 +325,7 @@ describe("telemetry.mcp", () => {
     await agent.start();
 
     const toolsets = agent.getToolsets();
+    // @ts-expect-error - test manipulation
     const mcpToolset = toolsets.remote as any;
     mcpToolset.disconnect = () => {
       throw new Error("disconnect failed");
@@ -425,7 +427,7 @@ describe("telemetry.generation", () => {
     const telemetry = createTelemetry();
     const agent = createAgent({ telemetry });
 
-    const stream = await agent.stream({ messages: [{ role: "user", content: "hi" }] });
+    const stream = await agent.stream({  messages: [{ role: "user", content: "hi" }] });
     for await (const _chunk of stream.textStream) {
       // consume
     }
@@ -463,7 +465,7 @@ describe("telemetry.tool", () => {
     const toolset = createToolset();
     const agent = createAgent({ telemetry, toolset });
 
-    await agent.getTools().echo.execute({ message: "hi" }, {} as any);
+    await agent.getTools().echo.execute?.({ message: "hi" }, {} as any);
 
     expectEmitted(
       telemetry,
@@ -478,7 +480,7 @@ describe("telemetry.tool", () => {
     const toolset = createToolset();
     const agent = createAgent({ telemetry, toolset });
 
-    await agent.getTools().echo.execute({ message: "hi" }, {} as any);
+    await agent.getTools().echo.execute?.({ message: "hi" }, {} as any);
 
     expectEmitted(
       telemetry,
@@ -496,7 +498,7 @@ describe("telemetry.tool", () => {
     const agent = createAgent({ telemetry, toolset });
 
     await expect(
-      agent.getTools().echo.execute({ message: "hi" }, {} as any),
+      agent.getTools().echo.execute?.({ message: "hi" }, {} as any),
     ).rejects.toBeInstanceOf(Error);
 
     expectEmitted(

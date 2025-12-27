@@ -325,4 +325,4 @@ export const IgniterAgentTelemetryEvents = IgniterTelemetryEvents.namespace(
  * Type for the telemetry events registry.
  */
 export type IgniterAgentTelemetryEventsType =
-  typeof IgniterAgentTelemetryEvents;
+  typeof IgniterAgentTelemetryEvents.$Infer.events;

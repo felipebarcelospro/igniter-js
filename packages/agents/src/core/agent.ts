@@ -14,7 +14,7 @@ import type { z } from "zod";
 import type { IgniterAgentPromptTemplate } from "../types/prompt";
 import type { IgniterLogger } from "@igniter-js/core";
 import type { IgniterTelemetryAttributes, IgniterTelemetryManager } from "@igniter-js/telemetry";
-import { IgniterAgentTelemetryEvents } from "../telemetry";
+import type { IgniterAgentTelemetryEventsType } from "../telemetry";
 import type { IgniterAgentHooks } from "../types/hooks";
 import { IgniterAgentMemoryCore } from "./memory";
 
@@ -43,7 +43,7 @@ export class IgniterAgentCore<
   >;
 
   private logger?: IgniterLogger;
-  private telemetry?: IgniterTelemetryManager;
+  private telemetry?: IgniterTelemetryManager<{ 'igniter.agent': IgniterAgentTelemetryEventsType}>;
   private hooks: IgniterAgentHooks;
   public memory?: IgniterAgentMemoryCore;
 
@@ -87,7 +87,7 @@ export class IgniterAgentCore<
   /**
    * Attaches a telemetry manager to the agent.
    */
-  attachTelemetry(telemetry?: IgniterTelemetryManager): void {
+  attachTelemetry(telemetry?: IgniterTelemetryManager<any>): void {
     if (!telemetry) return;
     if (!this.telemetry) {
       this.telemetry = telemetry;
@@ -153,7 +153,7 @@ export class IgniterAgentCore<
     };
 
     this.logger?.debug("IgniterAgent.start started", lifecycleAttributes);
-    this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("lifecycle.start.started"), {
+    this.telemetry?.emit('igniter.agent.lifecycle.start.started', {
       level: "debug",
       attributes: lifecycleAttributes as IgniterTelemetryAttributes,
     });
@@ -162,7 +162,7 @@ export class IgniterAgentCore<
       for (const mcpConfig of mcpConfigs) {
         const mcpStart = Date.now();
         this.hooks.onMCPStart?.(this.getName(), mcpConfig.name);
-        this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("mcp.connect.started"), {
+        this.telemetry?.emit('igniter.agent.mcp.connect.started', {
           level: "debug",
           attributes: {
             "ctx.agent.name": this.getName(),
@@ -177,7 +177,7 @@ export class IgniterAgentCore<
           // @ts-expect-error - Expected to assign dynamically
           toolsets[mcpConfig.name] = mcpToolset;
 
-          this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("mcp.connect.success"), {
+          this.telemetry?.emit('igniter.agent.mcp.connect.success', {
             level: "debug",
             attributes: {
               "ctx.agent.name": this.getName(),
@@ -189,7 +189,7 @@ export class IgniterAgentCore<
           });
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
-          this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("mcp.connect.error"), {
+          this.telemetry?.emit('igniter.agent.mcp.connect.error', {
             level: "error",
             attributes: {
               "ctx.agent.name": this.getName(),
@@ -205,7 +205,7 @@ export class IgniterAgentCore<
       }
 
       const durationMs = Date.now() - startTime;
-      this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("lifecycle.start.success"), {
+      this.telemetry?.emit('igniter.agent.lifecycle.start.success', {
         level: "debug",
         attributes: {
           ...lifecycleAttributes,
@@ -220,7 +220,7 @@ export class IgniterAgentCore<
       this.hooks.onAgentStart?.(this.getName());
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("lifecycle.start.error"), {
+      this.telemetry?.emit('igniter.agent.lifecycle.start.error', {
         level: "error",
         attributes: {
           ...lifecycleAttributes,
@@ -247,7 +247,7 @@ export class IgniterAgentCore<
     };
 
     this.logger?.debug("IgniterAgent.stop started", lifecycleAttributes);
-    this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("lifecycle.stop.started"), {
+    this.telemetry?.emit('igniter.agent.lifecycle.stop.started', {
       level: "debug",
       attributes: lifecycleAttributes as IgniterTelemetryAttributes,
     });
@@ -255,7 +255,7 @@ export class IgniterAgentCore<
     try {
       for (const mcpConfig of mcpConfigs) {
         const mcpStart = Date.now();
-        this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("mcp.disconnect.started"), {
+        this.telemetry?.emit('igniter.agent.mcp.disconnect.started', {
           level: "debug",
           attributes: {
             "ctx.agent.name": this.getName(),
@@ -282,7 +282,7 @@ export class IgniterAgentCore<
             };
           }
 
-          this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("mcp.disconnect.success"), {
+          this.telemetry?.emit('igniter.agent.mcp.disconnect.success', {
             level: "debug",
             attributes: {
               "ctx.agent.name": this.getName(),
@@ -293,7 +293,7 @@ export class IgniterAgentCore<
           });
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
-          this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("mcp.disconnect.error"), {
+          this.telemetry?.emit('igniter.agent.mcp.disconnect.error', {
             level: "error",
             attributes: {
               "ctx.agent.name": this.getName(),
@@ -309,7 +309,7 @@ export class IgniterAgentCore<
       }
 
       const durationMs = Date.now() - startTime;
-      this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("lifecycle.stop.success"), {
+      this.telemetry?.emit('igniter.agent.lifecycle.stop.success', {
         level: "debug",
         attributes: {
           ...lifecycleAttributes,
@@ -323,7 +323,7 @@ export class IgniterAgentCore<
       });
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("lifecycle.stop.error"), {
+      this.telemetry?.emit('igniter.agent.lifecycle.stop.error', {
         level: "error",
         attributes: {
           ...lifecycleAttributes,
@@ -335,11 +335,8 @@ export class IgniterAgentCore<
     }
   }
 
-  /**
-   * Generates a response from the agent.
-   */
   async generate(
-    input: AgentCallParameters<z.infer<TAgentContextSchema>>,
+    input: AgentCallParameters<any>,
   ): Promise<any> {
     const startTime = Date.now();
     const attributes = {
@@ -351,7 +348,7 @@ export class IgniterAgentCore<
     };
 
     this.logger?.debug("IgniterAgent.generate started", attributes);
-    this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("generation.generate.started"), {
+    this.telemetry?.emit('igniter.agent.generation.generate.started', {
       level: "debug",
       attributes: attributes as IgniterTelemetryAttributes,
     });
@@ -362,7 +359,7 @@ export class IgniterAgentCore<
       );
       const result = await agent.generate(input);
       const durationMs = Date.now() - startTime;
-      this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("generation.generate.success"), {
+      this.telemetry?.emit('igniter.agent.generation.generate.success', {
         level: "debug",
         attributes: {
           ...attributes,
@@ -376,7 +373,18 @@ export class IgniterAgentCore<
       return result;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("generation.generate.error"), {
+      
+      // Log specific detail about structuredClone errors
+      if (err.message.includes('can not be cloned') || err.name === 'DataCloneError') {
+        this.logger?.error("IgniterAgent.generate failed - structuredClone error", {
+          ...attributes,
+          error: err.message,
+          toolNames: Object.keys(this.getTools()),
+          toolsetCount: Object.keys(this.getToolsets()).length,
+        });
+      }
+      
+      this.telemetry?.emit('igniter.agent.generation.generate.error', {
         level: "error",
         attributes: {
           ...attributes,
@@ -392,7 +400,7 @@ export class IgniterAgentCore<
    * Streams a response from the agent.
    */
   async stream(
-    input: AgentStreamParameters<z.infer<TAgentContextSchema>, ToolSet>,
+    input: AgentStreamParameters<any, any>,
   ): Promise<any> {
     const startTime = Date.now();
     const attributes = {
@@ -404,7 +412,7 @@ export class IgniterAgentCore<
     };
 
     this.logger?.debug("IgniterAgent.stream started", attributes);
-    this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("generation.stream.started"), {
+    this.telemetry?.emit('igniter.agent.generation.stream.started', {
       level: "debug",
       attributes: attributes as IgniterTelemetryAttributes,
     });
@@ -417,7 +425,7 @@ export class IgniterAgentCore<
       const durationMs = Date.now() - startTime;
 
       const emitChunk = () => {
-        this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("generation.stream.chunk"), {
+        this.telemetry?.emit('igniter.agent.generation.stream.chunk', {
           level: "debug",
           attributes: attributes as IgniterTelemetryAttributes,
         });
@@ -425,7 +433,7 @@ export class IgniterAgentCore<
 
       const wrapped = this.wrapStreamResult(result, emitChunk);
 
-      this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("generation.stream.success"), {
+      this.telemetry?.emit('igniter.agent.generation.stream.success', {
         level: "debug",
         attributes: {
           ...attributes,
@@ -439,7 +447,7 @@ export class IgniterAgentCore<
       return wrapped;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("generation.stream.error"), {
+      this.telemetry?.emit('igniter.agent.generation.stream.error', {
         level: "error",
         attributes: {
           ...attributes,
@@ -514,7 +522,7 @@ export class IgniterAgentCore<
       execute: async (input: unknown, options?: unknown) => {
         const startTime = Date.now();
         this.hooks.onToolCallStart?.(agentName, fullName, input);
-        this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("tool.execute.started"), {
+        this.telemetry?.emit('igniter.agent.tool.execute.started', {
           level: "debug",
           attributes: {
             "ctx.agent.name": agentName,
@@ -532,7 +540,7 @@ export class IgniterAgentCore<
           const result = await execute(input as any, options as any);
           const durationMs = Date.now() - startTime;
           this.hooks.onToolCallEnd?.(agentName, fullName, result);
-          this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("tool.execute.success"), {
+          this.telemetry?.emit('igniter.agent.tool.execute.success', {
             level: "debug",
             attributes: {
               "ctx.agent.name": agentName,
@@ -551,7 +559,7 @@ export class IgniterAgentCore<
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           this.hooks.onToolCallError?.(agentName, fullName, err);
-          this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("tool.execute.error"), {
+          this.telemetry?.emit('igniter.agent.tool.execute.error', {
             level: "error",
             attributes: {
               "ctx.agent.name": agentName,

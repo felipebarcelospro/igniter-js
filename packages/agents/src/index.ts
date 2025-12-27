@@ -24,7 +24,7 @@
  *   .addTool(
  *     IgniterAgentTool.create('getTime')
  *       .withDescription('Returns the current time')
- *       .withInputSchema(z.object({}))
+ *       .withInput(z.object({}))
  *       .withExecute(async () => new Date().toISOString())
  *       .build(),
  *   )
@@ -80,13 +80,6 @@ export {
 
 export * from './adapters'
 export type * from './adapters'
-
-// =============================================================================
-// TELEMETRY EXPORTS
-// =============================================================================
-
-export * from './telemetry'
-export type * from './telemetry'
 
 // =============================================================================
 // ERROR EXPORTS

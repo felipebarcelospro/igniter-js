@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import type { LanguageModel, ToolSet, AgentCallParameters, AgentStreamParameters, Tool } from "ai";
+import type { LanguageModel, ToolSet, AgentCallParameters, AgentStreamParameters, Tool, StreamTextResult, GenerateTextResult } from "ai";
 import type { IgniterAgentPromptTemplate } from "./prompt";
 import type { IgniterLogger } from "@igniter-js/core";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
@@ -201,7 +201,7 @@ export type IgniterAgentMCPPartialConfig<
  * @public
  */
 export interface IgniterAgentBuiltAgent<
-  TContextSchema extends z.ZodSchema = z.ZodSchema,
+  TContextSchema extends z.ZodSchema = never,
   TToolsets extends Record<string, IgniterAgentToolset> = Record<string, IgniterAgentToolset>,
   TModel extends LanguageModel = LanguageModel,
   TInstructions extends IgniterAgentPromptTemplate = IgniterAgentPromptTemplate
@@ -273,7 +273,7 @@ export interface IgniterAgentBuiltAgent<
    */
   generate(
     input: AgentCallParameters<z.infer<TContextSchema>>
-  ): Promise<unknown>;
+  ): Promise<GenerateTextResult<any, any>>;
 
   /**
    * Streams a response from the agent.
@@ -299,8 +299,8 @@ export interface IgniterAgentBuiltAgent<
    * ```
    */
   stream(
-    input: AgentStreamParameters<z.infer<TContextSchema>, ToolSet>
-  ): Promise<unknown>;
+    input: AgentStreamParameters<z.infer<TContextSchema>, any>
+  ): Promise<StreamTextResult<any, any>>;
 
   /**
    * Gets all registered toolsets.
@@ -329,6 +329,13 @@ export interface IgniterAgentBuiltAgent<
    * @returns The Zod schema for context validation
    */
   getContextSchema(): TContextSchema;
+
+  /**
+   * Gets all registered tools from all toolsets.
+   * 
+   * @returns The combined tools from all toolsets
+   */
+  getTools(): ToolSet;
 
   /**
    * Optional memory runtime for persistence operations.

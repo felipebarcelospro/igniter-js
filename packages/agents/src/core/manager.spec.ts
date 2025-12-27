@@ -11,6 +11,7 @@ const createStubAgent = (name: string, shouldFail = false): StubAgent => {
     ? vi.fn().mockRejectedValue(new Error("start failed"))
     : vi.fn().mockResolvedValue(undefined);
 
+  // @ts-expect-error - partial stub
   return {
     attachLogger: vi.fn(),
     attachTelemetry: vi.fn(),
@@ -24,6 +25,8 @@ const createStubAgent = (name: string, shouldFail = false): StubAgent => {
     stop: vi.fn().mockResolvedValue(undefined),
     generate: vi.fn(),
     stream: vi.fn(),
+    getTools: vi.fn(),
+    memory: undefined,
   } as StubAgent;
 };
 

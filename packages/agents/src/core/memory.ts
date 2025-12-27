@@ -18,7 +18,6 @@ import type {
   IgniterAgentUIMessage,
 } from "../types";
 import { IgniterAgentMemoryError, IgniterAgentErrorCode } from "../errors";
-import { IgniterAgentTelemetryEvents } from "../telemetry";
 
 const MEMORY_ERROR_CODE = IgniterAgentErrorCode.MEMORY_PROVIDER_ERROR;
 
@@ -59,7 +58,7 @@ export class IgniterAgentMemoryCore implements IgniterAgentMemoryRuntime {
   }
 
   private emitStart(operation: string, scope?: string) {
-    this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("memory.operation.started"), {
+    this.telemetry?.emit('igniter.agent.memory.operation.started', {
       level: "debug",
       attributes: this.getBaseAttributes(operation, scope) as IgniterTelemetryAttributes,
     });
@@ -80,7 +79,7 @@ export class IgniterAgentMemoryCore implements IgniterAgentMemoryRuntime {
       attributes["ctx.memory.count"] = count;
     }
 
-    this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("memory.operation.success"), {
+    this.telemetry?.emit('igniter.agent.memory.operation.success', {
       level: "debug",
       attributes: attributes as IgniterTelemetryAttributes,
     });
@@ -95,7 +94,7 @@ export class IgniterAgentMemoryCore implements IgniterAgentMemoryRuntime {
       "ctx.error.component": "memory",
     };
 
-    this.telemetry?.emit(IgniterAgentTelemetryEvents.get.key("memory.operation.error"), {
+    this.telemetry?.emit('igniter.agent.memory.operation.error', {
       level: "error",
       attributes: attributes as IgniterTelemetryAttributes,
     });

@@ -167,7 +167,7 @@ export class IgniterAgentBuilder<
     string,
     IgniterAgentMCPConfigUnion
   >,
-  TAgentContextSchema extends z.ZodSchema = z.ZodSchema,
+  TAgentContextSchema extends z.ZodSchema = never,
 > {
   /**
    * The agent configuration being built.
@@ -241,7 +241,7 @@ export class IgniterAgentBuilder<
     IgniterAgentPromptTemplate,
     {},
     {},
-    z.ZodSchema
+    never
   > {
     return new IgniterAgentBuilder({
       name: name,

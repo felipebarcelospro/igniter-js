@@ -229,7 +229,7 @@ export interface IgniterAgentConfig<
     string,
     IgniterAgentMCPConfigUnion
   >,
-  TAgentContextSchema extends z.ZodSchema = z.ZodSchema,
+  TAgentContextSchema extends z.ZodSchema = never,
 > {
   /**
    * Unique name identifier for the agent.
@@ -280,7 +280,7 @@ export interface IgniterAgentConfig<
   /**
    * Optional telemetry manager for observability.
    */
-  telemetry?: IgniterTelemetryManager;
+  telemetry?: IgniterTelemetryManager<any>;
 
   /**
    * Optional hook callbacks for lifecycle/tool/mcp events.

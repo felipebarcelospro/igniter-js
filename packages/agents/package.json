@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/agents",
-  "version": "0.1.0",
+  "version": "0.1.13",
   "description": "Type-safe AI agent framework for Igniter.js with MCP integration, custom toolsets, and memory system",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -70,6 +70,9 @@
     "url": "https://github.com/felipebarcelospro/igniter-js/issues"
   },
   "homepage": "https://igniterjs.com",
+  "dependencies": {
+    "@igniter-js/telemetry": ">=0.1.12"
+  },
   "devDependencies": {
     "@ai-sdk/mcp": "^0.0.12",
     "@igniter-js/core": "*",
@@ -85,15 +88,12 @@
   "peerDependencies": {
     "@ai-sdk/mcp": "^0.0.12",
     "@igniter-js/core": ">=0.2.0",
-    "@igniter-js/telemetry": ">=0.1.0",
+    "@igniter-js/telemetry": ">=0.1.12",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "ai": "^6.0.3",
     "zod": "^4.2.1"
   },
   "peerDependenciesMeta": {
-    "@igniter-js/telemetry": {
-      "optional": true
-    },
     "@modelcontextprotocol/sdk": {
       "optional": true
     },
