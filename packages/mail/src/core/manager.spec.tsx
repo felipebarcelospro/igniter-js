@@ -3,7 +3,6 @@ import React from 'react'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { IgniterMail } from '../builders/main.builder'
 import { IgniterMailError } from '../errors/mail.error'
-import { IgniterMailTelemetryEvents } from '../telemetry'
 
 vi.mock('@react-email/components', () => ({
   render: vi.fn(async () => '<html></html>'),
@@ -166,7 +165,7 @@ describe('IgniterMail', () => {
 
       const started = findEmitPayload(
         telemetry,
-        IgniterMailTelemetryEvents.get.key('send.started'),
+        'igniter.mail.send.started',
       )
       expect(started).toMatchObject({
         level: 'debug',
@@ -178,7 +177,7 @@ describe('IgniterMail', () => {
 
       const success = findEmitPayload(
         telemetry,
-        IgniterMailTelemetryEvents.get.key('send.success'),
+        'igniter.mail.send.success',
       )
       expect(success).toMatchObject({
         level: 'info',
@@ -220,7 +219,7 @@ describe('IgniterMail', () => {
 
       const started = findEmitPayload(
         telemetry,
-        IgniterMailTelemetryEvents.get.key('schedule.started'),
+        'igniter.mail.schedule.started',
       )
       expect(started).toMatchObject({
         level: 'debug',
@@ -233,7 +232,7 @@ describe('IgniterMail', () => {
 
       const success = findEmitPayload(
         telemetry,
-        IgniterMailTelemetryEvents.get.key('schedule.success'),
+        'igniter.mail.schedule.success',
       )
       expect(success).toMatchObject({
         level: 'info',
@@ -276,7 +275,7 @@ describe('IgniterMail', () => {
 
       const error = findEmitPayload(
         telemetry,
-        IgniterMailTelemetryEvents.get.key('send.error'),
+        'igniter.mail.send.error',
       )
 
       expect(error).toMatchObject({
@@ -321,7 +320,7 @@ describe('IgniterMail', () => {
 
       const error = findEmitPayload(
         telemetry,
-        IgniterMailTelemetryEvents.get.key('schedule.error'),
+        'igniter.mail.schedule.error',
       )
 
       expect(error).toMatchObject({

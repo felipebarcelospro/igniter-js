@@ -83,7 +83,5 @@ export const IgniterMailTelemetryEvents = IgniterTelemetryEvents.namespace(
   )
   .build()
 
-export type IgniterMailTelemetryEventsType =
-  typeof IgniterMailTelemetryEvents.$Infer
-
-export type IgniterMailTelemetryEvents = typeof IgniterMailTelemetryEvents
+export type IgniterMailTelemetryEvents =
+  typeof IgniterMailTelemetryEvents.$Infer.registry

@@ -17,8 +17,7 @@ import type {
 } from "../types/templates";
 import { IgniterMailSchema } from "../utils/schema";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
-import type { IgniterMailTelemetryEventsType } from "../telemetry";
-import { IgniterMailTelemetryEvents } from "src/telemetry";
+import type { IgniterMailTelemetryEvents } from "../telemetry";
 
 /**
  * Mail runtime for Igniter.js.
@@ -31,9 +30,7 @@ export class IgniterMailManagerCore<
   private readonly adapter: IgniterMailAdapter;
   private readonly templates: TTemplates;
   private readonly logger?: IgniterLogger;
-  private readonly telemetry?: IgniterTelemetryManager<{
-    "igniter.mail": IgniterMailTelemetryEventsType;
-  }>;
+  private readonly telemetry?: IgniterTelemetryManager<IgniterMailTelemetryEvents>;
   private readonly queue?: IgniterMailQueueConfig;
   private queueJobRegistered = false;
   private queueJobRegistering?: Promise<void>;
@@ -156,7 +153,7 @@ export class IgniterMailManagerCore<
         template: String(params.template),
       });
 
-      this.telemetry?.emit(IgniterMailTelemetryEvents.get.key('send.started'), {
+      this.telemetry?.emit('igniter.mail.send.started', {
         level: "debug",
         attributes: {
           "mail.to": params.to,
@@ -204,7 +201,7 @@ export class IgniterMailManagerCore<
 
       const durationMs = Date.now() - startTime;
 
-      this.telemetry?.emit(IgniterMailTelemetryEvents.get.key('send.success'), {
+      this.telemetry?.emit('igniter.mail.send.success', {
         level: "info",
         attributes: {
           "mail.to": params.to,
@@ -235,7 +232,7 @@ export class IgniterMailManagerCore<
 
       const durationMs = Date.now() - startTime;
 
-      this.telemetry?.emit(IgniterMailTelemetryEvents.get.key('send.error'), {
+      this.telemetry?.emit('igniter.mail.send.error', {
         level: "error",
         attributes: {
           "mail.to": params.to,
@@ -282,7 +279,7 @@ export class IgniterMailManagerCore<
       delayMs: delay,
     });
 
-    this.telemetry?.emit(IgniterMailTelemetryEvents.get.key('schedule.started'), {
+    this.telemetry?.emit('igniter.mail.schedule.started', {
       level: "debug",
       attributes: {
         "mail.to": params.to,
@@ -320,7 +317,7 @@ export class IgniterMailManagerCore<
         delay,
       });
 
-      this.telemetry?.emit(IgniterMailTelemetryEvents.get.key('schedule.success'), {
+      this.telemetry?.emit('igniter.mail.schedule.success', {
         level: "info",
         attributes: {
           "mail.to": params.to,
@@ -349,7 +346,7 @@ export class IgniterMailManagerCore<
         });
       }
 
-      this.telemetry?.emit(IgniterMailTelemetryEvents.get.key('schedule.error'), {
+      this.telemetry?.emit('igniter.mail.schedule.error', {
         level: "error",
         attributes: {
           "mail.to": params.to,

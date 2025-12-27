@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/mail",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "Type-safe email library for Igniter.js with React Email templates and multiple provider adapters",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
