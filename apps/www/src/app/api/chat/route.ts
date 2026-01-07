@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   try {
     const ip = getClientIP(request);
     const userId = `user-${ip}`;
-    const allChats = await memoryProvider.getChats({ userId });
+    const allChats = await memoryProvider.getChats(userId);
 
     return new Response(JSON.stringify(allChats), {
       status: 200,
