@@ -10,10 +10,10 @@
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
-    "@ai-sdk-tools/agents": "1.2.0",
-    "@ai-sdk-tools/devtools": "1.2.0",
-    "@ai-sdk-tools/memory": "1.2.0",
-    "@ai-sdk-tools/store": "1.2.0",
+    "@ai-sdk-tools/agents": "1.0.0",
+    "@ai-sdk-tools/devtools": "1.0.0",
+    "@ai-sdk-tools/memory": "1.0.0",
+    "@ai-sdk-tools/store": "1.0.0",
     "@ai-sdk/google": "^2.0.25",
     "@hookform/resolvers": "^5.2.2",
     "@igniter-js/bot": "^0.2.1",
@@ -50,7 +50,7 @@
     "@upstash/ratelimit": "^2.0.6",
     "@upstash/redis": "^1.35.6",
     "@xyflow/react": "^12.9.1",
-    "ai": "^5.0.82",
+    "ai": "5.0.82",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
