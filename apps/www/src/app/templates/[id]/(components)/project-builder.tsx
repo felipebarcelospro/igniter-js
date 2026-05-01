@@ -20,15 +20,19 @@ interface ProjectBuilderProps {
 interface ProjectConfig {
   projectName: string;
   packageManager: "npm" | "yarn" | "pnpm" | "bun";
-  features: {
+  addOns: {
     store: boolean;
     jobs: boolean;
     mcp: boolean;
     logging: boolean;
     telemetry: boolean;
+    bots: boolean;
   };
-  database: "none" | "postgresql" | "mysql" | "sqlite";
-  orm: "prisma" | "drizzle";
+  database: {
+    enabled: boolean;
+    orm: "prisma" | "drizzle";
+    provider: "postgresql" | "mysql" | "sqlite";
+  };
 }
 
 export function ProjectBuilder({ template }: ProjectBuilderProps) {
@@ -38,15 +42,19 @@ export function ProjectBuilder({ template }: ProjectBuilderProps) {
   const [config, setConfig] = useState<ProjectConfig>({
     projectName: "my-project",
     packageManager: "npm",
-    features: {
+    addOns: {
       store: false,
       jobs: false,
       mcp: false,
       logging: true,
       telemetry: true,
+      bots: false,
     },
-    database: "none",
-    orm: "prisma",
+    database: {
+      enabled: false,
+      orm: "prisma",
+      provider: "postgresql",
+    },
   });
 
   const templateId = template.id;
@@ -54,34 +62,34 @@ export function ProjectBuilder({ template }: ProjectBuilderProps) {
 
   const generateCommand = () => {
     let command = `npx @igniter-js/cli init ${config.projectName}`;
-    command += ` --template ${templateId}`;
 
     if (config.packageManager !== "npm") {
       command += ` --pm ${config.packageManager}`;
     }
 
-    // Add features if any are enabled (only for starters)
+    // Build add-ons list with inline options notation (only for starters)
     if (isStarter) {
-      const enabledFeatures = Object.entries(config.features)
-        .filter(([_, enabled]) => enabled)
-        .map(([key, _]) => key);
+      const addOnsList: string[] = [];
 
-      if (enabledFeatures.length > 0) {
-        command += ` --features ${enabledFeatures.join(',')}`;
+      // Simple add-ons (no options)
+      const simpleAddOns = ['store', 'jobs', 'mcp', 'logging', 'telemetry', 'bots'] as const;
+      for (const addOn of simpleAddOns) {
+        if (config.addOns[addOn]) {
+          addOnsList.push(addOn);
+        }
       }
 
-      // Add database if not none
-      if (config.database !== "none") {
-        command += ` --database ${config.database}`;
+      // Database add-on with inline options: database:orm:provider
+      if (config.database.enabled) {
+        addOnsList.push(`database:${config.database.orm}:${config.database.provider}`);
       }
 
-      // Add ORM if database is selected
-      if (config.database !== "none") {
-        command += ` --orm ${config.orm}`;
+      if (addOnsList.length > 0) {
+        command += ` --add-ons ${addOnsList.join(',')}`;
       }
     }
 
-    // Setup options are always enabled (git, install, docker, force)
+    // Setup options are always enabled (git, install, docker)
     // No need to add flags as these are the defaults
 
     return command;
@@ -121,27 +129,27 @@ export function ProjectBuilder({ template }: ProjectBuilderProps) {
     stack.push(packageManagers[config.packageManager]);
 
     // Database
-    if (config.database !== 'none') {
+    if (config.database.enabled) {
       const databases = {
         postgresql: { name: 'PostgreSQL', logo: 'https://svgl.app/library/postgresql.svg' },
         mysql: { name: 'MySQL', logo: 'https://svgl.app/library/mysql.svg' },
         sqlite: { name: 'SQLite', logo: 'https://svgl.app/library/sqlite.svg' }
       };
-      stack.push(databases[config.database as keyof typeof databases]);
+      stack.push(databases[config.database.provider]);
 
       // ORM
       const orms = {
         prisma: { name: 'Prisma', logo: 'https://svgl.app/library/prisma.svg' },
         drizzle: { name: 'Drizzle', logo: 'https://svgl.app/library/drizzle-orm_light.svg' }
       };
-      stack.push(orms[config.orm]);
+      stack.push(orms[config.database.orm]);
     }
 
     // Features
-    if (config.features.store) {
+    if (config.addOns.store) {
       stack.push({ name: 'Redis', logo: 'https://svgl.app/library/redis.svg' });
     }
-    if (config.features.jobs) {
+    if (config.addOns.jobs) {
       stack.push({ name: 'BullMQ', logo: 'https://svgl.app/library/redis.svg' });
     }
 
@@ -161,12 +169,12 @@ Ready to build in public and share the journey! Who else is shipping something c
 #BuildInPublic #TypeScript #WebDev #OpenSource`;
   };
 
-  const updateFeature = (feature: keyof ProjectConfig["features"], checked: boolean) => {
+  const updateAddOn = (addOn: keyof ProjectConfig["addOns"], checked: boolean) => {
     setConfig(prev => ({
       ...prev,
-      features: {
-        ...prev.features,
-        [feature]: checked
+      addOns: {
+        ...prev.addOns,
+        [addOn]: checked
       }
     }));
   };
@@ -175,15 +183,19 @@ Ready to build in public and share the journey! Who else is shipping something c
     setConfig({
       projectName: "my-project",
       packageManager: "npm",
-      features: {
+      addOns: {
         store: false,
         jobs: false,
         mcp: false,
         logging: true,
         telemetry: true,
+        bots: false,
       },
-      database: "none",
-      orm: "prisma",
+      database: {
+        enabled: false,
+        orm: "prisma",
+        provider: "postgresql",
+      },
     });
     setCopied(false);
     setCurrentStep('configure');
@@ -239,251 +251,75 @@ Ready to build in public and share the journey! Who else is shipping something c
               <div className="absolute left-6 top-0 bottom-0 w-px bg-border" />
 
               <div className="space-y-12 pb-32">
-              {/* Project Name Section */}
-              <section className="relative">
-                <div className="absolute left-4 w-4 h-4 bg-background border-2 border-border rounded-full" />
-
-                <div className="ml-12 space-y-6">
-                  <div>
-                    <h3 className="text-sm font-semibold">Project Details</h3>
-                    <span className="text-sm text-muted-foreground">Choose a name for your project directory</span>
-                  </div>
-
-                  <Input
-                    value={config.projectName}
-                    onChange={(e) => setConfig(prev => ({ ...prev, projectName: e.target.value }))}
-                    placeholder="my-awesome-project"
-                    className="text-base"
-                  />
-                </div>
-              </section>
-
-              {/* Package Manager Section */}
-              <section className="relative">
-                <div className="absolute left-4 w-4 h-4 bg-background border-2 border-border rounded-full" />
-
-                <div className="ml-12 space-y-6">
-                  <div>
-                    <h3 className="text-sm">Package Manager</h3>
-                  </div>
-
-                  <div className="rounded-md border border-border p-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        {
-                          value: "npm",
-                          label: "npm",
-                          description: "Node's default package manager",
-                          logo: "https://svgl.app/library/npm.svg"
-                        },
-                        {
-                          value: "yarn",
-                          label: "Yarn",
-                          description: "Fast, reliable, and secure dependency management",
-                          logo: "https://svgl.app/library/yarn.svg"
-                        },
-                        {
-                          value: "pnpm",
-                          label: "pnpm",
-                          description: "Efficient and space-saving package manager",
-                          logo: "https://svgl.app/library/pnpm.svg"
-                        },
-                        {
-                          value: "bun",
-                          label: "Bun",
-                          description: "Ultra-fast JavaScript runtime and package manager",
-                          logo: "https://svgl.app/library/bun.svg"
-                        }
-                      ].map((pm) => {
-                        const isSelected = config.packageManager === pm.value;
-                        const hasSelection = config.packageManager !== "npm" || isSelected;
-
-                        return (
-                          <motion.div
-                            key={pm.value}
-                            className={cn(
-                              "relative cursor-pointer transition-all duration-300",
-                              !isSelected && hasSelection && "opacity-80"
-                            )}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => setConfig(prev => ({ ...prev, packageManager: pm.value as ProjectConfig["packageManager"] }))}
-                          >
-                            <Card className={cn(
-                              "h-full shadow-none border-2 transition-all duration-300 bg-card",
-                              isSelected && "bg-primary/5 border-primary/15"
-                            )}>
-                              <CardContent className="p-4">
-                                <div className="flex items-center gap-3">
-                                  <span className="flex items-center justify-center w-10 h-10 border border-border/40 rounded-md text-primary">
-                                    <img
-                                      src={pm.logo}
-                                      alt={pm.label}
-                                      className="w-6 h-6 flex-shrink-0"
-                                    />
-                                  </span>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-medium">{pm.label}</div>
-                                    <div className="text-xs text-muted-foreground line-clamp-1">{pm.description}</div>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </motion.div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Features Section - Only for starters */}
-              {isStarter && (
+                {/* Project Name Section */}
                 <section className="relative">
                   <div className="absolute left-4 w-4 h-4 bg-background border-2 border-border rounded-full" />
 
                   <div className="ml-12 space-y-6">
                     <div>
-                      <h3 className="text-sm">Igniter.js Features</h3>
+                      <h3 className="text-sm font-semibold">Project Details</h3>
+                      <span className="text-sm text-muted-foreground">Choose a name for your project directory</span>
                     </div>
 
-                    <div className="rounded-md border border-border p-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {Object.entries({
-                          store: {
-                            label: "Store (Redis)",
-                            description: "Caching, sessions, and pub/sub messaging",
-                            logo: "https://svgl.app/library/redis.svg"
-                          },
-                          jobs: {
-                            label: "Jobs (BullMQ)",
-                            description: "Background task processing and job queues",
-                            logo: "https://svgl.app/library/redis.svg"
-                          },
-                          mcp: {
-                            label: "MCP Server",
-                            description: "AI assistant integration with Model Context Protocol",
-                            logo: null
-                          },
-                          logging: {
-                            label: "Enhanced Logging",
-                            description: "Advanced console logging with structured output",
-                            logo: null
-                          },
-                          telemetry: {
-                            label: "Telemetry",
-                            description: "Telemetry for tracking requests and errors",
-                            logo: null
-                          }
-                        }).map(([key, { label, description, logo }]) => {
-                          const isSelected = config.features[key as keyof ProjectConfig["features"]];
-                          const hasAnySelection = Object.values(config.features).some(Boolean);
-
-                          return (
-                            <motion.div
-                              key={key}
-                              className={cn(
-                                "relative cursor-pointer transition-all duration-300",
-                                !isSelected && hasAnySelection && "opacity-80"
-                              )}
-                              whileHover={{ scale: 1.01 }}
-                              whileTap={{ scale: 0.99 }}
-                              onClick={() => updateFeature(key as keyof ProjectConfig["features"], !isSelected)}
-                            >
-                              <Card className={cn(
-                                "h-full shadow-none border-2 transition-all duration-300 bg-card",
-                                isSelected && "bg-primary/5 border-primary/15"
-                              )}>
-                                <CardContent className="p-4">
-                                  <div className="flex items-center gap-3">
-                                    <div className="flex items-center gap-2">
-                                      <Checkbox
-                                        checked={isSelected}
-                                        onCheckedChange={(checked) => updateFeature(key as keyof ProjectConfig["features"], checked as boolean)}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="opacity-0"
-                                      />
-                                      {logo ? (
-                                        <span className="flex items-center justify-center w-8 h-8 border border-border/40 rounded-md text-primary">
-                                          <img
-                                            src={logo}
-                                            alt={label}
-                                            className="w-5 h-5 flex-shrink-0"
-                                          />
-                                        </span>
-                                      ) : (
-                                        <span className="flex items-center justify-center w-8 h-8 border border-border/40 rounded-md text-primary">
-                                          <div className="w-2 h-2 bg-primary rounded-full" />
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-medium">{label}</div>
-                                      <div className="text-xs text-muted-foreground line-clamp-1">{description}</div>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            </motion.div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <Input
+                      value={config.projectName}
+                      onChange={(e) => setConfig(prev => ({ ...prev, projectName: e.target.value }))}
+                      placeholder="my-awesome-project"
+                      className="text-base"
+                    />
                   </div>
                 </section>
-              )}
 
-              {/* Database Section - Only for starters */}
-              {isStarter && (
+                {/* Package Manager Section */}
                 <section className="relative">
                   <div className="absolute left-4 w-4 h-4 bg-background border-2 border-border rounded-full" />
 
                   <div className="ml-12 space-y-6">
                     <div>
-                      <h3 className="text-sm">Database Provider</h3>
+                      <h3 className="text-sm">Package Manager</h3>
                     </div>
 
                     <div className="rounded-md border border-border p-4">
                       <div className="grid grid-cols-2 gap-3">
                         {[
                           {
-                            value: "none",
-                            label: "None",
-                            description: "Start without database",
-                            logo: null
+                            value: "npm",
+                            label: "npm",
+                            description: "Node's default package manager",
+                            logo: "https://svgl.app/library/npm.svg"
                           },
                           {
-                            value: "postgresql",
-                            label: "PostgreSQL",
-                            description: "Production-ready relational database",
-                            logo: "https://svgl.app/library/postgresql.svg"
+                            value: "yarn",
+                            label: "Yarn",
+                            description: "Fast, reliable, and secure dependency management",
+                            logo: "https://svgl.app/library/yarn.svg"
                           },
                           {
-                            value: "mysql",
-                            label: "MySQL",
-                            description: "Wide compatibility relational database",
-                            logo: "https://svgl.app/library/mysql.svg"
+                            value: "pnpm",
+                            label: "pnpm",
+                            description: "Efficient and space-saving package manager",
+                            logo: "https://svgl.app/library/pnpm.svg"
                           },
                           {
-                            value: "sqlite",
-                            label: "SQLite",
-                            description: "Lightweight file-based database",
-                            logo: "https://svgl.app/library/sqlite.svg"
+                            value: "bun",
+                            label: "Bun",
+                            description: "Ultra-fast JavaScript runtime and package manager",
+                            logo: "https://svgl.app/library/bun.svg"
                           }
-                        ].map((db) => {
-                          const isSelected = config.database === db.value;
-                          const hasSelection = config.database !== "none" || isSelected;
+                        ].map((pm) => {
+                          const isSelected = config.packageManager === pm.value;
+                          const hasSelection = config.packageManager !== "npm" || isSelected;
 
                           return (
                             <motion.div
-                              key={db.value}
+                              key={pm.value}
                               className={cn(
                                 "relative cursor-pointer transition-all duration-300",
                                 !isSelected && hasSelection && "opacity-80"
                               )}
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
-                              onClick={() => setConfig(prev => ({ ...prev, database: db.value as ProjectConfig["database"] }))}
+                              onClick={() => setConfig(prev => ({ ...prev, packageManager: pm.value as ProjectConfig["packageManager"] }))}
                             >
                               <Card className={cn(
                                 "h-full shadow-none border-2 transition-all duration-300 bg-card",
@@ -491,101 +327,16 @@ Ready to build in public and share the journey! Who else is shipping something c
                               )}>
                                 <CardContent className="p-4">
                                   <div className="flex items-center gap-3">
-                                    {db.logo ? (
-                                      <span className="flex items-center justify-center w-10 h-10 border border-border/40 rounded-md text-primary">
-                                        <img
-                                          src={db.logo}
-                                          alt={db.label}
-                                          className="w-6 h-6 flex-shrink-0"
-                                        />
-                                      </span>
-                                    ) : (
-                                      <span className="flex items-center justify-center w-10 h-10 border border-border/40 rounded-md text-primary">
-                                        <div className="w-3 h-3 bg-primary rounded-full" />
-                                      </span>
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-medium">{db.label}</div>
-                                      <div className="text-xs text-muted-foreground line-clamp-1">{db.description}</div>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            </motion.div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              )}
-
-              {/* ORM Section - Only for starters with database */}
-              {isStarter && config.database !== "none" && (
-                <section className="relative">
-                  <div className="absolute left-4 w-4 h-4 bg-background border-2 border-border rounded-full" />
-
-                  <div className="ml-12 space-y-6">
-                    <div>
-                      <h3 className="text-sm">ORM Provider</h3>
-                    </div>
-
-                    <div className="rounded-md border border-border p-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        {[
-                          {
-                            value: "prisma",
-                            label: "Prisma",
-                            description: "Next-generation ORM with type safety",
-                            logo: "https://svgl.app/library/prisma.svg"
-                          },
-                          {
-                            value: "drizzle",
-                            label: "Drizzle ORM",
-                            description: "TypeScript ORM that feels like writing SQL",
-                            logo: "https://svgl.app/library/drizzle-orm_light.svg",
-                            comingSoon: true
-                          }
-                        ].map((orm) => {
-                          const isSelected = config.orm === orm.value;
-                          const hasSelection = config.orm !== "prisma" || isSelected;
-
-                          return (
-                            <motion.div
-                              key={orm.value}
-                              className={cn(
-                                "relative cursor-pointer transition-all duration-300",
-                                !isSelected && hasSelection && "opacity-80",
-                                orm.comingSoon && "opacity-50 cursor-not-allowed"
-                              )}
-                              whileHover={!orm.comingSoon ? { scale: 1.02 } : {}}
-                              whileTap={!orm.comingSoon ? { scale: 0.98 } : {}}
-                              onClick={() => !orm.comingSoon && setConfig(prev => ({ ...prev, orm: orm.value as ProjectConfig["orm"] }))}
-                            >
-                              <Card className={cn(
-                                "h-full shadow-none border-2 transition-all duration-300 bg-card",
-                                isSelected && "bg-primary/5 border-primary/15",
-                                orm.comingSoon && "border-dashed"
-                              )}>
-                                <CardContent className="p-4">
-                                  <div className="flex items-center gap-3">
                                     <span className="flex items-center justify-center w-10 h-10 border border-border/40 rounded-md text-primary">
                                       <img
-                                        src={orm.logo}
-                                        alt={orm.label}
+                                        src={pm.logo}
+                                        alt={pm.label}
                                         className="w-6 h-6 flex-shrink-0"
                                       />
                                     </span>
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-medium flex items-center gap-2">
-                                        {orm.label}
-                                        {orm.comingSoon && (
-                                          <Badge variant="secondary" className="text-xs">
-                                            Soon
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      <div className="text-xs text-muted-foreground line-clamp-1">{orm.description}</div>
+                                      <div className="font-medium">{pm.label}</div>
+                                      <div className="text-xs text-muted-foreground line-clamp-1">{pm.description}</div>
                                     </div>
                                   </div>
                                 </CardContent>
@@ -597,10 +348,293 @@ Ready to build in public and share the journey! Who else is shipping something c
                     </div>
                   </div>
                 </section>
-              )}
+
+                {/* Features Section - Only for starters */}
+                {isStarter && (
+                  <section className="relative">
+                    <div className="absolute left-4 w-4 h-4 bg-background border-2 border-border rounded-full" />
+
+                    <div className="ml-12 space-y-6">
+                      <div>
+                        <h3 className="text-sm">Igniter.js Features</h3>
+                      </div>
+
+                      <div className="rounded-md border border-border p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {Object.entries({
+                            store: {
+                              label: "Store (Redis)",
+                              description: "Caching, sessions, and pub/sub messaging",
+                              logo: "https://svgl.app/library/redis.svg"
+                            },
+                            jobs: {
+                              label: "Jobs (BullMQ)",
+                              description: "Background task processing and job queues",
+                              logo: "https://svgl.app/library/redis.svg"
+                            },
+                            mcp: {
+                              label: "MCP Server",
+                              description: "AI assistant integration with Model Context Protocol",
+                              logo: null
+                            },
+                            logging: {
+                              label: "Enhanced Logging",
+                              description: "Advanced console logging with structured output",
+                              logo: null
+                            },
+                            telemetry: {
+                              label: "Telemetry",
+                              description: "Telemetry for tracking requests and errors",
+                              logo: null
+                            },
+                            bots: {
+                              label: "Bots",
+                              description: "Multi-platform bot framework (Discord, Telegram, etc.)",
+                              logo: null
+                            }
+                          }).map(([key, { label, description, logo }]) => {
+                            const isSelected = config.addOns[key as keyof ProjectConfig["addOns"]];
+                            const hasAnySelection = Object.values(config.addOns).some(Boolean);
+
+                            return (
+                              <motion.div
+                                key={key}
+                                className={cn(
+                                  "relative cursor-pointer transition-all duration-300",
+                                  !isSelected && hasAnySelection && "opacity-80"
+                                )}
+                                whileHover={{ scale: 1.01 }}
+                                whileTap={{ scale: 0.99 }}
+                                onClick={() => updateAddOn(key as keyof ProjectConfig["addOns"], !isSelected)}
+                              >
+                                <Card className={cn(
+                                  "h-full shadow-none border-2 transition-all duration-300 bg-card",
+                                  isSelected && "bg-primary/5 border-primary/15"
+                                )}>
+                                  <CardContent className="p-4">
+                                    <div className="flex items-center gap-3">
+                                      <div className="flex items-center gap-2">
+                                        <Checkbox
+                                          checked={isSelected}
+                                          onCheckedChange={(checked) => updateAddOn(key as keyof ProjectConfig["addOns"], checked as boolean)}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="opacity-0"
+                                        />
+                                        {logo ? (
+                                          <span className="flex items-center justify-center w-8 h-8 border border-border/40 rounded-md text-primary">
+                                            <img
+                                              src={logo}
+                                              alt={label}
+                                              className="w-5 h-5 flex-shrink-0"
+                                            />
+                                          </span>
+                                        ) : (
+                                          <span className="flex items-center justify-center w-8 h-8 border border-border/40 rounded-md text-primary">
+                                            <div className="w-2 h-2 bg-primary rounded-full" />
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="font-medium">{label}</div>
+                                        <div className="text-xs text-muted-foreground line-clamp-1">{description}</div>
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {/* Database Section - Only for starters */}
+                {isStarter && (
+                  <section className="relative">
+                    <div className="absolute left-4 w-4 h-4 bg-background border-2 border-border rounded-full" />
+
+                    <div className="ml-12 space-y-6">
+                      <div>
+                        <h3 className="text-sm">Database Provider</h3>
+                      </div>
+
+                      <div className="rounded-md border border-border p-4">
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            {
+                              value: "none",
+                              label: "None",
+                              description: "Start without database",
+                              logo: null
+                            },
+                            {
+                              value: "postgresql",
+                              label: "PostgreSQL",
+                              description: "Production-ready relational database",
+                              logo: "https://svgl.app/library/postgresql.svg"
+                            },
+                            {
+                              value: "mysql",
+                              label: "MySQL",
+                              description: "Wide compatibility relational database",
+                              logo: "https://svgl.app/library/mysql.svg"
+                            },
+                            {
+                              value: "sqlite",
+                              label: "SQLite",
+                              description: "Lightweight file-based database",
+                              logo: "https://svgl.app/library/sqlite.svg"
+                            }
+                          ].map((db) => {
+                            const isNone = db.value === "none";
+                            const isSelected = isNone ? !config.database.enabled : (config.database.enabled && config.database.provider === db.value);
+                            const hasSelection = config.database.enabled;
+
+                            return (
+                              <motion.div
+                                key={db.value}
+                                className={cn(
+                                  "relative cursor-pointer transition-all duration-300",
+                                  !isSelected && hasSelection && "opacity-80"
+                                )}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => {
+                                  if (isNone) {
+                                    setConfig(prev => ({ ...prev, database: { ...prev.database, enabled: false } }));
+                                  } else {
+                                    setConfig(prev => ({
+                                      ...prev,
+                                      database: {
+                                        ...prev.database,
+                                        enabled: true,
+                                        provider: db.value as "postgresql" | "mysql" | "sqlite"
+                                      }
+                                    }));
+                                  }
+                                }}
+                              >
+                                <Card className={cn(
+                                  "h-full shadow-none border-2 transition-all duration-300 bg-card",
+                                  isSelected && "bg-primary/5 border-primary/15"
+                                )}>
+                                  <CardContent className="p-4">
+                                    <div className="flex items-center gap-3">
+                                      {db.logo ? (
+                                        <span className="flex items-center justify-center w-10 h-10 border border-border/40 rounded-md text-primary">
+                                          <img
+                                            src={db.logo}
+                                            alt={db.label}
+                                            className="w-6 h-6 flex-shrink-0"
+                                          />
+                                        </span>
+                                      ) : (
+                                        <span className="flex items-center justify-center w-10 h-10 border border-border/40 rounded-md text-primary">
+                                          <div className="w-3 h-3 bg-primary rounded-full" />
+                                        </span>
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="font-medium">{db.label}</div>
+                                        <div className="text-xs text-muted-foreground line-clamp-1">{db.description}</div>
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {/* ORM Section - Only for starters with database */}
+                {isStarter && config.database.enabled && (
+                  <section className="relative">
+                    <div className="absolute left-4 w-4 h-4 bg-background border-2 border-border rounded-full" />
+
+                    <div className="ml-12 space-y-6">
+                      <div>
+                        <h3 className="text-sm">ORM Provider</h3>
+                      </div>
+
+                      <div className="rounded-md border border-border p-4">
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            {
+                              value: "prisma",
+                              label: "Prisma",
+                              description: "Next-generation ORM with type safety",
+                              logo: "https://svgl.app/library/prisma.svg"
+                            },
+                            {
+                              value: "drizzle",
+                              label: "Drizzle ORM",
+                              description: "TypeScript ORM that feels like writing SQL",
+                              logo: "https://svgl.app/library/drizzle-orm_light.svg",
+                              comingSoon: true
+                            }
+                          ].map((orm) => {
+                            const isSelected = config.database.orm === orm.value;
+                            const hasSelection = config.database.orm !== "prisma" || isSelected;
+
+                            return (
+                              <motion.div
+                                key={orm.value}
+                                className={cn(
+                                  "relative cursor-pointer transition-all duration-300",
+                                  !isSelected && hasSelection && "opacity-80",
+                                  orm.comingSoon && "opacity-50 cursor-not-allowed"
+                                )}
+                                whileHover={!orm.comingSoon ? { scale: 1.02 } : {}}
+                                whileTap={!orm.comingSoon ? { scale: 0.98 } : {}}
+                                onClick={() => !orm.comingSoon && setConfig(prev => ({
+                                  ...prev,
+                                  database: { ...prev.database, orm: orm.value as "prisma" | "drizzle" }
+                                }))}
+                              >
+                                <Card className={cn(
+                                  "h-full shadow-none border-2 transition-all duration-300 bg-card",
+                                  isSelected && "bg-primary/5 border-primary/15",
+                                  orm.comingSoon && "border-dashed"
+                                )}>
+                                  <CardContent className="p-4">
+                                    <div className="flex items-center gap-3">
+                                      <span className="flex items-center justify-center w-10 h-10 border border-border/40 rounded-md text-primary">
+                                        <img
+                                          src={orm.logo}
+                                          alt={orm.label}
+                                          className="w-6 h-6 flex-shrink-0"
+                                        />
+                                      </span>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="font-medium flex items-center gap-2">
+                                          {orm.label}
+                                          {orm.comingSoon && (
+                                            <Badge variant="secondary" className="text-xs">
+                                              Soon
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground line-clamp-1">{orm.description}</div>
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
         )}
 
