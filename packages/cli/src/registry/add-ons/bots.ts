@@ -1,6 +1,6 @@
 import type { ProjectSetupConfig } from "@/commands/init/types";
 import { BaseAddOn } from "@/core/registry/add-ons/base-addon";
-import path from "path";
+import { resolveTemplatePath } from "@/core/registry/starters/base-starter";
 
 export class BotsAddOn extends BaseAddOn {
   name = "Bots (Telegram, WhatsApp, Discord, etc.)";
@@ -9,23 +9,14 @@ export class BotsAddOn extends BaseAddOn {
   hint = "For multi-platform chatbot support";
   templates = [
     {
-      template: path.resolve(
-        process.cwd(),
-        "templates/add-ons/bots/sample-bot.hbs",
-      ),
+      template: resolveTemplatePath("add-ons/bots/sample-bot.hbs"),
       outputPath: "src/bots/sample-bot.ts",
     },
     {
       template: (data: ProjectSetupConfig) => {
         const templates = {
-          nextjs: path.resolve(
-            process.cwd(),
-            "templates/add-ons/bots/nextjs/route-handler.hbs",
-          ),
-          "tanstack-start": path.resolve(
-            process.cwd(),
-            "templates/add-ons/bots/tanstack-start/route-handler.hbs",
-          ),
+          nextjs: resolveTemplatePath("add-ons/bots/nextjs/route-handler.hbs"),
+          "tanstack-start": resolveTemplatePath("add-ons/bots/tanstack-start/route-handler.hbs"),
         };
 
         return templates[data.starter as keyof typeof templates] || "";

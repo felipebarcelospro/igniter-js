@@ -1,6 +1,6 @@
 import type { ProjectSetupConfig } from "@/commands/init/types";
 import { BaseAddOn } from "@/core/registry/add-ons/base-addon";
-import path from "path";
+import { resolveTemplatePath } from "@/core/registry/starters/base-starter";
 import { z } from "zod";
 
 export class McpServerAddOn extends BaseAddOn {
@@ -10,23 +10,14 @@ export class McpServerAddOn extends BaseAddOn {
   hint = "For AI integration";
   templates = [
     {
-      template: path.resolve(
-        process.cwd(),
-        "templates/add-ons/mcp/mcp.ts.hbs",
-      ),
+      template: resolveTemplatePath("add-ons/mcp/mcp.ts.hbs"),
       outputPath: "src/igniter.mcp.ts",
     },
     {
       template: (data: ProjectSetupConfig) => {
         const templates = {
-          nextjs: path.resolve(
-            process.cwd(),
-            "templates/add-ons/mcp/nextjs/route-handler.hbs",
-          ),
-          "tanstack-start": path.resolve(
-            process.cwd(),
-            "templates/add-ons/mcp/tanstack-start/route-handler.hbs",
-          ),
+          nextjs: resolveTemplatePath("add-ons/mcp/nextjs/route-handler.hbs"),
+          "tanstack-start": resolveTemplatePath("add-ons/mcp/tanstack-start/route-handler.hbs"),
         };
 
         return templates[data.starter as keyof typeof templates] || "";

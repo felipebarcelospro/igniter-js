@@ -8,6 +8,57 @@ import { join } from 'path';
 import handlebars from 'handlebars';
 import { registerHandlebarsHelpers } from '../../handlebars-helpers';
 import type { ProjectSetupConfig } from "@/commands/init/types";
+import { fileURLToPath } from 'url';
+
+// Resolve __dirname for ESM compatibility
+// @ts-expect-error import.meta is available at runtime in ESM
+const __filename = fileURLToPath(import.meta?.url);
+const __dirname = path.dirname(__filename);
+
+/**
+ * Resolves the templates directory path.
+ * Tries multiple candidate paths to find the templates directory,
+ * checking both bundled (dist/) and source layouts.
+ * 
+ * Since tsup bundles everything into dist/index.mjs:
+ * - __dirname at runtime is the 'dist/' folder
+ * - templates may be at 'dist/templates/' or '../templates/' relative to dist/
+ */
+function resolveTemplatesDir(): string {
+  const candidates = [
+    // Bundled: dist/index.mjs -> dist/../templates/ (templates at package root)
+    path.resolve(__dirname, '..', 'templates'),
+    // Bundled: dist/index.mjs -> dist/templates/ (if copied to dist)
+    path.resolve(__dirname, 'templates'),
+    // Development: when running from source (src/core/registry/starters/)
+    path.resolve(__dirname, '..', '..', '..', '..', 'templates'),
+    // Installed via npm: node_modules/@igniter-js/cli/templates
+    path.resolve(process.cwd(), 'node_modules', '@igniter-js', 'cli', 'templates'),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  // If no candidate found, throw a helpful error
+  throw new Error(
+    [
+      'Could not locate the CLI templates directory.',
+      'Looked in the following locations:',
+      ...candidates.map((candidate) => `- ${candidate}`),
+    ].join('\n')
+  );
+}
+
+/**
+ * Resolves a template path relative to the CLI templates directory.
+ * @param relativePath - Path relative to the templates directory (e.g., 'starters/nextjs/route-handler.hbs')
+ */
+export function resolveTemplatePath(relativePath: string): string {
+  return path.resolve(resolveTemplatesDir(), relativePath);
+}
 
 export abstract class BaseStarter {
   abstract id: string;
@@ -17,35 +68,35 @@ export abstract class BaseStarter {
   abstract repository: string;
   public templates: RegistryAssetTemplate[] = [
     {
-      template: path.resolve(process.cwd(), 'templates/starters/igniter.router.hbs'),
+      template: resolveTemplatePath('starters/igniter.router.hbs'),
       outputPath: 'src/igniter.router.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/starters/igniter.client.hbs'),
+      template: resolveTemplatePath('starters/igniter.client.hbs'),
       outputPath: 'src/igniter.client.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/starters/igniter.context.hbs'),
+      template: resolveTemplatePath('starters/igniter.context.hbs'),
       outputPath: 'src/igniter.context.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/starters/igniter.hbs'),
+      template: resolveTemplatePath('starters/igniter.hbs'),
       outputPath: 'src/igniter.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/scaffold/example-feature/example.controller.hbs'),
+      template: resolveTemplatePath('scaffold/example-feature/example.controller.hbs'),
       outputPath: 'src/features/example/controllers/example.controller.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/scaffold/example-feature/example.procedure.hbs'),
+      template: resolveTemplatePath('scaffold/example-feature/example.procedure.hbs'),
       outputPath: 'src/features/example/procedures/example.procedure.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/scaffold/example-feature/example.interfaces.hbs'),
+      template: resolveTemplatePath('scaffold/example-feature/example.interfaces.hbs'),
       outputPath: 'src/features/example/example.interfaces.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/starters/open-api.hbs'),
+      template: resolveTemplatePath('starters/open-api.hbs'),
       outputPath: 'src/docs/openapi.json',
     },
   ];
@@ -62,7 +113,7 @@ export abstract class BaseStarter {
    * Install the starter
    */
   public async install(targetDir: string, options: ProjectSetupConfig): Promise<void> {
-    if(options.mode === 'install') {
+    if (options.mode === 'install') {
       await this.createProjectStructure(targetDir, options);
     } else {
       await this.download({ targetDir });
@@ -232,7 +283,7 @@ export abstract class BaseStarter {
     const destDir = targetDir
 
 
-    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => { })
     await execa('git', [
       'clone',
       '--depth', '1',
@@ -241,7 +292,7 @@ export abstract class BaseStarter {
       templateUrl,
       tempDir
     ])
-    
+
     const stat = await fs.stat(starterDir).catch(() => null)
     if (!stat || !stat.isDirectory()) {
       throw new Error(`Starter directory '${starter}' not found in the repository.`)
@@ -263,6 +314,6 @@ export abstract class BaseStarter {
 
     await copyRecursive(starterDir, destDir)
 
-    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => { })
   }
 }

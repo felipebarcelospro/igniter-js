@@ -2,17 +2,23 @@
 applyTo: '**'
 ---
 
-# Lia - AI Agent for @igniter-js/new-cli
+# Lia - AI Agent for @igniter-js/cli
 
-> **Last Updated:** 2025-12-23
-> **Version:** 1.4
+> **Last Updated:** 2026-01-29
+> **Version:** 0.4.98
 
 ---
 
-## 1. Identity & Mission
+## 1. Package Vision & Context
+
+@igniter-js/cli is the orchestration layer that turns Igniter.js conventions into repeatable workflows.
+It exists to make scaffolding, code generation, and schema documentation deterministic across teams and runtimes.
+Every change to the CLI must preserve three guarantees: predictable outputs, traceable asset changes, and safe defaults.
+
+## 1.1 Identity & Mission
 
 **Name:** Lia
-**Role:** AI Agent for @igniter-js/new-cli Development & Maintenance
+**Role:** AI Agent for @igniter-js/cli Development & Maintenance
 **Communication Language:** Always respond to users in the same language they use
 **Documentation Language:** ALL written documentation, code, and content MUST be in English
 
@@ -28,11 +34,15 @@ Maintain and extend the next-generation CLI tool for Igniter.js, ensuring reliab
 
 ---
 
+## I. MAINTAINER GUIDE (Internal Architecture)
+
+This section is for contributors and agents maintaining the CLI internals. It maps the CLI architecture, files, and operational flows so changes remain safe and consistent.
+
 ## 2. Package Overview
 
-### What is @igniter-js/new-cli?
+### What is @igniter-js/cli?
 
-@igniter-js/new-cli is the next-generation command-line interface for Igniter.js that provides:
+@igniter-js/cli is the next-generation command-line interface for Igniter.js that provides:
 
 1. **Project Scaffolding** - Create new projects with starters and features
 2. **Feature Generation** - Add features to existing projects
@@ -43,7 +53,7 @@ Maintain and extend the next-generation CLI tool for Igniter.js, ensuring reliab
 ### Architecture Highlights
 
 ```
-@igniter-js/new-cli/
+@igniter-js/cli/
 ├── bin/
 │   └── igniter
 ├── dist/
@@ -298,6 +308,61 @@ The `igniter dev` workflow keeps Igniter artefacts in sync while you iterate on 
 - Streams your application dev server logs in a separate tab; toggle between Igniter/App logs with `1`/`2` or arrow keys
 - Detects the package manager to infer the default command (`npm run dev`, `pnpm dev`, `bun dev`, `yarn dev`) when `--cmd` is omitted
 - Gracefully handles exit signals (Ctrl+C / ESC) by tearing down the watcher and child process
+
+### 3.5. Operational Flow Mapping (Pipelines)
+
+#### Command: `igniter init`
+1. **Argument parsing:** `handleInitAction` parses CLI flags and inline add-on options (`parseAddOnsArg`).
+2. **Interactive prompts:** `runInitPrompts` gathers project name, mode, starter, add-ons, add-on options, package manager, and install/docker/git toggles.
+3. **Project generation:** `ProjectGenerator.generate()` orchestrates the pipeline.
+4. **Starter install:** `starter.install()` scaffolds the base project (download/templating depending on starter).
+5. **Add-on setup:** Each add-on `runSetup()` applies templates, dependencies, env vars, and docker services.
+6. **Dependency install:** If enabled, installs dependencies via detected package manager.
+7. **Docker setup:** If enabled, stops running containers, frees ports from `docker-compose.yml`, then runs `docker-compose up -d`.
+8. **Git setup:** If enabled, initializes git and commits initial state.
+9. **Post-install hooks:** Runs add-on `runPostInstall()` (Better Auth CLI, Prisma/Drizzle setup, Shadcn init).
+
+#### Command: `igniter generate feature`
+1. **Provider resolution:** Uses `schemaProviderRegistry` to resolve `--schema` or detect providers.
+2. **Model selection:** Prompts for a model (if provider selected) or proceeds with empty feature.
+3. **Feature slugging:** Converts user input to kebab-case and checks for collisions.
+4. **Scaffold:** Ensures feature structure and renders templates (schema provider or empty feature).
+5. **Success output:** Prints next steps and exits.
+
+#### Command: `igniter generate controller`
+1. **Collect controller name** via prompt or CLI argument.
+2. **Resolve feature** using `FeaturePrompts.resolveFeatureSlug`.
+3. **Ensure structure** with `FeatureWorkspace.ensureStructure`.
+4. **Render template** `empty.controller.hbs` into the feature.
+
+#### Command: `igniter generate procedure`
+1. **Collect procedure name** via prompt or CLI argument.
+2. **Resolve feature** using `FeaturePrompts.resolveFeatureSlug`.
+3. **Ensure structure** and remove `.gitkeep` if present.
+4. **Render template** `procedure.hbs` into the feature.
+
+#### Command: `igniter generate docs`
+1. **Load router** via `RouterInstrospector.loadRouter` (esbuild in-memory build).
+2. **Validate docs config** (`router.config.docs`).
+3. **Generate OpenAPI** via `OpenAPIGenerator` and write `openapi.json`.
+
+#### Command: `igniter generate schema`
+1. **Load router** via `RouterInstrospector.loadRouter`.
+2. **Introspect router** to JSON schema and stats.
+3. **Render template** `scaffold/igniter.schema.hbs` with schema JSON.
+
+#### Command: `igniter generate caller`
+1. **Resolve source** (URL or local path) and validate input.
+2. **Load + bundle OpenAPI** (must be OpenAPI 3.x).
+3. **Generate schema builder** (`IgniterCallerSchema`) and derived type aliases.
+4. **Emit caller** with optional base URL from spec or source.
+
+#### Command: `igniter dev`
+1. **Resolve paths** for router, schema output, and docs output.
+2. **Initial generation** of docs + schema.
+3. **Start watcher** on router + features with 300 ms debounce.
+4. **Start dev server** using inferred or explicit command.
+5. **Render Ink UI** and stream both Igniter and app logs.
 
 ---
 
@@ -982,7 +1047,7 @@ The build configuration creates a single ESM bundle with TypeScript declarations
 
 ```json
 {
-  "name": "@igniter-js/new-cli",
+  "name": "@igniter-js/cli",
   "bin": {
     "igniter": "./dist/index.js"
   },
@@ -1163,7 +1228,7 @@ templates/starters/new-starter/
 {{!-- File header with purpose --}}
 {{!--
   @description Brief description of the file
-  @generated by @igniter-js/new-cli
+  @generated by @igniter-js/cli
 --}}
 
 {{!-- Imports with conditional includes --}}
@@ -1251,6 +1316,69 @@ export const {{camelCase projectName}}Service = {
 {{/if}}
 ```
 
+---
+
+## II. CONSUMER GUIDE (Developer Manual)
+
+This section is for developers using the CLI. It explains how the CLI is distributed, how to apply it to real projects, and how to avoid common pitfalls.
+
+### Distribution Anatomy (Consumption)
+
+- **Executable**: `igniter` points to `dist/index.mjs` via the `bin` field in [packages/cli/package.json](packages/cli/package.json).
+- **Templates**: `templates/` and `dist/templates` are shipped via the `files` list.
+- **Runtime**: Node.js 18.17+ with ESM output; commands are executed via `node` or through your package manager.
+
+### Quick Start & Common Patterns
+
+```bash
+# Create a new project
+igniter init my-app --template nextjs --add-ons database,auth
+
+# Generate a schema-aware feature
+igniter generate feature users --schema prisma:User
+
+# Keep OpenAPI + client schema in sync during development
+igniter dev --cmd "pnpm dev"
+```
+
+### Real-World Use Case Library
+
+1. **SaaS Platform (Next.js + Auth + Database)**
+  ```bash
+  igniter init saas-app --template nextjs --add-ons "database:prisma:postgresql,auth:better-auth:email+passkey"
+  ```
+2. **Fintech API (Express + Jobs + Telemetry)**
+  ```bash
+  igniter init fintech-api --template express-rest-api --add-ons jobs,telemetry
+  ```
+3. **Realtime Workers (Bun + Jobs + Store)**
+  ```bash
+  igniter init workers --template bun-rest-api --add-ons jobs,store
+  ```
+4. **AI Platform (Next.js + MCP + Bots)**
+  ```bash
+  igniter init ai-platform --template nextjs --add-ons mcp,bots
+  ```
+5. **Docs-First API (Deno + OpenAPI)**
+  ```bash
+  igniter init docs-api --template deno-rest-api
+  igniter generate docs --router src/igniter.router.ts --output src/docs
+  ```
+
+### Best Practices vs Anti-Patterns
+
+| ✅ Do | ❌ Don't |
+| --- | --- |
+| Pin add-on options with inline syntax for CI reproducibility. | Rely on interactive prompts inside automated pipelines. |
+| Register new controllers in your router after generation. | Assume the CLI auto-registers controllers in your router. |
+| Use `--schema-path` when your Prisma schema is not in `prisma/schema.prisma`. | Hardcode schema paths in templates. |
+
+### Domain-Scoped Guidance
+
+- **High-change APIs**: Use `igniter dev` to keep `openapi.json` and `igniter.schema.ts` in sync while iterating.
+- **Automation-heavy teams**: Always pass `--template`, `--add-ons`, and `--package-manager` in CI.
+- **Multiple services**: Prefer separate CLI runs per service to avoid mixing add-on assets.
+
 ## 16. Documentation & Examples
 
 ### 16.1. CLI Help System
@@ -1279,7 +1407,7 @@ igniter generate feature --help  # Detailed help
 {{!-- templates/add-ons/auth/better-auth/auth.hbs --}}
 {{!--
   @description Better Auth configuration wired to the selected database adapter and plugins
-  @generated by @igniter-js/new-cli
+  @generated by @igniter-js/cli
 --}}
 
 import { betterAuth } from "better-auth"
@@ -1464,6 +1592,120 @@ export async function migrateProject(projectDir: string, fromVersion: string, to
 ```
 
 ---
+
+## III. TECHNICAL REFERENCE & RESILIENCE
+
+### 12. Exhaustive API Reference
+
+| Command | Purpose | Key Options |
+| --- | --- | --- |
+| `igniter init` | Scaffold a project or install into an existing folder. | `--mode`, `--package-manager`, `--template`, `--add-ons`, `--database`, `--no-git`, `--no-install`, `--no-docker` |
+| `igniter generate feature` | Create a new feature module. | `--schema`, `--schema-path` |
+| `igniter generate controller` | Add a controller to a feature. | `--feature` |
+| `igniter generate procedure` | Add a procedure to a feature. | `--feature` |
+| `igniter generate docs` | Generate OpenAPI 3.0 docs. | `--router`, `--output` |
+| `igniter generate schema` | Generate client schema output. | `--router`, `--output` |
+| `igniter generate caller` | Build caller schemas from OpenAPI 3.x. | `--name`, `--url`, `--path`, `--output` |
+| `igniter dev` | Watch mode with schema/docs regeneration. | `--router`, `--output`, `--docs-output`, `--cmd` |
+
+### 13. Telemetry & Observability Registry
+
+The CLI does not emit telemetry events. Observability is handled through structured logs in the Ink UI:
+
+- **Log types:** `info`, `success`, `warn`, `error`
+- **Streams:** Igniter logs (generation + watcher), Application logs (dev server)
+
+### 14. Troubleshooting & Error Code Library
+
+#### "Project initialization failed"
+- **Context:** `igniter init` error in prompts, generator, or filesystem.
+- **Cause:** Validation or runtime error during scaffolding.
+- **Mitigation:** Run in a clean directory and ensure Git/Docker/Node are available.
+- **Solution:** Re-run `igniter init` with verbose shell output and review the error above.
+
+#### "Starter not found"
+- **Context:** Starter ID not registered.
+- **Cause:** Invalid `--template` value or registry mismatch.
+- **Mitigation:** Use a registered starter ID (`nextjs`, `tanstack-start`, `express-rest-api`, `bun-rest-api`, `bun-react-app`, `deno-rest-api`).
+- **Solution:** Re-run with a valid `--template`.
+
+#### "Router file not found: <path>"
+- **Context:** `igniter dev` cannot resolve the router path.
+- **Cause:** Missing or renamed router file.
+- **Mitigation:** Keep `src/igniter.router.ts` or pass `--router`.
+- **Solution:** Provide the correct router path.
+
+#### "Router not found at: <path>"
+- **Context:** `igniter generate docs` could not load the router module.
+- **Cause:** Path typo or compile error in router.
+- **Mitigation:** Build the project or fix TypeScript errors.
+- **Solution:** Fix router build errors and retry.
+
+#### "Router does not have docs configuration"
+- **Context:** OpenAPI generation.
+- **Cause:** `router.config.docs` missing.
+- **Mitigation:** Add docs configuration to the router.
+- **Solution:** Define `docs` in your router config and re-run.
+
+#### "Failed to generate schema: <message>"
+- **Context:** Schema generation failed.
+- **Cause:** Router compilation errors or invalid exports.
+- **Mitigation:** Ensure router exports `AppRouter` or default export.
+- **Solution:** Fix compilation issues and rerun `igniter generate schema`.
+
+#### "No registered schema provider can handle '<value>'"
+- **Context:** `igniter generate feature --schema ...`.
+- **Cause:** Unknown provider prefix.
+- **Mitigation:** Use `prisma:` or register a provider.
+- **Solution:** Update the schema option or register provider in `src/registry/schema-provider/index.ts`.
+
+#### "Schema provider '<value>' is not registered."
+- **Context:** Interactive schema provider selection.
+- **Cause:** Provider not registered in the registry.
+- **Mitigation:** Ensure provider exists and is registered.
+- **Solution:** Register the provider and retry.
+
+#### "Feature '<slug>' already exists ..."
+- **Context:** Generating a feature with an existing slug.
+- **Cause:** Feature directory already exists.
+- **Mitigation:** Choose a new feature name or delete the folder.
+- **Solution:** Re-run with a unique feature slug.
+
+#### "Controller '<slug>' already exists ..."
+- **Context:** Generating a controller in an existing feature.
+- **Cause:** File collision.
+- **Mitigation:** Rename the controller or remove the existing file.
+- **Solution:** Re-run with a unique name.
+
+#### "Procedure '<slug>' already exists ..."
+- **Context:** Generating a procedure in an existing feature.
+- **Cause:** File collision.
+- **Mitigation:** Rename the procedure or remove the existing file.
+- **Solution:** Re-run with a unique name.
+
+#### "Use either --url or --path, not both."
+- **Context:** Caller generation.
+- **Cause:** Both inputs provided.
+- **Mitigation:** Provide only one input source.
+- **Solution:** Re-run with `--url` or `--path`.
+
+#### "Only OpenAPI 3.x documents are supported."
+- **Context:** Caller generation.
+- **Cause:** Spec is OpenAPI 2.x.
+- **Mitigation:** Upgrade the spec to 3.x.
+- **Solution:** Convert the document and rerun.
+
+#### "Could not parse OpenAPI document (JSON/YAML)."
+- **Context:** Caller generation.
+- **Cause:** Invalid JSON/YAML.
+- **Mitigation:** Validate the file.
+- **Solution:** Fix syntax errors and retry.
+
+#### "Module was compiled and loaded, but no valid Igniter router export was found."
+- **Context:** Router introspection.
+- **Cause:** Router module does not export `AppRouter` or default export.
+- **Mitigation:** Export `AppRouter` in the router module.
+- **Solution:** Update the router exports and retry.
 
 ## 18. Troubleshooting Guide
 
@@ -2084,7 +2326,7 @@ dockerServices: [
 ```bash
 # Clone repository
 git clone https://github.com/felipebarcelospro/igniter-js.git
-cd igniter-js/packages/new-cli
+cd igniter-js/packages/cli
 
 # Install dependencies
 npm install
@@ -2233,7 +2475,7 @@ When creating new templates:
 
 ```handlebars
 {{!-- MUST include generation comment --}}
-{{!-- @generated by @igniter-js/new-cli --}}
+{{!-- @generated by @igniter-js/cli --}}
 {{!-- @description Brief description --}}
 ```
 
@@ -2325,7 +2567,7 @@ Before **ANY** commit:
 
 ---
 
-**Remember:** This AGENTS.md is your primary reference for maintaining @igniter-js/new-cli. Follow these guidelines consistently, test thoroughly before releases, and prioritize developer experience in all changes.
+**Remember:** This AGENTS.md is your primary reference for maintaining @igniter-js/cli. Follow these guidelines consistently, test thoroughly before releases, and prioritize developer experience in all changes.
 
 **🚨 CRITICAL: ALWAYS UPDATE DOCUMENTATION FIRST** - Before committing code, update this AGENTS.md file. Documentation accuracy is non-negotiable.
 

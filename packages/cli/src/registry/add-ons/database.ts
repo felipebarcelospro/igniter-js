@@ -1,8 +1,8 @@
 import type { ProjectSetupConfig } from "@/commands/init/types";
 import { getPackageManagerCommand } from "@/core/package-manager";
 import { BaseAddOn } from "@/core/registry/add-ons/base-addon";
+import { resolveTemplatePath } from "@/core/registry/starters/base-starter";
 import { runCommand } from "@/core/terminal";
-import path from "path";
 
 export class DatabaseAddOn extends BaseAddOn {
   name = "Database";
@@ -39,24 +39,15 @@ export class DatabaseAddOn extends BaseAddOn {
           ],
           templates: [
             {
-              template: path.resolve(
-                process.cwd(),
-                "templates/add-ons/database/prisma/lib.hbs",
-              ),
+              template: resolveTemplatePath("add-ons/database/prisma/lib.hbs"),
               outputPath: "src/lib/database.ts",
             },
             {
-              template: path.resolve(
-                process.cwd(),
-                "templates/add-ons/database/prisma/prisma.config.hbs",
-              ),
+              template: resolveTemplatePath("add-ons/database/prisma/prisma.config.hbs"),
               outputPath: "prisma.config.ts",
             },
             {
-              template: path.resolve(
-                process.cwd(),
-                "templates/add-ons/database/prisma/schema.hbs",
-              ),
+              template: resolveTemplatePath("add-ons/database/prisma/schema.hbs"),
               outputPath: "prisma/schema.prisma",
             }
           ],
@@ -67,10 +58,7 @@ export class DatabaseAddOn extends BaseAddOn {
           hint: "Lightweight, modern, SQL-like",
           templates: [
             {
-              template: path.resolve(
-                process.cwd(),
-                "templates/add-ons/database/drizzle/lib.hbs",
-              ),
+              template: resolveTemplatePath("add-ons/database/drizzle/lib.hbs"),
               outputPath: "src/lib/database.ts",
             },
           ],

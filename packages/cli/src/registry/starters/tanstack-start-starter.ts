@@ -1,5 +1,4 @@
-import { BaseStarter } from '@/core/registry/starters/base-starter';
-import path from 'path';
+import { BaseStarter, resolveTemplatePath } from '@/core/registry/starters/base-starter';
 
 export class TanStackStartStarter extends BaseStarter {
   id = 'tanstack-start';
@@ -9,43 +8,43 @@ export class TanStackStartStarter extends BaseStarter {
   repository = 'starter-tanstack-start';
   templates = [
     {
-      template: path.resolve(process.cwd(), 'templates/starters/tanstack-start/route-handler.hbs'),
+      template: resolveTemplatePath('starters/tanstack-start/route-handler.hbs'),
       outputPath: 'src/routes/api/v1/$.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/starters/igniter.router.hbs'),
+      template: resolveTemplatePath('starters/igniter.router.hbs'),
       outputPath: 'src/igniter.router.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/starters/igniter.client.hbs'),
+      template: resolveTemplatePath('starters/igniter.client.hbs'),
       outputPath: 'src/igniter.client.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/starters/igniter.context.hbs'),
+      template: resolveTemplatePath('starters/igniter.context.hbs'),
       outputPath: 'src/igniter.context.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/starters/igniter.hbs'),
+      template: resolveTemplatePath('starters/igniter.hbs'),
       outputPath: 'src/igniter.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/scaffold/example-feature/example.controller.hbs'),
+      template: resolveTemplatePath('scaffold/example-feature/example.controller.hbs'),
       outputPath: 'src/features/example/controllers/example.controller.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/scaffold/example-feature/example.procedure.hbs'),
+      template: resolveTemplatePath('scaffold/example-feature/example.procedure.hbs'),
       outputPath: 'src/features/example/procedures/example.procedure.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/scaffold/example-feature/example.interfaces.hbs'),
+      template: resolveTemplatePath('scaffold/example-feature/example.interfaces.hbs'),
       outputPath: 'src/features/example/example.interfaces.ts',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/starters/tanstack-start/tsconfig.hbs'),
+      template: resolveTemplatePath('starters/tanstack-start/tsconfig.hbs'),
       outputPath: 'tsconfig.json',
     },
     {
-      template: path.resolve(process.cwd(), 'templates/starters/open-api.hbs'),
+      template: resolveTemplatePath('starters/open-api.hbs'),
       outputPath: 'src/docs/openapi.json',
     },
   ];

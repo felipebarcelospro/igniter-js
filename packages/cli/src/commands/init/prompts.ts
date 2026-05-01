@@ -4,10 +4,25 @@ import { detectPackageManager } from "@/core/package-manager";
 import { ProjectSetupConfig } from "@/commands/init/types";
 import { starterRegistry } from "@/registry/starters";
 import { addOnRegistry } from "@/registry/add-ons";
-import type { InitPromptsOptions } from "./action";
 import { isPathEmpty } from "@/core/file-system";
 import { detectFramework } from "@/core/framework";
 import type { AddOnOption } from "@/registry/types";
+
+export interface InitPromptsOptions {
+  projectName?: string;
+  useCurrentDir?: boolean;
+  mode?: "install" | "new-project";
+  packageManager?: string;
+  starter?: string;
+  /** Pre-parsed add-on IDs */
+  addOns?: string[];
+  /** Pre-parsed add-on options (from CLI notation) */
+  addOnOptions?: Record<string, Record<string, string | string[]>>;
+  git?: boolean;
+  install?: boolean;
+  docker?: boolean;
+}
+
 
 async function processAddOnOptions(
   options: AddOnOption[],
@@ -130,6 +145,11 @@ export async function runInitPrompts(
         });
       },
       addOns: async () => {
+        // Use pre-parsed add-ons from CLI if available
+        if (options.addOns && options.addOns.length > 0) {
+          return options.addOns;
+        }
+
         const addOnResult = await p.multiselect({
           message: "What add-ons would you like for your project?",
           options: addOnRegistry.getAll().map((f) => ({
@@ -142,6 +162,24 @@ export async function runInitPrompts(
         return addOnResult as unknown as string[];
       },
       addOnOptions: async ({ results }) => {
+        // Use pre-parsed add-on options from CLI if available
+        if (options.addOnOptions && Object.keys(options.addOnOptions).length > 0) {
+          // Merge CLI options with any missing that need to be prompted
+          const mergedOptions: Record<
+            string,
+            Record<string, string[] | string | undefined>
+          > = { ...options.addOnOptions };
+
+          // Check if any add-on needs options that weren't provided
+          for (const addOnValue of results.addOns || []) {
+            const addOn = addOnRegistry.get(addOnValue);
+            if (addOn?.options && addOn.options.length > 0 && !mergedOptions[addOnValue]) {
+              mergedOptions[addOnValue] = await processAddOnOptions(addOn.options);
+            }
+          }
+          return mergedOptions;
+        }
+
         const addOnOptions: Record<
           string,
           Record<string, string[] | string | undefined>

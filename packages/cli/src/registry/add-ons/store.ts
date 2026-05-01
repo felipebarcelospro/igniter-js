@@ -1,5 +1,5 @@
-import path from "path";
 import { BaseAddOn } from "@/core/registry/add-ons/base-addon";
+import { resolveTemplatePath } from "@/core/registry/starters/base-starter";
 
 export class RedisStoreAddOn extends BaseAddOn {
   name = "Store";
@@ -8,17 +8,11 @@ export class RedisStoreAddOn extends BaseAddOn {
   hint = "Recommended";
   templates = [
     {
-      template: path.resolve(
-        process.cwd(),
-        "templates/add-ons/store/redis.ts.hbs",
-      ),
+      template: resolveTemplatePath("add-ons/store/redis.ts.hbs"),
       outputPath: "src/services/redis.ts",
     },
     {
-      template: path.resolve(
-        process.cwd(),
-        "templates/add-ons/store/store.ts.hbs",
-      ),
+      template: resolveTemplatePath("add-ons/store/store.ts.hbs"),
       outputPath: "src/services/store.ts",
     },
   ];

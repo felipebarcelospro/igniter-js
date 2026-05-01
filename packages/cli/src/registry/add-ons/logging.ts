@@ -1,5 +1,5 @@
 import { BaseAddOn } from "@/core/registry/add-ons/base-addon";
-import path from "path";
+import { resolveTemplatePath } from "@/core/registry/starters/base-starter";
 
 export class LoggingAddOn extends BaseAddOn {
   name = "Logging";
@@ -8,10 +8,7 @@ export class LoggingAddOn extends BaseAddOn {
   hint = "For better observability";
   templates = [
     {
-      template: path.resolve(
-        process.cwd(),
-        "templates/add-ons/logging/logger.ts.hbs",
-      ),
+      template: resolveTemplatePath("add-ons/logging/logger.ts.hbs"),
       outputPath: "src/services/logger.ts",
     },
   ];

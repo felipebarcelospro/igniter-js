@@ -1,5 +1,5 @@
 import { BaseAddOn } from "@/core/registry/add-ons/base-addon";
-import path from "path";
+import { resolveTemplatePath } from "@/core/registry/starters/base-starter";
 
 export class JobsAddOn extends BaseAddOn {
   name = "Jobs";
@@ -8,24 +8,15 @@ export class JobsAddOn extends BaseAddOn {
   hint = "For background processing";
   templates = [
     {
-      template: path.resolve(
-        process.cwd(),
-        "templates/add-ons/jobs/jobs.ts.hbs",
-      ),
+      template: resolveTemplatePath("add-ons/jobs/jobs.ts.hbs"),
       outputPath: "src/services/jobs.ts",
     },
     {
-      template: path.resolve(
-        process.cwd(),
-        "templates/add-ons/jobs/redis.ts.hbs",
-      ),
+      template: resolveTemplatePath("add-ons/jobs/redis.ts.hbs"),
       outputPath: "src/services/redis.ts",
     },
     {
-      template: path.resolve(
-        process.cwd(),
-        "templates/add-ons/jobs/store.ts.hbs",
-      ),
+      template: resolveTemplatePath("add-ons/jobs/store.ts.hbs"),
       outputPath: "src/services/store.ts",
     },
   ];

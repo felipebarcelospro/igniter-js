@@ -1,5 +1,5 @@
 import { BaseAddOn } from "@/core/registry/add-ons/base-addon";
-import path from "path";
+import { resolveTemplatePath } from "@/core/registry/starters/base-starter";
 
 export class TelemetryAddOn extends BaseAddOn {
   name = "Telemetry";
@@ -9,10 +9,7 @@ export class TelemetryAddOn extends BaseAddOn {
   dockerServices = [];
   templates = [
     {
-      template: path.resolve(
-        process.cwd(),
-        "templates/add-ons/telemetry/telemetry.ts.hbs",
-      ),
+      template: resolveTemplatePath("add-ons/telemetry/telemetry.ts.hbs"),
       outputPath: "src/services/telemetry.ts",
     },
   ];
