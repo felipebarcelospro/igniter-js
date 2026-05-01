@@ -1,0 +1,9 @@
+{
+  "name": "@igniter-js/core-examples",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@igniter-js/core": "workspace:*",
+    "@igniter-js/telemetry": "workspace:*"
+  }
+}

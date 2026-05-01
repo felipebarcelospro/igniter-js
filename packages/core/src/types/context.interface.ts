@@ -1,8 +1,8 @@
 import type { JobsNamespaceProxy } from "./jobs.interface";
 import type { IgniterLogger } from "./logger.interface";
 import type { IgniterPlugin, PluginActionsCollection, PluginSelfContext } from "./plugin.interface";
-import type { IgniterStoreAdapter } from "./store.interface";
-import type { IgniterTelemetryProvider } from "./telemetry.interface";
+import type { IgniterStoreManager } from "./store.interface";
+import type { IgniterCoreTelemetryManager } from "./telemetry.interface";
 import type { Prettify } from "./utils.interface";
 
 /**
@@ -12,10 +12,10 @@ import type { Prettify } from "./utils.interface";
  * @template TCustomPlugins - Additional custom plugins
  */
 export type PluginsConfig<TCustomPlugins extends Record<string, unknown> = {
-  store?: IgniterStoreAdapter;
+  store?: IgniterStoreManager;
   logger?: IgniterLogger;
   jobs?: JobsNamespaceProxy<any>;
-  telemetry?: IgniterTelemetryProvider;
+  telemetry?: IgniterCoreTelemetryManager;
 }> = TCustomPlugins;
 
 /**

@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/core",
-  "version": "0.3.40",
+  "version": "1.0.0-alpha.5",
   "description": "A modern, type-safe, and flexible HTTP framework for building scalable APIs with TypeScript",
   "author": "Felipe Barcelos <felipebarcelospro@gmail.com>",
   "license": "MIT",
@@ -65,6 +65,16 @@
       "types": "./dist/plugins/index.d.ts",
       "import": "./dist/plugins/index.mjs",
       "require": "./dist/plugins/index.js"
+    },
+    "./telemetry": {
+      "types": "./dist/telemetry/index.d.ts",
+      "import": "./dist/telemetry/index.mjs",
+      "require": "./dist/telemetry/index.js"
+    },
+    "./store": {
+      "types": "./dist/store/index.d.ts",
+      "import": "./dist/store/index.mjs",
+      "require": "./dist/store/index.js"
     }
   },
   "files": [
@@ -73,17 +83,21 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup && node scripts/add-use-client.js",
+    "build": "tsup && node scripts/add-use-client.js && npm run build:types",
+    "build:types": "tsc --emitDeclarationOnly --project tsconfig.build.json",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "typecheck": "tsc --noEmit",
+    "typecheck:examples": "tsc --project examples/tsconfig.base.json --noEmit",
     "clean": "rm -rf dist"
   },
   "peerDependencies": {
-    "ioredis": "",
+    "@igniter-js/store": ">=0.1.0",
+    "@igniter-js/telemetry": ">=0.1.0",
+    "ioredis": ">=5.0.0",
     "next": ">=13.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -93,15 +107,24 @@
   "peerDependenciesMeta": {
     "webpack": {
       "optional": true
+    },
+    "@igniter-js/store": {
+      "optional": true
+    },
+    "@igniter-js/telemetry": {
+      "optional": true
     }
   },
   "devDependencies": {
+    "@igniter-js/telemetry": "*",
+    "@igniter-js/store": "*",
     "@types/lodash": "^4.17.15",
     "@types/next": "^9.0.0",
     "@types/node": "^22.9.0",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@types/webpack": "^5.28.5",
+    "@vitest/coverage-v8": "^4.0.16",
     "eslint": "^8.57.0",
     "tsup": "^8.3.5",
     "typescript": "^5.6.3",
@@ -109,6 +132,7 @@
     "zod": "3.25.67"
   },
   "dependencies": {
+    "@igniter-js/common": ">=0.1.0",
     "@scalar/core": "^0.3.11",
     "chalk": "^5.6.2",
     "glob": "^11.0.0",

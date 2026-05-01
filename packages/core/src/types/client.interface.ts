@@ -286,24 +286,24 @@ export type ClientActionCaller<
   >,
 > = TAction extends { method: "GET" }
   ? {
-      useQuery: QueryActionCaller<TAction>;
-      useRealtime: RealtimeActionCaller<TAction>;
-      query: TAction["$Infer"]["$Caller"];
-    }
+    useQuery: QueryActionCaller<TAction>;
+    useRealtime: RealtimeActionCaller<TAction>;
+    query: TAction["$Infer"]["$Caller"];
+  }
   : {
-      useMutation: MutationActionCaller<TAction>;
-      mutate: TAction["$Infer"]["$Caller"];
-    };
+    useMutation: MutationActionCaller<TAction>;
+    mutate: TAction["$Infer"]["$Caller"];
+  };
 
 // 1. Gera uma união de todas as rotas de action como strings. Ex: "users.getById" | "users.getAll"
 export type InferAllActionPaths<TRouter extends IgniterRouter<any, any, any, any, any>> = {
   [C in keyof TRouter['controllers']]: C extends string
-    ? {
-        [A in keyof TRouter['controllers'][C]['actions']]: A extends string
-          ? `${C}.${A}`
-          : never;
-      }[keyof TRouter['controllers'][C]['actions']]
+  ? {
+    [A in keyof TRouter['controllers'][C]['actions']]: A extends string
+    ? `${C}.${A}`
     : never;
+  }[keyof TRouter['controllers'][C]['actions']]
+  : never;
 }[keyof TRouter['controllers']];
 
 // 2. Dado uma rota (ex: "users.getById"), infere o tipo do input esperado.
@@ -312,10 +312,10 @@ export type InferInputFromPath<
   TPath extends string,
 > = TPath extends `${infer TController}.${infer TAction}`
   ? TController extends keyof TRouter['controllers']
-    ? TAction extends keyof TRouter['controllers'][TController]['actions']
-      ? TRouter['controllers'][TController]['actions'][TAction]['$Infer']['$Input']
-      : never
-    : never
+  ? TAction extends keyof TRouter['controllers'][TController]['actions']
+  ? TRouter['controllers'][TController]['actions'][TAction]['$Infer']['$Input']
+  : never
+  : never
   : never;
 
 // 3. Define a função `invalidate` sobrecarregada
@@ -334,14 +334,14 @@ export type InferRouterCaller<
   TRouter extends IgniterRouter<any, any, any, any, any>,
 > =
   TRouter extends IgniterRouter<any, infer TControllers, any, any, any>
-    ? {
-        [TControllerName in keyof TControllers]: {
-          [TActionName in keyof TControllers[TControllerName]["actions"]]: ClientActionCaller<
-            TControllers[TControllerName]["actions"][TActionName]
-          >;
-        };
-      }
-    : never;
+  ? {
+    [TControllerName in keyof TControllers]: {
+      [TActionName in keyof TControllers[TControllerName]["actions"]]: ClientActionCaller<
+        TControllers[TControllerName]["actions"][TActionName]
+      >;
+    };
+  }
+  : never;
 
 export type IgniterContextType<
   TRouter extends IgniterRouter<any, any, any, any, any>,

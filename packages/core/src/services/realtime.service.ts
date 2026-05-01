@@ -1,372 +1,765 @@
-import { SSEProcessor, type SSEChannel } from "../processors/sse.processor";
-import { generateQueryKey } from "../utils/queryKey";
 import type {
-  IgniterLogger,
-  IgniterRealtimeService as IgniterRealtimeServiceType,
-  RealtimeBuilder,
-  RealtimeEventPayload,
-  RevalidationTarget,
-} from "../types";
-import type { IgniterStoreAdapter } from "../types/store.interface";
+  IgniterStoreEventContext,
+  IgniterStoreEventsRegistry,
+  IgniterStoreFlattenRegistryKeys,
+  IgniterStoreGetEventSchema,
+  IgniterStoreInferEventSchema,
+  IgniterStoreManager,
+  IgniterStoreScopeEntry,
+  IgniterStoreScopeIdentifier,
+  IgniterStoreUnsubscribeFn,
+} from "@igniter-js/store";
+import type { IgniterCoreTelemetryManager } from "../types/telemetry.interface";
+import type { IgniterLogger } from "../types";
+import type {
+  IgniterRealtimeConnectionsApi,
+  IgniterRealtimeConnectionsArgs,
+  IgniterRealtimeConnectionMetadata,
+  IgniterRealtimeEvent,
+  IgniterRealtimeEventName,
+  IgniterRealtimeSubscribeHandler,
+  IgniterRealtimeTransport,
+} from "../types/realtime.interface";
+import { IgniterStoreCacheProcessor } from "./cache.processor";
+import { getRequestIp, parseDeviceFromUserAgent } from "../utils/request";
+import { resolveGeo } from "../utils/geo";
 
-/**
- * Type-safe, fluent RealtimeBuilder implementation for Igniter.js.
- *
- * @typeParam TContext - The context type available to event scopes.
- *
- * @example
- * // Basic usage: send a message to a channel
- * await realtime.to("chat:room-123")
- *   .withType("message")
- *   .withData({ text: "Hello world!" })
- *   .publish();
- *
- * @example
- * // Add a custom event ID and description
- * await realtime.to("notifications")
- *   .withId("evt-001")
- *   .withType("user-joined")
- *   .withDescription("A user joined the room")
- *   .withData({ userId: "abc" })
- *   .publish();
- *
- * @example
- * // Use dynamic scopes for fine-grained delivery
- * await realtime.to("secure-channel")
- *   .withScopes(async (ctx) => ctx.user?.roles ?? [])
- *   .withData({ secret: "42" })
- *   .publish();
- */
-class RealtimeBuilderImpl<
-  TContext = unknown,
-> implements RealtimeBuilder<TContext> {
-  private payload: RealtimeEventPayload;
-  private readonly store: IgniterStoreAdapter;
+type SubscriptionEntry = {
+  count: number;
+  unsubscribe: IgniterStoreUnsubscribeFn;
+};
 
-  /**
-   * @param store - The store adapter for event publishing (reserved for future use).
-   * @param initial - The initial payload for the realtime event.
-   */
-  constructor(store: IgniterStoreAdapter, initial: RealtimeEventPayload) {
-    this.store = store;
-    this.payload = { ...initial };
-  }
+class RealtimeSubscriptionRegistry<
+  TRegistry extends IgniterStoreEventsRegistry,
+  TScopes extends string,
+> {
+  private readonly subscriptions = new Map<string, SubscriptionEntry>();
 
-  /**
-   * Set the data payload for the event.
-   *
-   * @param data - Any serializable data to send.
-   * @returns A new builder instance with the updated data.
-   *
-   * @example
-   * realtime.to("updates").withData({ foo: 1 })
-   */
-  withData(data: unknown): RealtimeBuilder<TContext> {
-    return new RealtimeBuilderImpl(this.store, { ...this.payload, data });
-  }
+  constructor(
+    private readonly baseStore: IgniterStoreManager<TRegistry, TScopes>,
+    private readonly transport: IgniterRealtimeTransport,
+    private readonly logger?: IgniterLogger,
+    private readonly telemetry?: IgniterCoreTelemetryManager | null,
+  ) {}
 
-  /**
-   * Set the event type (e.g., "message", "update").
-   *
-   * @param type - The event type string.
-   * @returns A new builder instance with the updated type.
-   *
-   * @example
-   * realtime.to("chat").withType("message")
-   */
-  withType(type: string): RealtimeBuilder<TContext> {
-    return new RealtimeBuilderImpl(this.store, { ...this.payload, type });
-  }
+  async ensure(
+    scopeChain: IgniterStoreScopeEntry[],
+    eventName: string,
+  ): Promise<void> {
+    const key = this.createKey(scopeChain, eventName);
+    const existing = this.subscriptions.get(key);
+    if (existing) {
+      existing.count += 1;
+      return;
+    }
 
-  /**
-   * Set a custom event ID.
-   *
-   * @param id - The unique event identifier.
-   * @returns A new builder instance with the updated ID.
-   *
-   * @example
-   * realtime.to("log").withId("evt-123")
-   */
-  withId(id: string): RealtimeBuilder<TContext> {
-    return new RealtimeBuilderImpl(this.store, { ...this.payload, id });
-  }
-
-  /**
-   * Change the target channel for this event.
-   *
-   * @param channel - The channel name.
-   * @returns A new builder instance with the updated channel.
-   *
-   * @example
-   * realtime.to("foo").withChannel("bar")
-   */
-  withChannel(channel: string): RealtimeBuilder<TContext> {
-    return new RealtimeBuilderImpl(this.store, { ...this.payload, channel });
-  }
-
-  /**
-   * Set a human-readable description for the event.
-   *
-   * @param description - The event description.
-   * @returns A new builder instance with the updated description.
-   *
-   * @example
-   * realtime.to("alerts").withDescription("Critical system alert")
-   */
-  withDescription(description: string): RealtimeBuilder<TContext> {
-    return new RealtimeBuilderImpl(this.store, {
-      ...this.payload,
-      description,
+    const scopesCount = scopeChain.length;
+    this.telemetry?.emit("igniter.core.realtime.subscribe.started", {
+      level: "debug",
+      attributes: {
+        "ctx.realtime.event": eventName,
+        "ctx.realtime.scopes_count": scopesCount,
+      },
     });
-  }
 
-  /**
-   * Set dynamic scopes for the event, restricting delivery to certain users/contexts.
-   *
-   * @param scopes - A function that returns a list of scopes (sync or async).
-   * @returns A new builder instance with the updated scopes.
-   *
-   * @example
-   * realtime.to("private")
-   *   .withScopes(ctx => [ctx.user.id])
-   *   .withData({ secret: "shh" })
-   */
-  withScopes(
-    scopes: (context: TContext) => Promise<string[]> | string[],
-  ): RealtimeBuilder<TContext> {
-    return new RealtimeBuilderImpl(this.store, { ...this.payload, scopes });
-  }
+    const scopedStore = this.applyScopes(this.baseStore, scopeChain);
+    try {
+      const unsubscribe = await scopedStore.events.subscribe(
+        eventName,
+        async (ctx: IgniterStoreEventContext) => {
+          const event: IgniterRealtimeEvent = {
+            channel: ctx.type,
+            data: ctx.data,
+            timestamp: ctx.timestamp,
+            type: ctx.type === "http:revalidate:requested" ? "revalidate" : undefined,
+          };
+          const recipients = this.transport.publish(event);
 
-  /**
-   * Publish the constructed event to the specified channel.
-   *
-   * - Registers the channel if it does not exist.
-   * - Throws if the channel is not set.
-   *
-   * @returns Promise that resolves when the event is published.
-   *
-   * @throws Error if the channel is not set.
-   *
-   * @example
-   * await realtime.to("news").withData({ headline: "..." }).publish();
-   */
-  async publish(): Promise<void> {
-    if (!this.payload.channel) {
-      throw new Error(
-        "[RealtimeBuilder] Channel is required to publish an event.",
+          this.telemetry?.emit("igniter.core.realtime.event.deliver.success", {
+            level: "debug",
+            attributes: {
+              "ctx.realtime.event": ctx.type,
+              "ctx.realtime.recipients_count": recipients,
+            },
+          });
+        },
       );
-    }
-    if (!SSEProcessor.channelExists(this.payload.channel)) {
-      SSEProcessor.registerChannel({
-        id: this.payload.channel,
-        description:
-          this.payload.description ||
-          `Realtime events for ${this.payload.channel}`,
+
+      this.subscriptions.set(key, { count: 1, unsubscribe });
+
+      this.telemetry?.emit("igniter.core.realtime.subscribe.success", {
+        level: "debug",
+        attributes: {
+          "ctx.realtime.event": eventName,
+          "ctx.realtime.scopes_count": scopesCount,
+        },
       });
+    } catch (error) {
+      this.telemetry?.emit("igniter.core.realtime.subscribe.error", {
+        level: "error",
+        attributes: {
+          "ctx.realtime.event": eventName,
+          "ctx.realtime.scopes_count": scopesCount,
+          "ctx.error.type": "runtime",
+          "ctx.error.code":
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            (error as { code?: string }).code
+              ? String((error as { code?: string }).code)
+              : "REALTIME_SUBSCRIBE_FAILED",
+          "ctx.error.message":
+            error instanceof Error ? error.message : "Realtime subscribe failed",
+          "ctx.error.component": "IgniterStoreRealtimeProcessor",
+        },
+      });
+      throw error;
     }
-    SSEProcessor.publishEvent({
-      channel: this.payload.channel,
-      data: this.payload.data,
-      type: this.payload.type,
-      id: this.payload.id,
+  }
+
+  async release(
+    scopeChain: IgniterStoreScopeEntry[],
+    eventName: string,
+  ): Promise<void> {
+    const key = this.createKey(scopeChain, eventName);
+    const entry = this.subscriptions.get(key);
+    if (!entry) return;
+
+    entry.count -= 1;
+    if (entry.count > 0) {
+      return;
+    }
+
+    const scopesCount = scopeChain.length;
+    this.telemetry?.emit("igniter.core.realtime.unsubscribe.started", {
+      level: "debug",
+      attributes: {
+        "ctx.realtime.event": eventName,
+        "ctx.realtime.scopes_count": scopesCount,
+      },
     });
+
+    try {
+      await entry.unsubscribe();
+      this.subscriptions.delete(key);
+
+      this.telemetry?.emit("igniter.core.realtime.unsubscribe.success", {
+        level: "debug",
+        attributes: {
+          "ctx.realtime.event": eventName,
+          "ctx.realtime.scopes_count": scopesCount,
+        },
+      });
+    } catch (error) {
+      this.telemetry?.emit("igniter.core.realtime.unsubscribe.error", {
+        level: "error",
+        attributes: {
+          "ctx.realtime.event": eventName,
+          "ctx.realtime.scopes_count": scopesCount,
+          "ctx.error.type": "runtime",
+          "ctx.error.code":
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            (error as { code?: string }).code
+              ? String((error as { code?: string }).code)
+              : "REALTIME_UNSUBSCRIBE_FAILED",
+          "ctx.error.message":
+            error instanceof Error
+              ? error.message
+              : "Realtime unsubscribe failed",
+          "ctx.error.component": "IgniterStoreRealtimeProcessor",
+        },
+      });
+      throw error;
+    }
+  }
+
+  private applyScopes(
+    store: IgniterStoreManager<TRegistry, TScopes>,
+    scopeChain: IgniterStoreScopeEntry[],
+  ): IgniterStoreManager<TRegistry, TScopes> {
+    let scoped = store;
+    for (const scope of scopeChain) {
+      scoped = scoped.scope(scope.key as TScopes, scope.identifier);
+    }
+    return scoped;
+  }
+
+  private createKey(scopeChain: IgniterStoreScopeEntry[], eventName: string): string {
+    if (scopeChain.length === 0) {
+      return `global::${eventName}`;
+    }
+    const scopeKey = scopeChain
+      .map((entry) => `${entry.key}:${entry.identifier}`)
+      .join("|");
+    return `${scopeKey}::${eventName}`;
   }
 }
 
-/**
- * IgniterRealtimeService provides a type-safe, developer-friendly API for realtime event publishing.
- *
- * @typeParam TContext - The context type available to event scopes.
- *
- * @example
- * // Create the service (usually injected via builder)
- * const realtime = new IgniterRealtimeService(store, logger);
- *
- * // Publish a simple event
- * await realtime.publish("chat:room-1", { text: "Hi!" });
- *
- * // Use the fluent builder for more control
- * await realtime
- *   .to("chat:room-1")
- *   .withType("message")
- *   .withData({ text: "Hello" })
- *   .publish();
- *
- * // Broadcast to all channels
- * await realtime.broadcast({ system: "maintenance" });
- */
-export class IgniterRealtimeService<
-  TContext = any,
-> implements IgniterRealtimeServiceType<TContext> {
-  private readonly store: IgniterStoreAdapter;
-  private logger?: IgniterLogger;
+class IgniterRealtimeConnections<
+  TRegistry extends IgniterStoreEventsRegistry,
+  TScopes extends string,
+> implements IgniterRealtimeConnectionsApi {
+  private readonly store: IgniterStoreManager<TRegistry, TScopes>;
+  private readonly scopeFilter?: { key: TScopes; id: IgniterStoreScopeIdentifier };
 
-  /**
-   * Construct a new IgniterRealtimeService.
-   *
-   * @param store - The store adapter for event publishing (reserved for future use).
-   * @param logger - The logger instance for logging events.
-   *
-   * @example
-   * const realtime = new IgniterRealtimeService(store, logger);
-   */
-  constructor(store: IgniterStoreAdapter, logger?: IgniterLogger) {
+  constructor(
+    store: IgniterStoreManager<TRegistry, TScopes>,
+    scopeFilter?: { key: TScopes; id: IgniterStoreScopeIdentifier },
+  ) {
     this.store = store;
-    this.logger = logger?.child("IgniterRealtimeService");
+    this.scopeFilter = scopeFilter;
   }
 
-  /**
-   * Publish an event to a specific channel.
-   *
-   * - Registers the channel if it does not exist.
-   * - You can provide additional event metadata (type, id, description, scopes).
-   *
-   * @param channel - The channel to publish the event to.
-   * @param data - The data payload of the event.
-   * @param options - Optional event metadata (excluding channel and data).
-   * @returns Promise that resolves when the event is published.
-   *
-   * @example
-   * await realtime.publish("chat:room-1", { text: "Hello" });
-   *
-   * @example
-   * await realtime.publish("alerts", { msg: "!" }, { type: "warning", id: "evt-42" });
-   */
-  async publish(
-    channel: string,
-    data: unknown,
-    options?: Omit<RealtimeEventPayload<TContext>, "channel" | "data">,
-  ): Promise<void> {
-    if (!SSEProcessor.channelExists(channel)) {
-      SSEProcessor.registerChannel({
-        id: channel,
-        description: options?.description || `Realtime events for ${channel}`,
-      });
+  async list(
+    args: IgniterRealtimeConnectionsArgs = {},
+  ): Promise<IgniterRealtimeConnectionMetadata[]> {
+    const ids = await this.scanConnectionIds();
+    const entries = await this.loadConnections(ids);
+    const filtered = entries.filter((entry) => this.matches(entry, args.where));
+
+    if (this.scopeFilter) {
+      const token = `${this.scopeFilter.key}:${this.scopeFilter.id}`;
+      filtered.splice(
+        0,
+        filtered.length,
+        ...filtered.filter((entry) => entry.scopes?.includes(token)),
+      );
     }
-    SSEProcessor.publishEvent({
-      channel,
-      data: data,
-      type: options?.type,
-      id: options?.id,
+
+    const order = args.orderBy?.createdAt ?? "desc";
+    filtered.sort((a, b) => {
+      const aTime = Date.parse(a.createdAt || "");
+      const bTime = Date.parse(b.createdAt || "");
+      return order === "asc" ? aTime - bTime : bTime - aTime;
     });
+
+    if (args.skip) {
+      filtered.splice(0, args.skip);
+    }
+
+    if (args.take !== undefined) {
+      return filtered.slice(0, args.take);
+    }
+
+    return filtered;
   }
 
-  /**
-   * Create a fluent RealtimeBuilder for a specific channel.
-   *
-   * - Allows chaining methods to set event properties before publishing.
-   * - Encouraged for advanced use cases and best DX.
-   *
-   * @param channel - The channel to target for the realtime event.
-   * @returns A RealtimeBuilder instance for chaining event properties and publishing.
-   *
-   * @example
-   * await realtime
-   *   .to("chat:room-1")
-   *   .withType("message")
-   *   .withData({ text: "Hello" })
-   *   .publish();
-   */
-  to(channel: string): RealtimeBuilder<TContext> {
-    return new RealtimeBuilderImpl(this.store, { channel });
+  async count(args: IgniterRealtimeConnectionsArgs = {}): Promise<number> {
+    const items = await this.list(args);
+    return items.length;
   }
 
-  /**
-   * Broadcast data to all registered channels.
-   *
-   * - Useful for system-wide notifications or global events.
-   *
-   * @param data - The data payload to broadcast.
-   * @returns Promise that resolves when the broadcast is complete.
-   *
-   * @example
-   * await realtime.broadcast({ system: "maintenance" });
-   */
-  async broadcast(data: unknown): Promise<void> {
-    const channels = SSEProcessor.getRegisteredChannels() || [];
-    await Promise.all(
-      channels.map((channel: SSEChannel) => this.publish(channel.id, data)),
+  async getFirst(
+    args: IgniterRealtimeConnectionsArgs = {},
+  ): Promise<IgniterRealtimeConnectionMetadata | null> {
+    const items = await this.list({ ...args, orderBy: { createdAt: "asc" } });
+    return items[0] ?? null;
+  }
+
+  async getLast(
+    args: IgniterRealtimeConnectionsArgs = {},
+  ): Promise<IgniterRealtimeConnectionMetadata | null> {
+    const items = await this.list({ ...args, orderBy: { createdAt: "desc" } });
+    return items[0] ?? null;
+  }
+
+  async getById(
+    connectionId: string,
+  ): Promise<IgniterRealtimeConnectionMetadata | null> {
+    return this.store.kv.get(`sse:connections:${connectionId}`);
+  }
+
+  scope(
+    key: string,
+    id: IgniterStoreScopeIdentifier,
+  ): IgniterRealtimeConnectionsApi {
+    return new IgniterRealtimeConnections(this.store, { key: key as TScopes, id });
+  }
+
+  private async scanConnectionIds(): Promise<string[]> {
+    const ids: string[] = [];
+    let cursor = "0";
+    const marker = ":kv:sse:connections:";
+
+    do {
+      const result = await this.store.dev.scan("sse:connections:*", {
+        cursor,
+        count: 200,
+      });
+      cursor = result.cursor;
+
+      for (const key of result.keys) {
+        const index = key.indexOf(marker);
+        if (index === -1) continue;
+        const id = key.slice(index + marker.length);
+        if (id) ids.push(id);
+      }
+    } while (cursor !== "0");
+
+    return Array.from(new Set(ids));
+  }
+
+  private async loadConnections(
+    ids: string[],
+  ): Promise<IgniterRealtimeConnectionMetadata[]> {
+    const entries = await Promise.all(
+      ids.map((id) => this.store.kv.get(`sse:connections:${id}`)),
+    );
+    return entries.filter(Boolean) as IgniterRealtimeConnectionMetadata[];
+  }
+
+  private matches(
+    entry: IgniterRealtimeConnectionMetadata,
+    where?: IgniterRealtimeConnectionsArgs["where"],
+  ): boolean {
+    if (!where) return true;
+
+    if (where.scope) {
+      const token = `${where.scope.key}:${where.scope.id}`;
+      if (!entry.scopes?.includes(token)) {
+        return false;
+      }
+    }
+
+    if (where.channel) {
+      if (!entry.channels.includes(where.channel)) {
+        return false;
+      }
+    }
+
+    if (where.ip && entry.ip !== where.ip) {
+      return false;
+    }
+
+    if (where.device) {
+      const device = entry.device ?? {};
+      for (const [key, value] of Object.entries(where.device)) {
+        if ((device as Record<string, string | undefined>)[key] !== value) {
+          return false;
+        }
+      }
+    }
+
+    if (where.geo) {
+      const geo = entry.geo ?? {};
+      for (const [key, value] of Object.entries(where.geo)) {
+        if ((geo as Record<string, string | number | undefined>)[key] !== value) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+}
+
+export class IgniterStoreRealtimeProcessor<
+  TRegistry extends IgniterStoreEventsRegistry = IgniterStoreEventsRegistry,
+  TScopes extends string = string,
+> {
+  private readonly store: IgniterStoreManager<TRegistry, TScopes>;
+  private readonly baseStore: IgniterStoreManager<TRegistry, TScopes>;
+  private readonly transport: IgniterRealtimeTransport;
+  private readonly cache?: IgniterStoreCacheProcessor;
+  private readonly logger?: IgniterLogger;
+  private readonly telemetry?: IgniterCoreTelemetryManager | null;
+  private readonly scopeChain: IgniterStoreScopeEntry[];
+  private readonly subscriptions: RealtimeSubscriptionRegistry<TRegistry, TScopes>;
+
+  public readonly connections: IgniterRealtimeConnectionsApi;
+
+  constructor(options: {
+    store: IgniterStoreManager<TRegistry, TScopes>;
+    transport: IgniterRealtimeTransport;
+    cache?: IgniterStoreCacheProcessor;
+    logger?: IgniterLogger;
+    telemetry?: IgniterCoreTelemetryManager | null;
+    scopeChain?: IgniterStoreScopeEntry[];
+    baseStore?: IgniterStoreManager<TRegistry, TScopes>;
+    subscriptions?: RealtimeSubscriptionRegistry<TRegistry, TScopes>;
+  }) {
+    this.store = options.store;
+    this.baseStore = options.baseStore ?? options.store;
+    this.transport = options.transport;
+    this.cache = options.cache;
+    this.logger = options.logger?.child("IgniterStoreRealtimeProcessor");
+    this.telemetry = options.telemetry ?? null;
+    this.scopeChain = options.scopeChain ?? [];
+    this.subscriptions =
+      options.subscriptions ??
+      new RealtimeSubscriptionRegistry(
+        this.baseStore,
+        this.transport,
+        this.logger,
+        this.telemetry,
+      );
+
+    this.connections = new IgniterRealtimeConnections<TRegistry, TScopes>(
+      this.baseStore,
     );
   }
 
-  /**
-   * Triggers a refetch on the client for one or more queries.
-   * This is the primary mechanism for keeping client-side data in sync
-   * with server-side changes.
-   *
-   * @param targets - A single revalidation target or an array of them.
-   * @returns A promise that resolves when the revalidation event is published.
-   */
-  async revalidate(
-    targets: RevalidationTarget | RevalidationTarget[],
+  $api(): Pick<
+    IgniterStoreRealtimeProcessor<TRegistry, TScopes>,
+    "scope" | "publish" | "subscribe" | "connections"
+  > {
+    return {
+      scope: this.scope.bind(this),
+      publish: this.publish.bind(this),
+      subscribe: this.subscribe.bind(this),
+      connections: this.connections,
+    };
+  }
+
+  scope<TKey extends TScopes>(
+    key: TKey,
+    id: IgniterStoreScopeIdentifier,
+  ): IgniterStoreRealtimeProcessor<TRegistry, TScopes> {
+    const scopedStore = this.store.scope(key, id);
+    return new IgniterStoreRealtimeProcessor<TRegistry, TScopes>({
+      store: scopedStore,
+      transport: this.transport,
+      cache: this.cache,
+      logger: this.logger,
+      telemetry: this.telemetry,
+      scopeChain: [...this.scopeChain, { key, identifier: String(id) }],
+      baseStore: this.baseStore,
+      subscriptions: this.subscriptions,
+    });
+  }
+
+  publish<TEventName extends IgniterStoreFlattenRegistryKeys<TRegistry>>(
+    eventName: TEventName,
+    payload: IgniterStoreInferEventSchema<
+      IgniterStoreGetEventSchema<TRegistry, TEventName>
+    >,
   ): Promise<void> {
-    const targetsArray = Array.isArray(targets) ? targets : [targets];
+    const scopesCount = this.scopeChain.length;
+    this.telemetry?.emit("igniter.core.realtime.event.publish.started", {
+      level: "debug",
+      attributes: {
+        "ctx.realtime.event": String(eventName),
+        "ctx.realtime.scopes_count": scopesCount,
+      },
+    });
 
-    const eventsToPublish = new Map<
-      string,
-      { queryKeys: string[]; data?: unknown }
-    >();
-
-    for (const target of targetsArray) {
-      const { path, params, query, scopes, data } = target;
-      const [controller, action] = path.split(".");
-
-      if (!controller || !action) {
-        this.logger?.error("Invalid path format in revalidate target:", {
-          path,
+    return this.store.events
+      .publish(
+        eventName,
+        payload as TEventName extends IgniterStoreFlattenRegistryKeys<TRegistry>
+          ? IgniterStoreInferEventSchema<IgniterStoreGetEventSchema<TRegistry, TEventName>>
+          : unknown,
+      )
+      .then(() => {
+        this.telemetry?.emit("igniter.core.realtime.event.publish.success", {
+          level: "debug",
+          attributes: {
+            "ctx.realtime.event": String(eventName),
+            "ctx.realtime.scopes_count": scopesCount,
+          },
         });
-        continue;
-      }
-
-      const input = {
-        ...(params && { params }),
-        ...(query && { query }),
-      };
-
-      const queryKey = generateQueryKey(
-        controller,
-        action,
-        Object.keys(input).length > 0 ? input : undefined,
-      );
-
-      // Group by scopes to send minimal number of events
-      const scopeKey = (scopes || []).sort().join(",");
-
-      if (!eventsToPublish.has(scopeKey)) {
-        eventsToPublish.set(scopeKey, { queryKeys: [] });
-      }
-
-      const eventData = eventsToPublish.get(scopeKey)!;
-      eventData.queryKeys.push(queryKey);
-
-      // If data is provided, attach it. We'll use the data from the first target with data for a given scope group.
-      if (data !== undefined && eventData.data === undefined) {
-        eventData.data = data;
-      }
-    }
-
-    // Register revalidation channel if it doesn't exist
-    if (!SSEProcessor.channelExists("revalidation")) {
-      SSEProcessor.registerChannel({
-        id: "revalidation",
-        description: "Channel for query revalidation events",
+      })
+      .catch((error) => {
+        this.telemetry?.emit("igniter.core.realtime.event.publish.error", {
+          level: "error",
+          attributes: {
+            "ctx.realtime.event": String(eventName),
+            "ctx.realtime.scopes_count": scopesCount,
+            "ctx.error.type": "runtime",
+            "ctx.error.code":
+              typeof error === "object" &&
+              error !== null &&
+              "code" in error &&
+              (error as { code?: string }).code
+                ? String((error as { code?: string }).code)
+                : "REALTIME_PUBLISH_FAILED",
+            "ctx.error.message":
+              error instanceof Error
+                ? error.message
+                : "Realtime publish failed",
+            "ctx.error.component": "IgniterStoreRealtimeProcessor",
+          },
+        });
+        throw error;
       });
-    }
+  }
 
-    // Publish one event per scope group
-    for (const [scopeKey, eventPayload] of eventsToPublish.entries()) {
-      const scopes = scopeKey ? scopeKey.split(",") : undefined;
+  subscribe<TEventName extends IgniterRealtimeEventName<TRegistry>>(
+    eventName: TEventName,
+    handler: IgniterRealtimeSubscribeHandler<TRegistry, TEventName>,
+  ): Promise<IgniterStoreUnsubscribeFn> {
+    const scopesCount = this.scopeChain.length;
+    this.telemetry?.emit("igniter.core.realtime.subscribe.started", {
+      level: "debug",
+      attributes: {
+        "ctx.realtime.event": String(eventName),
+        "ctx.realtime.scopes_count": scopesCount,
+      },
+    });
 
-      SSEProcessor.publishEvent({
-        channel: "revalidation",
-        type: "revalidate",
-        scopes: scopes,
-        data: {
-          queryKeys: eventPayload.queryKeys,
-          data: eventPayload.data,
-          timestamp: new Date().toISOString(),
+    return this.store.events
+      .subscribe(eventName, handler as any)
+      .then((unsubscribe) => {
+        this.telemetry?.emit("igniter.core.realtime.subscribe.success", {
+          level: "debug",
+          attributes: {
+            "ctx.realtime.event": String(eventName),
+            "ctx.realtime.scopes_count": scopesCount,
+          },
+        });
+        return unsubscribe;
+      })
+      .catch((error) => {
+        this.telemetry?.emit("igniter.core.realtime.subscribe.error", {
+          level: "error",
+          attributes: {
+            "ctx.realtime.event": String(eventName),
+            "ctx.realtime.scopes_count": scopesCount,
+            "ctx.error.type": "runtime",
+            "ctx.error.code":
+              typeof error === "object" &&
+              error !== null &&
+              "code" in error &&
+              (error as { code?: string }).code
+                ? String((error as { code?: string }).code)
+                : "REALTIME_SUBSCRIBE_FAILED",
+            "ctx.error.message":
+              error instanceof Error
+                ? error.message
+                : "Realtime subscribe failed",
+            "ctx.error.component": "IgniterStoreRealtimeProcessor",
+          },
+        });
+        throw error;
+      });
+  }
+
+  async openConnection(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const channelsParam = url.searchParams.get("channels");
+    const scopesParam = url.searchParams.get("scopes");
+    const channels = channelsParam ? channelsParam.split(",") : [];
+    const scopeChain = [
+      ...this.scopeChain,
+      ...this.parseScopes(scopesParam),
+    ];
+    const connectionId = crypto.randomUUID();
+    const connectionAttributes = {
+      "ctx.realtime.transport": this.transport.name,
+      "ctx.realtime.channels_count": channels.length,
+      "ctx.realtime.scopes_count": scopeChain.length,
+    };
+
+    this.telemetry?.emit("igniter.core.realtime.connection.open.started", {
+      level: "debug",
+      attributes: connectionAttributes,
+    });
+
+    try {
+      await this.persistConnection(connectionId, request, channels, scopeChain);
+
+      for (const channel of channels) {
+        await this.subscriptions.ensure(scopeChain, channel);
+      }
+
+      const response = await this.transport.openConnection(request, {
+        connectionId,
+        channels,
+        scopes: scopeChain.map((scope) => `${scope.key}:${scope.identifier}`),
+        onClose: async (reason) => {
+          this.telemetry?.emit("igniter.core.realtime.connection.close.started", {
+            level: "debug",
+            attributes: connectionAttributes,
+          });
+
+          try {
+            for (const channel of channels) {
+              await this.subscriptions.release(scopeChain, channel);
+            }
+            await this.removeConnection(connectionId, channels, scopeChain);
+
+            this.telemetry?.emit("igniter.core.realtime.connection.close.success", {
+              level: "debug",
+              attributes: connectionAttributes,
+            });
+          } catch (error) {
+            this.telemetry?.emit("igniter.core.realtime.connection.close.error", {
+              level: "error",
+              attributes: {
+                ...connectionAttributes,
+                "ctx.error.type": "runtime",
+                "ctx.error.code":
+                  typeof error === "object" &&
+                  error !== null &&
+                  "code" in error &&
+                  (error as { code?: string }).code
+                    ? String((error as { code?: string }).code)
+                    : "REALTIME_CONNECTION_CLOSE_FAILED",
+                "ctx.error.message":
+                  error instanceof Error
+                    ? error.message
+                    : "Realtime connection close failed",
+                "ctx.error.component": "IgniterStoreRealtimeProcessor",
+              },
+            });
+            this.logger?.warn("Realtime connection close failed", {
+              connectionId,
+              reason,
+              error,
+            });
+          }
+        },
+        onKeepAlive: async () => {
+          try {
+            await this.touchConnection(connectionId);
+          } finally {
+            this.telemetry?.emit("igniter.core.realtime.connection.keepalive", {
+              level: "debug",
+              attributes: {
+                "ctx.realtime.transport": this.transport.name,
+              },
+            });
+          }
         },
       });
+
+      this.telemetry?.emit("igniter.core.realtime.connection.open.success", {
+        level: "debug",
+        attributes: connectionAttributes,
+      });
+
+      return response;
+    } catch (error) {
+      this.telemetry?.emit("igniter.core.realtime.connection.open.error", {
+        level: "error",
+        attributes: {
+          ...connectionAttributes,
+          "ctx.error.type": "runtime",
+          "ctx.error.code":
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            (error as { code?: string }).code
+              ? String((error as { code?: string }).code)
+              : "REALTIME_CONNECTION_OPEN_FAILED",
+          "ctx.error.message":
+            error instanceof Error
+              ? error.message
+              : "Realtime connection open failed",
+          "ctx.error.component": "IgniterStoreRealtimeProcessor",
+        },
+      });
+      throw error;
     }
+  }
+
+  private parseScopes(scopesParam: string | null): IgniterStoreScopeEntry[] {
+    if (!scopesParam) return [];
+    return scopesParam
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((scope) => {
+        const [key, ...rest] = scope.split(":");
+        return { key, identifier: rest.join(":") };
+      })
+      .filter((entry) => entry.key && entry.identifier);
+  }
+
+  private async persistConnection(
+    connectionId: string,
+    request: Request,
+    channels: string[],
+    scopeChain: IgniterStoreScopeEntry[],
+  ): Promise<void> {
+    const ip = getRequestIp(request);
+    const userAgent = request.headers.get("user-agent") || undefined;
+    const device = parseDeviceFromUserAgent(userAgent);
+    const geo = await resolveGeo({
+      ip,
+      headers: request.headers,
+      cache: this.cache,
+      logger: this.logger,
+    });
+
+    const metadata: IgniterRealtimeConnectionMetadata = {
+      connectionId,
+      channels,
+      scopes: scopeChain.map((scope) => `${scope.key}:${scope.identifier}`),
+      ip,
+      device,
+      geo: geo ?? undefined,
+      createdAt: new Date().toISOString(),
+      lastSeenAt: new Date().toISOString(),
+      userAgent,
+    };
+
+    await this.baseStore.kv.set(`sse:connections:${connectionId}`, metadata, {
+      ttl: 300,
+    });
+    await this.addToIndex("sse:connections", connectionId);
+
+    for (const channel of channels) {
+      await this.addToIndex(`sse:channels:${channel}`, connectionId);
+    }
+
+    for (const scope of metadata.scopes ?? []) {
+      await this.addToIndex(`sse:scopes:${scope}`, connectionId);
+    }
+  }
+
+  private async touchConnection(connectionId: string): Promise<void> {
+    const existing = await this.baseStore.kv.get<IgniterRealtimeConnectionMetadata>(
+      `sse:connections:${connectionId}`,
+    );
+    if (!existing) return;
+
+    const next = {
+      ...existing,
+      lastSeenAt: new Date().toISOString(),
+    };
+    await this.baseStore.kv.set(`sse:connections:${connectionId}`, next, {
+      ttl: 300,
+    });
+  }
+
+  private async removeConnection(
+    connectionId: string,
+    channels: string[],
+    scopeChain: IgniterStoreScopeEntry[],
+  ): Promise<void> {
+    await this.baseStore.kv.remove(`sse:connections:${connectionId}`);
+    await this.removeFromIndex("sse:connections", connectionId);
+
+    for (const channel of channels) {
+      await this.removeFromIndex(`sse:channels:${channel}`, connectionId);
+    }
+
+    for (const scope of scopeChain) {
+      await this.removeFromIndex(
+        `sse:scopes:${scope.key}:${scope.identifier}`,
+        connectionId,
+      );
+    }
+  }
+
+  private async addToIndex(indexKey: string, id: string): Promise<void> {
+    const existing = (await this.baseStore.kv.get<string[]>(indexKey)) ?? [];
+    const next = new Set(existing);
+    next.add(id);
+    await this.baseStore.kv.set(indexKey, Array.from(next));
+  }
+
+  private async removeFromIndex(indexKey: string, id: string): Promise<void> {
+    const existing = await this.baseStore.kv.get<string[]>(indexKey);
+    if (!existing || existing.length === 0) return;
+    const next = existing.filter((value) => value !== id);
+    if (next.length === 0) {
+      await this.baseStore.kv.remove(indexKey);
+      return;
+    }
+    await this.baseStore.kv.set(indexKey, next);
   }
 }

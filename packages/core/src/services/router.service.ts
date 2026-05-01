@@ -1,16 +1,13 @@
-import type {
-  ContextCallback,
-  DocsConfig,
-  IgniterBaseConfig,
-  IgniterControllerConfig,
-  IgniterRouter,
-  IgniterLogger,
-} from "../types";
+import type { IgniterLogger } from "@igniter-js/common";
+import type { IgniterCoreTelemetryManager } from "../types/telemetry.interface";
+import type { ContextCallback, DocsConfig, IgniterBaseConfig, IgniterControllerConfig, IgniterRouter, IgniterStoreCacheProcessor, IgniterStoreManager, IgniterStoreRealtimeProcessor, } from "../types";
 import type { IgniterPlugin } from "../types/plugin.interface";
+import type { IgniterServerOptions, IIgniterServerInstance } from "../types/server";
 import { RequestProcessor } from "../processors";
 import { createServerCaller } from "./caller.server.service";
 import { parseURL } from "../utils/url";
 import { initializeIgniterPlayground } from "./playground.service";
+import { IgniterServer } from "../server/server";
 
 /**
  * Creates a fully-typed, production-ready router instance for the Igniter Framework.
@@ -142,6 +139,11 @@ export const createIgniterRouter = <
   plugins,
   docs,
   logger,
+  telemetry,
+  store,
+  realtime,
+  cache,
+  $builder,
 }: {
   context: TContext;
   controllers: TControllers;
@@ -149,6 +151,11 @@ export const createIgniterRouter = <
   plugins?: TPlugins;
   docs?: TDocs;
   logger?: IgniterLogger;
+  telemetry?: IgniterCoreTelemetryManager;
+  store?: IgniterStoreManager;
+  realtime?: IgniterStoreRealtimeProcessor;
+  cache?: IgniterStoreCacheProcessor;
+  $builder?: IgniterRouter<TContext, TControllers, TConfig, TPlugins, TDocs>["$builder"];
 }): IgniterRouter<TContext, TControllers, TConfig, TPlugins, TDocs> => {
   type TRouter = IgniterRouter<
     TContext,
@@ -166,7 +173,66 @@ export const createIgniterRouter = <
     context: context,
     docs: docs,
     logger: logger,
+    telemetry: telemetry,
+    store: store,
+    realtime: realtime,
+    cache: cache,
+    $builder: $builder,
   });
+
+  const handler = async (request: Request) => {
+    logger?.debug("Incoming request:", {
+      url: request.url,
+      method: request.method,
+      headers: Object.fromEntries(request.headers),
+    });
+
+    const url = new URL(request.url);
+    const path = url.pathname;
+    const basePath = config.basePATH ?? "/api/v1";
+    const playgroundPath = docs?.playground?.route ?? "/docs";
+
+    logger?.debug("Parsed request:", {
+      path,
+      basePath,
+      playgroundPath,
+      fullPath: parseURL(basePath, playgroundPath),
+    });
+
+    // Check if is playground
+    if (path.startsWith(parseURL(basePath, playgroundPath))) {
+      logger?.debug("Routing to playground");
+      const playground = initializeIgniterPlayground(docs, basePath);
+      try {
+        const response = await playground.process(request);
+        logger?.debug("Playground response:", {
+          status: response.status,
+          headers: Object.fromEntries(response.headers),
+        });
+        return response;
+      } catch (error) {
+        logger?.error("Playground error:", { error });
+        throw error;
+      }
+    }
+
+    logger?.debug("Routing to processor");
+    try {
+      const response = telemetry
+        ? await telemetry.session().run(() => processor.process(request))
+        : await processor.process(request);
+
+      logger?.debug("Processor response:", {
+        status: response.status,
+        headers: Object.fromEntries(response.headers),
+      });
+
+      return response;
+    } catch (error) {
+      logger?.error("Processor error:", { error });
+      throw error;
+    }
+  };
 
   return {
     /**
@@ -195,72 +261,44 @@ export const createIgniterRouter = <
 
     /**
      * The main HTTP request handler for this router.
-     * Pass any standard Request object (Node.js, Edge, etc).
+     */
+    handler: handler,
+
+    /**
+     * Starts a standalone HTTP server for this router.
      *
-     * @param request - The incoming HTTP request.
-     * @returns A Promise resolving to a standard Response object.
+     * Automatically detects the runtime (Bun, Deno, or Node.js) and uses
+     * the optimal server adapter for maximum performance.
+     *
+     * @param options - Port number or server options
+     * @returns A promise resolving to the server instance
      *
      * @example
-     * // In Next.js API route
-     * export default async function handler(req: Request) {
-     *   return router.handler(req);
-     * }
+     * ```typescript
+     * // Simple port
+     * await router.listen(3000);
+     *
+     * // With options
+     * await router.listen({
+     *   port: 3000,
+     *   hostname: '0.0.0.0',
+     *   onListen: ({ port, hostname }) => {
+     *     console.log(`🚀 Server running at http://${hostname}:${port}`);
+     *   },
+     * });
+     * ```
      */
-    handler: async (request: Request) => {
-      logger?.debug("Incoming request:", {
-        url: request.url,
-        method: request.method,
-        headers: Object.fromEntries(request.headers),
-      });
-
-      const url = new URL(request.url);
-      const path = url.pathname;
-      const basePath = config.basePATH ?? "/api/v1";
-      const playgroundPath = docs?.playground?.route ?? "/docs";
-
-      logger?.debug("Parsed request:", {
-        path,
-        basePath,
-        playgroundPath,
-        fullPath: parseURL(basePath, playgroundPath),
-      });
-
-      // Check if is playground
-      if (path.startsWith(parseURL(basePath, playgroundPath))) {
-        logger?.debug("Routing to playground");
-        const playground = initializeIgniterPlayground(docs, basePath);
-        try {
-          const response = await playground.process(request);
-          logger?.debug("Playground response:", {
-            status: response.status,
-            headers: Object.fromEntries(response.headers),
-          });
-          return response;
-        } catch (error) {
-          logger?.error("Playground error:", { error });
-          throw error;
-        }
-      }
-
-      logger?.debug("Routing to processor");
-      try {
-        const response = await processor.process(request);
-
-        logger?.debug("Processor response:", {
-          status: response.status,
-          headers: Object.fromEntries(response.headers),
-        });
-
-        return response;
-      } catch (error) {
-        logger?.error("Processor error:", { error });
-        throw error;
-      }
+    listen: (
+      options?: IgniterServerOptions | number,
+    ): Promise<IIgniterServerInstance> => {
+      return IgniterServer.create(handler).listen(options);
     },
 
+    $builder: $builder,
+
     $Infer: {
-      $context: {},
-      $plugins: {},
+      $context: context as any,
+      $plugins: (plugins ?? {}) as any,
     },
   } as TRouter;
 };

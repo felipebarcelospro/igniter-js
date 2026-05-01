@@ -1,9 +1,10 @@
-import type { IgniterRealtimeService } from "../services/realtime.service";
+import type { IgniterStoreRealtimeProcessor } from "../services/realtime.service";
+import type { IgniterStoreCacheProcessor } from "../services/cache.processor";
 import type { JobsNamespaceProxy, JobsManagementProxy } from "./jobs.interface";
 import type { IgniterLogger } from "./logger.interface";
 import type { IgniterProcedure } from "./procedure.interface";
-import type { IgniterStoreAdapter } from "./store.interface";
-import type { IgniterTelemetryProvider } from "./telemetry.interface";
+import type { IgniterStoreManager } from "./store.interface";
+import type { IgniterCoreTelemetryManager } from "./telemetry.interface";
 import type { IgniterBuilder } from "../services";
 import type { ContextCallback } from "./context.interface";
 import type { IgniterPlugin, PluginActionsCollection, PluginSelfContext } from "./plugin.interface";
@@ -116,10 +117,10 @@ export interface DocsConfig {
  * to an Igniter application instance.
  *
  * @template TContext - The application context type (object or callback function)
- * @template TStore - The store adapter type for data persistence and caching
+ * @template TStore - The store manager type for data persistence and caching
  * @template TLogger - The logger adapter type for structured logging
  * @template TJobs - The job queue adapter type for background processing
- * @template TTelemetry - The telemetry provider type for observability
+ * @template TTelemetry - The telemetry manager type for observability
  *
  * @since 1.0.0
  *
@@ -128,7 +129,7 @@ export interface DocsConfig {
  * // Basic configuration
  * type BasicConfig = IgniterBuilderConfig<
  *   { db: Database },
- *   RedisStoreAdapter,
+ *   IgniterStoreManager,
  *   ConsoleLogger,
  *   BullMQAdapter,
  *   OpenTelemetryProvider
@@ -137,20 +138,22 @@ export interface DocsConfig {
  * // Configuration with context callback
  * type CallbackConfig = IgniterBuilderConfig<
  *   (req: Request) => Promise<{ user: User; db: Database }>,
- *   IgniterStoreAdapter,
+ *   IgniterStoreManager,
  *   IgniterLogger,
  *   JobsNamespaceProxy<any>,
- *   IgniterTelemetryProvider
+ *   IgniterCoreTelemetryManager
  * >;
  * ```
  */
 export interface IgniterBuilderConfig<
   TContext extends object | ContextCallback,
   TConfig extends IgniterBaseConfig,
-  TStore extends IgniterStoreAdapter = any,
+  TStore extends IgniterStoreManager = any,
   TLogger extends IgniterLogger = any,
   TJobs extends JobsNamespaceProxy<TContext> & JobsManagementProxy = any,
-  TTelemetry extends IgniterTelemetryProvider = any,
+  TTelemetry extends IgniterCoreTelemetryManager = any,
+  TRealtime extends IgniterStoreRealtimeProcessor = any,
+  TCache extends IgniterStoreCacheProcessor = any,
   TPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>> = Record<string, any>,
   TDocs extends DocsConfig = any,
 > {
@@ -190,20 +193,19 @@ export interface IgniterBuilderConfig<
   middleware?: readonly IgniterProcedure<unknown, unknown, unknown>[];
 
   /**
-   * Store adapter for data persistence, caching, pub/sub messaging, and sessions.
+ * Store manager for data persistence, caching, pub/sub messaging, and sessions.
    * Provides a unified interface for different storage backends like Redis,
    * in-memory, or database-backed stores.
    *
    * @example
    * ```typescript
-   * store: createRedisStoreAdapter({
-   *   host: 'localhost',
-   *   port: 6379,
-   *   password: process.env.REDIS_PASSWORD
-   * })
+   * store: IgniterStore.create()
+   *   .withAdapter(IgniterStoreRedisAdapter.create({ redis }))
+   *   .withService('my-api')
+   *   .build()
    * ```
    */
-  store: TStore extends IgniterStoreAdapter ? TStore : never;
+  store?: TStore;
 
   /**
    * Logger adapter for structured logging with configurable levels and outputs.
@@ -218,7 +220,7 @@ export interface IgniterBuilderConfig<
    * })
    * ```
    */
-  logger: TLogger extends IgniterLogger ? TLogger : never;
+  logger?: TLogger;
 
   /**
    * Job queue adapter for background processing and scheduled tasks.
@@ -236,10 +238,10 @@ export interface IgniterBuilderConfig<
    * })
    * ```
    */
-  jobs: TJobs extends JobsNamespaceProxy<any> & JobsManagementProxy ? TJobs : never;
+  jobs?: TJobs;
 
   /**
-   * Telemetry provider for distributed tracing, metrics, and observability.
+   * Telemetry manager for distributed tracing, metrics, and observability.
    * Integrates with monitoring platforms like OpenTelemetry, Datadog, or custom solutions.
    *
    * @example
@@ -252,7 +254,7 @@ export interface IgniterBuilderConfig<
    * })
    * ```
    */
-  telemetry: TTelemetry extends IgniterTelemetryProvider ? TTelemetry : never;
+  telemetry?: TTelemetry;
 
   /**
    * Router-level configuration for URL handling and routing behavior.
@@ -268,16 +270,20 @@ export interface IgniterBuilderConfig<
   config?: TConfig;
 
   /**
-   * Realtime service for event-driven communication.
-   * Enables real-time updates and notifications to clients.
+   * Realtime processor for event-driven communication.
    */
-  realtime: IgniterRealtimeService
+  realtime?: TRealtime;
+
+  /**
+   * Cache processor for response and geo caching.
+   */
+  cache?: TCache;
 
   /**
    * Plugin registry for type-safe access to plugin actions and events.
    * Provides IntelliSense and type checking for all registered plugins.
    */
-  plugins: TPlugins;
+  plugins?: TPlugins;
 
   /**
    * Configuration for API documentation and playground.
@@ -311,11 +317,12 @@ export type IgniterBuilderExtension<
   TContext extends object, 
   TConfig extends IgniterBaseConfig, 
   TMiddlewares extends readonly IgniterProcedure<unknown, unknown, unknown>[], 
-  TStore extends IgniterStoreAdapter, 
+  TStore extends IgniterStoreManager, 
   TLogger extends IgniterLogger, 
   TJobs extends JobsNamespaceProxy<any> & JobsManagementProxy, 
-  TTelemetry extends IgniterTelemetryProvider, 
-  TRealtime extends IgniterRealtimeService, 
+  TTelemetry extends IgniterCoreTelemetryManager, 
+  TRealtime extends IgniterStoreRealtimeProcessor, 
+  TCache extends IgniterStoreCacheProcessor,
   TPlugins extends Record<string, IgniterPlugin<any, any, any, any, any, any, any, any>>, 
   TDocs extends DocsConfig
 > = (
@@ -327,6 +334,7 @@ export type IgniterBuilderExtension<
     TJobs, 
     TTelemetry, 
     TRealtime, 
+    TCache,
     TPlugins, 
     TDocs
   >,
@@ -338,6 +346,7 @@ export type IgniterBuilderExtension<
   TJobs, 
   TTelemetry, 
   TRealtime, 
+  TCache,
   TPlugins, 
   TDocs
 >;

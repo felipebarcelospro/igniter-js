@@ -4,11 +4,7 @@ import type { ProcessedContext } from "./context-builder.processor";
 import type { IgniterProcedureContext } from "../types/procedure.interface";
 import { IgniterCookie } from "../services/cookie.service";
 import type { NextFunction, NextState } from "../types/next.interface";
-import type {
-  IgniterTelemetryProvider,
-  IgniterTelemetrySpan,
-} from "../types/telemetry.interface";
-import { TelemetryManagerProcessor } from "./telemetry-manager.processor";
+import type { IgniterCoreTelemetryManager } from "../types/telemetry.interface";
 
 /**
  * Result of middleware execution pipeline
@@ -34,15 +30,13 @@ export class MiddlewareExecutorProcessor {
    * @param middlewares - Array of global middlewares to execute
    * @param logger - Optional logger instance
    * @param telemetry - Optional telemetry provider for metrics
-   * @param parentSpan - Optional parent span for tracing
    * @returns Promise resolving to execution result
    */
   static async executeGlobal(
     context: ProcessedContext,
     middlewares: IgniterProcedure<unknown, unknown, unknown>[],
     logger?: IgniterLogger,
-    telemetry?: IgniterTelemetryProvider | null,
-    parentSpan?: IgniterTelemetrySpan,
+    telemetry?: IgniterCoreTelemetryManager | null,
   ): Promise<MiddlewareExecutionResult> {
     const childLogger = logger?.child("MiddlewareExecutorProcessor");
 
@@ -63,17 +57,18 @@ export class MiddlewareExecutorProcessor {
       const middleware = middlewares[i];
       const middlewareName = middleware.name || `anonymous_${i}`;
       const middlewareStartTime = Date.now();
-
-      // Create telemetry span for this middleware
-      const middlewareSpan = TelemetryManagerProcessor.createMiddlewareSpan(
-        telemetry,
-        middlewareName,
-        "global",
-        parentSpan,
-        logger,
-      );
+      const baseAttributes = {
+        "ctx.middleware.name": middlewareName,
+        "ctx.middleware.type": "global" as const,
+        "ctx.middleware.index": i,
+      };
 
       childLogger?.debug("Middleware executing", { middlewareName });
+
+      telemetry?.emit("igniter.core.middleware.execute.started", {
+        level: "debug",
+        attributes: baseAttributes,
+      });
 
       // Validate middleware has handler
       if (!middleware.handler || typeof middleware.handler !== "function") {
@@ -83,15 +78,18 @@ export class MiddlewareExecutorProcessor {
           reason: "missing or not a function",
         });
 
-        // Finish span - invalid handler
         const duration = Date.now() - middlewareStartTime;
-        TelemetryManagerProcessor.finishMiddlewareSpan(
-          middlewareSpan,
-          "error",
-          duration,
-          new Error("Invalid middleware handler"),
-          logger,
-        );
+        telemetry?.emit("igniter.core.middleware.execute.error", {
+          level: "error",
+          attributes: {
+            ...baseAttributes,
+            "ctx.middleware.duration_ms": duration,
+            "ctx.error.type": "runtime",
+            "ctx.error.code": "MIDDLEWARE_HANDLER_INVALID",
+            "ctx.error.message": "Invalid middleware handler",
+            "ctx.error.component": "MiddlewareExecutorProcessor",
+          },
+        });
 
         continue;
       }
@@ -129,24 +127,17 @@ export class MiddlewareExecutorProcessor {
               error: nextState.error.message,
             });
 
-            // Finish span with error
-            TelemetryManagerProcessor.finishMiddlewareSpan(
-              middlewareSpan,
-              "error",
-              duration,
-              nextState.error,
-              logger,
-            );
-
-            // Record metrics
-            TelemetryManagerProcessor.recordMiddlewareExecution(
-              telemetry,
-              middlewareName,
-              "global",
-              duration,
-              "error",
-              logger,
-            );
+            telemetry?.emit("igniter.core.middleware.execute.error", {
+              level: "error",
+              attributes: {
+                ...baseAttributes,
+                "ctx.middleware.duration_ms": duration,
+                "ctx.error.type": "runtime",
+                "ctx.error.code": "MIDDLEWARE_NEXT_ERROR",
+                "ctx.error.message": nextState.error.message,
+                "ctx.error.component": "MiddlewareExecutorProcessor",
+              },
+            });
 
             return {
               success: false,
@@ -160,24 +151,16 @@ export class MiddlewareExecutorProcessor {
               middlewareName,
             });
 
-            // Finish span - early return
-            TelemetryManagerProcessor.finishMiddlewareSpan(
-              middlewareSpan,
-              "early_return",
-              duration,
-              undefined,
-              logger,
-            );
-
-            // Record metrics
-            TelemetryManagerProcessor.recordMiddlewareExecution(
-              telemetry,
-              middlewareName,
-              "global",
-              duration,
-              "early_return",
-              logger,
-            );
+            const responseInfo = this.getEarlyReturnInfo(nextState.result);
+            telemetry?.emit("igniter.core.middleware.execute.early_return", {
+              level: "debug",
+              attributes: {
+                ...baseAttributes,
+                "ctx.middleware.duration_ms": duration,
+                "ctx.response.type": responseInfo.type,
+                "ctx.response.status_code": responseInfo.status,
+              },
+            });
 
             return {
               success: false,
@@ -191,24 +174,13 @@ export class MiddlewareExecutorProcessor {
               middlewareName,
             });
 
-            // Finish span - success (stop)
-            TelemetryManagerProcessor.finishMiddlewareSpan(
-              middlewareSpan,
-              "success",
-              duration,
-              undefined,
-              logger,
-            );
-
-            // Record metrics
-            TelemetryManagerProcessor.recordMiddlewareExecution(
-              telemetry,
-              middlewareName,
-              "global",
-              duration,
-              "success",
-              logger,
-            );
+            telemetry?.emit("igniter.core.middleware.execute.success", {
+              level: "debug",
+              attributes: {
+                ...baseAttributes,
+                "ctx.middleware.duration_ms": duration,
+              },
+            });
 
             return {
               success: true,
@@ -221,24 +193,13 @@ export class MiddlewareExecutorProcessor {
               middlewareName,
             });
 
-            // Finish span - success (skip)
-            TelemetryManagerProcessor.finishMiddlewareSpan(
-              middlewareSpan,
-              "success",
-              duration,
-              undefined,
-              logger,
-            );
-
-            // Record metrics
-            TelemetryManagerProcessor.recordMiddlewareExecution(
-              telemetry,
-              middlewareName,
-              "global",
-              duration,
-              "success",
-              logger,
-            );
+            telemetry?.emit("igniter.core.middleware.execute.success", {
+              level: "debug",
+              attributes: {
+                ...baseAttributes,
+                "ctx.middleware.duration_ms": duration,
+              },
+            });
 
             continue;
           }
@@ -251,24 +212,15 @@ export class MiddlewareExecutorProcessor {
             type: "Response",
           });
 
-          // Finish span - early return
-          TelemetryManagerProcessor.finishMiddlewareSpan(
-            middlewareSpan,
-            "early_return",
-            duration,
-            undefined,
-            logger,
-          );
-
-          // Record metrics
-          TelemetryManagerProcessor.recordMiddlewareExecution(
-            telemetry,
-            middlewareName,
-            "global",
-            duration,
-            "early_return",
-            logger,
-          );
+          telemetry?.emit("igniter.core.middleware.execute.early_return", {
+            level: "debug",
+            attributes: {
+              ...baseAttributes,
+              "ctx.middleware.duration_ms": duration,
+              "ctx.response.type": "response",
+              "ctx.response.status_code": result.status,
+            },
+          });
 
           return {
             success: false,
@@ -284,24 +236,14 @@ export class MiddlewareExecutorProcessor {
             type: "ResponseProcessor",
           });
 
-          // Finish span - early return
-          TelemetryManagerProcessor.finishMiddlewareSpan(
-            middlewareSpan,
-            "early_return",
-            duration,
-            undefined,
-            logger,
-          );
-
-          // Record metrics
-          TelemetryManagerProcessor.recordMiddlewareExecution(
-            telemetry,
-            middlewareName,
-            "global",
-            duration,
-            "early_return",
-            logger,
-          );
+          telemetry?.emit("igniter.core.middleware.execute.early_return", {
+            level: "debug",
+            attributes: {
+              ...baseAttributes,
+              "ctx.middleware.duration_ms": duration,
+              "ctx.response.type": "processor",
+            },
+          });
 
           return {
             success: false,
@@ -327,24 +269,13 @@ export class MiddlewareExecutorProcessor {
           }
         }
 
-        // Finish span - success
-        TelemetryManagerProcessor.finishMiddlewareSpan(
-          middlewareSpan,
-          "success",
-          duration,
-          undefined,
-          logger,
-        );
-
-        // Record metrics
-        TelemetryManagerProcessor.recordMiddlewareExecution(
-          telemetry,
-          middlewareName,
-          "global",
-          duration,
-          "success",
-          logger,
-        );
+        telemetry?.emit("igniter.core.middleware.execute.success", {
+          level: "debug",
+          attributes: {
+            ...baseAttributes,
+            "ctx.middleware.duration_ms": duration,
+          },
+        });
       } catch (error) {
         const duration = Date.now() - middlewareStartTime;
 
@@ -354,24 +285,18 @@ export class MiddlewareExecutorProcessor {
           error: error instanceof Error ? error.message : "Unknown error",
         });
 
-        // Finish span with error
-        TelemetryManagerProcessor.finishMiddlewareSpan(
-          middlewareSpan,
-          "error",
-          duration,
-          error instanceof Error ? error : new Error(String(error)),
-          logger,
-        );
-
-        // Record metrics
-        TelemetryManagerProcessor.recordMiddlewareExecution(
-          telemetry,
-          middlewareName,
-          "global",
-          duration,
-          "error",
-          logger,
-        );
+        telemetry?.emit("igniter.core.middleware.execute.error", {
+          level: "error",
+          attributes: {
+            ...baseAttributes,
+            "ctx.middleware.duration_ms": duration,
+            "ctx.error.type": "runtime",
+            "ctx.error.code": "MIDDLEWARE_EXECUTION_ERROR",
+            "ctx.error.message":
+              error instanceof Error ? error.message : "Unknown error",
+            "ctx.error.component": "MiddlewareExecutorProcessor",
+          },
+        });
 
         throw error; // Re-throw to be caught by the main processor
       }
@@ -394,15 +319,13 @@ export class MiddlewareExecutorProcessor {
    * @param middlewares - Array of action-specific middlewares to execute
    * @param logger - Optional logger instance
    * @param telemetry - Optional telemetry provider for metrics
-   * @param parentSpan - Optional parent span for tracing
    * @returns Promise resolving to execution result
    */
   static async executeAction(
     context: ProcessedContext,
     middlewares: IgniterProcedure<unknown, unknown, unknown>[],
     logger?: IgniterLogger,
-    telemetry?: IgniterTelemetryProvider | null,
-    parentSpan?: IgniterTelemetrySpan,
+    telemetry?: IgniterCoreTelemetryManager | null,
   ): Promise<MiddlewareExecutionResult> {
     const childLogger = logger?.child("MiddlewareExecutorProcessor");
 
@@ -423,17 +346,18 @@ export class MiddlewareExecutorProcessor {
     for (const middleware of middlewares) {
       const middlewareName = middleware.name || `anonymous_${index}`;
       const middlewareStartTime = Date.now();
-
-      // Create telemetry span for this middleware
-      const middlewareSpan = TelemetryManagerProcessor.createMiddlewareSpan(
-        telemetry,
-        middlewareName,
-        "action",
-        parentSpan,
-        logger,
-      );
+      const baseAttributes = {
+        "ctx.middleware.name": middlewareName,
+        "ctx.middleware.type": "action" as const,
+        "ctx.middleware.index": index,
+      };
 
       childLogger?.debug("Middleware executing", { middlewareName });
+
+      telemetry?.emit("igniter.core.middleware.execute.started", {
+        level: "debug",
+        attributes: baseAttributes,
+      });
 
       // Validate middleware has handler
       if (!middleware.handler || typeof middleware.handler !== "function") {
@@ -443,15 +367,18 @@ export class MiddlewareExecutorProcessor {
           reason: "missing or not a function",
         });
 
-        // Finish span - invalid handler
         const duration = Date.now() - middlewareStartTime;
-        TelemetryManagerProcessor.finishMiddlewareSpan(
-          middlewareSpan,
-          "error",
-          duration,
-          new Error("Invalid middleware handler"),
-          logger,
-        );
+        telemetry?.emit("igniter.core.middleware.execute.error", {
+          level: "error",
+          attributes: {
+            ...baseAttributes,
+            "ctx.middleware.duration_ms": duration,
+            "ctx.error.type": "runtime",
+            "ctx.error.code": "MIDDLEWARE_HANDLER_INVALID",
+            "ctx.error.message": "Invalid middleware handler",
+            "ctx.error.component": "MiddlewareExecutorProcessor",
+          },
+        });
 
         index++;
         continue;
@@ -477,24 +404,15 @@ export class MiddlewareExecutorProcessor {
             type: "Response",
           });
 
-          // Finish span - early return
-          TelemetryManagerProcessor.finishMiddlewareSpan(
-            middlewareSpan,
-            "early_return",
-            duration,
-            undefined,
-            logger,
-          );
-
-          // Record metrics
-          TelemetryManagerProcessor.recordMiddlewareExecution(
-            telemetry,
-            middlewareName,
-            "action",
-            duration,
-            "early_return",
-            logger,
-          );
+          telemetry?.emit("igniter.core.middleware.execute.early_return", {
+            level: "debug",
+            attributes: {
+              ...baseAttributes,
+              "ctx.middleware.duration_ms": duration,
+              "ctx.response.type": "response",
+              "ctx.response.status_code": result.status,
+            },
+          });
 
           return {
             success: false,
@@ -510,24 +428,14 @@ export class MiddlewareExecutorProcessor {
             type: "ResponseProcessor",
           });
 
-          // Finish span - early return
-          TelemetryManagerProcessor.finishMiddlewareSpan(
-            middlewareSpan,
-            "early_return",
-            duration,
-            undefined,
-            logger,
-          );
-
-          // Record metrics
-          TelemetryManagerProcessor.recordMiddlewareExecution(
-            telemetry,
-            middlewareName,
-            "action",
-            duration,
-            "early_return",
-            logger,
-          );
+          telemetry?.emit("igniter.core.middleware.execute.early_return", {
+            level: "debug",
+            attributes: {
+              ...baseAttributes,
+              "ctx.middleware.duration_ms": duration,
+              "ctx.response.type": "processor",
+            },
+          });
 
           return {
             success: false,
@@ -553,24 +461,13 @@ export class MiddlewareExecutorProcessor {
           }
         }
 
-        // Finish span - success
-        TelemetryManagerProcessor.finishMiddlewareSpan(
-          middlewareSpan,
-          "success",
-          duration,
-          undefined,
-          logger,
-        );
-
-        // Record metrics
-        TelemetryManagerProcessor.recordMiddlewareExecution(
-          telemetry,
-          middlewareName,
-          "action",
-          duration,
-          "success",
-          logger,
-        );
+        telemetry?.emit("igniter.core.middleware.execute.success", {
+          level: "debug",
+          attributes: {
+            ...baseAttributes,
+            "ctx.middleware.duration_ms": duration,
+          },
+        });
       } catch (error) {
         const duration = Date.now() - middlewareStartTime;
 
@@ -580,24 +477,18 @@ export class MiddlewareExecutorProcessor {
           error: error instanceof Error ? error.message : "Unknown error",
         });
 
-        // Finish span with error
-        TelemetryManagerProcessor.finishMiddlewareSpan(
-          middlewareSpan,
-          "error",
-          duration,
-          error instanceof Error ? error : new Error(String(error)),
-          logger,
-        );
-
-        // Record metrics
-        TelemetryManagerProcessor.recordMiddlewareExecution(
-          telemetry,
-          middlewareName,
-          "action",
-          duration,
-          "error",
-          logger,
-        );
+        telemetry?.emit("igniter.core.middleware.execute.error", {
+          level: "error",
+          attributes: {
+            ...baseAttributes,
+            "ctx.middleware.duration_ms": duration,
+            "ctx.error.type": "runtime",
+            "ctx.error.code": "MIDDLEWARE_EXECUTION_ERROR",
+            "ctx.error.message":
+              error instanceof Error ? error.message : "Unknown error",
+            "ctx.error.component": "MiddlewareExecutorProcessor",
+          },
+        });
 
         throw error; // Re-throw to be caught by the main processor
       }
@@ -613,6 +504,20 @@ export class MiddlewareExecutorProcessor {
       success: true,
       updatedContext,
     };
+  }
+
+  private static getEarlyReturnInfo(
+    result: unknown,
+  ): { type?: string; status?: number } {
+    if (result instanceof Response) {
+      return { type: "response", status: result.status };
+    }
+
+    if (result instanceof IgniterResponseProcessor) {
+      return { type: "processor" };
+    }
+
+    return { type: typeof result };
   }
 
   /**

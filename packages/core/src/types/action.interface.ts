@@ -4,14 +4,24 @@ import type { IgniterCookie } from "../services/cookie.service";
 import type { IgniterProcedure, InferActionProcedureContext } from "./procedure.interface";
 import type { StandardSchemaV1 } from "./schema.interface";
 import type { InferParamPath, NonUnknownObject, Prettify } from "./utils.interface";
-import type { IgniterRealtimeService } from "./realtime.interface";
+import type { IgniterRequestDevice, IgniterRequestGeo } from "./realtime.interface";
+import type { IgniterStoreRealtimeProcessor } from "../services/realtime.service";
+import type { IgniterStoreCacheProcessor } from "../services/cache.processor";
 import type { IgniterPlugin, InferIgniterPlugins } from "./plugin.interface";
+import type { IIgniterTelemetrySession } from "@igniter-js/telemetry";
+
+/**
+ * Type alias for telemetry session in action context.
+ */
+export type IgniterTelemetrySession = IIgniterTelemetrySession<string, string>;
 
 export type QueryMethod = "GET";
 export type MutationMethod = "POST" | "PUT" | "DELETE" | "PATCH";
 export type HTTPMethod = QueryMethod | MutationMethod;
 export type IgniterCookies = IgniterCookie;
 export type IgniterHeaders = Headers;
+export type IgniterRealtimeApi = ReturnType<IgniterStoreRealtimeProcessor["$api"]>;
+export type IgniterCacheApi = ReturnType<IgniterStoreCacheProcessor["$api"]>;
 
 /**
  * Infers the caller signature for a given IgniterAction.
@@ -20,22 +30,22 @@ export type IgniterHeaders = Headers;
  */
 export type InferActionCaller<TActionInput, TActionOutput> =
   NonUnknownObject<TActionInput> extends never
-    ? () => Promise<TActionOutput>
-    : (input: NonUnknownObject<TActionInput>) => Promise<TActionOutput>;
+  ? () => Promise<TActionOutput>
+  : (input: NonUnknownObject<TActionInput>) => Promise<TActionOutput>;
 
 /**
  * Utility type to infer the final response type from an action handler.
  */
- export type InferActionResponse<TReturn> =
-   TReturn extends any
-     ? TReturn extends Promise<infer TData>
-       ? InferActionResponse<TData>
-       : TReturn extends IgniterResponse<infer TDataType, infer TErrorType>
-         ? IgniterResponse<TDataType, TErrorType>
-         : TReturn extends Response
-         ? InferWebResponse<TReturn>
-       : InferDirectResponse<TReturn>
-     : never;
+export type InferActionResponse<TReturn> =
+  TReturn extends any
+  ? TReturn extends Promise<infer TData>
+  ? InferActionResponse<TData>
+  : TReturn extends IgniterResponse<infer TDataType, infer TErrorType>
+  ? IgniterResponse<TDataType, TErrorType>
+  : TReturn extends Response
+  ? InferWebResponse<TReturn>
+  : InferDirectResponse<TReturn>
+  : never;
 
 /**
  * Infer types when returning Web API Response directly
@@ -51,9 +61,9 @@ type InferWebResponse<T> = {
 type InferDirectResponse<T> = T extends IgniterResponse<infer TData, infer TError>
   ? IgniterResponse<TData, TError>
   : {
-      data?: T;
-      error?: IgniterErrorResponse;
-    };
+    data?: T;
+    error?: IgniterErrorResponse;
+  };
 
 /**
  * Base error response type
@@ -72,8 +82,8 @@ type InferActionContext<
   TActionMiddlewares extends readonly IgniterProcedure<any, any, unknown>[] | undefined
 > = TActionContext & (
   TActionMiddlewares extends readonly IgniterProcedure<any, any, unknown>[]
-    ? InferActionProcedureContext<TActionMiddlewares>
-    : {}
+  ? InferActionProcedureContext<TActionMiddlewares>
+  : {}
 );
 
 /**
@@ -122,17 +132,32 @@ export type IgniterActionContext<
    * Path parameters are inferred from the route path template.
    */
   request: {
+    /**
+     * Unique request identifier.
+     * This is the same as the telemetry session ID for this request.
+     * Use this for logging, debugging, and correlating events.
+     *
+     * @example
+     * ```typescript
+     * console.log('Processing request:', ctx.request.id);
+     * // Output: "Processing request: ses_lxq7z3kp_a1b2c3d4"
+     * ```
+     */
+    id: string;
     method: TActionMethod;
     path: TActionPath;
     params: InferParamPath<TActionPath>;
     headers: IgniterHeaders;
     cookies: IgniterCookies;
+    ip?: string;
+    device?: IgniterRequestDevice;
+    geo?: IgniterRequestGeo;
     body: TActionBody extends StandardSchemaV1
-      ? StandardSchemaV1.InferInput<TActionBody>
-      : undefined;
+    ? StandardSchemaV1.InferInput<TActionBody>
+    : undefined;
     query: TActionQuery extends StandardSchemaV1
-      ? StandardSchemaV1.InferInput<TActionQuery>
-      : undefined;
+    ? StandardSchemaV1.InferInput<TActionQuery>
+    : undefined;
     raw: Request;
   };
 
@@ -146,13 +171,42 @@ export type IgniterActionContext<
    * Response processor for creating typed HTTP responses.
    * Supports JSON, HTML, SSE, and custom response types.
    */
-   response: IgniterResponseProcessor<InferActionContext<TActionContext, TActionMiddlewares>>;
+  response: IgniterResponseProcessor<InferActionContext<TActionContext, TActionMiddlewares>>;
 
   /**
-   * Realtime service for server-sent events and websocket communication.
+   * Realtime processor for server-sent events.
    * Enables real-time updates to connected clients.
    */
-  realtime: IgniterRealtimeService<InferActionContext<TActionContext, TActionMiddlewares>>;
+  realtime: IgniterRealtimeApi;
+
+  /**
+   * Cache processor for response and geo caching.
+   */
+  cache: IgniterCacheApi;
+
+  /**
+   * Telemetry session for this request (optional).
+   * Allows emitting custom telemetry events within this request's context.
+   * All events emitted will share the same request.id (session ID).
+   *
+   * @example
+   * ```typescript
+   * handler: async (ctx) => {
+   *   // Log request ID for debugging
+   *   console.log('Request:', ctx.request.id);
+   *
+   *   // Emit custom telemetry event
+   *   ctx.telemetry?.emit('custom.event', {
+   *     attributes: { 'ctx.custom.value': 'test' }
+   *   });
+   *
+   *   // Access current session state
+   *   const state = ctx.telemetry?.getState();
+   *   console.log('Session ID:', state?.sessionId);
+   * }
+   * ```
+   */
+  telemetry?: IgniterTelemetrySession;
 
   /**
    * Type-safe plugin access registry.
@@ -277,6 +331,11 @@ export type IgniterAction<
     TActionResponse
   >,
 > = {
+  $meta?: {
+    controller: string;
+    action: string;
+    pathKey: string;
+  };
   name?: string;
   type: TActionMethod extends QueryMethod ? "query" : "mutation";
   path: TActionPath;
@@ -311,20 +370,20 @@ export type InferEndpoint<
   >,
   TResponse extends ReturnType<TActionHandler>,
   TActionInferBody = TActionBody extends StandardSchemaV1
-    ? StandardSchemaV1.InferInput<TActionBody>
-    : undefined,
+  ? StandardSchemaV1.InferInput<TActionBody>
+  : undefined,
   TActionInferQuery = TActionQuery extends StandardSchemaV1
-    ? StandardSchemaV1.InferInput<TActionQuery>
-    : {},
+  ? StandardSchemaV1.InferInput<TActionQuery>
+  : {},
   TActionInferParams = InferParamPath<TActionPath>,
   TActionInferInput = Prettify<
     (TActionBody extends StandardSchemaV1 ? { body: TActionInferBody } : {}) &
-      (TActionQuery extends StandardSchemaV1
-        ? { query: TActionInferQuery }
-        : {}) & { params: TActionInferParams } &
-      { headers?: Record<string, string> } &
-      { cookies?: Record<string, string> } &
-      { credentials?: RequestCredentials }
+    (TActionQuery extends StandardSchemaV1
+      ? { query: TActionInferQuery }
+      : {}) & { params: TActionInferParams } &
+    { headers?: Record<string, string> } &
+    { cookies?: Record<string, string> } &
+    { credentials?: RequestCredentials }
   >,
   TActionInferResponse = InferActionResponse<TResponse>,
   TActionInferCaller = InferActionCaller<TActionInferInput, TActionInferResponse>,

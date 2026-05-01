@@ -1,5 +1,21 @@
 # @igniter-js/core
 
+## *
+
+### Minor Changes
+
+- feat(core): add fluent `IgniterRouterBuilder` with support for CORS, Rate Limiting, Health Checks, and Global Middlewares.
+  feat(core): add `router.listen()` API for standalone server deployment on Bun, Node.js, and Deno.
+  fix(core): improve type safety and error handling in the request processing pipeline.
+
+## 0.4.0
+
+### Minor Changes
+
+- feat(core): add fluent `IgniterRouterBuilder` with support for CORS, Rate Limiting, Health Checks, and Global Middlewares.
+  feat(core): add `router.listen()` API for standalone server deployment on Bun, Node.js, and Deno.
+  fix(core): improve type safety and error handling in the request processing pipeline.
+
 ## 0.3.0
 
 ### Minor Changes
@@ -9,13 +25,11 @@
   Igniter.js is now a fully modular, type-safe backend framework. This alpha release debuts a robust architecture with first-class type safety, powerful built-in features, and standalone adapters for extensibility and flexibility.
 
   ### Breaking Changes
-
   - New modular package architecture
   - Adapters extracted into standalone packages
   - Updated import paths and API patterns
 
   ### Core Features
-
   - **Type-Safe Router**
     - Procedure-based routing system
     - Middleware chain with execution control
@@ -95,7 +109,6 @@
   ```
 
   ### Key Benefits
-
   - Full type safety across all features
   - Modular architecture - install only what you need
   - Built-in realtime capabilities
@@ -109,7 +122,6 @@
   ### Next Steps
 
   We're currently focused on:
-
   - Completing the new Igniter.js CLI for improved developer experience
   - Finalizing comprehensive unit and integration test coverage
   - Expanding and refining documentation with more examples

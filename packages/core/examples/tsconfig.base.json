@@ -1,0 +1,18 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../..",
+    "baseUrl": ".",
+    "jsx": "react-jsx",
+    "types": ["node", "react", "react-dom"],
+    "paths": {
+      "@/*": ["../src/*", "../../telemetry/src/*"],
+      "@igniter-js/core": ["../src/index.ts"],
+      "@igniter-js/core/client": ["../src/client/index.ts"],
+      "@igniter-js/core/telemetry": ["../src/telemetry/index.ts"],
+      "@igniter-js/telemetry": ["../../telemetry/src/index.ts"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx"]
+}

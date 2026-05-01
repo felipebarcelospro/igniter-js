@@ -1,8 +1,7 @@
 import { IgniterError } from "../error";
 import type { ProcessedContext } from "./context-builder.processor";
-import type { TelemetrySpan } from "./telemetry-manager.processor";
-import { TelemetryManagerProcessor } from "./telemetry-manager.processor";
 import type { IgniterLogger } from "../types";
+import type { IgniterCoreTelemetryManager } from "../types/telemetry.interface";
 
 /**
  * Error handling result
@@ -22,17 +21,17 @@ export class ErrorHandlerProcessor {
    *
    * @param error - The validation error
    * @param context - The processed context
-   * @param telemetrySpan - The telemetry span for tracking
    * @param startTime - Request start time
    * @param logger - Optional logger instance
+   * @param telemetry - Optional telemetry manager for tracking
    * @returns Standardized error response
    */
   static async handleValidationError(
     error: any,
     context: ProcessedContext,
-    telemetrySpan: TelemetrySpan | null,
     startTime: number,
     logger?: IgniterLogger,
+    telemetry?: IgniterCoreTelemetryManager | null,
   ): Promise<ErrorHandlingResult> {
     const childLogger = logger?.child("ErrorHandlerProcessor");
 
@@ -49,17 +48,15 @@ export class ErrorHandlerProcessor {
     });
 
     // Track validation error for CLI dashboard
-    await this.trackError(context, startTime, statusCode, error, logger);
-
-    // Finish telemetry span with error
-    if (telemetrySpan) {
-      TelemetryManagerProcessor.finishSpanError(
-        telemetrySpan,
-        statusCode,
-        error,
-        childLogger,
-      );
-    }
+    await this.trackError(
+      context,
+      startTime,
+      statusCode,
+      error,
+      "validation",
+      logger,
+      telemetry,
+    );
 
     return {
       response: new Response(
@@ -85,17 +82,17 @@ export class ErrorHandlerProcessor {
    *
    * @param error - The IgniterError instance
    * @param context - The processed context
-   * @param telemetrySpan - The telemetry span for tracking
    * @param startTime - Request start time
    * @param logger - Optional logger instance
+   * @param telemetry - Optional telemetry manager for tracking
    * @returns Standardized error response
    */
   static async handleIgniterError(
     error: IgniterError,
     context: ProcessedContext,
-    telemetrySpan: TelemetrySpan | null,
     startTime: number,
     logger?: IgniterLogger,
+    telemetry?: IgniterCoreTelemetryManager | null,
   ): Promise<ErrorHandlingResult> {
     const childLogger = logger?.child("ErrorHandlerProcessor");
 
@@ -111,17 +108,15 @@ export class ErrorHandlerProcessor {
     });
 
     // Track igniter error for CLI dashboard
-    await this.trackError(context, startTime, error.statusCode, error, logger);
-
-    // Finish telemetry span with error
-    if (telemetrySpan) {
-      TelemetryManagerProcessor.finishSpanError(
-        telemetrySpan,
-        error.statusCode,
-        error,
-        logger,
-      );
-    }
+    await this.trackError(
+      context,
+      startTime,
+      error.statusCode,
+      error,
+      "igniter",
+      logger,
+      telemetry,
+    );
 
     return {
       response: new Response(
@@ -147,17 +142,17 @@ export class ErrorHandlerProcessor {
    *
    * @param error - The generic error
    * @param context - The processed context
-   * @param telemetrySpan - The telemetry span for tracking
    * @param startTime - Request start time
    * @param logger - Optional logger instance
+   * @param telemetry - Optional telemetry manager for tracking
    * @returns Standardized error response
    */
   static async handleGenericError(
     error: any,
     context: ProcessedContext,
-    telemetrySpan: TelemetrySpan | null,
     startTime: number,
     logger?: IgniterLogger,
+    telemetry?: IgniterCoreTelemetryManager | null,
   ): Promise<ErrorHandlingResult> {
     const childLogger = logger?.child("ErrorHandlerProcessor");
 
@@ -181,18 +176,10 @@ export class ErrorHandlerProcessor {
       startTime,
       statusCode,
       error as Error,
+      "generic",
       logger,
+      telemetry,
     );
-
-    // Finish telemetry span with error
-    if (telemetrySpan) {
-      TelemetryManagerProcessor.finishSpanError(
-        telemetrySpan,
-        statusCode,
-        error as Error,
-        childLogger,
-      );
-    }
 
     return {
       response: new Response(
@@ -218,17 +205,17 @@ export class ErrorHandlerProcessor {
    *
    * @param error - The initialization error
    * @param context - The processed context (may be partial)
-   * @param telemetrySpan - The telemetry span for tracking
    * @param startTime - Request start time
    * @param logger - Optional logger instance
+   * @param telemetry - Optional telemetry manager for tracking
    * @returns Standardized error response
    */
   static async handleInitializationError(
     error: any,
     context: ProcessedContext | null,
-    telemetrySpan: TelemetrySpan | null,
     startTime: number,
     logger?: IgniterLogger,
+    telemetry?: IgniterCoreTelemetryManager | null,
   ): Promise<ErrorHandlingResult> {
     const childLogger = logger?.child("ErrorHandlerProcessor");
 
@@ -244,26 +231,16 @@ export class ErrorHandlerProcessor {
       method: context?.request?.method,
     });
 
-    // Clean up telemetry span if it exists
-    if (telemetrySpan) {
-      TelemetryManagerProcessor.cleanupSpan(
-        telemetrySpan,
-        statusCode,
-        error as Error,
-        logger,
-      );
-    }
-
     // Track initialization error (may not have full context)
-    if (context) {
-      await this.trackError(
-        context,
-        startTime,
-        statusCode,
-        error as Error,
-        logger,
-      );
-    }
+    await this.trackError(
+      context,
+      startTime,
+      statusCode,
+      error as Error,
+      "initialization",
+      logger,
+      telemetry,
+    );
 
     return {
       response: new Response(
@@ -289,17 +266,17 @@ export class ErrorHandlerProcessor {
    *
    * @param error - The error to classify and handle
    * @param context - The processed context
-   * @param telemetrySpan - The telemetry span for tracking
    * @param startTime - Request start time
    * @param logger - Optional logger instance
+   * @param telemetry - Optional telemetry manager for tracking
    * @returns Standardized error response
    */
   static async handleError(
     error: any,
     context: ProcessedContext,
-    telemetrySpan: TelemetrySpan | null,
     startTime: number,
     logger?: IgniterLogger,
+    telemetry?: IgniterCoreTelemetryManager | null,
   ): Promise<ErrorHandlingResult> {
     // Zod validation errors
     if (
@@ -318,9 +295,9 @@ export class ErrorHandlerProcessor {
       return this.handleValidationError(
         zodError,
         context,
-        telemetrySpan,
         startTime,
         logger,
+        telemetry,
       );
     }
 
@@ -329,9 +306,9 @@ export class ErrorHandlerProcessor {
       return this.handleIgniterError(
         error,
         context,
-        telemetrySpan,
         startTime,
         logger,
+        telemetry,
       );
     }
 
@@ -339,9 +316,9 @@ export class ErrorHandlerProcessor {
     return this.handleGenericError(
       error,
       context,
-      telemetrySpan,
       startTime,
       logger,
+      telemetry,
     );
   }
 
@@ -425,27 +402,44 @@ export class ErrorHandlerProcessor {
    * Tracks errors for monitoring and debugging purposes
    */
   private static async trackError(
-    context: ProcessedContext,
+    context: ProcessedContext | null,
     startTime: number,
     statusCode: number,
     error: Error,
+    errorType: "validation" | "igniter" | "generic" | "initialization" | "runtime",
     logger?: IgniterLogger,
+    telemetry?: IgniterCoreTelemetryManager | null,
   ): Promise<void> {
     const childLogger = logger?.child("ErrorHandlerProcessor");
 
     try {
-      // Skip if context is not available
-      if (!context?.request) {
-        childLogger?.warn("Error tracking skipped", {
-          reason: "request context missing",
-        });
-        return;
-      }
-
       // Skip if tracking is disabled
       if (process.env.DISABLE_ERROR_TRACKING === "true") {
         childLogger?.debug("Error tracking disabled", {
           reason: "DISABLE_ERROR_TRACKING=true",
+        });
+        return;
+      }
+
+      const normalizedError = this.normalizeError(error);
+
+      telemetry?.emit("igniter.core.error.tracked", {
+        level: "error",
+        attributes: {
+          "ctx.http.method": context?.request?.method,
+          "ctx.http.path_key": context?.request?.path,
+          "ctx.error.type": errorType,
+          "ctx.error.code": normalizedError.code ?? "UNKNOWN_ERROR",
+          "ctx.error.message": normalizedError.message,
+          "ctx.error.status_code": statusCode,
+          "ctx.error.component": "ErrorHandlerProcessor",
+        },
+      });
+
+      // Skip if context is not available
+      if (!context?.request) {
+        childLogger?.warn("Error tracking limited", {
+          reason: "request context missing",
         });
         return;
       }
@@ -460,8 +454,6 @@ export class ErrorHandlerProcessor {
           : [],
         has_body: !!context.request.body,
       };
-
-      const normalizedError = this.normalizeError(error);
 
       // Log the error with context
       childLogger?.debug("Error tracking completed", {

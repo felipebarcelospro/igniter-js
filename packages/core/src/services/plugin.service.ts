@@ -17,16 +17,16 @@ import type {
   IgniterBaseContext,
 } from "../types/context.interface";
 import type { StandardSchemaV1 } from "../types/schema.interface";
-import type { IgniterStoreAdapter } from "../types/store.interface";
+import type { IgniterStoreManager } from "../types/store.interface";
 import { IgniterLogLevel, type IgniterLogger } from "../types";
 import { IgniterConsoleLogger } from "./logger.service";
 import { resolveLogLevel, createLoggerContext } from "../utils/logger";
 
 /**
- * 100% Type-Safe Plugin Manager for Igniter.js with StoreAdapter Integration
+ * 100% Type-Safe Plugin Manager for Igniter.js with Store Integration
  *
  * Manages plugin lifecycle, dependencies, events, and execution with complete type safety.
- * Uses StoreAdapter for event pub/sub and maintains Map registry for performance.
+ * Uses Store events for pub/sub and maintains Map registry for performance.
  * Supports self-referential plugins and complete context extension.
  *
  * @template TContext - Application context type
@@ -69,12 +69,12 @@ export class IgniterPluginManager<TContext extends object | ContextCallback> {
   private isInitialized = false;
 
   // ============ INJECTED DEPENDENCIES ============
-  private readonly store: IgniterStoreAdapter;
+  private readonly store: IgniterStoreManager;
   private readonly logger?: IgniterLogger;
 
   // ============ CONSTRUCTOR ============
   constructor(params: {
-    store: IgniterStoreAdapter;
+    store: IgniterStoreManager;
     logger?: IgniterLogger;
     config?: PluginManagerConfig<TContext>;
   }) {
@@ -396,7 +396,7 @@ export class IgniterPluginManager<TContext extends object | ContextCallback> {
   /**
    * Emit an event using StoreAdapter pub/sub system
    *
-   * Events are published to Redis channels with pattern: `igniter:plugin:events:{eventName}`
+   * Events are published to Store channels with pattern: `plugin:events:{eventName}`
    * Local event listeners are also executed for immediate response
    *
    * @param eventName - Name of the event
@@ -457,15 +457,15 @@ export class IgniterPluginManager<TContext extends object | ContextCallback> {
       }
 
       // 2. Publish to Store (Redis) for distributed handling
-      const eventChannel = `igniter:plugin:events:${eventName}`;
-      const eventMessage = JSON.stringify({
+      const eventChannel = `plugin:events:${eventName}`;
+      const eventMessage = {
         eventName,
         payload,
         timestamp: Date.now(),
         source: "plugin-manager",
-      });
+      };
 
-      await this.store.publish(eventChannel, eventMessage);
+      await this.store.events.publish(eventChannel, eventMessage);
 
       this.logger?.debug(
         `Event ${eventName} published to channel: ${eventChannel}`,

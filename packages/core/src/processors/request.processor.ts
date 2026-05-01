@@ -1,7 +1,6 @@
 import { addRoute, createRouter, type RouterContext } from "rou3";
 import { IgniterError } from "../error";
 import { IgniterResponseProcessor } from "./response.processor";
-import { SSEProcessor } from "./sse.processor";
 import { parseURL } from "../utils/url";
 import { parseResponse } from "../utils/response";
 import {
@@ -19,17 +18,22 @@ import type {
 import { getHeadersSafe } from "../adapters/nextjs";
 import { z } from "zod";
 import { RouteResolverProcessor } from "./route-resolver.processor";
-import { type ProcessedContext } from "./context-builder.processor";
+import type { ProcessedContext } from "./context-builder.processor";
 import { ContextBuilderProcessor } from "./context-builder.processor";
 import { MiddlewareExecutorProcessor } from "./middleware-executor.processor";
-import {
-  TelemetryManagerProcessor,
-  type TelemetrySpan,
-} from "./telemetry-manager.processor";
 import { ErrorHandlerProcessor } from "./error-handler.processor";
-import { IgniterRealtimeService } from "../services/realtime.service";
+import { BodyParserProcessor } from "./body-parser.processor";
 import { IgniterPluginManager } from "../services/plugin.service";
 import chalk, { ChalkInstance } from "chalk";
+import { generateRequestId, getRequestIp } from "../utils/request";
+import type { IgniterCoreTelemetryManager } from "../types/telemetry.interface";
+import { createCorsMiddleware } from "../middlewares/cors.middleware";
+import { createRateLimitMiddleware } from "../middlewares/rate-limit.middleware";
+import type {
+  IgniterOnRequestHook,
+  IgniterOnResponseHook,
+  IgniterErrorHandler,
+} from "../types/router.interface";
 
 /**
  * Handles HTTP request processing for the Igniter Framework.
@@ -54,9 +58,8 @@ import chalk, { ChalkInstance } from "chalk";
 export class RequestProcessor<
   TRouter extends IgniterRouter<any, any, any, any, any>,
   TConfig extends
-    RequestProcessorConfig<TRouter> = RequestProcessorConfig<TRouter>,
-> implements RequestProcessorInterface<TRouter, TConfig>
-{
+  RequestProcessorConfig<TRouter> = RequestProcessorConfig<TRouter>,
+> implements RequestProcessorInterface<TRouter, TConfig> {
   public plugins: Map<string, any>;
   public config: TConfig;
   public router: RouterContext<
@@ -64,6 +67,7 @@ export class RequestProcessor<
   >;
   public pluginManager?: IgniterPluginManager<any>;
   private logger?: IgniterLogger;
+  private builderMiddlewares: IgniterProcedure<any, any, any>[] = [];
 
   /**
    * Creates a new RequestProcessor instance.
@@ -77,6 +81,9 @@ export class RequestProcessor<
 
     // Initialize PluginManager if plugins exist
     this.initializePluginManager();
+
+    // Pre-instantiate builder middlewares to preserve state (e.g., Rate Limiting)
+    this.initializeBuilderMiddlewares();
 
     // Initialize router with async plugin registration
     this.router =
@@ -94,6 +101,32 @@ export class RequestProcessor<
   }
 
   /**
+   * Initialize builder-level middlewares (CORS, Rate Limit, etc.)
+   */
+  private initializeBuilderMiddlewares(): void {
+    if (!this.config.$builder) return;
+
+    // Add CORS if configured
+    if (this.config.$builder.cors) {
+      this.builderMiddlewares.push(
+        createCorsMiddleware(this.config.$builder.cors) as any,
+      );
+    }
+
+    // Add Rate Limit if configured
+    if (this.config.$builder.rateLimit) {
+      this.builderMiddlewares.push(
+        createRateLimitMiddleware(this.config.$builder.rateLimit) as any,
+      );
+    }
+
+    // Add custom builder middlewares
+    if (this.config.$builder.middlewares) {
+      this.builderMiddlewares.push(...this.config.$builder.middlewares);
+    }
+  }
+
+  /**
    * Async initialization for plugins and routes
    */
   private async initializeAsync(): Promise<void> {
@@ -103,9 +136,6 @@ export class RequestProcessor<
 
       // Then register all routes (controllers + plugins)
       this.registerRoutes();
-
-      // Initialize SSE channels
-      this.initializeSSEChannels();
 
       this.logger?.debug("Request processor initialized", {
         hasPluginManager: !!this.pluginManager,
@@ -127,10 +157,8 @@ export class RequestProcessor<
   private initializePluginManager(): void {
     if (this.config.plugins && Object.keys(this.config.plugins).length > 0) {
       try {
-        // Extract store and logger from context plugins
-        const contextPlugins = this.config.context.$plugins || {};
-        const store = contextPlugins.store;
-        const logger = contextPlugins.logger || this.logger;
+        const store = this.config.store;
+        const logger = this.config.logger || this.logger;
 
         if (!store) {
           this.logger?.warn("Plugin manager storage adapter missing", {
@@ -191,53 +219,6 @@ export class RequestProcessor<
   }
 
   /**
-   * Initialize SSE channels based on controllers and system needs
-   */
-  private initializeSSEChannels(): void {
-    // Register system channels
-    SSEProcessor.registerChannel(
-      {
-        id: "revalidation",
-        description: "Channel for cache revalidation events",
-      },
-      this.logger,
-    );
-
-    SSEProcessor.registerChannel(
-      {
-        id: "system",
-        description: "Channel for system events like metrics and logs",
-      },
-      this.logger,
-    );
-
-    // Register action-specific channels for streams
-    for (const [controllerKey, controller] of Object.entries(
-      this.config.controllers,
-    )) {
-      // @ts-ignore
-      for (const [actionKey, action] of Object.entries(controller.actions)) {
-        // @ts-ignore
-        if (action.stream) {
-          const channelId = `${controllerKey}.${actionKey}`;
-          this.logger?.debug("Stream channel registered", { channelId });
-          SSEProcessor.registerChannel(
-            {
-              id: channelId,
-              description: `Stream events for ${controllerKey}.${actionKey} action`,
-            },
-            this.logger,
-          );
-        }
-      }
-    }
-
-    this.logger?.debug("SSE initialization completed", {
-      channels: SSEProcessor.getRegisteredChannels().map((c) => c.id),
-    });
-  }
-
-  /**
    * Registers all routes (controllers + plugins) into the router.
    * Creates a routing table based on controller and plugin configurations.
    */
@@ -249,21 +230,21 @@ export class RequestProcessor<
     let routeCount = 0;
 
     // Register application controllers and actions
-    for (const controller of Object.values(
+    for (const [controllerKey, controller] of Object.entries(
       this.config.controllers,
-    ) as IgniterControllerConfig<any>[]) {
-      for (const endpoint of Object.values(controller.actions) as IgniterAction<
-        any,
-        any,
-        any,
-        any,
-        any,
-        any,
-        any,
-        any,
-        any,
-        any
-      >[]) {
+    ) as [string, IgniterControllerConfig<any>][]) {
+      for (const [actionKey, endpoint] of Object.entries(
+        controller.actions,
+      ) as [
+        string,
+        IgniterAction<any, any, any, any, any, any, any, any, any, any>,
+      ][]) {
+        endpoint.$meta = {
+          controller: controllerKey,
+          action: actionKey,
+          pathKey: `${controllerKey}.${actionKey}`,
+        };
+
         const path = parseURL(basePATH, controller.path, endpoint.path);
         addRoute(this.router, endpoint.method, path, endpoint);
         routeCount++;
@@ -360,6 +341,11 @@ export class RequestProcessor<
               any
             > = {
               ...actionConfig,
+              $meta: {
+                controller: `plugins.${pluginName}.${controllerName}`,
+                action: actionName,
+                pathKey: `plugins.${pluginName}.${controllerName}.${actionName}`,
+              },
               handler: async (ctx: any) => {
                 // Inject self-reference for the plugin
                 const self = this.pluginManager!.getPluginProxy(pluginName);
@@ -472,60 +458,111 @@ export class RequestProcessor<
     const method = request.method;
     const startTime = Date.now();
 
-    let telemetrySpan: TelemetrySpan | null = null;
-    let context: ProcessedContext;
+    const telemetry =
+      (this.config.telemetry ??
+        this.config?.plugins?.telemetry ??
+        null) as IgniterCoreTelemetryManager | null;
+    let context: ProcessedContext | null = null;
 
-    // Get telemetry from config plugins
-    const telemetry = this.config?.plugins?.telemetry || null;
+    const basePATH =
+      this.config.basePATH || process.env.IGNITER_APP_BASE_PATH || "/api/v1";
+    const sseEndpoint = parseURL(basePATH, "/sse/events");
 
     try {
+      this.logger?.debug("Processing request", { method, path, basePATH });
+      // 1. Health Check
+      const healthCheckPath = this.config.$builder?.healthCheck?.path;
+      if (healthCheckPath) {
+        const fullHealthPath = parseURL(basePATH, healthCheckPath);
+        this.logger?.debug("Health check check", { path, fullHealthPath });
+        if (path === fullHealthPath) {
+          return new Response(JSON.stringify({ status: "ok", timestamp: new Date().toISOString() }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      // 2. onRequest Hook
+      if (this.config.$builder?.onRequest) {
+        this.logger?.debug("Calling onRequest hook");
+        await this.config.$builder.onRequest(request);
+      }
+
       // Check if this is an SSE request to the central endpoint
-      const basePATH =
-        this.config.basePATH || process.env.IGNITER_APP_BASE_PATH || "/api/v1";
-      const sseEndpoint = parseURL(basePATH, "/sse/events");
+      const pathDepth = path.split("/").filter(Boolean).length;
+      const queryCount = Array.from(url.searchParams.keys()).length;
+      const headersCount = Array.from(request.headers.keys()).length;
+      const contentLength = Number(
+        request.headers.get("content-length") ?? "0",
+      );
+      const hasBody = contentLength > 0 || !!request.headers.get("content-type");
+
+      telemetry?.emit("igniter.core.http.request.started", {
+        level: "debug",
+        attributes: {
+          "ctx.http.method": request.method,
+          "ctx.http.path_depth": pathDepth,
+          "ctx.http.query_count": queryCount,
+          "ctx.http.headers_count": headersCount,
+          "ctx.http.has_body": hasBody,
+          "ctx.http.is_sse": path === sseEndpoint,
+        },
+      });
 
       if (path === sseEndpoint && method === "GET") {
         this.logger?.debug("SSE connection received", { url: request.url });
-        return await SSEProcessor.handleConnection(
-          request,
-          this.logger,
-          telemetry,
-        );
-      }
+        if (!this.config.realtime) {
+          telemetry?.emit("igniter.core.http.request.error", {
+            level: "error",
+            attributes: {
+              "ctx.http.method": request.method,
+              "ctx.http.path_key": path,
+              "ctx.http.path_depth": path.split("/").filter(Boolean).length,
+              "ctx.http.query_count": Array.from(url.searchParams.keys()).length,
+              "ctx.http.headers_count": Array.from(request.headers.keys()).length,
+              "ctx.http.has_body": false,
+              "ctx.http.is_sse": true,
+              "ctx.http.status_code": 501,
+              "ctx.http.duration_ms": Date.now() - startTime,
+              "ctx.error.type": "runtime",
+              "ctx.error.code": "REALTIME_NOT_CONFIGURED",
+              "ctx.error.message": "Realtime is not configured",
+              "ctx.error.component": "RequestProcessor",
+            },
+          });
+          return new Response("Realtime is not configured", { status: 501 });
+        }
+        const response = await this.config.realtime.openConnection(request);
 
-      // Step 1: Resolve route with telemetry
-      const routeResult = RouteResolverProcessor.resolve(
-        this.router,
-        method,
-        path,
-        this.logger,
-        telemetry,
-        undefined, // No parent span yet
-      );
-      if (!routeResult.success) {
-        const response = new Response(null, {
-          status: routeResult.error!.status,
-          statusText: routeResult.error!.statusText,
+        telemetry?.emit("igniter.core.http.request.success", {
+          level: "debug",
+          attributes: {
+            "ctx.http.method": request.method,
+            "ctx.http.path_key": path,
+            "ctx.http.path_depth": path.split("/").filter(Boolean).length,
+            "ctx.http.query_count": Array.from(url.searchParams.keys()).length,
+            "ctx.http.headers_count": Array.from(request.headers.keys()).length,
+            "ctx.http.has_body": false,
+            "ctx.http.is_sse": true,
+            "ctx.http.status_code": response.status || 200,
+            "ctx.http.duration_ms": Date.now() - startTime,
+            "ctx.response.type": "stream",
+          },
         });
 
-        this.logResponse(request, response, startTime);
         return response;
       }
 
-      const { action, params } = routeResult;
-      const handler = action!;
-      this.logger?.debug("Route resolved", { method, path, params });
-
-      // Step 2: Build context with telemetry
+      // Step 2: Build initial context with telemetry (no params yet)
       context = await ContextBuilderProcessor.build(
         this.config,
         request,
-        params!,
+        {},
         url,
-        !!action?.body,
+        false, // Don't parse body yet for global middlewares
         this.logger,
         telemetry,
-        undefined, // No parent span yet
       );
 
       // Step 3: Enhance context with plugins
@@ -536,28 +573,19 @@ export class RequestProcessor<
         telemetry,
       );
 
-      // Step 4: Initialize telemetry span (this becomes the parent span for child operations)
-      telemetrySpan = TelemetryManagerProcessor.createHttpSpan(
-        request,
-        context,
-        startTime,
-        this.logger,
-      );
-      if (telemetrySpan) {
-        this.logger?.debug("HTTP span created");
-      }
-
-      // Get the parent span for child operations
-      const parentSpan = telemetrySpan?.span;
+      // Step 4: Prepare all global middlewares (plugin-provided + builder-provided)
+      const allGlobalMiddlewares = [
+        ...(Array.isArray(context.$plugins.use) ? context.$plugins.use : []),
+        ...this.builderMiddlewares,
+      ];
 
       // Step 5: Execute global middlewares with telemetry
-      if (context.$plugins.use && Array.isArray(context.$plugins.use)) {
+      if (allGlobalMiddlewares.length > 0) {
         const globalResult = await MiddlewareExecutorProcessor.executeGlobal(
           context,
-          context.$plugins.use,
+          allGlobalMiddlewares as IgniterProcedure<unknown, unknown, unknown>[],
           this.logger,
           telemetry,
-          parentSpan,
         );
 
         if (!globalResult.success) {
@@ -570,6 +598,69 @@ export class RequestProcessor<
         context = globalResult.updatedContext;
       }
 
+      const routeResult = RouteResolverProcessor.resolve(
+        this.router,
+        method,
+        path,
+        this.logger,
+        telemetry,
+      );
+
+      if (!routeResult.success) {
+        let response = new Response(null, {
+          status: routeResult.error!.status,
+          statusText: routeResult.error!.statusText,
+        });
+
+        // Apply CORS headers to 404/error responses if configured
+        if (this.config.$builder?.cors) {
+          const { applyCorsToResponse } = await import(
+            "../middlewares/cors.middleware"
+          );
+          response = applyCorsToResponse(
+            response,
+            request,
+            this.config.$builder.cors,
+          );
+        }
+
+        telemetry?.emit("igniter.core.http.request.success", {
+          level: "debug",
+          attributes: {
+            "ctx.http.method": request.method,
+            "ctx.http.path_key": path,
+            "ctx.http.path_depth": path.split("/").filter(Boolean).length,
+            "ctx.http.query_count": Array.from(url.searchParams.keys()).length,
+            "ctx.http.headers_count": Array.from(request.headers.keys()).length,
+            "ctx.http.has_body":
+              Number(request.headers.get("content-length") ?? "0") > 0 ||
+              !!request.headers.get("content-type"),
+            "ctx.http.is_sse": path === sseEndpoint,
+            "ctx.http.status_code": response.status,
+            "ctx.http.duration_ms": Date.now() - startTime,
+            "ctx.response.type": "raw",
+          },
+        });
+
+        this.logResponse(request, response, startTime);
+        return response;
+      }
+
+      const { action, params } = routeResult;
+      const handler = action!;
+      this.logger?.debug("Route resolved", { method, path, params });
+
+      // Step 7: Finalize context with route params and body
+      context.request.params = params ?? {};
+      if (handler.body) {
+        context.request.body = await BodyParserProcessor.parse(
+          request,
+          true,
+          this.logger,
+          telemetry,
+        );
+      }
+
       // Step 6: Execute action-specific middlewares with telemetry
       if (handler.use && Array.isArray(handler.use)) {
         const actionResult = await MiddlewareExecutorProcessor.executeAction(
@@ -577,7 +668,6 @@ export class RequestProcessor<
           handler.use as IgniterProcedure<unknown, unknown, unknown>[],
           this.logger,
           telemetry,
-          parentSpan,
         );
 
         if (!actionResult.success) {
@@ -598,15 +688,48 @@ export class RequestProcessor<
       const actionResponse = await this.executeAction(handler, context);
 
       // Step 8: Handle successful response
-      const response = await this.handleSuccessfulResponse(
-        actionResponse,
-        context,
-        telemetrySpan,
-        startTime,
-        request,
-      );
+      const { response, responseType, statusCode } =
+        await this.handleSuccessfulResponse(
+          actionResponse,
+          context,
+          startTime,
+          request,
+        );
+
+      telemetry?.emit("igniter.core.http.request.success", {
+        level: "debug",
+        attributes: {
+          "ctx.http.method": request.method,
+          "ctx.http.path_key": handler.$meta?.pathKey ?? context.request.path,
+          "ctx.http.path_depth": path.split("/").filter(Boolean).length,
+          "ctx.http.query_count": Array.from(url.searchParams.keys()).length,
+          "ctx.http.headers_count": Array.from(request.headers.keys()).length,
+          "ctx.http.has_body":
+            Number(request.headers.get("content-length") ?? "0") > 0 ||
+            !!request.headers.get("content-type"),
+          "ctx.http.is_sse": path === sseEndpoint,
+          "ctx.device.type": context.request.device?.device,
+          "ctx.device.browser": context.request.device?.browser,
+          "ctx.device.os": context.request.device?.os,
+          "ctx.geo.country": context.request.geo?.country,
+          "ctx.http.status_code": statusCode,
+          "ctx.http.duration_ms": Date.now() - startTime,
+          "ctx.response.type": responseType as
+            | "json"
+            | "error"
+            | "stream"
+            | "no_content"
+            | "raw",
+        },
+      });
 
       this.logResponse(request, response, startTime);
+
+      // 9. onResponse Hook
+      if (this.config.$builder?.onResponse) {
+        await this.config.$builder.onResponse(response, request);
+      }
+
       return response;
     } catch (error) {
       this.logger?.error("Request processing failed", {
@@ -615,14 +738,65 @@ export class RequestProcessor<
         method,
         error: error instanceof Error ? error.message : "Unknown error",
       });
+
+      const errorType =
+        error instanceof z.ZodError
+          ? "validation"
+          : error instanceof IgniterError
+            ? "igniter"
+            : context
+              ? "generic"
+              : "initialization";
+      const errorCode =
+        error instanceof IgniterError
+          ? error.code
+          : error instanceof z.ZodError
+            ? "VALIDATION_ERROR"
+            : "INTERNAL_SERVER_ERROR";
+
+      // Re-parse URL safely for error telemetry context
+      const url = new URL(request.url);
+      const sseEndpoint = this.config.$builder?.healthCheck?.path ?? "/api/sse/events";
+
+      telemetry?.emit("igniter.core.http.request.error", {
+        level: "error",
+        attributes: {
+          "ctx.http.path": path,
+          "ctx.http.method": request.method,
+          "ctx.http.path_key": context?.request?.path ?? path,
+          "ctx.http.path_depth": path.split("/").filter(Boolean).length,
+          "ctx.http.query_count": Array.from(url.searchParams.keys()).length,
+          "ctx.http.headers_count": Array.from(request.headers.keys()).length,
+          "ctx.http.has_body":
+            Number(request.headers.get("content-length") ?? "0") > 0 ||
+            !!request.headers.get("content-type"),
+          "ctx.http.is_sse": path === sseEndpoint,
+          "ctx.device.type": context?.request?.device?.device,
+          "ctx.device.browser": context?.request?.device?.browser,
+          "ctx.device.os": context?.request?.device?.os,
+          "ctx.geo.country": context?.request?.geo?.country,
+          "ctx.http.duration_ms": Date.now() - startTime,
+          "ctx.error.type": errorType,
+        },
+      });
+
       // Step 9: Handle errors
-      if (context!) {
+      if (context) {
+        // 10. errorHandler Hook
+        if (this.config.$builder?.errorHandler) {
+          try {
+            return await this.config.$builder.errorHandler(error as Error, context, request);
+          } catch (handlerError) {
+            this.logger?.error("Error handler failed", { error: handlerError });
+          }
+        }
+
         const errorResult = await ErrorHandlerProcessor.handleError(
           error,
           context,
-          telemetrySpan,
           startTime,
           this.logger,
+          telemetry,
         );
 
         const response = errorResult.response;
@@ -634,9 +808,9 @@ export class RequestProcessor<
           await ErrorHandlerProcessor.handleInitializationError(
             error,
             null,
-            telemetrySpan,
             startTime,
             this.logger,
+            telemetry,
           );
 
         const response = errorResult.response;
@@ -659,36 +833,48 @@ export class RequestProcessor<
   ): Promise<any> {
     this.logger?.debug("Action handler executing");
 
-    // Get telemetry from context
-    const telemetry = context.$plugins?.telemetry || null;
+    const telemetry =
+      (this.config.telemetry ??
+        this.config.plugins?.telemetry ??
+        null) as IgniterCoreTelemetryManager | null;
 
     // Validate and parse body and query to ensure correct types
     try {
       if (handler.body) {
         this.logger?.debug("Validating and parsing request body");
+        telemetry?.emit("igniter.core.validation.started", {
+          level: "debug",
+          attributes: {
+            "ctx.validation.type": "body",
+          },
+        });
         context.request.body = handler.body.parse(context.request.body);
 
-        // Record validation success
-        TelemetryManagerProcessor.recordValidation(
-          telemetry,
-          "body",
-          true,
-          0,
-          this.logger,
-        );
+        telemetry?.emit("igniter.core.validation.success", {
+          level: "debug",
+          attributes: {
+            "ctx.validation.type": "body",
+            "ctx.validation.errors_count": 0,
+          },
+        });
       }
       if (handler.query) {
         this.logger?.debug("Validating and parsing request query");
+        telemetry?.emit("igniter.core.validation.started", {
+          level: "debug",
+          attributes: {
+            "ctx.validation.type": "query",
+          },
+        });
         context.request.query = handler.query.parse(context.request.query);
 
-        // Record validation success
-        TelemetryManagerProcessor.recordValidation(
-          telemetry,
-          "query",
-          true,
-          0,
-          this.logger,
-        );
+        telemetry?.emit("igniter.core.validation.success", {
+          level: "debug",
+          attributes: {
+            "ctx.validation.type": "query",
+            "ctx.validation.errors_count": 0,
+          },
+        });
       }
     } catch (validationError) {
       this.logger?.warn("Request validation failed", {
@@ -697,85 +883,186 @@ export class RequestProcessor<
         method: context.request.method,
       });
 
-      // Record validation failure
       const errorCount =
         validationError instanceof z.ZodError
           ? validationError.errors.length
           : 1;
-      TelemetryManagerProcessor.recordValidation(
-        telemetry,
-        handler.body ? "body" : "query",
-        false,
-        errorCount,
-        this.logger,
-      );
+      telemetry?.emit("igniter.core.validation.error", {
+        level: "error",
+        attributes: {
+          "ctx.validation.type": handler.body ? "body" : "query",
+          "ctx.validation.errors_count": errorCount,
+          "ctx.error.type": "validation",
+          "ctx.error.code": "VALIDATION_ERROR",
+          "ctx.error.message":
+            validationError instanceof Error
+              ? validationError.message
+              : "Validation failed",
+          "ctx.error.component": "RequestProcessor",
+        },
+      });
 
       throw validationError; // Re-throw to be handled by the main error handler
     }
 
     this.logger?.debug("Executing action handler function");
 
+    const actionType =
+      handler.type ?? (handler.method === "GET" ? "query" : "mutation");
+    const actionPathKey = handler.$meta?.pathKey ?? context.request.path;
+    const actionAttributes = {
+      "ctx.action.path_key": actionPathKey,
+      "ctx.action.method": context.request.method,
+      "ctx.action.type": actionType,
+      "ctx.action.has_body": !!handler.body,
+      "ctx.action.has_query": !!handler.query,
+      "ctx.action.middleware_count": handler.use?.length ?? 0,
+    };
+
+    telemetry?.emit("igniter.core.action.execute.started", {
+      level: "debug",
+      attributes: actionAttributes,
+    });
+
     // Execute handler with proper context structure
     this.logger?.debug("Initializing response processor");
 
-    // Initialize response processor with telemetry
-    const responseProcessor = IgniterResponseProcessor.init(
-      context.$plugins?.store || context.$context?.store,
-      context.$context,
-      this.logger,
-      telemetry,
-    );
+    // Use the existing response processor from context, ensuring state persistence
+    const responseProcessor = context.response;
 
-    const realtimeService = new IgniterRealtimeService(
-      context.$plugins?.store || context.$context?.store,
-    );
+    // Update processor with telemetry and logging context if available
+    // @ts-ignore - Valid private access for internal wiring
+    if (this.logger) responseProcessor._logger = this.logger;
+    // @ts-ignore
+    if (telemetry) responseProcessor._telemetry = telemetry;
 
-    // Execute handler with proper IgniterActionContext structure
-    const response = await handler.handler({
-      request: {
-        method: context.request.method as HTTPMethod,
-        path: context.request.path,
-        params: context.request.params,
-        headers: context.request.headers,
-        cookies: context.request.cookies,
-        body: context.request.body,
-        query: context.request.query,
-        raw: context.request.raw,
-      },
-      context: context.$context,
-      plugins: context.$plugins,
-      response: responseProcessor,
-      realtime: realtimeService,
-    });
+    const realtimeApi = this.config.realtime?.$api() as any;
+    const cacheApi = this.config.cache?.$api() as any;
 
-    this.logger?.debug("Action handler completed");
+    const actionStartTime = Date.now();
 
-    return response;
+    // Generate unique request ID for this request
+    const requestId = generateRequestId();
+
+    // Create telemetry session for this request
+    const telemetrySession = telemetry?.session().id(requestId);
+
+    try {
+      // Initialize response processor or reuse existing one to preserve middleware changes
+      // const responseProcessor = context.response; // Removed shadowing
+
+      // Execute handler with proper IgniterActionContext structure
+      const response = await handler.handler({
+        request: {
+          id: requestId,
+          method: context.request.method as HTTPMethod,
+          path: context.request.path,
+          params: context.request.params,
+          headers: context.request.headers,
+          cookies: context.request.cookies,
+          ip: context.request.ip,
+          device: context.request.device,
+          geo: context.request.geo,
+          body: context.request.body,
+          query: context.request.query,
+          raw: context.request.raw,
+        },
+        context: context.$context,
+        plugins: context.$plugins,
+        response: responseProcessor,
+        realtime: realtimeApi,
+        cache: cacheApi,
+        telemetry: telemetrySession,
+      });
+
+      telemetry?.emit("igniter.core.action.execute.success", {
+        level: "debug",
+        attributes: {
+          ...actionAttributes,
+          "ctx.action.duration_ms": Date.now() - actionStartTime,
+        },
+      });
+
+      this.logger?.debug("Action handler completed");
+
+      return response;
+    } catch (error) {
+      telemetry?.emit("igniter.core.action.execute.error", {
+        level: "error",
+        attributes: {
+          ...actionAttributes,
+          "ctx.action.duration_ms": Date.now() - actionStartTime,
+          "ctx.error.type": "runtime",
+          "ctx.error.code": "ACTION_EXECUTION_ERROR",
+          "ctx.error.message":
+            error instanceof Error ? error.message : "Unknown error",
+          "ctx.error.component": "RequestProcessor",
+        },
+      });
+
+      throw error;
+    }
   }
 
   /**
-   * Handles successful response processing.
+   * Finalizes the response object.
    *
-   * @param actionResponse - Response from action handler
+   * @param actionResponse - The raw response from the action
    * @param context - The processed context
-   * @param telemetrySpan - Telemetry span for tracking
    * @param startTime - Request start time
    * @param request - Original request
-   * @returns Final HTTP Response
+   * @returns The finalized response
    */
   private async handleSuccessfulResponse(
     actionResponse: any,
     context: ProcessedContext,
-    telemetrySpan: TelemetrySpan | null,
     startTime: number,
     request: Request,
-  ): Promise<Response> {
+  ): Promise<{ response: Response; responseType: string; statusCode: number }> {
+    // Check if response is already handled by middleware/guard
+    if (actionResponse instanceof Response) {
+      return {
+        response: actionResponse,
+        responseType: "raw",
+        statusCode: actionResponse.status,
+      };
+    }
+
+    // Merge headers from context.response (where middlewares set them)
+    // into the final response headers
+    const mergeContextHeaders = (headers: Headers) => {
+      if (context.response instanceof IgniterResponseProcessor) {
+        // @ts-ignore - access private _headers for merging
+        const ctxHeaders = context.response._headers as Headers;
+        ctxHeaders.forEach((value, key) => {
+          headers.set(key, value);
+        });
+      }
+    };
+
     // Handle direct Response objects
     if (actionResponse instanceof Response) {
       this.logger?.debug("Raw response returned", { type: "Response" });
-      // It's already a response, we don't need to do much.
-      // We could add headers or cookies here if needed in the future.
-      return actionResponse;
+
+      const responseHeaders = new Headers(actionResponse.headers);
+      mergeContextHeaders(responseHeaders);
+
+      const finalResponse = new Response(actionResponse.body, {
+        status: actionResponse.status,
+        statusText: actionResponse.statusText,
+        headers: responseHeaders,
+      });
+
+      const contentType = finalResponse.headers.get("content-type") || "";
+      const responseType = contentType.includes("text/event-stream")
+        ? "stream"
+        : "raw";
+
+      return {
+        response: finalResponse,
+        responseType,
+        statusCode: finalResponse.status || 200,
+      };
     }
 
     // Handle ResponseProcessor objects
@@ -783,47 +1070,82 @@ export class RequestProcessor<
       this.logger?.debug("Response processor returned", {
         type: "IgniterResponseProcessor",
       });
+
+      // If it's a different instance than context.response, merge headers
+      if (actionResponse !== context.response) {
+        // @ts-ignore - access private _headers
+        const ctxHeaders = context.response._headers as Headers;
+        ctxHeaders.forEach((value, key) => {
+          actionResponse.setHeader(key, value);
+        });
+      }
+
       const finalResponse = await actionResponse.toResponse();
 
-      // Finish telemetry
-      if (telemetrySpan) {
-        TelemetryManagerProcessor.finishSpanSuccess(
-          telemetrySpan,
-          finalResponse.status || 200,
-          this.logger,
-        );
-      }
+      const statusCode = finalResponse.status || 200; // Default to 200 if not set
+      const contentType = finalResponse.headers.get("content-type") || "";
+      const responseType = contentType.includes("text/event-stream")
+        ? "stream"
+        : statusCode === 204
+          ? "no_content"
+          : actionResponse.responseError
+            ? "error"
+            : "json";
 
       this.logger?.debug("Request processed", {
         status: finalResponse.status,
         duration_ms: Date.now() - startTime,
-        responseType: "processor",
+        responseType,
       });
 
-      return finalResponse;
+      return { response: finalResponse, responseType, statusCode };
     }
 
-    this.logger?.debug("Request processed", {
-      status: actionResponse?.status || 200,
-      duration_ms: Date.now() - startTime,
-      responseType: "json",
-    });
+    // Handle plain objects
+    this.logger?.debug("Plain object returned, using context response processor");
 
-    // Finish telemetry
-    if (telemetrySpan) {
-      TelemetryManagerProcessor.finishSpanSuccess(
-        telemetrySpan,
-        actionResponse?.status || 200,
-        this.logger,
-      );
+    // Use the context's response processor to maintain headers set by middlewares
+    const processor = context.response;
+    let finalSuccessState;
+
+    if (actionResponse?.error) {
+      // It seems it returned an error object format
+      const err = actionResponse.error;
+      // @ts-ignore
+      finalSuccessState = processor.error(err.code || "ERR_INTERNAL", err.message, err.data);
+    } else {
+      // Check for status/headers in plain object response
+      let finalData = actionResponse;
+
+      if (typeof actionResponse === 'object' && actionResponse !== null) {
+        // Apply status if present
+        if ('status' in actionResponse && typeof actionResponse.status === 'number') {
+          processor.status(actionResponse.status);
+        }
+        // Apply headers if present
+        if ('headers' in actionResponse && typeof actionResponse.headers === 'object') {
+          Object.entries(actionResponse.headers).forEach(([k, v]) => {
+            processor.setHeader(k, v as string);
+          });
+        }
+
+        // Cleanup metadata from data payload if they were used for control
+        if (('status' in actionResponse || 'headers' in actionResponse) && !('data' in actionResponse)) {
+          const { status, headers, ...rest } = actionResponse;
+          finalData = rest;
+        }
+      }
+      finalSuccessState = processor.json(finalData);
     }
 
-    return new Response(JSON.stringify(actionResponse), {
-      status: actionResponse?.status || 200,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    const finalResponse = await finalSuccessState.toResponse();
+    const statusCode = finalResponse.status || 200;
+
+    return {
+      response: finalResponse,
+      responseType: actionResponse?.error ? "error" : "json",
+      statusCode,
+    };
   }
 
   /**
@@ -840,7 +1162,7 @@ export class RequestProcessor<
     TControllerKey extends keyof TConfig["controllers"],
     TActionKey extends keyof TConfig["controllers"][TControllerKey]["actions"],
     TAction extends
-      TConfig["controllers"][TControllerKey]["actions"][TActionKey],
+    TConfig["controllers"][TControllerKey]["actions"][TActionKey],
   >(
     controllerKey: TControllerKey,
     actionKey: TActionKey,
@@ -987,82 +1309,6 @@ export class RequestProcessor<
     const response = await this.process(request);
     const result = await parseResponse(response);
     return result;
-  }
-
-  /**
-   * Publish a custom event to an SSE channel
-   * @param channel Channel ID
-   * @param eventType Event type
-   * @param data Event payload
-   */
-  public publishEvent(channel: string, eventType: string, data: any): void {
-    SSEProcessor.publishEvent(
-      {
-        channel,
-        type: eventType,
-        data,
-      },
-      this.logger,
-    );
-  }
-
-  /**
-   * Publish a system event
-   * @param type Event type
-   * @param data Event payload
-   */
-  public publishSystemEvent(type: string, data: any): void {
-    this.publishEvent("system", type, data);
-  }
-
-  /**
-   * Revalidate queries across all connected clients
-   * @param queryKeys Keys to invalidate
-   */
-  public revalidateQueries(queryKeys: string[]): void {
-    const keysArray = Array.isArray(queryKeys) ? queryKeys : [queryKeys];
-
-    SSEProcessor.publishEvent(
-      {
-        channel: "revalidation",
-        type: "revalidate",
-        data: {
-          queryKeys: keysArray,
-          timestamp: new Date().toISOString(),
-        },
-      },
-      this.logger,
-    );
-  }
-
-  /**
-   * Publish an event to a specific action stream
-   * @param controllerKey Controller key
-   * @param actionKey Action key
-   * @param data Event data
-   */
-  public publishToActionStream(
-    controllerKey: string,
-    actionKey: string,
-    data: any,
-  ): number {
-    const channelId = `${controllerKey}.${actionKey}`;
-
-    if (!SSEProcessor.channelExists(channelId)) {
-      this.logger?.warn("Action channel not found", {
-        action: `${controllerKey}.${actionKey}`,
-      });
-      return 0;
-    }
-
-    return SSEProcessor.publishEvent(
-      {
-        channel: channelId,
-        type: "data",
-        data,
-      },
-      this.logger,
-    );
   }
 
   /**

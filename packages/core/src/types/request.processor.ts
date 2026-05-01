@@ -3,6 +3,10 @@ import type { IgniterAction } from "./action.interface";
 import type { IgniterRouter } from "./router.interface";
 import { DocsConfig } from "./builder.interface";
 import type { IgniterLogger } from "./logger.interface";
+import type { IgniterStoreManager } from "./store.interface";
+import type { IgniterStoreRealtimeProcessor } from "../services/realtime.service";
+import type { IgniterStoreCacheProcessor } from "../services/cache.processor";
+import type { IgniterCoreTelemetryManager } from "./telemetry.interface";
 
 export interface RequestProcessorConfig<
   TConfig extends IgniterRouter<any, any, any, any, any>,
@@ -14,6 +18,11 @@ export interface RequestProcessorConfig<
   plugins?: Record<string, any>;
   docs?: DocsConfig;
   logger?: IgniterLogger;
+  telemetry?: IgniterCoreTelemetryManager;
+  store?: IgniterStoreManager;
+  realtime?: IgniterStoreRealtimeProcessor;
+  cache?: IgniterStoreCacheProcessor;
+  $builder?: TConfig["$builder"];
 }
 
 export interface RequestProcessorInterface<
@@ -37,7 +46,7 @@ export interface RequestProcessorInterface<
     TControllerKey extends keyof TConfig["controllers"],
     TActionKey extends keyof TConfig["controllers"][TControllerKey]["actions"],
     TAction extends
-      TConfig["controllers"][TControllerKey]["actions"][TActionKey],
+    TConfig["controllers"][TControllerKey]["actions"][TActionKey],
   >(
     controllerKey: TControllerKey,
     actionKey: TActionKey,

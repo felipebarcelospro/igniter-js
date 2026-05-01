@@ -18,6 +18,7 @@ import {
   useRef,
   type PropsWithChildren,
 } from "react";
+import type { IgniterStoreScopeEntry } from "../types/store.interface";
 
 /**
  * Igniter context provider type
@@ -68,7 +69,9 @@ export interface IgniterProviderOptions<TContext extends () => Promise<any> | an
   /**
    * The context to be passed to the IgniterProvider
    */
-  getScopes?: (ctx: Awaited<ReturnType<TContext>>) => Promise<string[]> | string[];
+  getScopes?: (
+    ctx: Awaited<ReturnType<TContext>>,
+  ) => Promise<string[] | IgniterStoreScopeEntry[]> | string[] | IgniterStoreScopeEntry[];
 }
 
 /**
@@ -354,7 +357,7 @@ export function IgniterProvider<TContext extends () => Promise<any> | any>({
 
   // Function to get channels that need subscription
   const getChannelsToSubscribe = useCallback(() => {
-    const channelsToSubscribe = ["revalidation"];
+    const channelsToSubscribe = ["http:revalidate:requested"];
 
     // Add channels that have active subscribers
     streamSubscribers.forEach((_, channel) => {
@@ -414,7 +417,8 @@ export function IgniterProvider<TContext extends () => Promise<any> | any>({
 
     try {
       const context = await getContext?.();
-      const scopeIds = await getScopes?.(context);
+      const scopeEntries = await getScopes?.(context);
+      const scopeIds = normalizeScopes(scopeEntries);
 
       // Get channels to subscribe to
       const channelsToSubscribe = getChannelsToSubscribe();
@@ -632,6 +636,18 @@ export function IgniterProvider<TContext extends () => Promise<any> | any>({
     </IgniterContext.Provider>
   );
 }
+
+const normalizeScopes = (
+  scopes?: string[] | IgniterStoreScopeEntry[],
+): string[] | undefined => {
+  if (!scopes || scopes.length === 0) return undefined;
+  if (typeof scopes[0] === "string") {
+    return scopes as string[];
+  }
+  return (scopes as IgniterStoreScopeEntry[]).map(
+    (entry) => `${entry.key}:${entry.identifier}`,
+  );
+};
 
 /**
  * Hook to access the Igniter context, providing access to query registration and invalidation methods.

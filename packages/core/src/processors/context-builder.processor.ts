@@ -4,11 +4,10 @@ import { BodyParserProcessor } from "./body-parser.processor";
 import type { RequestProcessorConfig } from "../types/request.processor";
 import type { IgniterRouter, IgniterLogger } from "../types";
 import type { IgniterPluginManager } from "../services/plugin.service";
-import type {
-  IgniterTelemetryProvider,
-  IgniterTelemetrySpan,
-} from "../types/telemetry.interface";
-import { TelemetryManagerProcessor } from "./telemetry-manager.processor";
+import type { IgniterCoreTelemetryManager } from "../types/telemetry.interface";
+import { getRequestIp, parseDeviceFromUserAgent } from "../utils/request";
+import { resolveGeo } from "../utils/geo";
+import type { IgniterRequestDevice, IgniterRequestGeo } from "../types/realtime.interface";
 
 /**
  * Represents the processed request data
@@ -22,6 +21,9 @@ export interface ProcessedRequest extends Omit<
   params: Record<string, any>;
   headers: Headers;
   cookies: IgniterCookie;
+  ip?: string;
+  device?: IgniterRequestDevice;
+  geo?: IgniterRequestGeo;
   body: any;
   query: Record<string, string>;
   raw: Request;
@@ -52,7 +54,6 @@ export class ContextBuilderProcessor {
    * @param hasBodySchema - Whether the route has a body schema defined
    * @param logger - Optional logger instance
    * @param telemetry - Optional telemetry provider for metrics
-   * @param parentSpan - Optional parent span for tracing
    * @returns Promise resolving to the processed context
    */
   static async build<TRouter extends IgniterRouter<any, any, any, any, any>>(
@@ -62,118 +63,152 @@ export class ContextBuilderProcessor {
     url: URL,
     hasBodySchema: boolean,
     logger?: IgniterLogger,
-    telemetry?: IgniterTelemetryProvider | null,
-    parentSpan?: IgniterTelemetrySpan,
+    telemetry?: IgniterCoreTelemetryManager | null,
   ): Promise<ProcessedContext> {
     const childLogger = logger?.child("ContextBuilderProcessor");
     const startTime = Date.now();
 
-    // Create telemetry span for context building
-    const span = TelemetryManagerProcessor.createContextBuildSpan(
-      telemetry,
-      parentSpan,
-      logger,
-    );
-
-    childLogger?.debug("Context building started");
-
-    // Build base context
-    let contextValue = {};
-
-    try {
-      if (config?.context) {
-        childLogger?.debug("Processing global context...");
-        if (typeof config.context === "function") {
-          contextValue = await Promise.resolve(config.context());
-        } else {
-          contextValue = config.context;
-        }
-        childLogger?.debug("Base context created");
-      }
-    } catch (error) {
-      childLogger?.error("Base context creation failed", {
-        component: "ContextBuilder",
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-      // We can continue with an empty context
-    }
-
-    // Parse request components
-    const cookies = new IgniterCookie(request.headers);
-    const response = new IgniterResponseProcessor();
-
-    let body = null;
-
-    try {
-      body = await BodyParserProcessor.parse(
-        request,
-        hasBodySchema,
-        childLogger,
-        telemetry,
-        parentSpan,
-      );
-    } catch (error) {
-      childLogger?.warn("Body parsing failed", {
-        component: "ContextBuilder",
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-      body = null;
-    }
-
-    // Build processed request
-    const processedRequest: ProcessedRequest = {
-      ...request,
-      path: url.pathname,
-      method: request.method,
-      params: routeParams,
-      headers: request.headers,
-      cookies: cookies,
-      body: body,
-      query: Object.fromEntries(url.searchParams),
-      raw: request,
-    };
-
-    // Count plugins
-    const pluginCount = config.plugins
-      ? Object.keys(config.plugins).length
-      : 0;
-
-    // Build final context with proper structure
-    const processedContext: ProcessedContext = {
-      request: processedRequest,
-      response: response,
-      $context: contextValue,
-      $plugins: config.plugins || {},
-    };
-
-    const duration = Date.now() - startTime;
-
-    // Finish span with success
-    TelemetryManagerProcessor.finishContextBuildSpan(
-      span,
-      pluginCount > 0,
-      pluginCount,
-      duration,
-      logger,
-    );
-
-    // Record metrics
-    TelemetryManagerProcessor.recordContextBuild(
-      telemetry,
-      duration,
-      pluginCount,
-      logger,
-    );
-
-    childLogger?.debug("Context built", {
-      has_body: !!body,
-      query_params: Object.keys(processedRequest.query),
-      route_params: Object.keys(processedRequest.params),
-      plugin_count: pluginCount,
-      duration_ms: duration,
+    telemetry?.emit("igniter.core.context.build.started", {
+      level: "debug",
+      attributes: {
+        "ctx.context.has_body_schema": hasBodySchema,
+      },
     });
 
-    return processedContext;
+    childLogger?.debug("Context building started");
+    try {
+      // Build base context
+      let contextValue = {};
+
+      try {
+        if (config?.context) {
+          childLogger?.debug("Processing global context...");
+          if (typeof config.context === "function") {
+            contextValue = await Promise.resolve(config.context());
+          } else {
+            contextValue = config.context;
+          }
+          childLogger?.debug("Base context created");
+        }
+      } catch (error) {
+        childLogger?.error("Base context creation failed", {
+          component: "ContextBuilder",
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        // We can continue with an empty context
+      }
+
+      // Parse request components
+      const cookies = new IgniterCookie(request.headers);
+      const response = new IgniterResponseProcessor();
+
+      let body = null;
+
+      try {
+        body = await BodyParserProcessor.parse(
+          request,
+          hasBodySchema,
+          childLogger,
+          telemetry,
+        );
+      } catch (error) {
+        childLogger?.warn("Body parsing failed", {
+          component: "ContextBuilder",
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        body = null;
+      }
+
+      const ip = getRequestIp(request);
+      const userAgent = request.headers.get("user-agent");
+      const device = parseDeviceFromUserAgent(userAgent);
+      const geo = await resolveGeo({
+        ip,
+        headers: request.headers,
+        cache: config.cache,
+        logger: childLogger,
+      });
+
+      // Build processed request
+      const processedRequest: ProcessedRequest = {
+        ...request,
+        path: url.pathname,
+        method: request.method,
+        params: routeParams,
+        headers: request.headers,
+        cookies: cookies,
+        ip,
+        device,
+        geo,
+        body: body,
+        query: Object.fromEntries(url.searchParams),
+        raw: request,
+      };
+
+      // Count plugins
+      const pluginCount = config.plugins
+        ? Object.keys(config.plugins).length
+        : 0;
+
+      // Build final context with proper structure
+      const processedContext: ProcessedContext = {
+        request: processedRequest,
+        response: response,
+        $context: contextValue,
+        $plugins: config.plugins || {},
+      };
+
+      const duration = Date.now() - startTime;
+
+      telemetry?.emit("igniter.core.context.build.success", {
+        level: "debug",
+        attributes: {
+          "ctx.context.has_plugins": pluginCount > 0,
+          "ctx.context.plugin_count": pluginCount,
+          "ctx.context.duration_ms": duration,
+          "ctx.context.has_device": !!device,
+          "ctx.context.has_geo": !!geo,
+        },
+      });
+
+      childLogger?.debug("Context built", {
+        has_body: !!body,
+        query_params: Object.keys(processedRequest.query),
+        route_params: Object.keys(processedRequest.params),
+        plugin_count: pluginCount,
+        duration_ms: duration,
+      });
+
+      return processedContext;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+
+      childLogger?.error("Context build failed", {
+        component: "ContextBuilder",
+        error: error instanceof Error ? error.message : "Unknown error",
+        duration_ms: duration,
+      });
+
+      telemetry?.emit("igniter.core.context.build.error", {
+        level: "error",
+        attributes: {
+          "ctx.context.duration_ms": duration,
+          "ctx.error.type": "runtime",
+          "ctx.error.code":
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            (error as { code?: string }).code
+              ? String((error as { code?: string }).code)
+              : "CONTEXT_BUILD_ERROR",
+          "ctx.error.message":
+            error instanceof Error ? error.message : "Context build failed",
+          "ctx.error.component": "ContextBuilderProcessor",
+        },
+      });
+
+      throw error;
+    }
   }
 
   /**
@@ -190,12 +225,23 @@ export class ContextBuilderProcessor {
     context: ProcessedContext,
     pluginManager?: IgniterPluginManager<any>,
     logger?: IgniterLogger,
-    telemetry?: IgniterTelemetryProvider | null,
+    telemetry?: IgniterCoreTelemetryManager | null,
   ): Promise<ProcessedContext> {
     const childLogger = logger?.child("ContextBuilderProcessor");
     const startTime = Date.now();
+    const pluginCount = context?.$plugins
+      ? Object.keys(context.$plugins).length
+      : 0;
 
     childLogger?.debug("Context enhancement started");
+
+    telemetry?.emit("igniter.core.context.enhance.started", {
+      level: "debug",
+      attributes: {
+        "ctx.context.plugin_count": pluginCount,
+        "ctx.context.has_plugin_manager": !!pluginManager,
+      },
+    });
 
     const enhancedContext = { ...context.$context };
     const plugins = { ...context.$plugins };
@@ -227,13 +273,6 @@ export class ContextBuilderProcessor {
       const duration = Date.now() - startTime;
       const pluginCount = injectedProviders.length;
 
-      // Record enhancement metrics
-      if (telemetry) {
-        telemetry.timing("context.enhancement.duration", duration, {
-          has_plugins: (pluginCount > 0).toString(),
-        });
-      }
-
       if (injectedProviders.length > 0) {
         childLogger?.debug("Context enhanced", {
           providers: injectedProviders,
@@ -242,6 +281,14 @@ export class ContextBuilderProcessor {
       } else {
         childLogger?.debug("No providers injected", { duration_ms: duration });
       }
+
+      telemetry?.emit("igniter.core.context.enhance.success", {
+        level: "debug",
+        attributes: {
+          "ctx.context.injected_count": injectedProviders.length,
+          "ctx.context.duration_ms": duration,
+        },
+      });
 
       return {
         ...context,
@@ -257,10 +304,17 @@ export class ContextBuilderProcessor {
         duration_ms: duration,
       });
 
-      // Record error metric
-      if (telemetry) {
-        telemetry.increment("context.enhancement.errors", 1, {});
-      }
+      telemetry?.emit("igniter.core.context.enhance.error", {
+        level: "error",
+        attributes: {
+          "ctx.context.duration_ms": duration,
+          "ctx.error.type": "runtime",
+          "ctx.error.code": "CONTEXT_ENHANCE_ERROR",
+          "ctx.error.message":
+            error instanceof Error ? error.message : "Unknown error",
+          "ctx.error.component": "ContextBuilderProcessor",
+        },
+      });
 
       return {
         ...context,

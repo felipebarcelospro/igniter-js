@@ -1,10 +1,6 @@
 import { IgniterError } from "../error";
 import type { IgniterLogger } from "../types";
-import type {
-  IgniterTelemetryProvider,
-  IgniterTelemetrySpan,
-} from "../types/telemetry.interface";
-import { TelemetryManagerProcessor } from "./telemetry-manager.processor";
+import type { IgniterCoreTelemetryManager } from "../types/telemetry.interface";
 
 /**
  * Result of body parsing with metadata
@@ -28,7 +24,6 @@ export class BodyParserProcessor {
    * @param hasBodySchema - Whether the route has a body schema defined
    * @param logger - Optional logger instance
    * @param telemetry - Optional telemetry provider for metrics
-   * @param parentSpan - Optional parent span for tracing
    * @returns The parsed request body or undefined if no body
    *
    * @throws {IgniterError} When body parsing fails
@@ -45,21 +40,20 @@ export class BodyParserProcessor {
     request: Request,
     hasBodySchema: boolean,
     logger?: IgniterLogger,
-    telemetry?: IgniterTelemetryProvider | null,
-    parentSpan?: IgniterTelemetrySpan,
+    telemetry?: IgniterCoreTelemetryManager | null,
   ): Promise<any> {
     const childLogger = logger?.child("BodyParserProcessor");
     const startTime = Date.now();
     const contentType = request.headers.get("content-type") || "";
+    const baseAttributes = {
+      "ctx.body.content_type": contentType || "unknown",
+      "ctx.body.has_schema": hasBodySchema,
+    };
 
-    // Create telemetry span for body parsing
-    const span = TelemetryManagerProcessor.createBodyParsingSpan(
-      telemetry,
-      contentType,
-      hasBodySchema,
-      parentSpan,
-      logger,
-    );
+    telemetry?.emit("igniter.core.body.parse.started", {
+      level: "debug",
+      attributes: baseAttributes,
+    });
 
     try {
       childLogger?.debug("Parsing request body", {
@@ -73,24 +67,14 @@ export class BodyParserProcessor {
 
         const duration = Date.now() - startTime;
 
-        // Finish span - no body to parse
-        TelemetryManagerProcessor.finishBodyParsingSpan(
-          span,
-          true,
-          0,
-          duration,
-          logger,
-        );
-
-        // Record metrics
-        TelemetryManagerProcessor.recordBodyParsing(
-          telemetry,
-          contentType,
-          0,
-          duration,
-          true,
-          logger,
-        );
+        telemetry?.emit("igniter.core.body.parse.success", {
+          level: "debug",
+          attributes: {
+            ...baseAttributes,
+            "ctx.body.size_bytes": 0,
+            "ctx.body.duration_ms": duration,
+          },
+        });
 
         return undefined;
       }
@@ -100,24 +84,14 @@ export class BodyParserProcessor {
 
         const duration = Date.now() - startTime;
 
-        // Finish span - no body
-        TelemetryManagerProcessor.finishBodyParsingSpan(
-          span,
-          true,
-          0,
-          duration,
-          logger,
-        );
-
-        // Record metrics
-        TelemetryManagerProcessor.recordBodyParsing(
-          telemetry,
-          contentType,
-          0,
-          duration,
-          true,
-          logger,
-        );
+        telemetry?.emit("igniter.core.body.parse.success", {
+          level: "debug",
+          attributes: {
+            ...baseAttributes,
+            "ctx.body.size_bytes": 0,
+            "ctx.body.duration_ms": duration,
+          },
+        });
 
         return undefined;
       }
@@ -144,24 +118,21 @@ export class BodyParserProcessor {
         } catch (jsonError) {
           const duration = Date.now() - startTime;
 
-          // Finish span with error
-          TelemetryManagerProcessor.finishBodyParsingSpan(
-            span,
-            false,
-            contentLength,
-            duration,
-            logger,
-          );
-
-          // Record metrics
-          TelemetryManagerProcessor.recordBodyParsing(
-            telemetry,
-            contentType,
-            contentLength,
-            duration,
-            false,
-            logger,
-          );
+          telemetry?.emit("igniter.core.body.parse.error", {
+            level: "error",
+            attributes: {
+              ...baseAttributes,
+              "ctx.body.size_bytes": contentLength,
+              "ctx.body.duration_ms": duration,
+              "ctx.error.type": "validation",
+              "ctx.error.code": "BODY_PARSE_ERROR",
+              "ctx.error.message":
+                jsonError instanceof Error
+                  ? jsonError.message
+                  : "Invalid JSON format",
+              "ctx.error.component": "BodyParserProcessor",
+            },
+          });
 
           throw new IgniterError({
             code: "BODY_PARSE_ERROR",
@@ -243,24 +214,14 @@ export class BodyParserProcessor {
         }
       }
 
-      // Finish span with success
-      TelemetryManagerProcessor.finishBodyParsingSpan(
-        span,
-        true,
-        bodySize,
-        duration,
-        logger,
-      );
-
-      // Record metrics
-      TelemetryManagerProcessor.recordBodyParsing(
-        telemetry,
-        contentType,
-        bodySize,
-        duration,
-        true,
-        logger,
-      );
+      telemetry?.emit("igniter.core.body.parse.success", {
+        level: "debug",
+        attributes: {
+          ...baseAttributes,
+          "ctx.body.size_bytes": bodySize,
+          "ctx.body.duration_ms": duration,
+        },
+      });
 
       return parsedBody;
     } catch (error) {
@@ -275,24 +236,21 @@ export class BodyParserProcessor {
         10,
       );
 
-      // Finish span with error
-      TelemetryManagerProcessor.finishBodyParsingSpan(
-        span,
-        false,
-        contentLength,
-        duration,
-        logger,
-      );
-
-      // Record metrics
-      TelemetryManagerProcessor.recordBodyParsing(
-        telemetry,
-        contentType,
-        contentLength,
-        duration,
-        false,
-        logger,
-      );
+      telemetry?.emit("igniter.core.body.parse.error", {
+        level: "error",
+        attributes: {
+          ...baseAttributes,
+          "ctx.body.size_bytes": contentLength,
+          "ctx.body.duration_ms": duration,
+          "ctx.error.type": "validation",
+          "ctx.error.code": "BODY_PARSE_ERROR",
+          "ctx.error.message":
+            error instanceof Error
+              ? error.message
+              : "Invalid request body format",
+          "ctx.error.component": "BodyParserProcessor",
+        },
+      });
 
       const igniterError = new IgniterError({
         code: "BODY_PARSE_ERROR",

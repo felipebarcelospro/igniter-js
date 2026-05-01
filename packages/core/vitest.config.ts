@@ -15,7 +15,16 @@ export default defineConfig({
         '**/*.d.ts',
         'src/test/',
         '**/*.test.ts',
-        '**/*.spec.ts'
+        '**/*.spec.ts',
+        'src/adapters/**',
+        'src/client/**',
+        'src/plugins/**',
+        'src/types/**',
+        'src/error/**',
+        'src/store/**',
+        'src/telemetry/**',
+        'src/**/index.ts',
+        'src/index.ts'
       ]
     },
     testTimeout: 10000,
