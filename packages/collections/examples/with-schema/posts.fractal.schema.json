@@ -1,0 +1,47 @@
+{
+  "collectionName": "posts",
+  "patterns": [
+    "./.content/posts/{id}.md"
+  ],
+  "schema": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "minLength": 10,
+        "description": "SEO-friendly title"
+      },
+      "published": {
+        "type": "boolean",
+        "default": false
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "authors": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "email"
+          ]
+        }
+      }
+    },
+    "required": [
+      "title"
+    ]
+  }
+}

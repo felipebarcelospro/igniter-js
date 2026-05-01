@@ -1,0 +1,30 @@
+{
+  "mode": "pre",
+  "tag": "alpha",
+  "initialVersions": {
+    "@igniter-js/adapter-bullmq": "0.3.4",
+    "@igniter-js/adapter-mcp-server": "0.3.7",
+    "@igniter-js/adapter-opentelemetry": "0.2.55",
+    "@igniter-js/adapter-redis": "0.2.1",
+    "@igniter-js/agents": "0.1.14",
+    "@igniter-js/bot": "0.2.13",
+    "@igniter-js/caller": "0.1.57",
+    "@igniter-js/cli": "0.4.98",
+    "@igniter-js/common": "0.1.0",
+    "@igniter-js/connectors": "0.1.1",
+    "@igniter-js/core": "0.4.0",
+    "@igniter-js/eslint": "0.2.1",
+    "@igniter-js/jobs": "0.1.2",
+    "@igniter-js/mail": "0.1.14",
+    "@igniter-js/mcp-server": "0.0.63",
+    "@igniter-js/storage": "0.1.21",
+    "@igniter-js/store": "0.1.25",
+    "@igniter-js/studio": "0.1.0",
+    "@igniter-js/telemetry": "0.1.141",
+    "@igniter-js/eslint-config": "0.2.0",
+    "@igniter-js/typescript-config": "0.2.0"
+  },
+  "changesets": [
+    "fluent-router-builder"
+  ]
+}

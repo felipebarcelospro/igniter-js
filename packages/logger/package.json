@@ -1,0 +1,37 @@
+{
+  "name": "@igniter-js/logger",
+  "version": "0.1.0",
+  "description": "Pino-based logger abstraction for Igniter.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "browser": "./dist/shim.js",
+  "files": [
+    "dist",
+    "examples"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/shim.js",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pino": "^9.0.0",
+    "pino-abstract-transport": "^2.0.0",
+    "pino-pretty": "^13.0.0"
+  },
+  "devDependencies": {
+    "@igniter-js/common": "*"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
