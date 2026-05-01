@@ -1,4 +1,4 @@
-import type { IgniterLogger } from '@igniter-js/core'
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterJobsAdapter } from './adapter'
 import type { IgniterJobsQueue } from './queue'
 import type { IgniterJobsScopeDefinition } from './scope'

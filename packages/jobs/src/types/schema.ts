@@ -3,7 +3,7 @@
  * @module @igniter-js/jobs/types/schema
  */
 
-import type { StandardSchemaV1 } from '@igniter-js/core'
+import type { StandardSchemaV1 } from "@igniter-js/common";
 
 /**
  * A schema accepted by `@igniter-js/jobs` for input validation.

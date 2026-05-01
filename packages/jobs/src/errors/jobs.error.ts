@@ -1,4 +1,4 @@
-import { IgniterError } from '@igniter-js/core'
+import { IgniterError } from "@igniter-js/common";
 
 /**
  * Canonical error codes for `@igniter-js/jobs`.

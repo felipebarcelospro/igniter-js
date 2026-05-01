@@ -1,4 +1,4 @@
-import type { StandardSchemaV1 } from '@igniter-js/core'
+import type { StandardSchemaV1 } from "@igniter-js/common";
 import type { IgniterJobsScopeEntry } from './scope'
 import type { IgniterJobsScheduleOptions } from './schedule'
 import type { IgniterJobsInferSchemaInput, IgniterJobsSchema } from './schema'

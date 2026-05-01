@@ -177,14 +177,14 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
       at: params.at,
       repeat:
         params.cron ||
-        params.every ||
-        params.maxExecutions ||
-        params.skipWeekends ||
-        params.onlyBusinessHours ||
-        params.businessHours ||
-        params.onlyWeekdays ||
-        params.skipDates
-        ? {
+          params.every ||
+          params.maxExecutions ||
+          params.skipWeekends ||
+          params.onlyBusinessHours ||
+          params.businessHours ||
+          params.onlyWeekdays ||
+          params.skipDates
+          ? {
             cron: params.cron,
             every: params.every,
             times: params.maxExecutions,
@@ -194,7 +194,7 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
             onlyWeekdays: params.onlyWeekdays,
             skipDates: toDateArray(params.skipDates),
           }
-        : undefined,
+          : undefined,
     }
 
     return namespace.schedule({
@@ -416,10 +416,11 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
   private core(): IgniterJobQueueAdapter<any> {
     if (!this.coreAdapter) {
       // We only need the Redis connection. The wrapped job handlers can create real context.
-      this.coreAdapter = createBullMQAdapter<any>({
+      this.coreAdapter = createBullMQAdapter({
         store: ({ client: this.redis } as any),
-      })
+      }) as unknown as IgniterJobQueueAdapter<any>
     }
+
     return this.coreAdapter
   }
 
@@ -601,15 +602,15 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
       metadata:
         def.onlyBusinessHours || def.skipWeekends || def.businessHours || def.onlyWeekdays || def.skipDates || (def.startDate && def.endDate)
           ? {
-              advancedScheduling: {
-                onlyBusinessHours: def.onlyBusinessHours,
-                skipWeekends: def.skipWeekends,
-                businessHours: def.businessHours,
-                skipDates: toDateArray(def.skipDates),
-                onlyWeekdays: def.onlyWeekdays,
-                between: def.startDate && def.endDate ? [def.startDate, def.endDate] : undefined,
-              },
-            }
+            advancedScheduling: {
+              onlyBusinessHours: def.onlyBusinessHours,
+              skipWeekends: def.skipWeekends,
+              businessHours: def.businessHours,
+              skipDates: toDateArray(def.skipDates),
+              onlyWeekdays: def.onlyWeekdays,
+              between: def.startDate && def.endDate ? [def.startDate, def.endDate] : undefined,
+            },
+          }
           : undefined,
     } as any
   }

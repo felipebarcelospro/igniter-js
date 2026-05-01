@@ -19,6 +19,7 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   external: [
+    "@igniter-js/common",
     "@igniter-js/core",
     "@igniter-js/store",
     "@igniter-js/telemetry",

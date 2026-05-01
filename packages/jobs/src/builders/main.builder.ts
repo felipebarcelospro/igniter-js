@@ -31,8 +31,7 @@
  *   .build()
  * ```
  */
-
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterJobsConfig } from "../types/config";
 import type { IgniterJobsRuntime } from "../types/runtime";
 import type { IgniterJobsAdapter } from "../types/adapter";
