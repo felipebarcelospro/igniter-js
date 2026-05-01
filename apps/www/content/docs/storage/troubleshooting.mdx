@@ -1,0 +1,38 @@
+---
+title: Troubleshooting
+description: Diagnose common storage issues with adapters, URLs, policies, and permissions.
+---
+
+## Quick Checks
+
+<Steps>
+  <Step>
+    ### Configuration - Is `IGNITER_STORAGE_URL` set and reachable? URLs are
+    used to strip prefixes—mismatches cause `IGNITER_STORAGE_INVALID_PATH_HOST`.
+    - Did you pick an adapter? Set `.withAdapter(...)` or
+    `IGNITER_STORAGE_ADAPTER`.
+  </Step>
+  <Step>
+    ### Permissions - S3: bucket exists, policy allows `s3:GetObject` and write
+    access for your credentials. - GCS: service account has storage object
+    admin/read roles for the bucket.
+  </Step>
+  <Step>
+    ### Policies - Size/type violations throw
+    `IGNITER_STORAGE_UPLOAD_POLICY_VIOLATION`. Confirm `contentType` inference
+    or set it explicitly for streams.
+  </Step>
+</Steps>
+
+## Common Errors
+
+- `IGNITER_STORAGE_ADAPTER_NOT_CONFIGURED`: adapter key missing or factory not found. Check env and builder order.
+- `IGNITER_STORAGE_INVALID_SCOPE` or `IGNITER_STORAGE_SCOPE_IDENTIFIER_REQUIRED`: scope key absent or identifier missing; review your `addScope` calls.
+- `IGNITER_STORAGE_COPY_NOT_SUPPORTED` / `IGNITER_STORAGE_MOVE_NOT_SUPPORTED`: adapter lacks copy/move; fall back to download + upload.
+- `IGNITER_STORAGE_FETCH_FAILED`: remote URL fetch failed during `uploadFromUrl`; verify URL and network.
+
+## Logging and Telemetry
+
+Enable hooks and telemetry to capture failing paths and durations. Error events include `storage.error.code` and `storage.error.message`, making dashboards actionable.
+
+For the full list of codes, see [Error Codes](</docs/storage/(reference)/error-codes>). If you need to change folder structures, review [Migrations & Cleanup](</docs/storage/(guides)/migrations-and-cleanup>).

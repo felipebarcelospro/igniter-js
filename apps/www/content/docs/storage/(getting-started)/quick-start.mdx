@@ -1,0 +1,89 @@
+---
+title: Quick Start
+description: Configure scopes, upload your first file, and return a public URL using @igniter-js/storage.
+---
+
+## Build Your First Upload Path
+
+Follow these steps to configure a manager, add scopes, and serve a public URL in minutes.
+
+<Steps>
+  <Step>
+    ### Create the storage instance
+
+    ```typescript
+    import { IgniterStorage } from '@igniter-js/storage'
+
+    export const storage = IgniterStorage.create()
+      .withAdapter('s3', { bucket: 'my-bucket', region: 'us-east-1' })
+      .withUrl('https://cdn.myapp.com')
+      .addScope('public', '/public')
+      .addScope('user', '/users/[identifier]')
+      .build()
+    ```
+
+    <Callout type="info">
+      The builder merges `.withAdapter()` and `.withUrl()` with environment defaults. Scopes become typed: `storage.scope('user', '123').upload(...)` requires the identifier because the path template includes `[identifier]`.
+    </Callout>
+
+  </Step>
+
+  <Step>
+    ### Upload to a scope
+
+    ```typescript
+    const avatar = new Blob(['image-bytes'], { type: 'image/png' })
+
+    const file = await storage
+      .scope('user', '123')
+      .upload(avatar, 'avatar.png')
+
+    console.log(file.url) // https://cdn.myapp.com/users/123/avatar.png
+    ```
+
+    The manager infers content type from the filename and sets public caching (`cache-control: public, max-age=31536000`).
+
+  </Step>
+
+  <Step>
+    ### Fetch or clean up
+
+    ```typescript
+    const metadata = await storage.get(file.url) // works with URL or relative path
+    const listed = await storage.scope('user', '123').list()
+    await storage.delete(file.path)
+    ```
+
+    Use `list` for inventories and `delete` for cleanups. If you need to reorganize files, use `copy` or `move` (adapter support required).
+
+  </Step>
+</Steps>
+
+## Handle Errors Early
+
+Wrap uploads with typed errors to present helpful messages:
+
+```typescript
+import { IgniterStorageError } from "@igniter-js/storage";
+
+try {
+  await storage.upload(file, "public/banner.pdf");
+} catch (error) {
+  if (IgniterStorageError.is(error)) {
+    // Guardrails
+    if (error.code === "IGNITER_STORAGE_UPLOAD_POLICY_VIOLATION") {
+      return response.badRequest({
+        message: "File does not meet requirements",
+      });
+    }
+
+    return response.error({ message: error.message });
+  }
+
+  throw error;
+}
+```
+
+## Next Steps
+
+Design your hierarchy in [Scopes & Paths](</docs/storage/(core-concepts)/scopes-and-paths>), set size/type guardrails in [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>), and add lifecycle hooks in [Hooks & Telemetry](</docs/storage/(core-concepts)/hooks-and-telemetry>).

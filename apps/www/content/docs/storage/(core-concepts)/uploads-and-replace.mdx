@@ -1,0 +1,51 @@
+---
+title: Uploads & Replace
+description: Deliver files from buffers, URLs, or streams with automatic content-type inference and replace strategies.
+---
+
+## Upload Entry Points
+
+Use `upload` for File/Blob/Readable streams, `uploadFromUrl` for remote fetch, or `uploadFromBuffer`/`uploadFromBase64` for raw bytes. The manager infers `contentType` from filenames and normalizes cache headers to long-lived public caching by default.
+
+```typescript
+// File/Blob
+await storage.scope("public").upload(file, "assets/banner.png");
+
+// Remote URL
+await storage.uploadFromUrl("https://example.com/logo.svg", "public/logo.svg");
+
+// Buffers
+await storage.uploadFromBuffer(Buffer.from(data), "public/report.pdf", {
+  contentType: "application/pdf",
+});
+```
+
+<Callout type="info">
+  The manager always resolves the destination key using the current scope and
+  base path, even when you pass a full URL back in. Keep your `baseUrl` stable
+  so public links remain predictable.
+</Callout>
+
+## Replace Strategies
+
+Avoid duplicates by deleting conflicts before uploading. Choose a strategy via `IgniterStorageUploadOptions`:
+
+```typescript
+// Replace any file with the same basename (any extension)
+await storage.scope("user", "123").upload(file, "avatar.webp", {
+  replace: "BY_FILENAME",
+});
+
+// Replace only exact filename + extension
+await storage.scope("user", "123").upload(file, "resume.pdf", {
+  replace: "BY_FILENAME_AND_EXTENSION",
+});
+```
+
+`BY_FILENAME` removes `avatar.png`, `avatar.jpg`, etc., before saving `avatar.webp`. `BY_FILENAME_AND_EXTENSION` only replaces `resume.pdf`, leaving `resume.docx` untouched. If deletion fails, the upload aborts with `IGNITER_STORAGE_REPLACE_FAILED` so you never end up with half-written state.
+
+## Public Delivery
+
+Uploads set `cacheControl: public, max-age=31536000` and `public: true` when the adapter supports ACLs. Keep your CDN base URL in sync with the bucket permissions (S3 bucket policy or GCS IAM). If you need shorter caching for mutable assets, pass a different `cacheControl` through a custom adapter wrapper.
+
+Next: explore available operations in [File Operations](</docs/storage/(core-concepts)/file-operations>) and enforce guardrails in [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>).

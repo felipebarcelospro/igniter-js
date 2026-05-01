@@ -1,0 +1,67 @@
+---
+title: Google Cloud Storage Adapter
+description: Connect Igniter Storage to Google Cloud Storage buckets with public delivery.
+---
+
+## Credentials and Environment
+
+Use a service account JSON (file path or base64) plus bucket details. Set env vars or pass credentials directly.
+
+<TypeTable
+  type={{
+    IGNITER_STORAGE_GOOGLE_BUCKET: {
+      type: "string",
+      description: "Bucket name",
+      required: true,
+    },
+    IGNITER_STORAGE_GOOGLE_REGION: {
+      type: "string",
+      description: "Bucket region",
+      required: false,
+    },
+    IGNITER_STORAGE_GOOGLE_ENDPOINT: {
+      type: "string",
+      description: "Custom endpoint or emulator",
+      required: false,
+    },
+    IGNITER_STORAGE_GOOGLE_CREDENTIALS_JSON: {
+      type: "string",
+      description: "Raw JSON credentials",
+      required: false,
+    },
+    IGNITER_STORAGE_GOOGLE_CREDENTIALS_JSON_BASE64: {
+      type: "string",
+      description: "Base64-encoded credentials JSON",
+      required: false,
+    },
+  }}
+/>
+
+## Minimal Setup
+
+```typescript
+import { IgniterStorage } from "@igniter-js/storage";
+
+export const storage = IgniterStorage.create()
+  .withAdapter("google", {
+    bucket: process.env.IGNITER_STORAGE_GOOGLE_BUCKET!,
+    region: process.env.IGNITER_STORAGE_GOOGLE_REGION,
+    endpoint: process.env.IGNITER_STORAGE_GOOGLE_ENDPOINT,
+    credentialsJson: process.env.IGNITER_STORAGE_GOOGLE_CREDENTIALS_JSON,
+    credentialsJsonBase64:
+      process.env.IGNITER_STORAGE_GOOGLE_CREDENTIALS_JSON_BASE64,
+  })
+  .withUrl(process.env.IGNITER_STORAGE_URL || "https://cdn.example.com")
+  .build();
+```
+
+<Callout type="warn" title="Public access">
+  Ensure the bucket policy/IAM allows public reads if you rely on CDN-style
+  URLs. Otherwise, pair this adapter with signed URLs at your CDN or edge layer.
+</Callout>
+
+## Emulator and Multi-env
+
+Point `IGNITER_STORAGE_GOOGLE_ENDPOINT` to a local emulator for tests. Use `.withPath('/staging')` to isolate environments in the same bucket while keeping URLs stable (`https://cdn.example.com/staging/...`).
+
+Next: harden uploads with [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>) or explore lifecycle flows in [Architecture](</docs/storage/(concepts)/architecture>).

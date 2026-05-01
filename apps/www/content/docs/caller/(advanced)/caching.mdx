@@ -1,0 +1,96 @@
+---
+title: Caching
+description: Improve performance with built-in in-memory and persistent caching.
+---
+
+Caller provides a powerful caching system that works out of the box with in-memory storage, and can be extended to use persistent stores like Redis.
+
+## Basic Caching
+
+To enable caching for a request, use the `.stale()` method. This sets the duration (in milliseconds) for which the response is considered fresh.
+
+```typescript
+// Cache the list of users for 30 seconds
+const { data } = await api.get('/users')
+  .stale(30_000)
+  .execute();
+```
+
+When a request is made within the stale time, Caller returns the data from the cache immediately without making a network request.
+
+---
+
+## Cache Keys
+
+By default, Caller generates a cache key based on the full URL (including query parameters). You can override this behavior using the `.cache()` method.
+
+```typescript
+// Use a custom cache key
+await api.get('/me')
+  .cache('default', 'current-user-profile')
+  .stale(60_000)
+  .execute();
+```
+
+---
+
+## Cache Invalidation
+
+You can manually invalidate cache entries when data changes (e.g., after a mutation).
+
+### Exact Match
+
+Invalidate a specific key:
+
+```typescript
+import { IgniterCallerManager } from '@igniter-js/caller';
+
+// After updating a user
+await api.post('/users').body(userData).execute();
+
+// Invalidate the users list cache
+await IgniterCallerManager.invalidate('/users');
+```
+
+### Pattern Match
+
+Invalidate all entries matching a glob pattern:
+
+```typescript
+// Invalidate all cache entries starting with /users/
+await IgniterCallerManager.invalidatePattern('/users/*');
+```
+
+---
+
+## Persistent Caching (Redis/Store)
+
+For server-side applications, you can use a persistent store to share cache across multiple instances or survive restarts.
+
+```typescript
+import { IgniterCaller } from '@igniter-js/caller';
+
+// Assuming you have an Igniter Store adapter
+const store = createMyStoreAdapter();
+
+const api = IgniterCaller.create()
+  .withStore(store, {
+    ttl: 3600, // 1 hour default TTL
+    keyPrefix: 'api-cache:',
+  })
+  .build();
+```
+
+When a store is configured, Caller will try to get/set data in the store before falling back to in-memory cache.
+
+---
+
+## Best Practices
+
+<Callout type="info" title="GET Requests Only">
+  Caching is only applied to `GET` and `HEAD` requests. Mutations (`POST`, `PUT`, `PATCH`, `DELETE`) always bypass the cache and should typically trigger invalidations.
+</Callout>
+
+<Callout type="success" title="Telemetry">
+  Use Telemetry to monitor your cache hit rate. Every cache hit emits an `igniter.caller.cache.read.hit` event.
+</Callout>

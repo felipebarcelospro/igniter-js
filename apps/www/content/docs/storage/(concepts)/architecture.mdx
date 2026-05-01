@@ -1,0 +1,28 @@
+---
+title: Architecture
+description: How the storage builder, manager, scopes, and adapters collaborate to deliver files.
+---
+
+## Components
+
+- **Builder**: Immutable chain that registers scopes, adapters, policies, hooks, logger, and telemetry. Produces a configured manager after merging environment input.
+- **Manager**: High-level API (`upload`, `list`, `get`, `copy`, `move`, `stream`, `delete`) that resolves paths, enforces policies, triggers hooks, and emits telemetry.
+- **Adapter**: Infrastructure-only implementation for S3, GCS, or custom backends. Receives normalized keys and content plus options (`contentType`, `cacheControl`, `public`).
+- **Scopes & Paths**: Templates that turn identifiers into paths (`/users/[identifier]` → `/users/123`). Combined with optional `basePath` to isolate environments.
+
+## Flow of an Upload
+
+1. **Resolve**: Manager strips `baseUrl` (if a URL is passed), joins `basePath`, scope, and destination to form the key.
+2. **Infer**: Determines filename, extension, and content type (or uses explicit override).
+3. **Validate**: Applies policies (size, MIME, extension). Throws `IGNITER_STORAGE_UPLOAD_POLICY_VIOLATION` on failure.
+4. **Hooks/Telemetry Start**: Fires `onUploadStarted` and `igniter.storage.upload.started` with attributes.
+5. **Replace (optional)**: Deletes matching files when `replace` is set; aborts on failure.
+6. **Adapter Write**: Calls adapter `put` with cache control and public flag.
+7. **Build Response**: Returns `IgniterStorageFile` with path, URL, name, extension, content type, and optional size.
+8. **Hooks/Telemetry End**: Fires success or error hooks and telemetry with durations and codes.
+
+## Env Integration
+
+`IgniterStorageEnv` reads `IGNITER_STORAGE_URL`, `IGNITER_STORAGE_ADAPTER`, `IGNITER_STORAGE_BASE_PATH`, provider creds, and policies. The builder merges env and explicit state, so code config always wins. This keeps environments consistent while letting tests override values locally.
+
+Learn more in [Adapters](</docs/storage/(adapters)/index>), enforce guardrails in [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>), and instrument behavior in [Hooks & Telemetry](</docs/storage/(core-concepts)/hooks-and-telemetry>).

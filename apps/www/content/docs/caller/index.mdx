@@ -1,0 +1,283 @@
+---
+title: Introduction
+description: A type-safe HTTP client for Igniter.js with automatic schema validation, caching, retries, and React integration. Built on native fetch with zero dependencies.
+---
+
+## The Missing Piece
+
+Every modern application needs to talk to APIs. Whether you're fetching user data, sending form submissions, or syncing with third-party services, HTTP requests are everywhere. But making HTTP requests in TypeScript has always been frustrating:
+
+- **No type safety** — responses are `any` by default, forcing you to cast or define interfaces manually
+- **Boilerplate everywhere** — error handling, retries, and caching require custom code for each request
+- **Client/server disconnect** — types defined on the server don't automatically flow to the client
+- **Testing is painful** — mocking fetch or axios requires complex setup
+
+**Caller** solves all of these problems with a simple, fluent API that feels like an extension of your Igniter.js application.
+
+```typescript
+// Define your API once with full type safety
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withSchemas(myApiSchemas)
+  .build();
+
+// Every request is fully typed
+const { data, error } = await api.get('/users/:id')
+  .params({ id: '123' })
+  .execute();
+
+// data is automatically typed as User!
+console.log(data.name);
+```
+
+<Callout type="success" title="Zero Configuration">
+  If you're using Igniter.js on both client and server, schemas are automatically shared. No manual type definitions needed.
+</Callout>
+
+---
+
+## Why Caller?
+
+Caller was built specifically for the Igniter.js ecosystem, but it works beautifully as a standalone HTTP client too. Here's what makes it special:
+
+<Accordions>
+  <Accordion title="End-to-End Type Safety">
+    Define your API schema once and get automatic TypeScript inference everywhere. When your server response changes, TypeScript catches breaking changes instantly.
+    
+    ```typescript
+    // Schema defined once
+    const schemas = IgniterCallerSchema.create()
+      .path('/users/:id', (path) =>
+        path.get({
+          responses: {
+            200: z.object({ id: z.string(), name: z.string() }),
+            404: z.object({ message: z.string() }),
+          },
+        })
+      )
+      .build();
+    
+    // TypeScript knows exact response types
+    const result = await api.get('/users/:id').execute();
+    //    ^? { data: { id: string; name: string } | null; error: ... }
+    ```
+    
+    No more `as User` casts or manually syncing interfaces between client and server.
+  </Accordion>
+  
+  <Accordion title="Fluent Builder API">
+    Chain methods naturally to configure your requests. Every method returns the builder, enabling powerful composition without nested configurations.
+    
+    ```typescript
+    const response = await api.post('/users')
+      .body({ name: 'John', email: 'john@example.com' })
+      .headers({ 'X-Request-ID': crypto.randomUUID() })
+      .timeout(5000)
+      .retry({ attempts: 3, backoff: 'exponential' })
+      .execute();
+    ```
+    
+    Compare this to axios or fetch where you'd need to pass a complex options object. The fluent API makes your intentions crystal clear.
+  </Accordion>
+  
+  <Accordion title="Built-in Resilience">
+    Production applications need retry logic, timeouts, and fallbacks. Caller provides these out of the box with sensible defaults.
+    
+    ```typescript
+    const data = await api.get('/external-service')
+      .retry({
+        attempts: 3,
+        backoff: 'exponential',
+        retryOn: [502, 503, 504],
+      })
+      .fallback({ cached: true, stale: true })
+      .execute();
+    ```
+    
+    No more writing custom retry wrappers or handling transient failures manually.
+  </Accordion>
+  
+  <Accordion title="Intelligent Caching">
+    Cache responses automatically with configurable strategies. Invalidate caches programmatically when data changes.
+    
+    ```typescript
+    // Cache for 5 minutes
+    const users = await api.get('/users')
+      .cache({ ttl: 300, key: 'users:list' })
+      .execute();
+    
+    // Serve stale data while revalidating
+    const posts = await api.get('/posts')
+      .stale({ maxAge: 60, staleWhileRevalidate: 300 })
+      .execute();
+    
+    // Invalidate when data changes
+    await api.post('/users').body(newUser).execute();
+    IgniterCallerManager.invalidate('users:list');
+    ```
+  </Accordion>
+  
+  <Accordion title="React Integration">
+    First-class React hooks for data fetching with automatic loading states, error boundaries, and cache invalidation.
+    
+    ```tsx
+    function UserProfile({ id }: { id: string }) {
+      const api = useCaller('main');
+      
+      const { data, isLoading, error } = api.get('/users/:id')
+        .params({ id })
+        .useQuery({ staleTime: 10_000 });
+      
+      if (isLoading) return <Skeleton />;
+      if (error) return <ErrorMessage error={error} />;
+      
+      return <h1>{data.name}</h1>;
+    }
+    ```
+    
+    Works seamlessly with React Suspense and error boundaries.
+  </Accordion>
+</Accordions>
+
+---
+
+## Architecture
+
+Caller follows a builder pattern similar to other Igniter.js packages. The flow is simple:
+
+<Mermaid
+  chart="
+graph LR
+    A[IgniterCaller.create] --> B[.withBaseUrl]
+    B --> C[.withSchemas]
+    C --> D[.withInterceptors]
+    D --> E[.build]
+    E --> F[IgniterCallerManager]
+    F --> G[.get / .post / .put / .delete]
+    G --> H[IgniterCallerRequestBuilder]
+    H --> I[.execute]
+    I --> J[Type-Safe Response]
+"
+/>
+
+The key components are:
+
+| Component | Purpose |
+|-----------|---------|
+| **IgniterCaller** | Builder for creating configured instances |
+| **IgniterCallerManager** | Runtime engine that executes requests |
+| **IgniterCallerRequestBuilder** | Fluent API for configuring individual requests |
+| **IgniterCallerSchema** | Type-safe schema definitions with validation |
+
+---
+
+## Quick Start
+
+Get up and running in under 5 minutes:
+
+<Steps>
+  <Step>
+    ### Install the Package
+    
+    <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+      <Tab value="npm">
+        ```bash
+        npm install @igniter-js/caller
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm add @igniter-js/caller
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn add @igniter-js/caller
+        ```
+      </Tab>
+      <Tab value="bun">
+        ```bash
+        bun add @igniter-js/caller
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step>
+    ### Create Your Client
+    
+    ```typescript title="lib/api.ts"
+    import { IgniterCaller } from '@igniter-js/caller';
+    
+    export const api = IgniterCaller.create()
+      .withBaseUrl(process.env.API_URL || 'http://localhost:3000')
+      .build();
+    ```
+  </Step>
+  
+  <Step>
+    ### Make Your First Request
+    
+    ```typescript
+    import { api } from './lib/api';
+    
+    async function fetchUsers() {
+      const { data, error } = await api.get('/users').execute();
+      
+      if (error) {
+        console.error('Failed to fetch users:', error.message);
+        return [];
+      }
+      
+      return data;
+    }
+    ```
+  </Step>
+</Steps>
+
+That's it! You now have a working HTTP client. Continue to the [Installation Guide](/docs/caller/installation) for complete setup instructions, or jump to [Core Concepts](/docs/caller/builder) to learn about the builder pattern.
+
+---
+
+## When to Use Caller
+
+Caller is ideal for:
+
+- ✅ **Igniter.js applications** — seamless integration with the framework
+- ✅ **Type-safe API clients** — when you want compile-time validation
+- ✅ **React/Next.js projects** — with built-in hooks and SSR support
+- ✅ **Microservices communication** — with retries, caching, and observability
+- ✅ **OpenAPI consumers** — generate clients from specs with the CLI
+
+Consider alternatives if:
+
+- ❌ You need browser support for IE11 (Caller uses native fetch)
+- ❌ You're building a simple script with one-off requests (use fetch directly)
+- ❌ You need GraphQL support (consider urql or Apollo)
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Installation"
+    description="Complete setup guide with all configuration options"
+    href="/docs/caller/installation"
+  />
+  <Card
+    title="Comparison"
+    description="See how Caller compares to Axios, ky, and ofetch"
+    href="/docs/caller/comparison"
+  />
+  <Card
+    title="Request Builder"
+    description="Deep dive into the fluent API for building requests"
+    href="/docs/caller/builder"
+  />
+  <Card
+    title="Schema Validation"
+    description="Learn how to define type-safe API contracts"
+    href="/docs/caller/schemas"
+  />
+</Cards>

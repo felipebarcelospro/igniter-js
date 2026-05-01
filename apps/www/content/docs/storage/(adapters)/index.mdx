@@ -1,0 +1,26 @@
+---
+title: Adapters Overview
+description: Choose and configure storage adapters for S3, Google Cloud Storage, or custom providers.
+---
+
+## Adapter Model
+
+Adapters implement the infrastructure contract (`IgniterStorageAdapter`) and handle I/O only—no business logic, scopes, or policies. The manager composes adapters with base URLs, scopes, policies, hooks, and telemetry. Use a first-party adapter (S3 or Google Cloud) or provide your own factory via `.withAdapterFactories()`.
+
+## Picking an Adapter
+
+- **S3**: AWS S3, MinIO, or any S3-compatible endpoint. Great when you need multi-part uploads and ACL control.
+- **Google Cloud Storage**: When your stack already uses GCP; supports signed URLs and interoperable buckets.
+- **Custom**: Bring another backend by implementing `put`, `delete`, `list`, `exists`, `stream`, and optional `copy`/`move`.
+
+```typescript
+import { IgniterStorage } from "@igniter-js/storage";
+import { MyCustomAdapter } from "./adapters/my-custom-adapter";
+
+const storage = IgniterStorage.create()
+  .withAdapter(new MyCustomAdapter())
+  .withUrl("https://cdn.myapp.com")
+  .build();
+```
+
+Next: configure providers in [S3](</docs/storage/(adapters)/s3>) or [Google Cloud Storage](</docs/storage/(adapters)/google-cloud>), or learn the full architecture in [Architecture](</docs/storage/(concepts)/architecture>).

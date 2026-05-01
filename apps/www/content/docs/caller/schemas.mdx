@@ -1,0 +1,83 @@
+---
+title: Schema Validation
+description: Achieve end-to-end type safety with Standard Schema.
+---
+
+Schema validation is what makes Caller truly powerful. By defining your API contract using Zod (or any Standard Schema V1 compatible library), you get automatic runtime validation and perfect TypeScript inference.
+
+## Manual Schema Definition
+
+You can define your schemas using the `IgniterCallerSchema` builder. This approach is recommended when you want a single source of truth for your API paths.
+
+```ts title="lib/schemas.ts"
+import { IgniterCallerSchema } from '@igniter-js/caller'
+import { z } from 'zod'
+
+const UserSchema = z.object({ id: z.string(), name: z.string() })
+
+export const apiSchemas = IgniterCallerSchema.create()
+  .schema('User', UserSchema) // Register reusable schema
+  .path('/users/:id', (path) =>
+    path.get({
+      responses: {
+        200: path.ref('User').schema,
+        404: z.object({ message: z.string() }),
+      },
+    })
+  )
+  .build()
+```
+
+## Using Schemas with Caller
+
+Pass your built schemas to the caller builder during setup.
+
+```ts title="lib/api.ts"
+import { IgniterCaller } from '@igniter-js/caller'
+import { apiSchemas } from './schemas'
+
+export const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withSchemas(apiSchemas, { mode: 'strict' })
+  .build()
+```
+
+### Validation Modes
+
+| Mode | Description |
+|------|-------------|
+| `'strict'` | (Default) Fails the request if the response doesn't match the schema. |
+| `'loose'` | Logs a warning but returns the data if validation fails. |
+| `'none'` | Disables runtime validation while keeping type inference. |
+
+## Type Inference
+
+The `$Infer` helper allows you to extract types from your schemas without manual interfaces.
+
+```ts
+import type { apiSchemas } from './schemas'
+
+// Extract a specific response type
+type User = ReturnType<
+  typeof apiSchemas.$Infer.Response<'/users/:id', 'GET', 200>
+>
+
+// Usage in code
+const result = await api.get('/users/:id').params({ id: '1' }).execute()
+// result.data is automatically typed as User!
+```
+
+## Validatable Content Types
+
+Schema validation only runs for content types that support text parsing:
+- `application/json`
+- `text/xml` / `application/xml`
+- `text/csv`
+
+Binary responses (Blobs, Streams) are skipped and only typed via `.responseType<T>()`.
+
+---
+
+## Automatic Generation
+
+If you have an OpenAPI specification, you don't need to write these manually. Use the [CLI Generation](/docs/caller/cli) to bootstrap everything for you.

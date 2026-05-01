@@ -1,0 +1,24 @@
+{
+  "title": "Storage",
+  "root": true,
+  "pages": [
+    "---Getting Started---",
+    "(getting-started)/index",
+    "(getting-started)/installation",
+    "(getting-started)/quick-start",
+    "---Core Concepts---",
+    "...(core-concepts)",
+    "---Guides---",
+    "...(guides)",
+    "---Adapters---",
+    "...(adapters)",
+    "---Testing & Troubleshooting---",
+    "(testing)/testing-and-local-dev",
+    "troubleshooting",
+    "---Reference---",
+    "(reference)/api-reference",
+    "(reference)/error-codes",
+    "---Architecture---",
+    "(concepts)/architecture"
+  ]
+}

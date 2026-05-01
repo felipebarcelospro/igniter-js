@@ -1,0 +1,76 @@
+---
+title: CLI Integration
+description: Automate your API client setup with the Igniter CLI.
+---
+
+The Igniter CLI allows you to generate a fully typed Caller and its corresponding Zod schemas directly from an OpenAPI 3 specification. This is the fastest way to integrate third-party APIs or sync with your own backend.
+
+## Generation Command
+
+Use the `generate caller` command:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli generate caller --name facebook --url https://api.facebook.com/openapi.json
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm igniter generate caller --name facebook --url https://api.facebook.com/openapi.json
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn igniter generate caller --name facebook --url https://api.facebook.com/openapi.json
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli generate caller --name facebook --url https://api.facebook.com/openapi.json
+    ```
+  </Tab>
+</Tabs>
+
+### Command Options
+
+| Option | Description |
+|--------|-------------|
+| `--name` | Prefix for the generated variables and file naming. |
+| `--url` | Remote URL of the OpenAPI JSON/YAML. |
+| `--path` | Local file path to the OpenAPI spec. |
+| `--output`| Override output directory (default: `src/callers/<hostname>`). |
+
+## Generated Assets
+
+The command generates two main files in your project:
+
+1. **`schema.ts`**: Contains all Zod schemas derived from `components/schemas` and a path-first `IgniterCallerSchema` builder.
+2. **`index.ts`**: Exports a pre-configured `IgniterCaller` instance.
+
+### Using the Generated Caller
+
+```ts
+import { facebookCaller } from '@/callers/facebook'
+import type { FacebookCallerSchemas } from '@/callers/facebook/schema'
+
+// Making a request (URL is typed!)
+const result = await facebookCaller.get('/me').execute()
+
+// Type inference for responses
+type MeResponse = ReturnType<
+  typeof FacebookCallerSchemas.$Infer.Response<'/me', 'GET', 200>
+>
+```
+
+## Why use CLI Generation?
+
+- **Zero Manual Typing**: Keep your TS types perfectly in sync with the API documentation.
+- **Runtime Safety**: Automatic validation ensures the data you receive matches the code you wrote.
+- **Speed**: Go from an URL to a production-ready client in seconds.
+
+---
+
+## Manual Schemas
+
+If you don't have an OpenAPI spec, you can still define [Manual Schemas](/docs/caller/schemas) using the `IgniterCallerSchema` builder.

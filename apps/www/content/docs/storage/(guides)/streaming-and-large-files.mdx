@@ -1,0 +1,61 @@
+---
+title: Streaming & Large Files
+description: Stream files, handle large uploads, and apply retries safely on S3 or GCS.
+---
+
+## Stream Reads
+
+Use `stream` to pipe files directly from the adapter to HTTP responses or processing pipelines.
+
+```typescript
+const stream = await storage.stream("public/video.mp4");
+stream.pipe(res);
+```
+
+Ensure your adapter/provider supports ranged requests if you need partial content; otherwise serve full streams.
+
+## Large Uploads
+
+The S3 adapter leverages multipart uploads when given Node streams, making large uploads resilient. Always set or infer `contentType` for correct policies and downstream behavior. Consider a preflight check on size if the source is known before streaming.
+
+```typescript
+await storage.scope("public").upload(largeStream, "backups/db.dump", {
+  replace: undefined,
+});
+```
+
+<Callout type="info">
+  If you need client-side chunking, keep that logic at the edge and hand a
+  single stream or Blob to the storage manager. Policies still run before
+  upload, and errors return `IGNITER_STORAGE_UPLOAD_FAILED` with the original
+  cause.
+</Callout>
+
+## Retry and Backoff
+
+Wrap uploads with retry logic for transient network failures, but avoid retrying policy violations. Typed errors expose `code` and `operation` so you can branch cleanly.
+
+```typescript
+import { IgniterStorageError } from "@igniter-js/storage";
+
+async function uploadWithRetry(
+  file: Blob,
+  destination: string,
+  maxRetries = 3,
+) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await storage.upload(file, destination);
+    } catch (error) {
+      if (IgniterStorageError.is(error)) {
+        if (error.code === "IGNITER_STORAGE_UPLOAD_POLICY_VIOLATION")
+          throw error;
+        if (attempt === maxRetries) throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+    }
+  }
+}
+```
+
+See [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>) for size/type guardrails and [File Operations](</docs/storage/(core-concepts)/file-operations>) for more lifecycle actions.

@@ -1,0 +1,77 @@
+---
+title: Policies & Validation
+description: Enforce max file size, allowed MIME types, and extensions before uploads land in your storage bucket.
+---
+
+## Define Policies
+
+Set policies in the builder or via environment variables. Validation runs before uploads, failing fast with `IGNITER_STORAGE_UPLOAD_POLICY_VIOLATION` when a rule is broken.
+
+```typescript
+const storage = IgniterStorage.create()
+  .withAdapter("s3", { bucket: "app" })
+  .withUrl("https://cdn.app.com")
+  .withMaxFileSize(10 * 1024 * 1024) // 10 MB
+  .withAllowedMimeTypes(["image/png", "image/jpeg"])
+  .withAllowedExtensions(["png", "jpg", "jpeg"])
+  .build();
+```
+
+<TypeTable
+  type={{
+    maxFileSize: {
+      type: "number",
+      description: "Maximum bytes allowed; rejected if exceeded",
+      required: false,
+    },
+    allowedMimeTypes: {
+      type: "string[]",
+      description: "Accepted content types; inferred or explicit",
+      required: false,
+    },
+    allowedExtensions: {
+      type: "string[]",
+      description: "Accepted extensions (no leading dot)",
+      required: false,
+    },
+  }}
+/>
+
+<Callout type="info">
+  Env equivalents: `IGNITER_STORAGE_MAX_FILE_SIZE`,
+  `IGNITER_STORAGE_ALLOWED_MIME_TYPES`, and
+  `IGNITER_STORAGE_ALLOWED_EXTENSIONS`. Values merge with builder input;
+  undefined values are ignored.
+</Callout>
+
+## Handle Violations
+
+```typescript
+import { IgniterStorageError } from "@igniter-js/storage";
+
+try {
+  await storage.upload(file, "public/avatar.exe");
+} catch (error) {
+  if (
+    IgniterStorageError.is(error) &&
+    error.code === "IGNITER_STORAGE_UPLOAD_POLICY_VIOLATION"
+  ) {
+    const violations = error.data?.violations ?? [];
+    return response.badRequest({
+      message: "File does not meet requirements",
+      violations,
+    });
+  }
+  throw error;
+}
+```
+
+Violations include `reason`, `message`, and contextual `data` (size or allowed lists). Use them to craft user-facing guidance or logs.
+
+## Checklist
+
+- Provide explicit `contentType` when sending streams so MIME checks work.
+- Keep policy defaults consistent across environments by using env vars.
+- When replacing files, the same policies apply to the new upload before deletion occurs.
+
+Next: wire observability and lifecycle controls in [Hooks & Telemetry](</docs/storage/(core-concepts)/hooks-and-telemetry>).

@@ -1,0 +1,34 @@
+---
+title: Migrations & Cleanup
+description: Move, copy, and delete files safely during restructures, environment changes, or retention jobs.
+---
+
+## Reorganize Paths
+
+When you rename folders or change scope structures, use `copy` or `move` with scoped managers. This keeps base paths intact and reduces accidental cross-tenant moves.
+
+```typescript
+const legacy = storage.path("legacy");
+await legacy.copy("images/logo.png", "images/logo.v2.png");
+await legacy.move("temp/upload.tmp", "public/uploads/upload.pdf");
+```
+
+If the adapter does not support copy/move, you will receive `IGNITER_STORAGE_COPY_NOT_SUPPORTED` or `IGNITER_STORAGE_MOVE_NOT_SUPPORTED` before any changes occur.
+
+## Environment Transitions
+
+Switch `withPath` to migrate between environments (e.g., `/staging` → `/production`) without renaming files. Populate the new prefix by copying critical assets, then cut traffic by updating `IGNITER_STORAGE_URL` to the new CDN domain if needed.
+
+## Cleanup Jobs
+
+Combine `list` and `delete` for retention policies:
+
+```typescript
+const temp = storage.scope("public").path("temp");
+const files = await temp.list();
+await Promise.all(files.map((f) => temp.delete(f.path)));
+```
+
+Run these jobs with observability: hooks emit success/error events per deletion, and telemetry attributes (`storage.path`, `storage.duration_ms`, `storage.error.code`) keep dashboards honest.
+
+For more on operations, see [File Operations](</docs/storage/(core-concepts)/file-operations>) and [Hooks & Telemetry](</docs/storage/(core-concepts)/hooks-and-telemetry>).

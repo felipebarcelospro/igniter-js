@@ -1,0 +1,466 @@
+---
+title: Caller Manager
+description: The runtime engine that executes HTTP requests. Learn about global configuration, event handling, batch requests, and cache invalidation.
+---
+
+## Overview
+
+The **IgniterCallerManager** is the runtime engine behind every Caller instance. When you call `.build()` on your configuration, you receive a manager that handles all the heavy lifting: executing requests, managing interceptors, emitting events, and coordinating caching.
+
+While the Request Builder focuses on configuring individual requests, the Manager provides global capabilities that affect all requests or operate outside the request lifecycle.
+
+```typescript
+import { IgniterCallerManager } from '@igniter-js/caller';
+
+// Your api instance IS a manager
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .build();
+
+// Manager-level operations
+IgniterCallerManager.on('response', handleResponse);
+IgniterCallerManager.invalidate('users:*');
+```
+
+---
+
+## Instance vs Static Methods
+
+The Manager exposes two types of methods:
+
+| Type | Access | Purpose |
+|------|--------|---------|
+| **Instance** | `api.get()`, `api.post()` | Creating requests for this client |
+| **Static** | `IgniterCallerManager.on()` | Global operations across all clients |
+
+This design allows you to have multiple independent API clients while still coordinating global behaviors like event handling and cache invalidation.
+
+```typescript
+// Two independent clients
+const apiV1 = IgniterCaller.create().withBaseUrl('/api/v1').build();
+const apiV2 = IgniterCaller.create().withBaseUrl('/api/v2').build();
+
+// Global event listener applies to BOTH
+IgniterCallerManager.on('response', (event) => {
+  console.log(`Response from ${event.url}: ${event.status}`);
+});
+```
+
+---
+
+## Creating Requests
+
+The manager provides convenience methods for all HTTP verbs:
+
+<Accordions>
+  <Accordion title="api.get(path)">
+    Creates a GET request builder. GET requests retrieve data without side effects.
+    
+    ```typescript
+    // Simple fetch
+    const { data } = await api.get('/users').execute();
+    
+    // With parameters
+    const { data } = await api.get('/users/:id')
+      .params({ id: '123' })
+      .execute();
+    
+    // With query string
+    const { data } = await api.get('/users')
+      .query({ page: 1, limit: 20 })
+      .execute();
+    ```
+  </Accordion>
+  
+  <Accordion title="api.post(path)">
+    Creates a POST request builder. POST requests create new resources.
+    
+    ```typescript
+    const { data } = await api.post('/users')
+      .body({ name: 'John', email: 'john@example.com' })
+      .execute();
+    ```
+  </Accordion>
+  
+  <Accordion title="api.put(path)">
+    Creates a PUT request builder. PUT requests replace an entire resource.
+    
+    ```typescript
+    const { data } = await api.put('/users/:id')
+      .params({ id: '123' })
+      .body({ name: 'John Updated', email: 'john@example.com' })
+      .execute();
+    ```
+  </Accordion>
+  
+  <Accordion title="api.patch(path)">
+    Creates a PATCH request builder. PATCH requests update part of a resource.
+    
+    ```typescript
+    const { data } = await api.patch('/users/:id')
+      .params({ id: '123' })
+      .body({ name: 'John Updated' }) // Only updating name
+      .execute();
+    ```
+  </Accordion>
+  
+  <Accordion title="api.delete(path)">
+    Creates a DELETE request builder. DELETE requests remove resources.
+    
+    ```typescript
+    const { error } = await api.delete('/users/:id')
+      .params({ id: '123' })
+      .execute();
+    
+    if (!error) {
+      console.log('User deleted successfully');
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="api.request(config)">
+    Low-level method for when you need full control. Accepts an axios-style config object.
+    
+    ```typescript
+    const { data } = await api.request({
+      method: 'POST',
+      url: '/custom-endpoint',
+      headers: { 'X-Custom': 'value' },
+      body: { data: 'payload' },
+      timeout: 5000,
+    });
+    ```
+    
+    Use this when the fluent builder doesn't cover your use case.
+  </Accordion>
+</Accordions>
+
+---
+
+## Batch Requests
+
+Execute multiple requests in parallel with automatic error handling:
+
+```typescript
+const results = await IgniterCallerManager.batch([
+  api.get('/users').execute(),
+  api.get('/posts').execute(),
+  api.get('/comments').execute(),
+]);
+
+// results is an array of { data, error, status } objects
+const [users, posts, comments] = results;
+
+if (users.error) {
+  console.log('Failed to fetch users');
+} else {
+  console.log(`Fetched ${users.data.length} users`);
+}
+```
+
+### Batch with Settlement
+
+Batch requests use `Promise.allSettled` semantics—one failure doesn't abort the others:
+
+```typescript
+const results = await IgniterCallerManager.batch([
+  api.get('/always-works').execute(),
+  api.get('/sometimes-fails').execute(),
+  api.get('/always-works-2').execute(),
+]);
+
+// Even if the second request fails, you get results from all three
+results.forEach((result, index) => {
+  if (result.error) {
+    console.log(`Request ${index} failed: ${result.error.message}`);
+  } else {
+    console.log(`Request ${index} succeeded`);
+  }
+});
+```
+
+### Typed Batch Results
+
+For type safety with heterogeneous requests, use the generic form:
+
+```typescript
+const [usersResult, postsResult] = await IgniterCallerManager.batch<
+  [User[], Post[]]
+>([
+  api.get('/users').execute(),
+  api.get('/posts').execute(),
+]);
+
+// usersResult.data is User[] | null
+// postsResult.data is Post[] | null
+```
+
+---
+
+## Global Events
+
+Subscribe to events across all Caller instances for logging, analytics, or error tracking:
+
+<Accordions>
+  <Accordion title="IgniterCallerManager.on(event, handler)">
+    Subscribes to global events. Returns an unsubscribe function.
+    
+    ```typescript
+    const unsubscribe = IgniterCallerManager.on('response', (event) => {
+      console.log(`[${event.method}] ${event.url} → ${event.status}`);
+      
+      // Send to analytics
+      analytics.track('api_call', {
+        url: event.url,
+        method: event.method,
+        status: event.status,
+        duration: event.duration,
+      });
+    });
+    
+    // Later: stop listening
+    unsubscribe();
+    ```
+    
+    **Available Events:**
+    
+    | Event | Payload | Description |
+    |-------|---------|-------------|
+    | `request` | `{ url, method, headers }` | Before request is sent |
+    | `response` | `{ url, method, status, duration }` | After response received |
+    | `error` | `{ url, method, error }` | When request fails |
+    | `cache:hit` | `{ url, key }` | Cache hit occurred |
+    | `cache:miss` | `{ url, key }` | Cache miss occurred |
+  </Accordion>
+  
+  <Accordion title="IgniterCallerManager.off(event, handler)">
+    Removes a specific event handler. Alternatively, use the unsubscribe function returned by `.on()`.
+    
+    ```typescript
+    function myHandler(event) {
+      console.log(event);
+    }
+    
+    // Subscribe
+    IgniterCallerManager.on('response', myHandler);
+    
+    // Unsubscribe
+    IgniterCallerManager.off('response', myHandler);
+    ```
+  </Accordion>
+</Accordions>
+
+### Event Handler Examples
+
+```typescript
+// Error tracking
+IgniterCallerManager.on('error', (event) => {
+  Sentry.captureException(event.error, {
+    tags: { url: event.url, method: event.method },
+  });
+});
+
+// Performance monitoring
+IgniterCallerManager.on('response', (event) => {
+  if (event.duration > 1000) {
+    console.warn(`Slow request: ${event.url} took ${event.duration}ms`);
+  }
+});
+
+// Debug logging in development
+if (process.env.NODE_ENV === 'development') {
+  IgniterCallerManager.on('request', (e) => console.log('→', e.method, e.url));
+  IgniterCallerManager.on('response', (e) => console.log('←', e.status, e.url));
+}
+```
+
+---
+
+## Cache Invalidation
+
+Programmatically invalidate cached responses when data changes:
+
+<Accordions>
+  <Accordion title="IgniterCallerManager.invalidate(key)">
+    Invalidates a specific cache entry by its exact key.
+    
+    ```typescript
+    // Cache a response with a key
+    await api.get('/users')
+      .cache({ key: 'users:list', ttl: 300 })
+      .execute();
+    
+    // After creating a new user, invalidate the cache
+    await api.post('/users').body(newUser).execute();
+    IgniterCallerManager.invalidate('users:list');
+    
+    // Next request will fetch fresh data
+    const { data } = await api.get('/users')
+      .cache({ key: 'users:list', ttl: 300 })
+      .execute();
+    ```
+  </Accordion>
+  
+  <Accordion title="IgniterCallerManager.invalidatePattern(pattern)">
+    Invalidates multiple cache entries matching a glob pattern.
+    
+    ```typescript
+    // Invalidate all user-related caches
+    IgniterCallerManager.invalidatePattern('users:*');
+    
+    // Invalidate all caches for a specific user
+    IgniterCallerManager.invalidatePattern('*:user:123:*');
+    
+    // Clear all caches (use with caution!)
+    IgniterCallerManager.invalidatePattern('*');
+    ```
+    
+    **Pattern Syntax:**
+    - `*` matches any characters within a segment
+    - `users:*` matches `users:list`, `users:123`, etc.
+    - `*:user:*` matches `api:user:123`, `cache:user:456`, etc.
+  </Accordion>
+</Accordions>
+
+### Cache Invalidation Patterns
+
+```typescript
+// Pattern 1: Invalidate on mutation
+async function createUser(data: CreateUserInput) {
+  const { data: user, error } = await api.post('/users')
+    .body(data)
+    .execute();
+  
+  if (!error) {
+    IgniterCallerManager.invalidate('users:list');
+  }
+  
+  return user;
+}
+
+// Pattern 2: Invalidate related data
+async function updateUserProfile(userId: string, data: ProfileInput) {
+  await api.patch('/users/:id/profile')
+    .params({ id: userId })
+    .body(data)
+    .execute();
+  
+  // Invalidate multiple related caches
+  IgniterCallerManager.invalidate(`users:${userId}`);
+  IgniterCallerManager.invalidate(`users:${userId}:profile`);
+  IgniterCallerManager.invalidate('users:list'); // List might show profile data
+}
+
+// Pattern 3: React hook integration
+function useCreateUser() {
+  const queryClient = useQueryClient();
+  
+  return async (data: CreateUserInput) => {
+    const { data: user } = await api.post('/users').body(data).execute();
+    
+    // Invalidate Caller cache
+    IgniterCallerManager.invalidate('users:list');
+    
+    // Invalidate React Query cache (if using both)
+    queryClient.invalidateQueries(['users']);
+    
+    return user;
+  };
+}
+```
+
+---
+
+## Common Patterns
+
+<Accordions>
+  <Accordion title="Request Logging Middleware">
+    Create a logging layer that captures all API activity:
+    
+    ```typescript
+    // lib/api-logger.ts
+    export function setupApiLogging() {
+      IgniterCallerManager.on('request', (event) => {
+        console.log(`[API] → ${event.method} ${event.url}`);
+      });
+      
+      IgniterCallerManager.on('response', (event) => {
+        const emoji = event.status < 400 ? '✓' : '✗';
+        console.log(`[API] ${emoji} ${event.status} ${event.url} (${event.duration}ms)`);
+      });
+      
+      IgniterCallerManager.on('error', (event) => {
+        console.error(`[API] ✗ ${event.method} ${event.url}`, event.error);
+      });
+    }
+    
+    // Call once at app startup
+    setupApiLogging();
+    ```
+  </Accordion>
+  
+  <Accordion title="Offline Detection">
+    Detect when the user goes offline and queue requests:
+    
+    ```typescript
+    let isOnline = navigator.onLine;
+    const pendingRequests: Array<() => Promise<void>> = [];
+    
+    window.addEventListener('online', async () => {
+      isOnline = true;
+      // Replay queued requests
+      while (pendingRequests.length > 0) {
+        const request = pendingRequests.shift();
+        await request?.();
+      }
+    });
+    
+    window.addEventListener('offline', () => {
+      isOnline = false;
+    });
+    
+    IgniterCallerManager.on('error', (event) => {
+      if (!isOnline && event.error.code === 'NETWORK_ERROR') {
+        // Queue for retry when online
+        pendingRequests.push(() => 
+          api.request({ url: event.url, method: event.method }).execute()
+        );
+      }
+    });
+    ```
+  </Accordion>
+</Accordions>
+
+---
+
+## Best Practices
+
+<Callout type="success" title="Manager Guidelines">
+  1. **Use instance methods for requests** — `api.get()`, `api.post()`, etc.
+  2. **Use static methods for global operations** — events, invalidation
+  3. **Set up event handlers early** — typically in your app's entry point
+  4. **Clean up subscriptions** — especially in React useEffect or component unmount
+  5. **Use meaningful cache keys** — makes invalidation patterns clearer
+</Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="HTTP Methods"
+    description="Learn about response parsing and content types"
+    href="/docs/caller/methods"
+  />
+  <Card
+    title="Caching"
+    description="Deep dive into caching strategies"
+    href="/docs/caller/caching"
+  />
+  <Card
+    title="Interceptors"
+    description="Add middleware to all requests"
+    href="/docs/caller/interceptors"
+  />
+</Cards>

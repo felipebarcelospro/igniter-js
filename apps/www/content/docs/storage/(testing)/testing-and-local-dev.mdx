@@ -1,0 +1,36 @@
+---
+title: Testing & Local Dev
+description: Test storage flows with mock adapters, local S3/GCS emulators, and clean fixtures.
+---
+
+## Mock Adapter for Unit Tests
+
+Use the built-in mock adapter to avoid network calls. It implements the storage contract and stores data in memory, making it ideal for unit tests.
+
+```typescript
+import { IgniterStorage } from "@igniter-js/storage";
+import { IgniterMockStorageAdapter } from "@igniter-js/storage/adapters/mock.adapter";
+
+const storage = IgniterStorage.create()
+  .withAdapter(new IgniterMockStorageAdapter())
+  .withUrl("http://localhost:3000/cdn")
+  .addScope("test", "/tests")
+  .build();
+```
+
+Reset the adapter between tests to prevent bleed-over:
+
+```typescript
+afterEach(() => storage.adapter.clear());
+```
+
+## Local Emulators
+
+- **S3 (MinIO/localstack)**: set `IGNITER_STORAGE_S3_ENDPOINT=http://127.0.0.1:9000`, keep `forcePathStyle` (default) and disable TLS for localhost. Seed buckets before tests.
+- **GCS emulator**: set `IGNITER_STORAGE_GOOGLE_ENDPOINT` to the emulator URL and provide a test service account.
+
+## Fixtures and Cleanup
+
+Use scoped managers to limit cleanup radius. Combine `list` + `delete` after each suite to keep fixtures small. Hooks fire during tests, so assert on emitted events to verify observability.
+
+For troubleshooting common adapter errors, see [Troubleshooting](/docs/storage/troubleshooting). For production readiness, review [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>).

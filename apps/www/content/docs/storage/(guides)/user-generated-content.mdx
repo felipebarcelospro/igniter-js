@@ -1,0 +1,40 @@
+---
+title: User-Generated Content
+description: Safely store user uploads with scoped paths, replace strategies, and strict policies.
+---
+
+## Scope Per User or Tenant
+
+Keep uploads isolated with identifier scopes. This prevents cross-tenant collisions and makes cleanup straightforward.
+
+```typescript
+const userStorage = storage.scope("user", user.id);
+await userStorage.upload(file, "avatar.png");
+await userStorage.upload(document, "documents/contract.pdf");
+```
+
+## Enforce Guardrails
+
+Combine policies and replace strategies to control what lands in your bucket.
+
+```typescript
+const storage = IgniterStorage.create()
+  .withAdapter("s3", { bucket: "ugc" })
+  .withUrl("https://cdn.app.com")
+  .withMaxFileSize(5 * 1024 * 1024)
+  .withAllowedMimeTypes(["image/png", "image/jpeg", "application/pdf"])
+  .withAllowedExtensions(["png", "jpg", "jpeg", "pdf"])
+  .build();
+
+await storage.scope("user", user.id).upload(photo, "avatar.png", {
+  replace: "BY_FILENAME",
+});
+```
+
+`BY_FILENAME` keeps only one avatar per user regardless of format; policies reject oversized or unsafe files before upload.
+
+## Moderate and Move
+
+Use `list` to review pending uploads, then `copy` or `move` into approved locations after moderation. If an adapter lacks copy/move support, you will get a typed error before any files change, allowing you to fall back to download/re-upload logic.
+
+Link to [Uploads & Replace](</docs/storage/(core-concepts)/uploads-and-replace>) for delivery options and [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>) for stricter rules.

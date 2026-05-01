@@ -45,51 +45,37 @@ Igniter.js Jobs follow an **adapter-based architecture**. The core framework def
 Here's a minimal example showing how to set up and use jobs:
 
 ```typescript
-// 1. Create the adapter
-import { createBullMQAdapter } from '@igniter-js/adapter-bullmq';
-import { createRedisStoreAdapter } from '@igniter-js/adapter-redis';
+import { IgniterJobs, IgniterQueue } from '@igniter-js/jobs';
+import { IgniterJobsBullMQAdapter } from '@igniter-js/jobs/adapters';
 import { Redis } from 'ioredis';
 import { z } from 'zod';
 
 const redis = new Redis(process.env.REDIS_URL);
-const store = createRedisStoreAdapter({ client: redis });
 
-const jobs = createBullMQAdapter({
-  store,
-  autoStartWorker: { concurrency: 5 },
-});
+// 1. Define a queue
+const emailQueue = IgniterQueue.create('email')
+  .addJob('sendWelcome', {
+    input: z.object({ email: z.string().email() }),
+    handler: async ({ input, context }) => {
+      await context.emailService.sendWelcome(input.email);
+      return { sent: true };
+    },
+  })
+  .build();
 
-// 2. Define a job router
-const emailRouter = jobs.router({
-  namespace: 'emails',
-  jobs: {
-    sendWelcome: jobs.register({
-      input: z.object({ email: z.string().email() }),
-      handler: async ({ payload, context }) => {
-        await context.emailService.sendWelcome(payload.email);
-        return { sent: true };
-      },
-    }),
-  },
-});
+// 2. Create the jobs instance
+export const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsBullMQAdapter.create({ redis }))
+  .withService('my-api')
+  .withEnvironment('production')
+  .withContext(async () => ({
+    emailService: new EmailService(),
+  }))
+  .addQueue(emailQueue)
+  .build();
 
-// 3. Merge routers
-const REGISTERED_JOBS = jobs.merge({
-  emails: emailRouter,
-});
-
-// 4. Register with Igniter
-import { Igniter } from '@igniter-js/core';
-
-export const igniter = Igniter
-  .context<AppContext>()
-  .store(store)
-  .jobs(REGISTERED_JOBS)
-  .create();
-
-// 5. Use in your actions
-igniter.jobs.emails.schedule({
-  task: 'sendWelcome',
+// 3. Use in your application
+await jobs.email.sendWelcome.dispatch({
   input: { email: 'user@example.com' },
 });
 ```

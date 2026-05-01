@@ -1,0 +1,10 @@
+{
+  "title": "Core Concepts",
+  "pages": [
+    "scopes-and-paths",
+    "uploads-and-replace",
+    "file-operations",
+    "policies-and-validation",
+    "hooks-and-telemetry"
+  ]
+}

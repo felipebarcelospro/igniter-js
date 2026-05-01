@@ -1,0 +1,420 @@
+---
+title: HTTP Methods & Response Parsing
+description: Deep dive into HTTP method handling, automatic content-type detection, and response parsing strategies. Learn how Caller processes different data formats.
+---
+
+## Overview
+
+Caller supports all standard HTTP methods and automatically handles response parsing based on content type. You don't need to manually call `.json()` or `.text()`—Caller detects the response format and deserializes it appropriately.
+
+This automatic handling covers JSON, XML, plain text, form data, and binary responses. For cases where automatic detection isn't enough, you have full control over response parsing.
+
+---
+
+## HTTP Methods
+
+Every HTTP method has specific semantics. Understanding these helps you build correct, RESTful APIs:
+
+| Method | Purpose | Body | Idempotent | Safe |
+|--------|---------|------|------------|------|
+| **GET** | Retrieve data | No | Yes | Yes |
+| **POST** | Create resource | Yes | No | No |
+| **PUT** | Replace resource | Yes | Yes | No |
+| **PATCH** | Update resource | Yes | No | No |
+| **DELETE** | Remove resource | Optional | Yes | No |
+| **HEAD** | Get headers only | No | Yes | Yes |
+| **OPTIONS** | Check capabilities | No | Yes | Yes |
+
+<Accordions>
+  <Accordion title="GET — Retrieving Data">
+    GET requests fetch data without side effects. They should be safe to repeat without changing server state.
+    
+    ```typescript
+    // Fetch a list
+    const { data: users } = await api.get('/users')
+      .params({ status: 'active', limit: 50 })
+      .execute();
+    
+    // Fetch a single resource
+    const { data: user } = await api.get('/users/:id')
+      .params({ id: '123' })
+      .execute();
+    
+    // GET requests are cacheable by default
+    const { data } = await api.get('/config')
+      .cache({ ttl: 3600 })
+      .execute();
+    ```
+    
+    **Best Practices:**
+    - Use query parameters for filtering, not path parameters
+    - Keep URLs under 2000 characters
+    - Don't put sensitive data in query strings (use headers)
+  </Accordion>
+  
+  <Accordion title="POST — Creating Resources">
+    POST requests create new resources. Each call typically creates a new entity.
+    
+    ```typescript
+    const { data: newUser, status } = await api.post('/users')
+      .body({
+        name: 'John Doe',
+        email: 'john@example.com',
+      })
+      .execute();
+    
+    // status === 201 for successful creation
+    if (status === 201) {
+      console.log('Created user:', newUser.id);
+    }
+    ```
+    
+    **Idempotency Keys:**
+    For critical operations, use idempotency keys to prevent duplicates:
+    
+    ```typescript
+    const { data } = await api.post('/orders')
+      .headers({ 'X-Idempotency-Key': `order-${userId}-${Date.now()}` })
+      .body(orderData)
+      .execute();
+    ```
+  </Accordion>
+  
+  <Accordion title="PUT — Replacing Resources">
+    PUT requests replace an entire resource. You must send the complete entity.
+    
+    ```typescript
+    // Replace the entire user object
+    const { data } = await api.put('/users/:id')
+      .params({ id: '123' })
+      .body({
+        name: 'John Updated',
+        email: 'john@example.com',
+        role: 'admin',
+        // ALL fields are required
+      })
+      .execute();
+    ```
+    
+    PUT is idempotent—calling it multiple times with the same data produces the same result.
+  </Accordion>
+  
+  <Accordion title="PATCH — Partial Updates">
+    PATCH requests update specific fields without requiring the full resource.
+    
+    ```typescript
+    // Update only the name
+    const { data } = await api.patch('/users/:id')
+      .params({ id: '123' })
+      .body({ name: 'John Updated' })
+      .execute();
+    ```
+    
+    Common PATCH formats:
+    - **JSON Merge Patch** (RFC 7396): Send only changed fields
+    - **JSON Patch** (RFC 6902): Array of operations
+    
+    ```typescript
+    // RFC 7396: Merge Patch
+    await api.patch('/users/:id')
+      .headers({ 'Content-Type': 'application/merge-patch+json' })
+      .body({ name: 'New Name', email: null }) // null removes the field
+      .execute();
+    
+    // RFC 6902: JSON Patch
+    await api.patch('/users/:id')
+      .headers({ 'Content-Type': 'application/json-patch+json' })
+      .body([
+        { op: 'replace', path: '/name', value: 'New Name' },
+        { op: 'remove', path: '/email' },
+      ])
+      .execute();
+    ```
+  </Accordion>
+  
+  <Accordion title="DELETE — Removing Resources">
+    DELETE requests remove resources. They should be idempotent.
+    
+    ```typescript
+    const { error, status } = await api.delete('/users/:id')
+      .params({ id: '123' })
+      .execute();
+    
+    if (status === 204) {
+      console.log('User deleted');
+    }
+    if (status === 404) {
+      console.log('User not found (already deleted?)');
+    }
+    ```
+    
+    Some APIs return the deleted resource; others return 204 No Content:
+    
+    ```typescript
+    // API returns deleted resource
+    const { data: deletedUser } = await api.delete('/users/:id')
+      .params({ id: '123' })
+      .execute();
+    
+    // API returns 204 No Content
+    const { status } = await api.delete('/users/:id')
+      .params({ id: '123' })
+      .execute();
+    // data will be null for 204 responses
+    ```
+  </Accordion>
+</Accordions>
+
+---
+
+## Automatic Response Parsing
+
+Caller automatically parses responses based on the `Content-Type` header:
+
+| Content-Type | Parsing | Result Type |
+|--------------|---------|-------------|
+| `application/json` | `JSON.parse()` | Object/Array |
+| `text/plain` | Raw string | string |
+| `text/html` | Raw string | string |
+| `application/xml` | Parse to object | Object (if parser available) |
+| `multipart/form-data` | FormData | FormData |
+| `application/octet-stream` | Blob | Blob |
+| `image/*`, `video/*`, `audio/*` | Blob | Blob |
+
+```typescript
+// JSON response - automatically parsed
+const { data } = await api.get('/api/users').execute();
+// data is already a JavaScript object
+
+// Text response - returned as string
+const { data } = await api.get('/health').execute();
+// data is "OK" (string)
+
+// Binary response - returned as Blob
+const { data } = await api.get('/files/123/download').execute();
+// data is a Blob
+```
+
+---
+
+## Explicit Response Types
+
+When automatic detection isn't sufficient, explicitly specify the response type:
+
+<Accordions>
+  <Accordion title=".responseType<T>(schema?) — Custom Parsing">
+    Explicitly sets the expected response type and optional runtime validation. While Caller auto-detects most types, you can force a specific parsing strategy or type inference.
+    
+    ```typescript
+    // Force Blob response
+    const { data: blob } = await api.get('/files/:id')
+      .params({ id: 'abc123' })
+      .responseType<Blob>()
+      .execute();
+    
+    // Force ReadableStream
+    const { data: stream } = await api.get('/events')
+      .responseType<ReadableStream>()
+      .execute();
+
+    // Force JSON with explicit schema validation
+    const { data: user } = await api.get('/me')
+      .responseType(UserSchema)
+      .execute();
+    ```
+  </Accordion>
+</Accordions>
+
+---
+
+## Response Object
+
+Every request returns a standardized response object:
+
+```typescript
+interface CallerResponse<T> {
+  data: T | null;           // Parsed response body
+  error: CallerError | null; // Error object if failed
+  status: number;           // HTTP status code
+  headers: Headers;         // Response headers
+  isStale: boolean;         // True if from stale cache
+}
+```
+
+### Working with Headers
+
+```typescript
+const { data, headers } = await api.get('/users').execute();
+
+// Read specific headers
+const rateLimitRemaining = headers.get('X-RateLimit-Remaining');
+const etag = headers.get('ETag');
+
+// Check for pagination headers
+const totalCount = parseInt(headers.get('X-Total-Count') || '0');
+const nextPage = headers.get('Link')?.match(/<([^>]+)>; rel="next"/)?.[1];
+```
+
+### Status Code Handling
+
+```typescript
+const { data, error, status } = await api.post('/users')
+  .body(userData)
+  .execute();
+
+switch (status) {
+  case 200:
+    console.log('Updated existing user');
+    break;
+  case 201:
+    console.log('Created new user:', data.id);
+    break;
+  case 400:
+    console.error('Validation failed:', error?.message);
+    break;
+  case 401:
+    redirectToLogin();
+    break;
+  case 403:
+    console.error('Not authorized');
+    break;
+  case 404:
+    console.error('Resource not found');
+    break;
+  case 409:
+    console.error('Conflict - resource already exists');
+    break;
+  case 422:
+    console.error('Unprocessable entity:', error?.details);
+    break;
+  case 429:
+    console.error('Rate limited - retry after', error?.retryAfter);
+    break;
+  case 500:
+  case 502:
+  case 503:
+    console.error('Server error - please try again');
+    break;
+}
+```
+
+---
+
+## Content-Type Handling
+
+### Request Content Types
+
+Caller automatically sets the `Content-Type` header based on the body:
+
+| Body Type | Auto Content-Type |
+|-----------|-------------------|
+| Object/Array | `application/json` |
+| FormData | `multipart/form-data` |
+| URLSearchParams | `application/x-www-form-urlencoded` |
+| string | `text/plain` |
+| Blob | Blob's type or `application/octet-stream` |
+
+Override the automatic detection when needed:
+
+```typescript
+// Send XML
+await api.post('/soap-api')
+  .headers({ 'Content-Type': 'application/xml' })
+  .body('<request><data>value</data></request>')
+  .execute();
+
+// Send form-urlencoded
+const params = new URLSearchParams();
+params.append('username', 'john');
+params.append('password', 'secret');
+
+await api.post('/login')
+  .body(params)
+  .execute();
+```
+
+### File Uploads
+
+```typescript
+// Single file
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+formData.append('description', 'My document');
+
+const { data } = await api.post('/upload')
+  .body(formData)
+  .execute();
+
+// Multiple files
+const formData = new FormData();
+for (const file of fileInput.files) {
+  formData.append('files', file);
+}
+
+const { data } = await api.post('/upload/multiple')
+  .body(formData)
+  .execute();
+```
+
+---
+
+## Error Responses
+
+When a request fails (status ≥ 400), Caller populates the `error` property:
+
+```typescript
+interface CallerError {
+  code: string;           // Error code (e.g., 'HTTP_ERROR', 'TIMEOUT')
+  message: string;        // Human-readable message
+  status: number;         // HTTP status code
+  details?: unknown;      // API-specific error details
+  retryAfter?: number;    // Seconds to wait (for 429)
+}
+```
+
+```typescript
+const { data, error } = await api.get('/users/:id')
+  .params({ id: 'invalid' })
+  .execute();
+
+if (error) {
+  console.log(error.code);    // 'HTTP_ERROR'
+  console.log(error.status);  // 404
+  console.log(error.message); // 'Not Found'
+  console.log(error.details); // { reason: 'User does not exist' }
+}
+```
+
+---
+
+## Best Practices
+
+<Callout type="success" title="Response Handling Guidelines">
+  1. **Always check for errors** — Never assume `data` is defined
+  2. **Use explicit types for edge cases** — When Content-Type is unreliable
+  3. **Handle all relevant status codes** — Don't catch-all to 'error'
+  4. **Clean up Blobs** — Call `URL.revokeObjectURL()` after use
+  5. **Stream large responses** — Don't load huge files into memory
+</Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Schema Validation"
+    description="Add type-safe response validation"
+    href="/docs/caller/schemas"
+  />
+  <Card
+    title="Error Handling"
+    description="Advanced error handling patterns"
+    href="/docs/caller/interceptors"
+  />
+  <Card
+    title="Caching"
+    description="Cache responses for better performance"
+    href="/docs/caller/caching"
+  />
+</Cards>

@@ -1,0 +1,171 @@
+---
+title: CLI
+description: The official Igniter.js command-line interface for scaffolding projects, generating features, and keeping your API docs in sync.
+---
+
+The Igniter.js CLI is designed for a fast developer experience, providing type-safe defaults and seamless automation for your entire application lifecycle.
+
+## Installation
+
+You can run the CLI on demand via `npx` or install it globally for convenience.
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    # Run without installing
+    npx @igniter-js/cli@latest init my-app
+
+    # Install globally
+    npm install -g @igniter-js/cli
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    # Run without installing
+    pnpm dlx @igniter-js/cli@latest init my-app
+
+    # Install globally
+    pnpm add -g @igniter-js/cli
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    # Run without installing
+    yarn dlx @igniter-js/cli@latest init my-app
+
+    # Install globally
+    yarn global add @igniter-js/cli
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    # Run without installing
+    bunx @igniter-js/cli@latest init my-app
+
+    # Install globally
+    bun add -g @igniter-js/cli
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Core Commands
+
+### `igniter init`
+
+Scaffold a new Igniter.js project from scratch. It sets up your directory, installs dependencies, and configures chosen add-ons.
+
+<Steps>
+  <Step>
+    ### Start Initialization
+    ```bash
+    igniter init my-awesome-project
+    ```
+  </Step>
+  <Step>
+    ### Select a Starter Template
+    Choose between Next.js, Express, Bun, or TanStack Start.
+  </Step>
+  <Step>
+    ### Configure Add-Ons
+    Select optional integrations like Redis Store, BullMQ Jobs, or Better Auth.
+  </Step>
+</Steps>
+
+#### Scripted Initialization
+
+You can bypass interactive prompts by providing flags:
+
+```bash
+igniter init my-app \
+  --template nextjs \
+  --add-ons database,auth,store \
+  --database postgresql \
+  --pm pnpm
+```
+
+---
+
+### `igniter generate`
+
+Generate application building blocks such as features, controllers, and documentation.
+
+#### `generate feature`
+
+Scaffolds a complete feature skeleton under `src/features/<name>/`.
+
+```bash
+igniter generate feature users --schema prisma:User
+```
+
+#### `generate docs`
+
+Produces an OpenAPI 3.0 specification from your router configuration.
+
+```bash
+igniter generate docs --router src/igniter.router.ts --output src/docs
+```
+
+#### `generate schema`
+
+Generates the TypeScript client schema required for full-stack type safety.
+
+```bash
+igniter generate schema --router src/igniter.router.ts --output src/igniter.schema.ts
+```
+
+#### `generate caller`
+
+Builds a type-safe API caller from an external or local OpenAPI specification.
+
+```bash
+igniter generate caller --name billing --path ./openapi.json
+```
+
+---
+
+### `igniter dev`
+
+Starts a robust development environment with automatic regeneration of schemas and docs.
+
+```bash
+igniter dev --router src/igniter.router.ts --cmd "npm run dev"
+```
+
+<Callout type="info" title="Ink Dashboard">
+  The `dev` command provides a split-view terminal UI. You can switch between Igniter's logs and your application logs using the `1` and `2` keys.
+</Callout>
+
+---
+
+## Add-On Catalogue
+
+The CLI allows you to wire these powerful integrations automatically during `init`:
+
+| ID | Integration | Purpose |
+|----|-------------|---------|
+| `store` | Redis | Caching, sessions, and pub/sub |
+| `jobs` | BullMQ | Background processing and queues |
+| `auth` | Better Auth | Full-featured authentication system |
+| `database` | Prisma/Drizzle | Type-safe database access |
+| `telemetry` | OpenTelemetry | Distributed tracing and observability |
+| `mcp` | MCP Server | Model Context Protocol for AI integrations |
+
+---
+
+## Advanced Usage
+
+### Inline Options Notation
+
+For fully automated setups, you can pass add-on options directly in the `--add-ons` string using a colon-separated syntax: `addon:opt1:opt2`.
+
+```bash
+igniter init my-app \
+  --template nextjs \
+  --add-ons "database:prisma:postgresql,auth:better-auth:email+two-factor"
+```
+
+<Callout type="success">
+  This is ideal for CI/CD environments or custom scaffolding scripts.
+</Callout>

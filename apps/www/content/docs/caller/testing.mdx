@@ -1,0 +1,89 @@
+---
+title: Mocking & Testing
+description: Test your application logic without making real HTTP calls.
+---
+
+Testing code that depends on network requests can be difficult and slow. Caller provides `IgniterCallerMock` to create high-fidelity, type-safe mocks of your API.
+
+## Basic Mocking
+
+You can swap a real caller for a mocked one in your testing environment.
+
+```ts
+import { IgniterCaller, IgniterCallerMock } from '@igniter-js/caller'
+
+const mock = IgniterCallerMock.create()
+  .mock('/users/:id', {
+    GET: {
+      response: { id: '1', name: 'Mock User' },
+      status: 200,
+    }
+  })
+  .build()
+
+const api = IgniterCaller.create()
+  .withMock({ enabled: true, mock })
+  .build()
+```
+
+## Dynamic Mock Handlers
+
+If you need logic in your mocks, pass a function instead of an object. The function receives the full request context.
+
+```ts
+const mock = IgniterCallerMock.create()
+  .mock('/users/:id', {
+    GET: (request) => ({
+      response: { id: request.params.id, name: 'User ' + request.params.id },
+      status: 200,
+      delayMs: 100, // Simulate network latency
+    })
+  })
+  .build()
+```
+
+## Mocking with Schemas
+
+When using schemas, your mock responses are validated against the schema, ensuring your tests catch potential API contract breakages.
+
+```ts
+import { myApiSchemas } from './schema'
+
+const mock = IgniterCallerMock.create()
+  .withSchemas(myApiSchemas)
+  .mock('/me', {
+    GET: { response: { name: 'Lia' } } // This will error if 'name' is not in schema
+  })
+  .build()
+```
+
+## Using in Vitest/Jest
+
+Common pattern for unit testing:
+
+```ts
+import { describe, it, expect, beforeEach } from 'vitest'
+import { api } from '@/lib/api'
+
+describe('UserService', () => {
+  it('should fetch user correctly', async () => {
+    // Enable mock mode for this test
+    api.config.set('mock', { enabled: true, mock: myTestMock })
+    
+    const user = await UserService.get('1')
+    expect(user.name).toBe('Mock User')
+  })
+})
+```
+
+---
+
+## Error Handling
+
+Mocks can also simulate errors:
+
+```ts
+mock.mock('/forbidden', {
+  GET: { status: 403, response: { message: 'No access' } }
+})
+```

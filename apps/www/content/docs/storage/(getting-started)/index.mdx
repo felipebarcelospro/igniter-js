@@ -1,0 +1,22 @@
+---
+title: Overview
+description: Understand how @igniter-js/storage organizes uploads with adapters, scopes, and policies to ship reliable file handling fast.
+---
+
+## Why Storage
+
+Igniter Storage gives you a typed, adapter-based layer for file handling so you can standardize uploads, public URLs, and lifecycle hooks without hand-rolling S3 or GCS code. It keeps infrastructure concerns inside adapters while the manager enforces scopes, policies, and error handling, matching the way core Igniter services stay framework-agnostic. Use it when you need predictable public links, replace strategies, and observability baked into every file operation.
+
+<Callout type="info" title="Implementation-first">
+  All examples reflect real APIs from `@igniter-js/storage`. Verify imports,
+  types, and env vars before shipping. If you need to add a new adapter, follow
+  the adapter contract and keep business rules out of infra.
+</Callout>
+
+## How It Works
+
+Storage centers on two pieces: a manager you configure with scopes, base URL, policies, and hooks; and an adapter that talks to your provider (S3, GCS, custom). You create a manager via the builder, then call `upload`, `list`, `get`, `copy`, or `move` on typed scopes that resolve clean public URLs. Policies guard uploads, hooks feed logs/telemetry, and errors are typed with `IgniterStorageError` so your handlers stay predictable.
+
+## What to Read Next
+
+Start with the [Installation](</docs/storage/(getting-started)/installation>) and run the [Quick Start](</docs/storage/(getting-started)/quick-start>) to ship your first upload. Then formalize structure in [Scopes & Paths](</docs/storage/(core-concepts)/scopes-and-paths>), tighten guardrails in [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>), and add observability in [Hooks & Telemetry](</docs/storage/(core-concepts)/hooks-and-telemetry>).

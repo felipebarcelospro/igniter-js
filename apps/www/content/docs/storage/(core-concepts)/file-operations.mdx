@@ -1,0 +1,51 @@
+---
+title: File Operations
+description: Read, list, stream, copy, move, and delete files with predictable keys and URLs.
+---
+
+## Read and Inspect
+
+`get` resolves a relative path or public URL back to storage, returning metadata or `null` when not found. Use it to confirm existence before copying or deleting.
+
+```typescript
+const file = await storage.get("public/manual.pdf");
+if (!file) {
+  return response.notFound({ message: "File missing" });
+}
+```
+
+## List and Stream
+
+List files under the current base path or a sub-prefix; stream files directly from the adapter when you need to pipe data.
+
+```typescript
+const files = await storage.scope("user", "123").list("invoices/");
+const stream = await storage.stream(files[0].path);
+stream.pipe(res);
+```
+
+<Callout type="info">
+  Prefixes are resolved relative to the current scope/base path. Passing no
+  prefix lists the scope root. Streams come from the adapter; ensure the
+  underlying provider supports ranged reads if you need partial responses.
+</Callout>
+
+## Copy and Move
+
+Copy or move objects when the adapter implements the operations. If an adapter lacks `copy`/`move`, you receive `IGNITER_STORAGE_COPY_NOT_SUPPORTED` or `IGNITER_STORAGE_MOVE_NOT_SUPPORTED` before any work happens.
+
+```typescript
+const receipts = storage.scope("user", "123");
+await receipts.copy("invoices/2023.pdf", "invoices/2024.pdf");
+await receipts.move("temp/upload.tmp", "assets/upload.pdf");
+```
+
+## Delete Safely
+
+```typescript
+await storage.delete("public/old-hero.jpg");
+```
+
+Deletions emit hooks and telemetry; handle failures with typed errors to retry or report. Combine `list` + `delete` for cleanup jobs, and prefer scoped managers so you never delete outside the intended prefix.
+
+Continue to [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>) to enforce rules, or add observability in [Hooks & Telemetry](</docs/storage/(core-concepts)/hooks-and-telemetry>).

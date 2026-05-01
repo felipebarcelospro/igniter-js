@@ -1,0 +1,232 @@
+---
+title: API Reference
+description: Complete API reference for @igniter-js/caller.
+---
+
+## IgniterCaller
+
+The main entrypoint for creating API client instances.
+
+### `IgniterCaller.create()`
+
+Creates a new `IgniterCallerBuilder` instance.
+
+```typescript
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .build();
+```
+
+---
+
+## IgniterCallerBuilder
+
+Used to configure the API client instance.
+
+<TypeTable type={{
+  withBaseUrl: {
+    type: '(url: string) => this',
+    description: 'Sets the base URL for all requests.',
+  },
+  withHeaders: {
+    type: '(headers: Record<string, string>) => this',
+    description: 'Sets default headers sent with every request.',
+  },
+  withCookies: {
+    type: '(cookies: Record<string, string>) => this',
+    description: 'Sets default cookies (serialized into the Cookie header).',
+  },
+  withLogger: {
+    type: '(logger: IgniterLogger) => this',
+    description: 'Attaches a logger for request lifecycle events.',
+  },
+  withTelemetry: {
+    type: '(telemetry: IgniterTelemetryManager) => this',
+    description: 'Attaches a telemetry manager for observability.',
+  },
+  withSchemas: {
+    type: '(schemas: any, options?: any) => this',
+    description: 'Configures schema-based type safety and validation.',
+  },
+  withRequestInterceptor: {
+    type: '(fn: RequestInterceptor) => this',
+    description: 'Adds a function to modify requests before execution.',
+  },
+  withResponseInterceptor: {
+    type: '(fn: ResponseInterceptor) => this',
+    description: 'Adds a function to transform responses after execution.',
+  },
+  withStore: {
+    type: '(store: StoreAdapter, options?: StoreOptions) => this',
+    description: 'Configures a persistent store for caching.',
+  },
+  build: {
+    type: '() => IgniterCallerManager',
+    description: 'Finalizes configuration and returns the manager instance.',
+  }
+}} />
+
+---
+
+## IgniterCallerManager
+
+The runtime instance used to make requests.
+
+### Request Methods
+
+All HTTP methods follow the same pattern: `.method(url?)`.
+
+<TypeTable type={{
+  get: {
+    type: '<T>(url?: string) => RequestBuilder<T>',
+    description: 'Starts a GET request.',
+  },
+  post: {
+    type: '<T>(url?: string) => RequestBuilder<T>',
+    description: 'Starts a POST request.',
+  },
+  put: {
+    type: '<T>(url?: string) => RequestBuilder<T>',
+    description: 'Starts a PUT request.',
+  },
+  patch: {
+    type: '<T>(url?: string) => RequestBuilder<T>',
+    description: 'Starts a PATCH request.',
+  },
+  delete: {
+    type: '<T>(url?: string) => RequestBuilder<T>',
+    description: 'Starts a DELETE request.',
+  },
+  head: {
+    type: '<T>(url?: string) => RequestBuilder<T>',
+    description: 'Starts a HEAD request.',
+  },
+  request: {
+    type: '<T>(options: DirectRequestOptions) => Promise<ApiResponse<T>>',
+    description: 'Executes a request directly using an options object.',
+  }
+}} />
+
+### Static Methods
+
+<TypeTable type={{
+  on: {
+    type: '(pattern: string | RegExp, callback: Function) => () => void',
+    description: 'Registers a global listener for all responses.',
+  },
+  invalidate: {
+    type: '(key: string) => Promise<void>',
+    description: 'Invalidates a specific cache entry.',
+  },
+  invalidatePattern: {
+    type: '(pattern: string) => Promise<void>',
+    description: 'Invalidates cache entries matching a glob pattern.',
+  },
+  batch: {
+    type: '(requests: Promise<any>[]) => Promise<any[]>',
+    description: 'Executes multiple requests in parallel.',
+  }
+}} />
+
+---
+
+## IgniterCallerRequestBuilder
+
+Fluent API for configuring individual requests.
+
+<TypeTable type={{
+  url: {
+    type: '(url: string) => this',
+    description: 'Sets the request URL or path.',
+  },
+  body: {
+    type: '(data: any) => this',
+    description: 'Sets the request body (auto-serialized to JSON for objects).',
+  },
+  params: {
+    type: '(params: Record<string, any>) => this',
+    description: 'Sets URL path parameters and query string parameters.',
+  },
+  headers: {
+    type: '(headers: Record<string, string>) => this',
+    description: 'Adds custom headers for this request.',
+  },
+  timeout: {
+    type: '(ms: number) => this',
+    description: 'Sets request timeout in milliseconds.',
+  },
+  cache: {
+    type: '(strategy: RequestCache, key?: string) => this',
+    description: 'Sets the fetch cache strategy and optional key.',
+  },
+  stale: {
+    type: '(ms: number) => this',
+    description: 'Sets the stale time for caching results.',
+  },
+  retry: {
+    type: '(attempts: number, options?: RetryOptions) => this',
+    description: 'Configures automatic retry behavior.',
+  },
+  fallback: {
+    type: '(fn: () => T) => this',
+    description: 'Provides a value to return if the request fails.',
+  },
+  responseType: {
+    type: '<T>(schema?: Schema) => RequestBuilder<T>',
+    description: 'Sets the expected response type and optional validation schema.',
+  },
+  execute: {
+    type: '() => Promise<ApiResponse<T>>',
+    description: 'Executes the request and returns the response envelope.',
+  }
+}} />
+
+---
+
+## Types
+
+### `IgniterCallerApiResponse<T>`
+
+The standardized response envelope returned by all requests.
+
+<TypeTable type={{
+  data: {
+    type: 'T | null',
+    description: 'The parsed response data. Null if the request failed.',
+  },
+  error: {
+    type: 'IgniterCallerError | null',
+    description: 'The error object if the request failed. Null on success.',
+  },
+  status: {
+    type: 'number',
+    description: 'The HTTP status code of the response.',
+  },
+  headers: {
+    type: 'Headers',
+    description: 'The response headers object.',
+  }
+}} />
+
+### `IgniterCallerError`
+
+Custom error class for all Caller failures.
+
+<TypeTable type={{
+  code: {
+    type: 'string',
+    description: 'Stable error code (e.g., IGNITER_CALLER_TIMEOUT).',
+  },
+  message: {
+    type: 'string',
+    description: 'Human-readable error message.',
+  },
+  statusCode: {
+    type: 'number',
+    description: 'The HTTP status code associated with the error.',
+  },
+  operation: {
+    type: 'string',
+    description: 'The operation that failed (e.g., execute, validation).',
+  }
+}} />

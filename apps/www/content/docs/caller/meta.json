@@ -1,0 +1,13 @@
+{
+  "title": "Caller",
+  "root": true,
+  "pages": [
+    "index",
+    "installation",
+    "comparison",
+    "...(core-concepts)",
+    "...(advanced)",
+    "...(integration)",
+    "api-reference"
+  ]
+}

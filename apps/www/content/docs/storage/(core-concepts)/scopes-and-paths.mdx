@@ -1,0 +1,44 @@
+---
+title: Scopes & Paths
+description: Model storage hierarchy with global prefixes, typed scopes, and predictable public URLs.
+---
+
+## Organize Keys with Scopes
+
+Scopes define reusable path templates so uploads stay organized and type-safe. Add scopes in the builder, then call `scope()` to resolve identifiers before uploading or listing files. Use scopes for tenants, users, or public asset roots instead of concatenating strings manually.
+
+```typescript
+const storage = IgniterStorage.create()
+  .withUrl("https://cdn.myapp.com")
+  .withPath("/production")
+  .addScope("public", "/public")
+  .addScope("user", "/users/[identifier]")
+  .build();
+
+const userFiles = storage.scope("user", "u_123");
+await userFiles.upload(file, "avatar.png"); // /production/users/u_123/avatar.png
+```
+
+<Callout type="info">
+  Scopes are typed: when the path includes `[identifier]`, TypeScript requires
+  you to pass it. Use scopes everywhere—`upload`, `list`, `copy`, `move`, and
+  `delete` all respect the current scope and base path.
+</Callout>
+
+## Base Paths and URLs
+
+`withPath()` adds a global prefix (e.g., environment name), while `withUrl()` is the public CDN origin used for URLs. Resolved keys always remove leading slashes and combine base path, scope path, and destination name. You can pass either a relative path or a full URL back to the manager, and it strips the base URL before operating.
+
+```typescript
+const prod = storage.path("assets");
+await prod.upload(file, "logos/app.svg"); // key: production/assets/logos/app.svg
+const url = prod.scope("public").toString; // url generated via baseUrl
+```
+
+## Patterns to Reuse
+
+- **Public assets**: `addScope('public', '/public')` for CDNs and marketing files.
+- **User content**: `addScope('user', '/users/[identifier]')` to isolate per-user uploads.
+- **Transient files**: `addScope('temp', '/temp')` and clean with `list` + `delete` on a schedule.
+
+Continue to [Uploads & Replace](</docs/storage/(core-concepts)/uploads-and-replace>) to control delivery, or jump to [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>) to enforce sizes and types.

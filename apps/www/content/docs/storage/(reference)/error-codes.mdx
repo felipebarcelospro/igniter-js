@@ -1,0 +1,26 @@
+---
+title: Error Codes
+description: Reference for Igniter Storage error codes and how to fix them.
+---
+
+## Operational Errors
+
+- `IGNITER_STORAGE_ADAPTER_NOT_CONFIGURED`: No adapter configured or factory missing. Set `.withAdapter(...)` or `IGNITER_STORAGE_ADAPTER` and credentials.
+- `IGNITER_STORAGE_INVALID_SCOPE`: Scope key not registered. Add it in the builder or correct typos.
+- `IGNITER_STORAGE_SCOPE_IDENTIFIER_REQUIRED`: Scope requires an identifier; pass it to `scope(key, id)`.
+- `IGNITER_STORAGE_INVALID_PATH_HOST`: Path URL host differs from `baseUrl`. Ensure you call `get/delete/list` with URLs matching your configured `baseUrl`.
+
+## Upload Failures
+
+- `IGNITER_STORAGE_UPLOAD_POLICY_VIOLATION`: File failed size/type/extension checks. Adjust policies or the file.
+- `IGNITER_STORAGE_UPLOAD_FAILED`: Adapter or network failure during upload. Inspect `cause` and retry with backoff.
+- `IGNITER_STORAGE_REPLACE_FAILED`: Replace strategy could not delete conflicting files; clean manually or adjust permissions.
+- `IGNITER_STORAGE_FETCH_FAILED`: `uploadFromUrl` could not retrieve the source; verify network and URL.
+
+## File Operations
+
+- `IGNITER_STORAGE_DELETE_FAILED`, `IGNITER_STORAGE_LIST_FAILED`, `IGNITER_STORAGE_STREAM_FAILED`, `IGNITER_STORAGE_GET_FAILED`: Provider issue or permissions. Check credentials, bucket policy, and path correctness.
+- `IGNITER_STORAGE_COPY_NOT_SUPPORTED` / `IGNITER_STORAGE_MOVE_NOT_SUPPORTED`: Adapter lacks copy/move; implement in the adapter or fall back to download + upload.
+- `IGNITER_STORAGE_COPY_FAILED` / `IGNITER_STORAGE_MOVE_FAILED`: Provider error during copy/move. Retry or perform manual relocation.
+
+For troubleshooting steps and quick checks, see [Troubleshooting](/docs/storage/troubleshooting). To instrument and catch these early, enable [Hooks & Telemetry](</docs/storage/(core-concepts)/hooks-and-telemetry>).

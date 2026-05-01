@@ -1,0 +1,409 @@
+---
+title: Installation
+description: Complete guide to installing and configuring @igniter-js/caller in your project. Covers all package managers, TypeScript configuration, and environment setup.
+---
+
+## Overview
+
+Getting started with Caller is straightforward. This guide walks you through the complete installation process, from adding the package to configuring your first client instance. By the end, you'll have a fully functional, type-safe HTTP client ready to use in your application.
+
+Caller has minimal dependencies and works in any JavaScript environment that supports the Fetch API—Node.js 18+, Bun, Deno, and all modern browsers.
+
+---
+
+## Prerequisites
+
+Before installing Caller, ensure your environment meets these requirements:
+
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| **Node.js** | ≥ 18.0 | For native fetch support |
+| **TypeScript** | ≥ 5.0 | Recommended for type safety |
+| **Package Manager** | Any | npm, pnpm, yarn, or bun |
+
+<Callout type="info" title="Older Node.js Versions">
+  If you're using Node.js 16 or 17, you'll need to install a fetch polyfill like `undici` or `node-fetch`. Caller will detect and use the global `fetch` automatically.
+</Callout>
+
+---
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the Package
+    
+    Install `@igniter-js/caller` using your preferred package manager:
+    
+    <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+      <Tab value="npm">
+        ```bash
+        npm install @igniter-js/caller
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm add @igniter-js/caller
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn add @igniter-js/caller
+        ```
+      </Tab>
+      <Tab value="bun">
+        ```bash
+        bun add @igniter-js/caller
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step>
+    ### Optional: Install Zod for Schema Validation
+    
+    If you want runtime schema validation (highly recommended), install Zod:
+    
+    <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+      <Tab value="npm">
+        ```bash
+        npm install zod
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm add zod
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn add zod
+        ```
+      </Tab>
+      <Tab value="bun">
+        ```bash
+        bun add zod
+        ```
+      </Tab>
+    </Tabs>
+    
+    Caller uses [Standard Schema V1](https://github.com/standard-schema/standard-schema), so any compatible validation library works (Zod, Valibot, ArkType, etc.).
+  </Step>
+  
+  <Step>
+    ### Create Your API Client
+    
+    Create a new file for your API client configuration:
+    
+    ```typescript title="src/lib/api.ts"
+    import { IgniterCaller } from '@igniter-js/caller';
+    
+    export const api = IgniterCaller.create()
+      .withBaseUrl(process.env.API_URL || 'http://localhost:3000/api')
+      .build();
+    ```
+    
+    This creates a basic client with a base URL. All requests made through this client will be prefixed with this URL.
+  </Step>
+  
+  <Step>
+    ### Verify the Installation
+    
+    Test your setup with a simple request:
+    
+    ```typescript
+    import { api } from './lib/api';
+    
+    const { data, error } = await api.get('/health').execute();
+    
+    if (error) {
+      console.error('API not reachable:', error.message);
+    } else {
+      console.log('API response:', data);
+    }
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Configuration Options
+
+The `IgniterCaller.create()` builder supports many configuration options. Here's a complete example:
+
+```typescript title="src/lib/api.ts"
+import { IgniterCaller } from '@igniter-js/caller';
+import { myApiSchemas } from './schemas';
+
+export const api = IgniterCaller.create()
+  // Base configuration
+  .withBaseUrl('https://api.example.com/v1')
+  .withHeaders({
+    'Content-Type': 'application/json',
+    'X-API-Version': '2024-01',
+  })
+  .withCookies({
+    session: 'abc123',
+  })
+  
+  // Type safety
+  .withSchemas(myApiSchemas, { mode: 'strict' })
+  
+  // Resilience
+  .withRetry({
+    attempts: 3,
+    backoff: 'exponential',
+    retryOn: [502, 503, 504],
+  })
+  .withTimeout(10000)
+  
+  // Debugging
+  .withLogger(console)
+  
+  // Build the client
+  .build();
+```
+
+<Accordions>
+  <Accordion title=".withBaseUrl(url: string)">
+    Sets the base URL for all requests. This is prepended to every request path.
+    
+    ```typescript
+    .withBaseUrl('https://api.example.com/v1')
+    
+    // Now api.get('/users') hits https://api.example.com/v1/users
+    ```
+    
+    **Best Practice:** Use environment variables for different environments:
+    
+    ```typescript
+    .withBaseUrl(process.env.NEXT_PUBLIC_API_URL!)
+    ```
+  </Accordion>
+  
+  <Accordion title=".withHeaders(headers: Record<string, string>)">
+    Sets default headers sent with every request. Individual requests can override these.
+    
+    ```typescript
+    .withHeaders({
+      'Authorization': `Bearer ${token}`,
+      'X-Request-ID': crypto.randomUUID(),
+    })
+    ```
+    
+    Common headers to set globally:
+    - `Authorization` — API keys or tokens
+    - `Content-Type` — Usually `application/json`
+    - `Accept-Language` — For i18n
+    - `X-Request-ID` — For tracing
+  </Accordion>
+  
+  <Accordion title=".withSchemas(schemas, options?)">
+    Enables type-safe request/response validation. See [Schema Validation](/docs/caller/schemas) for details.
+    
+    ```typescript
+    import { myApiSchemas } from './schemas';
+    
+    .withSchemas(myApiSchemas, {
+      mode: 'strict', // 'strict' | 'loose' | 'none'
+    })
+    ```
+    
+    | Mode | Behavior |
+    |------|----------|
+    | `strict` | Throws if response doesn't match schema |
+    | `loose` | Logs warning but returns data |
+    | `none` | Skip validation, only type inference |
+  </Accordion>
+  
+  <Accordion title=".withRetry(options)">
+    Configures automatic retry behavior for failed requests.
+    
+    ```typescript
+    .withRetry({
+      attempts: 3,
+      backoff: 'exponential', // 'linear' | 'exponential'
+      baseDelay: 1000,
+      maxDelay: 30000,
+      retryOn: [408, 429, 500, 502, 503, 504],
+    })
+    ```
+    
+    See [Retries](/docs/caller/retries) for advanced configuration.
+  </Accordion>
+  
+  <Accordion title=".withTimeout(ms: number)">
+    Sets the default timeout in milliseconds for all requests.
+    
+    ```typescript
+    .withTimeout(5000) // 5 seconds
+    ```
+    
+    Individual requests can override this with `.timeout()`.
+  </Accordion>
+  
+  <Accordion title=".withLogger(logger)">
+    Enables request/response logging for debugging.
+    
+    ```typescript
+    .withLogger(console) // Use console.log
+    
+    // Or a custom logger
+    .withLogger({
+      info: (msg, data) => myLogger.info(msg, data),
+      error: (msg, data) => myLogger.error(msg, data),
+    })
+    ```
+  </Accordion>
+  
+  <Accordion title=".withTelemetry(manager)">
+    Integrates with `@igniter-js/telemetry` for distributed tracing. See [Telemetry](/docs/caller/telemetry) for setup.
+    
+    ```typescript
+    import { telemetry } from './telemetry';
+    
+    .withTelemetry(telemetry)
+    ```
+  </Accordion>
+</Accordions>
+
+---
+
+## Project Structure
+
+For larger projects, we recommend organizing your API code like this:
+
+```
+src/
+├── lib/
+│   └── api/
+│       ├── index.ts        # Main API client export
+│       ├── schemas.ts      # Zod schemas for all endpoints
+│       ├── interceptors.ts # Request/response interceptors
+│       └── mock.ts         # Mock handlers for testing
+├── features/
+│   ├── users/
+│   │   └── api.ts          # User-specific API calls
+│   └── posts/
+│       └── api.ts          # Post-specific API calls
+```
+
+**Example `src/lib/api/index.ts`:**
+
+```typescript
+import { IgniterCaller } from '@igniter-js/caller';
+import { apiSchemas } from './schemas';
+import { authInterceptor, loggingInterceptor } from './interceptors';
+
+export const api = IgniterCaller.create()
+  .withBaseUrl(process.env.NEXT_PUBLIC_API_URL!)
+  .withSchemas(apiSchemas, { mode: 'strict' })
+  .withRequestInterceptor(authInterceptor)
+  .withResponseInterceptor(loggingInterceptor)
+  .build();
+
+// Re-export for convenience
+export * from './schemas';
+```
+
+---
+
+## Environment Configuration
+
+### Development
+
+```env title=".env.local"
+NEXT_PUBLIC_API_URL=http://localhost:3000/api
+```
+
+### Production
+
+```env title=".env.production"
+NEXT_PUBLIC_API_URL=https://api.myapp.com
+```
+
+### TypeScript Configuration
+
+Ensure your `tsconfig.json` includes these settings for best type inference:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "strict": true,
+    "moduleResolution": "bundler",
+    "esModuleInterop": true
+  }
+}
+```
+
+---
+
+## Common Issues
+
+<Accordions>
+  <Accordion title="fetch is not defined">
+    If you see this error in Node.js, you're likely using a version older than 18. Either upgrade Node.js or install a polyfill:
+    
+    ```bash
+    npm install undici
+    ```
+    
+    Then add to your entry file:
+    
+    ```typescript
+    import { fetch } from 'undici';
+    globalThis.fetch = fetch;
+    ```
+  </Accordion>
+  
+  <Accordion title="Types not being inferred correctly">
+    Ensure you're using TypeScript 5.0+ and have `strict: true` in your tsconfig. Also verify that you're calling `.build()` at the end of the builder chain.
+    
+    ```typescript
+    // ❌ Wrong - missing .build()
+    const api = IgniterCaller.create().withBaseUrl('...');
+    
+    // ✅ Correct
+    const api = IgniterCaller.create().withBaseUrl('...').build();
+    ```
+  </Accordion>
+  
+  <Accordion title="CORS errors in the browser">
+    CORS is a server-side configuration. Caller can't bypass CORS restrictions. Ensure your API server sends the appropriate headers:
+    
+    ```
+    Access-Control-Allow-Origin: *
+    Access-Control-Allow-Methods: GET, POST, PUT, DELETE
+    Access-Control-Allow-Headers: Content-Type, Authorization
+    ```
+    
+    Or use a proxy in development (Next.js `rewrites`, Vite `proxy`, etc.).
+  </Accordion>
+</Accordions>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Comparison"
+    description="See how Caller stacks up against other HTTP clients"
+    href="/docs/caller/comparison"
+  />
+  <Card
+    title="Request Builder"
+    description="Learn the fluent API for building requests"
+    href="/docs/caller/builder"
+  />
+  <Card
+    title="Schema Validation"
+    description="Add type-safe validation to your API calls"
+    href="/docs/caller/schemas"
+  />
+  <Card
+    title="CLI Generation"
+    description="Generate clients from OpenAPI specifications"
+    href="/docs/caller/cli"
+  />
+</Cards>

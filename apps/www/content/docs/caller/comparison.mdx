@@ -1,0 +1,321 @@
+---
+title: Comparison
+description: How Caller compares to Axios, ky, ofetch, and native fetch. Understand the trade-offs and choose the right HTTP client for your project.
+---
+
+## Overview
+
+The JavaScript ecosystem has many excellent HTTP clients. This page provides an honest comparison between Caller and popular alternatives, helping you understand when Caller is the right choice and when you might prefer something else.
+
+We believe in picking the right tool for the job. Caller excels at type-safe, schema-validated API consumption in TypeScript projects—but it's not always the best choice for every scenario.
+
+---
+
+## Quick Comparison
+
+| Feature | Caller | Axios | ky | ofetch | fetch |
+|---------|--------|-------|-----|--------|-------|
+| **Type Safety** | ✅ Full inference | ⚠️ Manual | ⚠️ Manual | ⚠️ Manual | ❌ None |
+| **Schema Validation** | ✅ Built-in | ❌ | ❌ | ❌ | ❌ |
+| **Fluent API** | ✅ | ❌ | ✅ | ⚠️ Partial | ❌ |
+| **Retries** | ✅ Built-in | ❌ Plugin | ✅ Built-in | ✅ Built-in | ❌ |
+| **Caching** | ✅ Built-in | ❌ | ❌ | ❌ | ❌ |
+| **React Hooks** | ✅ Built-in | ❌ | ❌ | ❌ | ❌ |
+| **Interceptors** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Bundle Size** | ~8kb | ~13kb | ~4kb | ~5kb | 0kb |
+| **Node.js Support** | ✅ | ✅ | ✅ | ✅ | ✅ 18+ |
+| **Browser Support** | Modern | All | Modern | Modern | Modern |
+
+---
+
+## Detailed Comparisons
+
+<Accordions>
+  <Accordion title="Caller vs Axios">
+    **Axios** is the most popular HTTP client in the JavaScript ecosystem with excellent browser compatibility and a mature ecosystem.
+    
+    ### When to choose Axios
+    - You need to support older browsers (IE11)
+    - Your team is already familiar with Axios
+    - You need upload progress events
+    - You're working in a pure JavaScript project
+    
+    ### When to choose Caller
+    - You want automatic type inference from schemas
+    - You need built-in caching and retries
+    - You're building with React and want hooks
+    - You value compile-time API contract validation
+    
+    ### Code Comparison
+    
+    ```typescript title="Axios"
+    import axios from 'axios';
+    
+    interface User {
+      id: string;
+      name: string;
+    }
+    
+    // Manual type annotation required
+    const response = await axios.get<User>('/users/123');
+    const user = response.data; // Type: User (but not validated)
+    ```
+    
+    ```typescript title="Caller"
+    import { api } from './lib/api';
+    
+    // Type inferred from schema, validated at runtime
+    const { data } = await api.get('/users/:id')
+      .params({ id: '123' })
+      .execute();
+    // data is typed AND validated
+    ```
+    
+    **Key Difference:** Axios requires you to manually define and maintain TypeScript interfaces. Caller infers types from your schema definitions and validates responses at runtime.
+  </Accordion>
+  
+  <Accordion title="Caller vs ky">
+    **ky** is a lightweight HTTP client with a clean API, built by the creator of got. It's essentially a modern wrapper around fetch.
+    
+    ### When to choose ky
+    - You want the smallest possible bundle size
+    - You prefer a minimal API surface
+    - You don't need schema validation
+    - You're doing simple HTTP requests without complex flows
+    
+    ### When to choose Caller
+    - You want type-safe API contracts
+    - You need schema validation out of the box
+    - You want React integration
+    - You're building an Igniter.js application
+    
+    ### Code Comparison
+    
+    ```typescript title="ky"
+    import ky from 'ky';
+    
+    const user = await ky.get('https://api.example.com/users/123').json();
+    // Type: unknown - requires manual casting
+    ```
+    
+    ```typescript title="Caller"
+    const { data } = await api.get('/users/:id')
+      .params({ id: '123' })
+      .execute();
+    // Type: { id: string; name: string } - from schema
+    ```
+    
+    **Key Difference:** ky focuses on being a thin, elegant wrapper around fetch. Caller adds a comprehensive type system and validation layer on top.
+  </Accordion>
+  
+  <Accordion title="Caller vs ofetch">
+    **ofetch** (from UnJS/Nuxt team) is a modern fetch wrapper with automatic JSON parsing, retries, and good defaults.
+    
+    ### When to choose ofetch
+    - You're building a Nuxt application
+    - You want a simple, batteries-included fetch wrapper
+    - You don't need schema-level type safety
+    - You want universal (Node/Browser) support out of the box
+    
+    ### When to choose Caller
+    - You want compile-time type checking of API contracts
+    - You need built-in caching with invalidation
+    - You're building with React
+    - You want to generate clients from OpenAPI specs
+    
+    ### Code Comparison
+    
+    ```typescript title="ofetch"
+    import { ofetch } from 'ofetch';
+    
+    const user = await ofetch('/users/123', {
+      retry: 3,
+      retryDelay: 1000,
+    });
+    // Type: unknown
+    ```
+    
+    ```typescript title="Caller"
+    const { data } = await api.get('/users/:id')
+      .params({ id: '123' })
+      .retry({ attempts: 3, baseDelay: 1000 })
+      .execute();
+    // Type: User (from schema)
+    ```
+    
+    **Key Difference:** ofetch is excellent for quick, type-agnostic requests. Caller shines when you want your entire API surface typed and validated.
+  </Accordion>
+  
+  <Accordion title="Caller vs Native fetch">
+    **fetch** is the standard API built into modern browsers and Node.js 18+. No dependencies needed.
+    
+    ### When to choose fetch
+    - You have very simple needs (one or two API calls)
+    - You want zero dependencies
+    - You're writing a library that can't have external deps
+    - You're comfortable handling all edge cases manually
+    
+    ### When to choose Caller
+    - You're building an application with many API calls
+    - You want consistent error handling
+    - You need retries, caching, or timeouts
+    - You value developer experience and type safety
+    
+    ### Code Comparison
+    
+    ```typescript title="Native fetch"
+    interface User {
+      id: string;
+      name: string;
+    }
+    
+    const response = await fetch('https://api.example.com/users/123');
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const user = await response.json() as User;
+    // Type: User (but cast, not validated)
+    ```
+    
+    ```typescript title="Caller"
+    const { data, error } = await api.get('/users/:id')
+      .params({ id: '123' })
+      .execute();
+    
+    if (error) {
+      // Structured error with code, message, status
+      console.error(error.code, error.message);
+    }
+    // data is typed and validated
+    ```
+    
+    **Key Difference:** fetch requires significant boilerplate for production use (error handling, retries, timeouts, type safety). Caller provides all of this out of the box.
+  </Accordion>
+</Accordions>
+
+---
+
+## Feature Deep Dive
+
+### Type Safety
+
+The biggest differentiator between Caller and alternatives is the type system. Most HTTP clients require you to manually define interfaces and hope they match your API:
+
+```typescript title="Traditional Approach"
+// You define this manually
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+// API changes "email" to "emailAddress"
+// TypeScript doesn't know - runtime error!
+const user = await axios.get<User>('/users/123');
+console.log(user.data.email); // undefined at runtime
+```
+
+With Caller, your schema is the source of truth:
+
+```typescript title="Caller Approach"
+// Schema is the source of truth
+const schemas = IgniterCallerSchema.create()
+  .path('/users/:id', (path) =>
+    path.get({
+      responses: {
+        200: z.object({
+          id: z.string(),
+          name: z.string(),
+          emailAddress: z.string(), // API changed this
+        }),
+      },
+    })
+  )
+  .build();
+
+const { data } = await api.get('/users/:id').execute();
+console.log(data.emailAddress); // TypeScript knows the correct field
+```
+
+### React Integration
+
+Caller provides first-class React hooks, while other libraries require external wrappers like TanStack Query:
+
+```tsx title="Caller React Hooks"
+import { useCaller } from '@igniter-js/caller/client';
+
+function UserProfile({ id }: { id: string }) {
+  const api = useCaller('main');
+  
+  const { data, isLoading } = api.get('/users/:id')
+    .params({ id })
+    .useQuery({ staleTime: 10_000 });
+  
+  return <div>{data?.name}</div>;
+}
+```
+
+```tsx title="Axios + TanStack Query"
+import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
+
+function UserProfile({ id }: { id: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['user', id],
+    queryFn: () => axios.get(`/users/${id}`).then(r => r.data),
+  });
+  
+  return <div>{data?.name}</div>;
+}
+```
+
+---
+
+## Migration Guides
+
+<Cards>
+  <Card
+    title="From Axios"
+    description="Step-by-step guide to migrate from Axios to Caller"
+    href="/docs/caller/migration/axios"
+  />
+  <Card
+    title="From fetch"
+    description="How to upgrade from native fetch to Caller"
+    href="/docs/caller/migration/fetch"
+  />
+</Cards>
+
+---
+
+## Summary
+
+| Scenario | Recommendation |
+|----------|----------------|
+| New TypeScript project with APIs | **Caller** |
+| Existing Axios codebase, no time to migrate | **Axios** |
+| Ultra-minimal bundle, simple needs | **ky** or **fetch** |
+| Nuxt.js application | **ofetch** |
+| IE11 support required | **Axios** |
+| Type-safe, validated API layer | **Caller** |
+
+Choose Caller when type safety, developer experience, and production-readiness matter. Choose alternatives when simplicity or specific compatibility requirements take priority.
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Installation"
+    description="Get started with Caller in your project"
+    href="/docs/caller/installation"
+  />
+  <Card
+    title="Request Builder"
+    description="Learn the fluent API in depth"
+    href="/docs/caller/builder"
+  />
+</Cards>

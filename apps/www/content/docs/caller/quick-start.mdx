@@ -1,0 +1,66 @@
+---
+title: Quick Start
+description: Make your first request with Caller.
+---
+
+Setting up a Caller instance and making your first request is straightforward. This guide will walk you through the basic setup.
+
+## 1. Create your Caller instance
+
+The recommended approach is to create a shared instance for each API you interact with.
+
+```ts title="lib/api.ts"
+import { IgniterCaller } from '@igniter-js/caller'
+
+export const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withHeaders({ 
+    'Authorization': `Bearer ${process.env.API_TOKEN}` 
+  })
+  .build()
+```
+
+## 2. Execute a request
+
+You can now use this instance to perform requests. Caller uses the `data`/`error` pattern for predictable result handling.
+
+```ts
+const result = await api.get('/users').execute()
+
+if (result.error) {
+  console.error('Failed to fetch users:', result.error.code)
+  return
+}
+
+console.log('Users:', result.data)
+```
+
+## 3. Adding Parameters & Body
+
+Caller provides a fluent API to build complex requests easily.
+
+```ts
+// GET with query params
+const users = await api.get('/users')
+  .params({ page: 1, limit: 10 })
+  .execute()
+
+// POST with JSON body
+const newUser = await api.post('/users')
+  .body({ name: 'Lia GPT', role: 'Maintainer' })
+  .execute()
+```
+
+<Callout type="warn" title="Result Handling">
+  Caller **never throws** on HTTP error statuses (like 404 or 500). Instead, it returns an `error` object in the result envelope. It only throws on network failures or configuration errors.
+</Callout>
+
+---
+
+## Next Steps
+
+Now that you've made your first request, explore more advanced topics:
+
+- [**Schema Validation**](/docs/caller/schemas) - Add end-to-end type safety to your requests.
+- [**Interceptors**](/docs/caller/interceptors) - Transform requests and responses.
+- [**Caching**](/docs/caller/caching) - Improve performance with built-in caching.

@@ -1,0 +1,126 @@
+---
+title: Installation
+description: Install @igniter-js/storage, configure credentials, and boot a storage manager with a CDN base URL.
+---
+
+## Install Dependencies
+
+Use your package manager to add the storage package. Add provider SDKs when you pick an adapter (AWS SDK for S3, `@google-cloud/storage` for GCS).
+
+<Tabs items={["npm", "pnpm", "yarn", "bun"]} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/storage @igniter-js/common
+
+    # S3 (optional)
+    npm install @aws-sdk/client-s3 @aws-sdk/lib-storage
+
+    # Google Cloud (optional)
+    npm install @google-cloud/storage
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/storage @igniter-js/common
+
+    # S3 (optional)
+    pnpm add @aws-sdk/client-s3 @aws-sdk/lib-storage
+
+    # Google Cloud (optional)
+    pnpm add @google-cloud/storage
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/storage @igniter-js/common
+
+    # S3 (optional)
+    yarn add @aws-sdk/client-s3 @aws-sdk/lib-storage
+
+    # Google Cloud (optional)
+    yarn add @google-cloud/storage
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/storage @igniter-js/common
+
+    # S3 (optional)
+    bun add @aws-sdk/client-s3 @aws-sdk/lib-storage
+
+    # Google Cloud (optional)
+    bun add @google-cloud/storage
+    ```
+  </Tab>
+</Tabs>
+
+## Configure Environment
+
+Provide a public CDN/base URL and choose an adapter. You can set credentials in code or environment variables; the builder merges env (`IgniterStorageEnv`) with explicit options.
+
+<TypeTable
+  type={{
+    IGNITER_STORAGE_URL: {
+      type: "string",
+      description: "Public base URL for generated file links",
+      required: true,
+    },
+    IGNITER_STORAGE_ADAPTER: {
+      type: '"s3" | "google"',
+      description: "Adapter key used when no explicit adapter is provided",
+      required: false,
+    },
+    IGNITER_STORAGE_BASE_PATH: {
+      type: "string",
+      description: 'Optional global prefix (e.g., "/production")',
+      required: false,
+    },
+  }}
+/>
+
+## Create the Storage Manager
+
+<Steps>
+  <Step>
+    ### Define a storage service
+
+    ```typescript
+    // src/services/storage.ts
+    import { IgniterStorage } from '@igniter-js/storage'
+
+    export const storage = IgniterStorage.create()
+      .withAdapter('s3', {
+        bucket: process.env.IGNITER_STORAGE_S3_BUCKET,
+        region: process.env.IGNITER_STORAGE_S3_REGION,
+        endpoint: process.env.IGNITER_STORAGE_S3_ENDPOINT,
+        accessKeyId: process.env.IGNITER_STORAGE_S3_ACCESS_KEY_ID,
+        secretAccessKey: process.env.IGNITER_STORAGE_S3_SECRET_ACCESS_KEY,
+      })
+      .withUrl(process.env.IGNITER_STORAGE_URL || 'https://cdn.example.com')
+      .addScope('public', '/public')
+      .build()
+    ```
+
+    <Callout type="info">
+      Prefer environment variables for credentials. If you omit `.withAdapter()`, set `IGNITER_STORAGE_ADAPTER` and provider env vars so the builder can resolve an adapter automatically.
+    </Callout>
+
+  </Step>
+
+  <Step>
+    ### Verify connectivity
+
+    ```typescript
+    await storage.upload(new Blob(['hello'], { type: 'text/plain' }), 'public/hello.txt')
+    const file = await storage.get('public/hello.txt')
+    console.log(file?.url)
+    ```
+
+    If you see an adapter error or `IGNITER_STORAGE_ADAPTER_NOT_CONFIGURED`, double-check the bucket name, permissions, and `IGNITER_STORAGE_URL`.
+
+  </Step>
+</Steps>
+
+## Next Steps
+
+Move to the [Quick Start](</docs/storage/(getting-started)/quick-start>) to add scopes and return public URLs, then tighten policies in [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>).

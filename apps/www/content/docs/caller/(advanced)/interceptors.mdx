@@ -1,0 +1,93 @@
+---
+title: Interceptors
+description: Transform requests and responses globally with interceptors.
+---
+
+Interceptors allow you to run custom logic before a request is sent or after a response is received. They are perfect for cross-cutting concerns like authentication, logging, and error normalization.
+
+## Request Interceptors
+
+Request interceptors receive the current request options and should return the modified options. They run in the order they were registered.
+
+```typescript
+const api = IgniterCaller.create()
+  .withRequestInterceptor(async (request) => {
+    // Add an authentication header
+    return {
+      ...request,
+      headers: {
+        ...request.headers,
+        'Authorization': `Bearer ${process.env.API_TOKEN}`,
+      },
+    };
+  })
+  .withRequestInterceptor(async (request) => {
+    // Add a unique request ID
+    return {
+      ...request,
+      headers: {
+        ...request.headers,
+        'X-Request-ID': crypto.randomUUID(),
+      },
+    };
+  })
+  .build();
+```
+
+---
+
+## Response Interceptors
+
+Response interceptors receive the `IgniterCallerApiResponse` envelope and can transform the data, handle specific errors, or perform side effects.
+
+```typescript
+const api = IgniterCaller.create()
+  .withResponseInterceptor(async (response) => {
+    // Check for maintenance mode
+    if (response.status === 503) {
+      console.warn('API is in maintenance mode');
+    }
+    
+    // Normalize data structure if needed
+    if (response.data && 'deprecated_field' in response.data) {
+      // transform data...
+    }
+    
+    return response;
+  })
+  .build();
+```
+
+---
+
+## Shared State
+
+Interceptors can be used to manage shared state, like refreshing tokens:
+
+```typescript
+let isRefreshing = false;
+
+const api = IgniterCaller.create()
+  .withResponseInterceptor(async (response) => {
+    if (response.status === 401 && !isRefreshing) {
+      isRefreshing = true;
+      await refreshToken();
+      isRefreshing = false;
+      
+      // Note: You would typically retry the request here
+      // but simple interceptors return the original response.
+    }
+    return response;
+  })
+  .build();
+```
+
+---
+
+## Comparison with Middleware
+
+Unlike traditional middleware patterns that use `next()`, Caller interceptors follow a functional transformation pattern (`options -> options` and `response -> response`). This makes them easier to test and compose.
+
+<Callout type="warn" title="Async Handling">
+  Always remember to `await` any asynchronous operations inside your interceptors. If you don't return a Promise (or the modified object), the request chain may break.
+</Callout>

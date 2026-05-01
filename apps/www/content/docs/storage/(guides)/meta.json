@@ -1,0 +1,9 @@
+{
+  "title": "Guides",
+  "pages": [
+    "serving-public-assets",
+    "user-generated-content",
+    "migrations-and-cleanup",
+    "streaming-and-large-files"
+  ]
+}

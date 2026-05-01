@@ -1,0 +1,50 @@
+---
+title: Hooks & Telemetry
+description: Observe storage operations with lifecycle hooks and telemetry events for uploads, deletes, copies, and moves.
+---
+
+## Lifecycle Hooks
+
+Register hooks in the builder to react to uploads, deletions, copies, and moves. Hooks receive fully resolved paths plus context about the operation so you can log, validate, or trigger side effects.
+
+```typescript
+const storage = IgniterStorage.create()
+  .withAdapter("s3", { bucket: "app" })
+  .withUrl("https://cdn.app.com")
+  .onUploadStarted((payload) => {
+    logger.info("upload:start", { path: payload.path, size: payload.size });
+  })
+  .onUploadSuccess(({ file }) => {
+    analytics.track("upload_success", { url: file.url });
+  })
+  .onDeleteError((ctx, error) => {
+    logger.error("delete:error", { path: ctx.path, error });
+  })
+  .build();
+```
+
+Hook payloads include `operation`, `path`, `name`, `extension`, `contentType`, optional `size`, and source details (`file`, `url`, `buffer`, `base64`). Copy/move hooks also receive `from` and `to` paths.
+
+<Callout type="info">
+  Hooks run before or after adapter calls depending on the suffix: `Started`
+  fires before work, `Success` after completion, and `Error` after a failure. If
+  a hook throws in the `Started` phase, the operation is aborted.
+</Callout>
+
+## Telemetry Events
+
+Telemetry managers receive typed events (e.g., `igniter.storage.upload.started`, `.success`, `.error`, same for `get`, `list`, `delete`, `copy`, `move`, `stream`). Each event includes attributes like `storage.path`, `storage.size`, `storage.content_type`, durations, and error codes. Pass an `IgniterTelemetryManager` via `.withTelemetry()` to emit to OpenTelemetry or your analytics layer.
+
+```typescript
+const storage = IgniterStorage.create()
+  .withAdapter("google", { bucket: "cdn-app" })
+  .withUrl("https://cdn.app.com")
+  .withTelemetry(telemetry)
+  .build();
+```
+
+## Error Handling
+
+Use `IgniterStorageError.is(error)` to branch on codes (`IGNITER_STORAGE_UPLOAD_FAILED`, `IGNITER_STORAGE_DELETE_FAILED`, `IGNITER_STORAGE_COPY_NOT_SUPPORTED`, etc.). Telemetry emits the same codes so dashboards can surface failing operations quickly.
+
+Continue with provider-specific setup in [Adapters](</docs/storage/(adapters)/index>) or learn about full lifecycle flows in [Architecture](</docs/storage/(concepts)/architecture>).

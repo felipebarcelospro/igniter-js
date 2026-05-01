@@ -1,0 +1,76 @@
+---
+title: Retries
+description: Handle transient failures with automatic retry logic and backoff strategies.
+---
+
+Transient network issues or server overloads can cause temporary failures. Caller's built-in retry system helps make your application more resilient by automatically retrying failed requests.
+
+## Basic Usage
+
+Enable retries for a specific request using the `.retry()` method.
+
+```typescript
+const result = await api.get('/health')
+  .retry(3) // Retry up to 3 times (4 attempts total)
+  .execute();
+```
+
+By default, Caller retries on common transient status codes: `408`, `429`, `500`, `502`, `503`, and `504`.
+
+---
+
+## Configuration Options
+
+You can customize the retry behavior, including delay and backoff strategy.
+
+```typescript
+await api.get('/external-service')
+  .retry(5, {
+    baseDelay: 500,        // Initial delay in ms
+    backoff: 'exponential', // 'linear' or 'exponential'
+    retryOnStatus: [503],   // Only retry on Service Unavailable
+  })
+  .execute();
+```
+
+### Backoff Strategies
+
+- **Linear:** The delay increases linearly with each attempt (`baseDelay * attempt`).
+- **Exponential:** The delay doubles with each attempt (`baseDelay * 2^(attempt-1)`).
+
+---
+
+## Global Configuration
+
+If you want the same retry behavior for all requests, configure it on the client instance.
+
+```typescript
+const api = IgniterCaller.create()
+  .withRetry({
+    attempts: 3,
+    backoff: 'exponential',
+    baseDelay: 1000,
+  })
+  .build();
+```
+
+---
+
+## Idempotency Considerations
+
+<Callout type="warn" title="Safety First">
+  Caller defaults to retrying on all common server errors, but you should be careful with `POST` and `PATCH` requests that aren't idempotent. For critical operations, use idempotency keys in your headers.
+</Callout>
+
+```typescript
+await api.post('/payments')
+  .headers({ 'X-Idempotency-Key': 'payment_123' })
+  .retry(3)
+  .execute();
+```
+
+---
+
+## Observability
+
+Every retry attempt emits a telemetry event: `igniter.caller.retry.attempt.started`. This allows you to track how often your requests are failing and retrying in production.

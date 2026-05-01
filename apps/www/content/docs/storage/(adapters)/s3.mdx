@@ -1,0 +1,68 @@
+---
+title: S3 Adapter
+description: Configure the S3 adapter for AWS, MinIO, or any S3-compatible endpoint with public reads.
+---
+
+## Credentials and Environment
+
+Provide bucket name and credentials via builder or env. Env keys are merged automatically when no explicit credentials are passed.
+
+<TypeTable
+  type={{
+    IGNITER_STORAGE_S3_BUCKET: {
+      type: "string",
+      description: "Target bucket for all objects",
+      required: true,
+    },
+    IGNITER_STORAGE_S3_REGION: {
+      type: "string",
+      description: "AWS region (ignored for some compatibles)",
+      required: false,
+    },
+    IGNITER_STORAGE_S3_ENDPOINT: {
+      type: "string",
+      description: "Custom endpoint (MinIO/localstack)",
+      required: false,
+    },
+    IGNITER_STORAGE_S3_ACCESS_KEY_ID: {
+      type: "string",
+      description: "Access key with write permissions",
+      required: true,
+    },
+    IGNITER_STORAGE_S3_SECRET_ACCESS_KEY: {
+      type: "string",
+      description: "Secret key",
+      required: true,
+    },
+  }}
+/>
+
+## Minimal Setup
+
+```typescript
+import { IgniterStorage } from "@igniter-js/storage";
+
+export const storage = IgniterStorage.create()
+  .withAdapter("s3", {
+    bucket: process.env.IGNITER_STORAGE_S3_BUCKET!,
+    region: process.env.IGNITER_STORAGE_S3_REGION,
+    endpoint: process.env.IGNITER_STORAGE_S3_ENDPOINT,
+    accessKeyId: process.env.IGNITER_STORAGE_S3_ACCESS_KEY_ID,
+    secretAccessKey: process.env.IGNITER_STORAGE_S3_SECRET_ACCESS_KEY,
+  })
+  .withUrl(process.env.IGNITER_STORAGE_URL || "https://cdn.example.com")
+  .build();
+```
+
+<Callout type="warn" title="Make the bucket public">
+  The adapter attempts to create the bucket and set a public-read policy for objects. Ensure your IAM user can create buckets and apply policies, or pre-create the bucket with a policy that grants `s3:GetObject` on `arn:aws:s3:::<bucket>/*`.
+</Callout>
+
+## Local and Compatible Endpoints
+
+- **MinIO/localstack**: Set `IGNITER_STORAGE_S3_ENDPOINT` and keep `tls` disabled for localhost; `forcePathStyle` is enabled by default.
+- **CDN URL**: Keep `IGNITER_STORAGE_URL` pointed at your public CDN domain; object keys remain the same.
+
+If you need to avoid ACLs, wrap the adapter and override `put` to remove `public-read`, then serve through signed URLs at the edge.
+
+Continue to [Google Cloud Storage](</docs/storage/(adapters)/google-cloud>) or review [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>) to restrict uploads.

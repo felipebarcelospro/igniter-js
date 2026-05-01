@@ -1,0 +1,32 @@
+---
+title: Serving Public Assets
+description: Publish static assets with predictable URLs, long-lived caching, and clear folder structure.
+---
+
+## Structure Public Assets
+
+Keep public files under a dedicated scope for clean URLs and cache control. Pair a global `basePath` for environment separation with a `public` scope.
+
+```typescript
+const storage = IgniterStorage.create()
+  .withAdapter("s3", { bucket: "cdn-app" })
+  .withUrl("https://cdn.app.com")
+  .withPath("/production")
+  .addScope("public", "/public")
+  .build();
+```
+
+Upload assets with descriptive paths:
+
+```typescript
+await storage.scope("public").upload(heroImage, "marketing/hero.webp");
+await storage.scope("public").upload(logoSvg, "brand/logo.svg");
+```
+
+## Caching and Invalidations
+
+Uploads default to `public, max-age=31536000`. Version assets by filename to avoid breaking caches (`hero.v2.webp`) and keep old assets until safe to delete. If you need rapid changes, use a shorter `cacheControl` in a thin adapter wrapper or serve through a CDN with cache invalidation.
+
+## Link Building
+
+Use the returned `url` directly in frontend code or CMS entries. Because URLs are derived from `baseUrl + basePath + scope`, migrations are minimal: update `withPath('/staging')` and keep the same asset names. Cross-link with [Scopes & Paths](</docs/storage/(core-concepts)/scopes-and-paths>) for hierarchy tips and [Policies](</docs/storage/(core-concepts)/policies-and-validation>) to block unsafe file types.

@@ -22,27 +22,27 @@ Before you begin, ensure you have:
 
 ## Step 1: Install Dependencies
 
-Install the BullMQ adapter and its peer dependencies:
+Install the jobs package and the BullMQ adapter:
 
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
   <Tab value="npm">
     ```bash
-    npm install @igniter-js/adapter-bullmq @igniter-js/adapter-redis bullmq ioredis
+    npm install @igniter-js/jobs @igniter-js/core @igniter-js/adapter-bullmq bullmq ioredis
     ```
   </Tab>
   <Tab value="pnpm">
     ```bash
-    pnpm add @igniter-js/adapter-bullmq @igniter-js/adapter-redis bullmq ioredis
+    pnpm add @igniter-js/jobs @igniter-js/core @igniter-js/adapter-bullmq bullmq ioredis
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn add @igniter-js/adapter-bullmq @igniter-js/adapter-redis bullmq ioredis
+    yarn add @igniter-js/jobs @igniter-js/core @igniter-js/adapter-bullmq bullmq ioredis
     ```
   </Tab>
   <Tab value="bun">
     ```bash
-    bun add @igniter-js/adapter-bullmq @igniter-js/adapter-redis bullmq ioredis
+    bun add @igniter-js/jobs @igniter-js/core @igniter-js/adapter-bullmq bullmq ioredis
     ```
   </Tab>
 </Tabs>
@@ -51,7 +51,7 @@ Install the BullMQ adapter and its peer dependencies:
 
 ## Step 2: Set Up Redis Connection
 
-Create a Redis client that will be shared between the Store and Jobs adapters:
+Create a Redis client for the BullMQ adapter:
 
 ```typescript
 // src/lib/redis.ts
@@ -60,175 +60,78 @@ import { Redis } from 'ioredis';
 export const redis = new Redis(
   process.env.REDIS_URL || 'redis://localhost:6379'
 );
-
-// Handle connection errors
-redis.on('error', (err) => {
-  console.error('Redis connection error:', err);
-});
 ```
-
-<Callout type="info" title="Environment Variables">
-  Set `REDIS_URL` in your `.env` file. Examples:
-  - Local: `redis://localhost:6379`
-  - Upstash: `redis://default:password@host:port`
-  - Cloud providers: Check your provider's documentation
-</Callout>
 
 ---
 
-## Step 3: Create the Jobs Adapter
+## Step 3: Define Your Queues
 
-Create a jobs adapter instance using the BullMQ adapter:
+Define your queues and jobs using `IgniterQueue`:
+
+```typescript
+// src/jobs/email.queue.ts
+import { IgniterQueue } from '@igniter-js/jobs';
+import { z } from 'zod';
+
+export const emailQueue = IgniterQueue.create('email')
+  .addJob('sendWelcome', {
+    input: z.object({
+      email: z.string().email(),
+      name: z.string(),
+    }),
+    handler: async ({ input, context }) => {
+      console.log(`Sending welcome email to ${input.email}`);
+      await context.emailService.sendWelcome(input.email, input.name);
+    },
+  })
+  .build();
+```
+
+---
+
+## Step 4: Initialize IgniterJobs
+
+Create the main jobs instance and register your queues:
 
 ```typescript
 // src/services/jobs.ts
-import { createBullMQAdapter } from '@igniter-js/adapter-bullmq';
-import { createRedisStoreAdapter } from '@igniter-js/adapter-redis';
+import { IgniterJobs } from '@igniter-js/jobs';
+import { IgniterJobsBullMQAdapter } from '@igniter-js/adapter-bullmq';
 import { redis } from '@/lib/redis';
+import { emailQueue } from '@/jobs/email.queue';
 
-// Create the store adapter (required for BullMQ)
-const store = createRedisStoreAdapter({ client: redis });
-
-// Create the jobs adapter
-export const jobs = createBullMQAdapter({
-  store, // Share Redis connection with store
-  autoStartWorker: {
-    concurrency: 5, // Process up to 5 jobs concurrently
-    debug: true, // Enable debug logging during development
-  },
-});
-```
-
-<Callout type="info" title="Adapter Configuration">
-  The `autoStartWorker` option automatically starts workers when jobs are registered. During development, `debug: true` provides helpful logging. In production, you may want to disable auto-start and manage workers separately.
-</Callout>
-
----
-
-## Step 4: Define Your First Job
-
-Create a simple job that sends a welcome email:
-
-```typescript
-// src/services/jobs.ts (continued)
-import { z } from 'zod';
-
-// Define the email job
-const emailRouter = jobs.router({
-  namespace: 'emails',
-  jobs: {
-    sendWelcome: jobs.register({
-      name: 'Send Welcome Email',
-      input: z.object({
-        email: z.string().email(),
-        name: z.string().min(1),
-      }),
-      handler: async ({ payload, context }) => {
-        // Access your application context here
-        console.log(`Sending welcome email to ${payload.email}`);
-        
-        // Your email sending logic here
-        // await context.emailService.send({
-        //   to: payload.email,
-        //   subject: `Welcome, ${payload.name}!`,
-        //   body: `Hello ${payload.name}, welcome to our platform!`,
-        // });
-        
-        return {
-          sent: true,
-          email: payload.email,
-          timestamp: new Date().toISOString(),
-        };
-      },
-    }),
-  },
-});
-
-// Merge all routers
-export const REGISTERED_JOBS = jobs.merge({
-  emails: emailRouter,
-});
-```
-
-### Understanding the Code
-
-- **`jobs.router()`**: Creates a router to organize related jobs under a namespace (`emails`)
-- **`jobs.register()`**: Registers a single job with its schema and handler
-- **`input`**: A Zod schema that validates the job payload at runtime
-- **`handler`**: The function that executes when the job runs
-- **`jobs.merge()`**: Combines multiple routers into a single configuration
-
----
-
-## Step 5: Register Jobs with Igniter
-
-Register your jobs with the Igniter builder:
-
-```typescript
-// src/igniter.ts
-import { Igniter } from '@igniter-js/core';
-import { REGISTERED_JOBS } from './services/jobs';
-import { store } from './services/jobs'; // Same store instance
-
-export const igniter = Igniter
-  .context<AppContext>()
-  .store(store)
-  .jobs(REGISTERED_JOBS)
-  .create();
+export const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsBullMQAdapter.create({ redis }))
+  .withService('my-api')
+  .withEnvironment(process.env.NODE_ENV || 'development')
+  .withContext(async () => ({
+    emailService: new EmailService(),
+  }))
+  .addQueue(emailQueue)
+  .build();
 ```
 
 ---
 
-## Step 6: Invoke Your First Job
+## Step 5: Dispatch Your First Job
 
-Now you can schedule jobs from anywhere in your application:
+Now you can dispatch jobs from anywhere in your application:
 
 ```typescript
 // src/features/users/actions/signup.ts
-import { igniter } from '@/igniter';
+import { jobs } from '@/services/jobs';
 
-export const signup = igniter.mutation({
-  path: '/signup',
-  method: 'POST',
-  body: z.object({
-    email: z.string().email(),
-    name: z.string().min(1),
-  }),
-  handler: async ({ request, context, response }) => {
-    // Create user in database
-    const user = await context.db.users.create({
-      data: {
-        email: request.body.email,
-        name: request.body.name,
-      },
-    });
+export async function signup(userData: any) {
+  // ... create user ...
 
-    // Schedule the welcome email job
-    await igniter.jobs.emails.schedule({
-      task: 'sendWelcome',
-      input: {
-        email: user.email,
-        name: user.name,
-      },
-    });
-
-    return response.success({ user });
-  },
-});
-```
-
-### Running Jobs Immediately
-
-To run a job immediately (without scheduling), use `enqueue`:
-
-```typescript
-await igniter.jobs.emails.enqueue({
-  task: 'sendWelcome',
-  input: {
-    email: 'user@example.com',
-    name: 'John Doe',
-  },
-});
+  // Dispatch the welcome email job
+  await jobs.email.sendWelcome.dispatch({
+    input: {
+      email: userData.email,
+      name: userData.name,
+    },
+  });
+}
 ```
 
 ### Scheduling Jobs for Later
@@ -236,14 +139,24 @@ await igniter.jobs.emails.enqueue({
 Schedule a job to run after a delay:
 
 ```typescript
-await igniter.jobs.emails.schedule({
-  task: 'sendWelcome',
-  input: {
-    email: 'user@example.com',
-    name: 'John Doe',
-  },
+await jobs.email.sendWelcome.dispatch({
+  input: { email: 'user@example.com', name: 'John' },
   delay: 5000, // Run after 5 seconds
 });
+```
+
+### Scheduled Jobs (Cron)
+
+Schedule a job to run periodically:
+
+```typescript
+// In your queue definition
+.addCron('dailyCleanup', {
+  cron: '0 0 * * *',
+  handler: async ({ context }) => {
+    await context.db.cleanup();
+  },
+})
 ```
 
 ---

@@ -1,0 +1,126 @@
+---
+title: API Reference
+description: Quick reference for the storage builder, manager methods, and upload options.
+---
+
+## Builder
+
+<TypeTable
+  type={{
+    "withAdapter(adapterOrKey, credentials?)": {
+      type: "IgniterStorageBuilder",
+      description: "Set adapter instance or key + credentials",
+    },
+    "withAdapterFactories(factories)": {
+      type: "IgniterStorageBuilder",
+      description: "Register custom adapter factories keyed by string",
+    },
+    "withUrl(url)": {
+      type: "IgniterStorageBuilder",
+      description: "Set public base URL for generated links",
+    },
+    "withPath(basePath)": {
+      type: "IgniterStorageBuilder",
+      description: "Add a global prefix for all keys",
+    },
+    "withMaxFileSize(bytes)": {
+      type: "IgniterStorageBuilder",
+      description: "Set max upload size policy",
+    },
+    "withAllowedMimeTypes(list)": {
+      type: "IgniterStorageBuilder",
+      description: "Restrict uploads by MIME type",
+    },
+    "withAllowedExtensions(list)": {
+      type: "IgniterStorageBuilder",
+      description: "Restrict uploads by extension",
+    },
+    "addScope(key, path?)": {
+      type: "IgniterStorageBuilder",
+      description: 'Register typed scope; path defaults to "/<key>"',
+    },
+    "withLogger(logger)": {
+      type: "IgniterStorageBuilder",
+      description: "Inject logger used by manager",
+    },
+    "withTelemetry(manager)": {
+      type: "IgniterStorageBuilder",
+      description: "Emit typed telemetry events",
+    },
+    "build()": {
+      type: "IgniterStorageManager",
+      description: "Create a manager with merged env + builder state",
+    },
+  }}
+/>
+
+## Manager Methods
+
+<TypeTable
+  type={{
+    "path(prefix)": {
+      type: "IgniterStorageManager",
+      description: "Append a path segment and return a new scoped manager",
+    },
+    "scope(key, identifier?)": {
+      type: "IgniterStorageManager",
+      description:
+        "Bind to a registered scope; identifier required when path includes [identifier]",
+    },
+    "upload(file, destination, options?)": {
+      type: "Promise<IgniterStorageFile>",
+      description: "Upload Blob/File/Readable with optional replace strategy",
+    },
+    "uploadFromUrl(url, destination, options?)": {
+      type: "Promise<IgniterStorageFile>",
+      description: "Fetch a remote URL then upload to destination",
+    },
+    "uploadFromBuffer(buffer, destination, options?)": {
+      type: "Promise<IgniterStorageFile>",
+      description: "Upload bytes with optional contentType",
+    },
+    "uploadFromBase64(base64, destination, options?)": {
+      type: "Promise<IgniterStorageFile>",
+      description: "Upload base64 data; contentType optional",
+    },
+    "get(pathOrUrl)": {
+      type: "Promise<IgniterStorageFile | null>",
+      description: "Check existence and return metadata",
+    },
+    "list(prefix?)": {
+      type: "Promise<IgniterStorageFile[]>",
+      description: "List files under the current scope/base path",
+    },
+    "stream(pathOrUrl)": {
+      type: "Promise<Readable>",
+      description: "Open a readable stream for a file",
+    },
+    "delete(pathOrUrl)": {
+      type: "Promise<void>",
+      description: "Delete a file",
+    },
+    "copy(from, to)": {
+      type: "Promise<IgniterStorageFile>",
+      description: "Copy a file; adapter must support copy",
+    },
+    "move(from, to)": {
+      type: "Promise<IgniterStorageFile>",
+      description: "Move a file; adapter must support move",
+    },
+  }}
+/>
+
+## Upload Options
+
+<TypeTable
+  type={{
+    replace: {
+      type: '"BY_FILENAME" | "BY_FILENAME_AND_EXTENSION"',
+      description:
+        "Delete matching files before upload; aborts upload on deletion failure",
+      required: false,
+    },
+  }}
+/>
+
+For errors and recovery patterns, see [Error Codes](</docs/storage/(reference)/error-codes>) and [Troubleshooting](/docs/storage/troubleshooting). For concepts and flows, visit [Architecture](</docs/storage/(concepts)/architecture>).
