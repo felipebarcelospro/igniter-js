@@ -22,18 +22,18 @@ import type {
   IIgniterCollectionsManager,
   IIgniterCollectionModel,
   IIgniterCollectionsManagerMethods,
-  IgniterCollectionSchemaChangeCallback,
 } from "../types/manager";
-import type { IgniterCollectionRegistryConfig } from "../types/registry";
+import type { IgniterCollectionWatcherConfig } from "../types/builder";
 import type { IgniterCollectionViewDefinition } from "../types/view";
 import { IgniterCollectionModelManager } from "./model";
 import { IgniterCollectionEventEmitter } from "./event-emitter";
 import { IgniterCollectionSchemaRegistry } from "./schema-registry";
+import { IgniterCollectionViewRegistry } from "./view-registry";
+import { IgniterCollectionViewManager } from "./view-manager";
 import { StdSchema } from "../utils/schema";
 import type { StandardJSONSchemaV1 } from "@standard-schema/spec";
 import { IGNITER_COLLECTION_ERROR_CODES, IgniterCollectionError } from "../errors";
 import type { IgniterCollectionTelemetryEventsType } from "src/telemetry";
-import type { NormalizeSchema } from "../types/query";
 
 /**
  * Configuration for the main manager.
@@ -42,9 +42,8 @@ interface ManagerConfig<TCollections> {
   basePath: string;
   adapter: IgniterCollectionAdapter;
   collections: TCollections;
-  schemaRegistryPath?: string | string[];
-  schemaAutoWatch?: boolean;
-  schemaFilePattern?: string;
+  watcherConfig?: IgniterCollectionWatcherConfig;
+  views?: IgniterCollectionViewDefinition[];
   telemetry?: IgniterTelemetryManager<IgniterCollectionTelemetryEventsType>;
   logger?: IgniterLogger;
   globalHooks?: IgniterCollectionModelHooks<any>;
@@ -87,14 +86,16 @@ interface ManagerConfig<TCollections> {
 export class IgniterCollectionManager<
   TCollections extends Record<
     string,
-    IgniterCollectionModelDefinition<any, any>
-  > = Record<string, IgniterCollectionModelDefinition<any, any>>,
+    IgniterCollectionModelDefinition<any>
+  > = Record<string, IgniterCollectionModelDefinition<any>>,
 > implements IIgniterCollectionsManagerMethods<TCollections> {
   private readonly config: ManagerConfig<TCollections>;
-  private readonly collectionManagers: Map<string, IIgniterCollectionModel<any, any>> =
+  private readonly collectionManagers: Map<string, IIgniterCollectionModel<any>> =
     new Map();
   private readonly events = new IgniterCollectionEventEmitter<IgniterCollectionEvents<TCollections>>();
   private schemaRegistry?: IgniterCollectionSchemaRegistry;
+  private viewRegistry?: IgniterCollectionViewRegistry;
+  private viewManager: IgniterCollectionViewManager;
   private proxyInstance: IIgniterCollectionsManager<TCollections>;
 
   constructor(config: ManagerConfig<TCollections>) {
@@ -107,16 +108,18 @@ export class IgniterCollectionManager<
         if (
           prop === "collection" ||
           prop === "definitions" ||
-          prop === "refreshSchemas" ||
+          prop === "refresh" ||
           prop === "getSchemaRegistry" ||
-          prop === "startSchemaWatching" ||
-          prop === "stopSchemaWatching" ||
-          prop === "isSchemaWatching" ||
+          prop === "getViewRegistry" ||
+          prop === "startWatching" ||
+          prop === "stopWatching" ||
+          prop === "isWatching" ||
           prop === "dispose" ||
           prop === "on" ||
           prop === "off" ||
           prop === "once" ||
-          prop === "emit"
+          prop === "emit" ||
+          prop === "views"
         ) {
           return target[prop as keyof typeof target];
         }
@@ -134,14 +137,20 @@ export class IgniterCollectionManager<
     // Initialize collection managers (they need the proxy as manager reference)
     this.initializeCollections();
 
-    // Initialize schema registry if path is configured
-    if (config.schemaRegistryPath) {
-      this.initializeSchemaRegistry(config.schemaRegistryPath);
+    // Initialize view manager with programmatic views
+    this.viewManager = new IgniterCollectionViewManager({
+      views: config.views || [],
+      manager: this.proxyInstance as any,
+      logger: config.logger,
+    });
+
+    // Initialize watcher if configured
+    if (config.watcherConfig) {
+      this.initializeWatcher(config.watcherConfig);
 
       // Auto-start watching if configured
-      // Em manager.ts constructor
-      if (config.schemaAutoWatch && this.schemaRegistry) {
-        this.startSchemaWatching();
+      if (config.watcherConfig.autoWatch) {
+        this.startWatching();
       }
     }
 
@@ -168,17 +177,31 @@ export class IgniterCollectionManager<
   }
 
   /**
-   * Initialize the schema registry.
+   * Initialize the watcher (schema registry + view registry).
    */
-  private initializeSchemaRegistry(registryPath: string | string[]): void {
-    const registryConfig: IgniterCollectionRegistryConfig = {
-      registryPath,
-      basePath: this.config.basePath,
-      filePattern: this.config.schemaFilePattern,
-    };
+  private initializeWatcher(config: IgniterCollectionWatcherConfig): void {
+    const paths = Array.isArray(config.paths) ? config.paths : [config.paths];
 
+    // Initialize schema registry
+    const schemaRegistryConfig = {
+      registryPath: paths,
+      basePath: this.config.basePath,
+      filePattern: config.collections ?? "*.schema.{json,ts}",
+    };
     this.schemaRegistry = new IgniterCollectionSchemaRegistry(
-      registryConfig,
+      schemaRegistryConfig,
+      this.config.adapter,
+      this.config.logger
+    );
+
+    // Initialize view registry
+    const viewRegistryConfig = {
+      registryPath: paths,
+      basePath: this.config.basePath,
+      filePattern: config.views ?? "*.view.{json,ts}",
+    };
+    this.viewRegistry = new IgniterCollectionViewRegistry(
+      viewRegistryConfig,
       this.config.adapter,
       this.config.logger
     );
@@ -209,38 +232,54 @@ export class IgniterCollectionManager<
   }
 
   /**
-   * Refresh schemas from the registry and update collection managers.
-   *
-   * This method reloads all schema files from disk and creates/updates
-   * collection managers accordingly.
-   *
-   * @returns Promise that resolves when schemas are refreshed
-   *
-   * @example
-   * ```typescript
-   * const docs = IgniterCollections.create()
-   *   .withAdapter(adapter)
-   *   .withSchemaRegistryPath('.fractal/schemas')
-   *   .build();
-   *
-   * // After adding new schema files
-   * await docs.refreshSchemas();
-   *
-   * // Now new collections are available
-   * await docs.newCollection.findMany();
-   * ```
+   * Get the global view manager.
    */
-  async refreshSchemas(): Promise<void> {
-    if (!this.schemaRegistry) {
-      this.config.logger?.debug("No schema registry configured, skipping refresh");
-      return;
+  get views(): IgniterCollectionViewManager {
+    return this.viewManager;
+  }
+
+  /**
+   * Refresh schemas and views from the registries.
+   *
+   * This method reloads all schema and view files from disk and
+   * creates/updates managers accordingly.
+   *
+   * @returns Promise that resolves when refresh is complete
+   */
+  async refresh(): Promise<void> {
+    // Refresh collections from schema registry
+    if (this.schemaRegistry) {
+      const schemas = await this.schemaRegistry.refresh();
+      for (const [name, definition] of schemas) {
+        this.addCollectionManager(name, definition);
+      }
     }
 
-    const schemas = await this.schemaRegistry.refresh();
+    // Refresh views from view registry
+    if (this.viewRegistry) {
+      const watchedViews = await this.viewRegistry.refresh();
+      const programmaticViews = this.config.views || [];
+      const programmaticNames = new Set(programmaticViews.map(v => v.name));
 
-    // Create managers for new collections
-    for (const [name, definition] of schemas) {
-      this.addCollectionManager(name, definition);
+      // Merge watched views with programmatic views
+      // Programmatic views take precedence
+      const mergedViews: IgniterCollectionViewDefinition[] = [...programmaticViews];
+      for (const [name, view] of watchedViews) {
+        if (programmaticNames.has(name)) {
+          this.config.logger?.warn(
+            `View conflict: programmatic view "${name}" overrides watched view`
+          );
+          continue;
+        }
+        mergedViews.push(view);
+      }
+
+      // Rebuild view manager with merged views
+      this.viewManager = new IgniterCollectionViewManager({
+        views: mergedViews,
+        manager: this.proxyInstance as any,
+        logger: this.config.logger,
+      });
     }
   }
 
@@ -254,85 +293,71 @@ export class IgniterCollectionManager<
   }
 
   /**
-   * Start watching schema files for changes.
+   * Get the view registry instance.
    *
-   * When schema files change, the registry automatically refreshes
-   * and collection managers are updated accordingly.
-   *
-   * @param onSchemaChange - Optional callback for schema change events
-   * @returns True if watching started successfully
-   *
-   * @example
-   * ```typescript
-   * const docs = IgniterCollections.create()
-   *   .withAdapter(adapter)
-   *   .withSchemaRegistryPath('.fractal/schemas')
-   *   .build();
-   *
-   * // Start watching with callback
-   * docs.startSchemaWatching((event, collection) => {
-   *   console.log(`Collection ${event}: ${collection}`);
-   * });
-   *
-   * // Or without callback
-   * docs.startSchemaWatching();
-   * ```
+   * @returns View registry or undefined if not configured
    */
-  async startSchemaWatching(
-    onSchemaChange?: IgniterCollectionSchemaChangeCallback
-  ): Promise<boolean> {
-    if (!this.schemaRegistry) {
+  getViewRegistry(): IgniterCollectionViewRegistry | undefined {
+    return this.viewRegistry;
+  }
+
+  /**
+   * Start watching for file changes.
+   *
+   * When schema or view files change, the registries automatically
+   * refresh and managers are updated accordingly.
+   *
+   * @returns True if watching started successfully
+   */
+  async startWatching(): Promise<boolean> {
+    if (!this.schemaRegistry && !this.viewRegistry) {
       this.config.logger?.warn(
-        "Cannot start schema watching: no schema registry configured"
+        "Cannot start watching: no watcher configured"
       );
       return false;
     }
 
-    // Initial load - await to ensure schemas are ready before continuing
-    await this.refreshSchemas();
+    // Initial load
+    await this.refresh();
 
-    // Wrap callback to add collection managers on change
-    const wrappedCallback: IgniterCollectionSchemaChangeCallback = (event, name) => {
-      // If a collection was added, create the manager
+    // Start schema watching
+    this.schemaRegistry?.startWatching((event, name) => {
       if (event === "added") {
         const definition = this.schemaRegistry?.getCollection(name);
         if (definition) {
           this.addCollectionManager(name, definition);
         }
       }
+    });
 
-      // Invoke user callback if provided
-      onSchemaChange?.(event, name);
-    };
+    // Start view watching
+    this.viewRegistry?.startWatching();
 
-    return this.schemaRegistry.startWatching(wrappedCallback);
+    return true;
   }
 
   /**
-   * Stop watching schema files for changes.
-   *
-   * @example
-   * ```typescript
-   * docs.stopSchemaWatching();
-   * ```
+   * Stop watching for file changes.
    */
-  stopSchemaWatching(): void {
+  stopWatching(): void {
     this.schemaRegistry?.stopWatching();
+    this.viewRegistry?.stopWatching();
   }
 
   /**
-   * Check if schema watching is active.
+   * Check if watching is active.
    *
    * @returns True if watching is active
    */
-  isSchemaWatching(): boolean {
-    return this.schemaRegistry?.isWatching() ?? false;
+  isWatching(): boolean {
+    return (this.schemaRegistry?.isWatching() ?? false) ||
+           (this.viewRegistry?.isWatching() ?? false);
   }
 
   /**
    * Dispose the manager and clean up all resources.
    *
-   * Stops schema watching and releases any held resources.
+   * Stops watching and releases any held resources.
    * Call this when the manager is no longer needed.
    *
    * @example
@@ -342,7 +367,7 @@ export class IgniterCollectionManager<
    * ```
    */
   dispose(): void {
-    this.stopSchemaWatching();
+    this.stopWatching();
     this.collectionManagers.clear();
     this.config.logger?.debug("IgniterCollectionManager disposed");
   }
@@ -356,11 +381,8 @@ export class IgniterCollectionManager<
    */
   collection<K extends keyof TCollections>(
     name: K
-  ): TCollections[K] extends IgniterCollectionModelDefinition<infer TSchema, infer TViews>
-    ? IIgniterCollectionModel<
-      TSchema,
-      TViews
-    >
+  ): TCollections[K] extends IgniterCollectionModelDefinition<infer TSchema>
+    ? IIgniterCollectionModel<TSchema>
     : never {
     const manager = this.collectionManagers.get(name as string);
 
@@ -469,7 +491,8 @@ export class IgniterCollectionManager<
   | (keyof TCollections)[]
   | (() => Promise<void>)
   | (() => IgniterCollectionSchemaRegistry | undefined)
-  | ((onSchemaChange?: IgniterCollectionSchemaChangeCallback) => boolean)
+  | (() => IgniterCollectionViewRegistry | undefined)
+  | (() => boolean)
   | (() => void)
   | (() => boolean)
   | (<K extends keyof IgniterCollectionEvents<TCollections>>(

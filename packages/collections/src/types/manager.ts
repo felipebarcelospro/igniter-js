@@ -6,7 +6,7 @@
 import type { StandardJSONSchemaV1 } from "@standard-schema/spec";
 import type { IgniterCollectionModelDefinition, IgniterCollectionDocument, DeepPrettify, IgniterCollectionDocumentSystemFields, IgniterCollectionDocumentSearchFields } from "./collection";
 import type { IgniterCollectionEventHandler, IgniterCollectionEvents } from "./events";
-import type { IIgniterCollectionViewManager, IgniterCollectionViewDefinition } from "./view";
+import type { IIgniterCollectionViewManager } from "./view";
 import type {
   IgniterCollectionCountArgs,
   IgniterCollectionCreateArgs,
@@ -45,10 +45,6 @@ export type FindManyResult<TSchema, TArgs extends IgniterCollectionFindManyArgs<
  */
 export interface IIgniterCollectionModel<
   TSchema = unknown,
-  TViews extends Record<string, IgniterCollectionViewDefinition> = Record<
-    string,
-    IgniterCollectionViewDefinition
-  >,
 > {
   /** Collection definition */
   readonly definition: IgniterCollectionModelDefinition<TSchema>;
@@ -116,9 +112,6 @@ export interface IIgniterCollectionModel<
    * @returns Number of matching documents
    */
   count(args?: IgniterCollectionCountArgs<TSchema>): Promise<number>;
-
-  /** View manager for this collection (type-safe) */
-  readonly views: IIgniterCollectionViewManager<TSchema, TViews>;
 }
 
 /**
@@ -127,13 +120,12 @@ export interface IIgniterCollectionModel<
  * @typeParam TCollections - Map of collection definitions
  */
 export type IgniterCollectionsAccessor<
-  TCollections extends Record<string, IgniterCollectionModelDefinition<any, any>>,
+  TCollections extends Record<string, IgniterCollectionModelDefinition<any>>,
 > = {
     [K in keyof TCollections]: TCollections[K] extends IgniterCollectionModelDefinition<
-      infer TSchema,
-      infer TViews
+      infer TSchema
     >
-    ? IIgniterCollectionModel<TSchema, TViews>
+    ? IIgniterCollectionModel<TSchema>
     : never;
   };
 
@@ -143,8 +135,8 @@ export type IgniterCollectionsAccessor<
  * @typeParam TCollections - Map of collection definitions
  */
 export interface IIgniterCollectionsManagerMethods<
-  TCollections extends Record<string, IgniterCollectionModelDefinition<any, any>> = {
-    [key: string]: IgniterCollectionModelDefinition<any, any>;
+  TCollections extends Record<string, IgniterCollectionModelDefinition<any>> = {
+    [key: string]: IgniterCollectionModelDefinition<any>;
   },
 > {
   /**
@@ -155,11 +147,8 @@ export interface IIgniterCollectionsManagerMethods<
    */
   collection<K extends keyof TCollections>(
     name: K
-  ): TCollections[K] extends IgniterCollectionModelDefinition<infer TSchema, infer TViews>
-    ? IIgniterCollectionModel<
-      TSchema,
-      TViews
-    >
+  ): TCollections[K] extends IgniterCollectionModelDefinition<infer TSchema>
+    ? IIgniterCollectionModel<TSchema>
     : never;
 
   /**
@@ -213,37 +202,36 @@ export interface IIgniterCollectionsManagerMethods<
   ): void;
 
   /**
-   * Refresh schemas from the registry.
+   * Refresh collections and views from the registry.
    *
-   * Reloads all schema files from disk and creates/updates
-   * collection managers accordingly.
+   * Reloads all schema and view files from disk and creates/updates
+   * collection managers and views accordingly.
    *
-   * @returns Promise that resolves when schemas are refreshed
+   * @returns Promise that resolves when refresh is complete
    */
-  refreshSchemas(): Promise<void>;
+  refresh(): Promise<void>;
 
   /**
-   * Start watching schema files for changes.
+   * Start watching files for changes.
    *
-   * When schema files change, the registry automatically refreshes
-   * and collection managers are updated accordingly.
+   * When schema or view files change, the registry automatically refreshes
+   * and collection managers and views are updated accordingly.
    *
-   * @param onSchemaChange - Optional callback for schema change events
    * @returns Promise that resolves to true if watching started successfully
    */
-  startSchemaWatching(onSchemaChange?: IgniterCollectionSchemaChangeCallback): Promise<boolean>;
+  startWatching(): Promise<boolean>;
 
   /**
-   * Stop watching schema files for changes.
+   * Stop watching files for changes.
    */
-  stopSchemaWatching(): void;
+  stopWatching(): void;
 
   /**
-   * Check if schema watching is active.
+   * Check if file watching is active.
    *
    * @returns True if watching is active
    */
-  isSchemaWatching(): boolean;
+  isWatching(): boolean;
 
   /**
    * Dispose the manager and clean up all resources.
@@ -260,6 +248,11 @@ export interface IIgniterCollectionsManagerMethods<
     event: K,
     data: IgniterCollectionEvents<TCollections>[K]
   ): Promise<void>;
+
+  /**
+   * Global view manager for rendering views across all collections.
+   */
+  readonly views: IIgniterCollectionViewManager;
 }
 
 /**
@@ -268,9 +261,9 @@ export interface IIgniterCollectionsManagerMethods<
  * @typeParam TCollections - Map of collection definitions
  */
 export type IIgniterCollectionsManager<
-  TCollections extends Record<string, IgniterCollectionModelDefinition<Record<string, any>, any>> = Record<
+  TCollections extends Record<string, IgniterCollectionModelDefinition<Record<string, any>>> = Record<
     string,
-    IgniterCollectionModelDefinition<Record<string, any>, any>
+    IgniterCollectionModelDefinition<Record<string, any>>
   >,
 > = IIgniterCollectionsManagerMethods<TCollections> & IgniterCollectionsAccessor<TCollections>;
 

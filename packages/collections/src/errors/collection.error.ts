@@ -46,8 +46,14 @@ export const IGNITER_COLLECTION_ERROR_CODES = {
   TRANSFORM_UNKNOWN: "COLLECTION_TRANSFORM_UNKNOWN",
   /** Action not found */
   ACTION_NOT_FOUND: "COLLECTION_ACTION_NOT_FOUND",
+  /** Unsupported file format in watcher */
+  UNSUPPORTED_FILE_FORMAT: "COLLECTION_UNSUPPORTED_FILE_FORMAT",
+  /** TypeScript transpilation failed */
+  TRANSPILE_FAILED: "COLLECTION_TRANSPILE_FAILED",
   /** Invalid action parameters */
   ACTION_INVALID_PARAMS: "COLLECTION_ACTION_INVALID_PARAMS",
+  /** View missing mandatory configuration (e.g., getData) */
+  VIEW_INVALID_CONFIGURATION: "COLLECTION_VIEW_INVALID_CONFIGURATION",
 } as const;
 
 /**

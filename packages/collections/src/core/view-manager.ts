@@ -3,8 +3,8 @@
  * @module @igniter-js/collections/core/view-manager
  * 
  * @description
- * Handles rendering, action execution, and data processing for collection views.
- * Supports declarative stats, transforms, and custom data hooks.
+ * Handles rendering, action execution, and data processing for global views.
+ * Views have unrestricted access to the full IIgniterCollectionsManager.
  */
 
 import type { IgniterLogger } from "@igniter-js/common";
@@ -14,7 +14,6 @@ import {
   IGNITER_COLLECTION_ERROR_CODES
 } from "../errors/collection.error";
 import type {
-  IIgniterCollectionModel,
   IIgniterCollectionsManager
 } from "../types/manager";
 import type {
@@ -26,7 +25,6 @@ import type {
   IgniterCollectionViewRenderOptions,
   IgniterCollectionViewRenderResult,
   IIgniterCollectionViewManager,
-  IgniterCollectionViewQuery
 } from "../types/view";
 import { IgniterCollectionViewStatsCalculator } from "../utils/view-stats";
 import { IgniterCollectionViewTransformEngine } from "../utils/view-transforms";
@@ -35,27 +33,24 @@ import { IgniterCollectionPath } from "../utils/path";
 import type { IgniterCollectionTelemetryEventsType } from "../telemetry";
 
 /**
- * Manager for collection views with automatic type inference.
- * Handles listing, retrieval, and rendering of views.
+ * Manager for global collection views.
+ * Handles listing, retrieval, and rendering of views with multi-collection access.
  */
-export class IgniterCollectionViewManager<
-  TSchema extends Record<string, any> = Record<string, any>,
-  TViews extends Record<string, IgniterCollectionViewDefinition> = Record<string, IgniterCollectionViewDefinition>
-> implements IIgniterCollectionViewManager<TSchema, TViews> {
+export class IgniterCollectionViewManager implements IIgniterCollectionViewManager {
 
   private readonly views: Map<string, IgniterCollectionViewDefinition>;
-  private readonly collection: IIgniterCollectionModel<TSchema, TViews>;
+  private readonly manager: IIgniterCollectionsManager;
   private readonly logger?: IgniterLogger;
   private readonly hookCache: Map<string, IgniterCollectionViewDataHook>;
   private readonly handlerCache: Map<string, IgniterCollectionViewActionHandler>;
 
   constructor(config: {
     views: IgniterCollectionViewDefinition[];
-    collection: IIgniterCollectionModel<TSchema, TViews>;
+    manager: IIgniterCollectionsManager;
     logger?: IgniterLogger;
   }) {
     this.views = new Map(config.views.map(v => [v.name, v]));
-    this.collection = config.collection;
+    this.manager = config.manager;
     this.logger = config.logger;
     this.hookCache = new Map();
     this.handlerCache = new Map();
@@ -65,7 +60,7 @@ export class IgniterCollectionViewManager<
    * Internal access to telemetry manager if available.
    */
   private get telemetry(): IgniterTelemetryManager<IgniterCollectionTelemetryEventsType> | undefined {
-    return this.collection.telemetry;
+    return (this.manager as any).telemetry;
   }
 
   /**
@@ -76,41 +71,39 @@ export class IgniterCollectionViewManager<
   }
 
   /**
-   * Get a specific view (type-safe).
+   * Get a specific view.
    */
-  get<K extends keyof TViews>(name: K): TViews[K] | undefined {
-    return this.views.get(name as string) as TViews[K] | undefined;
+  get(name: string): IgniterCollectionViewDefinition | undefined {
+    return this.views.get(name);
   }
 
   /**
-   * Render a view with data (type-safe).
+   * Render a view with data.
    */
-  async render<K extends keyof TViews>(
-    name: K,
+  async render(
+    name: string,
     options?: IgniterCollectionViewRenderOptions
   ): Promise<IgniterCollectionViewRenderResult> {
     const startTime = Date.now();
-    const view = this.views.get(name as string);
+    const view = this.views.get(name);
 
     if (!view) {
       this.telemetry?.emit('igniter.collections.view.render.error', {
         attributes: {
-          'ctx.collection.name': this.collection.definition.name,
-          'ctx.view.name': String(name),
-          'ctx.error.code': 'COLLECTION_VIEW_NOT_FOUND',
-          'ctx.error.message': `View not found: ${String(name)}`
+          'ctx.view.name': name,
+          'ctx.error.code': 'VIEW_NOT_FOUND',
+          'ctx.error.message': `View not found: ${name}`
         }
       });
 
       throw new IgniterCollectionError({
-        message: `View not found: ${String(name)}`,
+        message: `View not found: ${name}`,
         code: IGNITER_COLLECTION_ERROR_CODES.VIEW_NOT_FOUND,
         statusCode: 404,
         details: {
           'ctx.package': '@igniter-js/collections',
           'ctx.operation': 'render',
-          'ctx.collection': this.collection.definition.name,
-          'ctx.view': String(name)
+          'ctx.view': name
         }
       });
     }
@@ -118,7 +111,6 @@ export class IgniterCollectionViewManager<
     // Emit started event
     this.telemetry?.emit('igniter.collections.view.render.started', {
       attributes: {
-        'ctx.collection.name': this.collection.definition.name,
         'ctx.view.name': view.name,
         'ctx.has_hook': !!view.getData,
         'ctx.has_stats': !!view.stats,
@@ -133,13 +125,21 @@ export class IgniterCollectionViewManager<
       if (view.getData) {
         result = await this.renderWithHook(view, options);
       } else {
-        result = await this.renderStandard(view, options);
+        throw new IgniterCollectionError({
+          message: `View "${view.name}" is missing required getData hook`,
+          code: IGNITER_COLLECTION_ERROR_CODES.VIEW_INVALID_CONFIGURATION,
+          statusCode: 500,
+          details: {
+            'ctx.package': '@igniter-js/collections',
+            'ctx.operation': 'render',
+            'ctx.view': view.name,
+          }
+        });
       }
 
       // Emit success event
       this.telemetry?.emit('igniter.collections.view.render.success', {
         attributes: {
-          'ctx.collection.name': this.collection.definition.name,
           'ctx.view.name': view.name,
           'ctx.duration_ms': Date.now() - startTime,
           'ctx.items.count': result.data.items.length,
@@ -152,7 +152,6 @@ export class IgniterCollectionViewManager<
       // Emit error event
       this.telemetry?.emit('igniter.collections.view.render.error', {
         attributes: {
-          'ctx.collection.name': this.collection.definition.name,
           'ctx.view.name': view.name,
           'ctx.error.code': error instanceof IgniterCollectionError ? error.code : 'UNKNOWN',
           'ctx.error.message': error instanceof Error ? error.message : String(error)
@@ -166,8 +165,8 @@ export class IgniterCollectionViewManager<
   /**
    * List all actions for a view.
    */
-  listActions(viewId: keyof TViews): string[] {
-    const view = this.views.get(viewId as string);
+  listActions(viewId: string): string[] {
+    const view = this.views.get(viewId);
     if (!view || !view.actions) {
       return [];
     }
@@ -178,15 +177,14 @@ export class IgniterCollectionViewManager<
    * Execute a view action with parameter validation.
    */
   async executeAction<TParams = any, TResult = any>(
-    viewId: keyof TViews,
+    viewId: string,
     actionId: string,
     params: TParams
   ): Promise<IgniterCollectionViewActionResult<TResult>> {
     // Telemetry: action started
     this.telemetry?.emit('igniter.collections.view.action.started', {
       attributes: {
-        'ctx.collection.name': this.collection.definition.name,
-        'ctx.view.name': String(viewId),
+        'ctx.view.name': viewId,
         'ctx.action.name': actionId,
         'ctx.action.params_size': JSON.stringify(params).length
       }
@@ -196,17 +194,16 @@ export class IgniterCollectionViewManager<
 
     try {
       // Get view and action
-      const view = this.views.get(viewId as string);
+      const view = this.views.get(viewId);
       if (!view) {
         throw new IgniterCollectionError({
-          message: `View not found: ${String(viewId)}`,
+          message: `View not found: ${viewId}`,
           code: IGNITER_COLLECTION_ERROR_CODES.VIEW_NOT_FOUND,
           statusCode: 404,
           details: {
             'ctx.package': '@igniter-js/collections',
             'ctx.operation': 'executeAction',
-            'ctx.collection': this.collection.definition.name,
-            'ctx.view': String(viewId)
+            'ctx.view': viewId
           }
         });
       }
@@ -220,8 +217,7 @@ export class IgniterCollectionViewManager<
           details: {
             'ctx.package': '@igniter-js/collections',
             'ctx.operation': 'executeAction',
-            'ctx.collection': this.collection.definition.name,
-            'ctx.view': String(viewId),
+            'ctx.view': viewId,
             'ctx.action': actionId
           }
         });
@@ -239,8 +235,7 @@ export class IgniterCollectionViewManager<
             details: {
               'ctx.package': '@igniter-js/collections',
               'ctx.operation': 'executeAction',
-              'ctx.collection': this.collection.definition.name,
-              'ctx.view': String(viewId),
+              'ctx.view': viewId,
               'ctx.action': actionId,
               'ctx.validation.errors': validationResult.issues
             }
@@ -253,7 +248,7 @@ export class IgniterCollectionViewManager<
 
       // Execute action
       const result = await handler({
-        manager: this.collection.manager,
+        manager: this.manager,
         view,
         actionId,
         params
@@ -263,8 +258,7 @@ export class IgniterCollectionViewManager<
       const duration = Date.now() - startTime;
       this.telemetry?.emit('igniter.collections.view.action.success', {
         attributes: {
-          'ctx.collection.name': this.collection.definition.name,
-          'ctx.view.name': String(viewId),
+          'ctx.view.name': viewId,
           'ctx.action.name': actionId,
           'ctx.action.duration_ms': duration,
           'ctx.action.success': result.success
@@ -278,8 +272,7 @@ export class IgniterCollectionViewManager<
       const duration = Date.now() - startTime;
       this.telemetry?.emit('igniter.collections.view.action.error', {
         attributes: {
-          'ctx.collection.name': this.collection.definition.name,
-          'ctx.view.name': String(viewId),
+          'ctx.view.name': viewId,
           'ctx.action.name': actionId,
           'ctx.action.duration_ms': duration,
           'ctx.error.code': error instanceof IgniterCollectionError ? error.code : 'UNKNOWN',
@@ -339,26 +332,18 @@ export class IgniterCollectionViewManager<
     // Load hook
     const hook = await this.loadHook(view.getData!);
 
-    // Fetch base items
-    const queryArgs = this.mergeQueries(view.defaultQuery, options);
-    const baseItems = await this.collection.findMany(queryArgs);
-
-    // Execute hook with proper error handling
+    // Execute hook
     let hookResult: IgniterCollectionViewDataHookResult;
     const hookStartTime = Date.now();
 
     try {
       hookResult = await hook({
-        manager: this.collection.manager,
-        collection: this.collection,
+        manager: this.manager,
         options,
-        items: baseItems,
-        stats: {}
       });
 
       this.telemetry?.emit('igniter.collections.view.hook.executed', {
         attributes: {
-          'ctx.collection.name': this.collection.definition.name,
           'ctx.view.name': view.name,
           'ctx.hook.type': typeof view.getData === 'string' ? 'file' : 'inline',
           'ctx.duration_ms': Date.now() - hookStartTime
@@ -373,7 +358,6 @@ export class IgniterCollectionViewManager<
         details: {
           'ctx.package': '@igniter-js/collections',
           'ctx.operation': 'renderWithHook',
-          'ctx.collection': this.collection.definition.name,
           'ctx.view': view.name,
           'ctx.hook': typeof view.getData === 'string' ? view.getData : 'inline',
           'ctx.error.message': error instanceof Error ? error.message : String(error),
@@ -382,56 +366,8 @@ export class IgniterCollectionViewManager<
       });
     }
 
-    // Calculate declarative stats (complement hook stats)
-    const statsStartTime = Date.now();
-    const declarativeStats = view.stats
-      ? IgniterCollectionViewStatsCalculator.calculate(
-        hookResult.items,
-        view.stats
-      )
-      : {};
-
-    if (view.stats) {
-      this.telemetry?.emit('igniter.collections.view.stats.calculated', {
-        attributes: {
-          'ctx.collection.name': this.collection.definition.name,
-          'ctx.view.name': view.name,
-          'ctx.stats.count': Object.keys(declarativeStats).length,
-          'ctx.items.count': hookResult.items.length,
-          'ctx.duration_ms': Date.now() - statsStartTime
-        }
-      });
-    }
-
-    return {
-      view,
-      data: {
-        items: hookResult.items,
-        stats: { ...declarativeStats, ...hookResult.stats },
-        extra: hookResult.extra,
-        meta: {
-          total: hookResult.items.length,
-          query: queryArgs
-        }
-      },
-      renderedAt: new Date().toISOString()
-    };
-  }
-
-  /**
-   * Standard render (no hook).
-   */
-  private async renderStandard(
-    view: IgniterCollectionViewDefinition,
-    options?: IgniterCollectionViewRenderOptions
-  ): Promise<IgniterCollectionViewRenderResult> {
-    // Merge queries
-    const queryArgs = this.mergeQueries(view.defaultQuery, options);
-
-    // Fetch items
-    let items = await this.collection.findMany(queryArgs);
-
     // Apply transforms
+    let items = hookResult.items;
     if (view.transforms && view.transforms.length > 0) {
       items = IgniterCollectionViewTransformEngine.applyTransforms(
         items,
@@ -439,18 +375,20 @@ export class IgniterCollectionViewManager<
       );
     }
 
-    // Calculate stats
+    // Calculate declarative stats (complement hook stats)
     const statsStartTime = Date.now();
-    const stats = view.stats
-      ? IgniterCollectionViewStatsCalculator.calculate(items, view.stats)
+    const declarativeStats = view.stats
+      ? IgniterCollectionViewStatsCalculator.calculate(
+        items,
+        view.stats
+      )
       : {};
 
     if (view.stats) {
       this.telemetry?.emit('igniter.collections.view.stats.calculated', {
         attributes: {
-          'ctx.collection.name': this.collection.definition.name,
           'ctx.view.name': view.name,
-          'ctx.stats.count': Object.keys(stats).length,
+          'ctx.stats.count': Object.keys(declarativeStats).length,
           'ctx.items.count': items.length,
           'ctx.duration_ms': Date.now() - statsStartTime
         }
@@ -461,10 +399,10 @@ export class IgniterCollectionViewManager<
       view,
       data: {
         items,
-        stats,
+        stats: { ...declarativeStats, ...hookResult.stats },
+        extra: hookResult.extra,
         meta: {
           total: items.length,
-          query: queryArgs
         }
       },
       renderedAt: new Date().toISOString()
@@ -486,7 +424,7 @@ export class IgniterCollectionViewManager<
       return this.hookCache.get(hookDef)!;
     }
 
-    // Load from file (mirror SchemaRegistry.loadHookModule pattern)
+    // Load from file
     const absolutePath = this.resolveHookPath(hookDef);
     const module = await import(absolutePath);
 
@@ -509,41 +447,20 @@ export class IgniterCollectionViewManager<
     return hook;
   }
 
-  // Helper methods...
-  private mergeQueries(
-    defaultQuery?: IgniterCollectionViewQuery,
-    options?: IgniterCollectionViewRenderOptions
-  ): any {
-    return {
-      where: { ...(defaultQuery?.where || {}), ...(options?.where || {}) },
-      orderBy: options?.orderBy || defaultQuery?.orderBy,
-      take: options?.take || defaultQuery?.take,
-      skip: options?.skip || defaultQuery?.skip
-    };
-  }
-
   /**
-   * Resolve hook path relative to collection.
+   * Resolve hook path relative to current working directory.
    */
   private resolveHookPath(relativePath: string): string {
-    // If absolute path, return as-is
     if (relativePath.startsWith("/")) {
       return relativePath;
     }
-
-    // In the new patterns-only model, we don't have a single collection-level basePath.
-    // We resolve relative to the manager's basePath which is available in the model manager.
-    const modelManager = this.collection as any;
-    const basePath = modelManager.basePath || "";
-
-    return IgniterCollectionPath.resolve(basePath, relativePath);
+    return IgniterCollectionPath.resolve(process.cwd(), relativePath);
   }
 
   /**
-   * Resolve action handler path relative to schema file location.
+   * Resolve action handler path relative to current working directory.
    */
   private resolveHandlerPath(relativePath: string): string {
-    // Same logic as hooks for now
     return this.resolveHookPath(relativePath);
   }
 

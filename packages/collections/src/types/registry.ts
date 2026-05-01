@@ -8,8 +8,6 @@
  */
 
 import type { StandardJSONSchemaV1 } from "@standard-schema/spec";
-import type { IgniterCollectionViewDefinition } from "./view";
-
 // =============================================================================
 // SCHEMA DEFINITION (Forward Declaration)
 // =============================================================================
@@ -123,20 +121,31 @@ export interface IgniterCollectionSchemaFile {
   schema?: IgniterCollectionSchemaDefinition;
   /** Hook file references */
   hooks?: IgniterCollectionSchemaHooksConfig;
-
-  /** View definitions */
-  views?: IgniterCollectionViewDefinition[];
 }
 
 /**
  * Configuration for the Schema Registry.
  */
 export interface IgniterCollectionRegistryConfig {
-  /** Path(s) to the directory containing schema JSON files */
+  /** Path(s) to the directory containing schema files */
   registryPath: string | string[];
   /** Base path for resolving collection paths */
   basePath: string;
   /** Pattern to match schema files (default: "*.schema.json") */
+  filePattern?: string;
+  /** Whether to watch for changes (file watching) */
+  watch?: boolean;
+}
+
+/**
+ * Configuration for the View Registry.
+ */
+export interface IgniterCollectionViewRegistryConfig {
+  /** Path(s) to the directory containing view files */
+  registryPath: string | string[];
+  /** Base path for resolving view paths */
+  basePath: string;
+  /** Pattern to match view files (default: "*.view.{json,ts}") */
   filePattern?: string;
   /** Whether to watch for changes (file watching) */
   watch?: boolean;

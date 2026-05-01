@@ -4,7 +4,10 @@ import { BunFsAdapter } from "../../src/adapters/bun-fs.adapter";
 const collections = IgniterCollections.create()
   .withAdapter(new BunFsAdapter())
   .withBasePath(process.cwd())
-  .withSchemaRegistry(['.'], { autoWatch: true, filePattern: '*.fractal.schema.json' })
+  .withWatcher('.', {
+    collections: '*.fractal.schema.json',
+    autoWatch: true,
+  })
   .build();
 
 async function runSample() {
@@ -50,6 +53,6 @@ async function runSample() {
 }
 
 runSample().catch((error) => {
-  collections.stopSchemaWatching();
+  collections.stopWatching();
   console.error("Error running sample:", error);
 });

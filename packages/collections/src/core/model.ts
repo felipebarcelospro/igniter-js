@@ -23,7 +23,6 @@ import type {
   IgniterCollectionDocumentSearchFields,
 } from "../types/collection";
 import type { IIgniterCollectionsManager, IIgniterCollectionModel, FindManyResult } from "../types/manager";
-import type { IgniterCollectionViewDefinition, IIgniterCollectionViewManager } from "../types/view";
 import type {
   IgniterCollectionCountArgs,
   IgniterCollectionCreateArgs,
@@ -38,7 +37,6 @@ import type {
 import { IgniterCollectionParser } from "../utils/parser";
 import { IgniterCollectionPath } from "../utils/path";
 
-import { IgniterCollectionViewManager } from "./view-manager";
 import type { IgniterCollectionTelemetryEventsType } from "src/telemetry";
 
 /**
@@ -46,12 +44,8 @@ import type { IgniterCollectionTelemetryEventsType } from "src/telemetry";
  */
 interface CollectionManagerConfig<
   TSchema extends Record<string, any>,
-  TViews extends Record<string, IgniterCollectionViewDefinition> = Record<
-    string,
-    IgniterCollectionViewDefinition
-  >,
 > {
-  definition: IgniterCollectionModelDefinition<TSchema, TViews>;
+  definition: IgniterCollectionModelDefinition<TSchema>;
   adapter: IgniterCollectionAdapter;
   basePath: string;
   /** Reference to the parent manager (required for hook context) */
@@ -69,13 +63,8 @@ interface CollectionManagerConfig<
  */
 export class IgniterCollectionModelManager<
   TSchema extends Record<string, any> = Record<string, any>,
-  TViews extends Record<string, IgniterCollectionViewDefinition> = Record<
-    string,
-    IgniterCollectionViewDefinition
-  >,
-> implements IIgniterCollectionModel<TSchema, TViews> {
-  readonly definition: IgniterCollectionModelDefinition<TSchema, TViews>;
-  readonly views: IIgniterCollectionViewManager<TSchema, TViews>;
+> implements IIgniterCollectionModel<TSchema> {
+  readonly definition: IgniterCollectionModelDefinition<TSchema>;
   readonly manager: IIgniterCollectionsManager;
   readonly telemetry?: IgniterTelemetryManager<IgniterCollectionTelemetryEventsType>;
   readonly basePath: string;
@@ -85,7 +74,7 @@ export class IgniterCollectionModelManager<
   private readonly globalHooks?: IgniterCollectionModelHooks<TSchema>;
   private readonly parentId?: string;
 
-  constructor(config: CollectionManagerConfig<TSchema, TViews>) {
+  constructor(config: CollectionManagerConfig<TSchema>) {
     this.definition = config.definition;
     this.adapter = config.adapter;
     this.basePath = config.basePath;
@@ -94,12 +83,6 @@ export class IgniterCollectionModelManager<
     this.logger = config.logger;
     this.globalHooks = config.globalHooks;
     this.parentId = config.parentId;
-
-    this.views = new IgniterCollectionViewManager({
-      views: this.definition.views || [],
-      collection: this as any,
-      logger: this.logger,
-    });
   }
 
   /**

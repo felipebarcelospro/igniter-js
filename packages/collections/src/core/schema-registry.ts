@@ -19,14 +19,11 @@ import type {
   IgniterCollectionSchemaHooksConfig,
   IgniterCollectionLoadedSchema,
 } from "../types/registry";
-import type {
-  IgniterCollectionViewDefinition,
-  IgniterCollectionViewDataHook,
-  IgniterCollectionViewActionHandler,
-} from "../types/view";
+
 import { IgniterCollectionId } from "../utils/id";
 import { IgniterCollectionPath } from "../utils/path";
 import { StdSchema } from "../utils/schema";
+import { IgniterCollectionLoader } from "../utils/loader";
 
 /**
  * Callback type for schema change notifications.
@@ -75,6 +72,7 @@ export class IgniterCollectionSchemaRegistry {
   private readonly cache: Map<string, IgniterCollectionModelDefinition<Record<string, any>>> =
     new Map();
   private readonly loadedSchemas: Map<string, IgniterCollectionLoadedSchema> = new Map();
+  private readonly loader: IgniterCollectionLoader;
 
   /** Cleanup function for active watcher */
   private unwatcher?: () => void;
@@ -98,12 +96,13 @@ export class IgniterCollectionSchemaRegistry {
     logger?: IgniterLogger
   ) {
     this.config = {
-      filePattern: "*.schema.json",
+      filePattern: "*.schema.{json,ts}",
       watch: false,
       ...config,
     };
     this.adapter = adapter;
     this.logger = logger;
+    this.loader = new IgniterCollectionLoader(adapter);
   }
 
   /**
@@ -472,18 +471,7 @@ export class IgniterCollectionSchemaRegistry {
    */
   private async loadSchemaFile(filePath: string): Promise<IgniterCollectionLoadedSchema> {
     try {
-      const content = await this.adapter.read(filePath);
-
-      if (content === null) {
-        return {
-          filePath,
-          schema: {} as IgniterCollectionSchemaFile,
-          success: false,
-          error: "File not found",
-        };
-      }
-
-      const parsed = JSON.parse(content) as IgniterCollectionSchemaFile;
+      const parsed = await this.loader.load(filePath) as IgniterCollectionSchemaFile;
 
       // Validate required fields
       if (!parsed.collectionName) {
@@ -526,11 +514,6 @@ export class IgniterCollectionSchemaRegistry {
       ? await this.loadHooks(schemaFile.hooks, filePath)
       : {};
 
-    // Load views if specified
-    const views = schemaFile.views
-      ? await this.loadViews(schemaFile.views, filePath)
-      : undefined;
-
     // Support legacy basePath/filePattern if patterns not provided
     let patterns = schemaFile.patterns;
     if (!patterns) {
@@ -545,7 +528,6 @@ export class IgniterCollectionSchemaRegistry {
       schema: schema,
       hooks: hooks as IgniterCollectionModelHooks<Record<string, any>>,
       subCollections: new Map(),
-      views,
     };
   }
 
@@ -582,80 +564,6 @@ export class IgniterCollectionSchemaRegistry {
     }
 
     return hooks;
-  }
-
-  /**
-   * Load view definitions from a schema file, resolving hook and handler paths.
-   */
-  private async loadViews(
-    views: IgniterCollectionViewDefinition[],
-    schemaFilePath: string
-  ): Promise<IgniterCollectionViewDefinition[]> {
-    const schemaDir = IgniterCollectionPath.dirname(schemaFilePath);
-    const processedViews: IgniterCollectionViewDefinition[] = [];
-
-    for (const view of views) {
-      const processedView = { ...view };
-
-      // Resolve getData hook if it's a string path
-      if (typeof view.getData === "string") {
-        const absolutePath = IgniterCollectionPath.resolve(
-          this.config.basePath,
-          schemaDir,
-          view.getData
-        );
-
-        // Try to dynamically load the hook module
-        const hookModule = (await this.loadHookModule(
-          absolutePath,
-          view.name
-        )) as IgniterCollectionViewDataHook | undefined;
-
-        if (hookModule) {
-          processedView.getData = hookModule;
-        } else {
-          // If loading fails, keep it as absolute path string for ViewManager to handle
-          processedView.getData = absolutePath;
-        }
-      }
-
-      // Resolve action handlers if they are string paths
-      if (view.actions) {
-        processedView.actions = { ...view.actions };
-        for (const [actionId, action] of Object.entries(view.actions)) {
-          if (typeof action.handler === "string") {
-            const absolutePath = IgniterCollectionPath.resolve(
-              this.config.basePath,
-              schemaDir,
-              action.handler
-            );
-
-            // Try to dynamically load the action handler
-            const handlerModule = (await this.loadHookModule(
-              absolutePath,
-              actionId
-            )) as IgniterCollectionViewActionHandler | undefined;
-
-            if (handlerModule) {
-              processedView.actions[actionId] = {
-                ...action,
-                handler: handlerModule,
-              };
-            } else {
-              // Keep as absolute path string
-              processedView.actions[actionId] = {
-                ...action,
-                handler: absolutePath,
-              };
-            }
-          }
-        }
-      }
-
-      processedViews.push(processedView);
-    }
-
-    return processedViews;
   }
 
   /**

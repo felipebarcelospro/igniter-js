@@ -5,3 +5,4 @@
 
 export * from "./collection.builder";
 export * from "./main.builder";
+export * from "./view.builder";

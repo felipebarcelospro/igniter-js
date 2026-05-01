@@ -1,8 +1,16 @@
 # AGENTS.md - @igniter-js/collections
 
-> **Last Updated:** 2026-01-24
-> **Version:** 1.0.0-alpha.1
+> **Last Updated:** 2026-05-01
+> **Version:** 0.2.0
 > **Goal:** This document serves as the complete operational manual for Code Agents (Lia, Kai, Nova, Rex) and maintainers working with the `@igniter-js/collections` package. It follows the 1,000-line "Gold Standard" for robust agent training, ensuring deep understanding of architecture, flows, and troubleshooting.
+
+## Key Changes in v2.0.0
+
+- **Decoupled Views:** Views are no longer tied to collections. They are global entities with access to the full `IIgniterCollectionsManager`.
+- **Unified Watcher:** `withWatcher()` replaces `withSchemaRegistry()`, supporting both collections and views.
+- **TypeScript Discovery:** `.schema.ts` and `.view.ts` files are supported via jiti with hot reload.
+- **Mandatory getData:** All views must define a `getData` hook.
+- **Immutable ViewBuilder:** `IgniterCollectionView.create()` follows the immutable builder pattern.
 
 ---
 
@@ -94,12 +102,67 @@ The `IgniterCollectionSchemaRegistry` allows loading collections from JSON schem
 - **Auto-Prefixing:** If `posts.schema.json` is found in two different folders, the registry uses the parent folder name as a prefix (e.g., `blog:posts` vs `docs:posts`).
 - **Watching:** In Bun, the registry can watch the filesystem. When a schema file is added or modified, the registry reloads it and automatically refreshes the main manager.
 
-#### 3.4 Views & Data Transformations (RFC 6901)
-The Views System introduces a declarative way to shape data for display.
-- **ViewManager:** Coordinates the rendering of views. It handles query merging, hook execution, and transformation chaining.
-- **TransformEngine:** A static engine that applies operations like `group`, `flatten`, and `pivot` to the raw document list.
-- **Stats Calculator:** Performs aggregations over the data set (count, sum, avg) based on field values or match criteria.
-- **JSON Pointer:** We use JSON Pointers for path resolution in the view result, making it easy for UI components to extract specific data nodes.
+#### 3.4 Views & Data Transformations (RFC 6901) — **v2.0 Global Views**
+The Views System was completely refactored in v2.0. Views are now **global first-class citizens** with unrestricted access to the `IIgniterCollectionsManager`.
+
+**Architectural Changes:**
+- **ViewManager (Global):** `IgniterCollectionViewManager` is initialized once per manager instance. It receives `manager: IIgniterCollectionsManager` instead of a single collection.
+- **ViewBuilder:** `IgniterCollectionViewBuilder` creates view definitions independently. `getData` is **mandatory**.
+- **ViewRegistry:** `IgniterCollectionViewRegistry` discovers `.view.json` and `.view.ts` files from the filesystem.
+- **TransformEngine:** Unchanged — still applies `group`, `flatten`, `pivot`.
+- **Stats Calculator:** Unchanged — still computes `count`, `sum`, `avg`, etc.
+- **JSON Pointer:** Unchanged — still used for path resolution.
+
+**Key Design Decisions:**
+- Views have no `defaultQuery` — they fetch data via `getData` hook with full manager access.
+- Views have no `collection` property — they access all collections freely.
+- `withViews()` and `withTypedViews()` were removed from `IgniterCollectionModelBuilder`.
+
+#### 3.5 Unified Watcher & Auto-Discovery
+The `IgniterCollectionWatcher` (configured via `withWatcher()`) is the central orchestrator for runtime discovery.
+
+**Components:**
+- **IgniterCollectionWatcher (Config):** Holds paths, globs, and `autoWatch` flag. Does not perform I/O itself.
+- **IgniterCollectionSchemaRegistry:** Owned by the watcher. Discovers `.schema.{json,ts}` files.
+- **IgniterCollectionViewRegistry:** Owned by the watcher. Discovers `.view.{json,ts}` files.
+- **IgniterCollectionLoader:** Shared utility. Wraps jiti for `.ts` and `JSON.parse` for `.json`.
+
+**Lifecycle:**
+1. `withWatcher(paths, { collections, views, autoWatch })` stores config in builder state.
+2. `build()` passes config to `IgniterCollectionManager`.
+3. Manager initializes `SchemaRegistry` and `ViewRegistry`.
+4. If `autoWatch: true`, `startWatching()` is called automatically.
+5. `refresh()` reloads both collections and views, merging with programmatic definitions.
+
+#### 3.6 TypeScript File Loading via jiti
+`jiti` (from UnJS) provides runtime TypeScript transpilation without ts-node.
+
+**Why jiti:**
+- Native ESM/CJS interoperability
+- `moduleCache: false` enables hot reload
+- `fsCache: true` keeps transpilation performant
+- Bun-compatible via `tryNative: true`
+
+**Configuration:**
+```typescript
+const jiti = createJiti(import.meta.url, {
+  moduleCache: false,  // Critical for hot reload
+  fsCache: true,       // Cache on disk
+  tryNative: true,     // Use native import in Bun
+  interopDefault: true, // Extract default export
+});
+```
+
+**Usage in Loader:**
+```typescript
+// .ts file → jiti.import(filePath, { default: true })
+// .json file → adapter.read() + JSON.parse()
+```
+
+**File Patterns:**
+- Collections: `*.schema.json` or `*.schema.ts`
+- Views: `*.view.json` or `*.view.ts`
+- Hooks: `*.ts` (loaded dynamically by manager)
 
 ---
 
@@ -152,6 +215,28 @@ Efficiently counts matching documents.
 2.  **Optimization:** If no filters are provided, it may optimize by just counting the keys from the adapter (if supported).
 3.  **Return:** Returns the final length of the filtered list.
 
+#### 4.5 Pipeline: `manager.views.render(name)`
+Renders a global view with multi-collection data.
+
+1.  **View Lookup:** Finds view in `IgniterCollectionViewManager.views` Map.
+2.  **Validation:** Confirms `getData` hook exists (throws `VIEW_INVALID_CONFIGURATION` if missing).
+3.  **Telemetry (Started):** Emits `igniter.collections.view.render.started`.
+4.  **Hook Execution:** Calls `getData({ manager, options })`.
+5.  **Transform Engine:** Applies transforms sequentially to `hookResult.items`.
+6.  **Stats Calculation:** Computes declarative stats over transformed items.
+7.  **Telemetry (Success):** Emits `igniter.collections.view.render.success`.
+8.  **Return Result:** Returns `IgniterCollectionViewRenderResult`.
+
+#### 4.6 Pipeline: `manager.refresh()`
+Reloads both collections and views from disk.
+
+1.  **Schema Registry Refresh:** Calls `schemaRegistry.refresh()`.
+2.  **Collection Manager Sync:** Compares old/new collections. Adds/updates/removes managers.
+3.  **View Registry Refresh:** Calls `viewRegistry.refresh()`.
+4.  **View Merge:** Combines watched views with programmatic views. Programmatic wins.
+5.  **Conflict Warning:** Logs `warn` if watched view name collides with programmatic view.
+6.  **Rebuild ViewManager:** Creates new `IgniterCollectionViewManager` with merged views.
+
 ---
 
 ### 5. Detailed Adapter Internal Mappings
@@ -173,9 +258,43 @@ Efficiently counts matching documents.
 
 ---
 
-### 6. Views System Deep Dive
+### 6. Views System Deep Dive (v2.0 Global Views)
 
-#### 6.1 View Actions (Implemented)
+#### 6.1 View Architecture
+Views are **global** and **independent** of collections. They are defined via `IgniterCollectionView.create()` and registered via `.addView()` or discovered via `.withWatcher()`.
+
+**Key Characteristics:**
+- **No defaultQuery:** Views fetch data entirely through the `getData` hook.
+- **No collection property:** The hook receives `manager: IIgniterCollectionsManager` and can access any collection.
+- **Mandatory getData:** `IgniterCollectionViewBuilder.build()` throws `VIEW_INVALID_CONFIGURATION` if `getData` is missing.
+- **Global Manager:** `docs.views.render('dashboard')` accesses the single `IgniterCollectionViewManager` instance.
+
+#### 6.2 View Builder API
+```typescript
+const DashboardView = IgniterCollectionView.create('dashboard')
+  .withTitle('Analytics Dashboard')
+  .withGetData(async ({ manager }) => {
+    const [posts, authors] = await Promise.all([
+      manager.posts.findMany(),
+      manager.authors.findMany(),
+    ]);
+    return {
+      items: posts,
+      stats: { totalPosts: posts.length, totalAuthors: authors.length }
+    };
+  })
+  .withTree([
+    { component: 'Metric', valuePath: '/stats/totalPosts' },
+    { component: 'Table', valuePath: '/items' }
+  ])
+  .addAction('export', {
+    description: 'Export to CSV',
+    handler: async ({ manager, params }) => ({ success: true })
+  })
+  .build();
+```
+
+#### 6.3 View Actions (Implemented)
 - **`group`:** Groups items into a dictionary based on a field value.
   - *Example:* Group posts by `author`.
 - **`flatten`:** flattens nested objects into dot-notation keys.
@@ -183,92 +302,148 @@ Efficiently counts matching documents.
 - **`pivot`:** Reorganizes data from long to wide format.
   - *Config:* `index`, `column`, `value`.
 
-#### 6.2 View Render Flow
-1. **Query Fetch:** Runs `findMany` with the view's `defaultQuery`.
-2. **Hook Execution:** If `getData` hook is present, it's called with the fetched items.
-3. **Transform Engine:** Applies the array of `transforms` sequentially.
-4. **Stats Calculation:** Computes aggregations over the final items list.
-5. **Return Result:** Returns the `IgniterCollectionViewRenderResult`.
+#### 6.4 View Render Flow (v2.0)
+1. **View Lookup:** Finds view by name in global `IgniterCollectionViewManager`.
+2. **Validation:** Confirms `getData` exists.
+3. **Telemetry (Started):** Emits `igniter.collections.view.render.started`.
+4. **Hook Execution:** Calls `getData({ manager, options })`. Returns `{ items, stats?, extra? }`.
+5. **Transform Engine:** Applies `transforms` sequentially to `items`.
+6. **Stats Calculation:** Computes declarative stats over final items.
+7. **Telemetry (Success):** Emits `igniter.collections.view.render.success`.
+8. **Return Result:** Returns `IgniterCollectionViewRenderResult`.
+
+### 7. TypeScript File Loading Deep Dive
+
+#### 7.1 Why TypeScript Files?
+TypeScript schema and view files provide:
+- **Type Safety:** Full IDE support and compile-time checking.
+- **Dynamic Logic:** Use Zod schemas, computed properties, and conditional logic.
+- **Import Reuse:** Share constants, types, and utilities across definitions.
+- **Hot Reload:** `moduleCache: false` ensures changes are picked up immediately.
+
+#### 7.2 File Structure
+
+**Collection Schema (TypeScript):**
+```typescript
+// .fractal/schemas/posts.schema.ts
+import { IgniterCollectionModel } from '@igniter-js/collections';
+import { z } from 'zod';
+
+export default IgniterCollectionModel.create('posts')
+  .withPatterns(['.content/posts/{id}.mdx'])
+  .withSchema(z.object({
+    title: z.string(),
+    publishedAt: z.date(),
+  }))
+  .onCreated(async ({ value, manager }) => {
+    console.log(`Post created: ${value.title}`);
+  })
+  .build();
+```
+
+**View Definition (TypeScript):**
+```typescript
+// .fractal/views/dashboard.view.ts
+import { IgniterCollectionView } from '@igniter-js/collections';
+
+export default IgniterCollectionView.create('dashboard')
+  .withTitle('Analytics Dashboard')
+  .withGetData(async ({ manager }) => {
+    const [posts, authors] = await Promise.all([
+      manager.posts.findMany(),
+      manager.authors.findMany(),
+    ]);
+    return {
+      items: posts,
+      stats: { totalPosts: posts.length, totalAuthors: authors.length }
+    };
+  })
+  .withTree([
+    { component: 'Metric', valuePath: '/stats/totalPosts' }
+  ])
+  .build();
+```
+
+#### 7.3 Hot Reload Mechanism
+1. File is modified on disk.
+2. Adapter `watch` callback fires.
+3. Debounce timer (100ms) prevents excessive reloads.
+4. Registry calls `refresh()`.
+5. `IgniterCollectionLoader.load()` calls `jiti.import()` with `moduleCache: false`.
+6. jiti transpiles the file fresh (ignoring module cache).
+7. New definition replaces old one in manager.
+8. `onSchemaChange` / `onViewChange` callbacks fire.
+
+#### 7.4 Migration from JSON to TypeScript
+Both formats can coexist in the same project:
+```typescript
+const docs = IgniterCollections.create()
+  .withWatcher('.fractal', {
+    collections: '**/schema.{json,ts}',
+    views: '**/view.{json,ts}',
+    autoWatch: true,
+  })
+  .build();
+```
 
 ---
 
-### 7. Hooks System Registry
+### 8. Hook System Deep Dive
 
-| Hook | When? | Context | Return |
-|------|-------|---------|--------|
-| `onCreated` | After creation, before write | `value`, `collection`, `manager` | Modified `value` or `false` |
-| `onUpdated` | After merge, before write | `newValue`, `previousValue`, `collection` | Modified `newValue` or `false` |
-| `onDeleted` | Before write | `value`, `collection`, `manager` | `true` to proceed, `false` to stop |
-| `onRead` | After single fetch | `value`, `collection`, `manager` | Modified `value` or `false` |
-| `onList` | After filtering | `values`, `collection`, `manager` | Modified `values[]` or `false` |
+Hooks are the primary mechanism for extending collection behavior without modifying core logic. They operate at the boundary between the manager and the adapter, allowing transformations, validations, side effects, and event emissions.
 
----
+#### 8.1 Hook Types & Signatures
 
-### 8. Real-World Use Case Library
+| Hook | Timing | Mutates Data | Context |
+|------|--------|--------------|---------|
+| `onCreated` | After validation, before persistence | Yes | `{ value, id?, manager }` |
+| `onUpdated` | After read, before persistence | Yes | `{ value, previousValue, id, manager }` |
+| `onDeleted` | After read, before deletion | Yes (can abort) | `{ value, id, manager }` |
+| `onRead` | After read, before return | Yes | `{ value, id, manager }` |
+| `onList` | After filtering, before return | Yes | `{ items, manager }` |
 
-#### Case 1: Multi-Environment Blog (Local + Cloud)
-A developer wants to work locally with files but deploy to Production using S3 for scalability.
-The manager automatically switches adapters based on the environment, while the rest of the code remains identical.
+#### 8.2 Hook Execution Order
 
-#### Case 2: Multi-Tenant Content Platform
-Each organization has its own isolated collections stored in Redis under a prefix.
-Using `BunRedisAdapter` with dynamic prefixes, we can ensure data isolation and high-performance access.
+For a `create` operation:
+1. Validate input against schema
+2. Call `onCreated` hook
+3. If hook returns `false`, throw `HOOK_CANCELLED`
+4. If hook returns object, use as new value
+5. Persist via adapter
+6. Emit `created` event
 
-#### Case 3: Automated Documentation Site
-A site that automatically registers collections for every folder in a specific path.
-Using `withSchemaRegistry` with a glob pattern allows adding new documentation sections just by creating a new folder with a schema file.
+For an `update` operation:
+1. Read existing document
+2. Merge new data with existing
+3. Validate merged result
+4. Call `onUpdated` hook
+5. If hook returns `false`, throw `HOOK_CANCELLED`
+6. Persist via adapter
+7. Emit `updated` event
 
-#### Case 4: Audited Secure Store
-A collection that requires every deletion to be logged to a separate audit collection.
-Using the `onDeleted` hook, we can trigger a `create` operation on an `audit` collection before allowing the deletion.
+#### 8.3 Global Hooks
 
-#### Case 5: Real-time Collaborative Editor
-Synchronizing content across multiple instances using Redis Pub/Sub events. The `watch` capability in `BunRedisAdapter` allows the manager to emit `updated` events across different servers as soon as a key is modified in Redis.
+Global hooks apply to ALL collections managed by an instance:
+```typescript
+const docs = IgniterCollections.create()
+  .withAdapter(adapter)
+  .withGlobalHooks({
+    onCreated: async ({ value, manager }) => {
+      value.createdAt = new Date().toISOString();
+      return value;
+    }
+  })
+  .build();
+```
 
-#### Case 6: Dynamic Plugin Content
-A multi-plugin CMS where each plugin provides its own content types. The main app uses `withSchemaRegistry` pointing to the `node_modules` of plugins to automatically discover their schemas and build the management UI dynamically.
+Global hooks execute BEFORE collection-specific hooks. If a global hook returns `false`, the operation is cancelled immediately.
 
-#### Case 7: High-Frequency Cache for Microservices
-Using `BunRedisAdapter` with `@igniter-js/collections` as a type-safe cache layer. Service A writes complex objects to Redis, and Service B reads them with full validation, ensuring that data corruption in Redis (due to manual intervention) is caught immediately at the ORM layer.
+#### 8.4 Hook Best Practices
 
-#### Case 8: Multi-Step Content Approval Workflow
-Using hooks to implement an approval state machine. Preventing unpublishing of approved content without specific permissions.
-
-#### Case 9: Global Search Implementation
-By utilizing the native **Full-Text Search (FTS)** capabilities of `findMany`, developers can build powerful global search engines over their Markdown content without external search services. The FTS engine supports `fields` weighting, `threshold` filtering, and Levenshtein-based `fuzzy` matching, automatically attaching `_search` scores to results.
-
-#### Case 10: Automatic Image Optimization on Upload
-A collection that manages image metadata in Markdown. An `onCreated` hook triggers an asynchronous process to optimize the image on S3 and update the Markdown file with the new optimized URL.
-
-#### Case 11: Multi-Language Content Routing
-Using a sub-collection for translations. Managing localized versions of a post within its own directory structure (`/posts/my-post/translations/en.md`).
-
-#### Case 12: Content Versioning with Git Adapters
-Creating a custom adapter that wraps Git commands. When `write` is called, the adapter performs a `git add` and `git commit`, enabling a full history of changes directly at the ORM layer.
-
-#### Case 13: Distributed State for Serverless Functions
-Using `BunRedisAdapter` to share state between short-lived Lambda or Vercel functions. The collections API provides a higher-level abstraction than raw Redis commands.
-
-#### Case 14: Documentation Versioning (v1, v2, etc.)
-Using multiple base paths in `IgniterCollections` to overlay different versions of documentation. The manager resolves documents by checking folders in order, allowing for easy content "inheritance".
-
-#### Case 15: Schema-Driven Form Generation
-Using the registered Zod schemas to automatically generate React forms in the frontend. Since the schemas are shared or discoverable via the Registry, the UI stays in perfect sync with the content requirements.
-
-#### Case 16: Content Migration CLI
-Using two managers to migrate thousands of files from a local disk to the cloud. The code simply iterates over `managerA.posts.findMany()` and calls `managerB.posts.create()`.
-
-#### Case 17: Scheduled Content Publishing
-An `onList` hook that filters out documents where the `publishDate` is in the future. This ensures that "future" posts never appear in the UI.
-
-#### Case 18: Dynamic Navigation Menu Generation
-Using a View with `group` and `sort` transforms to generate a multi-level navigation tree from Markdown frontmatter.
-
-#### Case 19: Content Analytics Overlay
-A View that merges document data with external analytics data using the `getData` hook. The final UI receives a unified object with both content and live view counts.
-
-#### Case 20: Audit Log for Sensitive Content
-Every `update` and `delete` operation on a "secrets" collection is automatically logged to an append-only "audit" collection using lifecycle hooks.
+- **Keep hooks idempotent:** The same hook may run multiple times during retries.
+- **Avoid heavy I/O:** Hooks block the CRUD operation. Use events for async side effects.
+- **Return the value:** Always return the (possibly modified) value object, even if unchanged.
+- **Use manager for cross-collection operations:** Access other collections via `manager.otherCollection`.
 
 ---
 
@@ -340,12 +515,26 @@ Understanding how `@igniter-js/collections` is distributed helps in selecting th
 | `create()` | None | `Builder<{}>` | Static factory for a new builder instance. |
 | `withAdapter()` | `adapter: IgniterCollectionAdapter` | `this` | Sets the filesystem or database adapter. **Required.** |
 | `withBasePath()` | `path: string \| string[]` | `this` | Sets the root path(s) for collection resolution. |
-| `withSchemaRegistry()` | `path: string \| string[], options?` | `this` | Configures dynamic schema loading from folders. |
+| `withWatcher()` | `paths: string \| string[], options?` | `this` | Configures unified watcher for collections and views. |
 | `withTelemetry()` | `telemetry: IgniterTelemetryManager` | `this` | Connects the package to the telemetry system. |
 | `withLogger()` | `logger: IgniterLogger` | `this` | Sets a custom logger for operational tracing. |
 | `withGlobalHooks()` | `hooks: IgniterCollectionModelHooks` | `this` | Applies hooks to all collections managed by this instance. |
 | `addCollection()` | `collection: Definition` | `Builder<T + C>` | Manually registers a collection with full type inference. |
+| `addView()` | `view: ViewDefinition` | `Builder<T>` | Manually registers a global view. |
 | `build()` | None | `Manager<T>` | Validates state and returns the operational Manager. |
+
+#### 12.2 IgniterCollectionViewBuilder (The View Builder)
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `create(name)` | `name: string` | `Builder` | Starts building a view named `name`. |
+| `withTitle()` | `title: string` | `this` | Sets the display title. |
+| `withDescription()` | `description: string` | `this` | Sets the description. |
+| `withGetData()` | `hook: Hook` | `this` | Sets the data hook (**Mandatory**). |
+| `withTree()` | `tree: Node[]` | `this` | Sets the UI component tree. |
+| `withTransform()` | `transform: Transform` | `this` | Adds a data transformation. |
+| `addAction()` | `name: string, action: Action` | `this` | Adds an action. |
+| `build()` | None | `Definition` | Returns the immutable view definition. |
 
 #### 12.2 IgniterCollectionModelBuilder (The Collection Builder)
 
@@ -355,7 +544,6 @@ Understanding how `@igniter-js/collections` is distributed helps in selecting th
 | `withPatterns()` | `patterns: string[]` | `this` | Sets file patterns for resolution (e.g., `['.content/posts/{id}.mdx']`). |
 | `withTemplate()` | `path: string` | `this` | Sets a predefined template path for generating content. |
 | `withSchema()` | `schema: S` | `Builder<Infer<S>>` | Sets the validation schema and updates type inference. |
-| `withViews()` | `views: ViewDefinition[]` | `this` | Registers declarative views for data shaping. |
 | `onCreated()` | `hook: Hook` | `this` | Register a callback for the creation lifecycle. |
 | `onUpdated()` | `hook: Hook` | `this` | Register a callback for the update lifecycle. |
 | `onDeleted()` | `hook: Hook` | `this` | Register a callback for the deletion lifecycle. |
@@ -413,6 +601,293 @@ By utilizing the native **Full-Text Search (FTS)** capabilities of `findMany`, d
 #### Case 10: Automatic Image Optimization on Upload
 A collection that manages image metadata in Markdown. An `onCreated` hook triggers an asynchronous process to optimize the image on S3 and update the Markdown file with the new optimized URL.
 
+#### Case 11: E-commerce Product Catalog with Variants
+A product collection with computed variant pricing based on base price and modifier rules.
+```typescript
+const products = IgniterCollectionModel.create('products')
+  .withPatterns(['.content/products/{id}.mdx'])
+  .withSchema(z.object({
+    name: z.string(),
+    basePrice: z.number(),
+    variants: z.array(z.object({
+      sku: z.string(),
+      modifier: z.number().default(0),
+    })),
+  }))
+  .onRead(({ value }) => ({
+    ...value,
+    variants: value.variants.map(v => ({
+      ...v,
+      finalPrice: value.basePrice + v.modifier
+    }))
+  }))
+  .build();
+```
+
+#### Case 12: Multi-Tenant SaaS with Isolated Collections
+Each tenant gets isolated collections using path prefixing. The adapter is shared, but base paths differ.
+```typescript
+const tenantDocs = (tenantId: string) => IgniterCollections.create()
+  .withAdapter(new BunFsAdapter())
+  .withBasePath(`.data/tenants/${tenantId}`)
+  .withWatcher('.fractal/schemas', { autoWatch: true })
+  .build();
+```
+
+#### Case 13: Documentation Site with Versioning
+Store multiple versions of documentation as separate collections, with a view that aggregates the latest version of each page.
+```typescript
+const docs = IgniterCollections.create()
+  .withAdapter(adapter)
+  .addCollection(IgniterCollectionModel.create('v1').withPatterns(['.content/v1/{id}.mdx']).build())
+  .addCollection(IgniterCollectionModel.create('v2').withPatterns(['.content/v2/{id}.mdx']).build())
+  .addView(IgniterCollectionView.create('latest')
+    .withTitle('Latest Documentation')
+    .withGetData(async ({ manager }) => {
+      const v2Docs = await manager.v2.findMany();
+      return { items: v2Docs };
+    })
+    .build()
+  )
+  .build();
+```
+
+#### Case 14: AI Agent Memory System
+An AI agent uses collections to store episodic memories with semantic search capabilities.
+```typescript
+const memories = IgniterCollectionModel.create('memories')
+  .withPatterns(['.data/memories/{id}.mdx'])
+  .withSchema(z.object({
+    agentId: z.string(),
+    timestamp: z.string().datetime(),
+    content: z.string(),
+    embedding: z.array(z.number()).optional(),
+    importance: z.number().min(0).max(1),
+  }))
+  .onCreated(({ value }) => ({
+    ...value,
+    id: crypto.randomUUID(),
+    timestamp: new Date().toISOString(),
+  }))
+  .build();
+```
+
+#### Case 15: Feature Flag Management
+Store feature flags in Markdown with environment-specific overrides.
+```typescript
+const flags = IgniterCollectionModel.create('feature-flags')
+  .withPatterns(['.config/flags/{id}.mdx'])
+  .withSchema(z.object({
+    name: z.string(),
+    enabled: z.boolean(),
+    environments: z.record(z.boolean()).default({}),
+    rolloutPercentage: z.number().min(0).max(100).default(100),
+  }))
+  .build();
+
+// Check flag for current environment
+const isEnabled = (flag: any, env: string) => {
+  return flag.environments[env] ?? flag.enabled;
+};
+```
+
+#### Case 16: Automated Changelog Generation
+Use hooks to automatically generate changelog entries when releases are created.
+```typescript
+const releases = IgniterCollectionModel.create('releases')
+  .withPatterns(['.content/releases/{id}.mdx'])
+  .onCreated(async ({ value, manager }) => {
+    await manager.changelog.create({
+      data: {
+        version: value.version,
+        date: new Date().toISOString(),
+        changes: value.changes,
+      }
+    });
+    return value;
+  })
+  .build();
+```
+
+#### Case 17: Content Translation Pipeline
+A view that aggregates untranslated content across multiple language collections.
+```typescript
+const TranslationView = IgniterCollectionView.create('pending-translations')
+  .withTitle('Pending Translations')
+  .withGetData(async ({ manager }) => {
+    const [en, es, fr] = await Promise.all([
+      manager.en.findMany(),
+      manager.es.findMany(),
+      manager.fr.findMany(),
+    ]);
+    const enIds = new Set(en.map(d => d.id));
+    const esIds = new Set(es.map(d => d.id));
+    const frIds = new Set(fr.map(d => d.id));
+    const pending = en.filter(doc => !esIds.has(doc.id) || !frIds.has(doc.id));
+    return { items: pending };
+  })
+  .build();
+```
+
+#### Case 18: Audit Trail with Immutable Logs
+Every mutation creates an append-only audit log entry.
+```typescript
+const auditLog = IgniterCollectionModel.create('audit-log')
+  .withPatterns(['.data/audit/{id}.mdx'])
+  .build();
+
+const sensitiveData = IgniterCollectionModel.create('secrets')
+  .withPatterns(['.data/secrets/{id}.mdx'])
+  .onUpdated(async ({ value, previousValue, manager }) => {
+    await auditLog.create({
+      data: {
+        action: 'UPDATE',
+        entityId: value.id,
+        changedFields: Object.keys(value).filter(k => value[k] !== previousValue[k]),
+        timestamp: new Date().toISOString(),
+      }
+    });
+    return value;
+  })
+  .build();
+```
+
+#### Case 19: Dynamic Form Builder
+Store form definitions as collections and render them dynamically via views.
+```typescript
+const forms = IgniterCollectionModel.create('forms')
+  .withPatterns(['.content/forms/{id}.mdx'])
+  .withSchema(z.object({
+    title: z.string(),
+    fields: z.array(z.object({
+      name: z.string(),
+      type: z.enum(['text', 'email', 'select', 'textarea']),
+      required: z.boolean().default(false),
+      options: z.array(z.string()).optional(),
+    })),
+  }))
+  .build();
+
+const FormView = IgniterCollectionView.create('form-list')
+  .withTitle('Available Forms')
+  .withGetData(async ({ manager }) => {
+    const items = await manager.forms.findMany();
+    return {
+      items,
+      stats: { totalForms: items.length }
+    };
+  })
+  .withTree([
+    { component: 'FormList', valuePath: '/items' },
+  ])
+  .build();
+```
+
+#### Case 20: Scheduled Content Publishing
+Use hooks to enforce publication schedules by checking `publishAt` dates.
+```typescript
+const posts = IgniterCollectionModel.create('posts')
+  .withPatterns(['.content/posts/{id}.mdx'])
+  .withSchema(z.object({
+    title: z.string(),
+    publishAt: z.string().datetime(),
+    status: z.enum(['draft', 'published', 'scheduled']),
+  }))
+  .onRead(({ value }) => {
+    const now = new Date();
+    const publishAt = new Date(value.publishAt);
+    if (value.status === 'scheduled' && publishAt <= now) {
+      return { ...value, status: 'published' };
+    }
+    return value;
+  })
+  .build();
+```
+
+#### Case 21: Multi-Collection Analytics Dashboard
+A global view aggregates data from multiple collections for a unified analytics dashboard.
+```typescript
+const Dashboard = IgniterCollectionView.create('dashboard')
+  .withTitle('Site Analytics')
+  .withGetData(async ({ manager }) => {
+    const [posts, authors, comments] = await Promise.all([
+      manager.posts.findMany(),
+      manager.authors.findMany(),
+      manager.comments.count()
+    ]);
+    return {
+      items: posts,
+      stats: {
+        totalPosts: posts.length,
+        totalAuthors: authors.length,
+        totalComments: comments
+      }
+    };
+  })
+  .withTree([
+    { component: 'Metric', valuePath: '/stats/totalPosts' },
+    { component: 'Metric', valuePath: '/stats/totalAuthors' },
+    { component: 'Metric', valuePath: '/stats/totalComments' },
+    { component: 'Table', valuePath: '/items' }
+  ])
+  .build();
+```
+
+#### Case 22: TypeScript Schema with Computed Fields
+Using TypeScript schemas to define collections with computed fields and complex validation.
+```typescript
+// .fractal/schemas/products.schema.ts
+import { IgniterCollectionModel } from '@igniter-js/collections';
+import { z } from 'zod';
+
+export default IgniterCollectionModel.create('products')
+  .withPatterns(['.content/products/{id}.mdx'])
+  .withSchema(z.object({
+    name: z.string(),
+    price: z.number().positive(),
+    category: z.enum(['electronics', 'clothing', 'food']),
+    tags: z.array(z.string()).optional(),
+  }))
+  .onCreated(({ value }) => {
+    // Auto-generate slug from name
+    return { ...value, slug: value.name.toLowerCase().replace(/\s+/g, '-') };
+  })
+  .build();
+```
+
+#### Case 23: Content Migration with Views
+Using views to migrate content between different storage backends.
+```typescript
+const MigrationView = IgniterCollectionView.create('migration')
+  .withTitle('Content Migration')
+  .withGetData(async ({ manager }) => {
+    const posts = await manager.posts.findMany();
+    for (const post of posts) {
+      await manager.archivedPosts.create({ data: post });
+    }
+    return { items: [], stats: { migrated: posts.length } };
+  })
+  .build();
+```
+
+#### Case 24: Real-time Collaborative Dashboard
+Using views with hot reload to provide real-time collaborative dashboards.
+```typescript
+const docs = IgniterCollections.create()
+  .withAdapter(new BunFsAdapter())
+  .withWatcher('.fractal', {
+    views: '**/dashboard.view.ts',
+    autoWatch: true,
+  })
+  .build();
+
+// Dashboard view is automatically reloaded when file changes
+setInterval(async () => {
+  const dashboard = await docs.views.render('dashboard');
+  broadcastToClients(dashboard);
+}, 5000);
+```
+
 ### 15. Troubleshooting & Error Code Library (Expanded)
 
 #### `EMPTY_RESULT_IN_HIDDEN_DIRECTORIES`
@@ -434,6 +909,70 @@ A collection that manages image metadata in Markdown. An `onCreated` hook trigge
 - **Context:** During `write` or `delete`.
 - **Cause:** The process doesn't have write permissions to the `basePath`.
 - **Solution:** Check `chmod` on Linux/macOS or verify S3 IAM policies.
+
+#### `COLLECTION_NOT_FOUND`
+- **Context:** Accessing `manager.unknownCollection`.
+- **Cause:** The collection name does not exist in the registry.
+- **Solution:** Verify the collection was added via `.addCollection()` or discovered by the watcher. Check for typos in the collection name.
+
+#### `DOCUMENT_NOT_FOUND`
+- **Context:** `findUnique()`, `update()`, or `delete()` with a non-existent ID.
+- **Cause:** The requested document ID does not match any file in the collection's patterns.
+- **Solution:** Verify the ID exists. Use `findMany()` to list available documents.
+
+#### `SCHEMA_VALIDATION_FAILED`
+- **Context:** During `create()` or `update()` when data does not match the schema.
+- **Cause:** Missing required fields, wrong types, or values outside constraints.
+- **Solution:** Inspect `error.details.validation.errors` for specific field failures. Ensure all required fields are present.
+
+#### `VIEW_INVALID_CONFIGURATION`
+- **Context:** Calling `IgniterCollectionViewBuilder.build()` without `getData`.
+- **Cause:** The view builder was not provided a mandatory `getData` hook.
+- **Solution:** Always call `.withGetData(hook)` before `.build()`.
+
+#### `TRANSPILE_FAILED`
+- **Context:** Loading a `.schema.ts` or `.view.ts` file via jiti.
+- **Cause:** TypeScript syntax error, missing import, or incompatible module format.
+- **Solution:** Check the file for syntax errors. Ensure all imports are resolvable. Verify the file uses `export default`.
+
+#### `WATCHER_INITIALIZATION_FAILED`
+- **Context:** Starting `autoWatch` on an unsupported adapter.
+- **Cause:** The adapter does not implement the `watch` method.
+- **Solution:** Use an adapter that supports watching (e.g., `BunFsAdapter`, `NodeFsAdapter`). Disable `autoWatch` for adapters without watch support.
+
+#### `HOOK_EXECUTION_ERROR`
+- **Context:** A hook throws an unhandled exception.
+- **Cause:** Logic error inside a custom hook function.
+- **Solution:** Wrap hook logic in try/catch. Log the error with context before re-throwing.
+
+---
+
+### 15.1 TypeScript Schema Migration Guide
+
+When migrating from JSON schemas to TypeScript schemas:
+
+1. Rename `.schema.json` to `.schema.ts`
+2. Wrap the content in `export default IgniterCollectionModel.create('name')...build()`
+3. Import Zod or your schema library at the top
+4. Move hooks from string paths to inline functions (or import them)
+5. Update `withWatcher` globs to include `*.schema.ts`
+6. Verify hot reload works by modifying the file and checking `manager.definitions()`
+
+### 15.2 jiti Performance Tuning
+
+For production environments with many TypeScript files:
+- `moduleCache: false` is required for hot reload but has overhead
+- `fsCache: true` minimizes re-transpilation of unchanged files
+- Consider pre-compiling `.ts` files to `.js` for production deployments
+- The loader automatically falls back to `JSON.parse` for `.json` files (no jiti overhead)
+
+### 15.3 View Conflict Resolution
+
+When a watched view and a programmatic view share the same name:
+1. The programmatic view always wins
+2. A `logger.warn` is emitted: `View "X" from watcher overridden by programmatic definition`
+3. The watched view is silently discarded
+4. To avoid conflicts, use namespaced view names in watched files: `team-dashboard.view.ts` → `team-dashboard`
 
 ---
 

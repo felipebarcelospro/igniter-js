@@ -10,6 +10,6 @@
       "@igniter-js/*": ["../*/src"]
     }
   },
-  "include": ["src/**/*", "examples/**/*"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "../core"]
 }

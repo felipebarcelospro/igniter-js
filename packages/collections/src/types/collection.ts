@@ -4,7 +4,6 @@
  */
 
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { IgniterCollectionViewDefinition } from "./view";
 import type {
   IgniterCollectionOnCreatedHook,
   IgniterCollectionOnDeletedHook,
@@ -116,15 +115,11 @@ export interface IgniterCollectionModelHooks<TSchema = any> {
  * Complete collection model definition.
  *
  * @typeParam TSchema - The schema type for document frontmatter
- * @typeParam TViews - Map of view definitions
+
  * @typeParam TName - The collection name literal type
  */
 export interface IgniterCollectionModelDefinition<
   TSchema = unknown,
-  TViews extends Record<string, IgniterCollectionViewDefinition> = Record<
-    string,
-    IgniterCollectionViewDefinition
-  >,
   TName extends string = string,
 > {
   /** Collection name (used for manager access) */
@@ -143,9 +138,6 @@ export interface IgniterCollectionModelDefinition<
   subCollections: Map<string, IgniterCollectionSubCollectionDefinition<unknown>>;
   /** Parent collection name (for sub-collections) */
   parentCollection?: string;
-
-  /** View definitions for this collection */
-  views?: IgniterCollectionViewDefinition[];
 }
 
 /**

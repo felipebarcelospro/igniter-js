@@ -78,6 +78,11 @@ export {
   IgniterCollectionModelBuilder,
 } from "./builders/collection.builder";
 
+export {
+  IgniterCollectionView,
+  IgniterCollectionViewBuilder,
+} from "./builders/view.builder";
+
 // =============================================================================
 // ERRORS
 // =============================================================================
@@ -207,3 +212,7 @@ export {
 export {
   IgniterCollectionViewJSONPointer,
 } from "./utils/view-json-pointer";
+
+export {
+  IgniterCollectionLoader,
+} from "./utils/loader";

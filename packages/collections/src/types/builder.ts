@@ -13,16 +13,30 @@ import type {
   IgniterCollectionSubCollectionDefinition,
 } from "./collection";
 import type { IgniterCollectionTelemetryEventsType } from "src/telemetry";
+import type { IgniterCollectionViewDefinition } from "./view";
+
+/**
+ * Configuration for the unified watcher.
+ */
+export interface IgniterCollectionWatcherConfig {
+  /** Path(s) to watch for schema and view files */
+  paths: string | string[];
+  /** Glob pattern for collection schema files (default: "*.schema.{json,ts}") */
+  collections?: string;
+  /** Glob pattern for view files (default: "*.view.{json,ts}") */
+  views?: string;
+  /** Whether to auto-watch for file changes */
+  autoWatch?: boolean;
+}
 
 /**
  * Internal state for IgniterCollectionModelBuilder.
  *
  * @typeParam TSchema - The schema type being accumulated
- * @typeParam TViews - Map of view definitions
+
  */
 export interface IgniterCollectionsModelBuilderState<
   TSchema = unknown,
-  TViews extends Record<string, any> = Record<string, any>,
 > {
   /** Collection name */
   name: string;
@@ -40,8 +54,6 @@ export interface IgniterCollectionsModelBuilderState<
   subCollections: Map<string, IgniterCollectionSubCollectionDefinition<unknown>>;
   /** Parent collection (for sub-collections) */
   parentCollection?: string;
-  /** View definitions */
-  views?: any[];
 }
 
 /**
@@ -81,10 +93,8 @@ export interface IgniterCollectionsBuilderState<
   basePath?: string | string[];
   /** Filesystem adapter */
   adapter?: IgniterCollectionAdapter;
-  /** Path(s) to schema registry JSON files */
-  schemaRegistryPath?: string | string[];
-  /** Schema registry options */
-  schemaRegistryOptions?: IgniterCollectionSchemaRegistryOptions;
+  /** Watcher configuration for auto-discovery */
+  watcherConfig?: IgniterCollectionWatcherConfig;
   /** Telemetry manager */
   telemetry?: IgniterTelemetryManager<IgniterCollectionTelemetryEventsType>;
   /** Logger instance */
@@ -93,4 +103,6 @@ export interface IgniterCollectionsBuilderState<
   collections: TCollections;
   /** Global hooks applied to all collections */
   globalHooks?: IgniterCollectionModelHooks<any>;
+  /** Registered views */
+  views?: IgniterCollectionViewDefinition[];
 }

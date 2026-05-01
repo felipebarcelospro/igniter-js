@@ -1,11 +1,10 @@
 import type { IgniterCollectionViewDataHook } from "src/types";
 
+const analyticsHook: IgniterCollectionViewDataHook = async ({ manager }) => {
+  const posts = await manager.posts.findMany();
 
-const analyticsHook: IgniterCollectionViewDataHook = async (context) => {
-  const { items = [] } = context;
-  
   return {
-    items: items.map(item => ({ ...item, enriched: true })),
+    items: posts.map((item: any) => ({ ...item, enriched: true })),
     stats: {
       customStat: 100
     },

@@ -6,3 +6,5 @@
 export * from "./model";
 export * from "./manager";
 export * from "./schema-registry";
+export * from "./view-registry";
+export * from "./view-manager";

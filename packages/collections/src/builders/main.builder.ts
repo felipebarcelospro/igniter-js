@@ -17,13 +17,14 @@ import {
 import type { IgniterCollectionAdapter } from "../types/adapter";
 import type {
   IgniterCollectionsBuilderState,
-  IgniterCollectionSchemaRegistryOptions,
+  IgniterCollectionWatcherConfig,
 } from "../types/builder";
 import type {
   IgniterCollectionModelDefinition,
   IgniterCollectionModelHooks,
 } from "../types/collection";
-import type { IIgniterCollectionModel, IIgniterCollectionsManager } from "../types/manager";
+import type { IIgniterCollectionsManager } from "../types/manager";
+import type { IgniterCollectionViewDefinition } from "../types/view";
 
 /**
  * Immutable builder for creating IgniterCollections.
@@ -113,41 +114,71 @@ export class IgniterCollectionsBuilder<
   }
 
   /**
-   * Set the path(s) to schema registry JSON files.
+   * Configure the unified watcher for auto-discovering collections and views.
    *
-   * When set, collections can be loaded from JSON schema files.
+   * The watcher scans directories for `.schema.{json,ts}` and `.view.{json,ts}`
+   * files, loading them automatically at build time and optionally watching
+   * for changes.
    *
-   * @param path - Path or array of paths to schema directory
-   * @param options - Optional configuration for schema registry
+   * @param paths - Directory or directories to watch
+   * @param options - Watcher configuration
    * @returns New builder instance
    *
-   * @example Without auto-watch (default)
+   * @example Basic usage
    * ```typescript
-   * .withSchemaRegistry('.fractal/schemas')
+   * .withWatcher('.fractal')
    * ```
    *
-   * @example With multiple paths and globs
+   * @example With custom globs
    * ```typescript
-   * .withSchemaRegistry(['.fractal/schemas', 'plugins/*\/schemas'])
-   * ```
-   *
-   * @example With auto-watch enabled
-   * ```typescript
-   * .withSchemaRegistry('.fractal/schemas', { autoWatch: true })
+   * .withWatcher('.fractal', {
+   *   collections: 'schema.{json,ts}',
+   *   views: 'view.{json,ts}',
+   *   autoWatch: true,
+   * })
    * ```
    */
-  withSchemaRegistry(
-    path: string | string[],
-    options?: IgniterCollectionSchemaRegistryOptions
-  ): IgniterCollectionsBuilder<
-    TCollections & {
-      [key: string]: IgniterCollectionModelDefinition<Record<string, any>, any>;
-    }
-  > {
+  withWatcher(
+    paths: string | string[],
+    options?: Omit<IgniterCollectionWatcherConfig, 'paths'>
+  ): IgniterCollectionsBuilder<TCollections> {
     return new IgniterCollectionsBuilder({
       ...this.state,
-      schemaRegistryPath: path,
-      schemaRegistryOptions: options,
+      watcherConfig: {
+        paths,
+        ...options,
+      },
+    });
+  }
+
+  /**
+   * Add a view definition to the manager.
+   *
+   * Programmatic views take precedence over watched views.
+   * When a conflict occurs, a warning is logged.
+   *
+   * @param view - View definition from builder
+   * @returns New builder instance
+   *
+   * @example
+   * ```typescript
+   * const DashboardView = IgniterCollectionView.create('dashboard')
+   *   .withTitle('Dashboard')
+   *   .withGetData(async ({ manager }) => ({ items: [] }))
+   *   .build();
+   *
+   * const docs = IgniterCollections.create()
+   *   .withAdapter(adapter)
+   *   .addView(DashboardView)
+   *   .build();
+   * ```
+   */
+  addView(
+    view: IgniterCollectionViewDefinition
+  ): IgniterCollectionsBuilder<TCollections> {
+    return new IgniterCollectionsBuilder({
+      ...this.state,
+      views: [...(this.state.views || []), view],
     });
   }
 
@@ -200,10 +231,10 @@ export class IgniterCollectionsBuilder<
    * @param collection - Collection definition from builder
    * @returns New builder instance with collection type added
    */
-  addCollection<TSchema extends Record<string, any>, TViews extends Record<string, any>, TName extends string>(
-    collection: IgniterCollectionModelDefinition<TSchema, TViews, TName>
+  addCollection<TSchema extends Record<string, any>, TName extends string>(
+    collection: IgniterCollectionModelDefinition<TSchema, TName>
   ): IgniterCollectionsBuilder<
-    TCollections & { [K in TName]: IgniterCollectionModelDefinition<TSchema, TViews, TName> }
+    TCollections & { [K in TName]: IgniterCollectionModelDefinition<TSchema, TName> }
   > {
     return new IgniterCollectionsBuilder({
       ...this.state,
@@ -211,7 +242,7 @@ export class IgniterCollectionsBuilder<
         ...this.state.collections,
         [collection.name]: collection,
       } as TCollections & {
-        [K in TName]: IgniterCollectionModelDefinition<TSchema, TViews, TName>;
+        [K in TName]: IgniterCollectionModelDefinition<TSchema, TName>;
       },
     });
   }
@@ -243,9 +274,8 @@ export class IgniterCollectionsBuilder<
       basePath,
       adapter: this.state.adapter,
       collections: this.state.collections,
-      schemaRegistryPath: this.state.schemaRegistryPath,
-      schemaAutoWatch: this.state.schemaRegistryOptions?.autoWatch,
-      schemaFilePattern: this.state.schemaRegistryOptions?.filePattern,
+      watcherConfig: this.state.watcherConfig,
+      views: this.state.views,
       telemetry: this.state.telemetry,
       logger: this.state.logger,
       globalHooks: this.state.globalHooks,

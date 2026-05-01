@@ -1,6 +1,5 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec';
-import type { IIgniterCollectionModel, IIgniterCollectionsManager } from './manager';
-import type { NormalizeSchema } from './query';
+import type { IIgniterCollectionsManager } from './manager';
 
 /**
  * Definition of a view for a collection.
@@ -18,9 +17,6 @@ export interface IgniterCollectionViewDefinition {
   
   /** UI component tree (json-render compatible) */
   tree: IgniterCollectionViewNode[];
-  
-  /** Default query options for this view */
-  defaultQuery?: IgniterCollectionViewQuery;
   
   /** Declarative stats definitions */
   stats?: IgniterCollectionViewStats;
@@ -168,30 +164,21 @@ export interface IgniterCollectionViewTransform {
 }
 
 /**
- * Context provided to data hooks.
+ * Context provided to data hooks for global views.
  */
-export interface IgniterCollectionViewDataHookContext<TSchema = any> {
+export interface IgniterCollectionViewDataHookContext {
   /** Global collections manager (access to all collections) */
   manager: IIgniterCollectionsManager;
 
-  /** Current collection model */
-  collection: IIgniterCollectionModel<NormalizeSchema<TSchema>>;
-
   /** User-provided query options */
   options?: IgniterCollectionViewQuery;
-  
-  /** Base items from standard query (if hook is post-process) */
-  items?: any[];
-  
-  /** Base stats calculated (if hook is post-process) */
-  stats?: Record<string, any>;
 }
 
 /**
- * Data hook function signature.
+ * Data hook function signature for global views.
  */
-export type IgniterCollectionViewDataHook<TSchema = any> = (
-  context: IgniterCollectionViewDataHookContext<TSchema>
+export type IgniterCollectionViewDataHook = (
+  context: IgniterCollectionViewDataHookContext
 ) => Promise<IgniterCollectionViewDataHookResult>;
 
 /**
@@ -260,35 +247,31 @@ export interface IgniterCollectionViewRenderOptions {
 }
 
 /**
- * Interface for the view manager with automatic type inference.
- * TViews is a mapped type from view names to their definitions.
+ * Interface for the global view manager.
  */
-export interface IIgniterCollectionViewManager<
-  TSchema = any,
-  TViews extends Record<string, IgniterCollectionViewDefinition> = Record<string, IgniterCollectionViewDefinition>
-> {
+export interface IIgniterCollectionViewManager {
   /**
-   * List all views for this collection.
+   * List all registered views.
    */
   list(): IgniterCollectionViewDefinition[];
   
   /**
-   * Get a specific view by name (type-safe).
+   * Get a specific view by name.
    * 
-   * @param name - View name (autocompleted from TViews keys)
+   * @param name - View name
    * @returns View definition or undefined if not found
    */
-  get<K extends keyof TViews>(name: K): TViews[K] | undefined;
+  get(name: string): IgniterCollectionViewDefinition | undefined;
   
   /**
-   * Render a view with data (type-safe).
+   * Render a view with data.
    * 
-   * @param name - View name (autocompleted from TViews keys)
+   * @param name - View name
    * @param options - Optional query overrides
    * @returns Rendered view result with data
    */
-  render<K extends keyof TViews>(
-    name: K,
+  render(
+    name: string,
     options?: IgniterCollectionViewRenderOptions
   ): Promise<IgniterCollectionViewRenderResult>;
   
@@ -298,7 +281,7 @@ export interface IIgniterCollectionViewManager<
    * @param viewId - View name
    * @returns Array of action IDs
    */
-  listActions(viewId: keyof TViews): string[];
+  listActions(viewId: string): string[];
   
   /**
    * Execute an action with validated parameters.
@@ -309,7 +292,7 @@ export interface IIgniterCollectionViewManager<
    * @returns Action execution result
    */
   executeAction<TParams = any, TResult = any>(
-    viewId: keyof TViews,
+    viewId: string,
     actionId: string,
     params: TParams
   ): Promise<IgniterCollectionViewActionResult<TResult>>;

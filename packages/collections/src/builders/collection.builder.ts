@@ -21,17 +21,11 @@ import type {
   IgniterCollectionOnUpdatedHook,
 } from "../types/hooks";
 import { IgniterCollectionId } from "../utils/id";
-import type { IgniterCollectionViewDefinition } from "../types/view";
-
 /**
  * Internal state for the collection builder.
  */
 interface CollectionBuilderState<
   TSchema = unknown,
-  TViews extends Record<string, IgniterCollectionViewDefinition> = Record<
-    string,
-    IgniterCollectionViewDefinition
-  >,
 > {
   name: string;
   patterns: string[];
@@ -41,14 +35,13 @@ interface CollectionBuilderState<
   hooks: IgniterCollectionModelHooks<TSchema>;
   subCollections: Map<string, IgniterCollectionSubCollectionDefinition<unknown>>;
   parentCollection?: string;
-  views?: IgniterCollectionViewDefinition[];
 }
 
 /**
  * Immutable builder for defining markdown collections.
  *
  * @typeParam TSchema - The schema type for document frontmatter
- * @typeParam TViews - Map of view definitions
+
  * @typeParam TName - The literal type of the collection name
  *
  * @example Basic collection
@@ -83,16 +76,12 @@ interface CollectionBuilderState<
  */
 export class IgniterCollectionModelBuilder<
   TSchema = unknown,
-  TViews extends Record<string, IgniterCollectionViewDefinition> = Record<
-    string,
-    IgniterCollectionViewDefinition
-  >,
   TName extends string = string,
 > {
   /**
    * Private constructor - use static create() method.
    */
-  private constructor(private readonly state: CollectionBuilderState<TSchema, TViews>) { }
+  private constructor(private readonly state: CollectionBuilderState<TSchema>) { }
 
   /**
    * Create a new collection builder.
@@ -103,11 +92,7 @@ export class IgniterCollectionModelBuilder<
   static create<
     TName extends string,
     TSchema = unknown,
-    TViews extends Record<string, IgniterCollectionViewDefinition> = Record<
-      string,
-      IgniterCollectionViewDefinition
-    >,
-  >(name: TName): IgniterCollectionModelBuilder<TSchema, TViews, TName> {
+  >(name: TName): IgniterCollectionModelBuilder<TSchema, TName> {
     return new IgniterCollectionModelBuilder({
       name,
       patterns: ["{id}.mdx"],
@@ -122,7 +107,7 @@ export class IgniterCollectionModelBuilder<
    * @param patterns - Array of patterns with placeholders
    * @returns New builder instance
    */
-  withPatterns(patterns: string[]): IgniterCollectionModelBuilder<TSchema, TViews, TName> {
+  withPatterns(patterns: string[]): IgniterCollectionModelBuilder<TSchema, TName> {
     return new IgniterCollectionModelBuilder({
       ...this.state,
       patterns,
@@ -135,7 +120,7 @@ export class IgniterCollectionModelBuilder<
    * @param path - Path to template file
    * @returns New builder instance
    */
-  withTemplate(path: string): IgniterCollectionModelBuilder<TSchema, TViews, TName> {
+  withTemplate(path: string): IgniterCollectionModelBuilder<TSchema, TName> {
     return new IgniterCollectionModelBuilder({
       ...this.state,
       template: path,
@@ -150,12 +135,12 @@ export class IgniterCollectionModelBuilder<
    */
   withSchema<S extends StandardSchemaV1>(
     schema: S
-  ): IgniterCollectionModelBuilder<StandardSchemaV1.InferOutput<S>, TViews, TName> {
+  ): IgniterCollectionModelBuilder<StandardSchemaV1.InferOutput<S>, TName> {
     return new IgniterCollectionModelBuilder({
       ...this.state,
       schema,
       hooks: {} as IgniterCollectionModelHooks<StandardSchemaV1.InferOutput<S>>,
-    }) as IgniterCollectionModelBuilder<StandardSchemaV1.InferOutput<S>, TViews, TName>;
+    }) as IgniterCollectionModelBuilder<StandardSchemaV1.InferOutput<S>, TName>;
   }
 
   /**
@@ -166,7 +151,7 @@ export class IgniterCollectionModelBuilder<
    */
   onCreated(
     hook: IgniterCollectionOnCreatedHook<TSchema>
-  ): IgniterCollectionModelBuilder<TSchema, TViews, TName> {
+  ): IgniterCollectionModelBuilder<TSchema, TName> {
     return new IgniterCollectionModelBuilder({
       ...this.state,
       hooks: {
@@ -184,7 +169,7 @@ export class IgniterCollectionModelBuilder<
    */
   onUpdated(
     hook: IgniterCollectionOnUpdatedHook<TSchema>
-  ): IgniterCollectionModelBuilder<TSchema, TViews, TName> {
+  ): IgniterCollectionModelBuilder<TSchema, TName> {
     return new IgniterCollectionModelBuilder({
       ...this.state,
       hooks: {
@@ -202,7 +187,7 @@ export class IgniterCollectionModelBuilder<
    */
   onDeleted(
     hook: IgniterCollectionOnDeletedHook<TSchema>
-  ): IgniterCollectionModelBuilder<TSchema, TViews, TName> {
+  ): IgniterCollectionModelBuilder<TSchema, TName> {
     return new IgniterCollectionModelBuilder({
       ...this.state,
       hooks: {
@@ -220,7 +205,7 @@ export class IgniterCollectionModelBuilder<
    */
   onRead(
     hook: IgniterCollectionOnReadHook<TSchema>
-  ): IgniterCollectionModelBuilder<TSchema, TViews, TName> {
+  ): IgniterCollectionModelBuilder<TSchema, TName> {
     return new IgniterCollectionModelBuilder({
       ...this.state,
       hooks: {
@@ -238,7 +223,7 @@ export class IgniterCollectionModelBuilder<
    */
   onList(
     hook: IgniterCollectionOnListHook<TSchema>
-  ): IgniterCollectionModelBuilder<TSchema, TViews, TName> {
+  ): IgniterCollectionModelBuilder<TSchema, TName> {
     return new IgniterCollectionModelBuilder({
       ...this.state,
       hooks: {
@@ -254,31 +239,7 @@ export class IgniterCollectionModelBuilder<
    * @param viewConfigs - Array of view definitions
    * @returns New builder instance
    */
-  withViews(
-    viewConfigs: IgniterCollectionViewDefinition[]
-  ): IgniterCollectionModelBuilder<TSchema, TViews, TName> {
-    return new IgniterCollectionModelBuilder({
-      ...this.state,
-      views: [...(this.state.views || []), ...viewConfigs],
-    });
-  }
 
-  /**
-   * Define typed views for this collection.
-   * This method is used primarily for type inference when views are defined programmatically.
-   *
-   * @typeParam V - Map of view definitions
-   * @param viewConfigs - Array of view definitions
-   * @returns New builder instance with typed views
-   */
-  withTypedViews<V extends Record<string, IgniterCollectionViewDefinition>>(
-    viewConfigs: IgniterCollectionViewDefinition[]
-  ): IgniterCollectionModelBuilder<TSchema, V, TName> {
-    return new IgniterCollectionModelBuilder({
-      ...this.state,
-      views: [...(this.state.views || []), ...viewConfigs],
-    }) as any;
-  }
 
   /**
    * Access sub-collection builder factory.
@@ -296,7 +257,8 @@ export class IgniterCollectionModelBuilder<
   get collections(): {
     create: <SubName extends string>(
       name: SubName
-    ) => IgniterCollectionSubCollectionBuilder<unknown, SubName, TSchema, TViews, TName>;
+    ) => IgniterCollectionSubCollectionBuilder<unknown, SubName, TSchema, TName>;
+
   } {
     return {
       create: <SubName extends string>(name: SubName) => {
@@ -304,7 +266,6 @@ export class IgniterCollectionModelBuilder<
           unknown,
           SubName,
           TSchema,
-          TViews,
           TName
         >({ name, hooks: {} }, this);
       },
@@ -316,7 +277,7 @@ export class IgniterCollectionModelBuilder<
    *
    * @returns Immutable collection definition
    */
-  build(): IgniterCollectionModelDefinition<TSchema, TViews, TName> {
+  build(): IgniterCollectionModelDefinition<TSchema, TName> {
     return {
       name: this.state.name as TName,
       patterns: this.state.patterns,
@@ -326,7 +287,6 @@ export class IgniterCollectionModelBuilder<
       hooks: this.state.hooks,
       subCollections: new Map(this.state.subCollections),
       parentCollection: this.state.parentCollection,
-      views: this.state.views ?? [],
     };
   }
 }
@@ -338,10 +298,6 @@ class IgniterCollectionSubCollectionBuilder<
   TSchema = unknown,
   TName extends string = string,
   TParentSchema = unknown,
-  TParentViews extends Record<string, IgniterCollectionViewDefinition> = Record<
-    string,
-    IgniterCollectionViewDefinition
-  >,
   TParentName extends string = string,
 > {
   constructor(
@@ -354,7 +310,6 @@ class IgniterCollectionSubCollectionBuilder<
     },
     private readonly parent: IgniterCollectionModelBuilder<
       TParentSchema,
-      TParentViews,
       TParentName
     >
   ) { }
@@ -365,7 +320,6 @@ class IgniterCollectionSubCollectionBuilder<
     TSchema,
     TName,
     TParentSchema,
-    TParentViews,
     TParentName
   > {
     return new IgniterCollectionSubCollectionBuilder(
@@ -380,7 +334,6 @@ class IgniterCollectionSubCollectionBuilder<
     StandardSchemaV1.InferOutput<S>,
     TName,
     TParentSchema,
-    TParentViews,
     TParentName
   > {
     return new IgniterCollectionSubCollectionBuilder(
@@ -390,7 +343,6 @@ class IgniterCollectionSubCollectionBuilder<
       StandardSchemaV1.InferOutput<S>,
       TName,
       TParentSchema,
-      TParentViews,
       TParentName
     >;
   }
@@ -401,7 +353,6 @@ class IgniterCollectionSubCollectionBuilder<
     TSchema,
     TName,
     TParentSchema,
-    TParentViews,
     TParentName
   > {
     return new IgniterCollectionSubCollectionBuilder(
@@ -416,7 +367,6 @@ class IgniterCollectionSubCollectionBuilder<
     TSchema,
     TName,
     TParentSchema,
-    TParentViews,
     TParentName
   > {
     return new IgniterCollectionSubCollectionBuilder(
@@ -431,7 +381,6 @@ class IgniterCollectionSubCollectionBuilder<
     TSchema,
     TName,
     TParentSchema,
-    TParentViews,
     TParentName
   > {
     return new IgniterCollectionSubCollectionBuilder(
@@ -446,7 +395,6 @@ class IgniterCollectionSubCollectionBuilder<
     TSchema,
     TName,
     TParentSchema,
-    TParentViews,
     TParentName
   > {
     return new IgniterCollectionSubCollectionBuilder(
@@ -461,7 +409,6 @@ class IgniterCollectionSubCollectionBuilder<
     TSchema,
     TName,
     TParentSchema,
-    TParentViews,
     TParentName
   > {
     return new IgniterCollectionSubCollectionBuilder(

@@ -8,7 +8,7 @@
 [![Bun](https://img.shields.io/badge/Bun-1.0+-orange)](https://bun.sh)
 
 **Type-safe ORM for content collections**  
-Prisma-like API for Markdown, JSON, and YAML files with schema validation, lifecycle hooks, and declarative views.
+Prisma-like API for Markdown, JSON, and YAML files with schema validation, lifecycle hooks, declarative views, and TypeScript-first configuration.
 
 [Quick Start](#-quick-start) • [Documentation](https://igniterjs.com/docs/collections) • [Examples](#-real-world-examples) • [API Reference](#-api-reference)
 
@@ -20,11 +20,12 @@ Prisma-like API for Markdown, JSON, and YAML files with schema validation, lifec
 
 Managing content-driven applications shouldn't require a database. Whether you're building a documentation site, a blog, or a configuration management system, you need:
 
-- ✅ **Type-safe content** — Catch errors at build time, not runtime
-- ✅ **Familiar API** — Prisma-like queries you already know
-- ✅ **Runtime flexibility** — Deploy anywhere (Bun, Node.js, Redis, S3)
-- ✅ **Developer experience** — Autocomplete everywhere, zero boilerplate
-- ✅ **Production-ready** — Lifecycle hooks, validation, and observability built-in
+- **Type-safe content** — Catch errors at build time, not runtime
+- **Familiar API** — Prisma-like queries you already know
+- **Runtime flexibility** — Deploy anywhere (Bun, Node.js, Redis, S3)
+- **Developer experience** — Autocomplete everywhere, zero boilerplate
+- **Production-ready** — Lifecycle hooks, validation, and observability built-in
+- **TypeScript-first** — Define collections and views in `.ts` files with hot reload
 
 ---
 
@@ -100,6 +101,7 @@ console.log('Created post:', post.id);
 │                   Your Application                       │
 ├─────────────────────────────────────────────────────────┤
 │  docs.posts.findMany({ where: { published: true } })    │
+│  docs.views.render('dashboard')                         │
 └────────────┬────────────────────────────────────────────┘
              │ Type-safe API
              ▼
@@ -109,6 +111,14 @@ console.log('Created post:', post.id);
 │  │    Posts     │  │    Docs      │  │   Authors    │  │
 │  │  Manager     │  │  Manager     │  │   Manager    │  │
 │  └──────────────┘  └──────────────┘  └──────────────┘  │
+│                                                          │
+│  ┌─────────────────────────────────────────────────────┐│
+│  │        IgniterCollectionViewManager                  ││
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐          ││
+│  │  │ Dashboard│  │ Analytics│  │   Admin  │          ││
+│  │  │  View    │  │   View   │  │   View   │          ││
+│  │  └──────────┘  └──────────┘  └──────────┘          ││
+│  └─────────────────────────────────────────────────────┘│
 └────────────┬────────────────────────────────────────────┘
              │ Hooks + Validation
              ▼
@@ -134,7 +144,8 @@ console.log('Created post:', post.id);
 - **Adapter** → Pluggable storage backend (filesystem, Redis, S3)
 - **Schema** → Runtime validation (Zod, JSON Schema, StandardSchemaV1)
 - **Hooks** → Lifecycle interception (`.onCreated()`, `.onDeleted()`)
-- **Views** → Declarative data shaping (stats, transforms, actions)
+- **Views** → Global declarative data shaping with multi-collection access
+- **Watcher** → Unified filesystem discovery for collections and views
 
 ---
 
@@ -209,31 +220,23 @@ const searchResults = await docs.posts.findMany({
         description: { weight: 1.5, fuzzy: true },
         content: { weight: 1 }
       },
-      threshold: 0.1, // Minimum match score
-      fuzzy: true     // Global fuzzy fallback
+      threshold: 0.1,
+      fuzzy: true
     }
   }
 });
-// searchResults[0]._search.score contains the match score
-// searchResults[0]._search.matches contains the matched fields
 
 // Field Selection (Select & Exclude)
 const lightweightPosts = await docs.posts.findMany({
   select: {
     id: true,
     title: true,
-    // When using select, fields not specified are excluded
   }
 });
 
 // Count matching documents
 const count = await docs.posts.count({
   where: { published: true },
-});
-
-// Find unique document
-const post = await docs.posts.findUnique({
-  where: { id: 'my-post-id' },
 });
 ```
 
@@ -265,7 +268,7 @@ const Posts = IgniterCollectionModel.create('posts')
   
   // Audit deletions
   .onDeleted(async ({ value, manager }) => {
-    await manager.collection('audit').create({
+    await manager.audit.create({
       data: {
         action: 'deleted',
         collection: 'posts',
@@ -303,24 +306,15 @@ docs.on('posts:updated', ({ newValue, previousValue }) => {
 import { z } from 'zod';
 
 const blogPostSchema = z.object({
-  // Required fields
   title: z.string().min(1).max(200),
   description: z.string().min(10).max(500),
   author: z.string(),
-  
-  // Optional with defaults
   published: z.boolean().default(false),
   featured: z.boolean().default(false),
-  
-  // Complex types
   tags: z.array(z.string()).min(1).max(10),
   category: z.enum(['tutorial', 'guide', 'news', 'update']),
-  
-  // Dates
   publishedAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime().optional(),
-  
-  // Nested objects
   seo: z.object({
     title: z.string().optional(),
     description: z.string().optional(),
@@ -342,598 +336,154 @@ const post = await docs.posts.create({
     category: 'tutorial',
   },
 });
-
-// ✅ Type-safe access
-console.log(post.title); // string
-console.log(post.published); // boolean (default: false)
-console.log(post.tags); // string[]
 ```
 
-### Views System (Declarative UI Data)
+---
 
-Views allow you to shape data for specific UI needs without custom query logic.
+## 🎨 Views System (Global & Multi-Collection)
+
+Views are **global first-class citizens** with unrestricted access to all collections. They allow you to shape data for specific UI needs without custom query logic.
+
+### Programmatic Views
 
 ```typescript
-const Posts = IgniterCollectionModel.create('posts')
-  .withSchema(postSchema)
-  .withViews([
-    {
-      name: 'dashboard',
-      title: 'Blog Dashboard',
-      
-      // Default query for this view
-      defaultQuery: {
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-      },
-      
-      // Stats (aggregations)
+import { IgniterCollectionView } from '@igniter-js/collections';
+
+const DashboardView = IgniterCollectionView.create('dashboard')
+  .withTitle('Blog Dashboard')
+  .withGetData(async ({ manager }) => {
+    const [posts, authors, comments] = await Promise.all([
+      manager.posts.findMany(),
+      manager.authors.findMany(),
+      manager.comments.count()
+    ]);
+    return {
+      items: posts,
       stats: {
-        totalPosts: { type: 'count' },
-        publishedCount: { type: 'count', where: { published: true } },
-        averageViews: { type: 'avg', field: 'views' },
-      },
-      
-      // Transformations
-      transforms: [
-        { type: 'group', field: 'category' },
-      ],
-      
-      // UI component tree (JSON-compatible)
-      tree: [
-        {
-          component: 'Metric',
-          props: { title: 'Total Posts' },
-          valuePath: '/stats/totalPosts',
-        },
-        {
-          component: 'Table',
-          props: { columns: ['title', 'category', 'views'] },
-          valuePath: '/items',
-        },
-      ],
-    },
+        totalPosts: posts.length,
+        totalAuthors: authors.length,
+        totalComments: comments
+      }
+    };
+  })
+  .withTree([
+    { component: 'Metric', props: { title: 'Total Posts' }, valuePath: '/stats/totalPosts' },
+    { component: 'Metric', props: { title: 'Total Authors' }, valuePath: '/stats/totalAuthors' },
+    { component: 'Metric', props: { title: 'Total Comments' }, valuePath: '/stats/totalComments' },
+    { component: 'Table', props: { columns: ['title', 'category', 'views'] }, valuePath: '/items' },
   ])
+  .addAction('export', {
+    description: 'Export to CSV',
+    async handler({ manager, params }) {
+      const posts = await manager.posts.findMany();
+      // ... export logic
+      return { success: true, fileUrl: '/exports/posts.csv' };
+    }
+  })
   .build();
 
-// Render the view
-const dashboard = await docs.posts.views.render('dashboard');
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .addCollection(Posts)
+  .addCollection(Authors)
+  .addCollection(Comments)
+  .addView(DashboardView)
+  .build();
 
-console.log(dashboard.stats.totalPosts); // 42
-console.log(dashboard.stats.publishedCount); // 28
-console.log(dashboard.items); // Grouped by category
+// Render the global view
+const dashboard = await docs.views.render('dashboard');
+console.log(dashboard.stats.totalPosts);    // 42
+console.log(dashboard.stats.totalAuthors);  // 8
+console.log(dashboard.items);               // All posts
 ```
 
-### Dynamic Schema Registry (Plugin Architecture)
-
-The Schema Registry allows you to define collections entirely in JSON files—perfect for plugin systems, CMS platforms, or any scenario where collections need to be added/removed without code changes.
-
-#### Complete Schema File Structure
-
-Here's a **complete** schema definition showing all available capabilities:
+### View Definition (JSON File)
 
 ```json
-// .fractal/schemas/posts.schema.json
+// .fractal/views/dashboard.view.json
 {
-  "name": "posts",
-  "patterns": [".content/posts/{id}.mdx"],
-  
-  "schema": {
-    "type": "object",
-    "properties": {
-      "title": { "type": "string", "minLength": 1, "maxLength": 200 },
-      "description": { "type": "string", "minLength": 10 },
-      "author": { "type": "string" },
-      "published": { "type": "boolean", "default": false },
-      "featured": { "type": "boolean", "default": false },
-      "tags": { 
-        "type": "array", 
-        "items": { "type": "string" },
-        "minItems": 1
-      },
-      "category": { 
-        "type": "string",
-        "enum": ["tutorial", "guide", "news", "update"]
-      },
-      "views": { "type": "number", "default": 0 },
-      "publishedAt": { "type": "string", "format": "date-time" },
-      "seo": {
-        "type": "object",
-        "properties": {
-          "title": { "type": "string" },
-          "description": { "type": "string" },
-          "image": { "type": "string", "format": "uri" }
-        }
-      }
-    },
-    "required": ["title", "description", "author"]
-  },
-  
-  "hooks": {
-    "onCreated": ".fractal/schemas/hooks/posts.onCreate.ts",
-    "onUpdated": ".fractal/schemas/hooks/posts.onUpdate.ts",
-    "onDeleted": ".fractal/schemas/hooks/posts.onDelete.ts",
-    "onList": ".fractal/schemas/hooks/posts.onList.ts"
-  },
-  
-  "views": [
-    {
-      "name": "dashboard",
-      "title": "Blog Dashboard",
-      "description": "Overview of blog posts with key metrics",
-      
-      "defaultQuery": {
-        "orderBy": { "createdAt": "desc" },
-        "take": 50
-      },
-      
-      "stats": {
-        "totalPosts": {
-          "type": "count"
-        },
-        "publishedCount": {
-          "type": "count",
-          "where": { "published": true }
-        },
-        "draftCount": {
-          "type": "count",
-          "where": { "published": false }
-        },
-        "featuredCount": {
-          "type": "count",
-          "where": { "featured": true }
-        },
-        "totalViews": {
-          "type": "sum",
-          "field": "views"
-        },
-        "averageViews": {
-          "type": "avg",
-          "field": "views"
-        }
-      },
-      
-      "transforms": [
-        {
-          "type": "group",
-          "field": "category"
-        }
-      ],
-      
-      "tree": [
-        {
-          "component": "Grid",
-          "props": { "columns": 4, "gap": 4 },
-          "children": [
-            {
-              "component": "Metric",
-              "props": { 
-                "title": "Total Posts",
-                "icon": "FileText"
-              },
-              "valuePath": "/stats/totalPosts"
-            },
-            {
-              "component": "Metric",
-              "props": { 
-                "title": "Published",
-                "icon": "CheckCircle",
-                "color": "green"
-              },
-              "valuePath": "/stats/publishedCount"
-            },
-            {
-              "component": "Metric",
-              "props": { 
-                "title": "Drafts",
-                "icon": "Edit",
-                "color": "orange"
-              },
-              "valuePath": "/stats/draftCount"
-            },
-            {
-              "component": "Metric",
-              "props": { 
-                "title": "Total Views",
-                "icon": "Eye"
-              },
-              "valuePath": "/stats/totalViews"
-            }
-          ]
-        },
-        {
-          "component": "Table",
-          "props": {
-            "columns": [
-              { "key": "title", "label": "Title" },
-              { "key": "category", "label": "Category" },
-              { "key": "author", "label": "Author" },
-              { "key": "views", "label": "Views" },
-              { "key": "published", "label": "Published" }
-            ]
-          },
-          "valuePath": "/items"
-        }
-      ],
-      
-      "actions": {
-        "publish": {
-          "description": "Publish a draft post",
-          "params": {
-            "type": "object",
-            "properties": {
-              "postId": { "type": "string" }
-            },
-            "required": ["postId"]
-          },
-          "handler": ".fractal/schemas/actions/posts.publish.ts",
-          "confirm": {
-            "title": "Publish Post",
-            "message": "Are you sure you want to publish this post?",
-            "variant": "info"
-          }
-        },
-        "unpublish": {
-          "description": "Unpublish a published post",
-          "params": {
-            "type": "object",
-            "properties": {
-              "postId": { "type": "string" }
-            },
-            "required": ["postId"]
-          },
-          "handler": ".fractal/schemas/actions/posts.unpublish.ts",
-          "confirm": {
-            "title": "Unpublish Post",
-            "message": "This will hide the post from public view.",
-            "variant": "warning"
-          }
-        },
-        "toggleFeatured": {
-          "description": "Toggle featured status",
-          "params": {
-            "type": "object",
-            "properties": {
-              "postId": { "type": "string" }
-            },
-            "required": ["postId"]
-          },
-          "handler": ".fractal/schemas/actions/posts.toggleFeatured.ts"
-        },
-        "bulkDelete": {
-          "description": "Delete multiple posts",
-          "params": {
-            "type": "object",
-            "properties": {
-              "postIds": { 
-                "type": "array",
-                "items": { "type": "string" }
-              }
-            },
-            "required": ["postIds"]
-          },
-          "handler": ".fractal/schemas/actions/posts.bulkDelete.ts",
-          "confirm": {
-            "title": "Delete Posts",
-            "message": "This action cannot be undone. Are you sure?",
-            "variant": "danger"
-          }
-        }
-      }
-    },
-    
-    {
-      "name": "analytics",
-      "title": "Content Analytics",
-      "description": "Performance metrics for published content",
-      
-      "defaultQuery": {
-        "where": { "published": true },
-        "orderBy": { "views": "desc" },
-        "take": 20
-      },
-      
-      "stats": {
-        "topPerformer": {
-          "type": "custom",
-          "fn": ".fractal/schemas/stats/posts.topPerformer.ts"
-        },
-        "totalEngagement": {
-          "type": "sum",
-          "field": "views",
-          "where": { "published": true }
-        }
-      },
-      
-      "transforms": [
-        {
-          "type": "group",
-          "field": "author"
-        }
-      ],
-      
-      "tree": [
-        {
-          "component": "Chart",
-          "props": {
-            "type": "bar",
-            "title": "Top 10 Posts by Views"
-          },
-          "valuePath": "/items"
-        }
-      ]
-    }
+  "name": "dashboard",
+  "title": "Blog Dashboard",
+  "getData": "./hooks/dashboard.ts",
+  "tree": [
+    { "component": "Metric", "valuePath": "/stats/totalPosts" },
+    { "component": "Table", "valuePath": "/items" }
   ]
 }
 ```
 
-#### Hook Files (External TypeScript)
-
-Hooks can be defined in external files for better maintainability:
-
-**`.fractal/schemas/hooks/posts.onCreate.ts`**
+### View Definition (TypeScript File)
 
 ```typescript
-import type { IgniterCollectionOnCreatedHook } from '@igniter-js/collections';
+// .fractal/views/dashboard.view.ts
+import { IgniterCollectionView } from '@igniter-js/collections';
 
-export const onCreated: IgniterCollectionOnCreatedHook<any> = async ({ value, manager }) => {
-  // Add automatic timestamps
-  return {
-    ...value,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    slug: value.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, ''),
-  };
-};
-```
-
-**`.fractal/schemas/hooks/posts.onUpdate.ts`**
-
-```typescript
-import type { IgniterCollectionOnUpdatedHook } from '@igniter-js/collections';
-
-export const onUpdated: IgniterCollectionOnUpdatedHook<any> = async ({ 
-  newValue, 
-  previousValue 
-}) => {
-  // Prevent unpublishing featured posts
-  if (previousValue.featured && !newValue.published) {
-    throw new Error('Cannot unpublish a featured post. Remove featured status first.');
-  }
-  
-  // Update timestamp
-  return {
-    ...newValue,
-    updatedAt: new Date().toISOString(),
-  };
-};
-```
-
-**`.fractal/schemas/hooks/posts.onDelete.ts`**
-
-```typescript
-import type { IgniterCollectionOnDeletedHook } from '@igniter-js/collections';
-
-export const onDeleted: IgniterCollectionOnDeletedHook<any> = async ({ 
-  value, 
-  manager 
-}) => {
-  // Create audit log
-  await manager.collection('audit').create({
-    data: {
-      action: 'deleted',
-      collection: 'posts',
-      documentId: value.id,
-      documentTitle: value.title,
-      deletedBy: 'system',
-      timestamp: new Date().toISOString(),
-    },
-  });
-  
-  return true; // Proceed with deletion
-};
-```
-
-**`.fractal/schemas/hooks/posts.onList.ts`**
-
-```typescript
-import type { IgniterCollectionOnListHook } from '@igniter-js/collections';
-
-export const onList: IgniterCollectionOnListHook<any> = async ({ values }) => {
-  // Filter out future scheduled posts
-  const now = new Date();
-  
-  return values.filter((post) => {
-    if (!post.published) return false;
-    if (!post.publishedAt) return true;
-    
-    return new Date(post.publishedAt) <= now;
-  });
-};
-```
-
-#### View Action Handlers
-
-Actions can also be defined in external files:
-
-**`.fractal/schemas/actions/posts.publish.ts`**
-
-```typescript
-import type { IgniterCollectionViewActionHandler } from '@igniter-js/collections';
-
-export const handler: IgniterCollectionViewActionHandler = async ({ 
-  manager, 
-  params 
-}) => {
-  try {
-    const post = await manager.collection('posts').findUnique({
-      where: { id: params.postId },
-    });
-    
-    if (!post) {
-      return {
-        success: false,
-        error: 'Post not found',
-      };
-    }
-    
-    if (post.published) {
-      return {
-        success: false,
-        error: 'Post is already published',
-      };
-    }
-    
-    const updated = await manager.collection('posts').update({
-      where: { id: params.postId },
-      data: {
-        published: true,
-        publishedAt: new Date().toISOString(),
-      },
-    });
-    
+export default IgniterCollectionView.create('dashboard')
+  .withTitle('Analytics Dashboard')
+  .withGetData(async ({ manager }) => {
+    const posts = await manager.posts.findMany();
     return {
-      success: true,
-      data: updated,
-      updates: {
-        '/stats/publishedCount': '+1',
-        '/stats/draftCount': '-1',
-      },
+      items: posts,
+      stats: { totalPosts: posts.length }
     };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
-};
+  })
+  .withTree([
+    { component: 'Metric', valuePath: '/stats/totalPosts' }
+  ])
+  .build();
 ```
 
-**`.fractal/schemas/actions/posts.toggleFeatured.ts`**
+### Executing View Actions
 
 ```typescript
-import type { IgniterCollectionViewActionHandler } from '@igniter-js/collections';
+// Execute an action on a global view
+const result = await docs.views.executeAction('dashboard', 'export', {
+  format: 'csv'
+});
 
-export const handler: IgniterCollectionViewActionHandler = async ({ 
-  manager, 
-  params 
-}) => {
-  const post = await manager.collection('posts').findUnique({
-    where: { id: params.postId },
-  });
-  
-  if (!post) {
-    return { success: false, error: 'Post not found' };
-  }
-  
-  const updated = await manager.collection('posts').update({
-    where: { id: params.postId },
-    data: {
-      featured: !post.featured,
-    },
-  });
-  
-  return {
-    success: true,
-    data: updated,
-    updates: {
-      '/stats/featuredCount': updated.featured ? '+1' : '-1',
-    },
-  };
-};
-```
-
-**`.fractal/schemas/actions/posts.bulkDelete.ts`**
-
-```typescript
-import type { IgniterCollectionViewActionHandler } from '@igniter-js/collections';
-
-export const handler: IgniterCollectionViewActionHandler = async ({ 
-  manager, 
-  params 
-}) => {
-  const deletedIds: string[] = [];
-  const errors: Array<{ id: string; error: string }> = [];
-  
-  for (const postId of params.postIds) {
-    try {
-      await manager.collection('posts').delete({
-        where: { id: postId },
-      });
-      deletedIds.push(postId);
-    } catch (error) {
-      errors.push({
-        id: postId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  }
-  
-  return {
-    success: errors.length === 0,
-    data: {
-      deleted: deletedIds.length,
-      failed: errors.length,
-      errors,
-    },
-    updates: {
-      '/stats/totalPosts': `-${deletedIds.length}`,
-    },
-  };
-};
-```
-
-**`.fractal/schemas/stats/posts.topPerformer.ts`**
-
-```typescript
-import type { IgniterCollectionDocument } from '@igniter-js/collections';
-
-export function topPerformer(items: IgniterCollectionDocument<any>[]): any {
-  if (items.length === 0) return null;
-  
-  return items.reduce((top, current) => {
-    return (current.views || 0) > (top.views || 0) ? current : top;
-  });
+if (result.success) {
+  console.log('Export ready:', result.fileUrl);
+} else {
+  console.error('Export failed:', result.error);
 }
 ```
 
-#### Initializing with Schema Registry
+---
 
-**Option 1: Auto-Discovery (Recommended)**
+## 🔍 Unified Watcher (Auto-Discovery)
+
+The watcher discovers collections and views from the filesystem, supporting both JSON and TypeScript files with hot reload.
+
+### Basic Auto-Discovery
 
 ```typescript
-import { IgniterCollections } from '@igniter-js/collections';
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
-
 const docs = IgniterCollections.create()
   .withAdapter(new NodeFsAdapter())
   .withBasePath(process.cwd())
-  .withSchemaRegistry('.fractal/schemas/*.schema.json', {
-    autoWatch: true, // Hot-reload on schema changes (dev mode)
+  .withWatcher('.fractal', {
+    collections: '**/schema.{json,ts}',  // Collection definitions
+    views: '**/view.{json,ts}',          // View definitions
+    autoWatch: true,                     // Hot reload on file changes
   })
   .build();
 
-// Collections are available automatically!
+// Collections and views are available automatically!
 const posts = await docs.posts.findMany();
-const authors = await docs.authors.findMany();
-const comments = await docs.comments.findMany();
-
-// All collections discovered from .fractal/schemas/
+const dashboard = await docs.views.render('dashboard');
 ```
 
-**Option 2: Multiple Directories (Plugin System)**
+### Multiple Directories (Plugin System)
 
 ```typescript
 const docs = IgniterCollections.create()
   .withAdapter(new NodeFsAdapter())
-  .withSchemaRegistry([
-    '.fractal/schemas/**/*.schema.json',     // Core schemas
-    'plugins/*/schemas/*.schema.json',       // Plugin schemas
-    'node_modules/@my-org/*/schemas/*.json', // NPM package schemas
+  .withWatcher([
+    '.fractal',                          // Core schemas
+    'plugins/*/schemas',                 // Plugin schemas
+    'node_modules/@my-org/*/schemas',    // NPM package schemas
   ], {
+    collections: '**/schema.{json,ts}',
+    views: '**/view.{json,ts}',
     autoWatch: process.env.NODE_ENV === 'development',
   })
   .build();
@@ -948,214 +498,97 @@ await docs['docs:posts'].findMany();
 await docs.posts.findMany(); // Core posts
 ```
 
-#### Complete Usage Examples
+### Collection Schema File (JSON)
 
-**Example 1: Using Registry Collections**
+```json
+// .fractal/schemas/posts.schema.json
+{
+  "name": "posts",
+  "patterns": [".content/posts/{id}.mdx"],
+  "schema": {
+    "type": "object",
+    "properties": {
+      "title": { "type": "string", "minLength": 1 },
+      "author": { "type": "string" },
+      "published": { "type": "boolean", "default": false }
+    },
+    "required": ["title", "author"]
+  }
+}
+```
+
+### Collection Schema File (TypeScript)
 
 ```typescript
-// The manager is already aware of all schema-defined collections
-const docs = IgniterCollections.create()
-  .withAdapter(new NodeFsAdapter())
-  .withSchemaRegistry('.fractal/schemas')
+// .fractal/schemas/posts.schema.ts
+import { IgniterCollectionModel } from '@igniter-js/collections';
+import { z } from 'zod';
+
+export default IgniterCollectionModel.create('posts')
+  .withPatterns(['.content/posts/{id}.mdx'])
+  .withSchema(z.object({
+    title: z.string(),
+    author: z.string(),
+    published: z.boolean().default(false),
+  }))
+  .onCreated(({ value }) => ({
+    ...value,
+    createdAt: new Date().toISOString(),
+  }))
   .build();
-
-// CRUD operations work exactly the same
-const post = await docs.posts.create({
-  data: {
-    title: 'My First Post',
-    description: 'This is a test post',
-    author: 'John Doe',
-    category: 'tutorial',
-    tags: ['typescript', 'igniter'],
-  },
-  content: '# Hello World\n\nThis is the content.',
-});
-
-// Hooks defined in .onCreate.ts run automatically
-console.log(post.slug); // 'my-first-post' (auto-generated)
-console.log(post.createdAt); // '2026-01-24T...' (auto-added)
-
-// Find with filters
-const tutorials = await docs.posts.findMany({
-  where: {
-    category: 'tutorial',
-    published: true,
-  },
-  orderBy: { views: 'desc' },
-});
 ```
 
-**Example 2: Using Views**
-
-```typescript
-// Render the dashboard view
-const dashboard = await docs.posts.views.render('dashboard');
-
-console.log(dashboard.stats);
-// {
-//   totalPosts: 42,
-//   publishedCount: 28,
-//   draftCount: 14,
-//   featuredCount: 5,
-//   totalViews: 15420,
-//   averageViews: 367
-// }
-
-console.log(dashboard.items);
-// {
-//   tutorial: [{ id: '...', data: {...} }, ...],
-//   guide: [{ id: '...', data: {...} }, ...],
-//   news: [{ id: '...', data: {...} }, ...],
-// }
-
-// Render analytics view
-const analytics = await docs.posts.views.render('analytics');
-console.log(analytics.stats.topPerformer);
-// { id: 'post-123', data: { title: 'Most Popular Post', views: 5000 } }
-```
-
-**Example 3: Executing View Actions**
-
-```typescript
-// Get the view manager
-const postsView = docs.posts.views;
-
-// Execute the publish action
-const result = await postsView.executeAction('publish', {
-  postId: 'draft-post-123',
-});
-
-if (result.success) {
-  console.log('Post published!', result.data);
-  // UI can update state using result.updates
-} else {
-  console.error('Publish failed:', result.error);
-}
-
-// Toggle featured status
-await postsView.executeAction('toggleFeatured', {
-  postId: 'post-123',
-});
-
-// Bulk delete
-const bulkResult = await postsView.executeAction('bulkDelete', {
-  postIds: ['post-1', 'post-2', 'post-3'],
-});
-
-console.log(`Deleted ${bulkResult.data.deleted} posts`);
-if (bulkResult.data.failed > 0) {
-  console.error('Failed:', bulkResult.data.errors);
-}
-```
-
-**Example 4: Hot-Reloading Schemas (Development)**
+### Hot Reload (Development)
 
 ```typescript
 const docs = IgniterCollections.create()
   .withAdapter(new NodeFsAdapter())
-  .withSchemaRegistry('.fractal/schemas', {
+  .withWatcher('.fractal', {
+    collections: '**/schema.{json,ts}',
+    views: '**/view.{json,ts}',
     autoWatch: true,
   })
   .build();
 
-// Start watching for schema changes
-docs.startSchemaWatching((event) => {
-  console.log('Schema changed:', event);
-  // { type: 'added' | 'updated' | 'removed', name: 'posts' }
-});
+// Start watching for file changes
+await docs.startWatching();
 
-// Now edit .fractal/schemas/posts.schema.json
+// Now edit .fractal/schemas/posts.schema.ts
 // The manager automatically reloads the schema!
 
 // Manually refresh if needed
-await docs.refreshSchemas();
+await docs.refresh();
 
 // Stop watching
-docs.stopSchemaWatching();
+docs.stopWatching();
 ```
 
-**Example 5: Multi-Tenant Plugin System**
+### Watcher Options
 
 ```typescript
-// CMS platform with plugin architecture
-const cms = IgniterCollections.create()
-  .withAdapter(new BunRedisAdapter({
-    url: process.env.REDIS_URL,
-  }))
-  .withSchemaRegistry([
-    'core/schemas/*.schema.json',
-    'plugins/*/schemas/*.schema.json',
-  ])
-  .build();
-
-// Each plugin contributes its own collections
-// plugins/ecommerce/schemas/products.schema.json → ecommerce:products
-// plugins/blog/schemas/posts.schema.json → blog:posts
-// plugins/analytics/schemas/events.schema.json → analytics:events
-
-// Access plugin collections
-const products = await cms['ecommerce:products'].findMany();
-const blogPosts = await cms['blog:posts'].findMany();
-const events = await cms['analytics:events'].findMany();
-
-// Cross-collection operations
-const product = await cms['ecommerce:products'].findUnique({ 
-  where: { id: 'prod-123' } 
-});
-
-await cms['analytics:events'].create({
-  data: {
-    type: 'product_viewed',
-    productId: product.id,
-    productName: product.name,
-    timestamp: new Date().toISOString(),
-  },
-});
-```
-
-**Example 6: Schema-Driven Admin UI**
-
-```typescript
-// Build an admin UI dynamically from schemas
-const cms = IgniterCollections.create()
-  .withAdapter(new NodeFsAdapter())
-  .withSchemaRegistry('.fractal/schemas')
-  .build();
-
-// Get all collection definitions
-const collections = cms.definitions();
-
-// For each collection, generate a UI panel
-for (const [name, definition] of Object.entries(collections)) {
-  console.log(`Collection: ${name}`);
-  console.log(`Path: ${definition.basePath}`);
-  console.log(`Schema:`, definition.schema);
-  
-  // Render views
-  for (const view of definition.views) {
-    console.log(`  View: ${view.name}`);
-    console.log(`  Tree:`, view.tree); // UI component tree
-    console.log(`  Actions:`, Object.keys(view.actions || {}));
-  }
+interface IgniterCollectionWatcherConfig {
+  paths: string | string[];           // Directories to watch
+  collections?: string;              // Glob for collection files (default: "*.schema.{json,ts}")
+  views?: string;                    // Glob for view files (default: "*.view.{json,ts}")
+  autoWatch?: boolean;               // Enable filesystem watching
 }
-
-// The UI framework (React, Vue, etc.) can use this metadata
-// to generate CRUD forms, dashboards, and action buttons automatically
 ```
 
-### Templates & Dynamic Content
+---
 
-When creating a collection, you can define a `template` path. This allows the `content` property in `.create()` and `.update()` to be a strongly-typed object instead of a raw string. 
+## 📐 Templates & Dynamic Content
+
+When creating a collection, you can define a `template` path. This allows the `content` property in `.create()` and `.update()` to be a strongly-typed object instead of a raw string.
 
 Igniter uses Handlebars to automatically hydrate the template with the provided object.
 
 ```typescript
 const Prompts = IgniterCollectionModel.create('prompts')
   .withPatterns(['prompts/{id}.md'])
-  .withTemplate('templates/prompt.hbs') // Enable template mode
+  .withTemplate('templates/prompt.hbs')
   .withSchema(z.object({
     title: z.string(),
-    content: z.object({ // Content is now an object, not a string
+    content: z.object({
       agent: z.string(),
       instructions: z.string()
     })
@@ -1166,53 +599,41 @@ const Prompts = IgniterCollectionModel.create('prompts')
 const doc = await docs.prompts.create({
   data: {
     title: "System Prompt",
-    content: { // Type-safe template variables
+    content: {
       agent: "Lia",
       instructions: "Be helpful."
     }
   }
 });
-
-// Output: Upon read, doc.content is always the rendered markdown string.
 ```
 
-### Sub-Collections (Nested Content)
+---
 
-Organize related content hierarchically.
+## 🧩 Multi-Runtime Adapters
 
-```typescript
-const Plans = IgniterCollectionModel.create('plans')
-  .withPatterns(['.fractal/plans/{id}.mdx'])
-  .withSchema(planSchema)
-  .build();
-
-// Define a sub-collection for tasks within plans
-const Tasks = Plans.collections.create('tasks')
-  .withPatterns(['/tasks/{id}.mdx']) // Relative to parent: .fractal/plans/{id}/tasks/{id}.mdx
-  .withSchema(taskSchema)
-  .build();
-
-// Access sub-collections
-const plan = await docs.plans.findUnique({ where: { id: 'PLN-001' } });
-const tasks = await plan.tasks.findMany({
-  where: { status: 'pending' },
-});
-```
-
-### Multi-Runtime Adapters
-
-#### Bun (High Performance)
+### Bun (High Performance)
 
 ```typescript
 import { BunFsAdapter } from '@igniter-js/collections/adapters';
 
 const docs = IgniterCollections.create()
-  .withAdapter(new BunFsAdapter()) // Native Bun syscalls
+  .withAdapter(new BunFsAdapter())
   .addCollection(Posts)
   .build();
 ```
 
-#### Redis (Distributed)
+### Node.js (Cross-Runtime)
+
+```typescript
+import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .addCollection(Posts)
+  .build();
+```
+
+### Redis (Distributed)
 
 ```typescript
 import { BunRedisAdapter } from '@igniter-js/collections/adapters';
@@ -1221,13 +642,13 @@ const docs = IgniterCollections.create()
   .withAdapter(new BunRedisAdapter({
     url: 'redis://localhost:6379',
     keyPrefix: 'content:',
-    ttl: 3600, // Optional TTL in seconds
+    ttl: 3600,
   }))
   .addCollection(Posts)
   .build();
 ```
 
-#### S3 (Cloud Storage)
+### S3 (Cloud Storage)
 
 ```typescript
 import { BunS3Adapter } from '@igniter-js/collections/adapters';
@@ -1236,13 +657,13 @@ const docs = IgniterCollections.create()
   .withAdapter(new BunS3Adapter({
     bucket: 'my-content-bucket',
     region: 'us-east-1',
-    endpoint: 'https://s3.amazonaws.com', // Or R2, MinIO, etc.
+    endpoint: 'https://s3.amazonaws.com',
   }))
   .addCollection(Posts)
   .build();
 ```
 
-#### Mock (Testing)
+### Mock (Testing)
 
 ```typescript
 import { MockAdapter } from '@igniter-js/collections/adapters';
@@ -1252,11 +673,6 @@ const docs = IgniterCollections.create()
   .withAdapter(mockAdapter)
   .addCollection(Posts)
   .build();
-
-// In tests
-await docs.posts.create({ data: { title: 'Test Post', published: true } });
-expect(mockAdapter.calls.write).toHaveLength(1);
-expect(mockAdapter.state.size).toBe(1);
 ```
 
 ---
@@ -1289,14 +705,6 @@ const docs = IgniterCollections.create()
 const navigation = await docs.docs.findMany({
   orderBy: { order: 'asc' },
 });
-
-// Group by category
-const byCategory = navigation.reduce((acc, doc) => {
-  const category = doc.category;
-  if (!acc[category]) acc[category] = [];
-  acc[category].push(doc);
-  return acc;
-}, {} as Record<string, typeof navigation>);
 ```
 
 ### Example 2: Blog with Scheduled Publishing
@@ -1308,8 +716,6 @@ const Posts = IgniterCollectionModel.create('posts')
     publishedAt: z.string().datetime(),
     status: z.enum(['draft', 'scheduled', 'published']),
   }))
-  
-  // Filter out future posts
   .onList(({ values }) => {
     const now = new Date();
     return values.filter((post) => {
@@ -1317,32 +723,49 @@ const Posts = IgniterCollectionModel.create('posts')
       return new Date(post.publishedAt) <= now;
     });
   })
-  
   .build();
 ```
 
-### Example 3: Multi-Tenant Content Platform
+### Example 3: Multi-Collection Analytics Dashboard
 
 ```typescript
-import { BunRedisAdapter } from '@igniter-js/collections/adapters';
+import { IgniterCollectionView } from '@igniter-js/collections';
 
-// Tenant-specific manager factory
-function createTenantDocs(tenantId: string) {
-  return IgniterCollections.create()
-    .withAdapter(new BunRedisAdapter({
-      url: process.env.REDIS_URL!,
-      keyPrefix: `tenant:${tenantId}:`,
-    }))
-    .addCollection(Posts)
-    .build();
-}
+const AnalyticsView = IgniterCollectionView.create('analytics')
+  .withTitle('Site Analytics')
+  .withGetData(async ({ manager }) => {
+    const [posts, authors, comments] = await Promise.all([
+      manager.posts.findMany(),
+      manager.authors.findMany(),
+      manager.comments.count()
+    ]);
+    return {
+      items: posts,
+      stats: {
+        totalPosts: posts.length,
+        totalAuthors: authors.length,
+        totalComments: comments,
+        avgViews: posts.reduce((s, p) => s + (p.views || 0), 0) / posts.length
+      }
+    };
+  })
+  .withTree([
+    { component: 'Metric', valuePath: '/stats/totalPosts' },
+    { component: 'Metric', valuePath: '/stats/totalAuthors' },
+    { component: 'Metric', valuePath: '/stats/totalComments' },
+    { component: 'Chart', valuePath: '/items' }
+  ])
+  .build();
 
-const tenantA = createTenantDocs('tenant-a');
-const tenantB = createTenantDocs('tenant-b');
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .addCollection(Posts)
+  .addCollection(Authors)
+  .addCollection(Comments)
+  .addView(AnalyticsView)
+  .build();
 
-// Isolated data per tenant
-await tenantA.posts.create({ data: { title: 'A Post' } });
-await tenantB.posts.create({ data: { title: 'B Post' } });
+const dashboard = await docs.views.render('analytics');
 ```
 
 ### Example 4: Configuration Management
@@ -1355,8 +778,6 @@ const Configs = IgniterCollectionModel.create('configs')
     apiUrl: z.string().url(),
     features: z.record(z.boolean()),
   }))
-  
-  // Validate on update
   .onUpdated(({ newValue }) => {
     if (newValue.environment === 'production') {
       if (!newValue.apiUrl.includes('api.prod.com')) {
@@ -1365,36 +786,7 @@ const Configs = IgniterCollectionModel.create('configs')
     }
     return newValue;
   })
-  
   .build();
-```
-
-### Example 5: Content Migration CLI
-
-```typescript
-import { BunS3Adapter, NodeFsAdapter } from '@igniter-js/collections/adapters';
-
-// Source: Local filesystem
-const localDocs = IgniterCollections.create()
-  .withAdapter(new NodeFsAdapter())
-  .addCollection(Posts)
-  .build();
-
-// Destination: S3 bucket
-const cloudDocs = IgniterCollections.create()
-  .withAdapter(new BunS3Adapter({ bucket: 'my-content' }))
-  .addCollection(Posts)
-  .build();
-
-// Migrate all posts
-const posts = await localDocs.posts.findMany();
-for (const post of posts) {
-  await cloudDocs.posts.create({
-    id: post.id,
-    data: post,
-  });
-  console.log(`Migrated: ${post.id}`);
-}
 ```
 
 ---
@@ -1403,20 +795,19 @@ for (const post of posts) {
 
 ### IgniterCollections (Main Builder)
 
-The main entry point for creating a collection manager.
-
 ```typescript
 class IgniterCollectionsBuilder<TCollections> {
   static create(): IgniterCollectionsBuilder<{}>
   
   withBasePath(path: string | string[]): this
   withAdapter(adapter: IgniterCollectionAdapter): this
-  withSchemaRegistry(path: string | string[], options?: RegistryOptions): this
+  withWatcher(paths: string | string[], options?: WatcherConfig): this
   withTelemetry(telemetry: IgniterTelemetryManager): this
   withLogger(logger: IgniterLogger): this
   withGlobalHooks(hooks: IgniterCollectionModelHooks): this
   
   addCollection<T>(collection: Definition<T>): IgniterCollectionsBuilder<TCollections & T>
+  addView(view: IgniterCollectionViewDefinition): this
   
   build(): IIgniterCollectionsManager<TCollections>
 }
@@ -1429,38 +820,23 @@ class IgniterCollectionsBuilder<TCollections> {
 | `create()` | None | `Builder` | Static factory for new builder |
 | `withBasePath()` | `path: string \| string[]` | `this` | Set root path(s) for collections |
 | `withAdapter()` | `adapter: IgniterCollectionAdapter` | `this` | **Required.** Set storage adapter |
-| `withSchemaRegistry()` | `path: string \| string[], options?` | `this` | Enable dynamic schema loading from JSON files |
+| `withWatcher()` | `paths, options?` | `this` | Enable filesystem discovery with auto-watch |
 | `withTelemetry()` | `telemetry: IgniterTelemetryManager` | `this` | Connect to telemetry system |
 | `withLogger()` | `logger: IgniterLogger` | `this` | Set custom logger |
 | `withGlobalHooks()` | `hooks: IgniterCollectionModelHooks` | `this` | Apply hooks to all collections |
 | `addCollection()` | `collection: Definition` | `Builder<T + C>` | Register a collection (type-safe) |
+| `addView()` | `view: ViewDefinition` | `this` | Register a global view |
 | `build()` | None | `Manager` | Build the operational manager |
-
-**Example:**
-
-```typescript
-const docs = IgniterCollections.create()
-  .withAdapter(new NodeFsAdapter())
-  .withBasePath(process.cwd())
-  .addCollection(Posts)
-  .addCollection(Docs)
-  .build();
-```
-
----
 
 ### IgniterCollectionModel (Collection Builder)
 
-Defines the schema, hooks, and configuration for a single collection.
-
 ```typescript
-class IgniterCollectionModelBuilder<TSchema, TViews, TName> {
-  static create<TName>(name: TName): Builder<unknown, {}, TName>
+class IgniterCollectionModelBuilder<TSchema, TName> {
+  static create<TName>(name: TName): Builder<unknown, TName>
   
   withPatterns(patterns: string[]): this
   withTemplate(path: string): this
-  withSchema<S>(schema: S): Builder<InferSchema<S>, TViews, TName>
-  withViews(views: ViewDefinition[]): this
+  withSchema<S>(schema: S): Builder<InferSchema<S>, TName>
   
   onCreated(hook: OnCreatedHook<TSchema>): this
   onUpdated(hook: OnUpdatedHook<TSchema>): this
@@ -1468,7 +844,24 @@ class IgniterCollectionModelBuilder<TSchema, TViews, TName> {
   onRead(hook: OnReadHook<TSchema>): this
   onList(hook: OnListHook<TSchema>): this
   
-  build(): IgniterCollectionModelDefinition<TSchema, TViews, TName>
+  build(): IgniterCollectionModelDefinition<TSchema, TName>
+}
+```
+
+### IgniterCollectionView (View Builder)
+
+```typescript
+class IgniterCollectionViewBuilder {
+  static create(name: string): IgniterCollectionViewBuilder
+  
+  withTitle(title: string): this
+  withDescription(description: string): this
+  withGetData(hook: ViewDataHook): this        // Required
+  withTree(tree: ViewNode[]): this
+  withTransform(transform: Transform): this
+  addAction(name: string, action: ViewAction): this
+  
+  build(): IgniterCollectionViewDefinition
 }
 ```
 
@@ -1476,539 +869,61 @@ class IgniterCollectionModelBuilder<TSchema, TViews, TName> {
 
 | Method | Parameters | Returns | Description |
 |--------|------------|---------|-------------|
-| `create()` | `name: string` | `Builder` | Start building a collection |
-| `withPatterns()` | `patterns: string[]` | `this` | Set file patterns for resolution |
-| `withTemplate()` | `path: string` | `this` | Set predefined template path |
-| `withSchema()` | `schema: StandardSchemaV1` | `Builder<T>` | Set validation schema (Zod, JSON Schema) |
-| `withViews()` | `views: ViewDefinition[]` | `this` | Register declarative views |
-| `onCreated()` | `hook: Function` | `this` | Hook for document creation |
-| `onUpdated()` | `hook: Function` | `this` | Hook for document updates |
-| `onDeleted()` | `hook: Function` | `this` | Hook for document deletion |
-| `onRead()` | `hook: Function` | `this` | Hook for single document reads |
-| `onList()` | `hook: Function` | `this` | Hook for bulk document listings |
+| `create()` | `name: string` | `Builder` | Start building a view |
+| `withTitle()` | `title: string` | `this` | Set display title |
+| `withDescription()` | `description: string` | `this` | Set description |
+| `withGetData()` | `hook: Function` | `this` | **Required.** Data fetching hook |
+| `withTree()` | `tree: Node[]` | `this` | UI component tree |
+| `withTransform()` | `transform: Transform` | `this` | Add data transformation |
+| `addAction()` | `name, action` | `this` | Add view action |
 | `build()` | None | `Definition` | Build immutable definition |
-
-**Example:**
-
-```typescript
-const Posts = IgniterCollectionModel.create('posts')
-  .withPatterns(['content/posts/{id}.mdx'])
-  .with
-  .withSchema(postSchema)
-  .onCreated(({ value }) => {
-    console.log('Created:', value.id);
-    return value;
-  })
-  .build();
-```
-
----
 
 ### Collection Manager (CRUD Operations)
 
-The operational instance for a specific collection.
-
 ```typescript
 interface IIgniterCollectionModel<TSchema> {
-  // Read operations
   findUnique(args: FindUniqueArgs): Promise<Document<TSchema> | null>
   findMany(args?: FindManyArgs): Promise<Document<TSchema>[]>
   count(args?: CountArgs): Promise<number>
-  
-  // Write operations
   create(args: CreateArgs<TSchema>): Promise<Document<TSchema>>
   update(args: UpdateArgs<TSchema>): Promise<Document<TSchema>>
   delete(args: DeleteArgs): Promise<Document<TSchema>>
-  
-  // Views
-  views: IIgniterCollectionViewManager
-  
-  // Metadata
   definition: IgniterCollectionModelDefinition
 }
 ```
 
-**Methods:**
-
-| Method | Arguments | Returns | Description |
-|--------|-----------|---------|-------------|
-| `findMany()` | `{ where?, orderBy?, take?, skip? }` | `Promise<Document[]>` | Find multiple documents with filtering and pagination |
-| `findUnique()` | `{ where: { id } }` | `Promise<Document \| null>` | Find single document by ID |
-| `create()` | `{ id?, data, content? }` | `Promise<Document>` | Create new document with validation |
-| `update()` | `{ where, data }` | `Promise<Document>` | Update existing document (partial) |
-| `delete()` | `{ where: { id } }` | `Promise<Document>` | Delete document and return last state |
-| `count()` | `{ where? }` | `Promise<number>` | Count matching documents |
-
-**Type: Document**
+### Views Manager (Global)
 
 ```typescript
-interface IgniterCollectionDocument<TSchema> {
-  id: string;
-  path: string;
-  data: TSchema; // Validated frontmatter
-  content: string; // Markdown/text content
-  raw: string; // Full file content
+interface IIgniterCollectionViewManager {
+  render(name: string, options?: RenderOptions): Promise<RenderResult>
+  executeAction(viewName: string, actionName: string, params?: any): Promise<ActionResult>
+  list(): ViewDefinition[]
+  get(name: string): ViewDefinition | undefined
 }
 ```
-
----
 
 ### Query System (Prisma-like)
 
-#### Where Clause
-
 ```typescript
+// Where Clause
 interface IgniterCollectionWhereClause<T> {
-  // Full-Text Search
-  search?: {
-    term: string | string[];
-    fields?: Record<string, { weight?: number; fuzzy?: boolean }>;
-    threshold?: number;
-    fuzzy?: boolean;
-  };
-
-  // Direct equality
+  search?: { term: string; fields?: Record<string, { weight?: number; fuzzy?: boolean }> };
   fieldName?: value;
-
-  // Dot notation for nested fields
-  "author.name"?: string;
-
-  // Search inside arrays of objects automatically natively
-  "tags.label"?: string;
-
-  // Operators
-  fieldName?: {
-    equals?: value;
-    not?: value;
-    in?: value[];
-    notIn?: value[];
-    lt?: number | Date;
-    lte?: number | Date;
-    gt?: number | Date;
-    gte?: number | Date;
-    contains?: string;
-    startsWith?: string;
-    endsWith?: string;
-  };
-
-  // Array operators
-  arrayField?: {
-    has?: item;
-    hasEvery?: item[];
-    hasSome?: item[];
-    isEmpty?: boolean;
-    length?: number;
-  };
-};
-  
-  // Array operators
-  arrayField?: {
-    has?: item;
-    hasEvery?: item[];
-    hasSome?: item[];
-    isEmpty?: boolean;
-    length?: number;
-  };
+  fieldName?: { equals?: value; not?: value; in?: value[]; lt?: number; gte?: number; contains?: string };
+  arrayField?: { has?: item; hasEvery?: item[]; isEmpty?: boolean };
 }
-```
 
-**Example:**
-
-```typescript
-const results = await docs.posts.findMany({
-  where: {
-    // Direct equality
-    published: true,
-    
-    // Comparison
-    views: { gte: 100, lt: 1000 },
-    
-    // String operations
-    title: { contains: 'TypeScript' },
-    slug: { startsWith: 'getting-started' },
-    
-    // Array operations
-    tags: { has: 'featured' },
-    categories: { hasSome: ['tech', 'programming'] },
-    
-    // In/Not in
-    status: { in: ['published', 'featured'] },
-    author: { notIn: ['banned-user'] },
-  },
-});
-```
-
-#### Select & Exclude
-
-```typescript
+// Select & Exclude
 interface IgniterCollectionSelectClause<T> {
-  // Use select to pick specific fields
-  select?: {
-    [K in keyof T]?: boolean;
-  };
-
-  // OR use exclude to omit specific fields
-  exclude?: {
-    [K in keyof T]?: boolean;
-  };
+  select?: { [K in keyof T]?: boolean };
+  exclude?: { [K in keyof T]?: boolean };
 }
-```
-
-**Example:**
-
-```typescript
-// Select only specific fields (other fields are omitted)
-const posts = await docs.posts.findMany({
-  select: {
-    id: true,
-    title: true,
-  },
-});
-
-// Exclude specific fields (other fields are included)
-const lightweightPosts = await docs.posts.findMany({
-  exclude: {
-    content: true,
-  },
-});
-```
-
-#### Order By
-
-```typescript
-interface IgniterCollectionOrderByClause<T> {
-  [field: string]: 'asc' | 'desc';
-}
-```
-
-**Example:**
-
-```typescript
-const posts = await docs.posts.findMany({
-  orderBy: { createdAt: 'desc' },
-});
-
-// Multiple fields
-const posts = await docs.posts.findMany({
-  orderBy: { publishedAt: 'desc', title: 'asc' },
-});
-```
-
-#### Pagination
-
-```typescript
-const page1 = await docs.posts.findMany({
-  take: 10,
-  skip: 0,
-});
-
-const page2 = await docs.posts.findMany({
-  take: 10,
-  skip: 10,
-});
-```
-
----
-
-### Hooks System
-
-Hooks intercept the document lifecycle and can modify data or cancel operations.
-
-```typescript
-type OnCreatedHook<T> = (context: {
-  value: Document<T>;
-  collection: CollectionDefinition;
-  manager: IIgniterCollectionsManager;
-}) => Promise<Document<T> | false> | Document<T> | false;
-
-type OnUpdatedHook<T> = (context: {
-  newValue: Document<T>;
-  previousValue: Document<T>;
-  collection: CollectionDefinition;
-  manager: IIgniterCollectionsManager;
-}) => Promise<Document<T> | false> | Document<T> | false;
-
-type OnDeletedHook<T> = (context: {
-  value: Document<T>;
-  collection: CollectionDefinition;
-  manager: IIgniterCollectionsManager;
-}) => Promise<boolean> | boolean;
-
-type OnReadHook<T> = (context: {
-  value: Document<T>;
-  collection: CollectionDefinition;
-  manager: IIgniterCollectionsManager;
-}) => Promise<Document<T> | false> | Document<T> | false;
-
-type OnListHook<T> = (context: {
-  values: Document<T>[];
-  collection: CollectionDefinition;
-  manager: IIgniterCollectionsManager;
-}) => Promise<Document<T>[] | false> | Document<T>[] | false;
-```
-
-**Rules:**
-- Returning `false` cancels the operation (throws `HOOK_CANCELLED` error)
-- Returning modified data applies the changes
-- Hooks run **after** validation for creates/updates
-- Hooks run **before** persistence for deletes
-- Hooks can access the full `manager` for cross-collection operations
-
-**Example:**
-
-```typescript
-.onCreated(async ({ value, manager }) => {
-  // Add metadata
-  return {
-    ...value,
-    createdAt: new Date().toISOString(),
-    createdBy: await getCurrentUser(),
-    };
-})
-
-.onDeleted(async ({ value, manager }) => {
-  // Create audit log
-  await manager.collection('audit').create({
-    data: {
-      action: 'deleted',
-      collection: 'posts',
-      documentId: value.id,
-      timestamp: new Date(),
-    },
-  });
-  
-  return true; // Proceed with deletion
-})
-```
-
----
-
-### Views System
-
-Views provide a declarative way to shape data for UI consumption.
-
-```typescript
-interface IgniterCollectionViewDefinition {
-  name: string;
-  title: string;
-  description?: string;
-  
-  defaultQuery?: {
-    where?: WhereClause;
-    orderBy?: OrderByClause;
-    take?: number;
-    skip?: number;
-  };
-  
-  stats?: {
-    [statName: string]: StatDefinition;
-  };
-  
-  transforms?: Transform[];
-  
-  tree: ViewNode[];
-  
-  actions?: {
-    [actionName: string]: ViewAction;
-  };
-}
-```
-
-**Stats Definitions:**
-
-```typescript
-type StatDefinition =
-  | { type: 'count'; where?: WhereClause }
-  | { type: 'sum' | 'avg' | 'min' | 'max'; field: string; where?: WhereClause }
-  | { type: 'custom'; fn: (items: Document[]) => any };
-```
-
-**Transforms:**
-
-```typescript
-type Transform =
-  | { type: 'group'; field: string }
-  | { type: 'flatten'; separator?: string }
-  | { type: 'pivot'; index: string; column: string; value: string };
-```
-
-**Example:**
-
-```typescript
-.withViews([
-  {
-    name: 'analytics',
-    title: 'Content Analytics',
-    
-    defaultQuery: {
-      where: { published: true },
-      orderBy: { views: 'desc' },
-    },
-    
-    stats: {
-      totalViews: { type: 'sum', field: 'views' },
-      avgViews: { type: 'avg', field: 'views' },
-      publishedCount: { type: 'count', where: { published: true } },
-    },
-    
-    transforms: [
-      { type: 'group', field: 'category' },
-    ],
-    
-    tree: [
-      {
-        component: 'Metric',
-        props: { title: 'Total Views' },
-        valuePath: '/stats/totalViews',
-      },
-    ],
-  },
-])
-```
-
-**Rendering:**
-
-```typescript
-const result = await docs.posts.views.render('analytics');
-
-console.log(result.stats.totalViews); // 15420
-console.log(result.items); // Grouped by category
-```
-
----
-
-### Adapters
-
-#### IgniterCollectionAdapter Interface
-
-All adapters must implement this contract:
-
-```typescript
-interface IgniterCollectionAdapter {
-  // Required methods
-  read(path: string): Promise<string>;
-  write(path: string, content: string): Promise<void>;
-  delete(path: string): Promise<void>;
-  list(dir: string, pattern?: string): Promise<string[]>;
-  exists(path: string): Promise<boolean>;
-  
-  // Optional capabilities
-  mkdir?(path: string): Promise<void>;
-  watch?(path: string, callback: (event: string, filename: string) => void): void;
-}
-```
-
-#### BunFsAdapter (High Performance)
-
-```typescript
-import { BunFsAdapter } from '@igniter-js/collections/adapters';
-
-const adapter = new BunFsAdapter();
-
-// Features:
-// ✅ Native Bun syscalls (Bun.file, Bun.write)
-// ✅ Zero Node.js dependencies
-// ✅ Recursive directory creation
-// ✅ Native file watching
-```
-
-#### NodeFsAdapter (Cross-Runtime)
-
-```typescript
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
-
-const adapter = new NodeFsAdapter();
-
-// Features:
-// ✅ Standard fs/promises
-// ✅ Works in Node.js and Bun
-// ✅ Widely compatible
-```
-
-#### BunRedisAdapter (Distributed)
-
-```typescript
-import { BunRedisAdapter } from '@igniter-js/collections/adapters';
-
-const adapter = new BunRedisAdapter({
-  url: 'redis://localhost:6379',
-  keyPrefix: 'content:', // Optional namespace
-  ttl: 3600, // Optional TTL in seconds
-});
-
-// Features:
-// ✅ Key-value storage
-// ✅ TTL support
-// ✅ Pub/Sub for real-time updates
-// ✅ SCAN-based listing with pattern matching
-```
-
-#### BunS3Adapter (Cloud Storage)
-
-```typescript
-import { BunS3Adapter } from '@igniter-js/collections/adapters';
-
-const adapter = new BunS3Adapter({
-  bucket: 'my-content-bucket',
-  region: 'us-east-1',
-  endpoint: 'https://s3.amazonaws.com', // Or R2, MinIO
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
-
-// Features:
-// ✅ Object storage (S3, R2, MinIO)
-// ✅ Automatic pagination
-// ✅ Streaming support
-```
-
-#### MockAdapter (Testing)
-
-```typescript
-import { MockAdapter } from '@igniter-js/collections/adapters';
-
-const adapter = new MockAdapter();
-
-// Features:
-// ✅ In-memory storage
-// ✅ Call tracking
-// ✅ State snapshots
-// ✅ Perfect for unit tests
-
-// Access call history
-adapter.calls.write; // Array of write calls
-adapter.calls.read;  // Array of read calls
-
-// Access state
-adapter.state; // Map<path, content>
-
-// Reset state
-adapter.reset();
 ```
 
 ---
 
 ## 🔧 Configuration
-
-### Schema Registry Options
-
-```typescript
-interface IgniterCollectionRegistryOptions {
-  autoWatch?: boolean; // Watch for schema file changes (default: false)
-  filePattern?: string; // Schema file pattern (default: "*.schema.json")
-}
-```
-
-**Example:**
-
-```typescript
-.withSchemaRegistry('.fractal/schemas', {
-  autoWatch: true,
-  filePattern: '*.collection.json',
-})
-```
 
 ### Global Hooks
 
@@ -2018,15 +933,12 @@ Apply hooks to **all** collections:
 const docs = IgniterCollections.create()
   .withAdapter(adapter)
   .withGlobalHooks({
-    onCreated: ({ value }) => {
-      return {
-        ...value,
-        createdAt: new Date().toISOString(),
-    };
-    },
+    onCreated: ({ value }) => ({
+      ...value,
+      createdAt: new Date().toISOString(),
+    }),
   })
   .addCollection(Posts)
-  .addCollection(Docs)
   .build();
 ```
 
@@ -2045,8 +957,8 @@ Customize file naming:
 ])
 
 // Custom extensions
-.withPatterns(['{id}.json']) // For JSON files
-.withPatterns(['{id}.yaml']) // For YAML files
+.withPatterns(['{id}.json'])
+.withPatterns(['{id}.yaml'])
 ```
 
 ---
@@ -2084,21 +996,9 @@ describe('Posts Collection', () => {
   it('should validate schema', async () => {
     await expect(
       docs.posts.create({
-        data: { title: '', published: true }, // Invalid: empty title
+        data: { title: '', published: true },
       })
     ).rejects.toThrow('Validation failed');
-  });
-  
-  it('should filter published posts', async () => {
-    await docs.posts.create({ data: { title: 'Draft', published: false } });
-    await docs.posts.create({ data: { title: 'Published', published: true } });
-    
-    const published = await docs.posts.findMany({
-      where: { published: true },
-    });
-    
-    expect(published).toHaveLength(1);
-    expect(published[0].title).toBe('Published');
   });
 });
 
@@ -2116,43 +1016,6 @@ function createDocs(adapter: MockAdapter) {
     .addCollection(Posts)
     .build();
 }
-```
-
-### Integration Testing
-
-```typescript
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
-import { rm } from 'fs/promises';
-
-describe('Integration: Filesystem', () => {
-  const testDir = './test-content';
-  
-  beforeEach(async () => {
-    await rm(testDir, { recursive: true, force: true });
-  });
-  
-  it('should persist to disk', async () => {
-    const docs = IgniterCollections.create()
-      .withAdapter(new NodeFsAdapter())
-      .withBasePath(testDir)
-      .addCollection(Posts)
-      .build();
-    
-    const post = await docs.posts.create({
-      data: { title: 'Persisted Post', published: true },
-      content: 'This is the content',
-    });
-    
-    const { readFile } = await import('fs/promises');
-    const fileContent = await readFile(
-      `${testDir}/content/posts/${post.id}.mdx`,
-      'utf-8'
-    );
-    
-    expect(fileContent).toContain('title: Persisted Post');
-    expect(fileContent).toContain('This is the content');
-  });
-});
 ```
 
 ---
@@ -2183,17 +1046,23 @@ const Posts = IgniterCollectionModel.create('posts')
   createdAt: new Date() 
 }))
 
-// ✅ Use views for UI data shaping
-.withViews([{ name: 'dashboard', stats: { ... } }])
+// ✅ Use global views for multi-collection dashboards
+.addView(IgniterCollectionView.create('dashboard')
+  .withGetData(async ({ manager }) => {
+    const posts = await manager.posts.findMany();
+    return { items: posts };
+  })
+  .build()
+)
 
 // ✅ Handle hook errors gracefully
 .onCreated(async ({ value, manager }) => {
   try {
-    await manager.collection('audit').create({ ... });
+    await manager.audit.create({ ... });
   } catch (error) {
     console.error('Audit failed:', error);
   }
-  return value; // Still proceed
+  return value;
 })
 ```
 
@@ -2207,7 +1076,7 @@ const Posts = IgniterCollectionModel.create('posts')
 
 // ❌ Don't perform heavy operations in hooks
 .onCreated(async ({ value }) => {
-  await heavyExternalAPICall(); // Blocks creation
+  await heavyExternalAPICall();
   return value;
 })
 
@@ -2222,10 +1091,6 @@ const Posts = IgniterCollectionModel.create('posts')
   ...value,
   title: 'Changed' 
 }))
-
-// ❌ Don't ignore adapter capabilities
-const adapter = new BunRedisAdapter({ ttl: 3600 });
-// Missing: Consider TTL implications for long-term storage
 
 // ❌ Don't use findMany for single results
 const post = await docs.posts.findMany({ where: { id: 'abc' } });
@@ -2245,12 +1110,10 @@ const post = await docs.posts.findUnique({ where: { id: 'abc' } });
 
 ```typescript
 const docs = IgniterCollections.create()
-  .withAdapter(new NodeFsAdapter()) // ← Add this
+  .withAdapter(new NodeFsAdapter())
   .addCollection(Posts)
   .build();
 ```
-
----
 
 ### Error: `VALIDATION_ERROR`
 
@@ -2259,57 +1122,48 @@ const docs = IgniterCollections.create()
 **Solution:**
 
 ```typescript
-// Check validation errors
 try {
   await docs.posts.create({
-    data: { title: '', published: true }, // Empty title
+    data: { title: '', published: true },
   });
 } catch (error) {
   console.log(error.details.issues);
-  // [{ path: ['title'], message: 'String must contain at least 1 character(s)' }]
 }
 ```
 
----
+### Error: `VIEW_INVALID_CONFIGURATION`
 
-### Error: `HOOK_CANCELLED`
-
-**Cause:** A hook returned `false`
+**Cause:** View created without mandatory `getData` hook
 
 **Solution:**
 
 ```typescript
-.onUpdated(({ newValue, previousValue }) => {
-  if (someCondition) {
-    return false; // Cancels operation
-  }
-  return newValue;
-})
+// ❌ Missing getData
+const BadView = IgniterCollectionView.create('bad').build();
 
-// Check hook logic
+// ✅ Always provide getData
+const GoodView = IgniterCollectionView.create('good')
+  .withGetData(async ({ manager }) => ({
+    items: await manager.posts.findMany()
+  }))
+  .build();
 ```
 
----
+### Error: `TRANSPILE_FAILED`
 
-### Error: `VIEW_NOT_FOUND`
-
-**Cause:** Requesting a view that doesn't exist
+**Cause:** TypeScript file has syntax error
 
 **Solution:**
 
 ```typescript
-// Check registered views
-console.log(docs.posts.definition.views.map(v => v.name));
-
-// Verify view name matches
-await docs.posts.views.render('dashboard'); // Must match registered name
+// Check your .schema.ts or .view.ts file for syntax errors
+// Ensure it exports default:
+export default IgniterCollectionModel.create('posts')
+  .withSchema(z.object({ ... }))
+  .build();
 ```
-
----
 
 ### Performance: Slow `findMany` with Large Collections
-
-**Diagnosis:** `findMany` loads all files and filters in-memory
 
 **Solutions:**
 
@@ -2320,30 +1174,17 @@ const page1 = await docs.posts.findMany({ take: 50, skip: 0 });
 
 2. Use Redis/S3 adapter with indexing
 
-3. Consider a view with pre-filtered query:
+3. Use views with pre-filtered data:
 ```typescript
-.withViews([{
-  name: 'recent',
-  defaultQuery: { take: 20, orderBy: { createdAt: 'desc' } }
-}])
-```
-
----
-
-### Type Inference Not Working
-
-**Cause:** Schema not implementing `StandardSchemaV1`
-
-**Solution:**
-
-```typescript
-import { z } from 'zod';
-
-// ✅ Zod schemas work automatically
-const schema = z.object({ ... });
-
-// ❌ Plain objects don't
-const schema = { type: 'object', ... }; // Use JSON Schema instead
+const RecentView = IgniterCollectionView.create('recent')
+  .withGetData(async ({ manager }) => {
+    const posts = await manager.posts.findMany({
+      take: 20,
+      orderBy: { createdAt: 'desc' }
+    });
+    return { items: posts };
+  })
+  .build();
 ```
 
 ---
@@ -2388,39 +1229,6 @@ export default async function BlogPage() {
     </div>
   );
 }
-```
-
-### Astro
-
-```typescript
-// src/lib/collections.ts
-import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
-import { BunFsAdapter } from '@igniter-js/collections/adapters';
-
-export const docs = IgniterCollections.create()
-  .withAdapter(new BunFsAdapter())
-  .addCollection(Posts)
-  .build();
-
-// src/pages/blog/[slug].astro
----
-import { docs } from '../../lib/collections';
-
-export async function getStaticPaths() {
-  const posts = await docs.posts.findMany();
-  return posts.map((post) => ({
-    params: { slug: post.id },
-    props: { post },
-  }));
-}
-
-const { post } = Astro.props;
----
-
-<article>
-  <h1>{post.title}</h1>
-  <div set:html={post.content} />
-</article>
 ```
 
 ### Express.js API
@@ -2483,19 +1291,6 @@ cd igniter-js/packages/collections
 bun install
 bun run build
 bun test
-```
-
-### Running Tests
-
-```bash
-# Run all tests
-bun test
-
-# Watch mode
-bun test:watch
-
-# Coverage
-bun test --coverage
 ```
 
 ---
