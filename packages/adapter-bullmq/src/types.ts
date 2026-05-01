@@ -1,12 +1,6 @@
 import type { Queue, Worker, Job, QueueOptions, WorkerOptions } from "bullmq";
-import type {
-  IgniterLogger,
-  IgniterStoreAdapter,
-  WorkerHandle,
-  WorkerMetrics,
-  JobDefinition,
-  JobLimiter,
-} from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
+import type { IgniterStoreAdapter, WorkerHandle, WorkerMetrics, JobDefinition, JobLimiter } from "@igniter-js/core";
 
 /**
  * Options for configuring the BullMQ Adapter.

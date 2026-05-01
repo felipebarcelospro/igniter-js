@@ -81,56 +81,25 @@ The package has a minimal and focused file structure.
 
 ---
 
-## 3.1. Management API Architecture
+## 3.1. Management API Architecture (Maintainership Summary)
 
-### WorkerHandle
-The `worker()` method now returns a `WorkerHandle` that provides:
-- `pause()` / `resume()` / `close()` - Worker control
-- `isRunning()` / `isPaused()` / `isClosed()` - Status checking
-- `getMetrics()` - Performance metrics (processed, failed, avgDuration, uptime)
+This package exposes a management surface both directly on the adapter and through
+`createJobsProxy()` in `@igniter-js/core`. For user-facing usage examples and
+controller patterns, see the README. This section only summarizes internal wiring.
 
-### QueueManager (adapter.queues)
-Provides queue-level operations:
-- `list()` / `get(name)` - Queue info
-- `pause(name)` / `resume(name)` / `isPaused(name)` - Queue control
-- `drain(name)` - Remove all waiting jobs
-- `clean(name, options)` - Remove jobs by status/age
-- `obliterate(name)` - Completely remove queue
-- `getJobCounts(name)` / `getJobs(name, filter)` - Job listing
-
-### JobManager (adapter.job)
-Provides individual job operations:
-- `get(id)` / `getState(id)` / `getLogs(id)` / `getProgress(id)` - Job info
-- `retry(id)` / `remove(id)` / `promote(id)` - Job control
-- `moveToFailed(id, reason)` - Manual failure
-- `retryMany(ids)` / `removeMany(ids)` - Batch operations
-
-### Proxy Access
-The `createJobsProxy()` function exposes management APIs via special properties:
-- `ctx.jobs.$queues` - Access to QueueManager
-- `ctx.jobs.$job` - Access to JobManager
-- `ctx.jobs.$workers` - Access to active worker handles Map
-
-### Rate Limiting
-Rate limiting is implemented at the BullMQ Worker level using `JobLimiter` interface:
-```typescript
-interface JobLimiter {
-  max: number;      // Maximum jobs to process within duration
-  duration: number; // Time window in milliseconds
-}
-```
-
-**Configuration levels (priority order):**
-1. **Job-level** (`JobDefinition.limiter`) - Highest priority
-2. **Router-level** (`defaultOptions.limiter`) - Used if job doesn't have one
-3. **Worker-level** (`JobWorkerConfig.limiter`) - Applied globally to worker
-4. **Auto-start** (`autoStartWorker.limiter`) - For auto-started workers
-
-**Implementation details:**
-- Limiter is passed to BullMQ Worker constructor
-- Jobs that hit rate limit return to "waiting" state
-- Rate limit is global per queue (shared across all workers)
-- Auto-discovery: If no limiter configured, adapter discovers from job definitions
+- **WorkerHandle**: created in `createWorkerHandle()` inside `src/bullmq.adapter.ts`.
+  Methods include `pause()`, `resume()`, `close()`, `isRunning()`, `isPaused()`,
+  `isClosed()`, and `getMetrics()`. Instances are stored in `instances.workerHandles`.
+- **QueueManager**: implemented as `queuesManager` with `list()`, `get()`,
+  `getJobCounts()`, `getJobs()`, `pause()`, `resume()`, `isPaused()`, `drain()`,
+  `clean()`, and `obliterate()`.
+- **JobManager**: implemented as `jobManager` with `get()`, `getState()`, `getLogs()`,
+  `getProgress()`, `retry()`, `remove()`, `promote()`, `moveToFailed()`,
+  `retryMany()`, and `removeMany()`.
+- **Proxy Access**: `createJobsProxy()` exposes `$queues`, `$job`, and `$workers`.
+- **Rate Limiting**: limiter can be provided at job definition, router defaults,
+  worker config, or auto-start config. Auto-start discovers a limiter from job
+  definitions when not explicitly provided.
 
 ---
 
@@ -214,31 +183,27 @@ This section provides explicit, step-by-step instructions for performing common 
 
 ### Task 2: Change a Default Worker Behavior
 
-**Scenario:** The default worker concurrency is `5`. The project lead wants to change this default to `10`.
+**Scenario:** The default worker concurrency is `1`. The project lead wants to change this default to `10`.
 
 1.  **Objective Analysis:** The goal is to change a default configuration value within the adapter.
 
-2.  **Locate Adapter Configuration:** This default is set when the adapter is created.
-    -   **File:** `packages/adapter-bullmq/src/bullmq.adapter.ts`.
-    -   **Action:** Find the `createBullMQAdapter` function. Inside it, locate where the `autoStartWorker` options are processed and where the default `concurrency` is set.
+2.  **Locate Adapter Configuration:** This default is set in two places.
+  -   **File:** `packages/adapter-bullmq/src/bullmq.adapter.ts`.
+  -   **Action:** Update the default in the auto-start block and the worker startup block:
+    - `concurrency: options.autoStartWorker.concurrency || 1`
+    - `concurrency: config.concurrency || 1`
 
-3.  **Modify the Default Value:** Change the default value from `5` to `10`.
+3.  **Modify the Default Value:** Change the default value from `1` to `10` in both locations.
     ```typescript
-    // Inside createBullMQAdapter
-    export const createBullMQAdapter = (config: BullMQAdapterConfig) => {
-      // ...
-      const workerOptions = {
-        concurrency: 5, // <-- This is the old value
-        // ...
-      };
-      
-      // Change it to:
-      const workerOptions = {
-        concurrency: 10, // <-- This is the new value
-        // ...
-      };
-      // ... rest of the logic that uses workerOptions
-    }
+    // Auto-start block
+    concurrency: options.autoStartWorker.concurrency || 1,
+
+    // Worker startup block
+    concurrency: config.concurrency || 1,
+
+    // Change both to:
+    concurrency: options.autoStartWorker.concurrency || 10,
+    concurrency: config.concurrency || 10,
     ```
 
 4.  **Review for Impacts:** Assess if this change has any side effects. Changing a default concurrency value is generally safe but could impact performance. The change is isolated to this adapter, so no other packages should be affected.

@@ -1,8 +1,5 @@
-import type {
-  IgniterTelemetryProvider,
-  IgniterTelemetryConfig,
-  IgniterLogger,
-} from '@igniter-js/core';
+import type { IgniterLogger } from "@igniter-js/common";
+import type { IgniterTelemetryProvider, IgniterTelemetryConfig } from "@igniter-js/core";
 
 /**
  * OpenTelemetry exporter types

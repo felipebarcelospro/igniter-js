@@ -59,9 +59,10 @@ const emailJobRouter = jobs.router({
   namespace: 'emails',
   jobs: {
     sendWelcome: jobs.register({
+      name: 'Send Welcome Email',
       input: z.object({ email: z.string().email() }),
-      handler: async ({ payload, context }) => {
-        context.logger.info(`Sending welcome email to ${payload.email}`);
+      handler: async ({ input, context }) => {
+        context.logger.info(`Sending welcome email to ${input.email}`);
         // Your email sending logic here...
         return { sent: true };
       },

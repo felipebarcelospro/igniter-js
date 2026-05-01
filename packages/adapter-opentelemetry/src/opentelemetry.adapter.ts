@@ -1,4 +1,5 @@
-import { type IgniterTelemetrySpan, type IgniterTimer, type IgniterSpanOptions, type IgniterLogger } from '@igniter-js/core';
+import { type IgniterLogger } from "@igniter-js/common";
+import { type IgniterTelemetrySpan, type IgniterTimer, type IgniterSpanOptions } from "@igniter-js/core";
 import { OpenTelemetrySpanWrapper } from './span';
 import { OpenTelemetryTimer, NoOpTimer } from './timer';
 import type { OpenTelemetryConfig, OpenTelemetryAdapter } from './types';

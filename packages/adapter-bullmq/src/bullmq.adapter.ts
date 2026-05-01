@@ -45,9 +45,9 @@ import {
   createJobsRegistry,
   createJobsProxy,
 } from "@igniter-js/core";
-import type { StandardSchemaV1 } from "@igniter-js/core";
+import type { StandardSchemaV1 } from "@igniter-js/common";
 import type { JobExecutionContext } from "@igniter-js/core";
-import { IgniterError } from "@igniter-js/core";
+import { IgniterError } from "@igniter-js/common";
 
 /**
  * Creates a Job Queue Adapter for BullMQ.

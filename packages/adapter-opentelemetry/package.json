@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/adapter-opentelemetry",
-  "version": "0.2.55",
+  "version": "1.0.0-alpha.0",
   "description": "OpenTelemetry adapter for Igniter.js telemetry system",
   "exports": {
     ".": {
@@ -36,6 +36,7 @@
     "@opentelemetry/semantic-conventions": "^1.38.0"
   },
   "peerDependencies": {
+    "@igniter-js/common": ">=0.1.0",
     "@igniter-js/core": "*"
   },
   "peerDependenciesMeta": {
@@ -50,6 +51,7 @@
     }
   },
   "devDependencies": {
+    "@igniter-js/common": "*",
     "@igniter-js/core": "*",
     "@types/node": "^20.0.0",
     "eslint": "^8.0.0",

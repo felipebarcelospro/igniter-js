@@ -23,4 +23,4 @@ export type {
   IgniterTimer,
   IgniterSpanOptions,
   IgniterTelemetryConfig,
-} from '@igniter-js/core'; 
+} from '@igniter-js/core';

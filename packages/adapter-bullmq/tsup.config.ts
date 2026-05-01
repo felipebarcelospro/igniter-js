@@ -6,6 +6,6 @@ export default defineConfig({
   dts: true,
   outDir: 'dist',
   clean: true,
-  external: ['@igniter-js/core'],
-  noExternal: ['@igniter-js/core']
+  external: ['@igniter-js/core', '@igniter-js/common'],
+  noExternal: ['@igniter-js/core', '@igniter-js/common']
 }); 

@@ -1,5 +1,12 @@
 # @igniter-js/adapter-bullmq
 
+## 1.0.0-alpha.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @igniter-js/core@*
+
 ## 0.2.0
 
 ### Minor Changes
@@ -9,13 +16,11 @@
   Igniter.js is now a fully modular, type-safe backend framework. This alpha release debuts a robust architecture with first-class type safety, powerful built-in features, and standalone adapters for extensibility and flexibility.
 
   ### Breaking Changes
-
   - New modular package architecture
   - Adapters extracted into standalone packages
   - Updated import paths and API patterns
 
   ### Core Features
-
   - **Type-Safe Router**
     - Procedure-based routing system
     - Middleware chain with execution control
@@ -95,7 +100,6 @@
   ```
 
   ### Key Benefits
-
   - Full type safety across all features
   - Modular architecture - install only what you need
   - Built-in realtime capabilities
@@ -109,7 +113,6 @@
   ### Next Steps
 
   We're currently focused on:
-
   - Completing the new Igniter.js CLI for improved developer experience
   - Finalizing comprehensive unit and integration test coverage
   - Expanding and refining documentation with more examples
