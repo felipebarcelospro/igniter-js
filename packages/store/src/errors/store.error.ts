@@ -3,7 +3,7 @@
  * @module @igniter-js/store/errors
  */
 
-import { IgniterError, type IgniterLogger } from '@igniter-js/core'
+import { IgniterError, type IgniterLogger } from "@igniter-js/common";
 
 /**
  * All possible error codes for IgniterStore.

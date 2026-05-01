@@ -3,7 +3,7 @@
  * @module @igniter-js/connectors/errors
  */
 
-import { IgniterError } from '@igniter-js/core'
+import { IgniterError } from "@igniter-js/common";
 
 /**
  * All possible error codes for IgniterConnector.
@@ -117,7 +117,7 @@ export interface IgniterConnectorErrorOptions {
 
 /**
  * Custom error class for IgniterConnector operations.
- * Extends IgniterError from @igniter-js/core.
+ * Extends IgniterError from @igniter-js/common.
  *
  * @example
  * ```typescript

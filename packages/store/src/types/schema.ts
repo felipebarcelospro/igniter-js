@@ -3,7 +3,7 @@
  * @module @igniter-js/store/types/schema
  */
 
-import type { StandardSchemaV1 } from '@igniter-js/core'
+import type { StandardSchemaV1 } from "@igniter-js/common";
 import type { IgniterStoreEventSchema } from './events'
 
 

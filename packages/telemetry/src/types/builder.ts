@@ -1,4 +1,4 @@
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type {
   IgniterTelemetryConfig,
   IgniterTelemetryActorOptions,
@@ -20,8 +20,8 @@ import type { IgniterTelemetryTransportAdapter } from "./transport";
 export interface IgniterTelemetryBuilderState<
   TRegistry extends IgniterTelemetryEventsRegistry =
     IgniterTelemetryEventsRegistry,
-  TScopes extends string = never,
-  TActors extends string = never,
+  TScopes extends string = string,
+  TActors extends string = string,
 > {
   service?: string;
   environment?: string;

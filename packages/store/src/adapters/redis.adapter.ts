@@ -31,6 +31,7 @@ import type {
   IgniterStoreScanResult,
   IgniterStoreScanOptions,
   IgniterStoreStreamAppendOptions,
+  IgniterStoreStreamRangeOptions,
   IgniterStoreStreamReadOptions,
   IgniterStoreStreamMessage,
 } from '../types'
@@ -420,11 +421,67 @@ export class IgniterStoreRedisAdapter implements IgniterStoreAdapter<Redis> {
     return messages
   }
 
+  async xrange<T = any>(
+    stream: string,
+    options?: IgniterStoreStreamRangeOptions,
+  ): Promise<IgniterStoreStreamMessage<T>[]> {
+    const startId = options?.startId ?? '-'
+    const endId = options?.endId ?? '+'
+    const args: (string | number)[] = [stream, startId, endId]
+
+    if (options?.count !== undefined) {
+      args.push('COUNT', options.count)
+    }
+
+    const result = await (this.client as any).xrange(...args)
+    return this.parseStreamRangeResult(result)
+  }
+
+  async xrevrange<T = any>(
+    stream: string,
+    options?: IgniterStoreStreamRangeOptions,
+  ): Promise<IgniterStoreStreamMessage<T>[]> {
+    const startId = options?.startId ?? '-'
+    const endId = options?.endId ?? '+'
+    const args: (string | number)[] = [stream, endId, startId]
+
+    if (options?.count !== undefined) {
+      args.push('COUNT', options.count)
+    }
+
+    const result = await (this.client as any).xrevrange(...args)
+    return this.parseStreamRangeResult(result)
+  }
+
   async xack(stream: string, group: string, ids: string[]): Promise<void> {
     if (ids.length === 0) {
       return
     }
     await (this.client as any).xack(stream, group, ...ids)
+  }
+
+  private parseStreamRangeResult<T = any>(result: any): IgniterStoreStreamMessage<T>[] {
+    if (!result) {
+      return []
+    }
+
+    const messages: IgniterStoreStreamMessage<T>[] = []
+
+    for (const [id, fields] of result) {
+      const data: Record<string, string> = {}
+      for (let i = 0; i < fields.length; i += 2) {
+        data[fields[i]] = fields[i + 1]
+      }
+
+      try {
+        const message = data.data ? JSON.parse(data.data) : data
+        messages.push({ id, message })
+      } catch {
+        messages.push({ id, message: data as unknown as T })
+      }
+    }
+
+    return messages
   }
 }
 

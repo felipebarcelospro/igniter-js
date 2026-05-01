@@ -3,7 +3,7 @@
  * @module @igniter-js/store/types/events
  */
 
-import type { StandardSchemaV1 } from '@igniter-js/core'
+import type { StandardSchemaV1 } from "@igniter-js/common";
 
 /**
  * Schema definition for a single event.

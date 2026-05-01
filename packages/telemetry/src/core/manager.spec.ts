@@ -8,19 +8,19 @@ import { IgniterTelemetryManager } from './manager'
 import { IgniterTelemetryBuilder } from '../builders/main.builder'
 import { IgniterTelemetryEvents } from '../builders/event-registry.builder'
 import type { IgniterTelemetryTransportAdapter } from '../types/transport'
-import type { TelemetryEnvelope } from '../types/envelope'
+import type { IgniterTelemetryEnvelope } from '../types/envelope'
 
 describe('IgniterTelemetryManager', () => {
   let runtime: IgniterTelemetryManager<any>
   let mockTransport: IgniterTelemetryTransportAdapter
-  let handledEnvelopes: TelemetryEnvelope[]
+  let handledEnvelopes: IgniterTelemetryEnvelope[]
 
   beforeEach(() => {
     handledEnvelopes = []
     mockTransport = {
       type: 'logger',
       init: vi.fn(),
-      handle: vi.fn((envelope: TelemetryEnvelope) => {
+      handle: vi.fn((envelope: IgniterTelemetryEnvelope) => {
         handledEnvelopes.push(envelope)
       }),
       flush: vi.fn().mockResolvedValue(undefined),

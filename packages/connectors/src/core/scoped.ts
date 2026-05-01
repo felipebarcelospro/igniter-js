@@ -3,7 +3,7 @@
  * @module @igniter-js/connectors/core/scoped
  */
 
-import type { StandardSchemaV1 } from "@igniter-js/core";
+import type { StandardSchemaV1 } from "@igniter-js/common";
 import type {
   IgniterConnectorDefinition,
   IgniterConnectorActionBuilder,

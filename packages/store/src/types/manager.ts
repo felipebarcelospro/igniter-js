@@ -3,10 +3,10 @@
  * @module @igniter-js/store/types/manager
  */
 
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterStoreEventContextHandler, IgniterStoreEventsRegistry, IgniterStoreEventsRegistryProxy, IgniterStoreFlattenRegistryKeys, IgniterStoreGetEventSchema, IgniterStoreInferEventSchema, IgniterStoreUnsubscribeFn, IgniterStoreWildcardEventContext } from "./events";
 import type { IgniterStoreScopeIdentifier } from "./scope";
-import type { IgniterStoreScanOptions, IgniterStoreScanResult, IgniterStoreStreamAppendOptions, IgniterStoreStreamConsumerGroup } from "./adapter";
+import type { IgniterStoreScanOptions, IgniterStoreScanResult, IgniterStoreStreamAppendOptions, IgniterStoreStreamConsumerGroup, IgniterStoreStreamMessage, IgniterStoreStreamRangeOptions } from "./adapter";
 
 
 
@@ -127,6 +127,7 @@ export interface IgniterStoreDev {
 export interface IgniterStoreStreams {
   append(stream: string, message: unknown, options?: IgniterStoreStreamAppendOptions): Promise<string>
   group(group: string, consumer: string): IgniterStoreStreamConsumerGroup
+  range<T = unknown>(stream: string, options?: IgniterStoreStreamRangeOptions): Promise<IgniterStoreStreamMessage<T>[]>
 }
 
 /**

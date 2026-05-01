@@ -3,7 +3,7 @@
  * @module @igniter-js/connectors/types/manager
  */
 
-import type { IgniterLogger } from '@igniter-js/core'
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from '@igniter-js/telemetry'
 import type { IgniterConnectorAdapter } from './adapter'
 import type {

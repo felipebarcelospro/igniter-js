@@ -58,7 +58,7 @@ import type {
   IIgniterTelemetrySession,
   IgniterTelemetrySessionState,
 } from "../types/session";
-import { IIgniterTelemetryManager } from "@/types/manager";
+import { IIgniterTelemetryManager } from "../types/manager";
 
 /**
  * Runtime implementation of IgniterTelemetry.

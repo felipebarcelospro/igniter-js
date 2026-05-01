@@ -35,6 +35,8 @@ const createMockRedis = () => {
     xadd: vi.fn().mockResolvedValue('1-0'),
     xgroup: vi.fn().mockResolvedValue(undefined),
     xreadgroup: vi.fn().mockResolvedValue([]),
+    xrange: vi.fn().mockResolvedValue([]),
+    xrevrange: vi.fn().mockResolvedValue([]),
     xack: vi.fn().mockResolvedValue(1),
   }
 
@@ -120,5 +122,23 @@ describe('IgniterStoreRedisAdapter', () => {
       'data',
       JSON.stringify({ a: 1 }),
     )
+  })
+
+  it('reads stream range with defaults', async () => {
+    const { client } = createMockRedis()
+    const adapter = IgniterStoreRedisAdapter.create({ redis: client as any })
+
+    await adapter.xrange('stream')
+
+    expect(client.xrange).toHaveBeenCalledWith('stream', '-', '+')
+  })
+
+  it('reads stream range in reverse with count', async () => {
+    const { client } = createMockRedis()
+    const adapter = IgniterStoreRedisAdapter.create({ redis: client as any })
+
+    await adapter.xrevrange('stream', { startId: '0', endId: '+', count: 50 })
+
+    expect(client.xrevrange).toHaveBeenCalledWith('stream', '+', '0', 'COUNT', 50)
   })
 })

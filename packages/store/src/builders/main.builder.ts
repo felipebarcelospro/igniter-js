@@ -45,8 +45,7 @@
  * await store.events.user.created.publish({ userId: '123', email: 'a@b.com' })
  * ```
  */
-
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterStoreAdapter } from "../types/adapter";
 import type { IgniterStoreBuilderState } from "../types/builder";
 import type { IgniterStoreConfig } from "../types/config";

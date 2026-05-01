@@ -127,6 +127,29 @@ export interface IgniterStoreStreamReadOptions {
 }
 
 /**
+ * Options for stream range operations.
+ *
+ * @example
+ * ```typescript
+ * const messages = await store.streams.range('events', {
+ *   startId: '0',
+ *   endId: '+',
+ *   count: 100,
+ * })
+ * ```
+ */
+export interface IgniterStoreStreamRangeOptions {
+  /** Start ID (default: '-') */
+  startId?: string
+  /** End ID (default: '+') */
+  endId?: string
+  /** Maximum number of messages to return */
+  count?: number
+  /** Read in reverse order */
+  reverse?: boolean
+}
+
+/**
  * Options for ensuring a consumer group exists.
  *
  * @example
@@ -208,8 +231,8 @@ export interface IgniterStoreStreamConsumerGroup {
  * Extended store adapter interface with full support for streams, batch operations,
  * and advanced Redis features.
  *
- * This interface extends the basic IgniterStoreAdapter from @igniter-js/core
- * with additional methods needed for the full Store API.
+ * This interface defines the complete adapter contract expected by @igniter-js/store,
+ * including the extra methods required for the full Store API.
  *
  * @typeParam TClient - The underlying client type (e.g., Redis)
  *
@@ -387,6 +410,30 @@ export interface IgniterStoreAdapter<TClient = unknown> {
     group: string,
     consumer: string,
     options?: IgniterStoreStreamReadOptions,
+  ): Promise<IgniterStoreStreamMessage<T>[]>
+
+  /**
+   * Reads a range of messages from a stream.
+   *
+   * @param stream - The stream name
+   * @param options - Range options
+   * @returns Array of messages
+   */
+  xrange<T = any>(
+    stream: string,
+    options?: IgniterStoreStreamRangeOptions,
+  ): Promise<IgniterStoreStreamMessage<T>[]>
+
+  /**
+   * Reads a range of messages from a stream in reverse order.
+   *
+   * @param stream - The stream name
+   * @param options - Range options
+   * @returns Array of messages
+   */
+  xrevrange<T = any>(
+    stream: string,
+    options?: IgniterStoreStreamRangeOptions,
   ): Promise<IgniterStoreStreamMessage<T>[]>
 
   /**

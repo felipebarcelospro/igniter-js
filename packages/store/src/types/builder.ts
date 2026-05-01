@@ -3,7 +3,7 @@
  * @module @igniter-js/store/types/builder
  */
 
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterStoreAdapter } from "./adapter";
 import type {
   IgniterStoreEventsRegistry,

@@ -30,6 +30,8 @@ const createMockAdapter = (): IgniterStoreAdapter<any> => ({
   xadd: vi.fn().mockResolvedValue('1234567890-0'),
   xgroupCreate: vi.fn().mockResolvedValue(undefined),
   xreadgroup: vi.fn().mockResolvedValue([]),
+  xrange: vi.fn().mockResolvedValue([]),
+  xrevrange: vi.fn().mockResolvedValue([]),
   xack: vi.fn().mockResolvedValue(undefined),
 })
 
@@ -1284,6 +1286,54 @@ describe('IgniterStore', () => {
         )
       })
 
+      it('emits stream.range.started', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.streams.range('events')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.range.started'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+          },
+          'first',
+        )
+      })
+
+      it('emits stream.range.success', async () => {
+        const { telemetry, telemetryStore } = createTelemetryStore()
+        await telemetryStore.streams.range('events')
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.range.success'),
+          'debug',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+            'ctx.stream.count': 0,
+          },
+        )
+      })
+
+      it('emits stream.range.error', async () => {
+        const { telemetry, telemetryStore, adapter: localAdapter } = createTelemetryStore()
+        ;(localAdapter.xrange as any).mockRejectedValueOnce(new Error('fail'))
+        await expect(telemetryStore.streams.range('events')).rejects.toBeInstanceOf(Error)
+        expectEmitted(
+          telemetry,
+          IgniterStoreTelemetryEvents.get.key('stream.range.error'),
+          'error',
+          {
+            'ctx.store.service': 'test-api',
+            'ctx.store.namespace': 'stream',
+            'ctx.stream.name': 'events',
+          },
+        )
+      })
+
       it('emits stream.ack.started', async () => {
         const { telemetry, telemetryStore } = createTelemetryStore()
         const group = telemetryStore.streams.group('processors', 'worker-1')
@@ -1431,6 +1481,29 @@ describe('IgniterStore', () => {
         'igniter:store:test-api:streams:events',
         { type: 'click' },
         { maxLen: 10000, approximate: true },
+      )
+    })
+
+    it('should read range from stream', async () => {
+      (adapter.xrange as any).mockResolvedValue([
+        { id: '1-0', message: { type: 'click' } },
+      ])
+
+      const messages = await store.streams.range('events', { count: 10 })
+
+      expect(adapter.xrange).toHaveBeenCalledWith(
+        'igniter:store:test-api:streams:events',
+        { count: 10 },
+      )
+      expect(messages).toHaveLength(1)
+    })
+
+    it('should read range in reverse order', async () => {
+      await store.streams.range('events', { reverse: true, count: 5 })
+
+      expect(adapter.xrevrange).toHaveBeenCalledWith(
+        'igniter:store:test-api:streams:events',
+        { reverse: true, count: 5 },
       )
     })
 

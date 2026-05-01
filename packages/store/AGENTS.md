@@ -1,7 +1,7 @@
 # AGENTS.md - @igniter-js/store
 
-> **Last Updated:** 2025-12-23  
-> **Version:** 0.1.21  
+> **Last Updated:** 2026-01-29  
+> **Version:** 0.1.25  
 > **Goal:** This document serves as the complete operational manual for Code Agents maintaining and consuming the @igniter-js/store package. It is designed to be hyper-robust, training-ready, and exhaustive, aiming for at least 1,500 lines of high-quality content to ensure the agent fully dominates the package's domain, architecture, and usage.
 
 ---
@@ -71,7 +71,7 @@ The core directory contains the implementation of the manager, which is the obje
 
 Standardization of failure modes is a key part of the framework's reliability.
 
-- `store.error.ts`: **IgniterStoreError.** Extends the base `IgniterError` from `@igniter-js/core`. It carries a typed `code` (from `IGNITER_STORE_ERROR_CODES`) and a `metadata` payload that includes the key, namespace, and operation that failed.
+- `store.error.ts`: **IgniterStoreError.** Extends the base `IgniterError` from `@igniter-js/common`. It carries a typed `code` (from `IGNITER_STORE_ERROR_CODES`) and a `metadata` payload that includes the key, namespace, and operation that failed.
 
 #### `src/telemetry/` — Observability Registry
 
@@ -89,7 +89,7 @@ This directory contains only TypeScript interfaces and type aliases. It is stric
 - `events.ts`: Contains the deeply nested types required for event registry inference and the Proxy-based API.
 - `manager.ts`: Public interfaces for the manager class and its sub-namespaces (KV, Counter, Claim, etc.).
 - `scope.ts`: Types for the hierarchical multi-tenancy system, including scope chains and entries.
-- `serializer.ts`: Defines the `IgniterStoreSerializer` interface for data transformation (JSON, etc.).
+- `serializer.ts`: Defines the `IgniterStoreSerializer` interface for adapter-level data transformation. The core manager does not apply this serializer; the Redis adapter serializes/deserializes with JSON internally.
 
 #### `src/utils/` — Static Helper Library
 
@@ -150,30 +150,25 @@ For EVERY public method, here is the exhaustive internal step-by-step pipeline d
 1.  **Argument Extraction**: Receives the user key string.
 2.  **Key Resolution**: Invokes `keyBuilder.build('kv', key)`. This handles all scoping and service prefixing.
 3.  **Telemetry (Started)**: Emits `igniter.store.kv.get.started`.
-    - Attributes: `ctx.store.service`, `ctx.store.namespace: 'kv'`, `ctx.store.scope_key` (if scoped).
-4.  **Trace (Debug)**: If a logger is provided, logs `[IgniterStore] KV GET started` with the full namespaced key.
-5.  **Adapter Execution**: Invokes `adapter.get(fullKey)`.
-6.  **Data Transformation**:
-    - If the adapter returns `null`, the manager skips decoding.
-    - If a string/buffer is returned, it calls `serializer.decode(value)`.
-    - If decoding fails, it throws a `STORE_DESERIALIZATION_FAILED` error.
-7.  **Telemetry (Success)**: Emits `igniter.store.kv.get.success`.
-    - Attributes: `ctx.kv.found: boolean`.
-8.  **Telemetry (Error)**: On adapter failure, catches the exception and emits `igniter.store.kv.get.error` with the standardized error metadata.
-9.  **Trace (Info)**: Logs the result (Found/Not Found) and the total duration in milliseconds.
-10. **Return**: Returns the typed object or `null`.
+  - Attributes: `ctx.store.service`, `ctx.store.namespace: 'kv'`, `ctx.store.scope_key` (if scoped).
+4.  **Adapter Execution**: Invokes `adapter.get(fullKey)`.
+  - The Redis adapter handles JSON serialization/deserialization internally.
+5.  **Telemetry (Success)**: Emits `igniter.store.kv.get.success`.
+  - Attributes: `ctx.kv.found: boolean`.
+6.  **Telemetry (Error)**: On adapter failure, catches the exception and emits `igniter.store.kv.get.error` with the standardized error metadata.
+7.  **Return**: Returns the typed object or `null`.
 
 ##### Method: `store.kv.set(key, value, options)`
 
 1.  **Argument Extraction**: Receives key, value, and optional `ttl` (in seconds).
 2.  **Key Resolution**: Invokes `keyBuilder.build('kv', key)`.
 3.  **Telemetry (Started)**: Emits `igniter.store.kv.set.started`.
-    - Attributes: `ctx.kv.ttl: number` (if provided).
-4.  **Serialization**: Calls `serializer.encode(value)`. This is typically `JSON.stringify`.
-5.  **Adapter Execution**: Invokes `adapter.set(fullKey, serializedValue, options)`.
-6.  **Telemetry (Success)**: Emits `igniter.store.kv.set.success`.
-7.  **Telemetry (Error)**: On failure, emits `igniter.store.kv.set.error`.
-8.  **Return**: Returns `Promise<void>`.
+  - Attributes: `ctx.kv.ttl: number` (if provided).
+4.  **Adapter Execution**: Invokes `adapter.set(fullKey, value, options)`.
+  - The Redis adapter serializes with `JSON.stringify` internally.
+5.  **Telemetry (Success)**: Emits `igniter.store.kv.set.success`.
+6.  **Telemetry (Error)**: On failure, emits `igniter.store.kv.set.error`.
+7.  **Return**: Returns `Promise<void>`.
 
 ##### Method: `store.kv.exists(key)`
 
@@ -250,7 +245,7 @@ For EVERY public method, here is the exhaustive internal step-by-step pipeline d
 2.  **Key Mapping**: Maps the user's array of keys to full namespaced keys using the `keyBuilder`.
 3.  **Telemetry (Started)**: Emits `igniter.store.batch.get.started` with `ctx.batch.count`.
 4.  **Adapter Execution**: Invokes `adapter.mget(fullKeys)`.
-5.  **Data Transformation**: Iterates through the results and calls `serializer.decode()` for each non-null value.
+5.  **Data Transformation**: Adapter returns deserialized values (Redis adapter parses JSON internally).
 6.  **Telemetry (Success)**: Emits `igniter.store.batch.get.success` with `ctx.batch.found` count.
 7.  **Return**: Returns the array of typed objects or nulls.
 
@@ -279,20 +274,19 @@ For EVERY public method, here is the exhaustive internal step-by-step pipeline d
     - `scope`: The current manager's `scopeChain`.
 5.  **Resolve Key**: `keyBuilder.build('events', channel)`.
 6.  **Telemetry (Started)**: Emits `igniter.store.events.publish.started` with `ctx.events.channel`.
-7.  **Serialization**: Calls `serializer.encode()` on the entire envelope.
-8.  **Adapter Execution**: Invokes `adapter.publish(fullChannel, serializedEnvelope)`.
-9.  **Telemetry (Success/Error)**: Emits success or error event.
-10. **Return**: Returns `Promise<void>`.
+7.  **Adapter Execution**: Invokes `adapter.publish(fullChannel, envelope)`.
+  - The Redis adapter serializes the envelope with `JSON.stringify`.
+8.  **Telemetry (Success/Error)**: Emits success or error event.
+9.  **Return**: Returns `Promise<void>`.
 
 ##### Method: `store.events.subscribe(channel, handler)`
 
 1.  **Key Resolution**: `keyBuilder.build('events', channel)`.
 2.  **Telemetry (Started)**: Emits `igniter.store.events.subscribe.started`.
 3.  **Handler Wrapping**: The manager creates a decorator function for the user's `handler`:
-    - **Step A**: Receives the raw JSON string from the adapter.
-    - **Step B**: Parses the JSON to recover the `IgniterStoreEventContext`.
-    - **Step C**: If a schema is registered for the channel, validates the `data` property of the context.
-    - **Step D**: Invokes the user's `handler` with the unwrapped, validated context.
+  - **Step A**: Receives the parsed envelope from the adapter (Redis adapter parses JSON internally).
+  - **Step B**: If a schema is registered for the channel, validates the `data` property of the context.
+  - **Step C**: Invokes the user's `handler` with the validated context.
 4.  **Adapter Execution**: Invokes `adapter.subscribe(fullChannel, wrappedHandler)`.
 5.  **Telemetry (Success)**: Emits `igniter.store.events.subscribe.success`.
 6.  **Unsubscribe Logic**: Returns an async function that, when called:
@@ -310,6 +304,16 @@ For EVERY public method, here is the exhaustive internal step-by-step pipeline d
 3.  **Adapter Execution**: Invokes `adapter.xadd(fullKey, message, options)`.
 4.  **Telemetry (Success)**: Emits `igniter.store.stream.append.success`.
 5.  **Return**: Returns the Redis message ID.
+
+##### Method: `store.streams.range(name, options)`
+
+1.  **Key Resolution**: Calls `keyBuilder.build('streams', name)`.
+2.  **Telemetry (Started)**: Emits `igniter.store.stream.range.started` with `ctx.stream.name`.
+3.  **Adapter Execution**:
+    - `adapter.xrange(fullKey, options)` for forward reads.
+    - `adapter.xrevrange(fullKey, options)` when `options.reverse` is true.
+4.  **Telemetry (Success)**: Emits `igniter.store.stream.range.success` with `ctx.stream.count`.
+5.  **Return**: Returns an array of `IgniterStoreStreamMessage`.
 
 ##### Method: `store.streams.group(name, consumer).ensure(stream, options)`
 
@@ -367,7 +371,7 @@ Maintainers must protect the architecture from "Dependency Bloat." The store pac
 
 #### Dependencies (Peer & Optional)
 
-- **`@igniter-js/core`**: Mandatory. Provides `IgniterError` and the `StandardSchemaV1` contract.
+- **`@igniter-js/common`**: Mandatory. Provides `IgniterError` and the `StandardSchemaV1` contract.
 - **`@igniter-js/telemetry`**: Optional peer dependency. If not present, the manager uses a "no-op" telemetry implementation that safely ignores `emit` calls.
 - **`ioredis`**: Optional peer dependency. Only required when the `IgniterStoreRedisAdapter` is used.
 - **`zod`**: Recommended peer dependency for event schema definitions.
@@ -777,7 +781,7 @@ await store.events.publish("db:update:user", { userId });
 #### Domain: Event-Driven Microservices
 
 - **Guidance**: Export your `IgniterStoreEvents` registry from a shared package to ensure producers and consumers remain in sync.
-- **Guidance**: Use wildcard subscriptions (`user:*`) for audit logging or notification services.
+- **Guidance**: Wildcard subscriptions require adapter support (Redis needs `PSUBSCRIBE`). The built-in Redis adapter uses `SUBSCRIBE`, so use explicit channels unless you implement a custom adapter.
 
 ### 12. Best Practices & Anti-Patterns (Maintenance Table)
 
@@ -789,7 +793,7 @@ await store.events.publish("db:update:user", { userId });
 | ✅ StandardSchemaV1 Validation   | Ensures data integrity between producers and consumers.                  | Using Zod for event payloads             |
 | ❌ Plain-text Secrets            | Redis is often unencrypted at rest; never store passwords or raw tokens. | `kv.set('password', p)`                  |
 | ❌ Storing Raw PDF/Image Buffers | Redis performance degrades significantly with values > 1MB.              | Storing binary in KV                     |
-| ❌ Direct Adapter Access         | Bypasses telemetry, logging, and key namespacing safety.                 | `store.adapter.client.set(...)`          |
+| ❌ Direct Adapter Access         | Bypasses telemetry and key namespacing safety.                           | `store.adapter.client.set(...)`          |
 | ❌ Key Scanning in Production    | `SCAN` operations block the Redis event loop.                            | Avoid `store.dev.scan` in hot paths      |
 
 ---
@@ -909,7 +913,7 @@ The store uses `igniter.store` as its telemetry namespace.
 - **Context**: During `kv.set` or `publish`.
 - **Cause**: The object provided contains circular references or non-serializable types.
 - **Mitigation**: Use pure JSON-serializable objects for state and events.
-- **Solution**: Sanitize the object or implement a custom serializer via `.withSerializer()`.
+- **Solution**: Sanitize the object or implement a custom adapter that uses your preferred encoding (the Redis adapter uses JSON internally).
 
 #### `STORE_ENVIRONMENT_REQUIRED`
 
@@ -1013,13 +1017,13 @@ If using globally distributed Redis (like Upstash or Fly.io Redis):
 ### 20. Comprehensive Developer FAQ (100 Item Target)
 
 1. **How do I handle connection loss?** Use ioredis retry strategy.
-2. **Can I use wildcards?** Yes, in `events.subscribe('user:*')`.
+2. **Can I use wildcards?** The TypeScript types support wildcards, but Redis Pub/Sub requires `PSUBSCRIBE`. The built-in Redis adapter uses `SUBSCRIBE`, so implement a custom adapter if you need wildcard patterns.
 3. **Is it thread-safe?** Yes, Node.js is single-threaded but Redis commands are atomic.
 4. **Maximum key size?** 512MB, but keep them under 1KB.
-5. **Is it safe for browser?** No, throws error.
-6. **Can I use custom serialization?** Yes, `.withSerializer()`.
+5. **Is it safe for browser?** Treat this as a server-only package. Use it in API routes, workers, or server actions.
+6. **Can I use custom serialization?** The Redis adapter uses JSON. For custom serialization, pre-encode values or implement a custom adapter.
 7. **How to clear specific scope?** Use `dev.scan` with scope prefix.
-8. **Does it support MessagePack?** Yes, via custom serializer.
+8. **Does it support MessagePack?** Not in the Redis adapter. Implement a custom adapter or pre-encode MessagePack payloads.
 9. **Is counter atomic?** Yes.
 10. **What is the `igniter:store` prefix for?** Universal framework namespacing.
 11. **Can I use it with AWS ElastiCache?** Yes, it is fully compatible.
@@ -1030,9 +1034,9 @@ If using globally distributed Redis (like Upstash or Fly.io Redis):
 16. **How do I list all keys?** Use `dev.scan` with a pattern. Avoid `KEYS *` in production.
 17. **Is it compatible with Bun?** Yes, fully compatible with the Bun runtime.
 18. **Is it compatible with Deno?** Yes, as long as `ioredis` dependencies are met.
-19. **How do I handle binary data?** Use a custom serializer or encode as base64.
+19. **How do I handle binary data?** Encode as base64/hex before storing, or implement a custom adapter that supports binary payloads.
 20. **Can I use it with Redis Cluster?** Yes, just pass a Cluster client to the adapter.
-21. **How do I mock the store in tests?** Use the `MockStoreAdapter` provided in the package.
+21. **How do I mock the store in tests?** Create a lightweight in-memory adapter that implements `IgniterStoreAdapter`.
 22. **What happens if validation fails on publish?** It throws `STORE_SCHEMA_VALIDATION_FAILED` by default.
 23. **Can I disable validation?** Yes, via the `eventsValidation` configuration in the builder.
 24. **How do I monitor performance?** Use the provided telemetry attributes and events.
@@ -1174,12 +1178,12 @@ Internal state container for the fluent API.
 
 - `adapter?: IgniterStoreAdapter`: Storage provider.
 - `service?: string`: Service name identifier.
-- `serializer?: IgniterStoreSerializer`: Data transformer.
+- `serializer?: IgniterStoreSerializer`: Optional serializer (stored in config; not applied by the core manager).
 - `eventsRegistry?: TRegistry`: Typed event definitions.
 - `eventsValidation?: EventsValidationOptions`: Validation settings.
 - `scopeDefinitions?: Record<TScopes, ScopeOptions>`: Allowed scope keys.
 - `telemetry?: IgniterTelemetryManager`: Observability provider.
-- `logger?: IgniterLogger`: Structured logging provider.
+- `logger?: IgniterLogger`: Logger instance exposed via `store.logger` (core does not log automatically).
 
 #### `IgniterStoreConfig<TRegistry, TScopes>`
 
@@ -1188,7 +1192,7 @@ Consolidated runtime configuration.
 - `adapter: IgniterStoreAdapter`: Required provider.
 - `service: string`: Required service name.
 - `scopeChain: ScopeEntry[]`: Current hierarchical prefix path.
-- `serializer: IgniterStoreSerializer`: Defaults to JSON.
+- `serializer: IgniterStoreSerializer`: Defaults to JSON (Redis adapter handles JSON internally).
 
 ---
 

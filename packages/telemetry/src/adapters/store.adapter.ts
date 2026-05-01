@@ -136,12 +136,12 @@ export class StoreStreamTransportAdapter implements IgniterTelemetryTransportAda
   readonly type = 'store' as const
   private readonly config: Required<Omit<StoreStreamTransportConfig, 'streamBuilder'>> & Pick<StoreStreamTransportConfig, 'streamBuilder'>
   private meta?: IgniterTelemetryTransportMeta
-  private store: IgniterStoreManager
+  private store: TelemetryStoreInterface
 
   private constructor(config: StoreStreamTransportConfig) {
     this.store = IgniterStore.create()
       .withAdapter(IgniterStoreRedisAdapter.create({ redis: config.redis }))
-      .build()
+      .build() as unknown as TelemetryStoreInterface
 
     this.config = {
       redis: config.redis,

@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { IgniterStore, IgniterStoreBuilder } from './main.builder'
 import { IgniterStoreError } from '../errors/store.error'
 import type { IgniterStoreAdapter } from '../types/adapter'
-import type { IgniterLogger } from '@igniter-js/core'
+import type { IgniterLogger } from "@igniter-js/common";
 import { IgniterStoreEvents } from './events.builder'
 import { z } from 'zod'
 

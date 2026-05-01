@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/connectors",
-  "version": "0.1.1",
+  "version": "0.1.11",
   "description": "Type-safe, multi-tenant connector management library for Igniter.js with OAuth, encryption, and adapter support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -71,10 +71,11 @@
   },
   "homepage": "https://igniterjs.com",
   "dependencies": {
+    "@igniter-js/common": ">=0.1.0",
     "@igniter-js/telemetry": ">=0.1.12"
   },
   "devDependencies": {
-    "@igniter-js/core": "*",
+    "@igniter-js/common": "*",
     "@igniter-js/telemetry": "*",
     "@types/node": "^25.0.2",
     "tsup": "^8.3.0",
@@ -83,7 +84,7 @@
     "zod": "^4.2.0"
   },
   "peerDependencies": {
-    "@igniter-js/core": ">=0.2.0",
+    "@igniter-js/common": ">=0.1.0",
     "@igniter-js/telemetry": ">=0.1.12",
     "zod": ">=3.0.0"
   },

@@ -3,7 +3,7 @@
  * @module @igniter-js/telemetry/types/config
  */
 
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type {
   IgniterTelemetryEventsRegistry,
   IgniterTelemetryEventsValidationOptions,
@@ -56,8 +56,8 @@ export interface IgniterTelemetryScopeOptions {
 export interface IgniterTelemetryConfig<
   TRegistry extends IgniterTelemetryEventsRegistry =
     IgniterTelemetryEventsRegistry,
-  TScopes extends string = never,
-  TActors extends string = never,
+  TScopes extends string = string,
+  TActors extends string = string,
 > {
   /** Service name */
   service: string;

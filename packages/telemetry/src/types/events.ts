@@ -3,7 +3,7 @@
  * @module @igniter-js/telemetry/types/events
  */
 
-import type { StandardSchemaV1 } from '@igniter-js/core'
+import type { StandardSchemaV1 } from "@igniter-js/common";
 
 /**
  * Base schema interface that supports both Zod and StandardSchemaV1 schemas.

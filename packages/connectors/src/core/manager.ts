@@ -3,7 +3,7 @@
  * @module @igniter-js/connectors/core/runtime
  */
 
-import type { IgniterLogger, StandardSchemaV1 } from "@igniter-js/core";
+import type { IgniterLogger, StandardSchemaV1 } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 import type { IgniterConnectorsTelemetryEvents } from "../telemetry";
 import type { IgniterConnectorAdapter } from "../types/adapter";

@@ -42,430 +42,1117 @@ The internal structure is optimized for high cohesion and extreme modularity. Ma
 #### `src/builders/` - The Fluent Configuration Layer
 
 This folder contains the "Accumulators" that build the immutable configuration state.
+# AGENTS.md - @igniter-js/telemetry
 
-- `main.builder.ts`: **IgniterTelemetryBuilder**. The primary entry point. Manages the overall config state and orchestrates the creation of the Manager.
-- `event-registry.builder.ts`: **IgniterTelemetryEvents**. Handles the declarative definition of events and namespaces. Uses generics to provide the "magic" autocomplete.
-- `event-registry-group.builder.ts`: **IgniterTelemetryEventsGroup**. Enables recursive nesting of event groups, allowing for hierarchical event organization (e.g., `igniter.jobs.worker.started`).
+> **Last Updated:** 2026-01-29
+> **Version:** 0.1.141
+> **Goal:** This document is the complete operational manual for Code Agents maintaining and extending `@igniter-js/telemetry`. It is training-ready, implementation-grounded, and exhaustive by design.
 
-#### `src/core/` - The Runtime Engine
+---
 
-The heartbeat of the package lives here.
+## 1. Package Vision & Context
 
-- `manager.ts`: **IgniterTelemetryManager**. The operational core. Implements the `emit` pipeline, transport orchestration, and lifecycle (flush/shutdown).
-- `session.ts`: **IgniterTelemetrySession**. Manages `AsyncLocalStorage` interaction, session ID generation, and context merging (actor/scope/attributes).
+`@igniter-js/telemetry` is the observability backbone of the Igniter.js ecosystem. It unifies logs, metrics-like events, and error reporting under a **typed, session-aware, privacy-safe** model. This package is not a logging facade — it is a deterministic telemetry pipeline that enforces structure across all event flows.
 
-#### `src/types/` - The Canonical Contracts
+### Core Philosophy
 
-Zero runtime code. Only interfaces and type aliases.
+This package is grounded in four non-negotiables:
 
-- `builder.ts`: Defines the internal state of the builder classes.
-- `config.ts`: Defines the final configuration object used by the Manager.
-- `emit.ts`: Defines the valid inputs for the `emit` methods.
-- `envelope.ts`: **The Golden Standard**. Defines the `IgniterTelemetryEnvelope`, the standard format for every event.
-- `events.ts`: Core types for the event registry and schema inference.
-- `levels.ts`: Type-safe severity levels (`debug`, `info`, `warn`, `error`).
-- `manager.ts`: The public interface for the Manager.
-- `policies.ts`: Schemas for sampling and redaction rules.
-- `session.ts`: The public interface and internal state for sessions.
-- `transport.ts`: The contract that all adapters must follow.
+1. **Type Safety as a First-Class Citizen**
+   Events should be as reliable as business logic. Typed registries prevent telemetry drift.
 
-#### `src/adapters/` - The Integration Layer
+2. **Context-Aware Observability**
+   Sessions correlate events across async boundaries without manual context threading.
 
-Translates the generic `IgniterTelemetryEnvelope` into specific provider formats.
+3. **Privacy by Design**
+   Redaction is applied before transport fan-out to prevent PII leaks.
 
-- `logger.adapter.ts`: Formats events for console output (JSON or Pretty).
-- `mock.adapter.ts`: A high-fidelity in-memory adapter for unit testing.
-- `sentry.adapter.ts`: Maps envelopes to Sentry Breadcrumbs or Exceptions.
-- `otlp.adapter.ts`: Maps envelopes to OpenTelemetry Logs Data Model.
-- `slack.adapter.ts` / `discord.adapter.ts` / `telegram.adapter.ts`: Formats events as rich messages for chat webhooks.
-- `file.adapter.ts`: Writes events to disk using NDJSON format.
-- `store.adapter.ts`: Streams events to `@igniter-js/store` (Redis Streams).
+4. **Operational Resilience**
+   Telemetry must never crash an application. Transport failures are isolated.
 
-#### `src/utils/` - Shared Logic
+### The Problems It Solves
 
-Stateless, tested utilities.
+- Fragmented logging across multiple systems
+- Missing correlations in async flows
+- PII leakage through raw event payloads
+- Cost blowouts from unbounded telemetry volume
+- Inconsistent event naming and shape drift
 
-- `id.ts`: Secure, collision-resistant ID generation for sessions.
-- `redaction.ts`: The core engine for PII removal and hashing.
-- `sampling.ts`: The algorithm for deterministic and random sampling.
-- `validator.ts`: Basic validation for namespaces and event names.
+---
 
-#### `src/errors/` - Failure Governance
+## I. MAINTAINER GUIDE (Internal Architecture)
 
-- `telemetry.error.ts`: Defines the `IgniterTelemetryError` class and the centralized error code registry.
+### 2. FileSystem Topology (Maintenance)
+
+Maintain this package by understanding its layers and enforcing immutability and runtime isolation.
+
+#### `src/` root map
+
+- `index.ts`
+  - Public entrypoint
+  - Exports builders, core, errors, types, utils, and adapters
+  - Imports `./shim` to enforce server-only safety
+
+- `shim.ts`
+  - Server-only safeguard
+  - Throws if imported in unsupported environments
+
+#### `src/builders/`
+
+- `main.builder.ts`
+  - `IgniterTelemetryBuilder`
+  - Immutable configuration chain
+  - Public alias via `IgniterTelemetry` in `src/index.ts`
+
+- `event-registry.builder.ts`
+  - `IgniterTelemetryEvents`
+  - Typed event registry with namespaces + groups
+
+- `event-registry-group.builder.ts`
+  - `IgniterTelemetryEventsGroup`
+  - Nested grouping helper for event registries
+
+#### `src/core/`
+
+- `manager.ts`
+  - `IgniterTelemetryManager`
+  - Runtime pipeline (sampling → envelope → redaction → transport)
+
+- `session.ts`
+  - `IgniterTelemetrySession`
+  - AsyncLocalStorage session manager
+
+#### `src/types/`
+
+- `builder.ts`
+  - `IgniterTelemetryBuilderState`
+
+- `config.ts`
+  - `IgniterTelemetryConfig`
+  - `IgniterTelemetryActorOptions`, `IgniterTelemetryScopeOptions`
+
+- `emit.ts`
+  - `IgniterTelemetryEmitInput`
+
+- `envelope.ts`
+  - `IgniterTelemetryEnvelope`
+  - Actor/Scope/Tags/Error/Source types
+
+- `events.ts`
+  - `IgniterTelemetryEventsMap`
+  - `IgniterTelemetryEventsRegistry`
+  - `IgniterTelemetryEventsDescriptor`
+  - `IgniterTelemetryFlattenRegistryKeys`
+
+- `keys.ts`
+  - `IgniterTelemetryKeyValidator`
+
+- `levels.ts`
+  - `IgniterTelemetryLevel`
+  - `IGNITER_TELEMETRY_LEVELS`
+  - `IGNITER_TELEMETRY_LEVEL_PRIORITY`
+
+- `manager.ts`
+  - `IIgniterTelemetryManager`
+
+- `policies.ts`
+  - `IgniterTelemetryRedactionPolicy`
+  - `IgniterTelemetrySamplingPolicy`
+  - Defaults
+
+- `session.ts`
+  - `IIgniterTelemetrySession`
+  - `IgniterTelemetrySessionState`
+
+- `transport.ts`
+  - `IgniterTelemetryTransportAdapter`
+  - `IgniterTelemetryTransportMeta`
+
+#### `src/adapters/`
+
+Public adapters (exported via `@igniter-js/telemetry/adapters`):
+
+- `logger.adapter.ts`
+- `http.adapter.ts`
+- `otlp.adapter.ts`
+- `sentry.adapter.ts`
+- `slack.adapter.ts`
+- `discord.adapter.ts`
+- `telegram.adapter.ts`
+- `memory.adapter.ts`
+- `mock.adapter.ts`
+- `store.adapter.ts`
+
+Internal (not included in `tsup` entries):
+
+- `file.adapter.ts` (not part of public dist; treat as experimental)
+
+#### `src/utils/`
+
+- `id.ts` → `IgniterTelemetryId`
+- `sampling.ts` → `IgniterTelemetrySampling`
+- `redaction.ts` → `IgniterTelemetryRedaction`
+- `validator.ts` → `IgniterTelemetryValidator`
+
+#### `src/errors/`
+
+- `telemetry.error.ts` → `IgniterTelemetryError` + error codes
+
+---
 
 ### 3. Architecture Deep-Dive
 
-#### The Builder → Manager → Adapter Chain
+#### Builder → Manager → Adapter Flow
 
-1.  **Phase 1: Accumulation (Builder)**
-    Every call to `.withService()`, `.addActor()`, etc., returns a _new_ instance of the builder. This ensures that the configuration is immutable and side-effect free. Types are "captured" into the class generics during this phase.
+1. **Builder accumulation**
+   - Each `with*` and `add*` method returns a **new builder instance**.
+   - No method mutates state in-place.
 
-2.  **Phase 2: Realization (Build)**
-    When `.build()` is called, the builder "bakes" the state into a `IgniterTelemetryConfig`. This is where default values (like default sampling rates) are merged. The Manager is instantiated, and it immediately initializes all transports.
+2. **Build**
+   - `buildConfig()` merges defaults and returns a config object.
+   - `build()` constructs `IgniterTelemetryManager`.
 
-3.  **Phase 3: Dispatch (Manager)**
-    The Manager holds the "Hot Path." When `emit()` is called, it flows through:
-    `Input` → `Sampling` → `Envelope Assembly` → `Async Context Lookup` → `Redaction` → `Multi-Transport Fan-out`.
+3. **Runtime dispatch**
+   - `emit()` resolves active session, applies sampling, builds envelope, redacts, and dispatches.
 
-#### The Async Context Isolation Engine
+#### Async Context Isolation
 
-We use `AsyncLocalStorage` from `node:async_hooks`. This allows us to keep track of a "current session" without requiring the developer to pass a session object to every single function in their app.
+- `IgniterTelemetrySession.run()` enters AsyncLocalStorage state.
+- `IgniterTelemetryManager.emit()` pulls `IgniterTelemetrySession.getActive()`.
+- Session fields override or merge with event-level input.
 
-- When `session.run(callback)` is called, the session state is "entered."
-- Any `telemetry.emit()` call made within the `callback` (including nested async calls) will automatically find and use the session's ID, actor, and scope.
-- This is critical for HTTP frameworks where multiple requests are being handled concurrently on the same event loop.
+#### Redaction Pipeline
 
-#### The Redaction Pipeline
+- Applied only if `attributes` exist.
+- Uses `IgniterTelemetryRedaction.createRedactor()`.
+- Runs **before** transport fan-out.
 
-Redaction is **mandatory and automatic** if configured. The redactor:
+#### Sampling Pipeline
 
-1.  Iterates through all keys in the `attributes` object.
-2.  If a key matches the `denylistKeys` (case-insensitive), it is **deleted**.
-3.  If a key matches the `hashKeys`, the value is hashed using a truncated SHA-256 hex string (prefixed with `sha256:`).
-4.  If a string value exceeds `maxStringLength`, it is truncated with a warning suffix.
-5.  This happens _after_ the envelope is built but _before_ it is handed to any transport.
+- Sampling occurs before envelope creation.
+- `IgniterTelemetrySampling.createSampler(policy)` returns a function used by the manager.
+
+---
 
 ### 4. Operational Flow Mapping (Pipelines)
 
-#### Method: `telemetry.emit(name, input)`
+#### Method: `IgniterTelemetryBuilder.create()`
 
-1.  **Entrance:** Method receives the event name and optional input (level, attributes, etc.).
-2.  **Context Detection:** Calls `IgniterTelemetrySession.getActive()` to check if we are inside an `AsyncLocalStorage` scope.
-3.  **Sampling Decision:**
-    - Checks if the event name matches any `never` patterns (e.g., `health.check`).
-    - Checks if it matches any `always` patterns (e.g., `*.error`).
-    - Applies level-based probability (e.g., only 1% of `debug` events).
-4.  **Envelope Synthesis:**
-    - Merges session-level attributes with event-level attributes.
-    - Resolves the `actor` and `scope` (prioritizing event-level overrides).
-    - Generates a timestamp and ensures a `sessionId` exists.
-5.  **Redaction Pipeline:** Attributes are passed through the `IgniterTelemetryRedaction` engine.
-6.  **Transport Fan-out:**
-    - Iterates through the `Map` of registered adapters.
-    - Each `adapter.handle(envelope)` is called.
-    - **Isolation:** If one transport fails, it logs to the internal logger but does not throw, allowing other transports to proceed.
-7.  **Finality:** The method returns `void`.
+1. Initialize default builder state.
+2. Set `eventsValidation` to `{ mode: 'development', strict: false }`.
+3. Return builder instance.
 
-#### Method: `session.run(fn)`
+#### Method: `.withService(service)`
 
-1.  **Validation:** Ensures the session hasn't been `end()`-ed.
-2.  **Context Entry:** Calls `sessionStorage.run(state, fn)`.
-3.  **Execution:** The provided function `fn` is executed.
-4.  **Propagation:** Any calls to `telemetry.emit` inside `fn` will now see this session's state as "Active."
-5.  **Clean-up:** When `fn` completes (or throws), the `AsyncLocalStorage` context is automatically cleared for this branch of execution.
+1. Copy existing state.
+2. Set `service`.
+3. Return new builder.
 
-#### Method: `telemetry.shutdown()`
+#### Method: `.withEnvironment(environment)`
 
-1.  **Flush:** Automatically calls `this.flush()` to ensure all buffered data in adapters is sent.
-2.  **Cleanup Loop:** Iterates through all adapters.
-3.  **Graceful Exit:** If an adapter implements `shutdown()`, it is awaited (e.g., closing a file handle or a socket).
-4.  **Status Update:** Internal state is marked as shutdown (preventing further emits).
+1. Copy existing state.
+2. Set `environment`.
+3. Return new builder.
+
+#### Method: `.withVersion(version)`
+
+1. Copy existing state.
+2. Set `version`.
+3. Return new builder.
+
+#### Method: `.addActor(key, options)`
+
+1. Validate with `IgniterTelemetryKeyValidator`.
+2. Throw `TELEMETRY_DUPLICATE_ACTOR` if already registered.
+3. Update `actorDefinitions`.
+4. Return new builder.
+
+#### Method: `.addScope(key, options)`
+
+1. Validate with `IgniterTelemetryKeyValidator`.
+2. Throw `TELEMETRY_DUPLICATE_SCOPE` if already registered.
+3. Update `scopeDefinitions`.
+4. Return new builder.
+
+#### Method: `.addEvents(descriptor, options)`
+
+1. Validate namespace uniqueness.
+2. Merge into `eventsRegistry`.
+3. Merge validation options.
+4. Return new builder.
+
+#### Method: `.addTransport(adapter)`
+
+1. If adapter is falsy → `TELEMETRY_INVALID_TRANSPORT`.
+2. Push to `transports`.
+3. Return new builder.
+
+#### Method: `.withSampling(policy)`
+
+1. Merge sampling policy into builder state.
+2. Return new builder.
+
+#### Method: `.withRedaction(policy)`
+
+1. Merge redaction policy into builder state.
+2. Return new builder.
+
+#### Method: `.withValidation(options)`
+
+1. Merge validation options into builder state.
+2. Return new builder.
+
+#### Method: `.withLogger(logger)`
+
+1. Set internal logger in state.
+2. Return new builder.
+
+#### Method: `.build()`
+
+1. Calls `.buildConfig()`.
+2. Logs with logger if configured.
+3. Instantiates `IgniterTelemetryManager`.
+4. Initializes all adapters (`adapter.init()` if present).
+
+#### Method: `.buildConfig()`
+
+1. Default `service` to `igniter-app` if missing.
+2. Default `environment` to `development` if missing.
+3. Merge sampling + redaction defaults.
+4. Return config.
+
+#### Method: `IgniterTelemetryManager.emit()`
+
+1. Read AsyncLocalStorage session state.
+2. Apply sampling rule.
+3. Build envelope with actor/scope merge.
+4. Redact attributes.
+5. Fan-out to transports.
+6. If all transports fail → `TELEMETRY_TRANSPORT_FAILED`.
+
+#### Method: `IgniterTelemetryManager.session()`
+
+1. Create `IgniterTelemetrySession` with emit callback.
+
+#### Method: `IgniterTelemetryManager.flush()`
+
+1. For each adapter with `flush()` → await flush.
+2. Log errors, do not throw.
+
+#### Method: `IgniterTelemetryManager.shutdown()`
+
+1. Call `flush()`.
+2. For each adapter with `shutdown()` → await shutdown.
+3. Log errors, do not throw.
+
+#### Method: `IgniterTelemetrySession.run()`
+
+1. Guard against ended session.
+2. Enter AsyncLocalStorage context.
+3. Execute callback.
+
+#### Method: `IgniterTelemetrySession.emit()`
+
+1. Guard against ended session.
+2. Delegate to `emitFn` with session state.
+
+#### Method: `IgniterTelemetrySession.end()`
+
+1. Mark session as ended.
+
+---
 
 ### 5. Dependency & Type Graph
 
-- **`@igniter-js/core`**: Provides `IgniterLogger` and `StandardSchemaV1`.
-- **`@igniter-js/store`**: Peer dependency used by `StoreStreamTransportAdapter` for persistent event storage.
-- **`zod`**: Used for runtime schema validation if the user chooses.
-- **`node:async_hooks`**: Core dependency for session isolation.
-- **`node:crypto`**: Used for SHA-256 hashing in the redaction pipeline.
+- `@igniter-js/common`
+  - `IgniterLogger`
+  - `IgniterError`
+  - `StandardSchemaV1`
 
-#### The Generic Loop
+- `@igniter-js/store` (peer dependency)
+  - Required by `StoreStreamTransportAdapter`
+  - Uses Redis Streams internally
 
-The `TRegistry` generic is passed from `IgniterTelemetryEvents` to the `IgniterTelemetryBuilder` and finally to the `IgniterTelemetryManager`. This "thread" of type information is what enables full autocomplete across the entire application.
+- `zod` (dev dependency)
+  - Used in examples and tests
+
+- `node:async_hooks`
+  - AsyncLocalStorage session engine
+
+- `node:crypto`
+  - Hashing and ID generation
+
+---
 
 ### 6. Maintenance Checklist
 
-When modifying this package, follow these steps:
+- [ ] Confirm builder immutability (no state mutation).
+- [ ] Update `src/types/` before runtime changes.
+- [ ] Update event naming validation if rules change.
+- [ ] Ensure redaction covers new attribute surfaces.
+- [ ] Validate transport init errors are isolated.
+- [ ] Update adapter tests and snapshots.
+- [ ] Update this AGENTS document if runtime pipeline changes.
 
-1.  **Contract First:** Update `src/types/` if the structure of an envelope or config changes.
-2.  **Immutability Check:** Ensure that any new method on the `Builder` returns a _new_ instance using `return new IgniterTelemetryBuilder({ ...this.state, ... })`.
-3.  **Validation Parity:** If a new key type is added (e.g., "Version"), add validation to `IgniterTelemetryKeyValidator`.
-4.  **Redaction Safety:** Ensure that new envelope fields (like `traceId`) are considered for redaction if they could contain PII.
-5.  **Transport Isolation:** Never allow a transport's `handle` method to throw an error that bubbles up to the application's `emit()` call.
-6.  **AsyncLocalStorage Guard:** Always use `IgniterTelemetrySession.getActive()` instead of referencing internal state directly to ensure thread safety.
-7.  **Test Everything:** Every new utility needs a `.spec.ts` with 100% branch coverage.
+---
 
 ### 7. Maintainer Troubleshooting
 
-#### Issue: Session data is missing in nested async calls
+#### Issue: Session data missing in nested async calls
 
-- **Cause:** The async chain was broken by a library that doesn't preserve `AsyncLocalStorage` or by a manual `Promise` wrapper that doesn't propagate context.
-- **Fix:** Ensure the `session.run()` wraps the entry point of the async work. Check for "floating promises" that might have started before the session was entered.
+- **Cause:** Async chain doesn’t preserve AsyncLocalStorage.
+- **Fix:** Wrap entry points with `session.run()`.
 
-#### Issue: `TELEMETRY_TRANSPORT_FAILED` is thrown
+#### Issue: Transport initialization fails
 
-- **Cause:** All registered transports returned a rejection.
-- **Fix:** Check network connectivity to OTLP/Sentry/Slack. Check for disk permission issues for the File adapter. Ensure Sentry is properly initialized before the adapter is created.
+- **Cause:** `adapter.init()` throws.
+- **Fix:** Validate credentials and network access.
 
-#### Issue: High memory usage in Manager
+#### Issue: Excessive memory in custom transports
 
-- **Cause:** A custom transport adapter is buffering too many events in memory without flushing.
-- **Fix:** Review the `handle` method of registered adapters. Ensure they are not pushing to an array without a corresponding `setInterval` or `limit` to flush.
+- **Cause:** Unbounded buffering.
+- **Fix:** Add `flush()` / queue limits / sampling.
+
+---
+
+### 8. Adapter Implementation Checklist (Maintainers)
+
+When adding a new adapter:
+
+1. Implement `IgniterTelemetryTransportAdapter`.
+2. Add entry in `src/adapters/index.ts`.
+3. Add entry in `tsup.config.ts` if public.
+4. Add tests in `src/adapters/*.spec.ts`.
+5. Update this AGENTS file (Tables + Examples + Error coverage).
+
+---
+
+### 9. Event Naming Rules (Maintainers)
+
+- No colons (`:`)
+- No spaces
+- Prefer dot notation (`domain.feature.action`)
+- Avoid reserved prefixes (`__`, `__internal`)
+
+---
+
+### 10. Internal Testing Matrix
+
+Required coverage:
+
+- Builder immutability tests
+- Session lifecycle tests
+- Sampling rules
+- Redaction policies
+- Each adapter `handle` path
+- Transport init failure handling
+- Type inference tests for registry events
 
 ---
 
 ## II. CONSUMER GUIDE (Developer Manual)
 
-### 8. Distribution Anatomy (Consumption)
+### 11. Distribution Anatomy (Consumption)
 
-`@igniter-js/telemetry` is designed for modern ESM-first environments but maintains compatibility with legacy systems.
+- Main entrypoint: `@igniter-js/telemetry`
+- Adapters subpath: `@igniter-js/telemetry/adapters`
+- Individual adapter subpaths: `@igniter-js/telemetry/adapters/*.adapter`
+- Types and interfaces are bundled with `.d.ts`
 
-- **Main Entrypoint:** `import { ... } from '@igniter-js/telemetry'` - Use this for the Builder and Manager.
-- **Adapters Subpath:** `import { ... } from '@igniter-js/telemetry/adapters'` - Use this to import transport adapters. This subpath is separated to allow for tree-shaking of heavy dependencies (like Sentry).
-- **TypeScript Sources:** We ship full `.d.ts` and `.d.ts.map` files. Command-clicking any symbol should take you to its clean definition.
+---
 
-### 9. Quick Start & Common Patterns
+### 12. Quick Start & Common Patterns
 
-#### The "Golden Path" Setup
+#### Golden Path Setup
 
 ```typescript
-import {
-  IgniterTelemetry,
-  LoggerTransportAdapter,
-} from "@igniter-js/telemetry";
+import { IgniterTelemetry } from '@igniter-js/telemetry'
+import { LoggerTransportAdapter } from '@igniter-js/telemetry/adapters'
 
-// 1. Create your instance (usually in src/lib/telemetry.ts)
 export const telemetry = IgniterTelemetry.create()
-  .withService("billing-service")
-  .withEnvironment("production")
-  .addActor("user")
-  .addScope("organization")
-  .addTransport("logger", LoggerTransportAdapter.create({ format: "json" }))
-  .withRedaction({ denylistKeys: ["password", "token"] })
-  .build();
+  .withService('billing-service')
+  .withEnvironment('production')
+  .addActor('user')
+  .addScope('organization')
+  .addTransport(LoggerTransportAdapter.create({ logger: console, format: 'json' }))
+  .withRedaction({ denylistKeys: ['password', 'token'] })
+  .build()
 
-// 2. Simple usage
-telemetry.emit("service.booted", { attributes: { uptime: process.uptime() } });
+telemetry.emit('service.booted', { attributes: { 'ctx.uptime_ms': 1234 } })
 ```
 
-#### The "Request Correlation" Pattern
+#### Request Correlation Pattern
 
 ```typescript
-// In your middleware (Express/Next.js)
-async function middleware(req, res, next) {
-  await telemetry
-    .session()
-    .actor("user", req.user.id)
-    .scope("organization", req.tenant.id)
-    .run(async () => {
-      // Every log inside here is now linked to this user and organization
-      telemetry.emit("request.received", {
-        attributes: { method: req.method },
-      });
-      await next();
-    });
-}
+await telemetry.session()
+  .actor('user', req.user.id)
+  .scope('organization', req.tenant.id)
+  .run(async () => {
+    telemetry.emit('request.received', { attributes: { 'ctx.request.path': req.path } })
+    await next()
+  })
 ```
 
-### 10. Real-World Use Case Library
+---
 
-#### Case 1: E-commerce Order Processing (Industry: Retail)
+### 13. Real-World Use Case Library (10 scenarios)
 
-**Problem:** Need to track an order from "Cart" to "Payment" to "Shipment" across multiple microservices.
-**Implementation:**
+#### Case A: E-commerce orders
 
 ```typescript
-const session = telemetry
-  .session()
-  .scope("order", orderId)
-  .actor("user", userId);
-
-await session.run(async () => {
-  telemetry.emit("order.payment_started", {
-    attributes: { "ctx.payment.provider": "stripe" },
-  });
-
-  const result = await processPayment(orderId);
-
-  if (result.success) {
-    telemetry.emit("order.payment_succeeded", {
-      attributes: { "ctx.payment.transaction_id": result.id },
-    });
-  } else {
-    telemetry.emit("order.payment_failed", {
-      level: "error",
-      error: { name: "PaymentError", message: result.error },
-    });
-  }
-});
+await telemetry.session()
+  .scope('order', orderId)
+  .actor('user', userId)
+  .run(async () => {
+    telemetry.emit('order.payment_started')
+    // ...
+    telemetry.emit('order.payment_succeeded')
+  })
 ```
 
-#### Case 2: SaaS Multi-tenant Usage Monitoring (Industry: SaaS)
-
-**Problem:** Bill users based on the number of "Workspaces" they create and "Members" they invite.
-**Implementation:**
+#### Case B: SaaS billing usage
 
 ```typescript
-telemetry.emit("workspace.created", {
-  scope: { type: "organization", id: orgId },
-  attributes: {
-    "ctx.workspace.id": wsId,
-    "ctx.workspace.plan": "pro",
-  },
-});
+telemetry.emit('workspace.created', {
+  attributes: { 'ctx.workspace.plan': 'pro' },
+})
 ```
 
-#### Case 3: Security & Compliance Audit (Industry: Fintech/Healthcare)
-
-**Problem:** Must log every time sensitive patient data is accessed, ensuring the IP address is hashed.
-**Implementation:**
+#### Case C: Healthcare access audit
 
 ```typescript
-const telemetry = IgniterTelemetry.create()
-  .withRedaction({ hashKeys: ["ctx.request.ip"] })
-  // ...
-  .build();
-
-telemetry.emit("patient.record.accessed", {
-  attributes: {
-    "ctx.patient.id": patientId,
-    "ctx.request.ip": req.ip,
-  },
-});
+telemetry.emit('patient.record.accessed', {
+  attributes: { 'ctx.patient.id': patientId },
+})
 ```
 
-#### Case 4: Performance Bottleneck Discovery (Industry: General)
-
-**Problem:** Identify which API endpoints are slow in production without logging every request.
-**Implementation:**
+#### Case D: Fintech compliance
 
 ```typescript
-const telemetry = IgniterTelemetry.create()
-  .withSampling({ infoRate: 0.1 }) // Only log 10% of successful requests
-  .withSampling({ always: ["*.error"] }) // But log 100% of errors
-  // ...
-  .build();
-
-// In handler
-const start = performance.now();
-await doWork();
-telemetry.emit("api.request.completed", {
-  attributes: { "ctx.perf.duration_ms": performance.now() - start },
-});
+telemetry.emit('kyc.completed', {
+  attributes: { 'ctx.kyc.level': 'l2' },
+})
 ```
 
-#### Case 5: CI/CD Pipeline Observability (Industry: DevOps)
-
-**Problem:** Track build success rates and stage durations across a large engineering team.
-**Implementation:**
+#### Case E: DevOps pipeline
 
 ```typescript
-const session = telemetry.session().scope("pipeline", ciJobId);
-
-session.emit("pipeline.stage_started", {
-  attributes: { "ctx.stage.name": "test" },
-});
-// ... logic ...
-session.emit("pipeline.stage_completed", {
-  attributes: {
-    "ctx.stage.name": "test",
-    "ctx.stage.status": "success",
-  },
-});
+telemetry.emit('pipeline.stage_completed', {
+  attributes: { 'ctx.stage.name': 'build' },
+})
 ```
 
-### 11. Domain-Specific Guidance
+#### Case F: Fraud detection
 
-- **High-Frequency Trading:** Set `sampling.debugRate` to `0` and use the `StoreStreamTransportAdapter` for sub-millisecond event capturing with zero event loop blocking.
-- **Public APIs:** Always include `traceId` in your envelopes to allow cross-service debugging using tools like Jaeger or Honeycomb.
-- **Mobile Backends:** Use the `SentryTransportAdapter` for errors but keep business events in `OTLP` for long-term trend analysis.
+```typescript
+telemetry.emit('fraud.signal.detected', {
+  level: 'warn',
+  attributes: { 'ctx.fraud.score': 0.92 },
+})
+```
 
-### 12. Best Practices & Anti-Patterns
+#### Case G: Multi-tenant API
 
-| Practice                            | Why?                                             | Example                                   |
-| :---------------------------------- | :----------------------------------------------- | :---------------------------------------- |
-| ✅ **Use `ctx.` prefix**            | Prevents collisions with system fields.          | `'ctx.user.role': 'admin'`                |
-| ✅ **Always `await session.end()`** | Prevents memory leaks in long-running processes. | `finally { await session.end() }`         |
-| ✅ **Define schemas**               | Ensures data quality and enables analytics.      | `IgniterTelemetryEvents.namespace(...)`   |
-| ❌ **Don't log raw tokens**         | Security risk. Use the redaction denylist.       | `telemetry.emit('...', { token: '...' })` |
-| ❌ **Don't use `any` in schemas**   | Breaks type-safe autocomplete.                   | `z.any()`                                 |
-| ❌ **Don't block the event loop**   | Telemetry should be async.                       | `fs.writeFileSync()` in an adapter        |
+```typescript
+telemetry.emit('request.completed', {
+  scope: { type: 'organization', id: orgId },
+  attributes: { 'ctx.request.status': 200 },
+})
+```
+
+#### Case H: AI agent orchestration
+
+```typescript
+telemetry.emit('agent.plan.completed', {
+  attributes: { 'ctx.plan.tokens_used': 800 },
+})
+```
+
+#### Case I: Media streaming
+
+```typescript
+telemetry.emit('stream.segment.buffered', {
+  attributes: { 'ctx.segment.ms': 4000 },
+})
+```
+
+#### Case J: IoT fleet
+
+```typescript
+telemetry.emit('sensor.heartbeat', {
+  attributes: { 'ctx.sensor.temp_c': 21.3 },
+})
+```
+
+---
+
+### 14. Best Practices vs Anti-Patterns
+
+| ✅ Do | Why | Example |
+| --- | --- | --- |
+| Use `ctx.` attribute keys | Prevent collisions | `'ctx.user.id'` |
+| Define typed events | Enforce schema safety | `IgniterTelemetryEvents` |
+| Use sessions in HTTP flows | Context correlation | `session.run()` |
+| Redact PII | Prevent leakage | `withRedaction({ hashKeys: ['email'] })` |
+
+| ❌ Don’t | Why | Example |
+| --- | --- | --- |
+| Log raw secrets | Security risk | `{ token: '...' }` |
+| Skip sampling | Cost blowout | No `withSampling()` |
+| Use colon delimiters | Invalid names | `auth:login` |
+
+---
+
+### 15. Domain-Scoped Guidance
+
+- **High-frequency trading**: set `debugRate` to `0`, `infoRate` to `0.01`.
+- **Public APIs**: add `source` metadata for traceability.
+- **Mobile backends**: ship errors to Sentry, business events to OTLP.
+- **Multi-tenant SaaS**: always set `scope` for every request.
 
 ---
 
 ## III. TECHNICAL REFERENCE & RESILIENCE
 
-### 13. Exhaustive API Reference
+### 16. Exhaustive API Reference (Public Surface)
 
-#### `IgniterTelemetryBuilder`
+#### Builders
 
-| Method                        | Description                                       |
-| :---------------------------- | :------------------------------------------------ |
-| `.withService(name)`          | Sets the unique identifier for the service.       |
-| `.withEnvironment(name)`      | Sets the deployment environment (prod/stage/dev). |
-| `.addActor(type)`             | Registers a valid actor type (e.g., 'user').      |
-| `.addScope(type)`             | Registers a valid scope type (e.g., 'org').       |
-| `.addEvents(descriptor)`      | Registers a typed event map.                      |
-| `.addTransport(key, adapter)` | Attaches a destination for events.                |
-| `.withSampling(policy)`       | Configures event volume reduction.                |
-| `.withRedaction(policy)`      | Configures PII protection.                        |
-| `.build()`                    | Returns the immutable `IgniterTelemetryManager`.  |
+- `IgniterTelemetry.create()` → builder instance
+- `IgniterTelemetryBuilder` methods:
+  - `withService(name)`
+  - `withEnvironment(name)`
+  - `withVersion(version)`
+  - `addActor(key, options?)`
+  - `addScope(key, options?)`
+  - `addEvents(descriptor, options?)`
+  - `addTransport(adapter)`
+  - `withSampling(policy)`
+  - `withRedaction(policy)`
+  - `withValidation(options)`
+  - `withLogger(logger)`
+  - `build()`
+  - `buildConfig()`
 
-#### `IIgniterTelemetryManager` (Runtime)
+#### Core runtime
 
-| Method               | Description                                  |
-| :------------------- | :------------------------------------------- |
-| `.emit(name, input)` | Dispatches an event to all transports.       |
-| `.session()`         | Creates a new context-aware session.         |
-| `.flush()`           | Forces all adapters to send buffered data.   |
-| `.shutdown()`        | Gracefully closes all transport connections. |
+- `IgniterTelemetryManager`
+  - `emit(name, input?)`
+  - `session()`
+  - `flush()`
+  - `shutdown()`
+  - `service`
+  - `environment`
+  - `version`
 
-#### `IIgniterTelemetrySession`
+- `IgniterTelemetrySession`
+  - `id(sessionId)`
+  - `actor(type, id?, tags?)`
+  - `scope(type, id, tags?)`
+  - `attributes(attrs)`
+  - `emit(name, input?)`
+  - `run(fn)`
+  - `end()`
+  - `getState()`
 
-| Method                    | Description                                    |
-| :------------------------ | :--------------------------------------------- |
-| `.actor(type, id, tags?)` | Sets who is performing the actions.            |
-| `.scope(type, id, tags?)` | Sets where the actions are performed (tenant). |
-| `.run(callback)`          | Enters the async context for correlation.      |
-| `.emit(name, input)`      | Emits an event bound to this session.          |
-| `.end()`                  | Closes the session.                            |
+#### Event registry
 
-### 14. Telemetry & Observability Registry
+- `IgniterTelemetryEvents`
+  - `namespace(name)`
+  - `event(name, schema)`
+  - `group(name, builder)`
+  - `build()`
 
-| Event Namespace     | Common Groups            | Typical Attributes                                         |
-| :------------------ | :----------------------- | :--------------------------------------------------------- |
-| `igniter.telemetry` | `transport`, `runtime`   | `ctx.telemetry.transport_type`, `ctx.telemetry.error_code` |
-| `igniter.auth`      | `login`, `token`, `mfa`  | `ctx.auth.method`, `ctx.auth.provider`                     |
-| `igniter.jobs`      | `worker`, `job`, `queue` | `ctx.job.id`, `ctx.job.attempts`, `ctx.job.duration`       |
+- `IgniterTelemetryEventsGroup`
+  - `event(name, schema)`
+  - `group(name, builder)`
+  - `build()`
 
-### 15. Troubleshooting & Error Code Library
+#### Utilities
 
-#### `TELEMETRY_SERVICE_REQUIRED`
+- `IgniterTelemetryId`
+  - `generateSessionId()`
+  - `generateSpanId()`
+  - `generateTraceId()`
+  - `isValidSessionId(id)`
 
-- **Context:** Occurs during `.build()`.
-- **Cause:** No service name was provided.
-- **Mitigation:** Call `.withService('my-app')` in your initialization code.
-- **Solution:** `telemetry.withService('api')`
+- `IgniterTelemetrySampling`
+  - `matchesPattern(pattern, name)`
+  - `shouldSample(policy, name, level)`
+  - `createSampler(policy)`
 
-#### `TELEMETRY_SESSION_ENDED`
+- `IgniterTelemetryRedaction`
+  - `createRedactor(policy)`
+  - `createSyncRedactor(policy)`
+  - `redactEnvelope(envelope, policy)`
 
-- **Context:** Occurs during `emit` or context modification.
-- **Cause:** Calling methods on a session that has already been ended.
-- **Mitigation:** Create a new session or check the session lifecycle in your code.
-- **Solution:** Check `if (!session.getState().ended)` before calling.
-
-#### `TELEMETRY_VALIDATION_ERROR`
-
-- **Context:** Occurs during `emit` (if validation is enabled).
-- **Cause:** The provided `attributes` do not match the Zod schema defined in the event registry.
-- **Mitigation:** Ensure the data types passed to `emit` match the `StandardSchemaV1` requirements.
-- **Solution:** Review the `attributes` object and the corresponding event definition.
-
-#### `TELEMETRY_RUNTIME_NOT_INITIALIZED`
-
-- **Context:** Attempting to emit before `.build()` is called.
-- **Cause:** Using the builder where the manager is expected.
-- **Mitigation:** Follow the `create() -> configuration -> build()` sequence.
-- **Solution:** Ensure `telemetry` is the result of `.build()`.
+- `IgniterTelemetryValidator`
+  - `validate(name, context)`
 
 ---
 
-**Maintenance Rules:**
+### 17. Telemetry & Observability Registry Guidance
 
-1.  **Never** lower the line count of this file without explicit justification.
-2.  **Always** update the `Operational Flow Mapping` when changing the `Manager` logic.
-3.  **Ensure** all new transport adapters are added to the technical reference tables.
+Recommended event namespaces by domain:
+
+- `igniter.auth.*`
+- `igniter.jobs.*`
+- `igniter.store.*`
+- `igniter.storage.*`
+- `igniter.http.*`
+- `igniter.billing.*`
+
+Recommended attribute pattern:
+
+- `ctx.<domain>.<attribute>`
+
+Examples:
+
+- `ctx.job.id`
+- `ctx.user.id`
+- `ctx.request.path`
+- `ctx.payment.transaction_id`
+
+---
+
+### 18. Exhaustive Error Code Library
+
+All codes from `IGNITER_TELEMETRY_ERROR_CODES`:
+
+#### `TELEMETRY_SERVICE_REQUIRED`
+
+- **Status:** Reserved (not currently emitted by builder, which defaults to `igniter-app`).
+- **Mitigation:** Still set `.withService()` explicitly for clarity.
+
+#### `TELEMETRY_ENVIRONMENT_REQUIRED`
+
+- **Status:** Reserved (builder defaults to `development`).
+- **Mitigation:** Always set `.withEnvironment()` in production.
+
+#### `TELEMETRY_CONFIGURATION_INVALID`
+
+- **Status:** Reserved.
+- **Mitigation:** Validate config in custom pipelines.
+
+#### `TELEMETRY_INVALID_TRANSPORT`
+
+- **Context:** `.addTransport()` with falsy adapter.
+- **Cause:** `undefined` or `null` adapter.
+- **Solution:** Pass adapter instance.
+
+#### `TELEMETRY_TRANSPORT_FAILED`
+
+- **Context:** All adapters throw on `handle()`.
+- **Cause:** Downstream outage or adapter bug.
+- **Solution:** Inspect logs; check network and credentials.
+
+#### `TELEMETRY_TRANSPORT_INIT_FAILED`
+
+- **Context:** Adapter `init()` failed at build.
+- **Cause:** Invalid configuration.
+- **Solution:** Validate env vars, permissions.
+
+#### `TELEMETRY_INVALID_EVENT_NAME`
+
+- **Context:** Event name validation.
+- **Cause:** Spaces, colons, reserved prefixes.
+- **Solution:** Use dot notation.
+
+#### `TELEMETRY_UNKNOWN_EVENT`
+
+- **Status:** Reserved for future schema enforcement.
+- **Mitigation:** Keep registries updated.
+
+#### `TELEMETRY_DUPLICATE_EVENT`
+
+- **Status:** Reserved for future enforcement.
+- **Mitigation:** Avoid duplicates in registries.
+
+#### `TELEMETRY_SCHEMA_VALIDATION_FAILED`
+
+- **Status:** Thrown by validator on invalid context.
+- **Mitigation:** Use supported validation contexts.
+
+#### `TELEMETRY_INVALID_NAMESPACE`
+
+- **Context:** Namespace validation.
+- **Cause:** Invalid characters.
+- **Solution:** Use dot notation.
+
+#### `TELEMETRY_RESERVED_NAMESPACE`
+
+- **Context:** Reserved namespace prefix usage.
+- **Cause:** Prefix `__`.
+- **Solution:** Choose a non-reserved namespace.
+
+#### `TELEMETRY_DUPLICATE_NAMESPACE`
+
+- **Context:** `.addEvents()` with existing namespace.
+- **Cause:** Multiple registries with same namespace.
+- **Solution:** Merge or rename registries.
+
+#### `TELEMETRY_SESSION_ENDED`
+
+- **Context:** Session used after `.end()`.
+- **Cause:** Misordered lifecycle.
+- **Solution:** Create new session.
+
+#### `TELEMETRY_SESSION_INVALID`
+
+- **Status:** Reserved.
+- **Mitigation:** Validate session usage in custom extensions.
+
+#### `TELEMETRY_DUPLICATE_SCOPE`
+
+- **Context:** `addScope()` with duplicate key.
+- **Cause:** Key already registered.
+- **Solution:** Remove duplicate registration.
+
+#### `TELEMETRY_INVALID_SCOPE`
+
+- **Status:** Reserved.
+- **Mitigation:** Validate scope usage in custom pipelines.
+
+#### `TELEMETRY_DUPLICATE_ACTOR`
+
+- **Context:** `addActor()` with duplicate key.
+- **Cause:** Key already registered.
+- **Solution:** Remove duplicate registration.
+
+#### `TELEMETRY_INVALID_ACTOR`
+
+- **Status:** Reserved.
+- **Mitigation:** Validate actor usage in custom pipelines.
+
+#### `TELEMETRY_EMIT_FAILED`
+
+- **Status:** Reserved for future error signaling.
+
+#### `TELEMETRY_RUNTIME_NOT_INITIALIZED`
+
+- **Status:** Reserved.
+- **Mitigation:** Ensure `.build()` is used before `emit()`.
+
+---
+
+### 19. Distribution Anatomy (Consumer)
+
+- `@igniter-js/telemetry`
+  - Builder, Manager, Session, Events, Errors, Types, Utils
+
+- `@igniter-js/telemetry/adapters`
+  - Logger, HTTP, OTLP, Sentry, Slack, Discord, Telegram, Memory, Mock, Store
+
+- `@igniter-js/telemetry/adapters/*.adapter`
+  - Direct adapter imports for tree-shaking
+
+---
+
+### 20. Contribution Checklist (Maintainers)
+
+- [ ] Update types in `src/types/` first
+- [ ] Keep builder immutable
+- [ ] Add tests for new runtime behavior
+- [ ] Update README examples if public API changes
+- [ ] Update this AGENTS manual
+- [ ] Keep telemetry redaction safe (no PII)
+
+---
+
+### 21. Maintenance Rules
+
+1. Do not reduce this file’s line count unless explicitly justified.
+2. Update Operational Flow Mapping when Manager logic changes.
+3. Update adapter lists when adding or removing exports.
+
+---
+
+### 22. Adapter Operational Notes (Maintainers)
+
+#### LoggerTransportAdapter
+
+Pipeline:
+
+1. Checks `minLevel` threshold using `IGNITER_TELEMETRY_LEVEL_PRIORITY`.
+2. Formats JSON or pretty string output.
+3. Logs via provided logger.
+
+Key config:
+
+- `logger` (required)
+- `format` (`json` | `pretty`)
+- `includeTimestamp`
+- `minLevel`
+
+#### HttpTransportAdapter
+
+Pipeline:
+
+1. Creates `AbortController` with optional timeout.
+2. POSTs envelope as JSON to configured URL.
+3. Logs errors to console.
+
+Key config:
+
+- `url` (required)
+- `headers` (optional)
+- `timeout` (optional)
+- `retries` (reserved)
+
+#### OtlpTransportAdapter
+
+Pipeline:
+
+1. Transforms envelope to OTLP Logs JSON payload.
+2. POSTs to `v1/logs` endpoint.
+3. Logs errors to console.
+
+Key config:
+
+- `url` (required)
+- `headers` (optional)
+
+#### SentryTransportAdapter
+
+Pipeline:
+
+1. Errors: uses `captureException()` with context.
+2. Non-errors: adds breadcrumbs.
+
+Key config:
+
+- `sentry` SDK instance (required)
+
+#### SlackTransportAdapter
+
+Pipeline:
+
+1. Level filter using `minLevel`.
+2. Builds Slack blocks payload.
+3. POSTs to webhook URL.
+
+Key config:
+
+- `webhookUrl` (required)
+- `minLevel` (optional)
+- `username` (optional)
+- `iconEmoji` (optional)
+
+#### DiscordTransportAdapter
+
+Pipeline:
+
+1. Level filter using `minLevel`.
+2. Builds embed payload.
+3. POSTs to webhook URL.
+
+Key config:
+
+- `webhookUrl` (required)
+- `minLevel` (optional)
+- `username` (optional)
+- `avatarUrl` (optional)
+
+#### TelegramTransportAdapter
+
+Pipeline:
+
+1. Level filter using `minLevel`.
+2. Builds Telegram message with HTML formatting.
+3. POSTs to `sendMessage` endpoint.
+
+Key config:
+
+- `botToken` (required)
+- `chatId` (required)
+- `minLevel` (optional)
+
+#### StoreStreamTransportAdapter
+
+Pipeline:
+
+1. Resolves stream name (`streamBuilder` or `stream`).
+2. Builds stream payload with serialized JSON fields.
+3. Appends to Redis Stream via `@igniter-js/store`.
+
+Key config:
+
+- `redis` (required)
+- `stream` (optional)
+- `maxLen` (optional)
+- `approximate` (optional)
+- `streamBuilder` (optional)
+
+---
+
+### 23. Event Schema Cookbook (Extra Examples)
+
+#### Example: Authentication
+
+```typescript
+const AuthEvents = IgniterTelemetryEvents
+  .namespace('igniter.auth')
+  .event('login.started', z.object({ 'ctx.user.id': z.string() }))
+  .event('login.succeeded', z.object({ 'ctx.user.id': z.string() }))
+  .event('login.failed', z.object({ 'ctx.auth.reason': z.string() }))
+  .build()
+```
+
+#### Example: Notifications
+
+```typescript
+const NotificationEvents = IgniterTelemetryEvents
+  .namespace('igniter.notifications')
+  .event('email.sent', z.object({ 'ctx.message.id': z.string() }))
+  .event('sms.sent', z.object({ 'ctx.message.id': z.string() }))
+  .build()
+```
+
+#### Example: Store Operations
+
+```typescript
+const StoreEvents = IgniterTelemetryEvents
+  .namespace('igniter.store')
+  .event('kv.set', z.object({ 'ctx.kv.key': z.string() }))
+  .event('kv.get', z.object({ 'ctx.kv.key': z.string() }))
+  .build()
+```
+
+#### Example: Storage Operations
+
+```typescript
+const StorageEvents = IgniterTelemetryEvents
+  .namespace('igniter.storage')
+  .event('file.uploaded', z.object({ 'ctx.file.id': z.string() }))
+  .event('file.deleted', z.object({ 'ctx.file.id': z.string() }))
+  .build()
+```
+
+#### Example: Webhooks
+
+```typescript
+const WebhookEvents = IgniterTelemetryEvents
+  .namespace('igniter.webhooks')
+  .event('delivery.started', z.object({ 'ctx.webhook.id': z.string() }))
+  .event('delivery.failed', z.object({ 'ctx.webhook.error': z.string() }))
+  .build()
+```
+
+#### Example: Search
+
+```typescript
+const SearchEvents = IgniterTelemetryEvents
+  .namespace('igniter.search')
+  .event('query.executed', z.object({ 'ctx.search.query': z.string() }))
+  .event('query.completed', z.object({ 'ctx.search.count': z.number() }))
+  .build()
+```
+
+#### Example: Billing
+
+```typescript
+const BillingEvents = IgniterTelemetryEvents
+  .namespace('igniter.billing')
+  .event('invoice.created', z.object({ 'ctx.invoice.id': z.string() }))
+  .event('invoice.paid', z.object({ 'ctx.invoice.id': z.string() }))
+  .build()
+```
+
+#### Example: Jobs
+
+```typescript
+const JobsEvents = IgniterTelemetryEvents
+  .namespace('igniter.jobs')
+  .event('job.started', z.object({ 'ctx.job.id': z.string() }))
+  .event('job.completed', z.object({ 'ctx.job.id': z.string() }))
+  .build()
+```
+
+#### Example: Bots
+
+```typescript
+const BotEvents = IgniterTelemetryEvents
+  .namespace('igniter.bot')
+  .event('message.received', z.object({ 'ctx.bot.id': z.string() }))
+  .event('message.sent', z.object({ 'ctx.bot.id': z.string() }))
+  .build()
+```
+
+#### Example: Agents
+
+```typescript
+const AgentEvents = IgniterTelemetryEvents
+  .namespace('igniter.agents')
+  .event('task.started', z.object({ 'ctx.task.id': z.string() }))
+  .event('task.completed', z.object({ 'ctx.task.id': z.string() }))
+  .build()
+```
+
+---
+
+### 24. Testing Blueprint (Maintainers)
+
+Required tests per layer:
+
+1. **Builder tests**
+   - Ensure immutability (new instance each call)
+   - Type inference with events registry
+   - Error codes for duplicate namespace/scope/actor
+
+2. **Session tests**
+   - Actor/scope merge behavior
+   - `session.run()` context propagation
+   - `session.end()` lifecycle guard
+
+3. **Sampling tests**
+   - Pattern matching (`*.failed`, `security.*`)
+   - Rate sampling bounds (0, 1)
+   - `always` and `never` precedence
+
+4. **Redaction tests**
+   - Denylist removal
+   - Hashing behavior
+   - Truncation behavior
+
+5. **Adapter tests**
+   - `logger.adapter` level filtering
+   - `http.adapter` payload shape
+   - `otlp.adapter` transformation
+   - `sentry.adapter` breadcrumb vs exception
+   - `slack/discord/telegram` payload formatting
+   - `store.adapter` stream payload correctness
+
+---
+
+### 25. Migration Notes (Maintainers)
+
+- `addTransport()` accepts only adapter instances (no type parameter).
+- Builder defaults `service` to `igniter-app` and `environment` to `development`.
+- File adapter is not exported; do not document as public unless added to `tsup` entries.
+
+---
+
+### 26. Attribute Glossary (Consumer Guidance)
+
+Common patterns:
+
+- `ctx.request.id`
+- `ctx.request.path`
+- `ctx.request.status`
+- `ctx.user.id`
+- `ctx.user.role`
+- `ctx.org.id`
+- `ctx.workspace.id`
+- `ctx.job.id`
+- `ctx.job.duration_ms`
+- `ctx.payment.transaction_id`
+- `ctx.payment.provider`
+- `ctx.cache.key`
+- `ctx.cache.hit`
+- `ctx.search.query`
+- `ctx.search.count`
+
+---
 
 ---
 

@@ -21,7 +21,7 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   external: [
-    '@igniter-js/core',
+    '@igniter-js/common',
     "@igniter-js/telemetry",
     'ioredis',
   ],

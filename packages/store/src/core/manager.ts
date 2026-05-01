@@ -61,6 +61,7 @@ import type {
   IgniterStoreStreamAppendOptions,
   IgniterStoreStreamConsumerGroup,
   IgniterStoreStreamMessage,
+  IgniterStoreStreamRangeOptions,
   IgniterStoreStreamReadOptions,
 } from '../types/adapter'
 import type {
@@ -1165,6 +1166,46 @@ export class IgniterStoreManager<
             },
           })
 
+          throw error
+        }
+      },
+
+      range: async <T = unknown>(
+        stream: string,
+        options?: IgniterStoreStreamRangeOptions,
+      ): Promise<IgniterStoreStreamMessage<T>[]> => {
+        const fullStream = this.keyBuilder.build('streams', stream)
+        const attributes = {
+          ...this.getBaseAttributes('stream'),
+          'ctx.stream.name': stream,
+        }
+
+        this.telemetry?.emit('igniter.store.stream.range.started', {
+          level: 'debug',
+          attributes,
+        })
+
+        try {
+          const messages = options?.reverse
+            ? await this.adapter.xrevrange<T>(fullStream, options)
+            : await this.adapter.xrange<T>(fullStream, options)
+
+          this.telemetry?.emit('igniter.store.stream.range.success', {
+            level: 'debug',
+            attributes: {
+              ...attributes,
+              'ctx.stream.count': messages.length,
+            },
+          })
+          return messages
+        } catch (error) {
+          this.telemetry?.emit('igniter.store.stream.range.error', {
+            level: 'error',
+            attributes: {
+              ...attributes,
+              ...this.getErrorAttributes(error, 'stream.range'),
+            },
+          })
           throw error
         }
       },

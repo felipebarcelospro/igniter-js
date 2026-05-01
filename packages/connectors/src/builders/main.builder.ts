@@ -3,7 +3,7 @@
  * @module @igniter-js/connectors/builders/manager
  */
 
-import type { IgniterLogger, StandardSchemaV1 } from "@igniter-js/core";
+import type { IgniterLogger, StandardSchemaV1 } from "@igniter-js/common";
 import type { IgniterConnectorAdapter } from "../types/adapter";
 import type {
   IgniterConnectorDefinition,
@@ -70,7 +70,7 @@ export class IgniterConnectorManagerBuilder<
   private logger?: IgniterLogger;
 
   /** Telemetry runtime */
-  private telemetry?: IgniterTelemetryManager<any>;
+  private telemetry?: IgniterTelemetryManager<any, any, any>;
 
   /** Encryption fields */
   private encryptFields: string[] = [];
@@ -250,7 +250,7 @@ export class IgniterConnectorManagerBuilder<
    * @see {@link https://igniterjs.com/docs/telemetry} for telemetry documentation
    */
   withTelemetry(
-    telemetry: IgniterTelemetryManager<any>,
+    telemetry: IgniterTelemetryManager<any, any, any>,
   ): IgniterConnectorManagerBuilder<TScopes, TConnectors> {
     this.telemetry = telemetry;
     return this;

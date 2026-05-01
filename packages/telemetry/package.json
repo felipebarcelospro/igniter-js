@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/telemetry",
-  "version": "0.1.13",
+  "version": "0.1.143",
   "description": "Type-safe telemetry library for Igniter.js with session-based events, typed event registry, transport adapters, and sampling/redaction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -66,8 +66,10 @@
     "url": "https://github.com/felipebarcelospro/igniter-js/issues"
   },
   "homepage": "https://igniterjs.com",
+  "dependencies": {
+    "@igniter-js/common": ">=0.1.0"
+  },
   "devDependencies": {
-    "@igniter-js/core": "*",
     "@types/node": "^22.7.5",
     "@vitest/coverage-v8": "^2.1.9",
     "tsup": "^8.3.0",
@@ -76,7 +78,6 @@
     "zod": "^3.23.8"
   },
   "peerDependencies": {
-    "@igniter-js/core": ">=0.2.0",
     "@igniter-js/store": ">=0.1.0"
   },
   "engines": {

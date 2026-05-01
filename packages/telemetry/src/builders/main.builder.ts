@@ -39,8 +39,7 @@
  * })
  * ```
  */
-
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type {
   IgniterTelemetryActorOptions,
   IgniterTelemetryConfig,
@@ -92,8 +91,8 @@ import type { IgniterTelemetryBuilderState } from "../types/builder";
  */
 export class IgniterTelemetryBuilder<
   TRegistry extends IgniterTelemetryEventsRegistry = {},
-  TScopes extends string = never,
-  TActors extends string = never,
+  TScopes extends string = string,
+  TActors extends string = string,
 > {
   private readonly state: IgniterTelemetryBuilderState<
     TRegistry,
@@ -117,7 +116,7 @@ export class IgniterTelemetryBuilder<
    * const builder = IgniterTelemetry.create()
    * ```
    */
-  static create(): IgniterTelemetryBuilder<{}, never, never> {
+  static create(): IgniterTelemetryBuilder<{}, string, string> {
     return new IgniterTelemetryBuilder({
       eventsRegistry: {},
       eventsValidation: { mode: "development", strict: false },
@@ -346,28 +345,19 @@ export class IgniterTelemetryBuilder<
    * ```
    */
   addTransport(
-    typeOrAdapter:
-      | IgniterTelemetryTransportType
-      | IgniterTelemetryTransportAdapter,
-    maybeAdapter?: IgniterTelemetryTransportAdapter,
+    transport: IgniterTelemetryTransportAdapter,
   ): IgniterTelemetryBuilder<TRegistry, TScopes, TActors> {
-    const adapter = (
-      typeof typeOrAdapter === "object" ? typeOrAdapter : maybeAdapter
-    )!;
-
-    // Validate adapter type matches if legacy signature used
-    if (typeof typeOrAdapter === "string" && adapter.type !== typeOrAdapter) {
+    if(!transport) {
       throw new IgniterTelemetryError({
         code: "TELEMETRY_INVALID_TRANSPORT",
-        message: `Transport adapter type "${adapter.type}" does not match provided type "${typeOrAdapter}"`,
+        message: `Transport adapter is required`,
         statusCode: 400,
-        details: { expectedType: typeOrAdapter, actualType: adapter.type },
       });
     }
 
     return new IgniterTelemetryBuilder({
       ...this.state,
-      transports: [...this.state.transports, adapter],
+      transports: [...this.state.transports, transport],
     });
   }
 

@@ -3,7 +3,7 @@
  * @module @igniter-js/connectors/types/webhook
  */
 
-import type { StandardSchemaV1 } from '@igniter-js/core'
+import type { StandardSchemaV1 } from "@igniter-js/common";
 import type { InferSchemaOutput } from './config'
 
 /**

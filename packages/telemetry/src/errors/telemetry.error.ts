@@ -4,10 +4,10 @@
  *
  * @description
  * Provides a typed error class for predictable error handling in telemetry operations.
- * All errors extend the base `IgniterError` from `@igniter-js/core`.
+ * All errors extend the base `IgniterError` from `@igniter-js/common`.
  */
 
-import { IgniterError, type IgniterLogger } from "@igniter-js/core";
+import { IgniterError, type IgniterLogger } from "@igniter-js/common";
 
 /**
  * All possible error codes for IgniterTelemetry.
@@ -109,7 +109,7 @@ export interface IgniterTelemetryErrorPayload {
 /**
  * Typed error class for `@igniter-js/telemetry`.
  *
- * Extends `IgniterError` from `@igniter-js/core` to provide consistent
+ * Extends `IgniterError` from `@igniter-js/common` to provide consistent
  * error handling across the Igniter.js ecosystem.
  *
  * @example

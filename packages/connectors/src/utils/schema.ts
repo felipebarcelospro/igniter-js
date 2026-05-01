@@ -3,7 +3,7 @@
  * @module @igniter-js/connectors/utils/schema
  */
 
-import type { StandardSchemaV1 } from '@igniter-js/core'
+import type { StandardSchemaV1 } from "@igniter-js/common";
 
 /**
  * Validation result from schema validation.

@@ -9,15 +9,15 @@ describe('IgniterTelemetryError', () => {
   describe('constructor', () => {
     it('should create an error with required fields', () => {
       const error = new IgniterTelemetryError({
-        code: 'TELEMETRY_DUPLICATE_TRANSPORT',
-        message: 'Transport type "logger" is already registered',
+        code: 'TELEMETRY_CONFIGURATION_INVALID',
+        message: 'Telemetry configuration is invalid',
       })
 
       expect(error).toBeInstanceOf(Error)
       expect(error).toBeInstanceOf(IgniterTelemetryError)
       expect(error.name).toBe('IgniterTelemetryError')
-      expect(error.code).toBe('TELEMETRY_DUPLICATE_TRANSPORT')
-      expect(error.message).toBe('Transport type "logger" is already registered')
+      expect(error.code).toBe('TELEMETRY_CONFIGURATION_INVALID')
+      expect(error.message).toBe('Telemetry configuration is invalid')
     })
 
     it('should create an error with all fields', () => {
@@ -81,7 +81,6 @@ describe('IgniterTelemetryError', () => {
 
   describe('error codes', () => {
     it('should have all expected error codes', () => {
-      expect(IGNITER_TELEMETRY_ERROR_CODES.TELEMETRY_DUPLICATE_TRANSPORT).toBe('TELEMETRY_DUPLICATE_TRANSPORT')
       expect(IGNITER_TELEMETRY_ERROR_CODES.TELEMETRY_INVALID_TRANSPORT).toBe('TELEMETRY_INVALID_TRANSPORT')
       expect(IGNITER_TELEMETRY_ERROR_CODES.TELEMETRY_TRANSPORT_FAILED).toBe('TELEMETRY_TRANSPORT_FAILED')
       expect(IGNITER_TELEMETRY_ERROR_CODES.TELEMETRY_INVALID_EVENT_NAME).toBe('TELEMETRY_INVALID_EVENT_NAME')
