@@ -11,7 +11,7 @@ export const exampleController = igniter.controller({
   // The base path for all actions in this controller.
   // e.g., /api/v1/example
   path: '/example',
-
+  
   // Actions are the individual endpoints of your controller.
   actions: {
     /**

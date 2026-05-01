@@ -17,6 +17,7 @@ Goal: ensure **only the packages listed below** fully comply with the standards 
 - @igniter-js/store (state/cache store)
 - @igniter-js/telemetry (telemetry/metrics)
 - @igniter-js/agents (telemetry/metrics)
+- @igniter-js/core (http core)
 
 Out of scope: everything else (do not modify or analyze other packages beyond what is necessary to understand integrations).
 

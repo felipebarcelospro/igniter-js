@@ -3,6 +3,6 @@
   "instructions": [
     ".github/instructions/content.instructions.md", 
     ".github/instructions/packages.instructions.md",
-    "packages/*/AGENTS.md"
+    "packages/*/src/*/AGENTS.md"
   ]
 }

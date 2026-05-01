@@ -186,6 +186,18 @@ Thumbs.db
 .gemini/
 .opencode/
 .vercel
+.agents
+.artifacts
+.claude
+.fractal
+.github/agents
+.github/instructions
+.github/prompts
+.github/skills
+apps/studio
+packages/studio
+packages/payments
+opencode.json
 
 # Gemini
 packages/mcp-server/.tmp-mcp-fs-tests/
