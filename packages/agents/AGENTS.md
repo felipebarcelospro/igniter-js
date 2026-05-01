@@ -1,7 +1,7 @@
 # AGENTS.md - @igniter-js/agents
 
-> **Last Updated:** 2025-12-23
-> **Version:** 0.1.0
+> **Last Updated:** 2026-01-29
+> **Version:** 0.1.15
 > **Goal:** This document serves as the complete operational manual for Code Agents maintaining and consuming the @igniter-js/agents package. It is designed to be hyper-robust, training-ready, and exhaustive, aiming for at least 1,500 lines of high-quality content to ensure the agent fully dominates the package's domain, architecture, and usage.
 
 ---
@@ -133,11 +133,22 @@ The agents package implements a sophisticated builder pattern cascade that ensur
 
 ```typescript
 // Builder Cascade Flow
+const memoryConfig = {
+  provider: memoryAdapter,
+  working: { enabled: true, scope: "chat" },
+  history: { enabled: true, limit: 50 },
+  chats: { enabled: true },
+};
+
+const agent = IgniterAgent.create("assistant")
+  .withModel(openai("gpt-4"))
+  .withMemory(memoryConfig)
+  .build();
+
 IgniterAgentManager.create()
   .withLogger(logger) // Adds logging context
   .withTelemetry(telemetry) // Adds telemetry context
-  .withMemory(memoryAdapter) // Adds memory context
-  .addAgent(agentBuilder) // Adds agent with inherited context
+  .addAgent("assistant", agent) // Adds agent instance
   .build(); // Produces fully configured manager
 ```
 
@@ -149,18 +160,16 @@ The `IgniterAgentCore` wraps Vercel AI's `ToolLoopAgent` with comprehensive life
 
 ```
 Agent Execution Flow:
-1. Hook: onAgentStart
-2. Memory: Load conversation history
-3. Telemetry: agent.started event
-4. AI Generation: Tool selection and reasoning
-5. Tool Execution Loop:
-   - Hook: onToolCallStart
-   - Tool validation and execution
-   - Hook: onToolCallEnd
-   - Telemetry: tool.called event
-6. Memory: Persist conversation state
-7. Telemetry: agent.completed event
-8. Hook: onAgentComplete
+1. Memory: Load conversation history (if enabled)
+2. Telemetry: igniter.agent.generation.generate.started
+3. AI Generation: Tool selection and reasoning
+4. Tool Execution Loop:
+  - Hook: onToolCallStart
+  - Tool validation and execution
+  - Hook: onToolCallEnd
+  - Telemetry: igniter.agent.tool.execute.started / success / error
+5. Memory: Persist conversation state (if enabled)
+6. Telemetry: igniter.agent.generation.generate.success
 ```
 
 #### 3.3 Memory System Design
@@ -203,10 +212,11 @@ MCP Communication Flow:
 
 Every operation emits structured telemetry events:
 
-- **Agent Lifecycle:** `agent.started`, `agent.completed`, `agent.error`
-- **Tool Execution:** `tool.called`, `tool.completed`, `tool.error`
-- **Memory Operations:** `memory.stored`, `memory.retrieved`, `memory.error`
-- **MCP Operations:** `mcp.connected`, `mcp.message.sent`, `mcp.message.received`
+- **Agent Lifecycle:** `igniter.agent.lifecycle.start.*`, `igniter.agent.lifecycle.stop.*`
+- **Generation:** `igniter.agent.generation.generate.*`, `igniter.agent.generation.stream.*`
+- **Tool Execution:** `igniter.agent.tool.execute.*`
+- **Memory Operations:** `igniter.agent.memory.operation.*`
+- **MCP Operations:** `igniter.agent.mcp.connect.*`, `igniter.agent.mcp.disconnect.*`
 
 All events include contextual attributes and error details when applicable.
 
@@ -216,74 +226,67 @@ All events include contextual attributes and error details when applicable.
 
 #### 4.1 Method: `IgniterAgentManagerBuilder.build()`
 
-1. **Configuration Validation:** Ensures all required dependencies (logger, telemetry, memory) are configured.
-2. **Context Inheritance:** Creates shared context object with logger, telemetry, and memory references.
-3. **Agent Instantiation:** For each registered agent builder, calls `agentBuilder.build(context)` to produce `IgniterAgentCore` instances.
+1. **Configuration Validation:** Ensures required dependencies are configured.
+2. **Context Wiring:** Attaches logger/telemetry and hooks to each agent instance.
+3. **Agent Registration:** Registers agent instances in the manager registry.
 4. **Manager Creation:** Instantiates `IgniterAgentManagerCore` with the agent registry.
-5. **Telemetry:** Emits `manager.created` event with agent count and configuration metadata.
-6. **Return:** Returns the fully configured manager instance.
+5. **Return:** Returns the fully configured manager instance.
 
 #### 4.2 Method: `IgniterAgentCore.generate(input)`
 
 1. **Input Validation:** Validates input against agent's context schema using Zod.
-2. **Hook Execution:** Fires `onAgentStart` hook with input and context.
-3. **Memory Loading:** Retrieves conversation history from memory adapter (if configured).
-4. **Telemetry:** Emits `generation.generate.started` event with input metadata.
-5. **AI Processing:** Initializes Vercel AI ToolLoopAgent with tools and system prompt.
-6. **Tool Loop:** Executes tool calling loop, validating each tool call and firing appropriate hooks.
-7. **Memory Persistence:** Stores conversation state after each interaction.
-8. **Telemetry:** Emits `generation.generate.success` or `generation.generate.error` event.
-9. **Hook Execution:** Fires `onAgentComplete` or `onAgentError` hook.
-10. **Return:** Returns the final AI response (AgentCallResult).
+2. **Memory Loading:** Retrieves conversation history from memory adapter (if configured).
+3. **Telemetry:** Emits `igniter.agent.generation.generate.started` event with input metadata.
+4. **AI Processing:** Initializes Vercel AI ToolLoopAgent with tools and system prompt.
+5. **Tool Loop:** Executes tool calling loop, validating each tool call and firing appropriate hooks.
+6. **Memory Persistence:** Stores conversation state after each interaction.
+7. **Telemetry:** Emits `igniter.agent.generation.generate.success` or `igniter.agent.generation.generate.error` event.
+8. **Return:** Returns the final AI response (AgentCallResult).
 
 #### 4.3 Method: `IgniterAgentCore.stream(input)`
 
 1. **Input Validation:** Validates input against agent's context schema using Zod.
-2. **Hook Execution:** Fires `onAgentStart` hook with input and context.
-3. **Telemetry:** Emits `generation.stream.started` event with input metadata.
+2. **Telemetry:** Emits `igniter.agent.generation.stream.started` event with input metadata.
 4. **Stream Initialization:** Creates a streaming connection with Vercel AI ToolLoopAgent.
 5. **Chunk Emission:** Yields response chunks as they arrive from the AI.
-6. **Telemetry:** Emits `generation.stream.chunk` event for each chunk.
-7. **Telemetry:** Emits `generation.stream.success` or `generation.stream.error` event at completion.
-8. **Hook Execution:** Fires `onAgentComplete` or `onAgentError` hook.
-9. **Return:** Returns an async iterable or readable stream of response chunks.
+6. **Telemetry:** Emits `igniter.agent.generation.stream.chunk` event for each chunk.
+7. **Telemetry:** Emits `igniter.agent.generation.stream.success` or `igniter.agent.generation.stream.error` event at completion.
+8. **Return:** Returns an async iterable or readable stream of response chunks.
 
 #### 4.4 Method: `IgniterAgentManagerCore.startAll()`
 
 1. **Agent Iteration:** Loops through all registered agents.
-2. **Dependency Resolution:** Ensures agents have required dependencies (logger, telemetry, memory).
+2. **Dependency Resolution:** Ensures agents have required dependencies (logger, telemetry).
 3. **Parallel Initialization:** Starts all agents concurrently using `Promise.allSettled`.
 4. **Status Tracking:** Updates internal status map for each agent.
-5. **Telemetry:** Emits `manager.agents.started` event with success/failure counts.
-6. **Error Handling:** Collects initialization errors and logs them without failing the entire operation.
-7. **Return:** Returns summary object with started agents and any errors.
+5. **Error Handling:** Collects initialization errors and logs them without failing the entire operation.
+6. **Return:** Returns summary map with started agents and any errors.
 
 #### 4.5 Method: `IgniterAgentTool.execute(input, context)`
 
 1. **Schema Validation:** Validates input against tool's input schema.
-2. **Hook Execution:** Fires `onToolExecute` hook if configured.
-3. **Telemetry:** Emits `tool.executed` event with input metadata.
-4. **Handler Execution:** Calls the tool's handler function with validated input and context.
+2. **Hook Execution:** Fires `onToolCallStart`/`onToolCallEnd` hooks if configured.
+3. **Telemetry:** Emits `igniter.agent.tool.execute.started` event with input metadata.
+4. **Handler Execution:** Calls the tool's handler function with validated input and execution options.
 5. **Result Validation:** Validates output against tool's output schema if provided.
-6. **Telemetry:** Emits `tool.completed` or `tool.error` event.
+6. **Telemetry:** Emits `igniter.agent.tool.execute.success` or `igniter.agent.tool.execute.error` event.
 7. **Return:** Returns the validated result or throws error.
 
-#### 4.6 Method: `IgniterAgentMemory.store(key, value)`
+#### 4.6 Method: `IgniterAgentMemoryCore.updateWorkingMemory()`
 
-1. **Serialization:** Converts value to JSON-compatible format.
-2. **Adapter Delegation:** Calls memory adapter's `set` method.
-3. **Error Handling:** Wraps adapter errors in `IgniterAgentError`.
-4. **Telemetry:** Emits `memory.stored` event with key and size metadata.
-5. **Return:** Returns success boolean.
+1. **Validation:** Ensures the memory provider supports working memory.
+2. **Adapter Delegation:** Calls provider `updateWorkingMemory`.
+3. **Error Handling:** Wraps adapter errors in `IgniterAgentMemoryError`.
+4. **Telemetry:** Emits `igniter.agent.memory.operation.*` events.
+5. **Return:** Resolves when persistence completes.
 
-#### 4.6 Method: `IgniterAgentMCPClient.connect()`
+#### 4.7 Method: `IgniterAgentCore.start()` (MCP Initialization)
 
-1. **Connection Establishment:** Initializes MCP transport layer.
-2. **Capability Discovery:** Queries server for available tools and resources.
-3. **Schema Validation:** Validates discovered tools against expected schemas.
-4. **Telemetry:** Emits `mcp.connected` event with capability metadata.
-5. **Hook Execution:** Fires `onConnected` hook with server capabilities.
-6. **Return:** Returns connection status and available tools.
+1. **Connection Establishment:** Initializes MCP transport layer for each config.
+2. **Tool Discovery:** Queries MCP servers for available tools.
+3. **Telemetry:** Emits `igniter.agent.mcp.connect.*` events.
+4. **Hook Execution:** Fires `onMCPStart` or `onMCPError` hooks.
+5. **Return:** Resolves when all MCP toolsets are connected.
 
 ---
 
@@ -293,7 +296,7 @@ All events include contextual attributes and error details when applicable.
 
 | Package                 | Purpose                                  | Version   |
 | ----------------------- | ---------------------------------------- | --------- |
-| `@igniter-js/core`      | Base error classes and logger interfaces | `^0.4.0`  |
+| `@igniter-js/common`    | Base error classes and logger interfaces | `^0.1.0`  |
 | `@igniter-js/telemetry` | Telemetry manager integration            | `^0.1.0`  |
 | `ai`                    | Vercel AI SDK for agent runtime          | `^6.0.0`  |
 | `zod`                   | Schema validation and type inference     | `^4.0.0` |
@@ -306,7 +309,6 @@ Builder Configuration Flow:
 IgniterAgentManagerBuilder
 ├── withLogger() → Logger context
 ├── withTelemetry() → Telemetry context
-├── withMemory() → Memory context
 └── addAgent() → Agent registration
 
 Agent Instantiation Flow:
@@ -317,7 +319,6 @@ MCPBuilder → MCPConfig → IgniterAgentMCPClient
 Runtime Type Flow:
 IgniterAgentManagerCore
 ├── agents: Map<string, IgniterAgentCore>
-├── memory: IgniterAgentMemory
 ├── telemetry: IgniterTelemetryManager
 └── logger: IgniterLogger
 
@@ -403,7 +404,7 @@ import {
 } from "@igniter-js/agents";
 
 // Adapters only
-import { MemoryAdapter } from "@igniter-js/agents/adapters";
+import { IgniterAgentInMemoryAdapter } from "@igniter-js/agents/adapters";
 
 // Telemetry only
 import { IgniterAgentTelemetryEvents } from "@igniter-js/agents/telemetry";
@@ -411,7 +412,7 @@ import { IgniterAgentTelemetryEvents } from "@igniter-js/agents/telemetry";
 
 #### Runtime Requirements
 
-- **Node.js:** 18.0.0+
+- **Node.js:** 22.0.0+
 - **Bun:** 1.0.0+
 - **Deno:** 1.30.0+
 - **Server-only:** Cannot be imported in browser environments (shim.ts protection)
@@ -426,7 +427,7 @@ import { IgniterAgentTelemetryEvents } from "@igniter-js/agents/telemetry";
 import {
   IgniterAgent,
   IgniterAgentTool,
-  MemoryAdapter,
+  IgniterAgentInMemoryAdapter,
 } from "@igniter-js/agents";
 import { z } from "zod";
 
@@ -443,13 +444,25 @@ const weatherTool = IgniterAgentTool.create("get_weather")
   .build();
 
 const agent = IgniterAgent.create("weather-assistant")
-  .withMemory(MemoryAdapter.create())
-  .withTool(weatherTool)
-  .withSystemPrompt("You are a helpful weather assistant.")
+  .withMemory({
+    provider: IgniterAgentInMemoryAdapter.create(),
+    working: { enabled: true, scope: "chat" },
+    history: { enabled: true, limit: 50 },
+    chats: { enabled: true },
+  })
+  .addToolset(
+    IgniterAgentToolset.create("weather").addTool(weatherTool).build(),
+  )
+  .withPrompt(
+    IgniterAgentPrompt.create("You are a helpful weather assistant."),
+  )
   .build();
 
 const response = await agent.generate({
-  messages: [{ role: 'user', content: 'What is the weather in New York?' }]
+  chatId: 'chat_123',
+  userId: 'user_123',
+  context: {},
+  message: { role: 'user', content: 'What is the weather in New York?' }
 });
 console.log(response);
 ```
@@ -459,19 +472,18 @@ console.log(response);
 ```typescript
 import { IgniterAgentManager, IgniterAgentToolset } from "@igniter-js/agents";
 
-const toolset = IgniterAgentToolset.create()
+const toolset = IgniterAgentToolset.create("shared")
   .addTool(weatherTool)
   .addTool(calculatorTool)
   .build();
 
 const manager = IgniterAgentManager.create()
-  .withMemory(MemoryAdapter.create())
-  .addAgent(weatherAgent)
-  .addAgent(mathAgent)
+  .addAgent("weather", weatherAgent)
+  .addAgent("math", mathAgent)
   .build();
 
 await manager.startAll();
-const agents = manager.listAgents();
+const agents = manager.getNames();
 ```
 
 #### MCP Integration
@@ -479,13 +491,13 @@ const agents = manager.listAgents();
 ```typescript
 import { IgniterAgentMCPClient } from "@igniter-js/agents";
 
-const mcpClient = IgniterAgentMCPClient.create()
-  .withServerUrl("http://localhost:3000/mcp")
+const mcpClient = IgniterAgentMCPClient.create("weather-service")
+  .withType("http")
+  .withURL("http://localhost:3000/mcp")
   .build();
 
-await mcpClient.connect();
-
-const agent = IgniterAgent.create("mcp-agent").withMCPClient(mcpClient).build();
+const agent = IgniterAgent.create("mcp-agent").addMCP(mcpClient).build();
+await agent.start();
 ```
 
 ---
@@ -510,7 +522,12 @@ const adapter = IgniterAgentInMemoryAdapter.create({
 });
 
 const agent = IgniterAgent.create("my-agent")
-  .withMemory(adapter)
+  .withMemory({
+    provider: adapter,
+    working: { enabled: true, scope: "chat" },
+    history: { enabled: true, limit: 50 },
+    chats: { enabled: true },
+  })
   .build();
 ```
 
@@ -547,12 +564,20 @@ await adapter.connect();
 
 // Use with agent
 const agent = IgniterAgent.create("my-agent")
-  .withMemory(adapter)
+  .withMemory({
+    provider: adapter,
+    working: { enabled: true, scope: "chat" },
+    history: { enabled: true, limit: 100 },
+    chats: { enabled: true },
+  })
   .build();
 
 // Generate conversation (auto-saves to JSON files)
 await agent.generate({
-  messages: [{ role: 'user', content: 'Hello!' }]
+  chatId: 'chat_123',
+  userId: 'user_123',
+  context: {},
+  message: { role: 'user', content: 'Hello!' }
 });
 
 // Disconnect when done (syncs remaining data)
@@ -628,7 +653,7 @@ import { IgniterAgentJSONFileAdapter } from "@igniter-js/agents/adapters";
 **Implementation:**
 
 ```typescript
-import { IgniterAgent, IgniterAgentToolset } from "@igniter-js/agents";
+import { IgniterAgent, IgniterAgentPrompt, IgniterAgentTool, IgniterAgentToolset } from "@igniter-js/agents";
 import { z } from "zod";
 
 // Order lookup tool
@@ -681,27 +706,34 @@ const productSearchTool = IgniterAgentTool.create("search_products")
 
 // Support agent
 const supportAgent = IgniterAgent.create("customer-support")
-  .withToolset(
-    IgniterAgentToolset.create()
+  .addToolset(
+    IgniterAgentToolset.create("support")
       .addTool(orderLookupTool)
       .addTool(productSearchTool)
       .build(),
   )
-  .withSystemPrompt(
-    `
+  .withPrompt(
+    IgniterAgentPrompt.create(`
     You are a helpful customer support agent for an e-commerce store.
     Help customers with order status, product information, and general inquiries.
     Always be polite and provide accurate information.
-  `,
+  `),
   )
-  .withMemory(MemoryAdapter.create())
+  .withMemory({
+    provider: IgniterAgentInMemoryAdapter.create(),
+    working: { enabled: true, scope: "chat" },
+    history: { enabled: true, limit: 50 },
+    chats: { enabled: true },
+  })
   .build();
 
 // Handle customer message
 async function handleCustomerMessage(message: string, customerId: string) {
   const response = await supportAgent.generate({
-    messages: [{ role: 'user', content: message }],
-    options: { userId: customerId }
+    chatId: `chat_${customerId}`,
+    userId: customerId,
+    context: {},
+    message: { role: 'user', content: message }
   });
   return response;
 }
@@ -723,7 +755,7 @@ async function handleCustomerMessage(message: string, customerId: string) {
 **Implementation:**
 
 ```typescript
-import { IgniterAgent, IgniterAgentToolset } from "@igniter-js/agents";
+import { IgniterAgent, IgniterAgentTool, IgniterAgentToolset } from "@igniter-js/agents";
 import { z } from "zod";
 
 // Git operations tool
@@ -780,17 +812,25 @@ const testTool = IgniterAgentTool.create("run_tests")
 
 // Code review agent
 const reviewAgent = IgniterAgent.create("code-reviewer")
-  .withToolset(
-    IgniterAgentToolset.create().addTool(gitTool).addTool(testTool).build(),
+  .addToolset(
+    IgniterAgentToolset.create("reviewer")
+      .addTool(gitTool)
+      .addTool(testTool)
+      .build(),
   )
-  .withSystemPrompt(
-    `
+  .withPrompt(
+    IgniterAgentPrompt.create(`
     You are an expert code reviewer with deep knowledge of software engineering best practices.
     Review pull requests for code quality, security, performance, and maintainability.
     Provide constructive feedback with specific suggestions for improvement.
-  `,
+  `),
   )
-  .withMemory(MemoryAdapter.create())
+  .withMemory({
+    provider: IgniterAgentInMemoryAdapter.create(),
+    working: { enabled: true, scope: "chat" },
+    history: { enabled: true, limit: 50 },
+    chats: { enabled: true },
+  })
   .onToolCallEnd((result, context) => {
     // Log review metrics
     console.log(`Review completed for PR #${context.prNumber}`);
@@ -812,12 +852,10 @@ async function reviewPR(repo: string, prNumber: number) {
   `;
 
   const review = await reviewAgent.generate({
-    messages: [{ role: 'user', content: prompt }],
-    options: {
-      repo,
-      prNumber,
-      context: { type: "pr_review" },
-    }
+    chatId: `pr_${prNumber}`,
+    userId: repo,
+    context: { repo, prNumber, type: "pr_review" },
+    message: { role: 'user', content: prompt }
   });
 
   return review;
@@ -936,21 +974,26 @@ const statsTool = IgniterAgentTool.create("calculate_stats")
 
 // Data analysis agent
 const analysisAgent = IgniterAgent.create("data-analyst")
-  .withToolset(
-    IgniterAgentToolset.create()
+  .addToolset(
+    IgniterAgentToolset.create("analysis")
       .addTool(queryTool)
       .addTool(chartTool)
       .addTool(statsTool)
       .build(),
   )
-  .withSystemPrompt(
-    `
+  .withPrompt(
+    IgniterAgentPrompt.create(`
     You are an expert data analyst who can query databases, perform statistical analysis,
     and create visualizations. Help users understand their data through queries, charts,
     and statistical insights. Always explain your findings clearly and suggest next steps.
-  `,
+  `),
   )
-  .withMemory(MemoryAdapter.create())
+  .withMemory({
+    provider: IgniterAgentInMemoryAdapter.create(),
+    working: { enabled: true, scope: "chat" },
+    history: { enabled: true, limit: 50 },
+    chats: { enabled: true },
+  })
   .build();
 
 // Analyze sales data
@@ -967,10 +1010,10 @@ async function analyzeSalesData(query: string) {
   `;
 
   const analysis = await analysisAgent.generate({
-      prompt, 
-      options: {
-         context: { type: "data_analysis", query },
-      }
+      chatId: 'analysis_1',
+      userId: 'user_123',
+      context: { type: "data_analysis", query },
+      message: { role: 'user', content: prompt }
   });
 
   return analysis;
@@ -1001,40 +1044,64 @@ import {
 
 // CRM integration agent
 const crmAgent = IgniterAgent.create("crm-sync")
-  .withToolset(crmToolset) // Tools for Salesforce, HubSpot, etc.
-  .withSystemPrompt("Handle CRM data synchronization and customer management")
+  .addToolset(crmToolset) // Tools for Salesforce, HubSpot, etc.
+  .withPrompt(
+    IgniterAgentPrompt.create(
+      "Handle CRM data synchronization and customer management",
+    ),
+  )
   .build();
 
 // Payment processing agent
 const paymentAgent = IgniterAgent.create("payment-processor")
-  .withToolset(paymentToolset) // Tools for Stripe, PayPal, etc.
-  .withSystemPrompt("Process payments and handle financial transactions")
+  .addToolset(paymentToolset) // Tools for Stripe, PayPal, etc.
+  .withPrompt(
+    IgniterAgentPrompt.create(
+      "Process payments and handle financial transactions",
+    ),
+  )
   .build();
 
 // Email marketing agent
 const emailAgent = IgniterAgent.create("email-campaign")
-  .withToolset(emailToolset) // Tools for Mailchimp, SendGrid, etc.
-  .withSystemPrompt("Manage email campaigns and subscriber communications")
+  .addToolset(emailToolset) // Tools for Mailchimp, SendGrid, etc.
+  .withPrompt(
+    IgniterAgentPrompt.create(
+      "Manage email campaigns and subscriber communications",
+    ),
+  )
   .build();
 
 // Analytics agent with MCP
 const analyticsAgent = IgniterAgent.create("analytics-orchestrator")
-  .withMCPClient(
-    IgniterAgentMCPClient.create()
-      .withServerUrl(process.env.ANALYTICS_MCP_URL!)
+  .addMCP(
+    IgniterAgentMCPClient.create("analytics")
+      .withType("http")
+      .withURL(process.env.ANALYTICS_MCP_URL!)
       .build(),
   )
-  .withSystemPrompt("Orchestrate complex analytics workflows")
+  .withPrompt(
+    IgniterAgentPrompt.create("Orchestrate complex analytics workflows"),
+  )
   .build();
+
+const sharedMemory = IgniterAgentInMemoryAdapter.create();
+const sharedMemoryConfig = {
+  provider: sharedMemory,
+  working: { enabled: true, scope: "chat" },
+  history: { enabled: true, limit: 50 },
+  chats: { enabled: true },
+};
+
+// Ensure crmAgent/paymentAgent/emailAgent/analyticsAgent are built with sharedMemoryConfig
 
 // Integration manager
 const agentManager = IgniterAgentManager.create()
-  .withMemory(MemoryAdapter.create())
   .withTelemetry(telemetryManager)
-  .addAgent(crmAgent)
-  .addAgent(paymentAgent)
-  .addAgent(emailAgent)
-  .addAgent(analyticsAgent)
+  .addAgent("crm", crmAgent)
+  .addAgent("payment", paymentAgent)
+  .addAgent("email", emailAgent)
+  .addAgent("analytics", analyticsAgent)
   .build();
 
 // Handle complex integration request
@@ -1047,17 +1114,17 @@ async function handleIntegrationRequest(request: IntegrationRequest) {
   }
 
   const result = await agent.generate({
-   prompt: request.description, 
-   options: {
-      context: request.metadata,
-      userId: request.userId,
-   }
+   chatId: `integration_${request.id}`,
+   userId: request.userId,
+   context: request.metadata,
+   message: { role: 'user', content: request.description }
   });
 
   // Store integration result
-  await agents.memory.store(`integration:${request.id}`, {
-    result,
-    timestamp: Date.now(),
+  await sharedMemory.updateWorkingMemory({
+    scope: "chat",
+    identifier: `integration:${request.id}`,
+    content: JSON.stringify({ result, timestamp: Date.now() }),
   });
 
   return result;
@@ -1184,15 +1251,15 @@ const contentTool = IgniterAgentTool.create("generate_lesson")
 
 // AI Tutor Agent
 const tutorAgent = IgniterAgent.create("ai-tutor")
-  .withToolset(
-    IgniterAgentToolset.create()
+  .addToolset(
+    IgniterAgentToolset.create("tutor")
       .addTool(progressTool)
       .addTool(styleTool)
       .addTool(contentTool)
       .build(),
   )
-  .withSystemPrompt(
-    `
+  .withPrompt(
+    IgniterAgentPrompt.create(`
     You are an expert AI tutor who adapts to each student's unique learning style and pace.
     Use the available tools to:
     1. Track student progress and performance
@@ -1201,22 +1268,22 @@ const tutorAgent = IgniterAgent.create("ai-tutor")
     4. Provide encouragement and adapt difficulty as needed
 
     Always maintain a supportive, patient, and encouraging tone.
-  `,
+  `),
   )
-  .withMemory(MemoryAdapter.create())
-  .onAgentStart(async (input, context) => {
-    // Load student profile and learning history
-    const studentData = await loadStudentProfile(context.userId);
-    context.studentProfile = studentData;
+  .withMemory({
+    provider: IgniterAgentInMemoryAdapter.create(),
+    working: { enabled: true, scope: "chat" },
+    history: { enabled: true, limit: 50 },
+    chats: { enabled: true },
   })
-  .onToolCallEnd(async (result, context) => {
-    // Update learning analytics
-    await updateLearningAnalytics(context.userId, result);
+  .onToolCallEnd(async (agentName, toolName, output) => {
+    await updateLearningAnalytics(agentName, toolName, output);
   })
   .build();
 
 // Conduct a tutoring session
 async function conductTutoringSession(studentId: string, topic: string) {
+  const studentProfile = await loadStudentProfile(studentId);
   const sessionPrompt = `
     Start a personalized tutoring session for student ${studentId} on the topic: "${topic}"
 
@@ -1231,11 +1298,10 @@ async function conductTutoringSession(studentId: string, topic: string) {
   `;
 
   const session = await tutorAgent.generate({
-   prompt: sessionPrompt, 
-   options: {
-      userId: studentId,
-      context: { type: "tutoring_session", topic },
-   }
+   chatId: `tutor_${studentId}`,
+   userId: studentId,
+   context: { type: "tutoring_session", topic, studentProfile },
+   message: { role: 'user', content: sessionPrompt }
   });
 
   return session;
@@ -1275,10 +1341,10 @@ const agent = manager.getAgentget.domain);
 
 ```typescript
 const devAgent = IgniterAgent.create("dev-assistant")
-  .withMCPClient(
-    IgniterAgentMCPClient.create()
-      .withServerUrl("http://localhost:3000/dev-tools")
-      .withToolFilter(["include", ["code.analyze", "docs.search", "test.run"]])
+  .addMCP(
+    IgniterAgentMCPClient.create("dev-tools")
+      .withType("http")
+      .withURL("http://localhost:3000/dev-tools")
       .build(),
   )
   .build();
@@ -1290,13 +1356,20 @@ const devAgent = IgniterAgent.create("dev-assistant")
 
 ```typescript
 const supportAgent = IgniterAgent.create("customer-support")
-  .withMemory(MemoryAdapter.create())
-  .withToolset(customerSupportToolset)
-  .withSystemPrompt(
-    "Provide excellent customer support using available tools and context",
+  .withMemory({
+    provider: IgniterAgentInMemoryAdapter.create(),
+    working: { enabled: true, scope: "chat" },
+    history: { enabled: true, limit: 50 },
+    chats: { enabled: true },
+  })
+  .addToolset(customerSupportToolset)
+  .withPrompt(
+    IgniterAgentPrompt.create(
+      "Provide excellent customer support using available tools and context",
+    ),
   )
-  .onAgentComplete(async (result, context) => {
-    await updateCustomerSatisfaction(context.customerId, result);
+  .onToolCallEnd(async (_agentName, toolName, result) => {
+    await updateCustomerSatisfaction(toolName, result);
   })
   .build();
 ```
@@ -1308,7 +1381,7 @@ const supportAgent = IgniterAgent.create("customer-support")
 | Practice                              | Why                                                  | Example                                            |
 | ------------------------------------- | ---------------------------------------------------- | -------------------------------------------------- |
 | ✅ **Use typed tool schemas**         | Prevents runtime errors and ensures data consistency | `withInput(z.object({ id: z.string() }))`          |
-| ✅ **Implement memory persistence**   | Maintains context across interactions                | `withMemory(MemoryAdapter.create())`               |
+| ✅ **Implement memory persistence**   | Maintains context across interactions                | `withMemory({ provider: IgniterAgentInMemoryAdapter.create() })`               |
 | ✅ **Add comprehensive telemetry**    | Enables observability and debugging                  | `withTelemetry(telemetryManager)`                  |
 | ✅ **Use agent hooks**                | Enables custom logic and monitoring                  | `onToolCallEnd(handler)`                      |
 | ✅ **Validate all inputs/outputs**    | Ensures data integrity                               | `withOutput(z.object({ result: z.string() }))`     |
@@ -1328,24 +1401,24 @@ const supportAgent = IgniterAgent.create("customer-support")
 
 | Class                        | Purpose               | Key Methods                                                              |
 | ---------------------------- | --------------------- | ------------------------------------------------------------------------ |
-| `IgniterAgentBuilder`        | Agent configuration   | `withModel()`, `withToolset()`, `withMemory()`, `build()`                |
+| `IgniterAgentBuilder`        | Agent configuration   | `withModel()`, `addToolset()`, `withMemory()`, `build()`                |
 | `IgniterAgentCore`           | Agent runtime         | `start()`, `stop()`, `generate()`, `stream()`                            |
 | `IgniterAgentManagerBuilder` | Manager configuration | `addAgent()`, `withLogger()`, `withTelemetry()`, `build()`               |
-| `IgniterAgentManagerCore`    | Manager runtime       | `start()`, `startAll()`, `get()`, `getStatus()`                          |
+| `IgniterAgentManagerCore`    | Manager runtime       | `start()`, `startAll()`, `get()`, `getStatus()`, `getNames()`            |
 | `IgniterAgentTool`           | Tool definition       | `withDescription()`, `withInput()`, `withExecute()`, `build()`           |
 | `IgniterAgentToolset`        | Tool composition      | `addTool()`, `getName()`, `getTools()`, `build()`                        |
 | `IgniterAgentMCPClient`      | MCP integration       | `withType()`, `withCommand()`, `withURL()`, `build()`                    |
-| `IgniterAgentPrompt`         | Prompt engineering    | `withTemplate()`, `withVariables()`, `render()`                          |
+| `IgniterAgentPrompt`         | Prompt engineering    | `create()`, `addAppended()`, `build()`                                   |
 
 #### Builder Pattern Methods
 
 | Builder               | Method                     | Purpose                          |
 | --------------------- | -------------------------- | -------------------------------- |
 | `IgniterAgentBuilder` | `withModel(model)`         | Set AI model                     |
-|                       | `withInstructions(prompt)` | Configure AI system instructions |
-|                       | `withToolset(toolset)`     | Add toolset                      |
-|                       | `withMCP(mcp)`             | Add MCP configuration            |
-|                       | `withMemory(adapter)`      | Configure memory persistence     |
+|                       | `withPrompt(prompt)`       | Configure AI system instructions |
+|                       | `addToolset(toolset)`      | Add toolset                      |
+|                       | `addMCP(mcp)`              | Add MCP configuration            |
+|                       | `withMemory(config)`       | Configure memory persistence     |
 |                       | `withContextSchema(schema)`| Define context schema            |
 |                       | `build()`                  | Create agent instance            |
 
@@ -1374,41 +1447,40 @@ const supportAgent = IgniterAgent.create("customer-support")
 
 | Event Key                        | Attributes                                               | Context                                |
 | -------------------------------- | -------------------------------------------------------- | -------------------------------------- |
-| `igniter.agents.agent.started`   | `agent.name`, `agent.input_length`                       | Agent execution begins                 |
-| `igniter.agents.agent.completed` | `agent.name`, `agent.output_length`, `agent.duration_ms` | Agent execution completes successfully |
-| `igniter.agents.agent.error`     | `agent.name`, `agent.error.code`, `agent.error.message`  | Agent execution fails                  |
+| `igniter.agent.lifecycle.start.started`   | `ctx.agent.name`, `ctx.lifecycle.toolsetCount`             | Agent start begins                 |
+| `igniter.agent.lifecycle.start.success`   | `ctx.agent.name`, `ctx.lifecycle.hasMemory`                | Agent start completes              |
+| `igniter.agent.lifecycle.start.error`     | `ctx.error.code`, `ctx.error.message`                      | Agent start fails                  |
 
 #### Tool Execution Events
 
 | Event Key                       | Attributes                                                         | Context                  |
 | ------------------------------- | ------------------------------------------------------------------ | ------------------------ |
-| `igniter.agents.tool.called`    | `tool.name`, `agent.name`, `tool.input_size`                       | Tool execution begins    |
-| `igniter.agents.tool.completed` | `tool.name`, `agent.name`, `tool.output_size`, `tool.duration_ms`  | Tool execution completes |
-| `igniter.agents.tool.error`     | `tool.name`, `agent.name`, `tool.error.code`, `tool.error.message` | Tool execution fails     |
+| `igniter.agent.tool.execute.started`    | `ctx.tool.toolset`, `ctx.tool.name`                         | Tool execution begins    |
+| `igniter.agent.tool.execute.success`    | `ctx.tool.durationMs`                                       | Tool execution completes |
+| `igniter.agent.tool.execute.error`      | `ctx.error.code`, `ctx.error.operation`                     | Tool execution fails     |
 
 #### Memory Events
 
 | Event Key                         | Attributes                                        | Context                    |
 | --------------------------------- | ------------------------------------------------- | -------------------------- |
-| `igniter.agents.memory.stored`    | `memory.key`, `memory.size_bytes`                 | Data stored in memory      |
-| `igniter.agents.memory.retrieved` | `memory.key`, `memory.size_bytes`, `memory.found` | Data retrieved from memory |
-| `igniter.agents.memory.error`     | `memory.operation`, `memory.error.code`           | Memory operation fails     |
+| `igniter.agent.memory.operation.started` | `ctx.memory.operation`, `ctx.memory.scope` | Memory operation begins |
+| `igniter.agent.memory.operation.success` | `ctx.memory.durationMs`, `ctx.memory.count` | Memory operation completes |
+| `igniter.agent.memory.operation.error`   | `ctx.error.code`, `ctx.error.component` | Memory operation fails |
 
 #### MCP Events
 
 | Event Key                             | Attributes                             | Context                          |
 | ------------------------------------- | -------------------------------------- | -------------------------------- |
-| `igniter.agents.mcp.connected`        | `mcp.server_url`, `mcp.tools_count`    | MCP connection established       |
-| `igniter.agents.mcp.message.sent`     | `mcp.message_type`, `mcp.message_size` | Message sent to MCP server       |
-| `igniter.agents.mcp.message.received` | `mcp.message_type`, `mcp.message_size` | Message received from MCP server |
-| `igniter.agents.mcp.error`            | `mcp.operation`, `mcp.error.code`      | MCP operation fails              |
+| `igniter.agent.mcp.connect.started`   | `ctx.mcp.name`, `ctx.mcp.type`         | MCP connection begins            |
+| `igniter.agent.mcp.connect.success`   | `ctx.mcp.toolCount`, `ctx.mcp.durationMs` | MCP connection succeeds       |
+| `igniter.agent.mcp.connect.error`     | `ctx.error.code`, `ctx.error.message`  | MCP connection fails             |
+| `igniter.agent.mcp.disconnect.started`| `ctx.mcp.name`, `ctx.mcp.type`         | MCP disconnect begins            |
+| `igniter.agent.mcp.disconnect.success`| `ctx.mcp.durationMs`                   | MCP disconnect succeeds          |
+| `igniter.agent.mcp.disconnect.error`  | `ctx.error.code`, `ctx.error.message`  | MCP disconnect fails             |
 
 #### Manager Events
 
-| Event Key                               | Attributes                                                            | Context                       |
-| --------------------------------------- | --------------------------------------------------------------------- | ----------------------------- |
-| `igniter.agents.manager.created`        | `manager.agents_count`, `manager.has_memory`, `manager.has_telemetry` | Manager instance created      |
-| `igniter.agents.manager.agents.started` | `manager.started_count`, `manager.failed_count`                       | Batch agent startup completed |
+Manager-level telemetry events are not emitted by this package at the moment.
 
 ### 14.5 Error Classes Reference
 
@@ -1418,7 +1490,7 @@ The `@igniter-js/agents` package provides a comprehensive error hierarchy for pr
 
 **`IgniterAgentError`**
 
-Base error class that extends `IgniterError` from `@igniter-js/core`. All agent-related errors inherit from this class.
+Base error class that extends `IgniterError` from `@igniter-js/common`. All agent-related errors inherit from this class.
 
 ```typescript
 import { IgniterAgentError, IgniterAgentErrorCode } from '@igniter-js/agents';
@@ -1549,7 +1621,12 @@ import {
 } from '@igniter-js/agents';
 
 try {
-  await agent.generate({ messages: [...] });
+  await agent.generate({
+    chatId: 'chat_123',
+    userId: 'user_123',
+    context: {},
+    message: { role: 'user', content: 'Hello' }
+  });
 } catch (error) {
   // Safe type narrowing
   if (isIgniterAgentMCPError(error)) {
@@ -1599,7 +1676,12 @@ All errors use standardized error codes from `IgniterAgentErrorCode` enum:
 - **Example:**
   ```typescript
   try {
-    await agent.generate({ messages: [] });
+    await agent.generate({
+      chatId: 'chat_123',
+      userId: 'user_123',
+      context: {},
+      messages: []
+    });
   } catch (error) {
     if (error.code === IgniterAgentErrorCode.UNKNOWN) {
       logger.error('Unexpected error:', error.cause);
@@ -1656,7 +1738,12 @@ All errors use standardized error codes from `IgniterAgentErrorCode` enum:
     .build();
   
   await agent.start();  // Required before generate()
-  const result = await agent.generate({ messages: [...] });
+  const result = await agent.generate({
+    chatId: 'chat_123',
+    userId: 'user_123',
+    context: {},
+    message: { role: 'user', content: 'Hello' }
+  });
   ```
 
 ##### `IGNITER_AGENT_MODEL_MISSING`
@@ -1708,14 +1795,18 @@ All errors use standardized error codes from `IgniterAgentErrorCode` enum:
   
   // ✅ WORKS
   await agent.generate({
-    messages: [...],
-    options: { userId: 'user_123', chatId: 'chat_456' }
+    chatId: 'chat_456',
+    userId: 'user_123',
+    context: { userId: 'user_123', chatId: 'chat_456' },
+    message: { role: 'user', content: 'Hello' }
   });
   
   // ❌ FAILS - Missing chatId
   await agent.generate({
-    messages: [...],
-    options: { userId: 'user_123' }
+    chatId: 'chat_456',
+    userId: 'user_123',
+    context: { userId: 'user_123' },
+    message: { role: 'user', content: 'Hello' }
   });
   ```
 
@@ -1779,10 +1870,13 @@ All errors use standardized error codes from `IgniterAgentErrorCode` enum:
 - **Example:**
   ```typescript
   const result = await agent.generate({
-    messages: [{ 
-      role: 'user', 
-      content: 'Use filesystem tool to read /invalid/path' 
-    }]
+    chatId: 'chat_123',
+    userId: 'user_123',
+    context: {},
+    message: {
+      role: 'user',
+      content: 'Use filesystem tool to read /invalid/path'
+    }
   });
   // May throw MCP_TOOL_ERROR if filesystem server fails
   ```
@@ -2033,7 +2127,12 @@ import {
 } from '@igniter-js/agents';
 
 try {
-  await agent.generate({ messages: [...] });
+  await agent.generate({
+    chatId: 'chat_123',
+    userId: 'user_123',
+    context: {},
+    message: { role: 'user', content: 'Hello' }
+  });
 } catch (error) {
   if (isIgniterAgentMCPError(error)) {
     console.error(`MCP error in ${error.mcpName}:`, error.message);
@@ -2146,7 +2245,12 @@ function logAgentError(error: unknown, context: Record<string, unknown>) {
 
 // Usage
 try {
-  await agent.generate({ messages: [...] });
+  await agent.generate({
+    chatId: 'chat_123',
+    userId: 'user_123',
+    context: {},
+    message: { role: 'user', content: 'Hello' }
+  });
 } catch (error) {
   logAgentError(error, { operation: 'generate', agentName: 'assistant' });
 }
@@ -2177,14 +2281,17 @@ interface MyAppContext {
 
 // Create agent with custom context inference
 const agent = IgniterAgent.create("advanced-agent")
-  .withToolset(
-    IgniterAgentToolset.create()
+  .withContextSchema(z.custom<MyAppContext>())
+  .addToolset(
+    IgniterAgentToolset.create("admin")
       .addTool(
         IgniterAgentTool.create("admin_action")
+          .withDescription("Run a privileged admin action")
           .withInput(z.object({ action: z.string() }))
-          .withExecute(async ({ action }, context: MyAppContext) => {
-            // Context is fully typed
-            if (!context.permissions.includes("admin")) {
+          .withExecute(async ({ action }, options) => {
+            const context = options.experimental_context?.context as MyAppContext;
+
+            if (!context?.permissions.includes("admin")) {
               throw new Error("Insufficient permissions");
             }
 
@@ -2202,21 +2309,24 @@ const agent = IgniterAgent.create("advanced-agent")
       )
       .build(),
   )
-  .withSystemPrompt(
-    "You are an advanced agent with full application context access.",
+  .withPrompt(
+    IgniterAgentPrompt.create(
+      "You are an advanced agent with full application context access.",
+    ),
   )
   .build();
 
 // Usage with typed context
 const result = await agent.generate({
-   prompt: "perform admin cleanup",
-   options: {
-      userId: "user123",
+   chatId: 'admin_cleanup',
+   userId: "user123",
+   context: {
       tenantId: "tenant456",
       permissions: ["admin", "write"],
       database: prismaClient,
       cache: redisClient,
-   }
+   },
+   message: { role: 'user', content: "perform admin cleanup" }
 });
 ```
 
@@ -2234,8 +2344,8 @@ class DynamicToolRegistry {
     name: string,
     config: { schema: z.ZodSchema; handler: Function },
   ) {
-    const tool = IgniterAgentTool.create()
-      .withName(name)
+    const tool = IgniterAgentTool.create(name)
+      .withDescription(`Dynamic tool: ${name}`)
       .withInput(config.schema)
       .withExecute(config.handler)
       .build();
@@ -2245,7 +2355,7 @@ class DynamicToolRegistry {
   }
 
   buildToolset(): IgniterAgentToolset {
-    const toolset = IgniterAgentToolset.create();
+    const toolset = IgniterAgentToolset.create("dynamic");
     for (const tool of this.tools.values()) {
       toolset.addTool(tool);
     }
@@ -2266,7 +2376,7 @@ const registry = new DynamicToolRegistry()
   });
 
 const agent = IgniterAgent.create("dynamic-agent")
-  .withToolset(registry.buildToolset())
+  .addToolset(registry.buildToolset())
   .build();
 ```
 
@@ -2277,7 +2387,7 @@ Different configurations for development, staging, and production:
 ```typescript
 import {
   IgniterAgentManager,
-  MemoryAdapter,
+  IgniterAgentInMemoryAdapter,
   IgniterAgentMCPClient,
 } from "@igniter-js/agents";
 
@@ -2289,38 +2399,65 @@ function createAgentManager(env: "development" | "staging" | "production") {
   switch (env) {
     case "development":
       return baseConfig
-        .withMemory(MemoryAdapter.create()) // Simple in-memory for dev
-        .addAgent(createDevAgent())
+        .addAgent("dev", createDevAgent({
+          provider: IgniterAgentInMemoryAdapter.create(),
+          working: { enabled: true, scope: "chat" },
+          history: { enabled: true, limit: 50 },
+          chats: { enabled: true },
+        }))
         .build();
 
     case "staging":
       return baseConfig
-        .withMemory(createRedisAdapter()) // Redis for staging
-        .addAgent(createStagingAgent())
-        .addAgent(createMonitoringAgent())
+        .addAgent("staging", createStagingAgent({
+          provider: createRedisAdapter(),
+          working: { enabled: true, scope: "chat" },
+          history: { enabled: true, limit: 100 },
+          chats: { enabled: true },
+        }))
+        .addAgent("monitoring", createMonitoringAgent({
+          provider: createRedisAdapter(),
+          working: { enabled: true, scope: "chat" },
+          history: { enabled: true, limit: 100 },
+          chats: { enabled: true },
+        }))
         .build();
 
     case "production":
       return baseConfig
-        .withMemory(createRedisClusterAdapter()) // Redis cluster for prod
-        .addAgent(createProdAgent())
-        .addAgent(createMonitoringAgent())
-        .addAgent(createAnalyticsAgent())
+        .addAgent("prod", createProdAgent({
+          provider: createRedisClusterAdapter(),
+          working: { enabled: true, scope: "chat" },
+          history: { enabled: true, limit: 200 },
+          chats: { enabled: true },
+        }))
+        .addAgent("monitoring", createMonitoringAgent({
+          provider: createRedisClusterAdapter(),
+          working: { enabled: true, scope: "chat" },
+          history: { enabled: true, limit: 200 },
+          chats: { enabled: true },
+        }))
+        .addAgent("analytics", createAnalyticsAgent({
+          provider: createRedisClusterAdapter(),
+          working: { enabled: true, scope: "chat" },
+          history: { enabled: true, limit: 200 },
+          chats: { enabled: true },
+        }))
         .build();
   }
 }
 
 // Environment-specific agent creation
 function createProdAgent() {
-   const myAppMCPClient = IgniterAgentMCPClient.create()
-      .withServerUrl(process.env.MCP_SERVER_URL!)
-      .withToolFilter(["include", ["prod.*"]]) // Only production tools
-      .build(),
+  const myAppMCPClient = IgniterAgentMCPClient.create("prod-mcp")
+    .withType("http")
+    .withURL(process.env.MCP_SERVER_URL!)
+    .build();
 
   return IgniterAgent.create("production-agent")
-    .withToolset(productionToolset)
-    .withMCPClient(myAppMCPClient)
-    .withSystemPrompt("Production-ready agent with full MCP integration.")
+    .addToolset(productionToolset)
+    .addMCP(myAppMCPClient)
+    .withPrompt(IgniterAgentPrompt.create("Production-ready agent with full MCP integration."))
     .build();
 }
 ```
@@ -2330,13 +2467,15 @@ function createProdAgent() {
 Implementing inter-agent communication:
 
 ```typescript
-import { IgniterAgentManager, IgniterAgentToolset } from "@igniter-js/agents";
+import { IgniterAgent, IgniterAgentManager, IgniterAgentPrompt, IgniterAgentTool, IgniterAgentToolset } from "@igniter-js/agents";
+
+let manager: ReturnType<typeof IgniterAgentManager.create>;
 
 // Create communication tools
-const communicationTools = IgniterAgentToolset.create()
+const communicationTools = IgniterAgentToolset.create("communication")
   .addTool(
-    IgniterAgentTool.create()
-      .withName("send_message")
+    IgniterAgentTool.create("send_message")
+      .withDescription("Send a message to another agent")
       .withInput(
         z.object({
           targetAgent: z.string(),
@@ -2344,54 +2483,56 @@ const communicationTools = IgniterAgentToolset.create()
           priority: z.enum(["low", "normal", "high"]).optional(),
         }),
       )
-      .withExecute(async ({ targetAgent, message, priority }, context) => {
-        // Send message to another agent via manager
-        const manager = context.manager;
-
+      .withExecute(async ({ targetAgent, message, priority }) => {
         const targetAgentInstance = manager.get(targetAgent);
 
         if (!targetAgentInstance) {
           throw new Error(`Agent ${targetAgent} not found`);
         }
 
-        // Queue message for target agent
-        await manager.memory.store(`messages:${targetAgent}`, {
-          from: context.agentName,
-          message,
-          priority,
-          timestamp: Date.now(),
+        return targetAgentInstance.generate({
+          chatId: `delegate_${Date.now()}`,
+          userId: "system",
+          context: { priority },
+          message: { role: "user", content: message },
         });
-
-        return { delivered: true };
       })
       .build(),
   )
   .build();
 
 // Create communicating agents
-const manager = IgniterAgentManager.create()
+manager = IgniterAgentManager.create()
   .addAgent(
+    "agent-a",
     IgniterAgent.create("agent-a")
-      .withToolset(communicationTools)
-      .withSystemPrompt("Agent A can communicate with other agents.")
+      .addToolset(communicationTools)
+      .withPrompt(IgniterAgentPrompt.create("Agent A can communicate with other agents."))
       .build(),
   )
   .addAgent(
+    "agent-b",
     IgniterAgent.create("agent-b")
-      .withToolset(communicationTools)
-      .withSystemPrompt("Agent B can receive and respond to messages.")
+      .addToolset(communicationTools)
+      .withPrompt(IgniterAgentPrompt.create("Agent B can receive and respond to messages."))
       .build(),
   )
   .build();
 
 // Agents can now communicate with each other
 await manager.get("agent-a").generate({
-  messages: [{ role: 'user', content: 'send message to Bob: hello!' }]
+  chatId: 'chat_a',
+  userId: 'agent-a',
+  context: {},
+  message: { role: 'user', content: 'send message to Bob: hello!' }
 });
 const response = await manager
   .get("agent-b")
   .generate({
-    messages: [{ role: 'user', content: 'check for new messages' }]
+    chatId: 'chat_b',
+    userId: 'agent-b',
+    context: {},
+    message: { role: 'user', content: 'check for new messages' }
   });
 ```
 
@@ -2402,23 +2543,27 @@ const response = await manager
 Optimizing memory usage for high-throughput agents:
 
 ```typescript
-import { IgniterAgent, MemoryAdapter } from "@igniter-js/agents";
+import { IgniterAgent, IgniterAgentInMemoryAdapter } from "@igniter-js/agents";
 
-// Configure memory with TTL and size limits
-const optimizedMemory = MemoryAdapter.create({
-  maxSize: 1000, // Maximum number of conversation entries
-  ttl: 24 * 60 * 60 * 1000, // 24 hours TTL
-  cleanupInterval: 60 * 60 * 1000, // Cleanup every hour
+// Configure memory with size limits
+const optimizedMemory = IgniterAgentInMemoryAdapter.create({
+  maxChats: 100, // Maximum number of chats
+  maxMessages: 1000, // Maximum number of messages per chat
 });
 
 const agent = IgniterAgent.create("optimized-agent")
-  .withMemory(optimizedMemory)
-  .withSystemPrompt("High-performance agent with optimized memory.")
+  .withMemory({
+    provider: optimizedMemory,
+    working: { enabled: true, scope: "chat" },
+    history: { enabled: true, limit: 100 },
+    chats: { enabled: true },
+  })
+  .withPrompt(IgniterAgentPrompt.create("High-performance agent with optimized memory."))
   .build();
 
-// Manual memory cleanup
-await agent.memory.clearExpired();
-await agent.memory.optimize(); // Remove duplicate/old entries
+// Monitor memory stats
+const stats = await optimizedMemory.getStats();
+console.log(stats);
 ```
 
 #### Tool Execution Optimization
@@ -2428,14 +2573,16 @@ Caching expensive tool results:
 ```typescript
 import { IgniterAgentTool } from "@igniter-js/agents";
 
+const cache = new Map<string, { result: unknown; timestamp: number }>();
+
 const cachedTool = IgniterAgentTool.create("expensive_calculation")
   .withDescription("Performs expensive calculation with caching")
   .withInput(z.object({ input: z.string() }))
-  .withExecute(async ({ input }, context) => {
+  .withExecute(async ({ input }) => {
     const cacheKey = `calc:${input}`;
 
     // Check memory cache first
-    const cached = await context.memory.retrieve(cacheKey);
+    const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < 3600000) {
       // 1 hour
       return cached.result;
@@ -2445,7 +2592,7 @@ const cachedTool = IgniterAgentTool.create("expensive_calculation")
     const result = await performExpensiveCalculation(input);
 
     // Cache result
-    await context.memory.store(cacheKey, {
+    cache.set(cacheKey, {
       result,
       timestamp: Date.now(),
     });
@@ -2470,7 +2617,7 @@ class AgentPool {
     poolSize: number,
   ) {
     for (let i = 0; i < poolSize; i++) {
-      this.agents.push(manager.getAgent(`${aget}-${i}`));
+      this.agents.push(manager.get(`${agentName}-${i}`));
     }
   }
 
@@ -2480,21 +2627,15 @@ class AgentPool {
     this.currentIndex = (this.currentIndex + 1) % this.agents.length;
 
     return agent.generate({
-      messages: [{ role: 'user', content: input }],
-      options: context
+      chatId: `pool_${this.currentIndex}`,
+      userId: 'pool',
+      context: context ?? {},
+      message: { role: 'user', content: input }
     });
   }
 
   async getStats() {
-    const stats = await Promise.all(
-      this.agents.map(async (agent, index) => ({
-        id: index,
-        status: await agent.getStatus(),
-        memoryUsage: await agent.memory.getStats(),
-      })),
-    );
-
-    return stats;
+    return this.manager.getStatus();
   }
 }
 
@@ -2513,8 +2654,8 @@ Implementing comprehensive input validation:
 import { IgniterAgentTool } from "@igniter-js/agents";
 
 // Secure tool with input sanitization
-const secureTool = IgniterAgentTool.create()
-  .withName("user_profile_update")
+const secureTool = IgniterAgentTool.create("user_profile_update")
+  .withDescription("Update a user profile with strict validation")
   .withInput(
     z.object({
       userId: z.string().uuid("Invalid user ID format"),
@@ -2530,9 +2671,11 @@ const secureTool = IgniterAgentTool.create()
       bio: z.string().max(500, "Bio too long").optional(),
     }),
   )
-  .withExecute(async ({ userId, email, name, bio }, context) => {
+  .withExecute(async ({ userId, email, name, bio }, options) => {
+    const context = options.experimental_context?.context as { userId: string; permissions: string[] } | undefined;
+
     // Additional runtime validation
-    if (context.userId !== userId && !context.permissions.includes("admin")) {
+    if (context && context.userId !== userId && !context.permissions.includes("admin")) {
       throw new Error("Cannot update other users' profiles");
     }
 
@@ -2557,16 +2700,13 @@ Implementing secure agent access controls:
 import { IgniterAgent, IgniterAgentToolset } from "@igniter-js/agents";
 
 // Authentication middleware tool
-const authTool = IgniterAgentTool.create()
-  .withName("authenticate")
+const authTool = IgniterAgentTool.create("authenticate")
+  .withDescription("Validate JWT tokens for authenticated operations")
   .withInput(z.object({ token: z.string() }))
-  .withExecute(async ({ token }, context) => {
+  .withExecute(async ({ token }, options) => {
     try {
       const payload = verifyJWT(token);
-      context.userId = payload.userId;
-      context.permissions = payload.permissions;
-      context.authenticated = true;
-      return { authenticated: true, userId: payload.userId };
+      return { authenticated: true, userId: payload.userId, permissions: payload.permissions };
     } catch (error) {
       throw new Error("Invalid authentication token");
     }
@@ -2575,27 +2715,19 @@ const authTool = IgniterAgentTool.create()
 
 // Authorized agent
 const secureAgent = IgniterAgent.create("secure-agent")
-  .withToolset(
-    IgniterAgentToolset.create()
+  .withContextSchema(z.object({ token: z.string() }))
+  .addToolset(
+    IgniterAgentToolset.create("security")
       .addTool(authTool)
       .addTool(secureTool) // Requires authentication
       .build(),
   )
-  .withSystemPrompt(
-    `
+  .withPrompt(
+    IgniterAgentPrompt.create(`
     You are a secure agent that requires authentication.
     Always authenticate users before performing sensitive operations.
-  `,
+  `),
   )
-  .onAgentStart(async (input, context) => {
-    // Require authentication for all interactions
-    if (!context.authenticated) {
-      await context.agent.generate({
-        messages: [{ role: 'user', content: 'authenticate with provided token first' }]
-      });
-      throw new Error("Authentication required");
-    }
-  })
   .build();
 ```
 
@@ -2629,18 +2761,22 @@ class RateLimiter {
 const rateLimiter = new RateLimiter();
 
 const rateLimitedAgent = IgniterAgent.create("rate-limited-agent")
-  .onAgentStart(async (input, context) => {
-    const allowed = rateLimiter.checkLimit(
-      context.userId,
-      10, // 10 requests
-      60000, // per minute
-    );
-
-    if (!allowed) {
-      throw new Error("Rate limit exceeded. Please try again later.");
-    }
-  })
+  .withModel(openai("gpt-4"))
   .build();
+
+async function generateWithRateLimit(input: { chatId: string; userId: string; context: Record<string, unknown>; message: { role: "user"; content: string } }) {
+  const allowed = rateLimiter.checkLimit(
+    input.userId,
+    10, // 10 requests
+    60000, // per minute
+  );
+
+  if (!allowed) {
+    throw new Error("Rate limit exceeded. Please try again later.");
+  }
+
+  return rateLimitedAgent.generate(input);
+}
 ```
 
 ### 19. API Reference (Complete)
@@ -2688,18 +2824,20 @@ const rateLimitedAgent = IgniterAgent.create("rate-limited-agent")
 | Method                 | Signature                                                     | Description                 |
 | ---------------------- | ------------------------------------------------------------- | --------------------------- |
 | `create()`             | `(name: string) => IgniterAgentBuilder`                       | Create agent builder        |
-| `withSystemPrompt()`   | `(prompt: string) => IgniterAgentBuilder`                     | Set system prompt           |
-| `withTool()`           | `(tool: IgniterAgentTool) => IgniterAgentBuilder`             | Add single tool             |
-| `withToolset()`        | `(toolset: IgniterAgentToolset) => IgniterAgentBuilder`       | Add toolset                 |
-| `withMemory()`         | `(memory: IgniterAgentMemory) => IgniterAgentBuilder`         | Set memory                  |
-| `withMCPClient()`      | `(client: IgniterAgentMCPClient) => IgniterAgentBuilder`      | Set MCP client              |
+| `withPrompt()`         | `(prompt: IgniterAgentPrompt) => IgniterAgentBuilder`         | Set system prompt           |
+| `addToolset()`         | `(toolset: IgniterAgentToolset) => IgniterAgentBuilder`       | Add toolset                 |
+| `addMCP()`             | `(config: IgniterAgentMCPConfigUnion) => IgniterAgentBuilder` | Add MCP configuration       |
+| `withMemory()`         | `(memory: IgniterAgentMemoryConfig) => IgniterAgentBuilder`   | Set memory                  |
+| `withContextSchema()`  | `(schema: z.ZodSchema) => IgniterAgentBuilder`                | Set context schema          |
 | `withLogger()`         | `(logger: IgniterLogger) => IgniterAgentBuilder`              | Set logger                  |
 | `withTelemetry()`      | `(telemetry: IgniterTelemetryManager) => IgniterAgentBuilder` | Set telemetry               |
 | `onAgentStart()`       | `(hook: AgentHook) => IgniterAgentBuilder`                    | Add start hook              |
-| `onAgentComplete()`    | `(hook: AgentHook) => IgniterAgentBuilder`                    | Add complete hook           |
 | `onAgentError()`       | `(hook: AgentHook) => IgniterAgentBuilder`                    | Add error hook              |
 | `onToolCallStart()`    | `(hook: ToolHook) => IgniterAgentBuilder`                     | Add tool call start hook    |
-| `onToolCallEnd()` | `(hook: ToolHook) => IgniterAgentBuilder`                     | Add tool call complete hook |
+| `onToolCallEnd()`      | `(hook: ToolHook) => IgniterAgentBuilder`                     | Add tool call complete hook |
+| `onToolCallError()`    | `(hook: ToolHook) => IgniterAgentBuilder`                     | Add tool call error hook    |
+| `onMCPStart()`         | `(hook: AgentHook) => IgniterAgentBuilder`                    | Add MCP start hook          |
+| `onMCPError()`         | `(hook: AgentHook) => IgniterAgentBuilder`                    | Add MCP error hook          |
 | `build()`              | `() => IgniterAgentCore`                                      | Build agent instance        |
 
 #### IgniterAgentCore
@@ -2768,7 +2906,7 @@ import {
   IgniterAgent,
   IgniterAgentToolset,
   IgniterAgentTool,
-  MemoryAdapter,
+  IgniterAgentInMemoryAdapter,
 } from "@igniter-js/agents";
 import { z } from "zod";
 
@@ -2809,22 +2947,30 @@ const orderTools = IgniterAgentToolset.create('order')
   .build();
 
 // Customer service agent
+const sharedMemory = IgniterAgentInMemoryAdapter.create();
+const sharedMemoryConfig = {
+  provider: sharedMemory,
+  working: { enabled: true, scope: "chat" },
+  history: { enabled: true, limit: 50 },
+  chats: { enabled: true },
+};
+
 const customerServiceAgent = IgniterAgent.create("customer-service")
-  .withToolset(orderTools)
-  .withMemory(MemoryAdapter.create())
-  .withSystemPrompt(
-    `
+  .addToolset(orderTools)
+  .withMemory(sharedMemoryConfig)
+  .withPrompt(
+    IgniterAgentPrompt.create(`
     You are a helpful customer service agent for our e-commerce platform.
     You can help customers with order creation, status checking, and general inquiries.
     Always be polite and provide accurate information.
-  `,
+  `),
   )
   .build();
 
 // Inventory management agent
 const inventoryAgent = IgniterAgent.create("inventory")
-  .withToolset(
-    IgniterAgentToolset.create()
+  .addToolset(
+    IgniterAgentToolset.create("inventory")
       .addTool(
         IgniterAgentTool.create("check_stock")
           .withInput(z.object({ productId: z.string() }))
@@ -2841,14 +2987,16 @@ const inventoryAgent = IgniterAgent.create("inventory")
       )
       .build(),
   )
-  .withSystemPrompt("You manage inventory and stock levels.")
+  .withPrompt(
+    IgniterAgentPrompt.create("You manage inventory and stock levels."),
+  )
+  .withMemory(sharedMemoryConfig)
   .build();
 
 // Manager orchestration
 const agentManager = IgniterAgentManager.create()
-  .withMemory(MemoryAdapter.create())
-  .addAgent(customerServiceAgent)
-  .addAgent(inventoryAgent)
+  .addAgent("customer-service", customerServiceAgent)
+  .addAgent("inventory", inventoryAgent)
   .build();
 
 // Usage
@@ -2858,49 +3006,62 @@ await agentManager.startAll();
 const customerQuery = "I want to check the status of my order #12345";
 const response = await agentManager
   .get("customer-service")
-  .generate({ prompt: customerQuery });
+  .generate({
+    chatId: 'chat_customer',
+    userId: 'user_123',
+    context: {},
+    message: { role: 'user', content: customerQuery }
+  });
 
 const inventoryQuery = "How many units of product ABC123 are in stock?";
 const inventoryResponse = await agentManager
   .get("inventory")
-  .generate({ prompt: customerQuery });
+  .generate({
+    chatId: 'chat_inventory',
+    userId: 'user_123',
+    context: {},
+    message: { role: 'user', content: inventoryQuery }
+  });
 ```
 
 #### Advanced MCP Integration
 
 ```typescript
 import { IgniterAgent, IgniterAgentMCPClient } from "@igniter-js/agents";
+import { openai } from "@ai-sdk/openai";
 
 // Agent with full MCP integration
 const mcpAgent = IgniterAgent.create("mcp-integrated")
-  .withMCPClient(
-    IgniterAgentMCPClient.create()
-      .withServerUrl("http://localhost:3000/mcp")
-      .withToolFilter([
-        "include",
-        ["database.query", "filesystem.read", "api.request", "git.status"],
-      ])
-      .withCredentials({
-        username: process.env.MCP_USERNAME,
-        password: process.env.MCP_PASSWORD,
+  .withModel(openai("gpt-4"))
+  .addMCP(
+    IgniterAgentMCPClient.create("tools-server")
+      .withType("http")
+      .withURL("http://localhost:3000/mcp")
+      .withHeaders({
+        Authorization: `Bearer ${process.env.MCP_TOKEN}`,
       })
       .build(),
   )
-  .withSystemPrompt(
-    `
+  .withPrompt(
+    IgniterAgentPrompt.create(`
     You are an AI agent with access to various tools through MCP.
     You can query databases, read files, make API calls, and check git status.
     Use these tools to help users accomplish their tasks.
-  `,
+  `),
   )
   .build();
 
+await mcpAgent.start();
+
 // The agent can now use MCP tools automatically
 const result = await mcpAgent.generate({
-  messages: [{ 
-    role: 'user', 
-    content: 'Check the current git status and show me any uncommitted changes' 
-  }]
+  chatId: 'chat_123',
+  userId: 'user_123',
+  context: {},
+  message: {
+    role: 'user',
+    content: 'Check the current git status and show me any uncommitted changes'
+  }
 });
 ```
 

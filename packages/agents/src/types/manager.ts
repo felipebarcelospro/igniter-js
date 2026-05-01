@@ -3,7 +3,7 @@
  * MANAGER TYPES
  * ============================================================================= */
 
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterAgentBuiltAgent } from "./builder";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 import type { IgniterAgentHooks } from "./hooks";

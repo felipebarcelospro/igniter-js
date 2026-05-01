@@ -33,8 +33,10 @@
  *
  * // Generate a response
  * const result = await agent.generate({
- *   messages: [{ role: 'user', content: 'Hello!' }],
- *   options: { userId: 'user_123', chatId: 'chat_456' }
+ *   chatId: 'chat_456',
+ *   userId: 'user_123',
+ *   context: { locale: 'pt' },
+ *   message: { role: 'user', content: 'Hello!' }
  * });
  * ```
  *
@@ -55,7 +57,7 @@ import type { IgniterAgentBuiltAgent } from "../types/builder";
 import { IgniterAgentCore } from "../core/agent";
 import type { IgniterAgentPromptTemplate } from "../types/prompt";
 import { IgniterAgentPromptBuilder } from "./prompt.builder";
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 import type { IgniterAgentHooks } from "../types/hooks";
 import type { IgniterAgentMemoryConfig } from "../types/memory";
@@ -147,8 +149,10 @@ import type { IgniterAgentMemoryConfig } from "../types/memory";
  * await agent.start();
  *
  * const response = await agent.generate({
- *   messages: [{ role: 'user', content: 'Help me write a test' }],
- *   options: { userId: 'user_123', projectId: 'proj_456' }
+ *   chatId: 'chat_456',
+ *   userId: 'user_123',
+ *   context: { projectId: 'proj_456' },
+ *   message: { role: 'user', content: 'Help me write a test' }
  * });
  * ```
  *
@@ -589,13 +593,13 @@ export class IgniterAgentBuilder<
    *
    * // Context is type-safe when calling generate
    * await agent.generate({
-   *   messages: [...],
-   *   options: {
-   *     userId: 'user_123',
-   *     chatId: 'chat_456',
+   *   chatId: 'chat_456',
+   *   userId: 'user_123',
+   *   context: {
    *     userRole: 'admin',
    *     preferences: { language: 'pt' }
-   *   }
+   *   },
+   *   message: { role: 'user', content: 'Hello!' }
    * });
    * ```
    *
@@ -756,7 +760,10 @@ export class IgniterAgentBuilder<
    *
    * // Generate a response
    * const result = await agent.generate({
-   *   messages: [{ role: 'user', content: 'Hello!' }]
+   *   chatId: 'chat_123',
+   *   userId: 'user_123',
+   *   context: {},
+   *   message: { role: 'user', content: 'Hello!' }
    * });
    *
    * // Access configuration

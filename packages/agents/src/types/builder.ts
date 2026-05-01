@@ -8,7 +8,7 @@
 
 import type { LanguageModel, ToolSet, AgentCallParameters, AgentStreamParameters, Tool, StreamTextResult, GenerateTextResult } from "ai";
 import type { IgniterAgentPromptTemplate } from "./prompt";
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 import type { IgniterAgentHooks } from "./hooks";
 import type { IgniterAgentMemoryRuntime } from "./memory";
@@ -18,6 +18,7 @@ import type {
   IgniterAgentToolsetType,
   IgniterAgentMCPConfigUnion
 } from "./common";
+import type { IgniterAgentGenerateOptions, IgniterAgentOutput, IgniterAgentStreamOptions, IgniterAgentToolsetParsed } from "./agent";
 
 /* =============================================================================
  * TOOLSET BUILDER TYPES
@@ -52,7 +53,7 @@ export interface IgniterAgentBuiltToolset<
 > extends IgniterAgentToolset<'custom', TName> {
   /** The raw toolset object */
   readonly toolset: TTools;
-  
+
   /** Typed tools collection */
   readonly tools: TTools;
 
@@ -86,12 +87,12 @@ export interface IgniterAgentBuiltTool<
   TExecute = (
     params: TInputSchema,
     options: IgniterAgentToolExecuteOptions
-  ) => 
+  ) =>
     TOutputSchema extends undefined ? Promise<unknown> : Promise<TOutputSchema>
 > {
   /** The tool's unique name */
   readonly name: TName;
-  
+
   /**
    * Human-readable description of what the tool does.
    * 
@@ -189,12 +190,18 @@ export type IgniterAgentMCPPartialConfig<
  * 
  * // Generate a response
  * const result = await agent.generate({
- *   messages: [{ role: 'user', content: 'Hello!' }]
+ *   chatId: 'chat_123',
+ *   userId: 'user_123',
+ *   context: { locale: 'pt' },
+ *   message: { role: 'user', content: 'Hello!' }
  * });
  * 
  * // Stream a response
  * const stream = await agent.stream({
- *   messages: [{ role: 'user', content: 'Tell me a story' }]
+ *   chatId: 'chat_123',
+ *   userId: 'user_123',
+ *   context: { locale: 'pt' },
+ *   message: { role: 'user', content: 'Tell me a story' }
  * });
  * ```
  * 
@@ -253,44 +260,49 @@ export interface IgniterAgentBuiltAgent<
    * Generates a single response from the agent.
    * 
    * @description
-   * Sends messages to the agent and waits for a complete response.
+   * Sends a message (or messages) to the agent and waits for a complete response.
+   * When both are provided, `message` takes precedence.
    * Supports context options for dynamic prompt generation.
    * 
-   * @param input - The call parameters including messages and options
+   * @param input - The call parameters including `chatId`, `userId`, `context`, and message or messages
    * @returns The generation result with response and tool calls
    * 
    * @example
    * ```typescript
    * const result = await agent.generate({
-   *   messages: [
-   *     { role: 'user', content: 'What is TypeScript?' }
-   *   ],
-   *   options: { userId: 'user_123' }
+   *   chatId: 'chat_123',
+   *   userId: 'user_123',
+   *   context: { locale: 'pt' },
+   *   message: { role: 'user', content: 'What is TypeScript?' }
    * });
    * 
    * console.log('Response:', result.text);
    * ```
    */
-  generate(
-    input: AgentCallParameters<z.infer<TContextSchema>>
-  ): Promise<GenerateTextResult<any, any>>;
+  generate<
+    CALL_OPTIONS = never,
+    OUTPUT extends IgniterAgentOutput = never,
+  >(params: IgniterAgentGenerateOptions<CALL_OPTIONS, TToolsets, OUTPUT>):
+    Promise<GenerateTextResult<IgniterAgentToolsetParsed<TToolsets>, OUTPUT>>;
 
   /**
    * Streams a response from the agent.
    * 
    * @description
-   * Sends messages to the agent and returns a stream of response chunks.
+   * Sends a message (or messages) to the agent and returns a stream of response chunks.
+   * When both are provided, `message` takes precedence.
    * Ideal for real-time UI updates and long responses.
    * 
-   * @param input - The stream parameters including messages and options
+   * @param input - The stream parameters including `chatId`, `userId`, `context`, and message or messages
    * @returns A stream of response chunks
    * 
    * @example
    * ```typescript
    * const stream = await agent.stream({
-   *   messages: [
-   *     { role: 'user', content: 'Write a poem about coding' }
-   *   ]
+   *   chatId: 'chat_123',
+   *   userId: 'user_123',
+   *   context: { locale: 'pt' },
+   *   message: { role: 'user', content: 'Write a poem about coding' }
    * });
    * 
    * for await (const chunk of stream) {
@@ -298,9 +310,11 @@ export interface IgniterAgentBuiltAgent<
    * }
    * ```
    */
-  stream(
-    input: AgentStreamParameters<z.infer<TContextSchema>, any>
-  ): Promise<StreamTextResult<any, any>>;
+  stream<
+    CALL_OPTIONS = never,
+    OUTPUT extends IgniterAgentOutput = never,
+  >(params: IgniterAgentStreamOptions<CALL_OPTIONS, TToolsets, OUTPUT>):
+    Promise<StreamTextResult<IgniterAgentToolsetParsed<TToolsets>, OUTPUT>>;
 
   /**
    * Gets all registered toolsets.

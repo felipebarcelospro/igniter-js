@@ -44,7 +44,12 @@
  *   .build()
  *
  * await agent.start()
- * const result = await agent.generate({ messages: [{ role: 'user', content: 'Hi' }] })
+ * const result = await agent.generate({
+ *   chatId: 'chat_123',
+ *   userId: 'user_123',
+ *   context: {},
+ *   message: { role: 'user', content: 'Hi' }
+ * })
  * ```
  */
 

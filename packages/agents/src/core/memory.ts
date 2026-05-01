@@ -3,7 +3,7 @@
  * @module core/memory
  */
 
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryAttributes, IgniterTelemetryManager } from "@igniter-js/telemetry";
 import type {
   IgniterAgentConversationMessage,

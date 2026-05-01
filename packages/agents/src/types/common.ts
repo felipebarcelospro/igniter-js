@@ -8,7 +8,7 @@
 
 import type { LanguageModel, Tool, ToolLoopAgent, ToolSet } from "ai";
 import type { z } from "zod";
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 import type { IgniterAgentPromptTemplate } from "./prompt";
 import type { IgniterAgentHooks } from "./hooks";
@@ -122,8 +122,8 @@ export type IgniterAgentFlattenedToolSet<
     IgniterAgentToolset<IgniterAgentToolsetType, string>
   >,
 > = {
-  [K in keyof TToolsets as `${K & string}_${keyof TToolsets[K]["tools"] & string}`]: TToolsets[K]["tools"][keyof TToolsets[K]["tools"]];
-};
+    [K in keyof TToolsets as `${K & string}_${keyof TToolsets[K]["tools"] & string}`]: TToolsets[K]["tools"][keyof TToolsets[K]["tools"]];
+  };
 
 /* =============================================================================
  * TOOLSET TYPES
@@ -162,6 +162,7 @@ export type IgniterAgentFlattenedToolSet<
 export interface IgniterAgentToolset<
   TType extends IgniterAgentToolsetType = IgniterAgentToolsetType,
   TName extends string = string,
+  ToolSet extends Record<string, IgniterAgentTool> = Record<string, IgniterAgentTool>,
 > {
   /** Unique identifier for the toolset */
   readonly name: TName;
@@ -219,11 +220,11 @@ export interface IgniterAgentToolset<
 export interface IgniterAgentConfig<
   TAgentName extends string = string,
   TAgentModel extends LanguageModel = LanguageModel,
-  TAgentInstructions extends IgniterAgentPromptTemplate =
-    IgniterAgentPromptTemplate,
-  TAgentToolsets extends Record<string, IgniterAgentToolset> = Record<
+  TAgentInstructions extends IgniterAgentPromptTemplate<any, any> =
+  IgniterAgentPromptTemplate<any, any>,
+  TAgentToolsets extends Record<string, IgniterAgentToolset<any, any>> = Record<
     string,
-    IgniterAgentToolset
+    IgniterAgentToolset<any, any>
   >,
   TAgentMCPConfigs extends Record<string, IgniterAgentMCPConfigUnion> = Record<
     string,

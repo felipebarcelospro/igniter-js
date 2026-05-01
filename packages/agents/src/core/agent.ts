@@ -2,30 +2,41 @@ import { experimental_createMCPClient, type experimental_MCPClient } from "@ai-s
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import {
+  generateText,
+  Output,
+  tool,
   ToolLoopAgent,
-  type AgentCallParameters,
-  type AgentStreamParameters,
   type LanguageModel,
+  type ModelMessage,
   type ToolSet,
 } from "ai";
 import { IgniterAgentConfigError, IgniterAgentError, IgniterAgentErrorCode, IgniterAgentMCPError } from "../errors";
 import type { IgniterAgentConfig, IgniterAgentMCPConfigUnion, IgniterAgentMCPHttpConfig, IgniterAgentMCPStdioConfig, IgniterAgentToolset } from "../types";
-import type { z } from "zod";
+import { z } from "zod";
 import type { IgniterAgentPromptTemplate } from "../types/prompt";
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryAttributes, IgniterTelemetryManager } from "@igniter-js/telemetry";
 import type { IgniterAgentTelemetryEventsType } from "../telemetry";
 import type { IgniterAgentHooks } from "../types/hooks";
 import { IgniterAgentMemoryCore } from "./memory";
+import type {
+  IgniterAgentGenerateOptions,
+  IgniterAgentMessageInput,
+  IgniterAgentOutput,
+  IgniterAgentPrepareOptions,
+  IgniterAgentStreamOptions,
+  IgniterAgentToolsetParsed,
+} from "../types/agent";
+import { IgniterAgentContext } from "../utils";
 
 export class IgniterAgentCore<
   TAgentName extends string = string,
   TAgentModel extends LanguageModel = LanguageModel,
   TAgentInstructions extends IgniterAgentPromptTemplate =
-    IgniterAgentPromptTemplate,
-  TAgentToolsets extends Record<string, IgniterAgentToolset> = Record<
+  IgniterAgentPromptTemplate,
+  TAgentToolsets extends Record<string, IgniterAgentToolset<any, any>> = Record<
     string,
-    IgniterAgentToolset
+    IgniterAgentToolset<any, any>
   >,
   TAgentMCPConfigs extends Record<string, IgniterAgentMCPConfigUnion> = Record<
     string,
@@ -43,7 +54,7 @@ export class IgniterAgentCore<
   >;
 
   private logger?: IgniterLogger;
-  private telemetry?: IgniterTelemetryManager<{ 'igniter.agent': IgniterAgentTelemetryEventsType}>;
+  private telemetry?: IgniterTelemetryManager<{ 'igniter.agent': IgniterAgentTelemetryEventsType }>;
   private hooks: IgniterAgentHooks;
   public memory?: IgniterAgentMemoryCore;
 
@@ -335,126 +346,137 @@ export class IgniterAgentCore<
     }
   }
 
-  async generate(
-    input: AgentCallParameters<any>,
-  ): Promise<any> {
-    const startTime = Date.now();
-    const attributes = {
-      "ctx.agent.name": this.getName(),
-      "ctx.generation.inputMessages": Array.isArray(input.messages)
-        ? input.messages.length
-        : undefined,
-      "ctx.generation.streamed": false,
-    };
+  /**
+   * Generates a response for the given message or messages.
+   *
+   * @description
+   * Accepts either a single `message` or an array of `messages`.
+   * When both are provided, `message` takes precedence.
+   *
+   * @param params - The parameters for the generate call.
+   * @returns The generated response.
+   */
+  async generate<
+    CALL_OPTIONS = never,
+    OUTPUT extends IgniterAgentOutput = never,
+  >(params: IgniterAgentGenerateOptions<CALL_OPTIONS, TAgentToolsets, OUTPUT>) {
+    const { message, messages } = this.resolveMessageInput(params);
 
-    this.logger?.debug("IgniterAgent.generate started", attributes);
-    this.telemetry?.emit('igniter.agent.generation.generate.started', {
-      level: "debug",
-      attributes: attributes as IgniterTelemetryAttributes,
+    // Generate a unique request ID
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    // Initialize chat memory
+    const historyMessages = await this.initializeChatMemory({
+      chatId: params.chatId,
+      userId: params.userId,
+      agentId: this.getName(),
+      message,
     });
 
+    // Prepare the agent
+    const agent = this.prepare({
+      chatId: params.chatId,
+      userId: params.userId,
+      agentId: this.getName(),
+      message,
+      requestId: requestId,
+      context: params.context,
+      streamed: false,
+    });
+
+    const inputMessages = params.message ? [message] : messages;
+    const resolvedMessages = historyMessages
+      ? [...historyMessages, ...inputMessages]
+      : inputMessages;
+
     try {
-      const agent = this.getAgentInstanceWithContext(
-        input.options as z.infer<TAgentContextSchema>,
-      );
-      const result = await agent.generate(input);
-      const durationMs = Date.now() - startTime;
-      this.telemetry?.emit('igniter.agent.generation.generate.success', {
-        level: "debug",
-        attributes: {
-          ...attributes,
-          "ctx.generation.durationMs": durationMs,
-        } as IgniterTelemetryAttributes,
+      return await agent.generate({
+        abortSignal: params.abortSignal,
+        options: params.options as any,
+        messages: resolvedMessages,
+        prompt: params.prompt as any,
       });
-      this.logger?.success?.("IgniterAgent.generate success", {
-        ...attributes,
-        durationMs,
-      });
-      return result;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      
-      // Log specific detail about structuredClone errors
-      if (err.message.includes('can not be cloned') || err.name === 'DataCloneError') {
-        this.logger?.error("IgniterAgent.generate failed - structuredClone error", {
-          ...attributes,
-          error: err.message,
-          toolNames: Object.keys(this.getTools()),
-          toolsetCount: Object.keys(this.getToolsets()).length,
-        });
-      }
-      
       this.telemetry?.emit('igniter.agent.generation.generate.error', {
         level: "error",
         attributes: {
-          ...attributes,
+          "ctx.agent.name": this.getName(),
+          "ctx.agent.chatId": params.chatId,
+          "ctx.agent.userId": params.userId,
+          "ctx.generation.streamed": false,
           ...this.getErrorAttributes(err, "generation.generate"),
         } as IgniterTelemetryAttributes,
       });
-      this.logger?.error("IgniterAgent.generate failed", err);
       throw err;
     }
   }
 
   /**
-   * Streams a response from the agent.
+   * Streams a response for the given message or messages.
+   *
+   * @description
+   * Accepts either a single `message` or an array of `messages`.
+   * When both are provided, `message` takes precedence.
+   *
+   * @param params - The parameters for the stream call.
+   * @returns The streaming response.
    */
-  async stream(
-    input: AgentStreamParameters<any, any>,
-  ): Promise<any> {
-    const startTime = Date.now();
-    const attributes = {
-      "ctx.agent.name": this.getName(),
-      "ctx.generation.inputMessages": Array.isArray(input.messages)
-        ? input.messages.length
-        : undefined,
-      "ctx.generation.streamed": true,
-    };
+  async stream<
+    CALL_OPTIONS = never,
+    OUTPUT extends IgniterAgentOutput = never,
+  >(params: IgniterAgentStreamOptions<CALL_OPTIONS, TAgentToolsets, OUTPUT>) {
+    const { message, messages } = this.resolveMessageInput(params);
 
-    this.logger?.debug("IgniterAgent.stream started", attributes);
-    this.telemetry?.emit('igniter.agent.generation.stream.started', {
-      level: "debug",
-      attributes: attributes as IgniterTelemetryAttributes,
+    // Generate a unique request ID
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    // Initialize chat memory
+    const historyMessages = await this.initializeChatMemory({
+      chatId: params.chatId,
+      userId: params.userId,
+      agentId: this.getName(),
+      message,
     });
 
+    // Prepare the agent
+    const agent = this.prepare({
+      chatId: params.chatId,
+      userId: params.userId,
+      agentId: this.getName(),
+      message,
+      requestId: requestId,
+      context: params.context,
+      streamed: true,
+    });
+
+    const inputMessages = params.message ? [message] : messages;
+    const resolvedMessages = historyMessages
+      ? [...historyMessages, ...inputMessages]
+      : inputMessages;
+
     try {
-      const agent = this.getAgentInstanceWithContext(
-        input.options as z.infer<TAgentContextSchema>,
-      );
-      const result = await agent.stream(input);
-      const durationMs = Date.now() - startTime;
-
-      const emitChunk = () => {
-        this.telemetry?.emit('igniter.agent.generation.stream.chunk', {
-          level: "debug",
-          attributes: attributes as IgniterTelemetryAttributes,
-        });
-      };
-
-      const wrapped = this.wrapStreamResult(result, emitChunk);
-
-      this.telemetry?.emit('igniter.agent.generation.stream.success', {
-        level: "debug",
-        attributes: {
-          ...attributes,
-          "ctx.generation.durationMs": durationMs,
-        } as IgniterTelemetryAttributes,
+      return await agent.stream({
+        abortSignal: params.abortSignal,
+        experimental_transform: params.experimental_transform as any,
+        options: params.options as any,
+        messages: resolvedMessages,
+        prompt: params.prompt as any,
       });
-      this.logger?.success?.("IgniterAgent.stream success", {
-        ...attributes,
-        durationMs,
-      });
-      return wrapped;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
+
       this.telemetry?.emit('igniter.agent.generation.stream.error', {
         level: "error",
         attributes: {
-          ...attributes,
+          "ctx.agent.name": this.getName(),
+          "ctx.agent.chatId": params.chatId,
+          "ctx.agent.userId": params.userId,
+          "ctx.generation.streamed": true,
           ...this.getErrorAttributes(err, "generation.stream"),
         } as IgniterTelemetryAttributes,
       });
-      this.logger?.error("IgniterAgent.stream failed", err);
+
       throw err;
     }
   }
@@ -491,124 +513,18 @@ export class IgniterAgentCore<
    * Gets all registered tools from all toolsets.
    */
   getTools() {
-    const toolsets = this.getToolsets();
-    const allTools: ToolSet = {};
-
-    for (const toolset of Object.values(toolsets)) {
-      for (const [toolName, tool] of Object.entries(toolset.tools)) {
-        const wrapped = this.wrapToolExecution(toolset.name, toolName, tool as ToolSet[string]);
-        allTools[toolName] = wrapped;
-      }
-    }
+    const allTools = this.initializeTools({
+      chatId: "",
+      userId: "",
+      agentId: this.getName(),
+    });
 
     return allTools;
   }
 
-  private wrapToolExecution(
-    toolsetName: string,
-    toolName: string,
-    tool: ToolSet[string],
-  ): ToolSet[string] {
-    if (!tool || !tool.execute || typeof tool.execute !== "function") {
-      return tool;
-    }
-
-    const execute = tool.execute as NonNullable<ToolSet[string]["execute"]>;
-    const fullName = `${toolsetName}.${toolName}`;
-    const agentName = this.getName();
-
-    return {
-      ...tool,
-      execute: async (input: unknown, options?: unknown) => {
-        const startTime = Date.now();
-        this.hooks.onToolCallStart?.(agentName, fullName, input);
-        this.telemetry?.emit('igniter.agent.tool.execute.started', {
-          level: "debug",
-          attributes: {
-            "ctx.agent.name": agentName,
-            "ctx.tool.toolset": toolsetName,
-            "ctx.tool.name": toolName,
-            "ctx.tool.fullName": fullName,
-          } as IgniterTelemetryAttributes,
-        });
-        this.logger?.debug("IgniterAgent.tool.execute started", {
-          agent: agentName,
-          tool: fullName,
-        });
-
-        try {
-          const result = await execute(input as any, options as any);
-          const durationMs = Date.now() - startTime;
-          this.hooks.onToolCallEnd?.(agentName, fullName, result);
-          this.telemetry?.emit('igniter.agent.tool.execute.success', {
-            level: "debug",
-            attributes: {
-              "ctx.agent.name": agentName,
-              "ctx.tool.toolset": toolsetName,
-              "ctx.tool.name": toolName,
-              "ctx.tool.fullName": fullName,
-              "ctx.tool.durationMs": durationMs,
-            } as IgniterTelemetryAttributes,
-          });
-          this.logger?.success?.("IgniterAgent.tool.execute success", {
-            agent: agentName,
-            tool: fullName,
-            durationMs,
-          });
-          return result;
-        } catch (error) {
-          const err = error instanceof Error ? error : new Error(String(error));
-          this.hooks.onToolCallError?.(agentName, fullName, err);
-          this.telemetry?.emit('igniter.agent.tool.execute.error', {
-            level: "error",
-            attributes: {
-              "ctx.agent.name": agentName,
-              "ctx.tool.toolset": toolsetName,
-              "ctx.tool.name": toolName,
-              "ctx.tool.fullName": fullName,
-              ...this.getErrorAttributes(err, "tool.execute"),
-            } as IgniterTelemetryAttributes,
-          });
-          this.logger?.error("IgniterAgent.tool.execute failed", err);
-          throw err;
-        }
-      },
-    };
-  }
-
-  private wrapStreamResult<T>(result: T, onChunk: () => void): T {
-    if (!result) {
-      return result;
-    }
-
-    if (typeof (result as any)[Symbol.asyncIterator] === "function") {
-      const iterable = result as unknown as AsyncIterable<unknown>;
-      return {
-        [Symbol.asyncIterator]: async function* () {
-          for await (const chunk of iterable) {
-            onChunk();
-            yield chunk;
-          }
-        },
-      } as T;
-    }
-
-    const maybeTextStream = (result as any).textStream;
-    if (maybeTextStream && typeof maybeTextStream[Symbol.asyncIterator] === "function") {
-      return {
-        ...(result as any),
-        textStream: (async function* () {
-          for await (const chunk of maybeTextStream) {
-            onChunk();
-            yield chunk;
-          }
-        })(),
-      } as T;
-    }
-
-    return result;
-  }
-
+  /**
+   * Gets error attributes for telemetry.
+   */
   private getErrorAttributes(error: Error, operation: string): Record<string, unknown> {
     return {
       "ctx.error.code": (error as { code?: string }).code ?? error.name ?? IgniterAgentErrorCode.UNKNOWN,
@@ -617,9 +533,16 @@ export class IgniterAgentCore<
       "ctx.error.component": "agent",
     };
   }
-  
-  private getAgentInstanceWithContext(context: z.infer<TAgentContextSchema>) {
-    const tools = this.getTools();
+
+  /**
+   * Gets an agent instance with the given context.
+   */
+  private prepare<OUTPUT extends IgniterAgentOutput = never>(params: IgniterAgentPrepareOptions<OUTPUT>) {
+    const tools = this.initializeTools({
+      chatId: params.chatId,
+      userId: params.userId,
+      agentId: this._agent.name,
+    }) as IgniterAgentToolsetParsed<TAgentToolsets>;
 
     if (!this._agent.model) {
       throw new IgniterAgentConfigError({
@@ -628,26 +551,387 @@ export class IgniterAgentCore<
       });
     }
 
-    if (this._agent.schema !== undefined) {
-      const parseResult = this._agent.schema.safeParse(context);
-      if (parseResult.success) {
-        context = parseResult.data;
-      } else {
-        throw new IgniterAgentError({
-          message: "Invalid context schema",
-          code: IgniterAgentErrorCode.AGENT_CONTEXT_SCHEMA_INVALID,
+    return new ToolLoopAgent<z.infer<TAgentContextSchema>, IgniterAgentToolsetParsed<TAgentToolsets>, IgniterAgentOutput>({
+      id: this._agent.name,
+      model: this._agent.model,
+      instructions: this._agent.instructions.getTemplate(),
+      tools,
+      callOptionsSchema: this._agent.schema as any,
+      prepareCall: async (options: any) => {
+        const isStreamed = Boolean(params.streamed);
+        const eventPrefix = isStreamed ? "stream" : "generate";
+
+        this.logger?.debug(`IgniterAgent.${eventPrefix} started`, {
+          "ctx.agent.name": this.getName(),
+          "ctx.agent.chatId": params.chatId,
+          "ctx.agent.userId": params.userId,
+          "ctx.generation.inputMessages": options.messages?.length || 0,
+          "ctx.generation.streamed": isStreamed,
         });
+
+        this.telemetry?.emit(`igniter.agent.generation.${eventPrefix}.started`, {
+          level: "debug",
+          attributes: {
+            "ctx.agent.name": this.getName(),
+            "ctx.agent.chatId": params.chatId,
+            "ctx.agent.userId": params.userId,
+            "ctx.generation.inputMessages": options.messages?.length || 0,
+            "ctx.generation.streamed": isStreamed,
+          },
+        });
+
+        if (this._agent.instructions && options.options) {
+          if (this._agent.memory?.working?.enabled && this._agent.memory.working.template) {
+            // @ts-expect-error - the instructions are not the same type as the agent instructions, but it's safe to use
+            this._agent.instructions = this._agent.instructions.addAppended(
+              "memory",
+              this._agent.memory.working.template,
+            );
+          }
+
+          options.instructions = this._agent.instructions.build(options.options);
+        }
+
+        if (params.prepareCall) {
+          return params.prepareCall(options);
+        }
+
+        return options;
+      },
+
+      onStepFinish: async (step) => {
+        if (params.streamed) {
+          return;
+        }
+
+        this.logger?.debug("IgniterAgent.generate step", {
+          "ctx.agent.name": this.getName(),
+          "ctx.chatId": params.chatId,
+          "ctx.userId": params.userId,
+          "ctx.generation.usage.inputTokens": step.usage.inputTokens,
+          "ctx.generation.usage.outputTokens": step.usage.outputTokens,
+          "ctx.generation.usage.totalTokens": step.usage.totalTokens,
+          "ctx.generation.streamed": false,
+        });
+
+        this.telemetry?.emit('igniter.agent.generation.generate.step', {
+          level: "debug",
+          attributes: {
+            "ctx.agent.name": this.getName(),
+            "ctx.chatId": params.chatId,
+            "ctx.userId": params.userId,
+            "ctx.generation.usage.inputTokens": step.usage.inputTokens,
+            "ctx.generation.usage.outputTokens": step.usage.outputTokens,
+            "ctx.generation.usage.totalTokens": step.usage.totalTokens,
+            "ctx.generation.streamed": false,
+          },
+        });
+      },
+
+      onFinish: (result) => {
+        if (params.streamed) {
+          return;
+        }
+
+        this.logger?.debug("IgniterAgent.generate success", {
+          "ctx.agent.name": this.getName(),
+          "ctx.chatId": params.chatId,
+          "ctx.userId": params.userId,
+          "ctx.generation.usage.inputTokens": result.usage.inputTokens,
+          "ctx.generation.usage.outputTokens": result.usage.outputTokens,
+          "ctx.generation.usage.totalTokens": result.usage.totalTokens,
+          "ctx.generation.streamed": false,
+        });
+
+        this.telemetry?.emit('igniter.agent.generation.generate.success', {
+          level: "debug",
+          attributes: {
+            "ctx.agent.name": this.getName(),
+            "ctx.chatId": params.chatId,
+            "ctx.userId": params.userId,
+            "ctx.generation.usage.inputTokens": result.usage.inputTokens,
+            "ctx.generation.usage.outputTokens": result.usage.outputTokens,
+            "ctx.generation.usage.totalTokens": result.usage.totalTokens,
+            "ctx.generation.streamed": false,
+          },
+        });
+      },
+
+      activeTools: params.activeTools,
+      experimental_context: IgniterAgentContext.create({
+        context: params.context,
+        memory: this._agent.memory,
+        metadata: {
+          agent: this.getName(),
+          chatId: params.chatId,
+          userId: params.userId,
+          requestId: params.requestId,
+          startTime: new Date(),
+        }
+      }),
+      experimental_download: params.experimental_download,
+      experimental_repairToolCall: params.experimental_repairToolCall,
+      experimental_telemetry: params.experimental_telemetry,
+      frequencyPenalty: params.frequencyPenalty,
+      maxOutputTokens: params.maxOutputTokens,
+      maxRetries: params.maxRetries,
+      output: params.output,
+      prepareStep: params.prepareStep as any,
+      presencePenalty: params.presencePenalty,
+      providerOptions: params.providerOptions,
+      seed: params.seed,
+      stopSequences: params.stopSequences,
+      stopWhen: params.stopWhen as any,
+      temperature: params.temperature,
+      toolChoice: params.toolChoice as any,
+      topK: params.topK,
+      topP: params.topP,
+      headers: params.headers,
+    })
+  }
+
+  private async initializeChatMemory({
+    chatId,
+    userId,
+    agentId,
+    message,
+  }: {
+    chatId: string;
+    userId: string;
+    agentId?: string;
+    message: ModelMessage;
+  }) {
+    if (!this.memory || !this._agent.memory?.chats?.enabled) {
+      return;
+    }
+
+    let chat = await this.memory.getChat(chatId);
+
+    const { generateSuggestions, generateTitle } = this._agent.memory.chats;
+
+    if (!chat) {
+      let title = 'New conversation'
+
+      if (generateTitle?.enabled) {
+        const response = await generateText({
+          model: generateTitle.model || this._agent.model,
+          messages: [message],
+          system: generateTitle.instructions || 'Analyze the chat history and generate a title for the chat',
+          output: Output.object({
+            schema: z.object({
+              title: z.string().min(1).max(100),
+            }),
+          }),
+        })
+
+        title = response.output.title;
+      }
+
+      await this.memory.saveChat({
+        chatId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        messageCount: 0,
+        title,
+      });
+
+      chat = await this.memory.getChat(chatId);
+    }
+
+    if (!chat) {
+      throw new IgniterAgentError({
+        code: IgniterAgentErrorCode.MISSING_REQUIRED,
+        message: 'Chat not found and could not be created',
+        metadata: {
+          chatId,
+          userId,
+          agentId,
+        }
+      });
+    }
+
+    if (!this._agent.memory?.history?.enabled) {
+      return;
+    }
+
+    const messages = await this.memory.getMessages<ModelMessage>({
+      chatId,
+      limit: this._agent.memory?.history?.limit,
+    });
+
+    return messages
+  }
+
+  private resolveMessageInput(params: IgniterAgentMessageInput): {
+    message: ModelMessage;
+    messages: ModelMessage[];
+  } {
+    const message = params.message ?? params.messages?.[params.messages.length - 1];
+    if (!message) {
+      throw new IgniterAgentError({
+        code: IgniterAgentErrorCode.MISSING_REQUIRED,
+        message: "Either 'message' or 'messages' must be provided",
+        metadata: {
+          missing: "message",
+        },
+      });
+    }
+
+    const messages = params.message ? [message] : params.messages || [];
+    return { message, messages };
+  }
+
+  private initializeTools({
+    chatId,
+    userId,
+    agentId,
+  }: {
+    chatId: string;
+    userId: string;
+    agentId?: string;
+  }) {
+    const toolsets = this.getToolsets();
+    const allTools: ToolSet = {};
+
+    for (const toolset of Object.values(toolsets)) {
+      for (const [toolName, tool] of Object.entries(toolset.tools)) {
+        allTools[toolName] = {
+          ...tool,
+          execute: async (args, options) => {
+            if (!tool.execute) {
+              throw new IgniterAgentError({
+                code: IgniterAgentErrorCode.MISSING_REQUIRED,
+                message: "Tool does not have an execute function",
+                metadata: { toolName },
+              });
+            }
+
+            try {
+              const startTime = Date.now();
+              const toolsetName = (toolset as { name?: string }).name ?? "unknown";
+              const toolAttributes = {
+                "ctx.agent.name": this.getName(),
+                "ctx.tool.toolset": toolsetName,
+                "ctx.tool.name": toolName,
+                "ctx.tool.fullName": `${toolsetName}.${toolName}`,
+              } as IgniterTelemetryAttributes;
+
+              this.hooks.onToolCallStart?.(this.getName(), toolName, args);
+              this.telemetry?.emit('igniter.agent.tool.execute.started', {
+                level: "debug",
+                attributes: toolAttributes,
+              });
+
+              const result = await tool.execute(args, {
+                ...options,
+                experimental_context: {
+                  ...options.experimental_context || {},
+                  chatId,
+                  userId,
+                  agentId,
+                },
+              });
+
+              this.telemetry?.emit('igniter.agent.tool.execute.success', {
+                level: "debug",
+                attributes: {
+                  ...toolAttributes,
+                  "ctx.tool.durationMs": Date.now() - startTime,
+                } as IgniterTelemetryAttributes,
+              });
+              this.hooks.onToolCallEnd?.(this.getName(), toolName, result);
+
+              return {
+                success: true,
+                result,
+              }
+            } catch (error) {
+              const err = error instanceof Error ? error : new Error(String(error));
+              const toolsetName = (toolset as { name?: string }).name ?? "unknown";
+              this.telemetry?.emit('igniter.agent.tool.execute.error', {
+                level: "error",
+                attributes: {
+                  "ctx.agent.name": this.getName(),
+                  "ctx.tool.toolset": toolsetName,
+                  "ctx.tool.name": toolName,
+                  "ctx.tool.fullName": `${toolsetName}.${toolName}`,
+                  ...this.getErrorAttributes(err, "tool.execute"),
+                } as IgniterTelemetryAttributes,
+              });
+              this.hooks.onToolCallError?.(this.getName(), toolName, err);
+              throw err;
+            }
+          },
+        };
       }
     }
 
-    return new ToolLoopAgent<z.infer<TAgentContextSchema>, ToolSet>({
-      model: this._agent.model,
-      instructions: this._agent.instructions
-        ? this._agent.instructions.build(context as any)
-        : "",
-      tools,
-      callOptionsSchema: this._agent.schema as any,
-    })
+    if (this._agent.memory?.working?.enabled) {
+      const scope = this._agent.memory?.working.scope;
+      const isChatMemory = scope === 'chat';
+      const identifier = isChatMemory ? chatId : userId;
+
+      allTools['internal__update_working_memory'] = tool({
+        description: "Remember important information for later in the conversation",
+        inputSchema: z.object({
+          content: z
+            .string()
+            .describe("Updated working memory following the template structure"),
+        }),
+        execute: async (args, options) => {
+          const { content } = args;
+
+          if (this.memory) {
+            await this.memory.updateWorkingMemory({
+              scope,
+              identifier,
+              content,
+            });
+          } else {
+            await this._agent.memory?.provider.updateWorkingMemory({
+              scope,
+              identifier,
+              content,
+            });
+          }
+
+          return {
+            success: true,
+          }
+        },
+      })
+
+      if (this._agent.memory?.history?.enabled) {
+        allTools['internal__search_on_chat_history'] = tool({
+          description: "Search on chat history",
+          inputSchema: z.object({
+            content: z.string().describe("Search query"),
+            limit: z.number().optional().describe("Limit number of results"),
+            dateFrom: z.date().optional().describe("Search from date"),
+            dateTo: z.date().optional().describe("Search to date"),
+          }),
+          execute: async (args, options) => {
+            const { content, limit, dateFrom, dateTo } = args;
+
+            const result = await this._agent.memory?.provider?.search?.({
+              chatId,
+              userId,
+              limit,
+              search: content,
+              dateFrom,
+              dateTo,
+            });
+
+            return {
+              success: true,
+              result,
+            }
+          },
+        })
+      }
+    }
+
+    return allTools;
   }
 
   private async initializeMCPClient<

@@ -25,7 +25,12 @@
  *
  * // Route to specific agent
  * const agent = manager.get('support');
- * const response = await agent.generate({ messages: [...] });
+ * const response = await agent.generate({
+ *   chatId: 'chat_123',
+ *   userId: 'user_123',
+ *   context: {},
+ *   message: { role: 'user', content: 'Hello!' }
+ * });
  * ```
  *
  * @module core/manager
@@ -35,7 +40,7 @@
 import type { IgniterAgentBuiltAgent } from "../types/builder";
 import type { IgniterAgentToolset } from "../types";
 import { IgniterAgentError, IgniterAgentErrorCode } from "../errors";
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterAgentInfo, IgniterAgentManagerOptions } from "../types/manager";
 
 
@@ -86,7 +91,10 @@ import type { IgniterAgentInfo, IgniterAgentManagerOptions } from "../types/mana
  * // Use specific agent
  * const agent = manager.get('code');
  * const result = await agent.generate({
- *   messages: [{ role: 'user', content: 'Write a test' }]
+ *   chatId: 'chat_123',
+ *   userId: 'user_123',
+ *   context: {},
+ *   message: { role: 'user', content: 'Write a test' }
  * });
  *
  * // Get status
@@ -398,7 +406,12 @@ export class IgniterAgentManagerCore<
    * @example
    * ```typescript
    * const agent = manager.get('support');
-   * const response = await agent.generate({ messages: [...] });
+   * const response = await agent.generate({
+   *   chatId: 'chat_123',
+   *   userId: 'user_123',
+   *   context: {},
+   *   message: { role: 'user', content: 'Hello!' }
+   * });
    * ```
    */
   get<TName extends string>(name: TName): TAgentRegistry[TName] {

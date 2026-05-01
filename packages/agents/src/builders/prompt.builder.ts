@@ -44,11 +44,17 @@ const resolvePath = (value: unknown, path: string): unknown => {
 export class IgniterAgentPromptBuilder<
   TTemplate extends string = string,
   TContext extends Record<string, unknown> = Record<string, unknown>,
-> implements IgniterAgentPromptTemplate<TContext> {
+  TAppended extends Record<
+    string,
+    IgniterAgentPromptTemplate<TContext, {}> | string
+  > = {},
+> implements IgniterAgentPromptTemplate<TContext, TAppended> {
   private readonly template: TTemplate;
+  private readonly appended: TAppended;
 
-  private constructor(template: TTemplate) {
+  private constructor(template: TTemplate, appended: TAppended) {
     this.template = template;
+    this.appended = appended;
   }
 
   /**
@@ -59,9 +65,11 @@ export class IgniterAgentPromptBuilder<
    */
   static create<TNewTemplate extends string>(
     template: TNewTemplate,
+    appended: Record<string, IgniterAgentPromptTemplate<{}, {}> | string> = {},
   ): IgniterAgentPromptBuilder<TNewTemplate, Record<string, unknown>> {
     return new IgniterAgentPromptBuilder<TNewTemplate, Record<string, unknown>>(
       template,
+    appended,
     );
   }
 
@@ -72,10 +80,70 @@ export class IgniterAgentPromptBuilder<
    * @returns The resolved prompt string
    */
   build(context: TContext): string {
-    return this.template.replace(TEMPLATE_PATTERN, (_match, path) => {
-      const value = resolvePath(context, String(path));
-      return value === undefined || value === null ? "" : String(value);
+    const resolveTemplate = (template: string) =>
+      template.replace(TEMPLATE_PATTERN, (_match, path) => {
+        const value = resolvePath(context, String(path));
+        return value === undefined || value === null ? "" : String(value);
+      });
+
+    const appendedTemplates = Object.values(this.appended).map((prompt) => {
+      if (typeof prompt === "string") {
+        return resolveTemplate(prompt);
+      }
+
+      if (prompt && typeof prompt === "object" && "build" in prompt) {
+        return prompt.build(context);
+      }
+
+      return "";
     });
+    const appendedString = appendedTemplates.filter(Boolean).join("\n\n");
+
+    const templateString = resolveTemplate(this.template);
+
+    if (!appendedString) {
+      return templateString;
+    }
+
+    return templateString + "\n\n" + appendedString;
+  }
+
+  /**
+   * Appends another prompt template to this one.
+   */
+  addAppended<K extends string>(
+    key: K,
+    prompt: IgniterAgentPromptTemplate<TContext, TAppended> | string,
+  ): IgniterAgentPromptTemplate<
+    TContext,
+    TAppended &
+    Record<K, IgniterAgentPromptTemplate<TContext, TAppended> | string>
+  > {
+    return new IgniterAgentPromptBuilder<TTemplate, TContext>(
+      this.template,
+      {
+        ...this.appended,
+        [key]: prompt,
+      },
+    ) as unknown as IgniterAgentPromptTemplate<TContext, TAppended & Record<K, IgniterAgentPromptTemplate<TContext, TAppended>>>;
+  }
+
+  /**
+   * Removes an appended prompt template from this one.
+   */
+  removeAppended<K extends string>(key: K): IgniterAgentPromptTemplate<TContext, Omit<TAppended, K>> {
+    const { [key]: _, ...rest } = this.appended;
+    return new IgniterAgentPromptBuilder<TTemplate, TContext>(
+      this.template,
+      rest,
+    ) as unknown as IgniterAgentPromptTemplate<TContext, Omit<TAppended, K>>;
+  }
+
+  /**
+   * Returns the appended prompts.
+   */
+  getAppended(): TAppended {
+    return this.appended;
   }
 
   /**

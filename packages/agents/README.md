@@ -159,7 +159,7 @@ npm install @ai-sdk/mcp @modelcontextprotocol/sdk
 
 ### Runtime Requirements
 
-- **Node.js:** 18.0.0 or higher
+- **Node.js:** 22.0.0 or higher
 - **Bun:** 1.0.0 or higher
 - **Deno:** 1.30.0 or higher
 - **Browser:** ❌ Not supported (server-only)
@@ -217,12 +217,13 @@ await agent.start()
 
 // Generate a response (agent chooses to use tools as needed)
 const result = await agent.generate({
-  messages: [
-    {
-      role: 'user',
-      content: 'What is the weather like in London right now?',
-    },
-  ],
+  chatId: 'chat_123',
+  userId: 'user_123',
+  context: {},
+  message: {
+    role: 'user',
+    content: 'What is the weather like in London right now?',
+  },
 })
 
 console.log(result.content)
@@ -234,6 +235,7 @@ console.log(result.content)
 import {
   IgniterAgent,
   IgniterAgentInMemoryAdapter,
+  IgniterAgentPrompt,
 } from '@igniter-js/agents'
 import { openai } from '@ai-sdk/openai'
 
@@ -243,13 +245,22 @@ const memory = IgniterAgentInMemoryAdapter.create({
   maxChats: 50,
 })
 
+const memoryConfig = {
+  provider: memory,
+  working: { enabled: true, scope: 'chat' },
+  history: { enabled: true, limit: 50 },
+  chats: { enabled: true },
+}
+
 // Build agent with memory
 const agent = IgniterAgent
   .create('assistant')
   .withModel(openai('gpt-4'))
-  .withMemory(memory)
-  .withSystemPrompt(
-    'You are a helpful assistant. Remember previous conversations with this user.'
+  .withMemory(memoryConfig)
+  .withPrompt(
+    IgniterAgentPrompt.create(
+      'You are a helpful assistant. Remember previous conversations with this user.'
+    )
   )
   .build()
 
@@ -257,15 +268,19 @@ await agent.start()
 
 // First turn
 let response = await agent.generate({
-  messages: [
-    { role: 'user', content: 'My name is Alice and I live in Paris' },
-  ],
+  chatId: 'chat_123',
+  userId: 'user_123',
+  context: {},
+  message: { role: 'user', content: 'My name is Alice and I live in Paris' },
 })
 console.log(response.content)
 
 // Second turn - agent remembers context from first turn
 response = await agent.generate({
-  messages: [{ role: 'user', content: "What's my name and where do I live?" }],
+  chatId: 'chat_123',
+  userId: 'user_123',
+  context: {},
+  message: { role: 'user', content: "What's my name and where do I live?" },
 })
 console.log(response.content) // Will reference Alice and Paris
 ```
@@ -293,13 +308,13 @@ await agent.start()
 
 // Use template with dynamic values
 const response = await agent.generate({
-  messages: [
-    { role: 'user', content: 'I need help with my order' },
-  ],
-  options: {
+  chatId: 'chat_123',
+  userId: 'user_123',
+  context: {
     company: 'TechCorp',
     tone: 'friendly and professional',
   },
+  message: { role: 'user', content: 'I need help with my order' },
 })
 
 console.log(response.content)
@@ -352,7 +367,7 @@ Memory is optional but highly recommended for multi-turn conversations.
 
 A **Manager** orchestrates multiple agents:
 - Routes requests to appropriate agents
-- Shares common resources (logger, telemetry, memory)
+- Shares common resources (logger, telemetry, hooks)
 - Monitors agent health and lifecycle
 - Enables agent-to-agent communication
 
@@ -413,26 +428,37 @@ const memory = IgniterAgentInMemoryAdapter.create({
   namespace: 'productivity-app',
 })
 
+const memoryConfig = {
+  provider: memory,
+  working: { enabled: true, scope: 'chat' },
+  history: { enabled: true, limit: 50 },
+  chats: { enabled: true },
+}
+
 // Step 4: Build agent
 const productivityAgent = IgniterAgent
   .create('productivity-assistant')
   .withModel(openai('gpt-4'))
-  .withSystemPrompt('You are a productivity assistant. Help users manage their tasks.')
-  .withMemory(memory)
+  .withPrompt(
+    IgniterAgentPrompt.create(
+      'You are a productivity assistant. Help users manage their tasks.'
+    )
+  )
+  .withMemory(memoryConfig)
   .addToolset(tasksToolset)
-  .withMaxToolCalls(5) // Prevent infinite loops
   .build()
 
 await productivityAgent.start()
 
 // Step 5: Use the agent
 const response = await productivityAgent.generate({
-  messages: [
-    {
-      role: 'user',
-      content: 'What are my high-priority tasks today? And add a meeting reminder.',
-    },
-  ],
+  chatId: 'chat_123',
+  userId: 'user_123',
+  context: {},
+  message: {
+    role: 'user',
+    content: 'What are my high-priority tasks today? And add a meeting reminder.',
+  },
 })
 
 console.log(response.content)
@@ -443,16 +469,20 @@ console.log(response.content)
 | Option | Type | Description |
 |--------|------|-------------|
 | `withModel()` | `LanguageModel` | AI model to use (required) |
-| `withSystemPrompt()` | `string` | System-level instructions |
 | `withPrompt()` | `IgniterAgentPrompt` | Template-based prompts with variables |
-| `withMemory()` | `IgniterAgentMemory` | Persistent context storage |
+| `withMemory()` | `IgniterAgentMemoryConfig` | Persistent context storage |
+| `withContextSchema()` | `z.ZodSchema` | Validate `context` passed to `generate()`/`stream()` |
 | `addToolset()` | `IgniterAgentToolset` | Collection of tools |
-| `withMaxToolCalls()` | `number` | Prevent tool loop runaway (default: 10) |
+| `addMCP()` | `IgniterAgentMCPConfigUnion` | Connect to MCP servers |
 | `withLogger()` | `IgniterLogger` | Structured logging |
 | `withTelemetry()` | `IgniterTelemetryManager` | Observable events |
-| `onAgentStart()` | `Hook` | Executed before generation starts |
-| `onAgentComplete()` | `Hook` | Executed after successful generation |
-| `onAgentError()` | `Hook` | Executed on error |
+| `onAgentStart()` | `Hook` | Executed after successful start |
+| `onAgentError()` | `Hook` | Executed on start error |
+| `onToolCallStart()` | `Hook` | Executed before tool call |
+| `onToolCallEnd()` | `Hook` | Executed after tool call |
+| `onToolCallError()` | `Hook` | Executed on tool error |
+| `onMCPStart()` | `Hook` | Executed before MCP connect |
+| `onMCPError()` | `Hook` | Executed on MCP error |
 
 ---
 
@@ -625,11 +655,18 @@ import { IgniterAgentInMemoryAdapter } from '@igniter-js/agents/adapters'
 const memory = IgniterAgentInMemoryAdapter.create({
   namespace: 'my-app',      // Namespace for isolation
   maxChats: 100,            // Maximum conversations to keep
-  ttlMs: 24 * 60 * 60 * 1000, // TTL for entries (24 hours)
+  maxMessages: 1000,        // Maximum messages per chat
 })
 
+const memoryConfig = {
+  provider: memory,
+  working: { enabled: true, scope: 'chat' },
+  history: { enabled: true, limit: 50 },
+  chats: { enabled: true },
+}
+
 const agent = IgniterAgent.create('assistant')
-  .withMemory(memory)
+  .withMemory(memoryConfig)
   .build()
 
 // Data is stored in process memory and lost on restart
@@ -647,13 +684,17 @@ const memory = IgniterAgentJSONFileAdapter.create({
   namespace: 'my-app',
   maxChats: 1000,
   autoSync: true,                  // Auto-save to disk
-  syncIntervalMs: 5000,           // Sync every 5 seconds
 })
 
 await memory.connect()
 
 const agent = IgniterAgent.create('assistant')
-  .withMemory(memory)
+  .withMemory({
+    provider: memory,
+    working: { enabled: true, scope: 'chat' },
+    history: { enabled: true, limit: 100 },
+    chats: { enabled: true },
+  })
   .build()
 
 // Data persists across process restarts
@@ -671,11 +712,19 @@ await memory.disconnect() // Flush remaining data before exit
   await memory.connect()
 
   const agent = IgniterAgent.create('assistant')
-    .withMemory(memory)
+    .withMemory({
+      provider: memory,
+      working: { enabled: true, scope: 'chat' },
+      history: { enabled: true, limit: 100 },
+      chats: { enabled: true },
+    })
     .build()
 
   await agent.generate({
-    messages: [{ role: 'user', content: 'I like TypeScript' }],
+    chatId: 'chat_123',
+    userId: 'user_123',
+    context: {},
+    message: { role: 'user', content: 'I like TypeScript' },
   })
 
   await memory.disconnect()
@@ -689,12 +738,20 @@ await memory.disconnect() // Flush remaining data before exit
   await memory.connect()
 
   const agent = IgniterAgent.create('assistant')
-    .withMemory(memory)
+    .withMemory({
+      provider: memory,
+      working: { enabled: true, scope: 'chat' },
+      history: { enabled: true, limit: 100 },
+      chats: { enabled: true },
+    })
     .build()
 
   // Agent remembers "user likes TypeScript"
   const response = await agent.generate({
-    messages: [{ role: 'user', content: 'Recommend a library for me' }],
+    chatId: 'chat_123',
+    userId: 'user_123',
+    context: {},
+    message: { role: 'user', content: 'Recommend a library for me' },
   })
 }
 ```
@@ -710,10 +767,14 @@ const memory = IgniterAgentInMemoryAdapter.create()
 await memory.updateWorkingMemory({
   scope: 'user',
   identifier: 'user-123',
-  content: {
-    preferences: { language: 'TypeScript', framework: 'React' },
-    tokens: { remaining: 500 },
-  },
+  content: `
+## User Preferences
+- Prefers TypeScript
+- Uses React
+
+## Usage
+- Remaining tokens: 500
+`,
 })
 
 // Retrieve context
@@ -722,7 +783,7 @@ const userContext = await memory.getWorkingMemory({
   identifier: 'user-123',
 })
 
-console.log(userContext) // { preferences: {...}, tokens: {...} }
+console.log(userContext?.content)
 ```
 
 ### Memory Best Practices
@@ -732,23 +793,28 @@ console.log(userContext) // { preferences: {...}, tokens: {...} }
 await memory.updateWorkingMemory({
   scope: 'user',
   identifier: 'user-123',
-  content: {
-    apiKey: 'sk-1234567890',      // Don't store secrets!
-    creditCard: '4111111111111111', // Don't store PII!
-    password: 'SuperSecret123',     // Never store passwords!
-  },
+  content: `
+## Sensitive Data (DO NOT STORE)
+- apiKey: sk-1234567890
+- creditCard: 4111111111111111
+- password: SuperSecret123
+`,
 })
 
 // ✅ GOOD: Storing non-sensitive, useful context
 await memory.updateWorkingMemory({
   scope: 'user',
   identifier: 'user-123',
-  content: {
-    preferences: { language: 'en-US', timezone: 'UTC' },
-    subscriptionTier: 'pro',
-    hasApiAccess: true,           // Flags, not secrets
-    lastLoginAt: '2025-12-24T10:30:00Z',
-  },
+  content: `
+## Preferences
+- language: en-US
+- timezone: UTC
+
+## Account
+- subscriptionTier: pro
+- hasApiAccess: true
+- lastLoginAt: 2025-12-24T10:30:00Z
+`,
 })
 
 // ❌ BAD: Unbounded memory growth
@@ -763,13 +829,8 @@ for (let i = 0; i < 1_000_000; i++) {
 // ✅ GOOD: Bounded, managed memory
 const memory = IgniterAgentInMemoryAdapter.create({
   maxChats: 100, // Limit conversations
-  ttlMs: 24 * 60 * 60 * 1000, // Expire old entries
+  maxMessages: 1000, // Limit messages per chat
 })
-
-// Periodic cleanup
-setInterval(async () => {
-  await memory.prune() // Remove expired entries
-}, 60 * 60 * 1000)
 ```
 
 ---
@@ -802,9 +863,10 @@ await agent.start()
 
 // Agent can now list files, read content, etc. via MCP
 const response = await agent.generate({
-  messages: [
-    { role: 'user', content: 'List all JSON files in /tmp' },
-  ],
+  chatId: 'chat_123',
+  userId: 'user_123',
+  context: {},
+  message: { role: 'user', content: 'List all JSON files in /tmp' },
 })
 
 console.log(response.content)
@@ -872,21 +934,25 @@ The package automatically emits these telemetry events:
 
 | Event | When | Attributes |
 |-------|------|-----------|
-| `agent.started` | Agent begins processing | `agent_id`, `model` |
-| `agent.completed` | Agent finished successfully | `agent_id`, `duration_ms` |
-| `agent.error` | Agent encountered error | `agent_id`, `error_code` |
-| `tool.called` | Tool invoked | `tool_name`, `agent_id` |
-| `tool.completed` | Tool finished | `tool_name`, `duration_ms` |
-| `tool.error` | Tool failed | `tool_name`, `error_code` |
-| `memory.stored` | Data saved to memory | `scope`, `size_bytes` |
-| `memory.retrieved` | Data loaded from memory | `scope`, `hit_ms` |
+| `igniter.agent.lifecycle.start.started` | Agent start begins | `ctx.agent.name`, `ctx.lifecycle.toolsetCount`, `ctx.lifecycle.mcpCount` |
+| `igniter.agent.lifecycle.start.success` | Agent start completes | `ctx.agent.name`, `ctx.lifecycle.hasMemory` |
+| `igniter.agent.lifecycle.start.error` | Agent start fails | `ctx.error.code`, `ctx.error.message` |
+| `igniter.agent.generation.generate.started` | Text generation begins | `ctx.generation.inputMessages`, `ctx.generation.streamed` |
+| `igniter.agent.generation.generate.success` | Text generation completes | `ctx.generation.inputTokens`, `ctx.generation.outputTokens` |
+| `igniter.agent.generation.generate.error` | Text generation fails | `ctx.error.code`, `ctx.error.operation` |
+| `igniter.agent.tool.execute.started` | Tool execution begins | `ctx.tool.toolset`, `ctx.tool.name` |
+| `igniter.agent.tool.execute.success` | Tool execution completes | `ctx.tool.durationMs` |
+| `igniter.agent.tool.execute.error` | Tool execution fails | `ctx.error.code`, `ctx.error.component` |
+| `igniter.agent.memory.operation.started` | Memory operation begins | `ctx.memory.operation`, `ctx.memory.scope` |
+| `igniter.agent.memory.operation.success` | Memory operation completes | `ctx.memory.durationMs`, `ctx.memory.count` |
+| `igniter.agent.memory.operation.error` | Memory operation fails | `ctx.error.code`, `ctx.error.component` |
 
 ```typescript
 // Events are emitted automatically with your telemetry adapter
 // Example: View events in your observability backend
 const events = await telemetry.query({
   service: 'my-ai-app',
-  eventType: 'agent.completed',
+  eventType: 'igniter.agent.generation.generate.success',
   timeRange: 'last_hour',
 })
 
@@ -903,31 +969,39 @@ console.log(`Completed ${events.length} agent requests in the last hour`)
 import { IgniterAgentManager } from '@igniter-js/agents'
 
 // Create specialized agents
+const sharedMemory = IgniterAgentInMemoryAdapter.create()
+
+const memoryConfig = {
+  provider: sharedMemory,
+  working: { enabled: true, scope: 'chat' },
+  history: { enabled: true, limit: 50 },
+  chats: { enabled: true },
+}
+
 const supportAgent = IgniterAgent
   .create('support')
   .withModel(openai('gpt-4'))
   .addToolset(supportToolset)
+  .withMemory(memoryConfig)
   .build()
 
 const salesAgent = IgniterAgent
   .create('sales')
   .withModel(openai('gpt-4'))
   .addToolset(salesToolset)
+  .withMemory(memoryConfig)
   .build()
 
 const analyticsAgent = IgniterAgent
   .create('analytics')
   .withModel(openai('gpt-4'))
   .addToolset(analyticsToolset)
+  .withMemory(memoryConfig)
   .build()
-
-// Create shared memory
-const sharedMemory = IgniterAgentInMemoryAdapter.create()
 
 // Create manager with shared resources
 const manager = IgniterAgentManager
   .create()
-  .withMemory(sharedMemory)
   .withLogger(logger)
   .withTelemetry(telemetry)
   .addAgent('support', supportAgent)
@@ -940,10 +1014,13 @@ await manager.startAll()
 // Route requests to appropriate agents
 async function routeRequest(request: CustomerRequest) {
   const agentId = request.type === 'support' ? 'support' : 'sales'
-  const agent = manager.getAgent(agentId)
+  const agent = manager.get(agentId)
   
   return agent.generate({
-    messages: [{ role: 'user', content: request.message }],
+    chatId: `chat_${request.id}`,
+    userId: request.userId,
+    context: {},
+    message: { role: 'user', content: request.message },
   })
 }
 ```
@@ -960,9 +1037,29 @@ const sharedMemory = IgniterAgentJSONFileAdapter.create({
 
 await sharedMemory.connect()
 
+const sharedMemoryConfig = {
+  provider: sharedMemory,
+  working: { enabled: true, scope: 'user' },
+  history: { enabled: true, limit: 100 },
+  chats: { enabled: true },
+}
+
+const supportAgent = IgniterAgent
+  .create('support')
+  .withModel(openai('gpt-4'))
+  .addToolset(supportToolset)
+  .withMemory(sharedMemoryConfig)
+  .build()
+
+const salesAgent = IgniterAgent
+  .create('sales')
+  .withModel(openai('gpt-4'))
+  .addToolset(salesToolset)
+  .withMemory(sharedMemoryConfig)
+  .build()
+
 const manager = IgniterAgentManager
   .create()
-  .withMemory(sharedMemory)
   .addAgent('support', supportAgent)
   .addAgent('sales', salesAgent)
   .build()
@@ -971,21 +1068,28 @@ const manager = IgniterAgentManager
 await sharedMemory.updateWorkingMemory({
   scope: 'user',
   identifier: 'user-123',
-  content: {
-    accountStatus: 'premium',
-    supportTickets: 5,
-    purchaseHistory: [...],
-  },
+  content: `
+## Account
+- Status: premium
+- Support tickets: 5
+- Purchase history: stored in CRM
+`,
 })
 
 // Support agent uses this context
-const supportResponse = await manager.getAgent('support').generate({
-  messages: [{ role: 'user', content: 'I have a problem' }],
+const supportResponse = await manager.get('support').generate({
+  chatId: 'chat_support',
+  userId: 'user-123',
+  context: {},
+  message: { role: 'user', content: 'I have a problem' },
 })
 
 // Sales agent also uses this context
-const salesResponse = await manager.getAgent('sales').generate({
-  messages: [{ role: 'user', content: 'Show me upgrades' }],
+const salesResponse = await manager.get('sales').generate({
+  chatId: 'chat_sales',
+  userId: 'user-123',
+  context: {},
+  message: { role: 'user', content: 'Show me upgrades' },
 })
 ```
 
@@ -1057,10 +1161,25 @@ const sendEmailTool = IgniterAgentTool
   .build()
 
 // Create agent
+const supportMemory = IgniterAgentJSONFileAdapter.create({
+  dataDir: './support-memory',
+  namespace: 'support',
+})
+
+await supportMemory.connect()
+
+const supportMemoryConfig = {
+  provider: supportMemory,
+  working: { enabled: true, scope: 'chat' },
+  history: { enabled: true, limit: 100 },
+  chats: { enabled: true },
+}
+
 const supportAgent = IgniterAgent
   .create('support-bot')
   .withModel(openai('gpt-4'))
-  .withSystemPrompt(`
+  .withPrompt(
+    IgniterAgentPrompt.create(`
     You are a helpful customer support agent. Your goal is to:
     1. Understand the customer's issue
     2. Search for relevant tickets or information
@@ -1069,12 +1188,8 @@ const supportAgent = IgniterAgent
     
     Be empathetic, clear, and professional.
   `)
-  .withMemory(
-    IgniterAgentJSONFileAdapter.create({
-      dataDir: './support-memory',
-      namespace: 'support',
-    })
   )
+  .withMemory(supportMemoryConfig)
   .addToolset(
     IgniterAgentToolset
       .create('support')
@@ -1089,12 +1204,13 @@ await supportAgent.start()
 
 // Use it
 const response = await supportAgent.generate({
-  messages: [
-    {
-      role: 'user',
-      content: 'I\\'ve been charged twice for my subscription!',
-    },
-  ],
+  chatId: 'chat_support_1',
+  userId: 'user_123',
+  context: {},
+  message: {
+    role: 'user',
+    content: 'I\\'ve been charged twice for my subscription!',
+  },
 })
 
 console.log(response.content)
@@ -1144,7 +1260,11 @@ const generateChartTool = IgniterAgentTool
 const analyticsAgent = IgniterAgent
   .create('data-analyst')
   .withModel(openai('gpt-4'))
-  .withSystemPrompt('You are a data analyst. Answer questions with data and create visualizations.')
+  .withPrompt(
+    IgniterAgentPrompt.create(
+      'You are a data analyst. Answer questions with data and create visualizations.'
+    )
+  )
   .addToolset(
     IgniterAgentToolset
       .create('analytics')
@@ -1157,12 +1277,13 @@ const analyticsAgent = IgniterAgent
 await analyticsAgent.start()
 
 const response = await analyticsAgent.generate({
-  messages: [
-    {
-      role: 'user',
-      content: 'Show me revenue trends for the last 30 days with a chart',
-    },
-  ],
+  chatId: 'chat_analytics_1',
+  userId: 'user_123',
+  context: {},
+  message: {
+    role: 'user',
+    content: 'Show me revenue trends for the last 30 days with a chart',
+  },
 })
 
 console.log(response.content)
@@ -1200,22 +1321,18 @@ const badTool = IgniterAgentTool
 // ✅ Set reasonable limits
 const memory = IgniterAgentInMemoryAdapter.create({
   maxChats: 100,                        // Prevent unbounded growth
-  ttlMs: 7 * 24 * 60 * 60 * 1000,     // Auto-expire old data
+  maxMessages: 1000,                   // Limit messages per chat
 })
-
-// ✅ Prune periodically
-setInterval(async () => {
-  await memory.prune()
-}, 6 * 60 * 60 * 1000) // Every 6 hours
 
 // ❌ Avoid storing sensitive data
 await memory.updateWorkingMemory({
   scope: 'user',
   identifier: 'user-123',
-  content: {
-    apiKey: secret,      // ❌ Never!
-    password: password,  // ❌ Never!
-  },
+  content: `
+## Sensitive Data (DO NOT STORE)
+- apiKey: ${'${secret}'}
+- password: ${'${password}'}
+`,
 })
 ```
 
@@ -1225,7 +1342,10 @@ await memory.updateWorkingMemory({
 // ✅ Always handle agent generation errors
 try {
   const response = await agent.generate({
-    messages: [...],
+    chatId: 'chat_123',
+    userId: 'user_123',
+    context: {},
+    message: { role: 'user', content: 'Hello' },
   })
 } catch (error) {
   if (error instanceof IgniterAgentError) {
@@ -1296,19 +1416,21 @@ const telemetry = IgniterTelemetry
 
 const agent = IgniterAgent
   .create('assistant')
+  .withModel(openai('gpt-4'))
   .withTelemetry(telemetry)
+  .onAgentStart((name) => {
+    console.log(`Agent started: ${name}`)
+  })
+  .onAgentError((name, error) => {
+    console.error(`Agent error in ${name}:`, error.message)
+  })
+  .onToolCallStart((agentName, toolName, input) => {
+    console.log(`[${agentName}] Tool ${toolName} called`, input)
+  })
+  .onToolCallError((agentName, toolName, error) => {
+    console.error(`[${agentName}] Tool ${toolName} failed`, error)
+  })
   .build()
-
-// ✅ Add logger hooks for debugging
-.onAgentStart((input) => {
-  console.log(`Starting agent with input: ${input.length} messages`)
-})
-.onAgentComplete((result) => {
-  console.log(`Agent completed in ${result.duration}ms`)
-})
-.onAgentError((error) => {
-  console.error(`Agent error: ${error.code}`, error.details)
-})
 ```
 
 ---
@@ -1321,26 +1443,40 @@ const agent = IgniterAgent
 interface IgniterAgent {
   // Configuration
   withModel(model: LanguageModel): IgniterAgent
-  withSystemPrompt(prompt: string): IgniterAgent
   withPrompt(prompt: IgniterAgentPrompt): IgniterAgent
-  withMemory(memory: IgniterAgentMemory): IgniterAgent
+  withMemory(memory: IgniterAgentMemoryConfig): IgniterAgent
+  withContextSchema(schema: z.ZodSchema): IgniterAgent
   addToolset(toolset: IgniterAgentToolset): IgniterAgent
+  addMCP(mcp: IgniterAgentMCPConfigUnion): IgniterAgent
   withLogger(logger: IgniterLogger): IgniterAgent
   withTelemetry(telemetry: IgniterTelemetryManager): IgniterAgent
-  withMaxToolCalls(max: number): IgniterAgent
 
   // Hooks
   onAgentStart(hook: Hook): IgniterAgent
-  onAgentComplete(hook: Hook): IgniterAgent
   onAgentError(hook: Hook): IgniterAgent
+  onToolCallStart(hook: Hook): IgniterAgent
+  onToolCallEnd(hook: Hook): IgniterAgent
+  onToolCallError(hook: Hook): IgniterAgent
+  onMCPStart(hook: Hook): IgniterAgent
+  onMCPError(hook: Hook): IgniterAgent
 
   // Build
   build(): IgniterAgentCore
 
   // Runtime
   start(): Promise<void>
+  stop(): Promise<void>
   generate(input: GenerateInput): Promise<GenerateOutput>
   stream(input: GenerateInput): AsyncIterable<StreamChunk>
+  getToolsets(): Record<string, IgniterAgentToolset>
+  getTools(): ToolSet
+  getModel(): LanguageModel
+  getInstructions(): IgniterAgentPrompt
+  getContextSchema(): z.ZodSchema
+  attachLogger(logger?: IgniterLogger): void
+  attachTelemetry(telemetry?: IgniterTelemetryManager): void
+  attachHooks(hooks?: IgniterAgentHooks): void
+  memory?: IgniterAgentMemoryCore
 }
 ```
 
@@ -1364,23 +1500,21 @@ interface IgniterAgentTool {
 ### IgniterAgentMemory
 
 ```typescript
-interface IgniterAgentMemory {
+interface IgniterAgentMemoryRuntime {
   // Working memory
-  getWorkingMemory(key: { scope: string; identifier: string }): Promise<any>
-  updateWorkingMemory(data: {
-    scope: string
-    identifier: string
-    content: any
-  }): Promise<void>
+  getWorkingMemory(params: { scope: string; identifier: string }): Promise<IgniterAgentWorkingMemory | null>
+  updateWorkingMemory(params: { scope: string; identifier: string; content: string }): Promise<void>
 
-  // Chat history
-  getChatHistory(chatId: string): Promise<Message[]>
-  appendMessage(chatId: string, message: Message): Promise<void>
+  // Conversation history
+  saveMessage(message: IgniterAgentConversationMessage): Promise<void>
+  getMessages<T = IgniterAgentUIMessage>(params: { chatId: string; userId?: string; limit?: number }): Promise<T[]>
 
-  // Lifecycle
-  connect(): Promise<void>
-  disconnect(): Promise<void>
-  prune(): Promise<void>
+  // Chat sessions
+  saveChat(chat: IgniterAgentChatSession): Promise<void>
+  getChats(params: { userId?: string; search?: string; limit?: number }): Promise<IgniterAgentChatSession[]>
+  getChat(chatId: string): Promise<IgniterAgentChatSession | null>
+  updateChatTitle(chatId: string, title: string): Promise<void>
+  deleteChat(chatId: string): Promise<void>
 }
 ```
 
@@ -1397,12 +1531,12 @@ interface IgniterAgentMemory {
 2. Check tool input schemas match expected parameters
 3. Ensure tool is added to a toolset and toolset is added to agent
 4. Review system prompt — doesn't discourage tool usage
-5. Check telemetry events for `tool.called` — should be emitted if agent attempts to use tools
+5. Check telemetry events for `igniter.agent.tool.execute.started` — should be emitted if agent attempts to use tools
 
 ```typescript
 // Debug: Log all tools the agent knows about
-const tools = agent.getAvailableTools()
-console.log('Available tools:', tools.map(t => t.name))
+const tools = agent.getTools()
+console.log('Available tools:', Object.keys(tools))
 ```
 
 ### Memory not persisting
@@ -1410,7 +1544,7 @@ console.log('Available tools:', tools.map(t => t.name))
 **Problem:** Agent doesn't remember previous conversations.
 
 **Solution:**
-1. Verify memory adapter is configured with `withMemory()`
+1. Verify memory config is passed to `withMemory()` (needs a `provider`)
 2. For file adapters, call `await memory.connect()` before using
 3. Check that you're not disconnecting between requests
 4. Ensure the memory has the same namespace
@@ -1425,8 +1559,7 @@ const memory = IgniterAgentJSONFileAdapter.create({
 await memory.connect()
 
 // Verify it's connected
-const status = await memory.getStatus()
-console.log('Memory connected:', status.connected)
+console.log('Memory connected:', memory.isConnected())
 ```
 
 ### Tool execution errors
@@ -1436,7 +1569,7 @@ console.log('Memory connected:', status.connected)
 **Solution:**
 1. Check tool input matches defined schema
 2. Add error handling in tool handler
-3. Review telemetry events for `tool.error` — will show error code
+3. Review telemetry events for `igniter.agent.tool.execute.error` — will show error code
 4. Add logging to understand what's failing
 5. Ensure external dependencies (databases, APIs) are accessible
 
@@ -1449,8 +1582,12 @@ const tool = IgniterAgentTool
       return await performOperation(input)
     } catch (error) {
       console.error('Tool failed:', error)
-      throw new IgniterAgentError('OPERATION_FAILED', {
-        originalError: error instanceof Error ? error.message : String(error),
+      throw new IgniterAgentToolError({
+        message: 'Operation failed',
+        toolName: 'risky-operation',
+        metadata: {
+          originalError: error instanceof Error ? error.message : String(error),
+        },
       })
     }
   })
@@ -1498,23 +1635,20 @@ const tool = IgniterAgentTool
 
 **Solution:**
 1. Set reasonable `maxChats` limit
-2. Configure `ttlMs` to auto-expire old data
-3. Call `prune()` periodically to clean up
-4. Monitor memory adapter size with telemetry
-5. Use file adapter instead of in-memory for large workloads
+2. Configure `maxChats`/`maxMessages` to cap growth
+3. Monitor memory adapter size with telemetry
+4. Use file adapter instead of in-memory for large workloads
 
 ```typescript
 const memory = IgniterAgentInMemoryAdapter.create({
   maxChats: 50,
-  ttlMs: 24 * 60 * 60 * 1000, // 24 hours
+  maxMessages: 500,
 })
-
-// Prune every hour
-setInterval(() => memory.prune(), 60 * 60 * 1000)
 
 // Monitor size
 const stats = await memory.getStats()
-console.log(`Memory size: ${stats.sizeBytes} bytes`)
+console.log(`Messages: ${stats.messageCount}`)
+console.log(`Chats: ${stats.chatCount}`)
 ```
 
 ---
@@ -1526,7 +1660,7 @@ console.log(`Memory size: ${stats.sizeBytes} bytes`)
 Implement your own memory adapter for custom storage backends:
 
 ```typescript
-import { IgniterAgentMemoryAdapter } from '@igniter-js/agents'
+import type { IgniterAgentMemoryAdapter } from '@igniter-js/agents'
 
 class CustomMemoryAdapter implements IgniterAgentMemoryAdapter {
   async connect(): Promise<void> {
@@ -1550,7 +1684,7 @@ class CustomMemoryAdapter implements IgniterAgentMemoryAdapter {
 
 const memory = new CustomMemoryAdapter()
 const agent = IgniterAgent.create('assistant')
-  .withMemory(memory)
+  .withMemory({ provider: memory })
   .build()
 ```
 
@@ -1565,9 +1699,12 @@ const analysisToolForSalesAgent = IgniterAgentTool
   .withInput(z.object({ query: z.string() }))
   .withExecute(async ({ query }) => {
     // Delegate to analytics agent
-    const analyticsAgent = manager.getAgent('analytics')
+    const analyticsAgent = manager.get('analytics')
     const result = await analyticsAgent.generate({
-      messages: [{ role: 'user', content: query }],
+      chatId: 'chat_analytics_1',
+      userId: 'user_123',
+      context: {},
+      message: { role: 'user', content: query },
     })
     return { analysis: result.content }
   })

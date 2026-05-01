@@ -10,14 +10,36 @@ vi.mock("ai", () => {
   class ToolLoopAgent {
     constructor(public readonly options: Record<string, unknown>) {}
 
-    async generate() {
+    async generate(params: Record<string, unknown> = {}) {
+      if (this.options.prepareCall) {
+        await (this.options.prepareCall as (options: Record<string, unknown>) => Promise<Record<string, unknown>>)(
+          params,
+        );
+      }
+
       if (generateError) {
         throw generateError;
       }
-      return { text: "ok" };
+
+      const result = {
+        text: "ok",
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      };
+
+      if (this.options.onFinish) {
+        (this.options.onFinish as (result: typeof result) => void)(result);
+      }
+
+      return result;
     }
 
-    async stream() {
+    async stream(params: Record<string, unknown> = {}) {
+      if (this.options.prepareCall) {
+        await (this.options.prepareCall as (options: Record<string, unknown>) => Promise<Record<string, unknown>>)(
+          params,
+        );
+      }
+
       if (streamError) {
         throw streamError;
       }
@@ -347,7 +369,12 @@ describe("telemetry.generation", () => {
     const telemetry = createTelemetry();
     const agent = createAgent({ telemetry });
 
-    await agent.generate({ messages: [{ role: "user", content: "hi" }] });
+    await agent.generate({
+      chatId: "chat-1",
+      userId: "user-1",
+      context: {},
+      message: { role: "user", content: "hi" },
+    });
 
     expectEmitted(
       telemetry,
@@ -361,7 +388,12 @@ describe("telemetry.generation", () => {
     const telemetry = createTelemetry();
     const agent = createAgent({ telemetry });
 
-    await agent.generate({ messages: [{ role: "user", content: "hi" }] });
+    await agent.generate({
+      chatId: "chat-1",
+      userId: "user-1",
+      context: {},
+      message: { role: "user", content: "hi" },
+    });
 
     expectEmitted(
       telemetry,
@@ -378,7 +410,12 @@ describe("telemetry.generation", () => {
     generateError = new Error("generation failed");
 
     await expect(
-      agent.generate({ messages: [{ role: "user", content: "hi" }] }),
+      agent.generate({
+        chatId: "chat-1",
+        userId: "user-1",
+        context: {},
+        message: { role: "user", content: "hi" },
+      }),
     ).rejects.toBeInstanceOf(Error);
 
     expectEmitted(
@@ -393,7 +430,12 @@ describe("telemetry.generation", () => {
     const telemetry = createTelemetry();
     const agent = createAgent({ telemetry });
 
-    const stream = await agent.stream({ messages: [{ role: "user", content: "hi" }] });
+    const stream = await agent.stream({
+      chatId: "chat-1",
+      userId: "user-1",
+      context: {},
+      message: { role: "user", content: "hi" },
+    });
     for await (const _chunk of stream.textStream) {
       // consume
     }
@@ -410,7 +452,12 @@ describe("telemetry.generation", () => {
     const telemetry = createTelemetry();
     const agent = createAgent({ telemetry });
 
-    const stream = await agent.stream({ messages: [{ role: "user", content: "hi" }] });
+    const stream = await agent.stream({
+      chatId: "chat-1",
+      userId: "user-1",
+      context: {},
+      message: { role: "user", content: "hi" },
+    });
     for await (const _chunk of stream.textStream) {
       // consume
     }
@@ -427,7 +474,12 @@ describe("telemetry.generation", () => {
     const telemetry = createTelemetry();
     const agent = createAgent({ telemetry });
 
-    const stream = await agent.stream({  messages: [{ role: "user", content: "hi" }] });
+    const stream = await agent.stream({
+      chatId: "chat-1",
+      userId: "user-1",
+      context: {},
+      message: { role: "user", content: "hi" },
+    });
     for await (const _chunk of stream.textStream) {
       // consume
     }
@@ -447,7 +499,12 @@ describe("telemetry.generation", () => {
     streamError = new Error("stream failed");
 
     await expect(
-      agent.stream({ messages: [{ role: "user", content: "hi" }] }),
+      agent.stream({
+        chatId: "chat-1",
+        userId: "user-1",
+        context: {},
+        message: { role: "user", content: "hi" },
+      }),
     ).rejects.toBeInstanceOf(Error);
 
     expectEmitted(

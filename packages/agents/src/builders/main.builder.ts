@@ -1,4 +1,4 @@
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterAgentBuiltAgent } from "../types";
 import { IgniterAgentManagerCore } from "../core/manager";
 import type { IgniterAgentManagerOptions } from "../types/manager";

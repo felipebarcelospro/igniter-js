@@ -4,7 +4,7 @@
  *
  * @description
  * The error system in IgniterAgent follows these principles:
- * - All errors extend IgniterError from @igniter-js/core for consistency
+ * - All errors extend IgniterError from @igniter-js/common for consistency
  * - Errors include rich context for debugging
  * - Error codes enable programmatic error handling
  * - Stack traces are preserved for debugging
@@ -15,11 +15,16 @@
  *   IgniterAgentError,
  *   IgniterAgentMCPError,
  *   IgniterAgentToolError,
- *   isIgniterAgentError
- * } from '@igniter-js/agents';
+ *   isIgniterAgentError,
+ * } from "@igniter-js/agents";
  *
  * try {
- *   await agent.generate({ messages: [] });
+ *   await agent.generate({
+ *     chatId: 'chat_123',
+ *     userId: 'user_123',
+ *     context: {},
+ *     messages: []
+ *   });
  * } catch (error) {
  *   if (isIgniterAgentError(error)) {
  *     console.error(`[${error.code}] ${error.message}`);
@@ -30,8 +35,8 @@
  * @module errors
  * @packageDocumentation
  */
-
-import { IgniterError, type IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
+import { IgniterError } from "@igniter-js/common";
 
 /* =============================================================================
  * ERROR CODES
@@ -145,7 +150,7 @@ export interface IgniterAgentErrorOptions {
  *
  * @description
  * All custom errors in the IgniterAgent library extend this class,
- * which itself extends IgniterError from @igniter-js/core.
+ * which itself extends IgniterError from @igniter-js/common.
  * It provides a consistent interface for error handling, including
  * error codes, context, and cause tracking.
  *
@@ -367,7 +372,12 @@ export class IgniterAgentAdapterError extends IgniterAgentError {
  * @example
  * ```typescript
  * try {
- *   await agent.generate({ messages: [] });
+ *   await agent.generate({
+ *     chatId: 'chat_123',
+ *     userId: 'user_123',
+ *     context: {},
+ *     messages: []
+ *   });
  * } catch (error) {
  *   if (isIgniterAgentError(error)) {
  *     // TypeScript knows error is IgniterAgentError

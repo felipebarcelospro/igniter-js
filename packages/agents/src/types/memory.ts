@@ -541,7 +541,7 @@ export interface IgniterAgentWorkingMemoryConfig {
  * ```typescript
  * const historyConfig: IgniterAgentHistoryConfig = {
  *   enabled: true,
- *   limit: 50  // Load last 50 messages for context
+ *   limit: 50,  // Load last 50 messages for context
  * };
  * ```
  * 
@@ -680,6 +680,65 @@ export interface IgniterAgentGetMessagesParams {
    * Maximum number of messages to retrieve.
    */
   limit?: number;
+}
+
+/**
+ * Parameters for searching messages in history.
+ * 
+ * @public
+ */
+export interface IgniterAgentSearchParams {
+  /**
+   * The chat session ID to retrieve messages from.
+   */
+  chatId: string;
+
+  /**
+   * Optional user ID to filter messages.
+   */
+  userId?: string;
+
+  /**
+   * Maximum number of messages to retrieve.
+   */
+  limit?: number;
+
+  /**
+   * Optional search query to filter messages.
+   */
+  search?: string;
+
+  /**
+   * Optional date range to filter messages.
+   */
+  dateFrom?: Date;
+
+  /**
+   * Optional date range to filter messages.
+   */
+  dateTo?: Date;
+}
+
+/**
+ * Search result interface.
+ * 
+ * @public
+ */
+export interface IgniterAgentSearchResult {
+  /**
+   * The message ID.
+   */
+  id: string;
+
+  /**
+   * The message content.
+   */
+  content: any;
+
+  /**
+   * The message timestamp.
+   */
+  timestamp: Date;
 }
 
 /**
@@ -1005,6 +1064,33 @@ export interface IgniterAgentMemoryProvider<
    * ```
    */
   deleteChat?(chatId: string): Promise<void>;
+
+  /**
+   * Searches for messages in the chat history.
+   * 
+   * @description
+   * Retrieves a list of messages that match the search query.
+   * 
+   * @remarks
+   * This method is optional. If not implemented, search functionality
+   * will be unavailable.
+   * 
+   * @param params - Search parameters
+   * @returns List of search results
+   * 
+   * @example
+   * ```typescript
+   * const results = await provider.search?.({
+   *   chatId: 'chat_123',
+   *   userId: 'user_456',
+   *   limit: 10,
+   *   search: 'deployment',
+   *   dateFrom: new Date('2023-01-01'),
+   *   dateTo: new Date('2023-12-31'),
+   * });
+   * ```
+   */
+  search?(params: IgniterAgentSearchParams): Promise<IgniterAgentSearchResult[]>;
 }
 
 /* =============================================================================
