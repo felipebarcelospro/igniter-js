@@ -1,4 +1,4 @@
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import React from "react";
 import { render } from "@react-email/components";
 import { IgniterMailError } from "../errors/mail.error";
@@ -9,10 +9,12 @@ import type {
   IgniterMailQueueConfig,
   IgniterMailSendParams,
   IIgniterMail,
+  IgniterMailTemplatesAPI,
 } from "../types/provider";
 import type {
   IgniterMailTemplateBuilt,
   IgniterMailTemplateKey,
+  IgniterMailTemplateMeta,
   IgniterMailTemplatePayload,
 } from "../types/templates";
 import { IgniterMailSchema } from "../utils/schema";
@@ -28,7 +30,7 @@ export class IgniterMailManagerCore<
   TTemplates extends object,
 > implements IIgniterMail<TTemplates> {
   private readonly adapter: IgniterMailAdapter;
-  private readonly templates: TTemplates;
+  private readonly templateRegistry: TTemplates;
   private readonly logger?: IgniterLogger;
   private readonly telemetry?: IgniterTelemetryManager<IgniterMailTelemetryEvents>;
   private readonly queue?: IgniterMailQueueConfig;
@@ -45,6 +47,11 @@ export class IgniterMailManagerCore<
    */
   public readonly $Infer: IgniterMailInfer<TTemplates> =
     {} as unknown as IgniterMailInfer<TTemplates>;
+
+  /**
+   * Template registry helpers.
+   */
+  public readonly templates: IgniterMailTemplatesAPI<TTemplates>;
 
   constructor(options: IgniterMailOptions<TTemplates>) {
     const { adapter, templates, logger, telemetry, queue, ...rest } = options;
@@ -66,11 +73,246 @@ export class IgniterMailManagerCore<
     }
 
     this.adapter = adapter;
-    this.templates = templates;
+    this.templateRegistry = templates;
     this.logger = logger;
     this.telemetry = telemetry;
     this.queue = queue;
     this.options = rest;
+
+    this.templates = {
+      list: async () => this.listTemplates(),
+      get: async (id) => this.getTemplate(id),
+      render: async (id, variables) => this.renderTemplate(id, variables),
+    };
+  }
+
+  private buildTemplateMeta(
+    key: string,
+    template: IgniterMailTemplateBuilt<any>,
+  ): IgniterMailTemplateMeta {
+    const now = new Date().toISOString();
+    return {
+      id: key,
+      name: template.name ?? key,
+      description: template.description ?? `Template ${key}`,
+      path: template.path ?? `mail/${key}`,
+      subject: template.subject,
+      createdAt: template.createdAt ?? now,
+      updatedAt: template.updatedAt ?? now,
+      variables: template.variables,
+    };
+  }
+
+  private async listTemplates(): Promise<IgniterMailTemplateMeta[]> {
+    const startTime = Date.now();
+
+    this.logger?.debug("IgniterMail.templates.list started");
+    this.telemetry?.emit('igniter.mail.templates.list.started', {
+      level: "debug",
+      attributes: {},
+    });
+
+    try {
+      const results = Object.entries(this.templateRegistry as any).map(
+        ([key, template]) =>
+          this.buildTemplateMeta(
+            key,
+            template as IgniterMailTemplateBuilt<any>,
+          ),
+      );
+
+      this.telemetry?.emit('igniter.mail.templates.list.success', {
+        level: "info",
+        attributes: {
+          "ctx.mail.template.count": results.length,
+          "ctx.mail.duration_ms": Date.now() - startTime,
+        },
+      });
+
+      this.logger?.info("IgniterMail.templates.list success", {
+        count: results.length,
+        durationMs: Date.now() - startTime,
+      });
+
+      return results;
+    } catch (error) {
+      const normalizedError = IgniterMailError.is(error)
+        ? error
+        : new IgniterMailError({
+            code: "MAIL_PROVIDER_TEMPLATE_LIST_FAILED",
+            message: "MAIL_PROVIDER_TEMPLATE_LIST_FAILED",
+            cause: error,
+            logger: this.logger,
+          });
+
+      this.telemetry?.emit('igniter.mail.templates.list.error', {
+        level: "error",
+        attributes: {
+          "ctx.mail.error.code": normalizedError.code,
+          "ctx.mail.error.message": normalizedError.message,
+          "ctx.mail.duration_ms": Date.now() - startTime,
+        },
+      });
+
+      this.logger?.error("IgniterMail.templates.list failed", normalizedError);
+      throw normalizedError;
+    }
+  }
+
+  private async getTemplate<
+    TSelectedTemplate extends IgniterMailTemplateKey<TTemplates>,
+  >(
+    id: TSelectedTemplate,
+  ): Promise<IgniterMailTemplateMeta | null> {
+    const startTime = Date.now();
+
+    this.logger?.debug("IgniterMail.templates.get started", {
+      template: String(id),
+    });
+    this.telemetry?.emit('igniter.mail.templates.get.started', {
+      level: "debug",
+      attributes: {
+        "ctx.mail.template_id": String(id),
+      },
+    });
+
+    try {
+      const template = (this.templateRegistry as any)[id] as
+        | IgniterMailTemplateBuilt<any>
+        | undefined;
+
+      if (!template) {
+        this.telemetry?.emit('igniter.mail.templates.get.success', {
+          level: "info",
+          attributes: {
+            "ctx.mail.template_id": String(id),
+            "ctx.mail.duration_ms": Date.now() - startTime,
+          },
+        });
+        return null;
+      }
+
+      const result = this.buildTemplateMeta(String(id), template);
+
+      this.telemetry?.emit('igniter.mail.templates.get.success', {
+        level: "info",
+        attributes: {
+          "ctx.mail.template_id": String(id),
+          "ctx.mail.duration_ms": Date.now() - startTime,
+        },
+      });
+
+      return result;
+    } catch (error) {
+      const normalizedError = IgniterMailError.is(error)
+        ? error
+        : new IgniterMailError({
+            code: "MAIL_PROVIDER_TEMPLATE_GET_FAILED",
+            message: "MAIL_PROVIDER_TEMPLATE_GET_FAILED",
+            cause: error,
+            logger: this.logger,
+            metadata: { template: String(id) },
+          });
+
+      this.telemetry?.emit('igniter.mail.templates.get.error', {
+        level: "error",
+        attributes: {
+          "ctx.mail.template_id": String(id),
+          "ctx.mail.error.code": normalizedError.code,
+          "ctx.mail.error.message": normalizedError.message,
+          "ctx.mail.duration_ms": Date.now() - startTime,
+        },
+      });
+
+      this.logger?.error("IgniterMail.templates.get failed", normalizedError);
+      throw normalizedError;
+    }
+  }
+
+  private async renderTemplate<
+    TSelectedTemplate extends IgniterMailTemplateKey<TTemplates>,
+  >(
+    id: TSelectedTemplate,
+    variables?: IgniterMailTemplatePayload<TTemplates[TSelectedTemplate]>,
+  ): Promise<{ html: string; text: string }> {
+    const startTime = Date.now();
+
+    this.logger?.debug("IgniterMail.templates.render started", {
+      template: String(id),
+    });
+    this.telemetry?.emit('igniter.mail.templates.render.started', {
+      level: "debug",
+      attributes: {
+        "ctx.mail.template_id": String(id),
+      },
+    });
+
+    try {
+      const template = (this.templateRegistry as any)[id] as
+        | IgniterMailTemplateBuilt<any>
+        | undefined;
+
+      if (!template) {
+        throw new IgniterMailError({
+          code: "MAIL_PROVIDER_TEMPLATE_NOT_FOUND",
+          message: "MAIL_PROVIDER_TEMPLATE_NOT_FOUND",
+          logger: this.logger,
+          metadata: { template: String(id) },
+        });
+      }
+
+      const validatedData = await this.validateTemplateData(
+        template,
+        (variables ?? {}) as IgniterMailTemplatePayload<typeof template>,
+      );
+      const MailTemplate = template.render;
+
+      const html = await render(
+        <MailTemplate {...(validatedData as any)} />,
+      );
+      const text = await render(
+        <MailTemplate {...(validatedData as any)} />,
+        { plainText: true },
+      );
+
+      this.telemetry?.emit('igniter.mail.templates.render.success', {
+        level: "info",
+        attributes: {
+          "ctx.mail.template_id": String(id),
+          "ctx.mail.duration_ms": Date.now() - startTime,
+        },
+      });
+
+      this.logger?.info("IgniterMail.templates.render success", {
+        template: String(id),
+        durationMs: Date.now() - startTime,
+      });
+
+      return { html, text };
+    } catch (error) {
+      const normalizedError = IgniterMailError.is(error)
+        ? error
+        : new IgniterMailError({
+            code: "MAIL_PROVIDER_TEMPLATE_RENDER_FAILED",
+            message: "MAIL_PROVIDER_TEMPLATE_RENDER_FAILED",
+            cause: error,
+            logger: this.logger,
+            metadata: { template: String(id) },
+          });
+
+      this.telemetry?.emit('igniter.mail.templates.render.error', {
+        level: "error",
+        attributes: {
+          "ctx.mail.template_id": String(id),
+          "ctx.mail.error.code": normalizedError.code,
+          "ctx.mail.error.message": normalizedError.message,
+          "ctx.mail.duration_ms": Date.now() - startTime,
+        },
+      });
+
+      this.logger?.error("IgniterMail.templates.render failed", normalizedError);
+      throw normalizedError;
+    }
   }
 
   private async ensureQueueJobRegistered(): Promise<void> {
@@ -164,7 +406,7 @@ export class IgniterMailManagerCore<
 
       await this.onSendStarted(params);
 
-      const template = (this.templates as any)[params.template] as
+      const template = (this.templateRegistry as any)[params.template] as
         | IgniterMailTemplateBuilt<any>
         | undefined;
 

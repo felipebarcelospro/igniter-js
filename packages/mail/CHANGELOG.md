@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0-alpha.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @igniter-js/core@*
+
 All notable changes to `@igniter-js/mail` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
@@ -14,6 +21,7 @@ First public release of `@igniter-js/mail` - a type-safe email library for Ignit
 ### Features
 
 #### Core Functionality
+
 - **Type-Safe Templates** - Full TypeScript support with compile-time inference
 - **React Email Integration** - Build beautiful emails with React components
 - **StandardSchema Validation** - Runtime validation of template payloads
@@ -22,6 +30,7 @@ First public release of `@igniter-js/mail` - a type-safe email library for Ignit
 - **Lifecycle Hooks** - React to send events (started, success, error)
 
 #### Email Operations
+
 - **`send()`** - Send emails immediately
 - **`schedule()`** - Schedule emails for future delivery
 - **Template Management** - Type-safe template registration
@@ -29,6 +38,7 @@ First public release of `@igniter-js/mail` - a type-safe email library for Ignit
 - **HTML + Plain Text** - Automatic generation of both formats
 
 #### Adapters
+
 - **Resend Adapter** - Official Resend integration
 - **Postmark Adapter** - Postmark email service
 - **SendGrid Adapter** - SendGrid email service
@@ -36,6 +46,7 @@ First public release of `@igniter-js/mail` - a type-safe email library for Ignit
 - **Mock Adapter** - In-memory adapter for unit tests
 
 #### Developer Experience
+
 - **Comprehensive Error Handling** - Typed `IgniterMailError` with stable error codes
 - **Rich Type Definitions** - Complete TypeScript types for all APIs
 - **React Email Components** - Full access to @react-email/components
@@ -43,12 +54,14 @@ First public release of `@igniter-js/mail` - a type-safe email library for Ignit
 - **Builder Validation** - Configuration errors caught at build time
 
 #### Integration Features
+
 - **Queue Integration** - Optional BullMQ integration for async delivery
 - **Logger Support** - Attach Igniter.js logger for debugging
 - **Hook System** - Extensible hooks for monitoring and analytics
 - **Legacy API Support** - Backwards compatibility with older initialization
 
 ### Package Configuration
+
 - ESM and CJS exports
 - TypeScript declaration files
 - Tree-shakeable exports
@@ -56,6 +69,7 @@ First public release of `@igniter-js/mail` - a type-safe email library for Ignit
 - Source maps included
 
 ### Documentation
+
 - Comprehensive README with examples
 - API reference documentation
 - Adapter configuration guides
@@ -65,6 +79,7 @@ First public release of `@igniter-js/mail` - a type-safe email library for Ignit
 - AGENTS.md for AI agent development
 
 ### Testing
+
 - Unit tests for core functionality
 - Adapter-specific tests
 - Template validation tests
@@ -76,6 +91,7 @@ First public release of `@igniter-js/mail` - a type-safe email library for Ignit
 ## Future Releases
 
 Planned features for upcoming versions:
+
 - AWS SES adapter
 - Mailgun adapter
 - SparkPost adapter

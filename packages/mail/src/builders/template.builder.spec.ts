@@ -1,5 +1,5 @@
 import React from 'react'
-import type { StandardSchemaV1 } from '@igniter-js/core'
+import type { StandardSchemaV1 } from "@igniter-js/common";
 import { describe, expect, it } from 'vitest'
 import { IgniterMailError } from '../errors/mail.error'
 import { IgniterMailTemplateBuilder } from './template.builder'

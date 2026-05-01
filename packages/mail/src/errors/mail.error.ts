@@ -1,4 +1,4 @@
-import { IgniterError, type IgniterLogger } from '@igniter-js/core'
+import { IgniterError, type IgniterLogger } from "@igniter-js/common";
 
 /**
  * Known error codes thrown by `@igniter-js/mail` runtime.
@@ -11,6 +11,9 @@ export type IgniterMailErrorCode =
   | 'MAIL_PROVIDER_TEMPLATES_REQUIRED'
   | 'MAIL_PROVIDER_TEMPLATE_NOT_FOUND'
   | 'MAIL_PROVIDER_TEMPLATE_DATA_INVALID'
+  | 'MAIL_PROVIDER_TEMPLATE_LIST_FAILED'
+  | 'MAIL_PROVIDER_TEMPLATE_GET_FAILED'
+  | 'MAIL_PROVIDER_TEMPLATE_RENDER_FAILED'
   | 'MAIL_PROVIDER_SCHEDULE_DATE_INVALID'
   | 'MAIL_PROVIDER_SEND_FAILED'
   | 'MAIL_PROVIDER_SCHEDULE_FAILED'
@@ -67,4 +70,3 @@ export class IgniterMailError extends IgniterError {
     return error instanceof IgniterMailError
   }
 }
-

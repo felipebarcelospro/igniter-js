@@ -1,4 +1,4 @@
-import type { StandardSchemaV1 } from '@igniter-js/core'
+import type { StandardSchemaV1 } from "@igniter-js/common";
 import React from 'react'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { IgniterMail } from '../builders/main.builder'
@@ -130,6 +130,35 @@ describe('IgniterMail', () => {
 
     expect(register).toHaveBeenCalledTimes(1)
     expect(invoke).toHaveBeenCalledTimes(1)
+  })
+
+  it('exposes template registry helpers', async () => {
+    const adapter = { send: vi.fn(async () => undefined) }
+
+    const mail = IgniterMail.create()
+      .withFrom('no-reply@test.com')
+      .withAdapter(adapter)
+      .addTemplate('welcome', {
+        subject: 'Welcome',
+        schema: createPassSchema(),
+        render: ({ name }: any) => React.createElement('div', null, name),
+      })
+      .build()
+
+    const templates = await mail.templates.list()
+    expect(templates).toHaveLength(1)
+    expect(templates[0]).toMatchObject({
+      id: 'welcome',
+      name: 'welcome',
+      subject: 'Welcome',
+    })
+
+    const template = await mail.templates.get('welcome')
+    expect(template?.id).toBe('welcome')
+
+    const rendered = await mail.templates.render('welcome', { name: 'Ana' } as any)
+    expect(rendered.html).toContain('<html>')
+    expect(rendered.text).toContain('<html>')
   })
 
   describe('telemetry', () => {
@@ -331,6 +360,156 @@ describe('IgniterMail', () => {
           'mail.scheduled_at': date.toISOString(),
           'mail.error.code': 'MAIL_PROVIDER_SCHEDULE_FAILED',
           'mail.error.message': 'MAIL_PROVIDER_SCHEDULE_FAILED',
+        },
+      })
+    })
+
+    it('emits template list telemetry with expected attributes', async () => {
+      const telemetry = { emit: vi.fn() }
+      const adapter = { send: vi.fn(async () => undefined) }
+
+      const mail = IgniterMail.create()
+        .withFrom('no-reply@test.com')
+        .withAdapter(adapter)
+        .withTelemetry(telemetry as any)
+        .addTemplate('welcome', {
+          subject: 'Welcome',
+          schema: createPassSchema(),
+          render: () => React.createElement('div', null, 'hello'),
+        })
+        .build()
+
+      await mail.templates.list()
+
+      const started = findEmitPayload(
+        telemetry,
+        'igniter.mail.templates.list.started',
+      )
+      expect(started).toMatchObject({ level: 'debug' })
+
+      const success = findEmitPayload(
+        telemetry,
+        'igniter.mail.templates.list.success',
+      )
+      expect(success).toMatchObject({
+        level: 'info',
+        attributes: {
+          'ctx.mail.template.count': 1,
+        },
+      })
+      expect(success.attributes['ctx.mail.duration_ms']).toEqual(expect.any(Number))
+    })
+
+    it('emits template get telemetry with expected attributes', async () => {
+      const telemetry = { emit: vi.fn() }
+      const adapter = { send: vi.fn(async () => undefined) }
+
+      const mail = IgniterMail.create()
+        .withFrom('no-reply@test.com')
+        .withAdapter(adapter)
+        .withTelemetry(telemetry as any)
+        .addTemplate('welcome', {
+          subject: 'Welcome',
+          schema: createPassSchema(),
+          render: () => React.createElement('div', null, 'hello'),
+        })
+        .build()
+
+      await mail.templates.get('welcome')
+
+      const started = findEmitPayload(
+        telemetry,
+        'igniter.mail.templates.get.started',
+      )
+      expect(started).toMatchObject({
+        level: 'debug',
+        attributes: {
+          'ctx.mail.template_id': 'welcome',
+        },
+      })
+
+      const success = findEmitPayload(
+        telemetry,
+        'igniter.mail.templates.get.success',
+      )
+      expect(success).toMatchObject({
+        level: 'info',
+        attributes: {
+          'ctx.mail.template_id': 'welcome',
+        },
+      })
+      expect(success.attributes['ctx.mail.duration_ms']).toEqual(expect.any(Number))
+    })
+
+    it('emits template render telemetry with expected attributes', async () => {
+      const telemetry = { emit: vi.fn() }
+      const adapter = { send: vi.fn(async () => undefined) }
+
+      const mail = IgniterMail.create()
+        .withFrom('no-reply@test.com')
+        .withAdapter(adapter)
+        .withTelemetry(telemetry as any)
+        .addTemplate('welcome', {
+          subject: 'Welcome',
+          schema: createPassSchema(),
+          render: () => React.createElement('div', null, 'hello'),
+        })
+        .build()
+
+      await mail.templates.render('welcome', {} as any)
+
+      const started = findEmitPayload(
+        telemetry,
+        'igniter.mail.templates.render.started',
+      )
+      expect(started).toMatchObject({
+        level: 'debug',
+        attributes: {
+          'ctx.mail.template_id': 'welcome',
+        },
+      })
+
+      const success = findEmitPayload(
+        telemetry,
+        'igniter.mail.templates.render.success',
+      )
+      expect(success).toMatchObject({
+        level: 'info',
+        attributes: {
+          'ctx.mail.template_id': 'welcome',
+        },
+      })
+      expect(success.attributes['ctx.mail.duration_ms']).toEqual(expect.any(Number))
+    })
+
+    it('emits template render error telemetry with expected attributes', async () => {
+      const telemetry = { emit: vi.fn() }
+      const adapter = { send: vi.fn(async () => undefined) }
+
+      const mail = IgniterMail.create()
+        .withFrom('no-reply@test.com')
+        .withAdapter(adapter)
+        .withTelemetry(telemetry as any)
+        .addTemplate('welcome', {
+          subject: 'Welcome',
+          schema: createPassSchema(),
+          render: () => React.createElement('div', null, 'hello'),
+        })
+        .build()
+
+      await expect(
+        mail.templates.render('missing' as any, {} as any),
+      ).rejects.toBeInstanceOf(IgniterMailError)
+
+      const error = findEmitPayload(
+        telemetry,
+        'igniter.mail.templates.render.error',
+      )
+      expect(error).toMatchObject({
+        level: 'error',
+        attributes: {
+          'ctx.mail.template_id': 'missing',
+          'ctx.mail.error.code': 'MAIL_PROVIDER_TEMPLATE_NOT_FOUND',
         },
       })
     })

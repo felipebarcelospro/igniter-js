@@ -1,7 +1,7 @@
 # AGENTS.md - @igniter-js/mail
 
-> **Last Updated:** 2025-12-23
-> **Version:** 0.1.11
+> **Last Updated:** 2026-01-29
+> **Version:** 1.0.0-alpha.0
 > **Goal:** This document serves as the complete operational manual for Code Agents working on the @igniter-js/mail package.
 
 ---
@@ -77,7 +77,10 @@ Maintaining `@igniter-js/mail` requires understanding its modular structure. The
 
 #### 3.1 The Builder Accumulation Pattern
 
-The `IgniterMailBuilder` is designed as an immutable state machine.
+The `IgniterMailBuilder` uses a **hybrid immutable pattern**:
+
+- `addTemplate(...)` returns a **new builder instance** to preserve template key inference.
+- `withFrom(...)`, `withAdapter(...)`, `withLogger(...)`, `withTelemetry(...)`, and hooks **mutate the current builder instance** and return `this` for fluent chaining.
 
 ```typescript
 export class IgniterMailBuilder<
@@ -124,7 +127,7 @@ The `schedule` method provides a seamless bridge to `@igniter-js/jobs`.
 
 The package integrates deeply with `@igniter-js/telemetry`. Every public method emits a `started` event, followed by either a `success` or `error` event.
 
-- **Attributes:** Events carry normalized attributes like `mail.to`, `mail.template`, and `mail.duration_ms`.
+- **Attributes:** Send/schedule events use `mail.*` attributes. Template events use `ctx.mail.*` attributes.
 - **Privacy:** By default, PII (like email content or raw data objects) is **never** included in telemetry attributes.
 
 ---
@@ -140,8 +143,9 @@ The package integrates deeply with `@igniter-js/telemetry`. Every public method 
 #### Method: `IgniterMailBuilder.withAdapter(provider, secret)`
 
 1. **Validation:** Checks if `provider` is a known string ('resend', 'postmark', etc.).
-2. **Instantiation:** Calls the static `create()` method of the corresponding adapter class.
-3. **Assignment:** Stores the adapter instance in the builder's state.
+2. **Validation:** Throws `MAIL_PROVIDER_ADAPTER_SECRET_REQUIRED` if `secret` is missing.
+3. **Instantiation:** Calls `ResendMailAdapter.create`, `PostmarkMailAdapter.create`, `SendGridMailAdapter.create`, or `SmtpMailAdapter.create`.
+4. **Assignment:** Stores the adapter instance in the builder's state.
 4. **Returns:** The updated builder instance.
 
 #### Method: `IgniterMailBuilder.addTemplate(key, template)`
@@ -169,9 +173,9 @@ The package integrates deeply with `@igniter-js/telemetry`. Every public method 
 1. **Entry:** User calls `mail.schedule(params, futureDate)`.
 2. **Validation:** Ensures `futureDate` is > `now()`.
 3. **Queue Check:** Ensures `this.queue` is configured.
-4. **Idempotent Registration:** Calls `ensureQueueJobRegistered()`. If the job isn't yet registered on the queue adapter, it does so now.
+4. **Idempotent Registration:** Calls `ensureQueueJobRegistered()` and registers the queue handler if needed.
 5. **Invocation:** Calls `queue.adapter.invoke()` with a delay calculated from the target date.
-6. **Telemetry:** Emits `igniter.mail.schedule.success`.
+6. **Telemetry:** Emits `igniter.mail.schedule.success` or `igniter.mail.schedule.error` on failure.
 
 ---
 
@@ -193,7 +197,8 @@ The package keeps a "Zero-Bloat" policy for production:
 
 - **`react` and `@react-email/components`**: Required for template rendering.
 - **`resend`, `nodemailer`**: Peer dependencies. They are not bundled, keeping the core package small.
-- **`@igniter-js/core`**: Provides the foundational error class and job interfaces.
+- **`@igniter-js/common`**: Provides the foundational error class and logger interfaces.
+- **`@igniter-js/core`**: Provides job interfaces used by the mail queue integration.
 - **`@igniter-js/telemetry`**: Optional peer dependency. If missing, telemetry emission is safely skipped.
 
 ---
@@ -404,7 +409,7 @@ await mail.schedule(params, reminderDate);
 #### Marketing and Newsletters
 
 - **Spam Score:** Always provide a plain-text fallback. Igniter.js does this automatically, but ensure your component renders meaningful text (no "click here" only).
-- **Unsubscribe:** Use the `headers` property (coming soon) to add the `List-Unsubscribe` header.
+- **Unsubscribe:** Use provider-level tooling or custom adapter logic to add compliance headers.
 
 #### E-commerce
 
@@ -436,7 +441,7 @@ await mail.schedule(params, reminderDate);
 | ------------------------ | -------------------- | --------------------------------------------------- |
 | `IgniterMail`            | Primary entry point  | `create()`                                          |
 | `IgniterMailBuilder`     | Configuration engine | `withAdapter`, `withFrom`, `addTemplate`, `build`   |
-| `IgniterMailManagerCore` | Runtime engine       | `send`, `schedule`, `$Infer`                        |
+| `IgniterMailManagerCore` | Runtime engine       | `send`, `schedule`, `$Infer`, `templates.*`         |
 | `IgniterMailTemplate`    | Template definition  | `create`, `withSubject`, `withSchema`, `withRender` |
 
 #### Adapters
@@ -465,19 +470,33 @@ The package exposes the following events via the `igniter.mail` namespace:
 
 #### Group: `send`
 
-| Event     | Attributes                    | Context                                   |
-| --------- | ----------------------------- | ----------------------------------------- |
-| `started` | `mail.to`, `mail.template`    | Emitted when `.send()` is called.         |
-| `success` | `mail.to`, `mail.duration_ms` | Emitted when the ESP accepts the email.   |
-| `error`   | `mail.to`, `mail.error.code`  | Emitted on validation or network failure. |
+| Event     | Attributes                                               | Context                                   |
+| --------- | -------------------------------------------------------- | ----------------------------------------- |
+| `started` | `mail.to`, `mail.template`, `mail.subject?`              | Emitted when `.send()` is called.         |
+| `success` | `mail.to`, `mail.template`, `mail.subject?`, `mail.duration_ms?` | Emitted when the ESP accepts the email.   |
+| `error`   | `mail.to`, `mail.template`, `mail.subject?`, `mail.error.code`, `mail.error.message`, `mail.duration_ms?` | Emitted on validation or network failure. |
 
 #### Group: `schedule`
 
-| Event     | Attributes                      | Context                               |
-| --------- | ------------------------------- | ------------------------------------- |
-| `started` | `mail.to`, `mail.scheduled_at`  | Emitted when `.schedule()` is called. |
-| `success` | `mail.to`, `mail.queue_id`      | Emitted when the job is enqueued.     |
-| `error`   | `mail.to`, `mail.error.message` | Emitted if the queue adapter fails.   |
+| Event     | Attributes                                                           | Context                               |
+| --------- | -------------------------------------------------------------------- | ------------------------------------- |
+| `started` | `mail.to`, `mail.template`, `mail.scheduled_at`, `mail.delay_ms`     | Emitted when `.schedule()` is called. |
+| `success` | `mail.to`, `mail.template`, `mail.scheduled_at`, `mail.delay_ms`, `mail.queue_id?` | Emitted when the job is enqueued.     |
+| `error`   | `mail.to`, `mail.template`, `mail.scheduled_at`, `mail.error.code`, `mail.error.message` | Emitted if the queue adapter fails.   |
+
+#### Group: `templates`
+
+| Event           | Attributes                                                                           | Context                                |
+| --------------- | ------------------------------------------------------------------------------------ | -------------------------------------- |
+| `list.started`  | `ctx.mail.template.count?`, `ctx.mail.duration_ms?`                                  | Emitted when `templates.list()` starts |
+| `list.success`  | `ctx.mail.template.count?`, `ctx.mail.duration_ms?`                                  | Emitted when list resolves             |
+| `list.error`    | `ctx.mail.template_id?`, `ctx.mail.error.code`, `ctx.mail.error.message`, `ctx.mail.duration_ms?` | Emitted on list failure |
+| `get.started`   | `ctx.mail.template_id`, `ctx.mail.duration_ms?`                                      | Emitted when `templates.get()` starts  |
+| `get.success`   | `ctx.mail.template_id`, `ctx.mail.duration_ms?`                                      | Emitted when get resolves              |
+| `get.error`     | `ctx.mail.template_id?`, `ctx.mail.error.code`, `ctx.mail.error.message`, `ctx.mail.duration_ms?` | Emitted on get failure |
+| `render.started`| `ctx.mail.template_id`, `ctx.mail.duration_ms?`                                      | Emitted when render starts             |
+| `render.success`| `ctx.mail.template_id`, `ctx.mail.duration_ms?`                                      | Emitted when render resolves           |
+| `render.error`  | `ctx.mail.template_id?`, `ctx.mail.error.code`, `ctx.mail.error.message`, `ctx.mail.duration_ms?` | Emitted on render failure |
 
 ---
 
@@ -489,6 +508,34 @@ The package exposes the following events via the `igniter.mail` namespace:
 - **Cause:** You called `build()` before telling the service how to actually send emails.
 - **Mitigation:** Ensure `.withAdapter()` is present in your builder chain.
 - **Solution:** `mail.withAdapter('resend', 'key').build()`.
+
+#### `MAIL_PROVIDER_FROM_REQUIRED`
+
+- **Context:** Occurs during `.build()`.
+- **Cause:** The default FROM address was not configured.
+- **Mitigation:** Always call `.withFrom()` before `.build()`.
+- **Solution:** `IgniterMail.create().withFrom('no-reply@acme.com').withAdapter(...).build()`.
+
+#### `MAIL_PROVIDER_ADAPTER_SECRET_REQUIRED`
+
+- **Context:** Occurs during `.withAdapter(provider, secret)`.
+- **Cause:** Provider string was provided without a secret.
+- **Mitigation:** Ensure secrets are passed and exist in environment variables.
+- **Solution:** `withAdapter('resend', process.env.RESEND_API_KEY!)`.
+
+#### `MAIL_PROVIDER_ADAPTER_NOT_FOUND`
+
+- **Context:** Occurs during `.withAdapter(provider, secret)`.
+- **Cause:** Provider key is not one of `resend | postmark | sendgrid | smtp`.
+- **Mitigation:** Validate provider names and avoid typos.
+- **Solution:** Use a supported provider or pass a custom adapter instance.
+
+#### `MAIL_PROVIDER_TEMPLATES_REQUIRED`
+
+- **Context:** Occurs during `.build()`.
+- **Cause:** The template registry is empty or missing.
+- **Mitigation:** Register at least one template via `.addTemplate()`.
+- **Solution:** `mail.addTemplate('welcome', template).build()`.
 
 #### `MAIL_PROVIDER_TEMPLATE_NOT_FOUND`
 
@@ -504,6 +551,27 @@ The package exposes the following events via the `igniter.mail` namespace:
 - **Mitigation:** Check the `details` array of the error to see which Zod/Schema path failed.
 - **Solution:** `data: { name: 'Valid String' }`.
 
+#### `MAIL_PROVIDER_TEMPLATE_LIST_FAILED`
+
+- **Context:** Occurs during `mail.templates.list()`.
+- **Cause:** Unexpected failure while enumerating the template registry.
+- **Mitigation:** Check for mutation or invalid template entries in the registry.
+- **Solution:** Ensure all templates follow `IgniterMailTemplateBuilt` shape.
+
+#### `MAIL_PROVIDER_TEMPLATE_GET_FAILED`
+
+- **Context:** Occurs during `mail.templates.get()`.
+- **Cause:** Unexpected failure while reading the template registry.
+- **Mitigation:** Ensure the registry is not mutated at runtime.
+- **Solution:** Rebuild the mail instance after modifying templates.
+
+#### `MAIL_PROVIDER_TEMPLATE_RENDER_FAILED`
+
+- **Context:** Occurs during `mail.templates.render()`.
+- **Cause:** Rendering failed after validation (e.g., runtime errors inside the React template).
+- **Mitigation:** Inspect the template render function for thrown errors.
+- **Solution:** Render the template in isolation to reproduce the error.
+
 #### `MAIL_PROVIDER_SEND_FAILED`
 
 - **Context:** Occurs after rendering, during adapter execution.
@@ -517,6 +585,762 @@ The package exposes the following events via the `igniter.mail` namespace:
 - **Cause:** The date provided is in the past.
 - **Mitigation:** Ensure your scheduling logic accounts for clock drift and processing time.
 - **Solution:** `mail.schedule(params, new Date(Date.now() + 5000))`.
+
+#### `MAIL_PROVIDER_SCHEDULE_FAILED`
+
+- **Context:** Occurs during `.schedule()`.
+- **Cause:** The queue adapter rejected or failed the enqueue operation.
+- **Mitigation:** Validate queue connection and retry policy.
+- **Solution:** Check queue adapter logs and ensure the queue is reachable.
+
+#### `MAIL_PROVIDER_SCHEDULE_QUEUE_NOT_CONFIGURED`
+
+- **Context:** Occurs during `.schedule()`.
+- **Cause:** Queue adapter was not configured via `.withQueue()`.
+- **Mitigation:** Configure a queue adapter before scheduling.
+- **Solution:** `IgniterMail.create().withQueue(queueAdapter, options).build()`.
+
+#### `MAIL_ADAPTER_CONFIGURATION_INVALID`
+
+- **Context:** Occurs when an adapter is missing `secret` or `from`.
+- **Cause:** Adapter credentials are incomplete.
+- **Mitigation:** Provide `secret` and `from` when creating adapters.
+- **Solution:** `ResendMailAdapter.create({ secret, from })`.
+
+#### `MAIL_TEMPLATE_CONFIGURATION_INVALID`
+
+- **Context:** Occurs during `IgniterMailTemplate.build()`.
+- **Cause:** Missing `subject`, `schema`, or `render`.
+- **Mitigation:** Set all template components before building.
+- **Solution:** `IgniterMailTemplate.create().withSubject(...).withSchema(...).withRender(...).build()`.
+
+---
+
+---
+
+# IV. MAINTAINER APPENDIX (Deep Dive)
+
+## 16. Builder State Model
+
+The builder is intentionally mixed:
+
+- **Mutable setters**: `withFrom`, `withAdapter`, `withLogger`, `withTelemetry`, `withQueue`, and hooks mutate the current instance.
+- **Immutable template expansion**: `addTemplate` returns a new builder instance with expanded generics.
+
+This ensures type inference remains precise without forcing every method to allocate a new builder.
+
+## 17. Template Builder Internals
+
+`IgniterMailTemplate` is a strict builder.
+
+It validates three required fields:
+
+1. `subject`
+2. `schema`
+3. `render`
+
+Missing any of these throws `MAIL_TEMPLATE_CONFIGURATION_INVALID`.
+
+## 18. Template Registry Flow (Expanded)
+
+### `templates.list()`
+
+1. Emit `igniter.mail.templates.list.started`.
+2. Map each registry entry into `IgniterMailTemplateMeta`.
+3. Emit `igniter.mail.templates.list.success` with count + duration.
+4. Log success with count.
+
+### `templates.get(id)`
+
+1. Emit `igniter.mail.templates.get.started`.
+2. Resolve template by key.
+3. Return `null` if missing.
+4. Emit `igniter.mail.templates.get.success`.
+
+### `templates.render(id, variables)`
+
+1. Emit `igniter.mail.templates.render.started`.
+2. Validate template exists.
+3. Validate payload with StandardSchemaV1 (if available).
+4. Render HTML and text via React Email.
+5. Emit `igniter.mail.templates.render.success`.
+
+## 19. Queue Registration Pipeline
+
+`schedule()` registers a job lazily.
+
+1. Ensure queue adapter exists.
+2. Register job named `options.job ?? "send"`.
+3. Use passthrough schema for compatibility.
+4. Handler calls `send(input)`.
+5. Mark `queueJobRegistered` to avoid re-registering.
+
+## 20. Telemetry Implementation Map
+
+| Method | Start Event | Success Event | Error Event |
+| --- | --- | --- | --- |
+| `send` | `igniter.mail.send.started` | `igniter.mail.send.success` | `igniter.mail.send.error` |
+| `schedule` | `igniter.mail.schedule.started` | `igniter.mail.schedule.success` | `igniter.mail.schedule.error` |
+| `templates.list` | `igniter.mail.templates.list.started` | `igniter.mail.templates.list.success` | `igniter.mail.templates.list.error` |
+| `templates.get` | `igniter.mail.templates.get.started` | `igniter.mail.templates.get.success` | `igniter.mail.templates.get.error` |
+| `templates.render` | `igniter.mail.templates.render.started` | `igniter.mail.templates.render.success` | `igniter.mail.templates.render.error` |
+
+## 21. Logging Parity Checklist
+
+For every public operation:
+
+- A debug log is emitted at start.
+- An info log is emitted on success.
+- An error log is emitted on failure.
+- Logging attributes must mirror telemetry attributes.
+- Never log raw template payloads.
+
+## 22. Adapter Implementation Guide
+
+Every adapter must:
+
+- Implement `IgniterMailAdapter.send`.
+- Validate required credentials (`secret`, `from`).
+- Normalize errors as `IgniterMailError` when possible.
+- Avoid leaking PII to logs or telemetry.
+
+## 23. Maintainer Testing Checklist
+
+- Add adapter tests in `src/adapters/*.spec.ts`.
+- Add core tests for send/schedule/templates in `src/core/manager.spec.tsx`.
+- Add builder tests for type inference in `src/builders/main.builder.spec.ts`.
+- Add template builder tests in `src/builders/template.builder.spec.ts`.
+- Add telemetry tests for each event group.
+
+---
+
+# V. CONSUMER APPENDIX (Practical Guide)
+
+## 24. Distribution Anatomy (Expanded)
+
+`@igniter-js/mail` exposes:
+
+- **Main entry**: Builder, template builder, errors, types, utils.
+- **Subpath `adapters`**: Adapter classes.
+- **Subpath `telemetry`**: Telemetry events.
+
+The browser shim ensures server-only safety.
+
+## 25. Quick Start (Extended)
+
+```typescript
+import { IgniterMail } from '@igniter-js/mail'
+import { z } from 'zod'
+import { WelcomeEmail } from './emails/welcome'
+
+export const mail = IgniterMail.create()
+  .withFrom('no-reply@example.com')
+  .withAdapter('resend', process.env.RESEND_API_KEY!)
+  .addTemplate('welcome', {
+    subject: 'Welcome',
+    schema: z.object({ name: z.string() }),
+    render: WelcomeEmail,
+  })
+  .build()
+```
+
+## 26. Consumer API Reference (Expanded)
+
+### Builder Methods
+
+- `create()`
+- `withFrom(from: string)`
+- `withAdapter(adapter: IgniterMailAdapter)`
+- `withAdapter(provider: string, secret: string)`
+- `withQueue(adapter: IgniterJobQueueAdapter, options?: IgniterMailQueueOptions)`
+- `withLogger(logger: IgniterLogger)`
+- `withTelemetry(telemetry: IgniterTelemetryManager)`
+- `addTemplate(key, template)`
+- `onSendStarted(handler)`
+- `onSendError(handler)`
+- `onSendSuccess(handler)`
+- `build()`
+
+### Runtime Methods
+
+- `send(params)`
+- `schedule(params, date)`
+- `templates.list()`
+- `templates.get(id)`
+- `templates.render(id, variables?)`
+
+## 27. Consumer Configuration Patterns
+
+### Provider string + secret
+
+```typescript
+IgniterMail.create()
+  .withFrom('no-reply@example.com')
+  .withAdapter('postmark', process.env.POSTMARK_SERVER_TOKEN!)
+```
+
+### Adapter instance
+
+```typescript
+const adapter = ResendMailAdapter.create({
+  secret: process.env.RESEND_API_KEY,
+  from: 'no-reply@example.com',
+})
+
+IgniterMail.create()
+  .withFrom('no-reply@example.com')
+  .withAdapter(adapter)
+```
+
+## 28. Consumer Real-World Use Cases (Expanded)
+
+### Case 11: Multi-region notifications
+
+```typescript
+await mail.send({ to: user.email, template: 'regionNotice', data: { region: 'eu-west' } })
+```
+
+### Case 12: Marketplace receipts
+
+```typescript
+await mail.send({ to: buyer.email, template: 'receipt', data: { orderId: order.id } })
+```
+
+### Case 13: Banking daily digest
+
+```typescript
+await mail.schedule({ to: user.email, template: 'dailyDigest', data: { date: '2026-01-29' } }, tomorrow)
+```
+
+### Case 14: Travel check-in reminders
+
+```typescript
+await mail.schedule({ to: guest.email, template: 'checkIn', data: { hotel: 'Aster' } }, checkInDate)
+```
+
+### Case 15: Subscription renewal notice
+
+```typescript
+await mail.send({ to: user.email, template: 'renewal', data: { plan: 'Pro' } })
+```
+
+## 29. Consumer Best Practices (Expanded)
+
+| ✅ Do | Why |
+| --- | --- |
+| Use `.withQueue()` for high-volume sending | Keeps request latency low |
+| Validate data with schemas | Prevents invalid templates |
+| Use `MockMailAdapter` for tests | Deterministic tests |
+| Use hooks for side effects | Isolates delivery logic |
+
+| ❌ Avoid | Why |
+| --- | --- |
+| Hardcoding secrets | Security risk |
+| Importing mail in client bundles | Triggers server-only shim |
+| Ignoring `MAIL_PROVIDER_TEMPLATE_DATA_INVALID` | Causes invalid emails |
+
+---
+
+# VI. EXAMPLE LIBRARY (30+)
+
+## Example A01 — Minimal send
+
+```typescript
+await mail.send({ to: 'user@example.com', template: 'welcome', data: { name: 'Ada' } })
+```
+
+## Example A02 — Override subject
+
+```typescript
+await mail.send({ to: 'user@example.com', template: 'welcome', subject: 'Hello', data: { name: 'Ada' } })
+```
+
+## Example A03 — Render template for preview
+
+```typescript
+const preview = await mail.templates.render('welcome', { name: 'Ada' })
+```
+
+## Example A04 — Template list
+
+```typescript
+const list = await mail.templates.list()
+```
+
+## Example A05 — Template get
+
+```typescript
+const template = await mail.templates.get('welcome')
+```
+
+## Example A06 — Schedule an email
+
+```typescript
+await mail.schedule({ to: 'user@example.com', template: 'welcome', data: { name: 'Ada' } }, new Date(Date.now() + 60_000))
+```
+
+## Example A07 — Create template via builder
+
+```typescript
+const template = IgniterMailTemplate.create()
+  .withSubject('Welcome')
+  .withSchema(z.object({ name: z.string() }))
+  .withRender(({ name }) => <Text>Hello {name}</Text>)
+  .build()
+```
+
+## Example A08 — Add template metadata
+
+```typescript
+builder.addTemplate('welcome', {
+  subject: 'Welcome',
+  schema: z.object({ name: z.string() }),
+  render: WelcomeEmail,
+  name: 'Welcome Email',
+  description: 'First email',
+  variables: ['name'],
+})
+```
+
+## Example A09 — Logger integration
+
+```typescript
+builder.withLogger(logger)
+```
+
+## Example A10 — Telemetry integration
+
+```typescript
+builder.withTelemetry(telemetry)
+```
+
+## Example A11 — Mock adapter usage
+
+```typescript
+const adapter = MockMailAdapter.create()
+```
+
+## Example A12 — Reset mock adapter
+
+```typescript
+adapter.clear()
+```
+
+## Example A13 — Custom adapter
+
+```typescript
+const adapter: IgniterMailAdapter = { send: async () => undefined }
+```
+
+## Example A14 — Provider string adapter
+
+```typescript
+builder.withAdapter('resend', process.env.RESEND_API_KEY!)
+```
+
+## Example A15 — Provider instance adapter
+
+```typescript
+builder.withAdapter(ResendMailAdapter.create({ secret: process.env.RESEND_API_KEY, from: 'no-reply@example.com' }))
+```
+
+## Example A16 — Queue adapter
+
+```typescript
+builder.withQueue(queueAdapter, { queue: 'mail', job: 'send' })
+```
+
+## Example A17 — Hook: onSendStarted
+
+```typescript
+builder.onSendStarted(async ({ to }) => audit.log({ to }))
+```
+
+## Example A18 — Hook: onSendSuccess
+
+```typescript
+builder.onSendSuccess(async ({ to }) => analytics.track('mail.sent', { to }))
+```
+
+## Example A19 — Hook: onSendError
+
+```typescript
+builder.onSendError(async ({ to }, error) => alerts.notify({ to, error: error.message }))
+```
+
+## Example A20 — Type inference: template keys
+
+```typescript
+type Keys = typeof mail.$Infer.Templates
+```
+
+## Example A21 — Type inference: payloads
+
+```typescript
+type WelcomePayload = typeof mail.$Infer.Payloads['welcome']
+```
+
+## Example A22 — Type inference: send input
+
+```typescript
+type SendInput = typeof mail.$Infer.SendInput
+```
+
+## Example A23 — Type inference: schedule input
+
+```typescript
+type ScheduleInput = typeof mail.$Infer.ScheduleInput
+```
+
+## Example A24 — Template render output
+
+```typescript
+const { html, text } = await mail.templates.render('welcome', { name: 'Ada' })
+```
+
+## Example A25 — Error handling pattern
+
+```typescript
+try {
+  await mail.send({ to: 'user@example.com', template: 'welcome', data: { name: 'Ada' } })
+} catch (error) {
+  if (error instanceof IgniterMailError) {
+    console.error(error.code)
+  }
+}
+```
+
+## Example A26 — Resend adapter
+
+```typescript
+const adapter = ResendMailAdapter.create({ secret: process.env.RESEND_API_KEY, from: 'no-reply@example.com' })
+```
+
+## Example A27 — Postmark adapter
+
+```typescript
+const adapter = PostmarkMailAdapter.create({ secret: process.env.POSTMARK_SERVER_TOKEN, from: 'no-reply@example.com' })
+```
+
+## Example A28 — SendGrid adapter
+
+```typescript
+const adapter = SendGridMailAdapter.create({ secret: process.env.SENDGRID_API_KEY, from: 'no-reply@example.com' })
+```
+
+## Example A29 — SMTP adapter
+
+```typescript
+const adapter = SmtpMailAdapter.create({ secret: process.env.SMTP_URL, from: 'no-reply@example.com' })
+```
+
+## Example A30 — Template metadata timestamps
+
+```typescript
+builder.addTemplate('report', {
+  subject: 'Report',
+  schema: z.object({ date: z.string() }),
+  render: ReportEmail,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+})
+```
+
+## Example A31 — Template variables
+
+```typescript
+builder.addTemplate('welcome', {
+  subject: 'Welcome',
+  schema: z.object({ name: z.string() }),
+  render: WelcomeEmail,
+  variables: ['name'],
+})
+```
+
+## Example A32 — Schema passthrough
+
+```typescript
+const schema = IgniterMailSchema.createPassthroughSchema()
+```
+
+## Example A33 — Manual schema validation
+
+```typescript
+const validated = await IgniterMailSchema.validateInput(schema, { any: 'data' })
+```
+
+## Example A34 — Template render without send
+
+```typescript
+await mail.templates.render('welcome', { name: 'Ada' })
+```
+
+## Example A35 — Multiple templates
+
+```typescript
+const mail = IgniterMail.create()
+  .withFrom('no-reply@example.com')
+  .withAdapter('resend', process.env.RESEND_API_KEY!)
+  .addTemplate('welcome', { subject: 'Welcome', schema: z.object({ name: z.string() }), render: WelcomeEmail })
+  .addTemplate('reset', { subject: 'Reset', schema: z.object({ link: z.string().url() }), render: ResetEmail })
+  .build()
+```
+
+## Example A36 — Template get null case
+
+```typescript
+const template = await mail.templates.get('missing')
+if (!template) {
+  console.log('missing')
+}
+```
+
+## Example A37 — Queue schedule helper
+
+```typescript
+const sendLater = (params: typeof mail.$Infer.SendInput, date: Date) => mail.schedule(params, date)
+```
+
+## Example A38 — Hook side-effect example
+
+```typescript
+builder.onSendSuccess(async ({ to }) => db.notifications.insert({ to }))
+```
+
+## Example A39 — Telemetry event wire-up
+
+```typescript
+const telemetry = IgniterTelemetry.create().withService('api').addEvents(IgniterMailTelemetryEvents).build()
+```
+
+## Example A40 — Template rendering inside job handler
+
+```typescript
+queue.adapter.register({
+  name: 'send',
+  input: IgniterMailSchema.createPassthroughSchema(),
+  handler: async ({ input }) => mail.send(input as any),
+})
+```
+
+---
+
+# VII. Troubleshooting Playbooks
+
+## Playbook 1 — `MAIL_PROVIDER_TEMPLATE_DATA_INVALID`
+
+1. Inspect `error.details` for schema issues.
+2. Confirm template schema matches the data shape.
+3. Validate that the template key is correct.
+
+## Playbook 2 — `MAIL_PROVIDER_SCHEDULE_QUEUE_NOT_CONFIGURED`
+
+1. Ensure `withQueue()` is called before `.build()`.
+2. Confirm adapter registration happens once (no duplicate job names).
+
+## Playbook 3 — Adapter credentials missing
+
+1. Validate `secret` and `from` are set.
+2. Use environment variables for secrets.
+
+---
+
+# VIII. Adapter Reference Patterns
+
+## Resend adapter pattern
+
+```typescript
+const adapter = ResendMailAdapter.create({
+  secret: process.env.RESEND_API_KEY,
+  from: 'no-reply@example.com',
+})
+```
+
+## Postmark adapter pattern
+
+```typescript
+const adapter = PostmarkMailAdapter.create({
+  secret: process.env.POSTMARK_SERVER_TOKEN,
+  from: 'no-reply@example.com',
+})
+```
+
+## SendGrid adapter pattern
+
+```typescript
+const adapter = SendGridMailAdapter.create({
+  secret: process.env.SENDGRID_API_KEY,
+  from: 'no-reply@example.com',
+})
+```
+
+## SMTP adapter pattern
+
+```typescript
+const adapter = SmtpMailAdapter.create({
+  secret: process.env.SMTP_URL,
+  from: 'no-reply@example.com',
+})
+```
+
+---
+
+# IX. Additional Example Library
+
+## Example A41 — List templates and log names
+
+```typescript
+const templates = await mail.templates.list()
+templates.forEach((t) => console.log(t.name))
+```
+
+## Example A42 — Render for plain text preview
+
+```typescript
+const { text } = await mail.templates.render('welcome', { name: 'Ada' })
+```
+
+## Example A43 — Multi-template inference
+
+```typescript
+type Payloads = typeof mail.$Infer.Payloads
+```
+
+## Example A44 — Custom adapter with monitoring
+
+```typescript
+const adapter: IgniterMailAdapter = {
+  async send(params) {
+    await monitor.track('mail.send', { to: params.to })
+  },
+}
+```
+
+## Example A45 — Hook for compliance logging
+
+```typescript
+builder.onSendSuccess(async ({ to, template }) => compliance.log({ to, template }))
+```
+
+## Example A46 — Queue options with limiter
+
+```typescript
+builder.withQueue(queueAdapter, {
+  queue: 'mail',
+  job: 'send',
+  limiter: { max: 10, duration: 1000 },
+})
+```
+
+## Example A47 — Schedule far in the future
+
+```typescript
+const date = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+await mail.schedule({ to: 'user@example.com', template: 'welcome', data: { name: 'Ada' } }, date)
+```
+
+## Example A48 — Template metadata path
+
+```typescript
+builder.addTemplate('welcome', {
+  subject: 'Welcome',
+  schema: z.object({ name: z.string() }),
+  render: WelcomeEmail,
+  path: 'mail/welcome',
+})
+```
+
+## Example A49 — Template description
+
+```typescript
+builder.addTemplate('welcome', {
+  subject: 'Welcome',
+  schema: z.object({ name: z.string() }),
+  render: WelcomeEmail,
+  description: 'Sent on account creation',
+})
+```
+
+## Example A50 — Template variables list
+
+```typescript
+builder.addTemplate('welcome', {
+  subject: 'Welcome',
+  schema: z.object({ name: z.string() }),
+  render: WelcomeEmail,
+  variables: ['name'],
+})
+```
+
+## Example A51 — Guard against missing template
+
+```typescript
+const meta = await mail.templates.get('welcome')
+if (!meta) throw new Error('Template missing')
+```
+
+## Example A52 — Use `IgniterMailSchema.validateInput`
+
+```typescript
+const validated = await IgniterMailSchema.validateInput(z.object({ ok: z.boolean() }), { ok: true })
+```
+
+## Example A53 — Schedule input type alias
+
+```typescript
+type ScheduleInput = typeof mail.$Infer.ScheduleInput
+```
+
+## Example A54 — Send input type alias
+
+```typescript
+type SendInput = typeof mail.$Infer.SendInput
+```
+
+## Example A55 — Payload map alias
+
+```typescript
+type PayloadMap = typeof mail.$Infer.Payloads
+```
+
+## Example A56 — Use template builder in registry
+
+```typescript
+const template = IgniterMailTemplate.create()
+  .withSubject('Reset')
+  .withSchema(z.object({ link: z.string().url() }))
+  .withRender(({ link }) => <Text>{link}</Text>)
+  .build()
+
+builder.addTemplate('reset', template)
+```
+
+## Example A57 — Avoid PII in telemetry
+
+```typescript
+builder.onSendSuccess(async ({ template }) => audit.track('mail.sent', { template }))
+```
+
+## Example A58 — Render for A/B preview
+
+```typescript
+const previewA = await mail.templates.render('welcome', { name: 'Ada' })
+const previewB = await mail.templates.render('welcome', { name: 'Grace' })
+```
+
+## Example A59 — Schedule using helper function
+
+```typescript
+const scheduleWelcome = (to: string, name: string, date: Date) =>
+  mail.schedule({ to, template: 'welcome', data: { name } }, date)
+```
+
+## Example A60 — Use templates list for admin UI
+
+```typescript
+const templates = await mail.templates.list()
+const options = templates.map((t) => ({ label: t.name, value: t.id }))
+```
 
 ---
 

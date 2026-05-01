@@ -1,12 +1,10 @@
-import type {
-  IgniterJobQueueAdapter,
-  IgniterLogger,
-  JobLimiter,
-} from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
+import type { IgniterJobQueueAdapter, JobLimiter } from "@igniter-js/core";
 import type { IgniterMailAdapter } from "./adapter";
 import type {
   IgniterMailTemplateBuilt,
   IgniterMailTemplateKey,
+  IgniterMailTemplateMeta,
   IgniterMailTemplatePayload,
 } from "./templates";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
@@ -110,6 +108,36 @@ export interface IgniterMailHooks<TTemplates extends object> {
 }
 
 /**
+ * Template registry API exposed by {@link IIgniterMail}.
+ */
+export interface IgniterMailTemplatesAPI<TTemplates extends object> {
+  /**
+   * Lists all registered templates with metadata.
+   */
+  list: () => Promise<IgniterMailTemplateMeta[]>;
+
+  /**
+   * Resolves a template metadata entry by id.
+   *
+   * @param id - Template key.
+   */
+  get: <TSelectedTemplate extends IgniterMailTemplateKey<TTemplates>>(
+    id: TSelectedTemplate,
+  ) => Promise<IgniterMailTemplateMeta | null>;
+
+  /**
+   * Renders a template to HTML + text.
+   *
+   * @param id - Template key.
+   * @param variables - Template input payload.
+   */
+  render: <TSelectedTemplate extends IgniterMailTemplateKey<TTemplates>>(
+    id: TSelectedTemplate,
+    variables?: IgniterMailTemplatePayload<TTemplates[TSelectedTemplate]>,
+  ) => Promise<{ html: string; text: string }>;
+}
+
+/**
  * Options used to initialize {@link IgniterMail}.
  */
 export interface IgniterMailOptions<
@@ -138,6 +166,11 @@ export interface IIgniterMail<TTemplates extends object> {
    * Access via `typeof mail.$Infer` (type-level only).
    */
   readonly $Infer: IgniterMailInfer<TTemplates>;
+
+  /**
+   * Template registry helpers.
+   */
+  readonly templates: IgniterMailTemplatesAPI<TTemplates>;
 
   /** Sends an email immediately. */
   send: <TSelectedTemplate extends IgniterMailTemplateKey<TTemplates>>(

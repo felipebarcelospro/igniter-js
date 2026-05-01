@@ -1,4 +1,5 @@
-import type { IgniterJobQueueAdapter, IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
+import type { IgniterJobQueueAdapter } from "@igniter-js/core";
 import { PostmarkMailAdapter } from "../adapters/postmark.adapter";
 import { ResendMailAdapter } from "../adapters/resend.adapter";
 import { SendGridMailAdapter } from "../adapters/sendgrid.adapter";

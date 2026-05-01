@@ -12,6 +12,23 @@ import { z } from 'zod'
  */
 const TELEMETRY_NAMESPACE = 'igniter.mail'
 
+const TemplateListAttributesSchema = z.object({
+  'ctx.mail.template.count': z.number().optional(),
+  'ctx.mail.duration_ms': z.number().optional(),
+})
+
+const TemplateAttributesSchema = z.object({
+  'ctx.mail.template_id': z.string(),
+  'ctx.mail.duration_ms': z.number().optional(),
+})
+
+const TemplateErrorAttributesSchema = z.object({
+  'ctx.mail.template_id': z.string().optional(),
+  'ctx.mail.error.code': z.string(),
+  'ctx.mail.error.message': z.string(),
+  'ctx.mail.duration_ms': z.number().optional(),
+})
+
 /**
  * Telemetry event definitions for `@igniter-js/mail`.
  */
@@ -80,6 +97,18 @@ export const IgniterMailTelemetryEvents = IgniterTelemetryEvents.namespace(
           'mail.error.message': z.string(),
         }),
       ),
+  )
+  .group('templates', (g) =>
+    g
+      .event('list.started', TemplateListAttributesSchema)
+      .event('list.success', TemplateListAttributesSchema)
+      .event('list.error', TemplateErrorAttributesSchema)
+      .event('get.started', TemplateAttributesSchema)
+      .event('get.success', TemplateAttributesSchema)
+      .event('get.error', TemplateErrorAttributesSchema)
+      .event('render.started', TemplateAttributesSchema)
+      .event('render.success', TemplateAttributesSchema)
+      .event('render.error', TemplateErrorAttributesSchema),
   )
   .build()
 
