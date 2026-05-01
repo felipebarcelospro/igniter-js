@@ -1,4 +1,4 @@
-import type { IgniterLogger } from '@igniter-js/core'
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from '@igniter-js/telemetry'
 import type { IgniterCallerTelemetryEvents } from '../telemetry'
 import { IgniterCallerRequestBuilder } from '../builders/request.builder'
@@ -15,6 +15,7 @@ import type {
   IgniterCallerRequestInterceptor,
   IgniterCallerResponseInterceptor,
 } from '../types/interceptors'
+import type { IgniterCallerMockConfig } from '../types/mock'
 import type { IgniterCallerDirectRequestOptions } from '../types/request'
 import type { IgniterCallerApiResponse } from '../types/response'
 import type {
@@ -54,6 +55,7 @@ export class IgniterCallerManager<
   private responseInterceptors?: IgniterCallerResponseInterceptor[]
   private schemas?: TSchemas
   private schemaValidation?: IgniterCallerSchemaValidationOptions
+  private mock?: IgniterCallerMockConfig<TSchemas>
 
   /**
    * Creates a new manager instance.
@@ -72,6 +74,7 @@ export class IgniterCallerManager<
       responseInterceptors?: IgniterCallerResponseInterceptor[]
       schemas?: TSchemas
       schemaValidation?: IgniterCallerSchemaValidationOptions
+      mock?: IgniterCallerMockConfig<TSchemas>
     },
   ) {
     this.baseURL = baseURL
@@ -83,6 +86,7 @@ export class IgniterCallerManager<
     this.responseInterceptors = opts?.responseInterceptors
     this.schemas = opts?.schemas
     this.schemaValidation = opts?.schemaValidation
+    this.mock = opts?.mock
   }
 
   /**
@@ -102,6 +106,7 @@ export class IgniterCallerManager<
       },
       schemas: this.schemas,
       schemaValidation: this.schemaValidation,
+      mock: this.mock,
     }
   }
 

@@ -12,6 +12,7 @@
 import { describe, it, expect, expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import { IgniterCaller } from './main.builder'
+import { IgniterCallerMock } from './mock.builder'
 import { IgniterCallerManager } from '../core/manager'
 import type { IgniterCallerApiResponse } from '../types/response'
 
@@ -129,5 +130,12 @@ describe('IgniterCaller Type Inference', () => {
     // This uses the fallback overload for arbitrary strings
     const builder = api.get('/any/path/here')
     expect(builder).toBeDefined()
+  })
+
+  it('types mock builder paths from schemas', () => {
+    const mockBuilder = IgniterCallerMock.create().withSchemas(schemas)
+    type MockPath = Parameters<typeof mockBuilder.mock>[0]
+
+    expectTypeOf<MockPath>().toEqualTypeOf<'/users' | '/users/:id'>()
   })
 })

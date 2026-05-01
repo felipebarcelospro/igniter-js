@@ -1,4 +1,4 @@
-import type { IgniterError, IgniterLogger, StandardSchemaV1 } from '@igniter-js/core'
+import type { IgniterError, IgniterLogger, StandardSchemaV1 } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from '@igniter-js/telemetry'
 import type { z } from 'zod'
 import { IgniterCallerError } from '../errors/caller.error'
@@ -20,6 +20,12 @@ import type {
   IgniterCallerSchemaValidationOptions,
 } from '../types/schemas'
 import type { IgniterCallerRequestBuilderParams } from '../types/builder'
+import type {
+  IgniterCallerMockHandlerDefinition,
+  IgniterCallerMockRequest,
+  IgniterCallerMockResponse,
+  IgniterCallerMockConfig,
+} from '../types/mock'
 import { IgniterCallerBodyUtils } from '../utils/body'
 import { IgniterCallerCacheUtils } from '../utils/cache'
 import { IgniterCallerSchemaUtils } from '../utils/schema'
@@ -138,6 +144,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
   private schemas?: IgniterCallerSchemaMap
   private schemaValidation?: IgniterCallerSchemaValidationOptions
   private responseTypeSchema?: z.ZodSchema<any> | StandardSchemaV1
+  private mock?: IgniterCallerMockConfig
 
   /**
    * Creates a new request builder instance.
@@ -168,6 +175,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
     this.eventEmitter = params.eventEmitter
     this.schemas = params.schemas
     this.schemaValidation = params.schemaValidation
+    this.mock = params.mock
   }
 
   /**
@@ -195,7 +203,7 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
   /**
    * Overrides the logger for this request chain.
    *
-   * @param logger - Logger implementation from `@igniter-js/core`.
+   * @param logger - Logger implementation from `@igniter-js/common`.
    */
   withLogger(logger: IgniterLogger): this {
     this.logger = logger
@@ -770,6 +778,12 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
       }
     }
 
+    const mockResult = await this.executeMockRequest(url, safeUrl)
+    if (mockResult) {
+      clearTimeout(timeoutId)
+      return mockResult
+    }
+
     try {
       const httpResponse = await fetch(url, {
         ...requestInit,
@@ -1129,6 +1143,341 @@ export class IgniterCallerRequestBuilder<TResponse = unknown> {
       requestInit,
       controller,
       timeoutId,
+    }
+  }
+
+  /**
+   * Normalizes a URL into a path for mock matching.
+   */
+  private normalizeMockPath(url: string, baseURL?: string): string {
+    if (/^https?:\/\//i.test(url)) {
+      try {
+        return new URL(url).pathname
+      } catch {
+        return url
+      }
+    }
+
+    if (baseURL && /^https?:\/\//i.test(baseURL)) {
+      try {
+        const resolved = IgniterCallerUrlUtils.buildUrl({ url, baseURL })
+        return new URL(resolved).pathname
+      } catch {
+        return url
+      }
+    }
+
+    return url.startsWith('/') ? url : `/${url}`
+  }
+
+  /**
+   * Resolves the final query object (merges GET/HEAD body into params).
+   */
+  private getFinalQuery(): Record<string, string | number | boolean> {
+    const { method, body, params } = this.options
+    if ((method === 'GET' || method === 'HEAD') && body && typeof body === 'object') {
+      const bodyParams: Record<string, string | number | boolean> = {}
+      for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+        if (value !== undefined && value !== null) {
+          bodyParams[key] = String(value)
+        }
+      }
+      return { ...bodyParams, ...(params || {}) }
+    }
+
+    return params || {}
+  }
+
+  /**
+   * Executes a mock handler when enabled and matched.
+   */
+  private async executeMockRequest(
+    url: string,
+    safeUrl: string,
+  ): Promise<IgniterCallerApiResponse<TResponse> | null> {
+    if (!this.mock?.enabled) return null
+
+    const path = this.normalizeMockPath(this.options.url, this.options.baseURL)
+    const method = this.options.method
+    const resolved = this.mock.mock.resolve(path, method)
+
+    if (!resolved) return null
+
+    const query = this.getFinalQuery()
+    const mockRequest: IgniterCallerMockRequest<any, any, any> = {
+      method: method as any,
+      path: resolved.path,
+      url,
+      safeUrl,
+      baseURL: this.options.baseURL,
+      headers: this.options.headers || {},
+      query,
+      params: resolved.params || {},
+      body: this.options.body as any,
+      timeoutMs: this.options.timeout,
+      cache: this.options.cache,
+      cacheKey: this.cacheKey,
+      staleTime: this.staleTime,
+      responseTypeSchema: this.responseTypeSchema as
+        | StandardSchemaV1
+        | z.ZodSchema<any>
+        | undefined,
+    }
+
+    const response = await this.resolveMockResponse(
+      resolved.handler,
+      mockRequest,
+    )
+
+    const delayMs = response.delayMs ?? this.mock?.delay
+    if (delayMs && delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+
+    const status = response.status
+    const headers = new Headers(response.headers)
+
+    if (status >= 400) {
+      return {
+        data: undefined,
+        error: new IgniterCallerError({
+          code: 'IGNITER_CALLER_MOCK_HTTP_ERROR',
+          operation: 'execute',
+          message:
+            response.errorMessage ||
+            `Mocked request failed with status ${status}`,
+          statusCode: status,
+          logger: this.logger,
+          metadata: {
+            method,
+            url,
+          },
+        }),
+        status,
+        headers,
+      }
+    }
+
+    let data = response.response as TResponse
+
+    if (this.schemas) {
+      const { schema: endpointSchema } = IgniterCallerSchemaUtils.findSchema(
+        this.schemas,
+        path,
+        method,
+      )
+      const responseSchema = endpointSchema?.responses?.[status]
+      if (responseSchema) {
+        try {
+          data = await IgniterCallerSchemaUtils.validateResponse(
+            data,
+            responseSchema,
+            status,
+            this.schemaValidation,
+            { url: safeUrl, method },
+            this.logger,
+          )
+        } catch (error) {
+          const err = error as IgniterCallerError
+          this.telemetry?.emit(
+            'igniter.caller.validation.response.error',
+            {
+              level: 'error',
+              attributes: {
+                'ctx.request.method': method,
+                'ctx.request.url': safeUrl,
+                'ctx.validation.type': 'response',
+                'ctx.validation.error': err.message,
+                'ctx.response.status': status,
+              },
+            },
+          )
+          this.logger?.error('IgniterCaller.response.validation failed', {
+            method,
+            url: safeUrl,
+            status,
+            error: err,
+          })
+          return {
+            data: undefined,
+            error: err,
+            status,
+            headers,
+          }
+        }
+      }
+    }
+
+    if (this.responseTypeSchema) {
+      if ('safeParse' in this.responseTypeSchema) {
+        const zodSchema = this.responseTypeSchema as z.ZodSchema<any>
+        const result = zodSchema.safeParse(data)
+        if (!result.success) {
+          const err = new IgniterCallerError({
+            code: 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED',
+            operation: 'parseResponse',
+            message: `Response validation failed: ${result.error.message}`,
+            logger: this.logger,
+            statusCode: status,
+            metadata: {
+              method,
+              url,
+            },
+            cause: result.error,
+          })
+          this.telemetry?.emit(
+            'igniter.caller.validation.response.error',
+            {
+              level: 'error',
+              attributes: {
+                'ctx.request.method': method,
+                'ctx.request.url': safeUrl,
+                'ctx.validation.type': 'response',
+                'ctx.validation.error': err.message,
+                'ctx.response.status': status,
+              },
+            },
+          )
+          this.logger?.error('IgniterCaller.response.validation failed', {
+            method,
+            url: safeUrl,
+            status,
+            error: err,
+          })
+          return {
+            data: undefined,
+            error: err,
+            status,
+            headers,
+          }
+        }
+        data = result.data
+      } else if ('~standard' in this.responseTypeSchema) {
+        try {
+          const standardSchema = this.responseTypeSchema as StandardSchemaV1
+          const result = await standardSchema['~standard'].validate(data)
+          if (result.issues) {
+            const err = new IgniterCallerError({
+              code: 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED',
+              operation: 'parseResponse',
+              message: `Response validation failed`,
+              logger: this.logger,
+              statusCode: status,
+              metadata: {
+                method,
+                url,
+                issues: result.issues,
+              },
+            })
+            this.telemetry?.emit(
+              'igniter.caller.validation.response.error',
+              {
+                level: 'error',
+                attributes: {
+                  'ctx.request.method': method,
+                  'ctx.request.url': safeUrl,
+                  'ctx.validation.type': 'response',
+                  'ctx.validation.error': err.message,
+                  'ctx.response.status': status,
+                },
+              },
+            )
+            this.logger?.error('IgniterCaller.response.validation failed', {
+              method,
+              url: safeUrl,
+              status,
+              error: err,
+            })
+            return {
+              data: undefined,
+              error: err,
+              status,
+              headers,
+            }
+          }
+          data = result.value as TResponse
+        } catch (error) {
+          const err = error as IgniterCallerError
+          this.telemetry?.emit(
+            'igniter.caller.validation.response.error',
+            {
+              level: 'error',
+              attributes: {
+                'ctx.request.method': method,
+                'ctx.request.url': safeUrl,
+                'ctx.validation.type': 'response',
+                'ctx.validation.error': err.message,
+                'ctx.response.status': status,
+              },
+            },
+          )
+          this.logger?.error('IgniterCaller.response.validation failed', {
+            method,
+            url: safeUrl,
+            status,
+            error: err,
+          })
+          return {
+            data: undefined,
+            error: err,
+            status,
+            headers,
+          }
+        }
+      }
+    }
+
+    let responseResult: IgniterCallerApiResponse<TResponse> = {
+      data: data as TResponse,
+      error: undefined,
+      status,
+      headers,
+    }
+
+    if (this.responseInterceptors && this.responseInterceptors.length > 0) {
+      for (const interceptor of this.responseInterceptors) {
+        responseResult = await interceptor(responseResult)
+      }
+    }
+
+    return responseResult
+  }
+
+  /**
+   * Normalizes a mock handler result into a response payload with status.
+   */
+  private async resolveMockResponse(
+    handler: IgniterCallerMockHandlerDefinition<any, any, any>,
+    request: IgniterCallerMockRequest<any, any, any>,
+  ): Promise<IgniterCallerMockResponse<any, any, any> & { status: number }> {
+    const result =
+      typeof handler === 'function' ? await handler(request) : handler
+
+    const hasStatus = typeof (result as any).status === 'number'
+    if (hasStatus) {
+      return result as IgniterCallerMockResponse<any, any, any> & {
+        status: number
+      }
+    }
+
+    const schemas = this.schemas
+    const schemaMatch = schemas
+      ? IgniterCallerSchemaUtils.findSchema(
+          schemas,
+          request.path,
+          request.method,
+        ).schema
+      : undefined
+
+    const fallbackStatus = schemaMatch?.responses?.[200]
+      ? 200
+      : schemaMatch?.responses?.[201]
+        ? 201
+        : 200
+
+    return {
+      ...(result as IgniterCallerMockResponse<any, any, any>),
+      status: fallbackStatus,
     }
   }
 

@@ -44,7 +44,7 @@ The package follows these core principles:
 
 `@igniter-js/caller` is a standalone library that can be used independently or alongside other Igniter.js packages. It integrates with:
 
-- **`@igniter-js/core`:** Uses `IgniterError` base class, `IgniterLogger` interface, and `StandardSchemaV1` type.
+- **`@igniter-js/common`:** Uses `IgniterError` base class, `IgniterLogger` interface, and `StandardSchemaV1` type.
 
 - **`@igniter-js/telemetry`:** Emits structured telemetry events for request lifecycle monitoring.
 
@@ -53,6 +53,11 @@ The package follows these core principles:
 ### 1.4 Client-Safe Design
 
 Unlike most Igniter.js packages, `@igniter-js/caller` is **explicitly designed to work in both server and client environments**. It does NOT have a server-only shim because HTTP clients are a valid use case for browser applications.
+
+Additional constraints for client usage:
+
+- The React layer is exported from `@igniter-js/caller/client` to avoid bundling React into non-React consumers.
+- If a caller instance is configured with server-only store adapters or telemetry managers, do not bundle that instance in browser code. Create a browser-safe instance instead.
 
 ---
 
@@ -69,14 +74,25 @@ packages/caller/src/
 │   ├── index.ts               # Builder exports barrel
 │   ├── main.builder.ts         # IgniterCallerBuilder (package initializer)
 │   ├── main.builder.spec.ts    # Builder type inference tests
+│   ├── mock.builder.ts         # IgniterCallerMockBuilder (typed mocks)
+│   ├── mock.builder.spec.ts    # Mock builder tests
 │   ├── request.builder.ts      # IgniterCallerRequestBuilder (request lifecycle)
 │   ├── schema.builder.ts       # IgniterCallerSchema (schema registry builder)
 │   ├── schema.builder.spec.ts  # Schema builder tests
 │   └── schema-path.builder.ts # IgniterCallerSchemaPathBuilder (path+methods)
+├── client/                    # React client layer (Provider + hooks)
+│   ├── index.ts               # React client entrypoint barrel
+│   ├── builders/              # Provider + hook factories
+│   ├── interfaces/            # Client-specific types
+│   └── utils/                 # Client-only helpers (cache, keys, cookies)
+├── mock/                      # Mock exports barrel (subpath)
+│   └── index.ts               # Mock exports barrel
 ├── core/                      # Runtime execution layer
 │   ├── index.ts               # Core exports barrel
 │   ├── manager.ts             # IgniterCallerManager (HTTP client runtime)
 │   ├── manager.spec.ts        # Manager runtime tests
+│   ├── mock.ts                # IgniterCallerMockManager (typed mock runtime)
+│   ├── mock.spec.ts           # Mock manager tests
 │   └── events.ts             # IgniterCallerEvents (global event emitter)
 ├── errors/                    # Error handling
 │   ├── index.ts               # Error exports barrel
@@ -118,20 +134,33 @@ packages/caller/src/
 | File                     | Responsibility                                                                                                                                                                             |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `main.builder.ts`        | `IgniterCallerBuilder` class - package initialization with immutable state accumulation. Handles baseURL, headers, cookies, interceptors, store, schemas, and telemetry configuration.     |
+| `mock.builder.ts`        | `IgniterCallerMockBuilder` class - typed mock registry builder for schema-driven mocks.                                                                                                    |
 | `request.builder.ts`     | `IgniterCallerRequestBuilder` class - per-request builder. Manages request lifecycle including URL, body, params, headers, timeout, cache, retry, fallback, and response type.             |
 | `schema.builder.ts`      | `IgniterCallerSchema` class - schema registry builder with `$Infer` type helpers and `get` runtime helpers. Prevents duplicate keys and paths.                                             |
 | `schema-path.builder.ts` | `IgniterCallerSchemaPathBuilder` class - path-first fluent API for defining HTTP methods (GET, POST, PUT, PATCH, DELETE, HEAD) on a path. Provides `ref()` helper for registry references. |
 
-#### 2.2 Core Directory (`src/core/`)
+#### 2.2 Client Directory (`src/client/`)
+
+**Purpose:** React-specific layer that provides Provider + hooks for multiple callers.
+
+| Folder/File          | Responsibility                                                                                          |
+| -------------------- | -------------------------------------------------------------------------------------------------------- |
+| `builders/`          | `IgniterCallerProvider`, `useIgniterCaller`, and hook factories for `useQuery`/`useMutate`.            |
+| `interfaces/`        | Client-only types for config, hooks, context, and the wrapper client API.                              |
+| `utils/`             | Client-only helpers (query keys, in-memory cache, cookie header merge).                                |
+| `index.ts`           | Client entrypoint barrel used by `@igniter-js/caller/client`.                                          |
+
+#### 2.3 Core Directory (`src/core/`)
 
 **Purpose:** Runtime execution and event handling.
 
 | File         | Responsibility                                                                                                                                                                                                         |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `manager.ts` | `IgniterCallerManager` class - the main HTTP client runtime. Creates request builders, executes direct requests, manages global event emission, and provides static methods for cache invalidation and batch requests. |
+| `mock.ts`    | `IgniterCallerMockManager` class - resolves typed mock handlers for schema-driven testing and mock-enabled execution.                                                                                                   |
 | `events.ts`  | `IgniterCallerEvents` class - global event emitter supporting exact URL matches and RegExp patterns. Handles listener registration, cleanup, and error-safe emission.                                                  |
 
-#### 2.3 Types Directory (`src/types/`)
+#### 2.4 Types Directory (`src/types/`)
 
 **Purpose:** Pure TypeScript contracts—no implementation code.
 
@@ -150,7 +179,7 @@ packages/caller/src/
 | `schemas.ts`        | Core schema types: `IgniterCallerSchemaMethod`, `IgniterCallerEndpointSchema`, `IgniterCallerSchemaMap`, path extraction types (`ExtractPathParams`), inference types (`InferRequestType`, `InferResponseType`, `InferSuccessResponseType`, `InferAllResponseTypes`), path filtering types (`GetPaths`, `PostPaths`, etc.), endpoint info types, validation options. |
 | `store.ts`          | `IgniterCallerStoreAdapter<TClient>`, `IgniterCallerStoreOptions`.                                                                                                                                                                                                                                                                                                   |
 
-#### 2.4 Utils Directory (`src/utils/`)
+#### 2.5 Utils Directory (`src/utils/`)
 
 **Purpose:** Pure functions for specific operations.
 
@@ -672,7 +701,7 @@ This section provides step-by-step flow documentation for every public method.
 
 | Package                 | Purpose                                             | Peer Dependency                          |
 | ----------------------- | --------------------------------------------------- | ---------------------------------------- |
-| `@igniter-js/core`      | `IgniterError`, `IgniterLogger`, `StandardSchemaV1` | ✅ Required                              |
+| `@igniter-js/common`    | `IgniterError`, `IgniterLogger`, `StandardSchemaV1` | ✅ Required                              |
 | `@igniter-js/telemetry` | `IgniterTelemetryManager`, `IgniterTelemetryEvents` | ⚙️ Optional                              |
 | `zod`                   | Schema validation (v4+)                             | ⚙️ Optional (any StandardSchemaV1 works) |
 
@@ -907,6 +936,10 @@ The package is distributed as a standard npm package with multiple entry points.
 │   ├── index.js              # CommonJS main entry
 │   ├── index.mjs            # ESM main entry
 │   ├── index.d.ts           # TypeScript definitions
+│   ├── client/
+│   │   ├── index.js         # React client entry (CJS)
+│   │   ├── index.mjs        # React client entry (ESM)
+│   │   └── index.d.ts       # React client types
 │   ├── telemetry/
 │   │   ├── index.js         # Telemetry definitions (CJS)
 │   │   ├── index.mjs       # Telemetry definitions (ESM)
@@ -929,6 +962,12 @@ import { IgniterCallerTelemetryEvents } from "@igniter-js/caller/telemetry";
 
 // Mock adapter - for testing
 import { MockCallerStoreAdapter } from "@igniter-js/caller/adapters";
+
+// React client - Provider + hooks
+import { IgniterCallerProvider, useIgniterCaller } from "@igniter-js/caller/client";
+
+// Typed mock registry
+import { IgniterCallerMock } from "@igniter-js/caller";
 
 // Types - for extending or advanced usage
 import type {
@@ -1007,6 +1046,78 @@ const result = await api
   })
   .execute();
 ```
+
+#### 9.6 React Client (Provider + Hooks)
+
+```tsx
+import { IgniterCallerProvider, useIgniterCaller } from "@igniter-js/caller/client";
+
+export function CallerProvider() {
+  return (
+    <IgniterCallerProvider callers={{ github: githubApi }}>
+      <App />
+    </IgniterCallerProvider>
+  );
+}
+
+export const useCaller = useIgniterCaller<{
+  github: typeof githubApi;
+}>();
+
+function Profile() {
+  const github = useCaller("github");
+  const { data, isLoading, error, refetch, invalidate } = github
+    .get("/me")
+    .useQuery({ staleTime: 5000 });
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error</div>;
+  return <pre>{JSON.stringify(data, null, 2)}</pre>;
+}
+```
+
+Notes:
+
+- `@igniter-js/caller/client` is the only entrypoint that depends on React.
+- Global defaults can be set via `github.config.set(...)`.
+- Invalidation supports an optional data payload for optimistic updates.
+
+#### 9.7 Typed Mocks (IgniterCallerMock)
+
+```typescript
+import { IgniterCaller, IgniterCallerMock } from "@igniter-js/caller";
+
+const schemas = {
+  "/users/:id": {
+    GET: {
+      responses: {
+        200: UserSchema,
+      },
+    },
+  },
+};
+
+const mock = IgniterCallerMock.create()
+  .withSchemas(schemas)
+  .mock("/users/:id", {
+    GET: (request) => ({
+      response: { id: request.params.id },
+      status: 200,
+      delayMs: 150,
+    }),
+  })
+  .build();
+
+const api = IgniterCaller.create()
+  .withSchemas(schemas)
+  .withMock({ enabled: true, mock })
+  .build();
+```
+
+Notes:
+
+- Mock handlers receive the full request context (method, url, headers, query, params, body).
+- When mock is enabled and no handler is registered, the request falls back to the real transport.
 
 ---
 

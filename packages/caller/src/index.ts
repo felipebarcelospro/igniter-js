@@ -14,8 +14,16 @@ export type * from "./core";
 // BUILDER EXPORTS
 // =============================================================================
 
-export * from "./builders";
-export type * from "./builders";
+export * from "./builders/main.builder";
+export type * from "./builders/main.builder";
+export * from "./builders/request.builder";
+export type * from "./builders/request.builder";
+export * from "./builders/schema.builder";
+export type * from "./builders/schema.builder";
+export * from "./builders/schema-path.builder";
+export type * from "./builders/schema-path.builder";
+export * from "./builders/mock.builder";
+export type * from "./builders/mock.builder";
 
 // =============================================================================
 // ADAPTER EXPORTS

@@ -1,4 +1,4 @@
-import type { IgniterLogger, StandardSchemaV1 } from '@igniter-js/core'
+import type { IgniterLogger, StandardSchemaV1 } from "@igniter-js/common";
 import { IgniterCallerError } from '../errors/caller.error'
 import type {
   IgniterCallerEndpointSchema,

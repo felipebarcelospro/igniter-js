@@ -21,12 +21,29 @@ export class IgniterCallerUrlUtils {
       fullUrl = baseURL + url
     }
 
-    if (query && Object.keys(query).length > 0) {
-      const queryParams = new URLSearchParams(
-        Object.entries(query).map(([key, value]) => [key, String(value)]),
+    // Process path parameters
+    const queryParams: Record<string, string | number | boolean> = {}
+
+    if (query) {
+      Object.entries(query).forEach(([key, value]) => {
+        // Check for :key in the URL
+        const placeholder = `:${key}`
+        if (fullUrl.includes(placeholder)) {
+          // Replace all occurrences
+          fullUrl = fullUrl.split(placeholder).join(encodeURIComponent(String(value)))
+        } else {
+          // Keep as query param
+          queryParams[key] = value
+        }
+      })
+    }
+
+    if (Object.keys(queryParams).length > 0) {
+      const queryString = new URLSearchParams(
+        Object.entries(queryParams).map(([key, value]) => [key, String(value)]),
       ).toString()
 
-      fullUrl += (fullUrl.includes('?') ? '&' : '?') + queryParams
+      fullUrl += (fullUrl.includes('?') ? '&' : '?') + queryString
     }
 
     return fullUrl

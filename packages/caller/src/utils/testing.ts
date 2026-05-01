@@ -12,7 +12,7 @@ import type {
  *
  * Designed to simplify mocking HTTP responses in unit tests.
  */
-export class IgniterCallerMock {
+export class IgniterCallerHttpMock {
   /**
    * Creates a successful mock response.
    *

@@ -5,7 +5,7 @@
 
 import { z } from 'zod'
 import { IgniterCallerError } from '../errors/caller.error'
-import type { StandardSchemaV1 } from '@igniter-js/core'
+import type { StandardSchemaV1 } from "@igniter-js/common";
 import type {
   IgniterCallerEndpointSchema,
   IgniterCallerSchemaMethod,

@@ -1,310 +1,464 @@
 # @igniter-js/caller
 
-[![NPM Version](https://img.shields.io/npm/v/@igniter-js/caller.svg)](https://www.npmjs.com/package/@igniter-js/caller)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<div align="center">
 
-Type-safe HTTP client for Igniter.js apps. Built on top of `fetch`, it gives you a fluent request builder, interceptors, retries, caching (memory or store), schema validation (Standard Schema V1), and global response events.
+[![npm version](https://img.shields.io/npm/v/@igniter-js/caller)](https://www.npmjs.com/package/@igniter-js/caller)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6+-blue)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-green)](https://nodejs.org/)
+[![Bun](https://img.shields.io/badge/Bun-1.0+-orange)](https://bun.sh)
 
-## Features
+**End-to-end type-safe HTTP client**  
+Built on `fetch` with interceptors, retries, caching, schema validation, and full observability.
 
-- ✅ **Fluent API** - `api.get('/users').execute()` or builder pattern
-- ✅ **axios-style requests** - `api.request({ method, url, body, ... })`
-- ✅ **Auto content-type detection** - JSON, XML, CSV, Blob, Stream, etc.
-- ✅ **Interceptors** - modify requests and responses in one place
-- ✅ **Retries** - linear or exponential backoff + status-based retry
-- ✅ **Caching** - in-memory cache + optional persistent store adapter
-- ✅ **Schema Validation** - validate request/response using `StandardSchemaV1`
-- ✅ **StandardSchema Support** - Zod or any library that implements `StandardSchemaV1`
-- ✅ **Telemetry-ready** - optional integration with `@igniter-js/telemetry`
-- ✅ **Global Events** - observe responses for logging/telemetry/cache invalidation
-- ✅ **Auto query encoding** - body in GET requests converts to query params
+[Quick Start](#-quick-start) • [Documentation](https://igniterjs.com/docs/caller) • [Examples](#-real-world-examples) • [API Reference](#-api-reference)
 
-## Installation
+</div>
+
+---
+
+## ✨ Why @igniter-js/caller?
+
+Making API calls shouldn't require choosing between developer experience and runtime safety. Whether you're building a SaaS platform, a mobile backend, or a microservices architecture, you need:
+
+- ✅ **End-to-end type safety** — Catch API mismatches at build time, not in production
+- ✅ **Zero configuration** — Works anywhere `fetch` works (Node 18+, Bun, Deno, browsers)
+- ✅ **Production resilience** — Retries, timeouts, fallbacks, and caching built-in
+- ✅ **Full observability** — Telemetry, logging, and global events for every request
+- ✅ **Schema validation** — Runtime type checking with Zod, Valibot, or any StandardSchemaV1 library
+- ✅ **Developer experience** — Fluent API, autocomplete everywhere, zero boilerplate
+
+---
+
+## 🚀 Quick Start
+
+### Installation
 
 ```bash
-# npm
-npm install @igniter-js/caller @igniter-js/core
+# Using npm
+npm install @igniter-js/caller
 
-# pnpm
-pnpm add @igniter-js/caller @igniter-js/core
+# Using pnpm
+pnpm add @igniter-js/caller
 
-# yarn
-yarn add @igniter-js/caller @igniter-js/core
+# Using yarn
+yarn add @igniter-js/caller
 
-# bun
-bun add @igniter-js/caller @igniter-js/core
+# Using bun
+bun add @igniter-js/caller
 ```
 
-Optional dependencies:
+**Optional dependencies:**
 
 ```bash
-# Telemetry (optional)
-npm install @igniter-js/telemetry
-
-# Schema validation (optional - Zod or any StandardSchemaV1-compatible lib)
+# For schema validation (any StandardSchemaV1 library)
 npm install zod
+
+# For telemetry features
+npm install @igniter-js/telemetry
 ```
 
-> `@igniter-js/core` is required. `@igniter-js/telemetry` and `zod` are optional peer dependencies.
+> **Note:** `@igniter-js/common` is installed automatically. `zod` is optional for schema validation. Install `@igniter-js/telemetry` if you plan to use `withTelemetry()` or `@igniter-js/caller/telemetry`.
 
-## Quick Start
+### Your First API Call (60 seconds)
 
-```ts
-import { IgniterCaller } from '@igniter-js/caller'
+```typescript
+import { IgniterCaller } from '@igniter-js/caller';
 
-export const api = IgniterCaller.create()
+// 1️⃣ Create the client
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.github.com')
+  .withHeaders({ 
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  })
+  .build();
+
+// 2️⃣ Make a request
+const result = await api.get('/users/octocat').execute();
+
+// 3️⃣ Handle the response
+if (result.error) {
+  console.error('Request failed:', result.error.message);
+} else {
+  console.log('User:', result.data);
+}
+```
+
+**✅ Success!** You just made a type-safe HTTP request with zero configuration.
+
+---
+
+## 🎯 Core Concepts
+
+### Architecture Overview
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                      Your Application                             │
+├──────────────────────────────────────────────────────────────────┤
+│  api.get('/users').params({ page: 1 }).execute()                │
+└────────────┬─────────────────────────────────────────────────────┘
+             │ Type-safe fluent API
+             ▼
+┌──────────────────────────────────────────────────────────────────┐
+│              IgniterCallerBuilder (Immutable)                     │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │ Configuration:                                             │ │
+│  │  - baseURL, headers, cookies                               │ │
+│  │  - requestInterceptors, responseInterceptors                │ │
+│  │  - store, schemas, telemetry, logger                       │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└────────────┬─────────────────────────────────────────────────────┘
+             │ .build()
+             ▼
+┌──────────────────────────────────────────────────────────────────┐
+│              IgniterCallerManager (Runtime)                       │
+│  - get/post/put/patch/delete/head() → RequestBuilder           │
+│  - request() → axios-style direct execution                    │
+│  - Static: batch(), on(), invalidate()                         │
+└────────────┬─────────────────────────────────────────────────────┘
+             │ Creates
+             ▼
+┌──────────────────────────────────────────────────────────────────┐
+│          IgniterCallerRequestBuilder (Per-Request)                │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │ Configuration:                                             │ │
+│  │  - url, method, body, params, headers                      │ │
+│  │  - timeout, cache, staleTime, retry                        │ │
+│  │  - fallback, responseType (schema or type marker)          │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└────────────┬─────────────────────────────────────────────────────┘
+             │ .execute()
+             ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                 Execution Pipeline                                │
+│  1. Cache Check (if staleTime set)                              │
+│  2. Request Interceptors                                         │
+│  3. Request Validation (if schema defined)                       │
+│  4. Fetch with Retry Logic                                       │
+│  5. Response Parsing (Content-Type auto-detect)                  │
+│  6. Response Validation (if schema defined)                      │
+│  7. Response Interceptors                                        │
+│  8. Cache Store (if successful)                                  │
+│  9. Fallback (if failed and fallback set)                        │
+│  10. Telemetry Emission                                         │
+│  11. Global Event Emission                                       │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Key Abstractions
+
+- **Builder** → Immutable configuration (`.withHeaders()`, `.withSchemas()`)
+- **Manager** → Operational HTTP client instance (`.get()`, `.post()`)
+- **RequestBuilder** → Per-request fluent API (`.body()`, `.retry()`, `.execute()`)
+- **Interceptors** → Request/Response transformation pipeline
+- **Schemas** → Type inference + runtime validation (StandardSchemaV1)
+- **Cache** → In-memory or store-based (Redis, etc.)
+- **Events** → Global observation for logging/telemetry
+
+---
+
+## 📖 Usage Examples
+
+### Basic Usage
+
+```typescript
+import { IgniterCaller } from '@igniter-js/caller';
+
+const api = IgniterCaller.create()
   .withBaseUrl('https://api.example.com')
   .withHeaders({ Authorization: `Bearer ${process.env.API_TOKEN}` })
-  .build()
+  .build();
 
-// Simple GET request with URL directly
-const result = await api.get('/users').execute()
+// GET request
+const users = await api.get('/users').execute();
 
-// With query params
-const result = await api.get('/users').params({ page: 1 }).execute()
+// POST request with body
+const newUser = await api
+  .post('/users')
+  .body({ name: 'John Doe', email: 'john@example.com' })
+  .execute();
 
-// With caching
-const result = await api.get('/users').stale(10_000).execute()
+// PUT request with params
+const updated = await api
+  .put('/users/:id')
+  .params({ id: '123' })
+  .body({ name: 'Jane Doe' })
+  .execute();
 
-if (result.error) {
-  throw result.error
+// DELETE request
+const deleted = await api.delete('/users/123').execute();
+
+// Check for errors
+if (users.error) {
+  console.error('Request failed:', users.error.message);
+  throw users.error;
 }
 
-console.log(result.data)
+console.log('Users:', users.data);
 ```
 
-## HTTP Methods
+### Query Parameters
 
-All HTTP methods accept an optional URL directly:
+```typescript
+// Using .params()
+const result = await api
+  .get('/search')
+  .params({ q: 'typescript', page: 1, limit: 10 })
+  .execute();
 
-```ts
-// GET
-const users = await api.get('/users').execute()
-
-// POST with body
-const created = await api.post('/users').body({ name: 'John' }).execute()
-
-// PUT
-const updated = await api.put('/users/1').body({ name: 'Jane' }).execute()
-
-// PATCH
-const patched = await api.patch('/users/1').body({ name: 'Jane' }).execute()
-
-// DELETE
-const deleted = await api.delete('/users/1').execute()
-
-// HEAD
-const head = await api.head('/users').execute()
+// GET with body (auto-converted to query params)
+const result = await api
+  .get('/search')
+  .body({ q: 'typescript', page: 1 })
+  .execute();
+// Becomes: GET /search?q=typescript&page=1
 ```
 
-You can also use the traditional builder pattern:
+### Request Headers
 
-```ts
-const result = await api.get().url('/users').params({ page: 1 }).execute()
+```typescript
+// Per-request headers (merged with defaults)
+const result = await api
+  .get('/users')
+  .headers({ 'X-Custom-Header': 'value' })
+  .execute();
+
+// Override default headers
+const result = await api
+  .get('/public/data')
+  .headers({ Authorization: '' }) // Remove auth for this request
+  .execute();
 ```
 
-## axios-style Requests
+### Timeout & Retry
 
-For dynamic requests or when you prefer an object-based API:
+```typescript
+// Set timeout
+const result = await api
+  .get('/slow-endpoint')
+  .timeout(5000) // 5 seconds
+  .execute();
 
-```ts
+// Retry with exponential backoff
+const result = await api
+  .get('/unreliable-endpoint')
+  .retry(3, {
+    baseDelay: 500,
+    backoff: 'exponential',
+    retryOnStatus: [408, 429, 500, 502, 503, 504],
+  })
+  .execute();
+```
+
+### Caching
+
+```typescript
+// In-memory cache
+const result = await api
+  .get('/users')
+  .stale(60_000) // Cache for 60 seconds
+  .execute();
+
+// Custom cache key
+const result = await api
+  .get('/users')
+  .cache('default', 'custom-cache-key')
+  .stale(60_000)
+  .execute();
+
+// Store-based caching (Redis, etc.)
+const api = IgniterCaller.create()
+  .withStore(redisAdapter, {
+    ttl: 3600,
+    keyPrefix: 'api:',
+  })
+  .build();
+
+const result = await api
+  .get('/users')
+  .stale(300_000) // 5 minutes
+  .execute();
+```
+
+### Fallback Values
+
+```typescript
+// Provide fallback if request fails
+const result = await api
+  .get('/optional-data')
+  .fallback(() => ({ default: 'value' }))
+  .execute();
+
+// result.data will be fallback value if request fails
+// result.error will still contain the original error
+```
+
+### axios-Style Direct Requests
+
+```typescript
+// Using .request() method
 const result = await api.request({
   method: 'POST',
   url: '/users',
   body: { name: 'John' },
   headers: { 'X-Custom': 'value' },
   timeout: 5000,
-})
-
-// With caching
-const result = await api.request({
-  method: 'GET',
-  url: '/users',
-  staleTime: 30000,
-})
-
-// With retry
-const result = await api.request({
-  method: 'GET',
-  url: '/health',
   retry: { maxAttempts: 3, backoff: 'exponential' },
-})
+  staleTime: 30_000,
+});
 ```
 
-## Auto Content-Type Detection
+### Interceptors
 
-The response is automatically parsed based on the `Content-Type` header:
-
-| Content-Type | Parsed As |
-|-------------|-----------|
-| `application/json` | JSON object |
-| `text/xml`, `application/xml` | Text (parse with your XML library) |
-| `text/csv` | Text |
-| `text/html`, `text/plain` | Text |
-| `image/*`, `audio/*`, `video/*` | Blob |
-| `application/pdf`, `application/zip` | Blob |
-| `application/octet-stream` | Blob |
-
-```ts
-// JSON response - automatically parsed
-const { data } = await api.get('/users').execute()
-
-// Blob response - automatically detected
-const { data } = await api.get('/file.pdf').responseType<Blob>().execute()
-
-// Stream response
-const { data } = await api.get('/stream').responseType<ReadableStream>().execute()
-```
-
-## GET with Body → Query Params
-
-When you pass a body to a GET request, it's automatically converted to query parameters:
-
-```ts
-// This:
-await api.get('/search').body({ q: 'test', page: 1 }).execute()
-
-// Becomes: GET /search?q=test&page=1
-```
-
-## Interceptors
-
-Interceptors are great for cross-cutting concerns like auth headers, request ids, logging, and response normalization.
-
-```ts
+```typescript
 const api = IgniterCaller.create()
   .withBaseUrl('https://api.example.com')
+  
+  // Request interceptor (modify before sending)
   .withRequestInterceptor(async (request) => {
     return {
       ...request,
       headers: {
         ...request.headers,
-        'x-request-id': crypto.randomUUID(),
+        'X-Request-ID': crypto.randomUUID(),
+        'X-Timestamp': new Date().toISOString(),
       },
-    }
+    };
   })
+  
+  // Response interceptor (transform after receiving)
   .withResponseInterceptor(async (response) => {
-    // Example: normalize empty responses
+    // Normalize empty responses
     if (response.data === '') {
-      return { ...response, data: null as any }
+      return { ...response, data: null as any };
     }
-    return response
+    
+    // Add custom metadata
+    return {
+      ...response,
+      metadata: {
+        cached: response.headers?.get('X-Cache') === 'HIT',
+        duration: parseInt(response.headers?.get('X-Duration') || '0'),
+      },
+    };
   })
-  .build()
+  
+  .build();
 ```
 
-## Retries
+### Schema Validation (Type-Safe)
 
-Configure retry behavior for transient errors:
+```typescript
+import { IgniterCaller, IgniterCallerSchema } from '@igniter-js/caller';
+import { z } from 'zod';
 
-```ts
-const result = await api
-  .get('/health')
-  .retry(3, {
-    baseDelay: 250,
-    backoff: 'exponential',
-    retryOnStatus: [408, 429, 500, 502, 503, 504],
-  })
-  .execute()
-```
+// Define schemas
+const UserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+});
 
-## Caching
+const ErrorSchema = z.object({
+  message: z.string(),
+  code: z.string(),
+});
 
-### In-memory caching
-
-Use `.stale(ms)` to enable caching. The cache key defaults to the request URL, or you can set it via `.cache(cache, key)`.
-
-```ts
-const users = await api.get('/users').stale(30_000).execute()
-```
-
-### Store-based caching
-
-You can plug any store that matches `IgniterCallerStoreAdapter` (Redis, etc.).
-
-```ts
-import { IgniterCaller } from '@igniter-js/caller'
-
-const store = {
-  client: null,
-  async get(key) { return null },
-  async set(key, value) { void key; void value },
-  async delete(key) { void key },
-  async has(key) { void key; return false },
-}
-
-const api = IgniterCaller.create()
-  .withStore(store, {
-    ttl: 3600,
-    keyPrefix: 'igniter:caller:',
-  })
-  .build()
-```
-
-## Adapters
-
-The package ships a mock store adapter for tests and local development:
-
-```ts
-import { MockCallerStoreAdapter } from '@igniter-js/caller/adapters'
-import { IgniterCaller } from '@igniter-js/caller'
-
-const store = MockCallerStoreAdapter.create()
-
-const api = IgniterCaller.create()
-  .withStore(store)
-  .build()
-```
-
-## Schema Validation (StandardSchemaV1)
-
-If you already use schemas in your Igniter.js app, you can validate requests and responses automatically.
-Schemas must implement `StandardSchemaV1` (Zod is supported, and any compatible library works).
-
-### Preferred: IgniterCallerSchema builder
-
-```ts
-import { IgniterCaller, IgniterCallerSchema } from '@igniter-js/caller'
-import { z } from 'zod'
-
-const UserSchema = z.object({ id: z.string(), name: z.string() })
-const ErrorSchema = z.object({ message: z.string() })
-
-const callerSchemas = IgniterCallerSchema.create()
+// Build schema registry
+const apiSchemas = IgniterCallerSchema.create()
   .schema('User', UserSchema)
   .schema('Error', ErrorSchema)
+  
   .path('/users/:id', (path) =>
     path.get({
       responses: {
         200: path.ref('User').schema,
         404: path.ref('Error').schema,
       },
-      doc: 'Get user by id',
-      tags: ['users'],
-      operationId: 'users.get',
-    }),
+    })
   )
-  .build()
+  
+  .path('/users', (path) =>
+    path.get({
+      responses: {
+        200: path.ref('User').array(),
+      },
+    })
+    .post({
+      request: z.object({
+        name: z.string(),
+        email: z.string().email(),
+      }),
+      responses: {
+        201: path.ref('User').schema,
+        400: path.ref('Error').schema,
+      },
+    })
+  )
+  
+  .build();
 
+// Create typed client
 const api = IgniterCaller.create()
   .withBaseUrl('https://api.example.com')
-  .withSchemas(callerSchemas, { mode: 'strict' })
-  .build()
+  .withSchemas(apiSchemas, { mode: 'strict' })
+  .build();
 
-type UserResponse = ReturnType<
-  typeof callerSchemas.$Infer.Response<'/users/:id', 'GET', 200>
->
+// Full type inference!
+const result = await api.get('/users/:id')
+  .params({ id: '123' }) // ✅ params typed from path pattern
+  .execute();
+
+// ✅ result.data is User | undefined (typed from schema)
+console.log(result.data?.name);
+
+// POST with typed body
+const created = await api.post('/users')
+  .body({ name: 'John', email: 'john@example.com' }) // ✅ body is typed
+  .execute();
+
+// ✅ created.data is User | undefined
 ```
 
-`callerSchemas.get` exposes runtime helpers (`path`, `endpoint`, `request`, `response`, `schema`) and
-`callerSchemas.$Infer` provides type inference without extra imports. `path.ref()` helpers use Zod
-wrappers; when using a different StandardSchema implementation, use `ref().schema` directly.
+### Global Events
 
-### Manual object literal (still supported)
+```typescript
+import { IgniterCallerManager } from '@igniter-js/caller';
 
-```ts
-import { IgniterCaller } from '@igniter-js/caller'
-import { z } from 'zod'
+// Listen to all requests
+const unsubscribe = IgniterCallerManager.on(/.*/, (result, ctx) => {
+  console.log(`[${ctx.method}] ${ctx.url}`, {
+    status: result.status,
+    success: !result.error,
+    duration: Date.now() - ctx.timestamp,
+  });
+});
+
+// Listen to specific paths
+IgniterCallerManager.on(/^\/users/, (result, ctx) => {
+  if (result.error) {
+    console.error('User API failed:', result.error.message);
+  }
+});
+
+// Listen to exact URL
+IgniterCallerManager.on('/auth/login', (result, ctx) => {
+  if (!result.error) {
+    console.log('User logged in successfully');
+  }
+});
+
+// Cleanup listener
+unsubscribe();
+```
+
+### Typed Mocking
+
+```typescript
+import { IgniterCaller, IgniterCallerMock } from '@igniter-js/caller';
+import { z } from 'zod';
 
 const schemas = {
   '/users/:id': {
@@ -314,188 +468,881 @@ const schemas = {
       },
     },
   },
-} as const
+  '/users': {
+    POST: {
+      request: z.object({ name: z.string() }),
+      responses: {
+        201: z.object({ id: z.string(), name: z.string() }),
+      },
+    },
+  },
+};
 
-const api = IgniterCaller.create()
-  .withBaseUrl('https://api.example.com')
-  .withSchemas(schemas, { mode: 'strict' })
-  .build()
-
-const result = await api.get('/users/123').execute()
-```
-
-**Note:** Schema validation only runs for validatable content types (JSON, XML, CSV). Binary responses (Blob, Stream) are not validated.
-
-## Generate schemas via CLI
-
-You can bootstrap Zod schemas and a ready-to-use caller from an OpenAPI 3 spec using the Igniter CLI:
-
-```bash
-npx @igniter-js/cli generate caller --name facebook --url https://api.example.com/openapi.json
-```
-
-By default this outputs `src/callers/<hostname>/schema.ts` and `index.ts`:
-
-```ts
-import { facebookCaller } from './src/callers/api.example.com'
-import { facebookCallerSchemas } from './src/callers/api.example.com/schema'
-
-const result = await facebookCaller.get('/products').execute()
-type ProductsResponse = ReturnType<
-  typeof facebookCallerSchemas.$Infer.Response<'/products', 'GET', 200>
->
-```
-
-The generated `schema.ts` uses `IgniterCallerSchema` (path-first builder), registers reusable
-schemas, and includes derived type aliases for each endpoint.
-
-## `responseType()` for Typing and Validation
-
-Use `responseType()` to:
-
-1. **Type the response** - for TypeScript inference
-2. **Validate the response** - if you pass a Zod/StandardSchema (only for JSON/XML/CSV)
-
-```ts
-import { z } from 'zod'
-
-// With Zod schema - validates JSON response
-const result = await api
-  .get('/users')
-  .responseType(z.array(z.object({ id: z.string(), name: z.string() })))
-  .execute()
-
-// With type marker - typing only, no validation
-const result = await api.get('/file').responseType<Blob>().execute()
-```
-
-## Global Events
-
-You can observe responses globally using `IgniterCallerManager.on()`:
-
-```ts
-import { IgniterCallerManager } from '@igniter-js/caller'
-
-const unsubscribe = IgniterCallerManager.on(/^\/users/, (result, ctx) => {
-  console.log(`[${ctx.method}] ${ctx.url}`, {
-    ok: !result.error,
-    status: result.status,
+// Create mock
+const mock = IgniterCallerMock.create()
+  .withSchemas(schemas)
+  
+  // Static response
+  .mock('/users/:id', {
+    GET: {
+      response: { id: 'user_123', name: 'John Doe' },
+      status: 200,
+    },
   })
-})
+  
+  // Dynamic response
+  .mock('/users', {
+    POST: (request) => ({
+      response: {
+        id: crypto.randomUUID(),
+        name: request.body.name,
+      },
+      status: 201,
+      delayMs: 150, // Simulate network delay
+    }),
+  })
+  
+  .build();
 
-// later
-unsubscribe()
+// Create API with mock
+const api = IgniterCaller.create()
+  .withSchemas(schemas)
+  .withMock({ enabled: true, mock })
+  .build();
+
+// All requests use mock
+const user = await api.get('/users/:id').params({ id: '123' }).execute();
+console.log(user.data); // { id: 'user_123', name: 'John Doe' }
 ```
 
-## Observability (Telemetry)
+---
 
-```ts
-import { IgniterTelemetry } from '@igniter-js/telemetry'
-import { IgniterCaller } from '@igniter-js/caller'
-import { IgniterCallerTelemetryEvents } from '@igniter-js/caller/telemetry'
+## 🌍 Real-World Examples
 
-const telemetry = IgniterTelemetry.create()
-  .withService('my-api')
-  .addEvents(IgniterCallerTelemetryEvents)
-  .build()
+### Example 1: E-Commerce Product Catalog
+
+```typescript
+import { IgniterCaller } from '@igniter-js/caller';
+import { z } from 'zod';
+
+const ProductSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  price: z.number(),
+  inStock: z.boolean(),
+  images: z.array(z.string().url()),
+});
 
 const api = IgniterCaller.create()
-  .withBaseUrl('https://api.example.com')
-  .withTelemetry(telemetry)
-  .build()
-```
+  .withBaseUrl('https://shop-api.example.com')
+  .withHeaders({ 'X-API-Key': process.env.SHOP_API_KEY! })
+  .build();
 
-## Error Handling
+// Fetch products with caching
+async function getProducts(category?: string) {
+  const result = await api
+    .get('/products')
+    .params(category ? { category } : {})
+    .responseType(z.object({
+      products: z.array(ProductSchema),
+      total: z.number(),
+    }))
+    .stale(300_000) // 5 minutes
+    .execute();
 
-All predictable failures return an `IgniterCallerError` with stable error codes.
-
-```ts
-import { IgniterCallerError } from '@igniter-js/caller'
-
-const result = await api.get('/users').execute()
-
-if (result.error) {
-  if (IgniterCallerError.is(result.error)) {
-    console.error(result.error.code, result.error.operation)
+  if (result.error) {
+    throw new Error(`Failed to fetch products: ${result.error.message}`);
   }
-  throw result.error
+
+  return result.data;
 }
 
-// Response includes status and headers
-console.log(result.status) // 200
-console.log(result.headers?.get('x-request-id'))
+// Search with debouncing
+let searchAbortController: AbortController | null = null;
+
+async function searchProducts(query: string) {
+  // Cancel previous search
+  searchAbortController?.abort();
+  searchAbortController = new AbortController();
+
+  const result = await api
+    .get('/products/search')
+    .params({ q: query })
+    .timeout(3000)
+    .execute();
+
+  return result.data?.products || [];
+}
+
+// Usage
+const products = await getProducts('electronics');
+console.log(`Found ${products.total} products`);
 ```
 
-## API Reference
+### Example 2: Payment Processing with Retries
 
-### `IgniterCaller.create()`
+```typescript
+import { IgniterCaller } from '@igniter-js/caller';
 
-Creates a new caller builder.
+const api = IgniterCaller.create()
+  .withBaseUrl('https://payments-api.example.com')
+  .withHeaders({
+    'X-API-Key': process.env.PAYMENT_API_KEY!,
+    'Content-Type': 'application/json',
+  })
+  .build();
 
-### Builder Methods
+async function processPayment(payment: {
+  amount: number;
+  currency: string;
+  recipient: { accountNumber: string };
+}) {
+  const result = await api
+    .post('/payments')
+    .body(payment)
+    .timeout(10_000) // 10 seconds
+    .retry(3, {
+      baseDelay: 500,
+      backoff: 'exponential',
+      retryOnStatus: [503, 504], // Only retry on server errors
+    })
+    .fallback(() => ({
+      id: 'fallback',
+      status: 'pending',
+      message: 'Payment queued for retry',
+    }))
+    .execute();
 
-| Method | Description |
-|--------|-------------|
-| `.withBaseUrl(url)` | Sets the base URL for all requests |
-| `.withHeaders(headers)` | Sets default headers |
-| `.withCookies(cookies)` | Sets default cookies |
-| `.withLogger(logger)` | Attaches a logger |
-| `.withRequestInterceptor(fn)` | Adds a request interceptor |
-| `.withResponseInterceptor(fn)` | Adds a response interceptor |
-| `.withStore(store, options)` | Configures a persistent store |
-| `.withSchemas(schemas, options)` | Configures schema validation |
-| `.withTelemetry(telemetry)` | Attaches telemetry manager |
-| `.build()` | Builds the caller instance |
+  if (result.error) {
+    console.error('Payment failed:', result.error.message);
+    // Log to monitoring service
+    throw result.error;
+  }
 
-### Request Methods
+  return result.data;
+}
+```
 
-| Method | Description |
-|--------|-------------|
-| `.get(url?)` | Creates a GET request |
-| `.post(url?)` | Creates a POST request |
-| `.put(url?)` | Creates a PUT request |
-| `.patch(url?)` | Creates a PATCH request |
-| `.delete(url?)` | Creates a DELETE request |
-| `.head(url?)` | Creates a HEAD request |
-| `.request(options)` | Executes request directly (axios-style) |
+### Example 3: Real-Time Analytics Dashboard
 
-### Request Builder Methods
+```typescript
+import { IgniterCaller, IgniterCallerManager } from '@igniter-js/caller';
 
-| Method | Description |
-|--------|-------------|
-| `.url(url)` | Sets the URL |
-| `.body(body)` | Sets the request body |
-| `.params(params)` | Sets query parameters |
-| `.headers(headers)` | Merges additional headers |
-| `.timeout(ms)` | Sets request timeout |
-| `.cache(cache, key?)` | Sets cache strategy |
-| `.stale(ms)` | Sets cache stale time |
-| `.retry(attempts, options)` | Configures retry behavior |
-| `.fallback(fn)` | Provides fallback value |
-| `.responseType(schema?)` | Sets expected response type |
-| `.execute()` | Executes the request |
+const api = IgniterCaller.create()
+  .withBaseUrl('https://analytics-api.example.com')
+  .build();
 
-### Static Methods
+// Global event listener for monitoring
+IgniterCallerManager.on(/^\/metrics/, (result, ctx) => {
+  if (!result.error) {
+    console.log(`Metrics fetched in ${Date.now() - ctx.timestamp}ms`);
+  }
+});
 
-| Method | Description |
-|--------|-------------|
-| `IgniterCallerManager.on(pattern, callback)` | Registers event listener |
-| `IgniterCallerManager.off(pattern, callback?)` | Removes event listener |
-| `IgniterCallerManager.invalidate(key)` | Invalidates cache entry |
-| `IgniterCallerManager.invalidatePattern(pattern)` | Invalidates cache by pattern |
-| `IgniterCallerManager.batch(requests)` | Executes requests in parallel |
+// Polling with cache
+async function startMetricsPolling(intervalMs: number) {
+  const poll = async () => {
+    const result = await api
+      .get('/metrics')
+      .params({
+        start: new Date(Date.now() - 300_000).toISOString(),
+        end: new Date().toISOString(),
+      })
+      .stale(30_000) // 30 seconds
+      .execute();
 
-## Contributing
+    if (!result.error) {
+      updateDashboard(result.data);
+    }
+  };
 
-Contributions are welcome! Please see the main [CONTRIBUTING.md](https://github.com/felipebarcelospro/igniter-js/blob/main/CONTRIBUTING.md) for details.
+  poll(); // Initial fetch
+  return setInterval(poll, intervalMs);
+}
 
-## License
+const pollInterval = await startMetricsPolling(30_000);
+```
 
-MIT License - see [LICENSE](https://github.com/felipebarcelospro/igniter-js/blob/main/LICENSE) for details.
+### Example 4: Multi-Tenant SaaS API Client
 
-## Links
+```typescript
+import { IgniterCaller } from '@igniter-js/caller';
 
-- **Documentation:** https://igniterjs.com/docs
-- **GitHub:** https://github.com/felipebarcelospro/igniter-js
-- **NPM:** https://www.npmjs.com/package/@igniter-js/caller
-- **Issues:** https://github.com/felipebarcelospro/igniter-js/issues
+function createTenantAPI(tenantId: string, apiKey: string) {
+  return IgniterCaller.create()
+    .withBaseUrl('https://saas-api.example.com')
+    .withHeaders({
+      'X-Tenant-ID': tenantId,
+      'Authorization': `Bearer ${apiKey}`,
+    })
+    .build();
+}
+
+const tenant1API = createTenantAPI('tenant_1', process.env.TENANT_1_KEY!);
+const tenant2API = createTenantAPI('tenant_2', process.env.TENANT_2_KEY!);
+
+// Isolated requests per tenant
+const tenant1Users = await tenant1API.get('/users').execute();
+const tenant2Users = await tenant2API.get('/users').execute();
+```
+
+### Example 5: GraphQL-Style Batch Requests
+
+```typescript
+import { IgniterCallerManager } from '@igniter-js/caller';
+
+async function fetchDashboardData() {
+  const [users, posts, comments] = await IgniterCallerManager.batch([
+    api.get('/users').params({ limit: 10 }).execute(),
+    api.get('/posts').params({ limit: 20 }).execute(),
+    api.get('/comments').params({ limit: 50 }).execute(),
+  ]);
+
+  return {
+    users: users.data,
+    posts: posts.data,
+    comments: comments.data,
+  };
+}
+```
+
+---
+
+## 📚 API Reference
+
+### IgniterCaller (Main Builder)
+
+The main entry point for creating an HTTP client.
+
+```typescript
+class IgniterCallerBuilder<TSchemas> {
+  static create(): IgniterCallerBuilder<{}>
+  
+  withBaseUrl(url: string): this
+  withHeaders(headers: Record<string, string>): this
+  withCookies(cookies: Record<string, string>): this
+  withLogger(logger: IgniterLogger): this
+  withRequestInterceptor(interceptor: RequestInterceptor): this
+  withResponseInterceptor(interceptor: ResponseInterceptor): this
+  withStore(store: StoreAdapter, options?: StoreOptions): this
+  withSchemas<T>(schemas: T, validation?: ValidationOptions): Builder<T>
+  withTelemetry(telemetry: TelemetryManager): this
+  withMock(config: MockConfig): this
+  
+  build(): IgniterCallerManager<TSchemas>
+}
+```
+
+**Methods:**
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `create()` | None | `Builder<{}>` | Static factory for new builder |
+| `withBaseUrl()` | `url: string` | `this` | Set base URL prefix for all requests |
+| `withHeaders()` | `headers: Record<string, string>` | `this` | Merge default headers into every request |
+| `withCookies()` | `cookies: Record<string, string>` | `this` | Set default cookies (sent as `Cookie` header) |
+| `withLogger()` | `logger: IgniterLogger` | `this` | Attach logger for request lifecycle logging |
+| `withRequestInterceptor()` | `interceptor: Function` | `this` | Add request modifier (runs before fetch) |
+| `withResponseInterceptor()` | `interceptor: Function` | `this` | Add response transformer (runs after fetch) |
+| `withStore()` | `store: Adapter, options?` | `this` | Configure persistent cache (Redis, etc.) |
+| `withSchemas()` | `schemas: Map, validation?` | `Builder<T>` | Enable type inference + validation |
+| `withTelemetry()` | `telemetry: Manager` | `this` | Connect to telemetry system |
+| `withMock()` | `config: MockConfig` | `this` | Enable mock mode for testing |
+| `build()` | None | `Manager` | Build the operational client instance |
+
+**Example:**
+
+```typescript
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withHeaders({ Authorization: 'Bearer token' })
+  .withStore(redisAdapter)
+  .withSchemas(schemas)
+  .build();
+```
+
+---
+
+### IgniterCallerManager (HTTP Client)
+
+The operational HTTP client instance for making requests.
+
+```typescript
+class IgniterCallerManager<TSchemas> {
+  // HTTP Methods
+  get<T>(url?: string): RequestBuilder<T>
+  post<T>(url?: string): RequestBuilder<T>
+  put<T>(url?: string): RequestBuilder<T>
+  patch<T>(url?: string): RequestBuilder<T>
+  delete<T>(url?: string): RequestBuilder<T>
+  head<T>(url?: string): RequestBuilder<T>
+  
+  // Direct execution (axios-style)
+  request<T>(options: DirectRequestOptions): Promise<ApiResponse<T>>
+  
+  // Static methods
+  static on(pattern: string | RegExp, callback: EventCallback): () => void
+  static off(pattern: string | RegExp, callback?: EventCallback): void
+  static invalidate(key: string): Promise<void>
+  static invalidatePattern(pattern: string): Promise<void>
+  static batch<T extends Promise<any>[]>(requests: T): Promise<AwaitedArray<T>>
+}
+```
+
+**Methods:**
+
+| Method | Arguments | Returns | Description |
+|--------|-----------|---------|-------------|
+| `get()` | `url?: string` | `RequestBuilder` | Create GET request |
+| `post()` | `url?: string` | `RequestBuilder` | Create POST request |
+| `put()` | `url?: string` | `RequestBuilder` | Create PUT request |
+| `patch()` | `url?: string` | `RequestBuilder` | Create PATCH request |
+| `delete()` | `url?: string` | `RequestBuilder` | Create DELETE request |
+| `head()` | `url?: string` | `RequestBuilder` | Create HEAD request |
+| `request()` | `options: DirectRequestOptions` | `Promise<ApiResponse>` | Execute request directly |
+| `on()` | `pattern, callback` | `unsubscribe: Function` | Register global event listener |
+| `off()` | `pattern, callback?` | `void` | Remove event listener(s) |
+| `invalidate()` | `key: string` | `Promise<void>` | Invalidate specific cache entry |
+| `invalidatePattern()` | `pattern: string` | `Promise<void>` | Invalidate cache by pattern |
+| `batch()` | `requests: Promise[]` | `Promise<Results[]>` | Execute requests in parallel |
+
+---
+
+### RequestBuilder (Fluent Request API)
+
+Per-request configuration builder.
+
+```typescript
+class IgniterCallerRequestBuilder<TResponse> {
+  withLogger(logger: IgniterLogger): this
+  url(url: string): this
+  body<T>(body: T): this
+  params<T>(params: T): this
+  headers(headers: Record<string, string>): this
+  timeout(ms: number): this
+  cache(cache: RequestCache, key?: string): this
+  stale(ms: number): this
+  retry(attempts: number, options?: RetryOptions): this
+  fallback<T>(fn: () => T): this
+  responseType<T>(schema?: StandardSchemaV1<T>): RequestBuilder<T>
+  getFile(url: string): { execute(): Promise<IgniterCallerFileResponse> }
+  
+  execute(): Promise<ApiResponse<TResponse>>
+}
+```
+
+**Methods:**
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `withLogger()` | `logger: IgniterLogger` | `this` | Override logger for this request |
+| `url()` | `url: string` | `this` | Set request URL |
+| `body()` | `body: any` | `this` | Set request body (JSON, FormData, Blob) |
+| `params()` | `params: Record<string, string \| number \| boolean>` | `this` | Set query parameters |
+| `headers()` | `headers: Record<string, string>` | `this` | Merge additional headers |
+| `timeout()` | `ms: number` | `this` | Set request timeout |
+| `cache()` | `cache: RequestCache, key?: string` | `this` | Set fetch cache mode + optional cache key |
+| `stale()` | `ms: number` | `this` | Set cache stale time |
+| `retry()` | `attempts: number, options?` | `this` | Configure retry behavior |
+| `fallback()` | `fn: () => T` | `this` | Provide fallback value on error |
+| `responseType()` | `schema?: StandardSchemaV1` | `RequestBuilder<T>` | Set expected response type (validates JSON/XML/CSV) |
+| `getFile()` | `url: string` | `{ execute(): Promise<IgniterCallerFileResponse> }` | **Deprecated**. Use `responseType<File>().execute()` instead |
+| `execute()` | None | `Promise<ApiResponse>` | Execute the request |
+
+---
+
+### Types
+
+#### ApiResponse
+
+```typescript
+interface IgniterCallerApiResponse<TData> {
+  data?: TData;
+  error?: IgniterCallerError;
+  status?: number;
+  headers?: Headers;
+}
+```
+
+#### RetryOptions
+
+```typescript
+interface IgniterCallerRetryOptions {
+  maxAttempts: number;
+  baseDelay?: number;
+  backoff?: 'linear' | 'exponential';
+  retryOnStatus?: number[];
+}
+```
+
+#### ValidationOptions
+
+```typescript
+interface IgniterCallerSchemaValidationOptions {
+  mode?: 'strict' | 'soft' | 'off';
+  onValidationError?: (error: ValidationError) => void;
+}
+```
+
+---
+
+## 🔧 Configuration
+
+### Store Adapter
+
+Configure persistent caching with Redis or other stores:
+
+```typescript
+interface IgniterCallerStoreAdapter<TClient = any> {
+  client: TClient | null;
+  get(key: string): Promise<string | null>;
+  set(
+    key: string,
+    value: string,
+    options?: { ttl?: number; [key: string]: any },
+  ): Promise<void>;
+  delete(key: string): Promise<void>;
+  has(key: string): Promise<boolean>;
+}
+
+interface IgniterCallerStoreOptions {
+  ttl?: number;
+  keyPrefix?: string;
+  fallbackToFetch?: boolean;
+}
+```
+
+**Example:**
+
+```typescript
+import { IgniterCaller } from '@igniter-js/caller';
+
+const redisAdapter: IgniterCallerStoreAdapter = {
+  client: redis,
+  async get(key) { return await redis.get(key); },
+  async set(key, value, options) {
+    const ttl = options?.ttl ?? 3600;
+    await redis.setex(key, ttl, value);
+  },
+  async delete(key) { await redis.del(key); },
+  async has(key) { return (await redis.exists(key)) === 1; },
+};
+
+const api = IgniterCaller.create()
+  .withStore(redisAdapter, {
+    ttl: 3600,
+    keyPrefix: 'api:',
+  })
+  .build();
+```
+
+### Schema Validation
+
+Enable runtime validation with any StandardSchemaV1 library:
+
+```typescript
+import { z } from 'zod';
+
+const api = IgniterCaller.create()
+  .withSchemas(schemas, {
+    mode: 'strict', // 'strict' | 'soft' | 'off'
+    onValidationError: (error) => {
+      console.error('Validation failed:', error);
+    },
+  })
+  .build();
+```
+
+**Modes:**
+- `strict`: Throw on validation failure (default)
+- `soft`: Log error and continue
+- `off`: Skip validation
+
+---
+
+## 🧪 Testing
+
+### Unit Testing with Mock Adapter
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { IgniterCaller, IgniterCallerMock } from '@igniter-js/caller';
+import { MockCallerStoreAdapter } from '@igniter-js/caller/adapters';
+
+describe('API Client', () => {
+  const mock = IgniterCallerMock.create()
+    .mock('/users/:id', {
+      GET: (request) => ({
+        response: { id: request.params.id, name: 'Test User' },
+        status: 200,
+      }),
+    })
+    .build();
+
+  const api = IgniterCaller.create()
+    .withMock({ enabled: true, mock })
+    .build();
+
+  it('should fetch user', async () => {
+    const result = await api.get('/users/:id').params({ id: '123' }).execute();
+    
+    expect(result.error).toBeUndefined();
+    expect(result.data).toEqual({ id: '123', name: 'Test User' });
+  });
+
+  it('should handle errors', async () => {
+    const mock = IgniterCallerMock.create()
+      .mock('/error', {
+        GET: { response: null, status: 500 },
+      })
+      .build();
+
+    const api = IgniterCaller.create()
+      .withMock({ enabled: true, mock })
+      .build();
+
+    const result = await api.get('/error').execute();
+    
+    expect(result.error).toBeDefined();
+  });
+});
+```
+
+### Integration Testing
+
+```typescript
+import { IgniterCaller } from '@igniter-js/caller';
+
+describe('Integration: Real API', () => {
+  const api = IgniterCaller.create()
+    .withBaseUrl(process.env.TEST_API_URL!)
+    .build();
+
+  it('should fetch users from real API', async () => {
+    const result = await api.get('/users').execute();
+    
+    expect(result.error).toBeUndefined();
+    expect(Array.isArray(result.data)).toBe(true);
+  });
+});
+```
+
+---
+
+## 🎨 Best Practices
+
+### ✅ Do
+
+```typescript
+// ✅ Use immutable builders
+const api = IgniterCaller.create()
+  .withBaseUrl('...')
+  .withHeaders({ ... })
+  .build();
+
+// ✅ Handle errors explicitly
+const result = await api.get('/users').execute();
+if (result.error) {
+  console.error(result.error);
+  throw result.error;
+}
+
+// ✅ Use schema validation for type safety
+const api = IgniterCaller.create()
+  .withSchemas(schemas, { mode: 'strict' })
+  .build();
+
+// ✅ Cache expensive requests
+const result = await api
+  .get('/expensive')
+  .stale(300_000) // 5 minutes
+  .execute();
+
+// ✅ Use retry for transient failures
+const result = await api
+  .get('/unreliable')
+  .retry(3, { backoff: 'exponential' })
+  .execute();
+
+// ✅ Provide fallbacks for optional data
+const result = await api
+  .get('/optional')
+  .fallback(() => defaultValue)
+  .execute();
+```
+
+### ❌ Don't
+
+```typescript
+// ❌ Don't mutate builder state
+const builder = IgniterCaller.create();
+builder.state.baseURL = 'https://api.example.com'; // ❌ Won't work
+
+// ❌ Don't ignore errors
+const result = await api.get('/users').execute();
+console.log(result.data); // ❌ Might be undefined
+
+// ❌ Don't skip validation in production
+const api = IgniterCaller.create()
+  .withSchemas(schemas, { mode: 'off' }) // ❌ Risky
+  .build();
+
+// ❌ Don't cache mutations
+const result = await api
+  .post('/users')
+  .stale(60_000) // ❌ Don't cache POST/PUT/PATCH/DELETE
+  .execute();
+
+// ❌ Don't retry non-idempotent operations
+const result = await api
+  .post('/payments')
+  .retry(3) // ❌ Might duplicate payment
+  .execute();
+```
+
+---
+
+## 🚨 Troubleshooting
+
+### Error: Request timeout
+
+**Cause:** Request took longer than configured timeout
+
+**Solution:**
+
+```typescript
+// Increase timeout
+const result = await api
+  .get('/slow-endpoint')
+  .timeout(30_000) // 30 seconds
+  .execute();
+```
+
+---
+
+### Error: Validation failed
+
+**Cause:** Response doesn't match schema
+
+**Solution:**
+
+```typescript
+// Check schema definition
+const UserSchema = z.object({
+  id: z.string(),
+  name: z.string(), // ❌ API returns `username`
+});
+
+// Fix schema
+const UserSchema = z.object({
+  id: z.string(),
+  username: z.string(), // ✅ Matches API
+});
+
+// Or use soft mode
+const api = IgniterCaller.create()
+  .withSchemas(schemas, { mode: 'soft' })
+  .build();
+```
+
+---
+
+### Error: Cache not invalidating
+
+**Cause:** Cache key doesn't match
+
+**Solution:**
+
+```typescript
+// Ensure consistent cache keys
+const result1 = await api.get('/users').cache('default', 'users-list').execute();
+
+// Later, invalidate with same key
+await IgniterCallerManager.invalidate('users-list');
+```
+
+---
+
+### Performance: Slow requests
+
+**Diagnosis:** No caching or retries
+
+**Solution:**
+
+```typescript
+// Enable caching for read-heavy endpoints
+const result = await api
+  .get('/heavy-computation')
+  .stale(600_000) // 10 minutes
+  .execute();
+
+// Use store-based cache for persistence
+const api = IgniterCaller.create()
+  .withStore(redisAdapter)
+  .build();
+```
+
+---
+
+### Type Inference: Not working
+
+**Cause:** Schema path doesn't match request URL
+
+**Solution:**
+
+```typescript
+// ❌ Schema path doesn't match
+const schemas = {
+  '/users': { GET: { responses: { 200: UserSchema } } }
+};
+
+const result = await api.get('/users/list').execute(); // ❌ No match
+
+// ✅ Fix schema or URL
+const schemas = {
+  '/users/list': { GET: { responses: { 200: UserSchema } } }
+};
+
+const result = await api.get('/users/list').execute(); // ✅ Typed
+```
+
+---
+
+## 🔗 Framework Integration
+
+### Next.js (App Router)
+
+```typescript
+// lib/api.ts
+import { IgniterCaller } from '@igniter-js/caller';
+
+export const api = IgniterCaller.create()
+  .withBaseUrl(process.env.NEXT_PUBLIC_API_URL!)
+  .build();
+
+// app/users/page.tsx
+import { api } from '@/lib/api';
+
+export default async function UsersPage() {
+  const result = await api.get('/users').execute();
+  
+  if (result.error) {
+    throw new Error('Failed to fetch users');
+  }
+  
+  return (
+    <div>
+      {result.data.map((user) => (
+        <div key={user.id}>{user.name}</div>
+      ))}
+    </div>
+  );
+}
+```
+
+### React with TanStack Query
+
+```typescript
+import { useQuery } from '@tanstack/react-query';
+import { api } from './api';
+
+function useUsers() {
+  return useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const result = await api.get('/users').execute();
+      if (result.error) throw result.error;
+      return result.data;
+    },
+  });
+}
+
+function Users() {
+  const { data, isLoading, error } = useUsers();
+  
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+  
+  return <ul>{data.map(...)}</ul>;
+}
+```
+
+### Express.js
+
+```typescript
+import express from 'express';
+import { IgniterCaller } from '@igniter-js/caller';
+
+const app = express();
+const api = IgniterCaller.create()
+  .withBaseUrl('https://external-api.example.com')
+  .build();
+
+app.get('/proxy/users', async (req, res) => {
+  const result = await api.get('/users').execute();
+  
+  if (result.error) {
+    return res.status(result.status || 500).json({
+      error: result.error.message,
+    });
+  }
+  
+  res.json(result.data);
+});
+```
+
+---
+
+## 📊 Performance Tips
+
+1. **Use caching aggressively** for read-heavy endpoints
+2. **Enable store-based caching** (Redis) for distributed systems
+3. **Batch parallel requests** with `IgniterCallerManager.batch()`
+4. **Set appropriate timeouts** to fail fast
+5. **Use retry with exponential backoff** for transient failures
+6. **Minimize interceptor overhead** (avoid heavy computation)
+7. **Enable compression** via headers (`Accept-Encoding: gzip`)
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
+
+### Development Setup
+
+```bash
+git clone https://github.com/felipebarcelospro/igniter-js.git
+cd igniter-js/packages/caller
+npm install
+npm run build
+npm test
+```
+
+---
+
+## 📄 License
+
+MIT © [Felipe Barcelos](https://github.com/felipebarcelospro)
+
+---
+
+## 🔗 Related Packages
+
+- [@igniter-js/core](../core) — HTTP framework core
+- [@igniter-js/telemetry](../telemetry) — Observability system
+- [@igniter-js/store](../store) — State management
+- [Igniter.js Documentation](https://igniterjs.com)
+
+---
+
+## 💬 Community & Support
+
+- 📚 [Documentation](https://igniterjs.com/docs/caller)
+- 💬 [Discord Community](https://discord.gg/igniterjs)
+- 🐛 [Report Issues](https://github.com/felipebarcelospro/igniter-js/issues)
+- 🔒 [Security Policy](https://github.com/felipebarcelospro/igniter-js/security/policy)
+
+---
+
+**Built with ❤️ by the Igniter.js team**

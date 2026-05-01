@@ -1,4 +1,4 @@
-import type { IgniterError } from "@igniter-js/core"
+import type { IgniterError } from "@igniter-js/common";
 
 /**
  * Response object containing either successful data or an error.

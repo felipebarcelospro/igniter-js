@@ -5,9 +5,10 @@
     "baseUrl": ".",
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
+    "jsx": "react-jsx",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "paths": {
-      "@igniter-js/core": ["../core/dist"],
+      "@igniter-js/common": ["../common/dist"],
       "@igniter-js/telemetry": ["../telemetry/dist"]
     }
   },

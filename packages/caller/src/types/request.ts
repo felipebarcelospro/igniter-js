@@ -1,4 +1,4 @@
-import type { StandardSchemaV1 } from '@igniter-js/core'
+import type { StandardSchemaV1 } from "@igniter-js/common";
 import type { z } from 'zod'
 import type { IgniterCallerHttpMethod } from './http'
 import type { IgniterCallerRetryOptions } from './retry'

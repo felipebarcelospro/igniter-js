@@ -3,7 +3,7 @@
  * @module @igniter-js/caller/types/schema-builder
  */
 
-import type { StandardSchemaV1 } from '@igniter-js/core'
+import type { StandardSchemaV1 } from "@igniter-js/common";
 import type {
   EndpointInfo,
   IgniterCallerEndpointSchema,

@@ -16,6 +16,7 @@ export type * from "./retry";
 export type * from "./schemas";
 export type * from "./schema-builder";
 export type * from "./store";
+export type * from "./mock";
 
 // =============================================================================
 // BUILDER + MANAGER TYPES

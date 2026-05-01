@@ -1,4 +1,4 @@
-import type { StandardSchemaV1 } from '@igniter-js/core'
+import type { StandardSchemaV1 } from "@igniter-js/common";
 
 /**
  * HTTP methods supported for schema mapping.

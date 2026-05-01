@@ -3,9 +3,10 @@
  * @module @igniter-js/caller/types/builder
  */
 
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 import type { IgniterCallerRequestInterceptor, IgniterCallerResponseInterceptor } from "./interceptors";
+import type { IgniterCallerMockConfig } from "./mock";
 import type { IgniterCallerSchemaMap, IgniterCallerSchemaValidationOptions } from "./schemas";
 import type { IgniterCallerStoreAdapter, IgniterCallerStoreOptions } from "./store";
 import type { IgniterCallerApiResponse } from "./response";
@@ -39,6 +40,8 @@ export type IgniterCallerBuilderState<
   schemas?: TSchemas;
   /** Validation options for schema enforcement. */
   schemaValidation?: IgniterCallerSchemaValidationOptions;
+  /** Optional mock configuration (routes requests to mock handlers). */
+  mock?: IgniterCallerMockConfig<TSchemas>;
 };
 
 /**
@@ -69,6 +72,8 @@ export interface IgniterCallerRequestBuilderParams {
   schemas?: IgniterCallerSchemaMap;
   /** Validation options for schema enforcement. */
   schemaValidation?: IgniterCallerSchemaValidationOptions;
+  /** Optional mock configuration. */
+  mock?: IgniterCallerMockConfig<any>;
 }
 
 /**

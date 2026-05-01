@@ -1,6 +1,7 @@
-import type { IgniterLogger } from '@igniter-js/core'
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from '@igniter-js/telemetry'
 import type { IgniterCallerBuilderState } from '../types/builder'
+import type { IgniterCallerMockConfig } from '../types/mock'
 import type {
   IgniterCallerRequestInterceptor,
   IgniterCallerResponseInterceptor,
@@ -10,8 +11,10 @@ import type {
   IgniterCallerSchemaValidationOptions,
 } from '../types/schemas'
 import type {
+  IgniterCallerSchemaBuildResult,
   IgniterCallerSchemaInput,
   IgniterCallerSchemaMapFrom,
+  IgniterCallerSchemaRegistry,
 } from '../types/schema-builder'
 import type {
   IgniterCallerStoreAdapter,
@@ -73,7 +76,7 @@ export class IgniterCallerBuilder<
   /**
    * Attaches a logger instance.
    *
-   * @param logger - Logger implementation from `@igniter-js/core`.
+   * @param logger - Logger implementation from `@igniter-js/common`.
    */
   withLogger(logger: IgniterLogger): IgniterCallerBuilder<TSchemas> {
     return new IgniterCallerBuilder({ ...this.state, logger });
@@ -162,17 +165,34 @@ export class IgniterCallerBuilder<
    *   .build()
    * ```
    */
+  withSchemas<TNewSchemas extends IgniterCallerSchemaMap>(
+    schemas: TNewSchemas,
+    validation?: IgniterCallerSchemaValidationOptions,
+  ): IgniterCallerBuilder<TNewSchemas>
+  withSchemas<
+    TNewSchemas extends IgniterCallerSchemaMap,
+    TRegistry extends IgniterCallerSchemaRegistry,
+  >(
+    schemas: IgniterCallerSchemaBuildResult<TNewSchemas, TRegistry>,
+    validation?: IgniterCallerSchemaValidationOptions,
+  ): IgniterCallerBuilder<TNewSchemas>
   withSchemas<TNewSchemas extends IgniterCallerSchemaInput>(
     schemas: TNewSchemas,
     validation?: IgniterCallerSchemaValidationOptions,
   ): IgniterCallerBuilder<IgniterCallerSchemaMapFrom<TNewSchemas>> {
-    const nextState = {
-      ...this.state,
-      schemas: schemas as IgniterCallerSchemaMapFrom<TNewSchemas>,
-      schemaValidation: validation,
-    } as unknown as IgniterCallerBuilderState<IgniterCallerSchemaMapFrom<TNewSchemas>>;
+    type ExtractedSchemas = IgniterCallerSchemaMapFrom<TNewSchemas>;
 
-    return new IgniterCallerBuilder<IgniterCallerSchemaMapFrom<TNewSchemas>>(nextState);
+    // When schemas change, we need to reset the mock to avoid type incompatibility
+    // The mock should be configured AFTER setting schemas using withMock()
+    const { mock: _removedMock, ...stateWithoutMock } = this.state;
+
+    const nextState: IgniterCallerBuilderState<ExtractedSchemas> = {
+      ...stateWithoutMock,
+      schemas: schemas as ExtractedSchemas,
+      schemaValidation: validation,
+    };
+
+    return new IgniterCallerBuilder<ExtractedSchemas>(nextState);
   }
 
   /**
@@ -215,6 +235,19 @@ export class IgniterCallerBuilder<
   }
 
   /**
+   * Enables request mocking using a mock registry.
+   *
+   * When enabled, matching requests are routed to the mock handlers instead of fetch.
+   *
+   * @param config - Mock configuration with registry and enable flag.
+   */
+  withMock(
+    config: IgniterCallerMockConfig<TSchemas>,
+  ): IgniterCallerBuilder<TSchemas> {
+    return new IgniterCallerBuilder({ ...this.state, mock: config })
+  }
+
+  /**
    * Builds the `IgniterCaller` instance.
    *
    * @returns Configured manager instance.
@@ -233,6 +266,7 @@ export class IgniterCallerBuilder<
       responseInterceptors: this.state.responseInterceptors,
       schemas: this.state.schemas,
       schemaValidation: this.state.schemaValidation,
+      mock: this.state.mock,
     });
 
     this.state.logger?.info('IgniterCaller initialized', {

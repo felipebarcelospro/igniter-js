@@ -25,3 +25,9 @@ export * from "./schema.builder";
 export type * from "./schema.builder";
 export * from "./schema-path.builder";
 export type * from "./schema-path.builder";
+
+// =============================================================================
+// MOCK BUILDER
+// =============================================================================
+
+export { IgniterCallerMock, IgniterCallerMockBuilder } from "./mock.builder";

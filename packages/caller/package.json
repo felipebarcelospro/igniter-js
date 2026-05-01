@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/caller",
-  "version": "0.1.4",
+  "version": "0.1.58",
   "description": "Type-safe HTTP client for Igniter.js with interceptors, retries, caching, and StandardSchema validation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -26,6 +26,11 @@
       "types": "./dist/adapters/index.d.ts",
       "import": "./dist/adapters/index.mjs",
       "require": "./dist/adapters/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.mjs",
+      "require": "./dist/client/index.js"
     }
   },
   "scripts": {
@@ -63,20 +68,23 @@
   },
   "homepage": "https://igniterjs.com",
   "dependencies": {
-    "@igniter-js/telemetry": ">=0.1.12"
+    "@igniter-js/common": ">=0.1.0"
   },
   "devDependencies": {
-    "@igniter-js/core": "*",
+    "@igniter-js/common": "*",
     "@igniter-js/telemetry": "*",
     "@types/node": "^22.7.5",
+    "@types/react": "^18.3.12",
+    "react": "^18.3.1",
     "tsup": "^8.3.0",
     "typescript": "^5.6.3",
     "vitest": "^2.1.4",
     "zod": "^4.2.1"
   },
   "peerDependencies": {
-    "@igniter-js/core": "*",
+    "@igniter-js/common": ">=0.1.0",
     "@igniter-js/telemetry": ">=0.1.12",
+    "react": ">=18.0.0",
     "zod": ">=4.2.1"
   },
   "peerDependenciesMeta": {

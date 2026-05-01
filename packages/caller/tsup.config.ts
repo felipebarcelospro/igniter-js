@@ -5,6 +5,7 @@ export default defineConfig({
     index: 'src/index.ts',
     'telemetry/index': 'src/telemetry/index.ts',
     'adapters/index': 'src/adapters/index.ts',
+    'client/index': 'src/client/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -12,5 +13,11 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   treeshake: true,
-  external: ['@igniter-js/core', '@igniter-js/telemetry', 'zod'],
+  external: [
+    '@igniter-js/common',
+    '@igniter-js/telemetry',
+    'zod',
+    'react',
+    'react/jsx-runtime',
+  ],
 })

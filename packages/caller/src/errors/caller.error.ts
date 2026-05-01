@@ -1,10 +1,11 @@
-import { IgniterError, type IgniterLogger } from '@igniter-js/core'
+import { IgniterError, type IgniterLogger } from "@igniter-js/common";
 
 /**
  * Stable error codes emitted by `IgniterCaller`.
  */
 export type IgniterCallerErrorCode =
   | 'IGNITER_CALLER_HTTP_ERROR'
+  | 'IGNITER_CALLER_MOCK_HTTP_ERROR'
   | 'IGNITER_CALLER_TIMEOUT'
   | 'IGNITER_CALLER_REQUEST_VALIDATION_FAILED'
   | 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED'

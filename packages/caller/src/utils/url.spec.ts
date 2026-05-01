@@ -23,4 +23,14 @@ describe('IgniterCallerUrlUtils', () => {
 
     expect(result).toBe('https://example.com/health')
   })
+
+  it('replaces path parameters', () => {
+    const result = IgniterCallerUrlUtils.buildUrl({
+      url: '/users/:id/posts/:postId',
+      baseURL: 'https://api.test',
+      query: { id: '123', postId: '456', sort: 'desc' },
+    })
+
+    expect(result).toBe('https://api.test/users/123/posts/456?sort=desc')
+  })
 })
