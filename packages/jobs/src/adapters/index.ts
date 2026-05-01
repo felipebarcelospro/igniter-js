@@ -1,3 +1,2 @@
-export * from './bullmq.adapter'
-export * from './memory.adapter'
-export * from './sqlite.adapter'
+// Intentionally empty. Adapters are exposed only through runtime-specific subpaths.
+export {};

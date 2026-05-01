@@ -27,6 +27,7 @@ In modern distributed systems, background processing is usually the first point 
 2. **Resource-Aware Context:** The `withContext()` factory ensures that every job execution starts with a fresh, validated set of resources, exactly like a standard API request.
 3. **Multi-Platform Support (Adapters):** Whether using **BullMQ** for massive production scale or an **In-Memory** adapter for unit tests, the business logic remains identical.
 4. **Native Observability:** Telemetry and internal event publishing are "baked in," providing immediate visibility into enqueuing, execution times, failures, and retries without writing a single line of logging code.
+5. **Typed Job Streams:** Jobs can emit typed per-job stream events for live consumers and optional persisted replay.
 
 ---
 
@@ -45,7 +46,7 @@ Maintainers must respect the following directory structure and responsibilities:
   - `queue.ts`: `IgniterQueue` facade for the queue builder.
 - **`src/adapters/`**: The infrastructure boundary.
   - `memory.adapter.ts`: Production-grade in-memory implementation for tests (non-persistent).
-  - `sqlite.adapter.ts`: SQLite-based persistent adapter for local/desktop/CLI environments.
+  - `bun-sqlite.adapter.ts`: Bun-native SQLite adapter for local, desktop, CLI, and embedded workloads.
   - `bullmq.adapter.ts`: Reference to external `@igniter-js/adapter-bullmq` for production Redis-based queues.
 - **`src/errors/`**: Resiliency definitions.
   - `jobs.error.ts`: `IgniterJobsError`. Extends `IgniterError` with metadata-rich payloads and authoritative error codes.
@@ -55,6 +56,7 @@ Maintainers must respect the following directory structure and responsibilities:
   - `adapter.ts`: `IgniterJobsAdapter` interface.
   - `runtime.ts`: Accessor interfaces for the proxy API.
   - `job.ts`: authoritative types for job definitions, contexts, and hooks.
+  - `stream.ts`: typed per-job stream definitions, emit/read/subscribe contracts, and inference helpers.
 - **`src/utils/`**: Static helper library.
   - `events.utils.ts`: Pub/sub event helpers and channel composition.
   - `id-generator.ts`: Deterministic ID utilities for adapters.
@@ -157,7 +159,9 @@ Type Flow:
 The package provides organized subpath exports for optimized bundling:
 
 - **`@igniter-js/jobs`**: The main entry point. Use for `IgniterJobs` and `IgniterQueue`.
-- **`@igniter-js/jobs/adapters`**: Built-in adapters (Memory, SQLite, BullMQ wrapper).
+- **`@igniter-js/jobs/adapters/node`**: Node.js adapters (`BullMQ` wrapper).
+- **`@igniter-js/jobs/adapters/bun`**: Bun-native SQLite adapter.
+- **`@igniter-js/jobs/adapters/mock`**: In-memory adapter for tests and local mocks.
 - **`@igniter-js/jobs/telemetry`**: Telemetry registry for registration.
 
 ### 9. Quick Start & Common Patterns
@@ -168,7 +172,7 @@ Setup your jobs in a central `src/services/jobs.ts` file:
 
 ```typescript
 import { IgniterJobs } from "@igniter-js/jobs";
-import { IgniterJobsBullMQAdapter } from "@igniter-js/jobs/adapters";
+import { IgniterJobsBullMQAdapter } from "@igniter-js/jobs/adapters/node";
 
 export const jobs = IgniterJobs.create()
   .withAdapter(IgniterJobsBullMQAdapter.create({ redis }))
@@ -216,7 +220,7 @@ Prevent permanent failures in external API calls:
 #### Case 5: SaaS Multi-Tenant CSV Import
 
 - **Scenario:** Process 100k row CSV.
-- **Implementation:** `job.progress(percent)` every 100 rows for real-time progress bar.
+- **Implementation:** `job.updateProgress?.(percent)` every 100 rows for real-time progress bar.
 
 ### 11. Domain-Specific Guidance
 
@@ -457,17 +461,17 @@ All adapters implement the `IgniterJobsAdapter` interface defined in `src/types/
 
 ### 17. Adapter Comparison Matrix
 
-| Feature | Memory | SQLite | BullMQ |
-|---------|--------|--------|--------|
-| **Persistence** | ❌ In-memory only | ✅ File-based | ✅ Redis |
-| **Multi-process** | ❌ Single process | ⚠️ Single process (WAL) | ✅ Distributed |
-| **Installation** | Built-in | `better-sqlite3` | `bullmq` + Redis |
-| **Use Case** | Tests, demos | Desktop, CLI, MCP | Production, scale |
-| **Job Limits** | Memory-bound | Disk-bound | Redis-bound |
-| **Worker Mechanism** | Immediate | Polling-based | Event-driven |
-| **Cron Jobs** | ⚠️ Basic | ⚠️ Basic | ✅ Full |
-| **Distributed Locking** | ❌ | ❌ | ✅ |
-| **Rate Limiting** | ⚠️ Basic | ⚠️ Basic | ✅ Advanced |
+| Feature                 | Memory            | Bun SQLite               | BullMQ            |
+| ----------------------- | ----------------- | ------------------------ | ----------------- |
+| **Persistence**         | ❌ In-memory only | ✅ File-based            | ✅ Redis          |
+| **Multi-process**       | ❌ Single process | ⚠️ Single process/local  | ✅ Distributed    |
+| **Installation**        | Built-in          | Bundled with package     | `bullmq` + Redis  |
+| **Use Case**            | Tests, demos      | Desktop, CLI, local apps | Production, scale |
+| **Job Limits**          | Memory-bound      | Disk-bound               | Redis-bound       |
+| **Worker Mechanism**    | Immediate         | Embedded worker runtime  | Event-driven      |
+| **Cron Jobs**           | ⚠️ Basic          | ✅ Supported             | ✅ Supported      |
+| **Distributed Locking** | ❌                | ❌                       | ✅                |
+| **Rate Limiting**       | ⚠️ Basic          | ✅ Supported             | ✅ Advanced       |
 
 ---
 
@@ -490,7 +494,7 @@ No additional dependencies required. The adapter is built into `@igniter-js/jobs
 
 ```typescript
 import { IgniterJobs } from "@igniter-js/jobs";
-import { IgniterJobsMemoryAdapter } from "@igniter-js/jobs/adapters";
+import { IgniterJobsMemoryAdapter } from "@igniter-js/jobs/adapters/mock";
 
 const adapter = IgniterJobsMemoryAdapter.create();
 
@@ -553,47 +557,36 @@ await worker.close();
 
 ---
 
-### 19. SQLite Adapter (Desktop, CLI, MCP Servers)
+### 19. Bun SQLite Adapter (Desktop, CLI, Local Apps)
 
-The `IgniterJobsSQLiteAdapter` provides persistent job storage using SQLite, ideal for local environments where Redis is impractical.
+The `IgniterJobsBunSQLiteAdapter` is the local persistent adapter for Bun runtimes. It is the recommended choice for desktop applications, embedded tools, local orchestrators, and Bun services that want SQLite-backed jobs without Redis.
 
 #### 19.1 When to Use
 
-- **Desktop Applications:** Tauri, Electron apps needing background tasks.
-- **CLI Tools:** Long-running commands with progress tracking.
-- **MCP Servers:** Model Context Protocol servers with job queues.
-- **Edge Deployments:** Single-node deployments.
-- **Local Development:** When you want jobs to survive restarts.
+- **Desktop Applications:** Tauri or Electron apps with a Bun sidecar/runtime.
+- **CLI Tools:** Long-running commands with progress tracking and durable jobs.
+- **Local Services:** Single-node Bun services that need persistence and recurring jobs.
+- **Embedded Workloads:** Sidecar workers, local automation, and job-heavy scripts.
 
 #### 19.2 Installation
 
-```bash
-npm install better-sqlite3
-# or
-bun add better-sqlite3
-```
-
-The `better-sqlite3` package is an optional peer dependency.
+No extra adapter package is required. Install `@igniter-js/jobs`, run the app in Bun, and import the adapter from `@igniter-js/jobs/adapters/bun`.
 
 #### 19.3 Basic Usage
 
 ```typescript
 import { IgniterJobs } from "@igniter-js/jobs";
-import { IgniterJobsSQLiteAdapter } from "@igniter-js/jobs/adapters";
+import { IgniterJobsBunSQLiteAdapter } from "@igniter-js/jobs/adapters/bun";
 
-// File-based (persistent)
-const adapter = IgniterJobsSQLiteAdapter.create({
+const adapter = IgniterJobsBunSQLiteAdapter.create({
   path: "./jobs.sqlite",
-});
-
-// In-memory (for tests)
-const memoryAdapter = IgniterJobsSQLiteAdapter.create({
-  path: ":memory:",
+  durable: true,
 });
 
 const jobs = IgniterJobs.create()
   .withAdapter(adapter)
   .withService("desktop-app")
+  .withEnvironment("production")
   .withContext(async () => ({ settings: loadSettings() }))
   .addQueue(syncQueue)
   .build();
@@ -602,144 +595,52 @@ const jobs = IgniterJobs.create()
 #### 19.4 Configuration Options
 
 ```typescript
-interface IgniterJobsSQLiteAdapterOptions {
-  /** 
-   * Path to the SQLite database file.
-   * Use ":memory:" for in-memory database.
-   * @example "./data/jobs.sqlite"
-   */
+interface IgniterJobsBunSQLiteAdapterOptions {
   path: string;
-
-  /**
-   * Polling interval in milliseconds for workers to check for new jobs.
-   * Lower values = more responsive, higher CPU usage.
-   * @default 500
-   */
-  pollingInterval?: number;
-
-  /**
-   * Enable WAL (Write-Ahead Logging) mode for better concurrent performance.
-   * Recommended for production use.
-   * @default true
-   */
-  enableWAL?: boolean;
+  durable?: boolean;
+  heartbeatInterval?: number;
+  pollTimeout?: number;
+  batchSize?: number;
+  lockDuration?: number;
+  maxStalledCount?: number;
 }
 ```
 
-#### 19.5 Database Schema
+#### 19.5 Runtime Characteristics
 
-The adapter automatically creates and manages the following tables:
+- Uses an embedded SQLite-backed runtime under Bun.
+- Persists jobs to a local file path.
+- Supports immediate dispatch, `at`, `delay`, `cron`, and `every` scheduling.
+- Provides progress updates, logs, worker lifecycle events, and queue inspection APIs.
+- Designed for local and embedded topologies, not distributed Redis-style clusters.
 
-```sql
--- Main jobs table
-CREATE TABLE IF NOT EXISTS jobs (
-  id TEXT PRIMARY KEY,
-  queue TEXT NOT NULL,
-  name TEXT NOT NULL,
-  input TEXT,                    -- JSON serialized
-  result TEXT,                   -- JSON serialized
-  error TEXT,
-  status TEXT NOT NULL DEFAULT 'waiting',
-  progress INTEGER DEFAULT 0,
-  priority INTEGER DEFAULT 0,
-  attempts_made INTEGER DEFAULT 0,
-  max_attempts INTEGER DEFAULT 1,
-  delay_until INTEGER,           -- Unix timestamp
-  metadata TEXT,                 -- JSON serialized
-  scope_type TEXT,
-  scope_id TEXT,
-  created_at INTEGER NOT NULL,
-  started_at INTEGER,
-  completed_at INTEGER
-);
-
--- Indexes for efficient queries
-CREATE INDEX IF NOT EXISTS idx_jobs_queue_status ON jobs(queue, status);
-CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
-CREATE INDEX IF NOT EXISTS idx_jobs_priority ON jobs(priority DESC);
-CREATE INDEX IF NOT EXISTS idx_jobs_delay ON jobs(delay_until);
-
--- Job logs table
-CREATE TABLE IF NOT EXISTS job_logs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  job_id TEXT NOT NULL,
-  level TEXT NOT NULL,
-  message TEXT NOT NULL,
-  timestamp INTEGER NOT NULL,
-  FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
-);
-
--- Paused queues tracking
-CREATE TABLE IF NOT EXISTS paused_queues (
-  name TEXT PRIMARY KEY,
-  paused_at INTEGER NOT NULL
-);
-```
-
-#### 19.6 Worker Polling Mechanism
-
-Unlike event-driven adapters (BullMQ), the SQLite adapter uses a polling-based approach:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Worker Polling Loop                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌─────────┐     ┌─────────────┐     ┌─────────────┐            │
-│  │ Wait    │────▶│ Check Jobs  │────▶│ Process Job │            │
-│  │ Polling │     │ Available?  │     │ (if any)    │            │
-│  │ Interval│     └─────────────┘     └─────────────┘            │
-│  └─────────┘           │                    │                    │
-│       ▲                │ No jobs            │ Done               │
-│       │                │                    ▼                    │
-│       └────────────────┴───────────────────┘                    │
-│                                                                  │
-│  Query Priority:                                                 │
-│  1. Delayed jobs ready to run (delay_until <= NOW)              │
-│  2. Waiting jobs, ordered by priority DESC                      │
-│  3. Retry jobs (failed but attempts < max_attempts)             │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-#### 19.7 Complete Example
+#### 19.6 Complete Example
 
 ```typescript
-import { IgniterJobsSQLiteAdapter } from "@igniter-js/jobs/adapters";
+import { IgniterJobsBunSQLiteAdapter } from "@igniter-js/jobs/adapters/bun";
 
 async function main() {
-  // 1. Create adapter
-  const adapter = IgniterJobsSQLiteAdapter.create({
+  const adapter = IgniterJobsBunSQLiteAdapter.create({
     path: "./my-app-jobs.sqlite",
-    pollingInterval: 500,
-    enableWAL: true,
+    durable: true,
+    batchSize: 25,
   });
 
-  // 2. Register jobs
   adapter.registerJob("sync", "upload", {
-    handler: async ({ input }) => {
+    handler: async ({ input, job }) => {
       const { fileId } = input as { fileId: string };
-      // Simulate upload
+      await job.updateProgress?.(25, "Uploading metadata");
       await uploadFile(fileId);
+      await job.updateProgress?.(100, "Upload completed");
       return { uploaded: true };
     },
-    onProgress: async ({ progress }) => {
-      console.log(`Upload progress: ${progress}%`);
-    },
   });
 
-  // 3. Create worker
   const worker = await adapter.createWorker({
     queues: ["sync"],
     concurrency: 2,
-    handlers: {
-      onActive: ({ job }) => console.log(`Processing: ${job.id}`),
-      onSuccess: ({ job }) => console.log(`Completed: ${job.id}`),
-      onFailure: ({ job, error }) => console.error(`Failed: ${job.id}`, error),
-    },
   });
 
-  // 4. Dispatch jobs
   const jobId = await adapter.dispatch({
     queue: "sync",
     jobName: "upload",
@@ -747,50 +648,26 @@ async function main() {
     priority: 10,
   });
 
-  console.log(`Dispatched job: ${jobId}`);
+  console.log(jobId);
 
-  // 5. Monitor status
-  const counts = await adapter.getQueueJobCounts("sync");
-  console.log(`Queue status:`, counts);
-
-  // 6. Graceful shutdown
   process.on("SIGINT", async () => {
     await worker.close();
     await adapter.shutdown();
-    process.exit(0);
   });
 }
-
-main().catch(console.error);
 ```
 
-#### 19.8 Persistence & Recovery
+#### 19.7 Persistence & Recovery
 
-Jobs are automatically persisted and survive process restarts:
+- Jobs remain on disk across process restarts.
+- Delayed and recurring work is persisted in the local SQLite backend.
+- Worker shutdown should always call `adapter.shutdown()` during graceful exits.
 
-```typescript
-// Session 1: Dispatch job and exit
-const adapter = IgniterJobsSQLiteAdapter.create({ path: "./jobs.sqlite" });
-await adapter.dispatch({
-  queue: "emails",
-  jobName: "send",
-  input: { to: "user@example.com" },
-});
-await adapter.shutdown();
-// Process exits
+#### 19.8 Limitations
 
-// Session 2: Jobs are still there
-const adapter2 = IgniterJobsSQLiteAdapter.create({ path: "./jobs.sqlite" });
-const jobs = await adapter2.searchJobs({ queue: "emails", status: ["waiting"] });
-console.log(jobs); // Shows the pending job from session 1
-```
-
-#### 19.9 Limitations
-
-- **Single Process:** WAL mode helps, but true concurrent writes from multiple processes may cause issues.
-- **Polling Overhead:** Unlike event-driven systems, there's CPU overhead from polling.
-- **No Distributed Locking:** Cannot guarantee exactly-once processing across processes.
-- **Limited Cron:** Basic cron support without advanced scheduling features.
+- **Local Topology:** The adapter is intended for Bun-local deployments and desktop-class runtimes.
+- **No Redis-style Distribution:** Use BullMQ when you need multi-node horizontal workers.
+- **Runtime Requirement:** This adapter runs only under Bun.
 
 ---
 
@@ -863,8 +740,9 @@ See `src/types/adapter.ts` for the complete interface definition.
 #### 21.2 Testing Custom Adapters
 
 Use the existing test suites as a reference:
+
 - `src/adapters/memory.adapter.spec.ts`
-- `src/adapters/sqlite.adapter.spec.ts`
+- `src/core/telemetry.spec.ts`
 
 ---
 
@@ -877,18 +755,19 @@ The `examples/` directory contains runnable examples:
 ```
 packages/jobs/examples/
 ├── README.md                 # Example documentation
-└── sqlite-example.ts         # Complete SQLite adapter demo
+└── bun-sqlite-example.ts     # Complete Bun SQLite adapter demo
 ```
 
-### 23. Running the SQLite Example
+### 23. Running the Bun SQLite Example
 
 ```bash
 cd packages/jobs
-npx tsx examples/sqlite-example.ts
+bun run examples/bun-sqlite-example.ts
 ```
 
 This example demonstrates:
-- Creating an SQLite adapter with file persistence
+
+- Creating a Bun SQLite adapter with file persistence
 - Registering multiple job types
 - Priority-based job processing
 - Delayed job scheduling
@@ -900,32 +779,32 @@ This example demonstrates:
 
 ## VI. MIGRATION GUIDE
 
-### 24. Migrating from Memory to SQLite
+### 24. Migrating from Memory to Bun SQLite
 
 For development to production-like local testing:
 
 ```typescript
 // Before: Memory adapter
-import { IgniterJobsMemoryAdapter } from "@igniter-js/jobs/adapters";
+import { IgniterJobsMemoryAdapter } from "@igniter-js/jobs/adapters/mock";
 const adapter = IgniterJobsMemoryAdapter.create();
 
-// After: SQLite adapter
-import { IgniterJobsSQLiteAdapter } from "@igniter-js/jobs/adapters";
-const adapter = IgniterJobsSQLiteAdapter.create({
+// After: Bun SQLite adapter
+import { IgniterJobsBunSQLiteAdapter } from "@igniter-js/jobs/adapters/bun";
+const adapter = IgniterJobsBunSQLiteAdapter.create({
   path: "./dev-jobs.sqlite",
 });
 
 // Rest of the code remains identical!
 ```
 
-### 25. Migrating from SQLite to BullMQ
+### 25. Migrating from Bun SQLite to BullMQ
 
 For local development to production:
 
 ```typescript
-// Before: SQLite adapter
-import { IgniterJobsSQLiteAdapter } from "@igniter-js/jobs/adapters";
-const adapter = IgniterJobsSQLiteAdapter.create({
+// Before: Bun SQLite adapter
+import { IgniterJobsBunSQLiteAdapter } from "@igniter-js/jobs/adapters/bun";
+const adapter = IgniterJobsBunSQLiteAdapter.create({
   path: "./jobs.sqlite",
 });
 
@@ -944,11 +823,9 @@ const adapter = IgniterJobsBullMQAdapter.create({
 
 ### Version 0.2.0 (2026-01-17)
 
-- **Added:** `IgniterJobsSQLiteAdapter` for persistent local job queues
-- **Added:** SQLite adapter comprehensive test suite (71 tests)
+- **Added:** `IgniterJobsBunSQLiteAdapter` for persistent local Bun job queues
 - **Added:** `examples/` directory with runnable examples
-- **Added:** `better-sqlite3` as optional peer dependency
-- **Updated:** Adapter exports to include SQLite adapter
+- **Updated:** Adapter exports to include Bun SQLite adapter
 - **Updated:** AGENTS.md with comprehensive adapter documentation
 
 ### Version 0.1.2 (2025-12-23)
@@ -965,16 +842,16 @@ const adapter = IgniterJobsBullMQAdapter.create({
 
 #### Q: Which adapter should I choose?
 
-| Environment | Recommended Adapter |
-|-------------|---------------------|
-| Unit/Integration Tests | Memory Adapter |
-| Desktop App (Tauri/Electron) | SQLite Adapter |
-| CLI Tool | SQLite Adapter |
-| MCP Server | SQLite Adapter |
-| Local Development | SQLite Adapter |
-| Production (Single Node) | SQLite or BullMQ |
-| Production (Multi Node) | BullMQ Adapter |
-| Serverless | BullMQ Adapter |
+| Environment                  | Recommended Adapter  |
+| ---------------------------- | -------------------- |
+| Unit/Integration Tests       | Memory Adapter       |
+| Desktop App (Tauri/Electron) | Bun SQLite Adapter   |
+| CLI Tool                     | Bun SQLite Adapter   |
+| MCP Server                   | Bun SQLite Adapter   |
+| Local Development            | Bun SQLite Adapter   |
+| Production (Single Node)     | Bun SQLite or BullMQ |
+| Production (Multi Node)      | BullMQ Adapter       |
+| Serverless                   | BullMQ Adapter       |
 
 #### Q: Can I switch adapters without changing business logic?
 
@@ -1003,14 +880,14 @@ adapter.registerJob("email", "send", {
 adapter.registerJob("import", "csv", {
   handler: async ({ input, job }) => {
     const rows = await parseCSV(input.file);
-    
+
     for (let i = 0; i < rows.length; i++) {
       await processRow(rows[i]);
-      
+
       // Update progress
-      await adapter.updateJobProgress(job.id, Math.floor((i / rows.length) * 100));
+      await job.updateProgress?.(Math.floor((i / rows.length) * 100));
     }
-    
+
     return { processed: rows.length };
   },
   onProgress: async ({ progress, message }) => {
@@ -1019,28 +896,24 @@ adapter.registerJob("import", "csv", {
 });
 ```
 
-#### Q: Can SQLite handle high throughput?
+#### Q: Can Bun SQLite handle high throughput?
 
-SQLite with WAL mode can handle moderate throughput (100-1000 jobs/minute) on a single machine. For higher throughput or distributed processing, use BullMQ.
+The Bun SQLite adapter handles local persistent workloads very well, especially for desktop, CLI, and embedded apps. For distributed workers or multi-node scale, use BullMQ.
 
 ### 27. Common Issues & Solutions
 
-#### Issue: "Cannot find module 'better-sqlite3'"
+#### Issue: Bun SQLite adapter throws a runtime error in Node.js
 
-**Cause:** The `better-sqlite3` peer dependency is not installed.
+**Cause:** The Bun SQLite adapter only runs inside Bun.
 
-**Solution:**
-```bash
-npm install better-sqlite3
-# If compilation fails on macOS:
-npm install better-sqlite3 --build-from-source
-```
+**Solution:** Use the BullMQ adapter in Node.js runtimes, or run the local adapter from Bun.
 
 #### Issue: Jobs stuck in "active" status after restart
 
 **Cause:** Process crashed while job was processing.
 
 **Solution:**
+
 ```typescript
 // On startup, reset stale active jobs
 const staleJobs = await adapter.searchJobs({
@@ -1058,6 +931,7 @@ for (const job of staleJobs) {
 **Cause:** Worker queues don't match job queue names.
 
 **Solution:**
+
 ```typescript
 // Ensure queue names match
 adapter.registerJob("email", "send", { ... }); // Queue: "email"
@@ -1069,40 +943,43 @@ const worker = await adapter.createWorker({
 });
 ```
 
-#### Issue: SQLite database locked
+#### Issue: Bun SQLite database locked
 
 **Cause:** Multiple processes trying to write simultaneously.
 
 **Solution:**
-- Use WAL mode (enabled by default)
-- Ensure only one process writes at a time
-- Consider BullMQ for multi-process scenarios
+
+- Ensure the local runtime is the primary writer to the database path.
+- Avoid multiple unrelated Bun processes sharing the same local queue file.
+- Consider BullMQ for multi-process or multi-node scenarios.
 
 ---
 
 ## IX. PERFORMANCE CONSIDERATIONS
 
-### 28. SQLite Adapter Performance Tips
+### 28. Bun SQLite Adapter Performance Tips
 
-1. **Use WAL Mode:** Always enable WAL mode for better read/write concurrency.
+1. **Use durable mode only for critical jobs:** durable writes trade throughput for stronger persistence.
 
-2. **Tune Polling Interval:** 
-   - Lower interval (100ms) = more responsive, higher CPU
-   - Higher interval (1000ms) = less responsive, lower CPU
+2. **Tune worker batch settings:** `batchSize`, `pollTimeout`, and `heartbeatInterval` affect local throughput.
 
 3. **Batch Operations:** When dispatching many jobs, consider batching:
+
 ```typescript
 const jobIds = [];
 for (const item of items) {
-  jobIds.push(await adapter.dispatch({
-    queue: "process",
-    jobName: "item",
-    input: item,
-  }));
+  jobIds.push(
+    await adapter.dispatch({
+      queue: "process",
+      jobName: "item",
+      input: item,
+    }),
+  );
 }
 ```
 
 4. **Clean Old Jobs:** Periodically clean completed/failed jobs:
+
 ```typescript
 await adapter.cleanQueue("email", {
   status: ["completed", "failed"],
@@ -1110,12 +987,12 @@ await adapter.cleanQueue("email", {
 });
 ```
 
-5. **Index Usage:** The adapter creates optimized indexes for common queries.
+5. **Split high-volume workloads into dedicated queues:** local SQLite workloads benefit from clear queue boundaries.
 
 ### 29. Memory Considerations
 
 - **Memory Adapter:** All jobs stored in RAM; limit maxJobHistory.
-- **SQLite Adapter:** Disk-based; memory usage scales with active jobs.
+- **Bun SQLite Adapter:** Disk-based; memory usage scales with active workers and buffered operations.
 - **BullMQ Adapter:** Redis memory; configure maxmemory policy.
 
 ---
@@ -1150,4 +1027,3 @@ const emailQueue = IgniterQueue.create("email")
 - **Encrypt at rest** if storing sensitive metadata.
 
 ---
-

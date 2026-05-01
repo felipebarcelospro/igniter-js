@@ -7,19 +7,20 @@ import type {
   IgniterCronDefinition,
   IgniterJobDefinition,
   IgniterJobsQueue,
-} from '../types'
-import type { IgniterJobsSchema } from '../types/schema'
-import { IgniterJobsError } from '../errors'
+} from "../types";
+import type { IgniterJobsSchema } from "../types/schema";
+import type { IgniterJobsJobStreamSchemaMap } from "../types/stream";
+import { IgniterJobsError } from "../errors";
 
 interface IgniterQueueBuilderState<
   TContext,
-  TJobs extends Record<string, IgniterJobDefinition<TContext, any, any>>,
+  TJobs extends Record<string, IgniterJobDefinition<TContext, any, any, any>>,
   TCron extends Record<string, IgniterCronDefinition<TContext, any>>,
   TName extends string,
 > {
-  name: TName
-  jobs: TJobs
-  crons: TCron
+  name: TName;
+  jobs: TJobs;
+  crons: TCron;
 }
 
 /**
@@ -49,14 +50,22 @@ interface IgniterQueueBuilderState<
  */
 export class IgniterQueueBuilder<
   TContext,
-  TJobs extends Record<string, IgniterJobDefinition<TContext, any, any>> = {},
+  TJobs extends Record<string, IgniterJobDefinition<TContext, any, any, any>> =
+    {},
   TCron extends Record<string, IgniterCronDefinition<TContext, any>> = {},
   TName extends string = string,
 > {
-  private readonly state: IgniterQueueBuilderState<TContext, TJobs, TCron, TName>
+  private readonly state: IgniterQueueBuilderState<
+    TContext,
+    TJobs,
+    TCron,
+    TName
+  >;
 
-  private constructor(state: IgniterQueueBuilderState<TContext, TJobs, TCron, TName>) {
-    this.state = state
+  private constructor(
+    state: IgniterQueueBuilderState<TContext, TJobs, TCron, TName>,
+  ) {
+    this.state = state;
   }
 
   /**
@@ -65,30 +74,41 @@ export class IgniterQueueBuilder<
   public static create<const TName extends string>(
     name: TName,
   ): IgniterQueueBuilder<unknown, {}, {}, TName> {
-    if (!name || typeof name !== 'string') {
+    if (!name || typeof name !== "string") {
       throw new IgniterJobsError({
-        code: 'JOBS_CONFIGURATION_INVALID',
-        message: 'Queue name must be a non-empty string.',
-      })
+        code: "JOBS_CONFIGURATION_INVALID",
+        message: "Queue name must be a non-empty string.",
+      });
     }
 
     return new IgniterQueueBuilder<unknown, {}, {}, TName>({
       name,
       jobs: {} as Record<string, any>,
       crons: {} as Record<string, any>,
-    })
+    });
   }
 
   private clone<
-    TNewJobs extends Record<string, IgniterJobDefinition<TContext, any, any>> = TJobs,
-    TNewCron extends Record<string, IgniterCronDefinition<TContext, any>> = TCron,
+    TNewJobs extends Record<
+      string,
+      IgniterJobDefinition<TContext, any, any, any>
+    > = TJobs,
+    TNewCron extends Record<string, IgniterCronDefinition<TContext, any>> =
+      TCron,
   >(
-    patch: Partial<IgniterQueueBuilderState<TContext, TNewJobs, TNewCron, TName>>,
+    patch: Partial<
+      IgniterQueueBuilderState<TContext, TNewJobs, TNewCron, TName>
+    >,
   ): IgniterQueueBuilder<TContext, TNewJobs, TNewCron, TName> {
     return new IgniterQueueBuilder<TContext, TNewJobs, TNewCron, TName>({
-      ...(this.state as unknown as IgniterQueueBuilderState<TContext, TNewJobs, TNewCron, TName>),
+      ...(this.state as unknown as IgniterQueueBuilderState<
+        TContext,
+        TNewJobs,
+        TNewCron,
+        TName
+      >),
       ...patch,
-    })
+    });
   }
 
   /**
@@ -101,58 +121,73 @@ export class IgniterQueueBuilder<
     TJobName extends string,
     TInput extends IgniterJobsSchema | unknown,
     TResult = unknown,
+    TStreamEvents extends IgniterJobsJobStreamSchemaMap | undefined = undefined,
   >(
     jobName: TJobName,
-    definition: IgniterJobDefinition<TContext, TInput, TResult>,
+    definition: IgniterJobDefinition<TContext, TInput, TResult, TStreamEvents>,
   ): IgniterQueueBuilder<
     TContext,
-    TJobs & Record<TJobName, IgniterJobDefinition<TContext, TInput, TResult>>,
+    TJobs &
+      Record<
+        TJobName,
+        IgniterJobDefinition<TContext, TInput, TResult, TStreamEvents>
+      >,
     TCron,
     TName
   > {
-    if (!jobName || typeof jobName !== 'string') {
+    if (!jobName || typeof jobName !== "string") {
       throw new IgniterJobsError({
-        code: 'JOBS_INVALID_DEFINITION',
-        message: 'Job name must be a non-empty string.',
-      })
+        code: "JOBS_INVALID_DEFINITION",
+        message: "Job name must be a non-empty string.",
+      });
     }
 
     if ((this.state.jobs as Record<string, unknown>)[jobName]) {
       throw new IgniterJobsError({
-        code: 'JOBS_DUPLICATE_JOB',
+        code: "JOBS_DUPLICATE_JOB",
         message: `Job "${jobName}" is already registered in queue "${this.state.name}".`,
-      })
+      });
     }
 
     if ((this.state.crons as Record<string, unknown>)[jobName]) {
       throw new IgniterJobsError({
-        code: 'JOBS_DUPLICATE_JOB',
+        code: "JOBS_DUPLICATE_JOB",
         message: `Job "${jobName}" conflicts with an existing cron in queue "${this.state.name}".`,
-      })
+      });
     }
 
-    if (!definition || typeof definition !== 'object') {
+    if (!definition || typeof definition !== "object") {
       throw new IgniterJobsError({
-        code: 'JOBS_INVALID_DEFINITION',
+        code: "JOBS_INVALID_DEFINITION",
         message: `Job "${jobName}" definition must be an object.`,
-      })
+      });
     }
 
-    if (!definition.handler || typeof definition.handler !== 'function') {
+    if (!definition.handler || typeof definition.handler !== "function") {
       throw new IgniterJobsError({
-        code: 'JOBS_HANDLER_REQUIRED',
+        code: "JOBS_HANDLER_REQUIRED",
         message: `Job "${jobName}" handler is required and must be a function.`,
-      })
+      });
     }
 
     const nextJobs = {
       ...(this.state.jobs as Record<string, any>),
       [jobName]: definition,
-    } as TJobs & Record<TJobName, IgniterJobDefinition<TContext, TInput, TResult>>
+    } as TJobs &
+      Record<
+        TJobName,
+        IgniterJobDefinition<TContext, TInput, TResult, TStreamEvents>
+      >;
 
-    return this.clone<TJobs & Record<TJobName, IgniterJobDefinition<TContext, TInput, TResult>>>({
+    return this.clone<
+      TJobs &
+        Record<
+          TJobName,
+          IgniterJobDefinition<TContext, TInput, TResult, TStreamEvents>
+        >
+    >({
       jobs: nextJobs,
-    })
+    });
   }
 
   /**
@@ -170,56 +205,59 @@ export class IgniterQueueBuilder<
     TCron & Record<TCronName, IgniterCronDefinition<TContext, TResult>>,
     TName
   > {
-    if (!cronName || typeof cronName !== 'string') {
+    if (!cronName || typeof cronName !== "string") {
       throw new IgniterJobsError({
-        code: 'JOBS_INVALID_CRON',
-        message: 'Cron name must be a non-empty string.',
-      })
+        code: "JOBS_INVALID_CRON",
+        message: "Cron name must be a non-empty string.",
+      });
     }
 
     if ((this.state.crons as Record<string, unknown>)[cronName]) {
       throw new IgniterJobsError({
-        code: 'JOBS_INVALID_CRON',
+        code: "JOBS_INVALID_CRON",
         message: `Cron "${cronName}" is already registered in queue "${this.state.name}".`,
-      })
+      });
     }
 
     if ((this.state.jobs as Record<string, unknown>)[cronName]) {
       throw new IgniterJobsError({
-        code: 'JOBS_INVALID_CRON',
+        code: "JOBS_INVALID_CRON",
         message: `Cron "${cronName}" conflicts with an existing job in queue "${this.state.name}".`,
-      })
+      });
     }
 
-    if (!definition || typeof definition !== 'object') {
+    if (!definition || typeof definition !== "object") {
       throw new IgniterJobsError({
-        code: 'JOBS_INVALID_CRON',
+        code: "JOBS_INVALID_CRON",
         message: `Cron "${cronName}" definition must be an object.`,
-      })
+      });
     }
 
-    if (!definition.cron || typeof definition.cron !== 'string') {
+    if (!definition.cron || typeof definition.cron !== "string") {
       throw new IgniterJobsError({
-        code: 'JOBS_INVALID_CRON',
+        code: "JOBS_INVALID_CRON",
         message: `Cron "${cronName}" must include a valid cron expression string.`,
-      })
+      });
     }
 
-    if (!definition.handler || typeof definition.handler !== 'function') {
+    if (!definition.handler || typeof definition.handler !== "function") {
       throw new IgniterJobsError({
-        code: 'JOBS_HANDLER_REQUIRED',
+        code: "JOBS_HANDLER_REQUIRED",
         message: `Cron "${cronName}" handler is required and must be a function.`,
-      })
+      });
     }
 
     const nextCrons = {
       ...(this.state.crons as Record<string, any>),
       [cronName]: definition,
-    } as TCron & Record<TCronName, IgniterCronDefinition<TContext, TResult>>
+    } as TCron & Record<TCronName, IgniterCronDefinition<TContext, TResult>>;
 
-    return this.clone<TJobs, TCron & Record<TCronName, IgniterCronDefinition<TContext, TResult>>>({
+    return this.clone<
+      TJobs,
+      TCron & Record<TCronName, IgniterCronDefinition<TContext, TResult>>
+    >({
       crons: nextCrons,
-    })
+    });
   }
 
   /**
@@ -230,6 +268,6 @@ export class IgniterQueueBuilder<
       name: this.state.name,
       jobs: this.state.jobs,
       crons: this.state.crons,
-    } as IgniterJobsQueue<TContext, TJobs, TCron> & { name: TName }
+    } as IgniterJobsQueue<TContext, TJobs, TCron> & { name: TName };
   }
 }

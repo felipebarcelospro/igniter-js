@@ -1,57 +1,53 @@
 {
   "name": "@igniter-js/jobs",
-  "version": "0.1.13",
-  "description": "Type-safe jobs and worker builder for Igniter.js with adapter-based backends and BullMQ integration",
+  "version": "0.1.15",
+  "description": "Type-safe jobs and workers for Igniter.js with BullMQ, Bun SQLite, and mock adapters",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "sideEffects": false,
   "files": [
     "dist",
     "README.md",
-    "CHANGELOG.md",
     "AGENTS.md"
   ],
   "exports": {
     ".": {
       "browser": "./dist/shim.js",
       "types": "./dist/index.d.ts",
-      "node": {
-        "import": "./dist/index.mjs",
-        "require": "./dist/index.cjs"
-      },
       "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "require": "./dist/index.js"
     },
     "./telemetry": {
       "browser": "./dist/shim.js",
       "types": "./dist/telemetry/index.d.ts",
-      "node": {
-        "import": "./dist/telemetry/index.mjs",
-        "require": "./dist/telemetry/index.cjs"
-      },
       "import": "./dist/telemetry/index.mjs",
-      "require": "./dist/telemetry/index.cjs"
+      "require": "./dist/telemetry/index.js"
     },
-    "./adapters": {
+    "./adapters/node": {
       "browser": "./dist/shim.js",
-      "types": "./dist/adapters/index.d.ts",
-      "node": {
-        "import": "./dist/adapters/index.mjs",
-        "require": "./dist/adapters/index.cjs"
-      },
-      "import": "./dist/adapters/index.mjs",
-      "require": "./dist/adapters/index.cjs"
+      "types": "./dist/adapters/node.d.ts",
+      "import": "./dist/adapters/node.mjs",
+      "require": "./dist/adapters/node.js"
     },
-    "./adapters/*": {
+    "./adapters/bun": {
       "browser": "./dist/shim.js",
-      "types": "./dist/adapters/*.d.ts",
-      "node": {
-        "import": "./dist/adapters/*.mjs",
-        "require": "./dist/adapters/*.cjs"
-      },
-      "import": "./dist/adapters/*.mjs",
-      "require": "./dist/adapters/*.cjs"
+      "types": "./dist/adapters/bun.d.ts",
+      "import": "./dist/adapters/bun.mjs",
+      "require": "./dist/adapters/bun.js"
+    },
+    "./adapters/mock": {
+      "browser": "./dist/shim.js",
+      "types": "./dist/adapters/mock.d.ts",
+      "import": "./dist/adapters/mock.mjs",
+      "require": "./dist/adapters/mock.js"
     }
+  },
+  "browser": {
+    "./dist/index.js": "./dist/shim.js",
+    "./dist/telemetry/index.js": "./dist/shim.js",
+    "./dist/adapters/node.js": "./dist/shim.js",
+    "./dist/adapters/bun.js": "./dist/shim.js",
+    "./dist/adapters/mock.js": "./dist/shim.js"
   },
   "scripts": {
     "dev": "tsup --watch",
@@ -86,7 +82,8 @@
   "homepage": "https://igniterjs.com",
   "dependencies": {
     "@igniter-js/common": ">=0.1.0",
-    "@igniter-js/telemetry": ">=0.1.12"
+    "@igniter-js/telemetry": ">=0.1.12",
+    "bunqueue": "^2.6.114"
   },
   "devDependencies": {
     "@igniter-js/adapter-bullmq": "1.0.0-alpha.0",
@@ -94,9 +91,7 @@
     "@igniter-js/core": "*",
     "@igniter-js/store": "*",
     "@igniter-js/telemetry": "*",
-    "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^22.7.5",
-    "better-sqlite3": "^11.0.0",
     "bullmq": "4.18.3",
     "ioredis": "^5.3.2",
     "tsup": "^8.3.0",
@@ -107,10 +102,9 @@
   "peerDependencies": {
     "@igniter-js/adapter-bullmq": ">=1.0.0-alpha.0",
     "@igniter-js/common": ">=0.1.0",
-    "@igniter-js/core": ">=*",
+    "@igniter-js/core": "*",
     "@igniter-js/store": ">=0.1.0",
     "@igniter-js/telemetry": ">=0.1.12",
-    "better-sqlite3": ">=9.0.0",
     "bullmq": ">=4.18.3",
     "ioredis": ">=5.3.2",
     "zod": ">=3.23.8"
@@ -120,9 +114,6 @@
       "optional": true
     },
     "@igniter-js/store": {
-      "optional": true
-    },
-    "better-sqlite3": {
       "optional": true
     },
     "bullmq": {
@@ -137,8 +128,5 @@
   },
   "publishConfig": {
     "access": "public"
-  },
-  "engines": {
-    "node": ">=22.0.0"
   }
 }

@@ -14,9 +14,6 @@ export * from "./core";
 // Builders
 export * from "./builders";
 
-// Adapters
-export * from "./adapters";
-
 // Errors
 export * from "./errors";
 

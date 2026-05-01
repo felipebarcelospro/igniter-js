@@ -1,10 +1,10 @@
 import type { IgniterLogger } from "@igniter-js/common";
-import type { IgniterJobsAdapter } from './adapter'
-import type { IgniterJobsQueue } from './queue'
-import type { IgniterJobsScopeDefinition } from './scope'
-import type { IgniterJobsWorkerBuilderConfig } from './worker'
-import type { IgniterJobsTelemetry } from './events'
-import type { IgniterJobDefinition } from './job'
+import type { IgniterJobsAdapter } from "./adapter";
+import type { IgniterJobsQueue } from "./queue";
+import type { IgniterJobsScopeDefinition } from "./scope";
+import type { IgniterJobsWorkerBuilderConfig } from "./worker";
+import type { IgniterJobsTelemetry } from "./events";
+import type { IgniterJobDefinition } from "./job";
 
 /**
  * Configuration used to build the jobs runtime.
@@ -14,21 +14,21 @@ export interface IgniterJobsConfig<
   TQueues extends Record<string, IgniterJobsQueue<TContext, any, any>> = {},
   TScope extends string = never,
 > {
-  adapter: IgniterJobsAdapter
-  service: string
-  environment: string
-  contextFactory: () => TContext | Promise<TContext>
-  queues: TQueues
-  scopeDefinition?: IgniterJobsScopeDefinition<TScope>
-  queueDefaults?: Partial<IgniterJobDefinition<TContext, any, any>>
-  workerDefaults?: Partial<IgniterJobsWorkerBuilderConfig>
+  adapter: IgniterJobsAdapter;
+  service: string;
+  environment: string;
+  contextFactory: () => TContext | Promise<TContext>;
+  queues: TQueues;
+  scopeDefinition?: IgniterJobsScopeDefinition<TScope>;
+  queueDefaults?: Partial<IgniterJobDefinition<TContext, any, any, any>>;
+  workerDefaults?: Partial<IgniterJobsWorkerBuilderConfig>;
   autoStartWorker?: {
-    queues: (keyof TQueues)[]
-    concurrency?: number
-    limiter?: IgniterJobsWorkerBuilderConfig['limiter']
-  }
-  logger?: IgniterLogger
-  telemetry?: IgniterJobsTelemetry
+    queues: (keyof TQueues)[];
+    concurrency?: number;
+    limiter?: IgniterJobsWorkerBuilderConfig["limiter"];
+  };
+  logger?: IgniterLogger;
+  telemetry?: IgniterJobsTelemetry;
 }
 
 /**
@@ -39,17 +39,17 @@ export interface IgniterJobsBuilderState<
   TQueues extends Record<string, IgniterJobsQueue<TContext, any, any>>,
   TScope extends string,
 > {
-  adapter?: IgniterJobsAdapter
-  service?: string
-  environment?: string
-  contextFactory?: () => TContext | Promise<TContext>
-  queues: TQueues
-  scopeDefinition?: IgniterJobsScopeDefinition<TScope>
-  queueDefaults?: Partial<IgniterJobDefinition<TContext, any, any>>
-  workerDefaults?: Partial<IgniterJobsWorkerBuilderConfig>
+  adapter?: IgniterJobsAdapter;
+  service?: string;
+  environment?: string;
+  contextFactory?: () => TContext | Promise<TContext>;
+  queues: TQueues;
+  scopeDefinition?: IgniterJobsScopeDefinition<TScope>;
+  queueDefaults?: Partial<IgniterJobDefinition<TContext, any, any, any>>;
+  workerDefaults?: Partial<IgniterJobsWorkerBuilderConfig>;
   autoStartWorker?: {
-    queues: (keyof TQueues)[]
-    concurrency?: number
-    limiter?: IgniterJobsWorkerBuilderConfig['limiter']
-  }
+    queues: (keyof TQueues)[];
+    concurrency?: number;
+    limiter?: IgniterJobsWorkerBuilderConfig["limiter"];
+  };
 }

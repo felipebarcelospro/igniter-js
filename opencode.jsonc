@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    ".github/instructions/content.instructions.md",
+    ".github/instructions/packages.instructions.md",
+    "packages/*/src/*/AGENTS.md"
+  ],
+  "mcp": {
+    "fractal": {
+      "enabled": true,
+      "type": "local",
+      "command": [
+        "bun",
+        "/Users/felipebarcelospro/Sandbox/nubler/fractal/src/@cli/index.ts",
+        "--mcp"
+      ],
+      "environment": {
+        "FRACTAL_WORKSPACE_ID": "igniter-js"
+      },
+      "timeout": 50000
+    }
+  }
+}

@@ -92,13 +92,11 @@ describe("IgniterQueue", () => {
       const queue = IgniterQueue.create("email")
         .addJob("send", {
           handler: async () => ({ ok: true }),
-          maxAttempts: 5,
-          backoff: { type: "exponential", delay: 1000 },
-          timeout: 30000,
+          attempts: 5,
         })
         .build();
 
-      expect(queue.jobs.send).toHaveProperty("maxAttempts", 5);
+      expect(queue.jobs.send).toHaveProperty("attempts", 5);
     });
 
     it("supports crons with input schemas", () => {

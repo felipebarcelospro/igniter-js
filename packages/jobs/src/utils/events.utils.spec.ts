@@ -15,7 +15,7 @@ describe("IgniterJobsEventsUtils", () => {
       const eventType = IgniterJobsEventsUtils.buildJobEventType(
         "email",
         "send",
-        "started"
+        "started",
       );
 
       expect(eventType).toBe("email:send:started");
@@ -25,17 +25,17 @@ describe("IgniterJobsEventsUtils", () => {
       const started = IgniterJobsEventsUtils.buildJobEventType(
         "email",
         "send",
-        "started"
+        "started",
       );
       const completed = IgniterJobsEventsUtils.buildJobEventType(
         "email",
         "send",
-        "completed"
+        "completed",
       );
       const failed = IgniterJobsEventsUtils.buildJobEventType(
         "email",
         "send",
-        "failed"
+        "failed",
       );
 
       expect(started).toBe("email:send:started");
@@ -47,12 +47,12 @@ describe("IgniterJobsEventsUtils", () => {
       const emailEvent = IgniterJobsEventsUtils.buildJobEventType(
         "email",
         "process",
-        "enqueued"
+        "enqueued",
       );
       const notificationsEvent = IgniterJobsEventsUtils.buildJobEventType(
         "notifications",
         "process",
-        "enqueued"
+        "enqueued",
       );
 
       expect(emailEvent).toBe("email:process:enqueued");
@@ -63,12 +63,12 @@ describe("IgniterJobsEventsUtils", () => {
       const sendEvent = IgniterJobsEventsUtils.buildJobEventType(
         "email",
         "send",
-        "started"
+        "started",
       );
       const receiveEvent = IgniterJobsEventsUtils.buildJobEventType(
         "email",
         "receive",
-        "started"
+        "started",
       );
 
       expect(sendEvent).toBe("email:send:started");
@@ -79,7 +79,7 @@ describe("IgniterJobsEventsUtils", () => {
       const eventType = IgniterJobsEventsUtils.buildJobEventType(
         "email-queue",
         "send-welcome",
-        "job-started"
+        "job-started",
       );
 
       expect(eventType).toBe("email-queue:send-welcome:job-started");
@@ -89,7 +89,7 @@ describe("IgniterJobsEventsUtils", () => {
       const eventType = IgniterJobsEventsUtils.buildJobEventType(
         "email_queue",
         "send_welcome",
-        "job_started"
+        "job_started",
       );
 
       expect(eventType).toBe("email_queue:send_welcome:job_started");
@@ -114,7 +114,8 @@ describe("IgniterJobsEventsUtils", () => {
     it("publishes event to base channel without scope", async () => {
       const event: IgniterJobsEvent = {
         type: "email:send:started",
-        timestamp: new Date().toISOString(),
+        data: {},
+        timestamp: new Date(),
       };
 
       await IgniterJobsEventsUtils.publishJobsEvent({
@@ -130,16 +131,20 @@ describe("IgniterJobsEventsUtils", () => {
           service: "my-service",
           environment: "production",
         }),
-        event
+        event,
       );
     });
 
     it("publishes event to both base and scope channels when scope is provided", async () => {
       const event: IgniterJobsEvent = {
         type: "email:send:completed",
-        timestamp: new Date().toISOString(),
+        data: {},
+        timestamp: new Date(),
       };
-      const scope: IgniterJobsScopeEntry = { type: "organization", id: "org_123" };
+      const scope: IgniterJobsScopeEntry = {
+        type: "organization",
+        id: "org_123",
+      };
 
       await IgniterJobsEventsUtils.publishJobsEvent({
         adapter: mockAdapter,
@@ -158,7 +163,7 @@ describe("IgniterJobsEventsUtils", () => {
           service: "my-service",
           environment: "production",
         }),
-        event
+        event,
       );
 
       // Second call - scope channel
@@ -169,14 +174,15 @@ describe("IgniterJobsEventsUtils", () => {
           environment: "production",
           scope: { type: "organization", id: "org_123" },
         }),
-        event
+        event,
       );
     });
 
     it("publishes to correct channels for different environments", async () => {
       const event: IgniterJobsEvent = {
         type: "test:event",
-        timestamp: new Date().toISOString(),
+        data: {},
+        timestamp: new Date(),
       };
 
       await IgniterJobsEventsUtils.publishJobsEvent({
@@ -188,14 +194,15 @@ describe("IgniterJobsEventsUtils", () => {
 
       expect(mockAdapter.publishEvent).toHaveBeenCalledWith(
         "igniter:jobs:events:development:api",
-        event
+        event,
       );
     });
 
     it("publishes to correct channels for different services", async () => {
       const event: IgniterJobsEvent = {
         type: "test:event",
-        timestamp: new Date().toISOString(),
+        data: {},
+        timestamp: new Date(),
       };
 
       await IgniterJobsEventsUtils.publishJobsEvent({
@@ -207,14 +214,15 @@ describe("IgniterJobsEventsUtils", () => {
 
       expect(mockAdapter.publishEvent).toHaveBeenCalledWith(
         "igniter:jobs:events:production:worker",
-        event
+        event,
       );
     });
 
     it("publishes to scope channel with numeric id", async () => {
       const event: IgniterJobsEvent = {
         type: "test:event",
-        timestamp: new Date().toISOString(),
+        data: {},
+        timestamp: new Date(),
       };
       const scope: IgniterJobsScopeEntry = { type: "tenant", id: 12345 };
 
@@ -229,14 +237,15 @@ describe("IgniterJobsEventsUtils", () => {
       expect(mockAdapter.publishEvent).toHaveBeenNthCalledWith(
         2,
         "igniter:jobs:events:prod:api:scope:tenant:12345",
-        event
+        event,
       );
     });
 
     it("handles different scope types", async () => {
       const event: IgniterJobsEvent = {
         type: "test:event",
-        timestamp: new Date().toISOString(),
+        data: {},
+        timestamp: new Date(),
       };
 
       // Organization scope
@@ -250,7 +259,7 @@ describe("IgniterJobsEventsUtils", () => {
 
       expect(mockAdapter.publishEvent).toHaveBeenCalledWith(
         "igniter:jobs:events:prod:api:scope:organization:org_1",
-        event
+        event,
       );
 
       vi.mocked(mockAdapter.publishEvent).mockClear();
@@ -266,15 +275,15 @@ describe("IgniterJobsEventsUtils", () => {
 
       expect(mockAdapter.publishEvent).toHaveBeenCalledWith(
         "igniter:jobs:events:prod:api:scope:user:user_1",
-        event
+        event,
       );
     });
 
     it("passes event object unchanged", async () => {
       const event: IgniterJobsEvent = {
         type: "email:send:completed",
-        timestamp: "2024-01-01T00:00:00.000Z",
-        payload: {
+        timestamp: new Date("2024-01-01T00:00:00.000Z"),
+        data: {
           jobId: "job_123",
           result: { sent: true },
         },
@@ -289,14 +298,15 @@ describe("IgniterJobsEventsUtils", () => {
 
       expect(mockAdapter.publishEvent).toHaveBeenCalledWith(
         expect.any(String),
-        event
+        event,
       );
     });
 
     it("does not publish to scope channel when scope is undefined", async () => {
       const event: IgniterJobsEvent = {
         type: "test:event",
-        timestamp: new Date().toISOString(),
+        data: {},
+        timestamp: new Date(),
       };
 
       await IgniterJobsEventsUtils.publishJobsEvent({
@@ -327,7 +337,8 @@ describe("IgniterJobsEventsUtils", () => {
 
       const event: IgniterJobsEvent = {
         type: "test:event",
-        timestamp: new Date().toISOString(),
+        data: {},
+        timestamp: new Date(),
       };
 
       await IgniterJobsEventsUtils.publishJobsEvent({

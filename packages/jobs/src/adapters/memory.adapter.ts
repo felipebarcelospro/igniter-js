@@ -4,6 +4,9 @@
  */
 
 import type {
+  IgniterJobsAdapterJobStreamReadParams,
+  IgniterJobsAdapterJobStreamSubscribeParams,
+  IgniterJobsAdapterJobStreamWriteParams,
   IgniterCronDefinition,
   IgniterJobCounts,
   IgniterJobDefinition,
@@ -21,6 +24,10 @@ import type {
   IgniterJobsWorkerHandle,
   IgniterJobsWorkerMetrics,
 } from "../types";
+import type {
+  IgniterJobsJobStreamEvent,
+  IgniterJobsJobStreamReadResult,
+} from "../types/stream";
 import { IgniterJobsIdGenerator } from "../utils/id-generator";
 import { IgniterJobsError } from "../errors";
 
@@ -59,6 +66,11 @@ type MemoryWorkerState = {
   handlers?: IgniterJobsWorkerBuilderConfig["handlers"];
 };
 
+type MemoryStreamRecord = {
+  events: IgniterJobsJobStreamEvent<string, unknown>[];
+  nextId: number;
+};
+
 /**
  * Lightweight in-memory adapter used for unit tests and local development.
  *
@@ -81,6 +93,15 @@ export class IgniterJobsMemoryAdapter implements IgniterJobsAdapter {
   >();
 
   private readonly workers = new Map<string, MemoryWorkerState>();
+  private readonly streamRecords = new Map<string, MemoryStreamRecord>();
+  private readonly streamSubscribers = new Map<
+    string,
+    Set<
+      (
+        event: IgniterJobsJobStreamEvent<string, unknown>,
+      ) => void | Promise<void>
+    >
+  >();
 
   private readonly subscribers = new Map<
     string,
@@ -492,29 +513,6 @@ export class IgniterJobsMemoryAdapter implements IgniterJobsAdapter {
     return retried;
   }
 
-  public async pauseJobType(queue: string, jobName: string): Promise<void> {
-    // Memory adapter supports job-type pause by blocking processing inside workers.
-    // We model it by marking matching waiting jobs as paused.
-    const jobIds = this.jobsByQueue.get(queue) ?? [];
-    for (const id of jobIds) {
-      const job = this.jobsById.get(id);
-      if (!job) continue;
-      if (job.name === jobName && job.status === "waiting")
-        job.status = "paused";
-    }
-  }
-
-  public async resumeJobType(queue: string, jobName: string): Promise<void> {
-    const jobIds = this.jobsByQueue.get(queue) ?? [];
-    for (const id of jobIds) {
-      const job = this.jobsById.get(id);
-      if (!job) continue;
-      if (job.name === jobName && job.status === "paused")
-        job.status = "waiting";
-    }
-    void this.kickWorkers(queue);
-  }
-
   public async searchJobs(filter: any): Promise<IgniterJobSearchResult[]> {
     const queue = filter?.queue as string | undefined;
     const statuses: IgniterJobStatus[] | undefined = filter?.status;
@@ -611,9 +609,89 @@ export class IgniterJobsMemoryAdapter implements IgniterJobsAdapter {
     };
   }
 
+  public async writeJobStreamEvent(
+    params: IgniterJobsAdapterJobStreamWriteParams,
+  ): Promise<string> {
+    const key = this.getStreamKey(params.queue, params.jobId);
+    const record = this.streamRecords.get(key) ?? { events: [], nextId: 1 };
+    const id = String(record.nextId++);
+    const event: IgniterJobsJobStreamEvent<string, unknown> = {
+      ...params.event,
+      id,
+    };
+
+    if (params.persistence?.enabled) {
+      record.events.push(event);
+      const maxEvents = params.persistence.maxEvents;
+      if (
+        typeof maxEvents === "number" &&
+        maxEvents > 0 &&
+        record.events.length > maxEvents
+      ) {
+        record.events.splice(0, record.events.length - maxEvents);
+      }
+      this.streamRecords.set(key, record);
+    } else if (!this.streamRecords.has(key)) {
+      this.streamRecords.set(key, record);
+    }
+
+    const handlers = this.streamSubscribers.get(key);
+    if (handlers?.size) {
+      await Promise.all(
+        Array.from(handlers).map(async (handler) => handler(event)),
+      );
+    }
+
+    return id;
+  }
+
+  public async readJobStream(
+    params: IgniterJobsAdapterJobStreamReadParams,
+  ): Promise<
+    IgniterJobsJobStreamReadResult<IgniterJobsJobStreamEvent<string, unknown>>
+  > {
+    const key = this.getStreamKey(params.queue, params.jobId);
+    const record = this.streamRecords.get(key);
+    if (!record) {
+      return { items: [], nextCursor: undefined, hasMore: false };
+    }
+
+    const after = params.after ? Number(params.after) : undefined;
+    const limit = params.limit ?? 100;
+    const filtered = record.events.filter((event) =>
+      typeof after === "number" ? Number(event.id) > after : true,
+    );
+    const items = filtered.slice(0, limit);
+    const hasMore = filtered.length > items.length;
+
+    return {
+      items,
+      nextCursor: items.at(-1)?.id,
+      hasMore,
+    };
+  }
+
+  public async subscribeJobStream(
+    params: IgniterJobsAdapterJobStreamSubscribeParams,
+  ): Promise<() => Promise<void>> {
+    const key = this.getStreamKey(params.queue, params.jobId);
+    const set = this.streamSubscribers.get(key) ?? new Set();
+    set.add(params.handler);
+    this.streamSubscribers.set(key, set);
+
+    return async () => {
+      const current = this.streamSubscribers.get(key);
+      if (!current) return;
+      current.delete(params.handler);
+      if (current.size === 0) this.streamSubscribers.delete(key);
+    };
+  }
+
   public async shutdown(): Promise<void> {
     this.workers.clear();
     this.subscribers.clear();
+    this.streamSubscribers.clear();
+    this.streamRecords.clear();
   }
 
   private toSearchResult(job: MemoryJob): IgniterJobSearchResult {
@@ -634,6 +712,10 @@ export class IgniterJobsMemoryAdapter implements IgniterJobsAdapter {
       metadata: job.metadata,
       scope: job.scope as any,
     };
+  }
+
+  private getStreamKey(queue: string, jobId: string): string {
+    return `${queue}:${jobId}`;
   }
 
   private toWorkerHandle(worker: MemoryWorkerState): IgniterJobsWorkerHandle {
@@ -764,11 +846,62 @@ export class IgniterJobsMemoryAdapter implements IgniterJobsAdapter {
             queue: job.queue,
             attemptsMade: job.attemptsMade,
             metadata: job.metadata,
+            updateProgress: async (progress: number, message?: string) => {
+              job.progress = progress;
+              if (message) {
+                job.logs.push({
+                  timestamp: new Date(),
+                  level: "info",
+                  message,
+                });
+              }
+              await definition.onProgress?.({
+                input: job.input as any,
+                context: {} as any,
+                job: {
+                  id: job.id,
+                  name: job.name,
+                  queue: job.queue,
+                  attemptsMade: job.attemptsMade,
+                  metadata: job.metadata,
+                },
+                scope: job.scope as any,
+                progress,
+                message,
+              } as any);
+            },
           },
           scope: job.scope as any,
           startedAt: job.startedAt,
         } as any);
       }
+
+      const updateProgress = async (progress: number, message?: string) => {
+        job.progress = progress;
+        if (message) {
+          job.logs.push({
+            timestamp: new Date(),
+            level: "info",
+            message,
+          });
+        }
+
+        await definition.onProgress?.({
+          input: job.input as any,
+          context: {} as any,
+          job: {
+            id: job.id,
+            name: job.name,
+            queue: job.queue,
+            attemptsMade: job.attemptsMade,
+            metadata: job.metadata,
+            updateProgress,
+          },
+          scope: job.scope as any,
+          progress,
+          message,
+        } as any);
+      };
 
       const result = await definition.handler({
         input: job.input as any,
@@ -779,6 +912,7 @@ export class IgniterJobsMemoryAdapter implements IgniterJobsAdapter {
           queue: job.queue,
           attemptsMade: job.attemptsMade,
           metadata: job.metadata,
+          updateProgress,
         },
         scope: job.scope as any,
       } as any);
@@ -807,6 +941,7 @@ export class IgniterJobsMemoryAdapter implements IgniterJobsAdapter {
             queue: job.queue,
             attemptsMade: job.attemptsMade,
             metadata: job.metadata,
+            updateProgress,
           },
           scope: job.scope as any,
           result,
@@ -845,6 +980,7 @@ export class IgniterJobsMemoryAdapter implements IgniterJobsAdapter {
               queue: job.queue,
               attemptsMade: job.attemptsMade,
               metadata: job.metadata,
+              updateProgress: async () => undefined,
             },
             scope: job.scope as any,
             error,

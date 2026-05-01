@@ -2,7 +2,7 @@
  * Helpers for building consistent key/queue prefixes.
  */
 export class IgniterJobsPrefix {
-  public static readonly BASE_PREFIX = 'igniter:jobs'
+  public static readonly BASE_PREFIX = "igniter:jobs";
 
   /**
    * Builds a normalized queue name using the global prefix and queue id.
@@ -14,7 +14,7 @@ export class IgniterJobsPrefix {
    * ```
    */
   public static buildQueueName(queue: string): string {
-    return `${IgniterJobsPrefix.BASE_PREFIX}:${queue}`
+    return `${IgniterJobsPrefix.BASE_PREFIX}:${queue}`;
   }
 
   /**
@@ -24,12 +24,24 @@ export class IgniterJobsPrefix {
    * Scoped events are also published to an additional channel for that scope.
    */
   public static buildEventsChannel(params: {
-    service: string
-    environment: string
-    scope?: { type: string; id: string | number }
+    service: string;
+    environment: string;
+    scope?: { type: string; id: string | number };
   }): string {
-    const base = `${IgniterJobsPrefix.BASE_PREFIX}:events:${params.environment}:${params.service}`
-    if (!params.scope) return base
-    return `${base}:scope:${params.scope.type}:${params.scope.id}`
+    const base = `${IgniterJobsPrefix.BASE_PREFIX}:events:${params.environment}:${params.service}`;
+    if (!params.scope) return base;
+    return `${base}:scope:${params.scope.type}:${params.scope.id}`;
+  }
+
+  public static buildJobStreamChannel(params: {
+    service: string;
+    environment: string;
+    queue: string;
+    jobId: string;
+    scope?: { type: string; id: string | number };
+  }): string {
+    const base = `${IgniterJobsPrefix.BASE_PREFIX}:stream:${params.environment}:${params.service}:${params.queue}:${params.jobId}`;
+    if (!params.scope) return base;
+    return `${base}:scope:${params.scope.type}:${params.scope.id}`;
   }
 }

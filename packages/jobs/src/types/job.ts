@@ -1,30 +1,35 @@
 import type { StandardSchemaV1 } from "@igniter-js/common";
-import type { IgniterJobsScopeEntry } from './scope'
-import type { IgniterJobsScheduleOptions } from './schedule'
-import type { IgniterJobsInferSchemaInput, IgniterJobsSchema } from './schema'
+import type { IgniterJobsScopeEntry } from "./scope";
+import type { IgniterJobsScheduleOptions } from "./schedule";
+import type { IgniterJobsInferSchemaInput, IgniterJobsSchema } from "./schema";
+import type {
+  IgniterJobsExecutionStreamEmitter,
+  IgniterJobsJobStreamDefinition,
+  IgniterJobsJobStreamSchemaMap,
+} from "./stream";
 
 /**
  * Rate limiter configuration applied to job dispatch or worker level.
  */
 export interface IgniterJobsLimiter {
   /** Maximum number of jobs allowed within the duration window. */
-  max: number
+  max: number;
   /** Duration of the window in milliseconds. */
-  duration: number
+  duration: number;
 }
 
 /**
  * Options controlling job dispatch behavior.
  */
 export interface IgniterJobsInvokeOptions {
-  jobId?: string
-  priority?: number
-  delay?: number
-  attempts?: number
-  removeOnComplete?: boolean | number
-  removeOnFail?: boolean | number
-  metadata?: Record<string, unknown>
-  limiter?: IgniterJobsLimiter
+  jobId?: string;
+  priority?: number;
+  delay?: number;
+  attempts?: number;
+  removeOnComplete?: boolean | number;
+  removeOnFail?: boolean | number;
+  metadata?: Record<string, unknown>;
+  limiter?: IgniterJobsLimiter;
 }
 
 /**
@@ -33,23 +38,34 @@ export interface IgniterJobsInvokeOptions {
 export interface IgniterJobsExecutionContext<
   TContext,
   TInput extends IgniterJobsSchema | unknown = unknown,
+  TStreamEvents extends IgniterJobsJobStreamSchemaMap | undefined = undefined,
 > {
-  input: IgniterJobsInferSchemaInput<TInput>
-  context: TContext
+  input: IgniterJobsInferSchemaInput<TInput>;
+  context: TContext;
   job: {
-    id: string
-    name: string
-    queue: string
-    attemptsMade: number
+    id: string;
+    name: string;
+    queue: string;
+    attemptsMade: number;
     /**
      * Timestamp when the job was created (when available).
      *
      * Some adapters may not provide this information for synthetic executions.
      */
-    createdAt?: Date
-    metadata?: Record<string, unknown>
-  }
-  scope?: IgniterJobsScopeEntry
+    createdAt?: Date;
+    metadata?: Record<string, unknown>;
+    /**
+     * Reports job progress and triggers the public progress hook when supported by the adapter.
+     */
+    updateProgress?: (progress: number, message?: string) => Promise<void>;
+    /**
+     * Emits typed stream events for the current job execution.
+     */
+    stream: IgniterJobsExecutionStreamEmitter<
+      IgniterJobDefinition<TContext, TInput, unknown, TStreamEvents>
+    >;
+  };
+  scope?: IgniterJobsScopeEntry;
 }
 
 /**
@@ -58,36 +74,52 @@ export interface IgniterJobsExecutionContext<
 export interface IgniterJobsHookContext<
   TContext,
   TInput extends IgniterJobsSchema | unknown = unknown,
-> extends IgniterJobsExecutionContext<TContext, TInput> {
-  startedAt?: Date
-  duration?: number
+  TStreamEvents extends IgniterJobsJobStreamSchemaMap | undefined = undefined,
+> extends IgniterJobsExecutionContext<TContext, TInput, TStreamEvents> {
+  startedAt?: Date;
+  duration?: number;
 }
 
-export type IgniterJobsStartHook<TContext, TInput extends IgniterJobsSchema | unknown = unknown> = (
-  context: IgniterJobsHookContext<TContext, TInput>,
-) => void | Promise<void>
+export type IgniterJobsStartHook<
+  TContext,
+  TInput extends IgniterJobsSchema | unknown = unknown,
+  TStreamEvents extends IgniterJobsJobStreamSchemaMap | undefined = undefined,
+> = (
+  context: IgniterJobsHookContext<TContext, TInput, TStreamEvents>,
+) => void | Promise<void>;
 
 export type IgniterJobsSuccessHook<
   TContext,
   TInput extends IgniterJobsSchema | unknown = unknown,
   TResult = unknown,
+  TStreamEvents extends IgniterJobsJobStreamSchemaMap | undefined = undefined,
 > = (
-  context: IgniterJobsHookContext<TContext, TInput> & { result: TResult },
-) => void | Promise<void>
+  context: IgniterJobsHookContext<TContext, TInput, TStreamEvents> & {
+    result: TResult;
+  },
+) => void | Promise<void>;
 
 export type IgniterJobsFailureHook<
   TContext,
   TInput extends IgniterJobsSchema | unknown = unknown,
+  TStreamEvents extends IgniterJobsJobStreamSchemaMap | undefined = undefined,
 > = (
-  context: IgniterJobsHookContext<TContext, TInput> & { error: Error; isFinalAttempt: boolean },
-) => void | Promise<void>
+  context: IgniterJobsHookContext<TContext, TInput, TStreamEvents> & {
+    error: Error;
+    isFinalAttempt: boolean;
+  },
+) => void | Promise<void>;
 
 export type IgniterJobsProgressHook<
   TContext,
   TInput extends IgniterJobsSchema | unknown = unknown,
+  TStreamEvents extends IgniterJobsJobStreamSchemaMap | undefined = undefined,
 > = (
-  context: IgniterJobsHookContext<TContext, TInput> & { progress: number; message?: string },
-) => void | Promise<void>
+  context: IgniterJobsHookContext<TContext, TInput, TStreamEvents> & {
+    progress: number;
+    message?: string;
+  },
+) => void | Promise<void>;
 
 /**
  * Definition of a job registered on a queue.
@@ -96,22 +128,25 @@ export interface IgniterJobDefinition<
   TContext,
   TInput extends IgniterJobsSchema | unknown = unknown,
   TResult = unknown,
+  TStreamEvents extends IgniterJobsJobStreamSchemaMap | undefined = undefined,
 > extends IgniterJobsInvokeOptions {
   /** Optional input schema for validation. */
-  input?: TInput
+  input?: TInput;
   /** Optional output schema (validation handled externally). */
-  output?: IgniterJobsSchema
+  output?: IgniterJobsSchema;
   /** Optional queue override (creates child queue in adapters). */
-  queue?: string
+  queue?: string;
+  /** Optional stream configuration for live and persisted per-job events. */
+  stream?: IgniterJobsJobStreamDefinition<TStreamEvents>;
   /** Job handler implementation. */
   handler: (
-    context: IgniterJobsExecutionContext<TContext, TInput>,
-  ) => Promise<TResult> | TResult
+    context: IgniterJobsExecutionContext<TContext, TInput, TStreamEvents>,
+  ) => Promise<TResult> | TResult;
   /** Lifecycle hooks */
-  onStart?: IgniterJobsStartHook<TContext, TInput>
-  onProgress?: IgniterJobsProgressHook<TContext, TInput>
-  onSuccess?: IgniterJobsSuccessHook<TContext, TInput, TResult>
-  onFailure?: IgniterJobsFailureHook<TContext, TInput>
+  onStart?: IgniterJobsStartHook<TContext, TInput, TStreamEvents>;
+  onProgress?: IgniterJobsProgressHook<TContext, TInput, TStreamEvents>;
+  onSuccess?: IgniterJobsSuccessHook<TContext, TInput, TResult, TStreamEvents>;
+  onFailure?: IgniterJobsFailureHook<TContext, TInput, TStreamEvents>;
 }
 
 /**
@@ -119,76 +154,76 @@ export interface IgniterJobDefinition<
  */
 export interface IgniterCronDefinition<TContext, TResult = unknown> {
   /** Cron expression (5 or 6 fields depending on engine). */
-  cron: string
+  cron: string;
   /** Timezone used when evaluating cron expressions. */
-  tz?: string
+  tz?: string;
   /** Maximum number of executions for this schedule (adapter-dependent). */
-  maxExecutions?: number
+  maxExecutions?: number;
   /** Skip executions on weekends when true (adapter-dependent). */
-  skipWeekends?: boolean
+  skipWeekends?: boolean;
   /** Restrict executions to business hours when true (adapter-dependent). */
-  onlyBusinessHours?: boolean
+  onlyBusinessHours?: boolean;
   /** Business hours config used when `onlyBusinessHours` is enabled. */
   businessHours?: {
-    start: number
-    end: number
-    timezone?: string
-  }
+    start: number;
+    end: number;
+    timezone?: string;
+  };
   /** Only execute on these weekdays (0=Sunday..6=Saturday). */
-  onlyWeekdays?: number[]
+  onlyWeekdays?: number[];
   /** Dates to skip execution (ISO strings or Date objects). */
-  skipDates?: Array<string | Date>
+  skipDates?: Array<string | Date>;
   /** Optional start date for the schedule (adapter-dependent). */
-  startDate?: Date
+  startDate?: Date;
   /** Optional end date for the schedule (adapter-dependent). */
-  endDate?: Date
+  endDate?: Date;
   handler: (
-    context: Omit<IgniterJobsExecutionContext<TContext, unknown>, 'input'>,
-  ) => Promise<TResult> | TResult
+    context: Omit<IgniterJobsExecutionContext<TContext, unknown>, "input">,
+  ) => Promise<TResult> | TResult;
 }
 
 /**
  * Supported job states for management queries.
  */
 export type IgniterJobStatus =
-  | 'waiting'
-  | 'active'
-  | 'completed'
-  | 'failed'
-  | 'delayed'
-  | 'paused'
+  | "waiting"
+  | "active"
+  | "completed"
+  | "failed"
+  | "delayed"
+  | "paused";
 
 /**
  * Result shape for job inspection calls.
  */
 export interface IgniterJobSearchResult<TResult = unknown> {
-  id: string
-  name: string
-  queue: string
-  status: IgniterJobStatus
-  input: unknown
-  result?: TResult
-  error?: string
-  progress: number
-  attemptsMade: number
-  priority: number
-  createdAt: Date
-  startedAt?: Date
-  completedAt?: Date
-  metadata?: Record<string, unknown>
-  scope?: IgniterJobsScopeEntry
+  id: string;
+  name: string;
+  queue: string;
+  status: IgniterJobStatus;
+  input: unknown;
+  result?: TResult;
+  error?: string;
+  progress: number;
+  attemptsMade: number;
+  priority: number;
+  createdAt: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+  metadata?: Record<string, unknown>;
+  scope?: IgniterJobsScopeEntry;
 }
 
 /**
  * Management counts for a queue.
  */
 export interface IgniterJobCounts {
-  waiting: number
-  active: number
-  completed: number
-  failed: number
-  delayed: number
-  paused: number
+  waiting: number;
+  active: number;
+  completed: number;
+  failed: number;
+  delayed: number;
+  paused: number;
 }
 
 /**
@@ -205,9 +240,9 @@ export interface IgniterJobCounts {
  * ```
  */
 export type IgniterJobsDispatchParams<TInput = unknown> = {
-  input: TInput
-  scope?: IgniterJobsScopeEntry
-} & IgniterJobsInvokeOptions
+  input: TInput;
+  scope?: IgniterJobsScopeEntry;
+} & IgniterJobsInvokeOptions;
 
 /**
  * Parameters accepted by `.schedule()`.
@@ -215,4 +250,4 @@ export type IgniterJobsDispatchParams<TInput = unknown> = {
  * Scheduling options are applied in addition to base dispatch options.
  */
 export type IgniterJobsScheduleParams<TInput = unknown> =
-  IgniterJobsDispatchParams<TInput> & IgniterJobsScheduleOptions
+  IgniterJobsDispatchParams<TInput> & IgniterJobsScheduleOptions;

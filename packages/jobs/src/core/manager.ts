@@ -40,7 +40,10 @@
 
 import type { IgniterJobsConfig } from "../types/config";
 import type { IgniterJobsRuntime } from "../types/runtime";
-import type { IgniterJobsAdapter } from "../types/adapter";
+import type {
+  IgniterJobsAdapter,
+  IgniterJobsAdapterJobStreamWriteParams,
+} from "../types/adapter";
 import type {
   IgniterCronDefinition,
   IgniterJobDefinition,
@@ -60,6 +63,14 @@ import type {
   IgniterJobsScopeOptions,
 } from "../types/scope";
 import type { IgniterJobsQueue } from "../types/queue";
+import type {
+  IgniterJobsExecutionStreamEmitter,
+  IgniterJobsInferJobStreamEvent,
+  IgniterJobsJobStreamDefinition,
+  IgniterJobsJobStreamEvent,
+  IgniterJobsJobStreamReadResult,
+  IgniterJobsJobStreamSchemaMap,
+} from "../types/stream";
 
 import { IgniterWorkerBuilder } from "../builders/worker.builder";
 import { IgniterJobsError } from "../errors";
@@ -234,6 +245,7 @@ export class IgniterJobsManager<
         new IgniterWorkerBuilder({
           adapter: this.adapter,
           allowedQueues: Object.keys(this.config.queues) as any,
+          state: this.config.workerDefaults,
         }),
     };
   }
@@ -296,12 +308,16 @@ export class IgniterJobsManager<
     )) {
       // Register jobs
       for (const [jobName, def] of Object.entries(
-        queue.jobs as Record<string, IgniterJobDefinition<any, any, any>>,
+        queue.jobs as Record<string, IgniterJobDefinition<any, any, any, any>>,
       )) {
         this.adapter.registerJob(
           queueName,
           jobName,
-          this.wrapJobDefinition(queueName, jobName, def),
+          this.wrapJobDefinition(
+            queueName,
+            jobName,
+            this.getEffectiveJobDefinition(queueName, jobName, def),
+          ),
         );
       }
 
@@ -413,6 +429,7 @@ export class IgniterJobsManager<
           state: () => self.adapter.getJobState(id, queueName),
           progress: () => self.adapter.getJobProgress(id, queueName),
           logs: () => self.adapter.getJobLogs(id, queueName),
+          stream: () => self.createJobStreamAccessor(queueName, jobName, id),
         };
       },
 
@@ -422,9 +439,6 @@ export class IgniterJobsManager<
           remove: () => self.adapter.removeManyJobs(ids, queueName),
         };
       },
-
-      pause: () => self.adapter.pauseJobType(queueName, jobName),
-      resume: () => self.adapter.resumeJobType(queueName, jobName),
 
       async subscribe(handler: IgniterJobsEventHandler) {
         const channel = self.buildEventsChannel();
@@ -550,7 +564,7 @@ export class IgniterJobsManager<
       "ctx.job.id": jobId,
       "ctx.job.name": jobName,
       "ctx.job.queue": queueName,
-      "ctx.job.scheduledAt": (params as any).runAt?.toISOString?.() ?? null,
+      "ctx.job.scheduledAt": params.at?.toISOString() ?? null,
       "ctx.job.cron": (params as any).cron ?? null,
     });
 
@@ -568,8 +582,8 @@ export class IgniterJobsManager<
   private wrapJobDefinition(
     queueName: string,
     jobName: string,
-    definition: IgniterJobDefinition<any, any, any>,
-  ): IgniterJobDefinition<any, any, any> {
+    definition: IgniterJobDefinition<any, any, any, any>,
+  ): IgniterJobDefinition<any, any, any, any> {
     const self = this;
 
     return {
@@ -846,11 +860,19 @@ export class IgniterJobsManager<
     const scope =
       ctx.scope ??
       IgniterJobsScopeUtils.extractScopeFromMetadata(ctx.job.metadata as any);
+    const definition = this.getJobDefinition(queueName, jobName);
+    const stream = this.createExecutionStreamEmitter(
+      queueName,
+      jobName,
+      ctx.job.id,
+      scope,
+      definition,
+    );
 
     return {
       ...ctx,
       context: realContext,
-      job: { ...ctx.job, name: jobName, queue: queueName },
+      job: { ...ctx.job, name: jobName, queue: queueName, stream },
       scope,
     };
   }
@@ -886,11 +908,189 @@ export class IgniterJobsManager<
   private getJobDefinition(
     queueName: string,
     jobName: string,
-  ): IgniterJobDefinition<any, any, any> | undefined {
+  ): IgniterJobDefinition<any, any, any, any> | undefined {
     const queue = this.config.queues[queueName] as
       | IgniterJobsQueue<any, any, any>
       | undefined;
-    return queue?.jobs?.[jobName];
+    const definition = queue?.jobs?.[jobName];
+    return definition
+      ? this.getEffectiveJobDefinition(queueName, jobName, definition)
+      : undefined;
+  }
+
+  private getEffectiveJobDefinition(
+    queueName: string,
+    jobName: string,
+    definition: IgniterJobDefinition<any, any, any, any>,
+  ): IgniterJobDefinition<any, any, any, any> {
+    const queue = this.config.queues[queueName] as
+      | IgniterJobsQueue<any, any, any>
+      | undefined;
+
+    return {
+      ...this.config.queueDefaults,
+      ...queue?.defaultJobOptions,
+      ...definition,
+      name: jobName,
+    } as IgniterJobDefinition<any, any, any, any>;
+  }
+
+  private createExecutionStreamEmitter(
+    queueName: string,
+    jobName: string,
+    jobId: string,
+    scope: IgniterJobsScopeEntry | undefined,
+    definition?: IgniterJobDefinition<any, any, any, any>,
+  ): IgniterJobsExecutionStreamEmitter<any> {
+    return {
+      emit: async (type: string, data: unknown) => {
+        const payload = await this.normalizeStreamEmitPayload(
+          queueName,
+          jobName,
+          type,
+          data,
+          definition,
+        );
+
+        return this.adapter.writeJobStreamEvent({
+          queue: queueName,
+          jobName,
+          jobId,
+          scope,
+          persistence: definition?.stream?.persistence,
+          event: {
+            type,
+            data: payload,
+            timestamp: new Date(),
+            jobId,
+            jobName,
+            queue: queueName,
+            scope,
+          },
+        });
+      },
+    };
+  }
+
+  private createJobStreamAccessor(
+    queueName: string,
+    jobName: string,
+    jobId: string,
+  ) {
+    const definition = this.getJobDefinition(queueName, jobName);
+
+    return {
+      subscribe: async (
+        handler: (
+          event: IgniterJobsInferJobStreamEvent<any>,
+        ) => void | Promise<void>,
+      ) => {
+        return this.adapter.subscribeJobStream({
+          queue: queueName,
+          jobId,
+          handler: async (event) => {
+            const normalized = await this.normalizeStreamReadEvent(
+              queueName,
+              jobName,
+              event,
+              definition,
+            );
+            await handler(normalized as any);
+          },
+        });
+      },
+      read: async ({
+        after,
+        limit,
+      }: { after?: string; limit?: number } = {}) => {
+        if (!definition?.stream?.persistence?.enabled) {
+          return {
+            items: [],
+            nextCursor: undefined,
+            hasMore: false,
+          } as IgniterJobsJobStreamReadResult<
+            IgniterJobsInferJobStreamEvent<any>
+          >;
+        }
+
+        const result = await this.adapter.readJobStream({
+          queue: queueName,
+          jobId,
+          after,
+          limit,
+        });
+
+        return {
+          ...result,
+          items: await Promise.all(
+            result.items.map((event) =>
+              this.normalizeStreamReadEvent(
+                queueName,
+                jobName,
+                event,
+                definition,
+              ),
+            ),
+          ),
+        } as IgniterJobsJobStreamReadResult<
+          IgniterJobsInferJobStreamEvent<any>
+        >;
+      },
+    };
+  }
+
+  private async normalizeStreamEmitPayload(
+    queueName: string,
+    jobName: string,
+    type: string,
+    data: unknown,
+    definition?: IgniterJobDefinition<any, any, any, any>,
+  ): Promise<unknown> {
+    const schema = this.getJobStreamSchema(definition, type);
+    if (!schema) return data;
+
+    return IgniterJobsValidationUtils.validateInput(schema as any, data);
+  }
+
+  private async normalizeStreamReadEvent(
+    queueName: string,
+    jobName: string,
+    event: IgniterJobsJobStreamEvent<string, unknown>,
+    definition?: IgniterJobDefinition<any, any, any, any>,
+  ): Promise<IgniterJobsJobStreamEvent<string, unknown>> {
+    const schema = this.getJobStreamSchema(definition, event.type);
+    if (!schema) return event;
+
+    const normalized = await IgniterJobsValidationUtils.validateInput(
+      schema as any,
+      event.data,
+    );
+
+    return {
+      ...event,
+      data: normalized,
+    };
+  }
+
+  private getJobStreamSchema(
+    definition: IgniterJobDefinition<any, any, any, any> | undefined,
+    type: string,
+  ) {
+    const events = definition?.stream?.events as
+      | IgniterJobsJobStreamSchemaMap
+      | undefined;
+
+    if (!events) return undefined;
+
+    const schema = events[type];
+    if (!schema) {
+      throw new IgniterJobsError({
+        code: "JOBS_VALIDATION_FAILED",
+        message: `Stream event "${type}" is not registered for this job definition.`,
+      });
+    }
+
+    return schema;
   }
 
   /**

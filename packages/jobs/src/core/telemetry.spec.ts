@@ -55,10 +55,10 @@ describe("IgniterJobs Telemetry", () => {
   it("emits job.scheduled when scheduling a job", async () => {
     const jobs = createJobs(mockTelemetry) as any;
 
-    const runAt = new Date(Date.now() + 10000);
+    const at = new Date(Date.now() + 10000);
     const jobId = await jobs["test-queue"]["simple-job"].schedule({
       input: {},
-      runAt,
+      at,
     });
 
     expect(mockTelemetry.emit).toHaveBeenCalledWith(
@@ -68,7 +68,7 @@ describe("IgniterJobs Telemetry", () => {
           "ctx.job.id": jobId,
           "ctx.job.name": "simple-job",
           "ctx.job.queue": "test-queue",
-          "ctx.job.scheduledAt": runAt.toISOString(),
+          "ctx.job.scheduledAt": at.toISOString(),
         }),
       }),
     );

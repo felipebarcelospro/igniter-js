@@ -3,7 +3,7 @@
  * @module @igniter-js/jobs/adapters/bullmq
  */
 
-import type { Redis } from 'ioredis'
+import type { Redis } from "ioredis";
 import type {
   AdvancedScheduleOptions,
   IgniterJobQueueAdapter,
@@ -11,9 +11,12 @@ import type {
   JobDefinition as CoreJobDefinition,
   JobExecutionContext as CoreJobExecutionContext,
   JobWorkerConfig,
-} from '@igniter-js/core'
-import { createBullMQAdapter } from '@igniter-js/adapter-bullmq'
+} from "@igniter-js/core";
+import { createBullMQAdapter } from "@igniter-js/adapter-bullmq";
 import type {
+  IgniterJobsAdapterJobStreamReadParams,
+  IgniterJobsAdapterJobStreamSubscribeParams,
+  IgniterJobsAdapterJobStreamWriteParams,
   IgniterCronDefinition,
   IgniterJobDefinition,
   IgniterJobSearchResult,
@@ -30,15 +33,20 @@ import type {
   IgniterJobsWorkerBuilderConfig,
   IgniterJobsWorkerHandle,
   IgniterJobsWorkerMetrics,
-} from '../types'
-import { IgniterJobsPrefix } from '../utils/prefix'
-import { IgniterJobsError } from '../errors'
+} from "../types";
+import { IgniterJobsPrefix } from "../utils/prefix";
+import { IgniterJobsError } from "../errors";
+import type {
+  IgniterJobsJobStreamEvent,
+  IgniterJobsJobStreamReadResult,
+} from "../types/stream";
 
-type CoreMergedExecutor = ReturnType<IgniterJobQueueAdapter<any>['merge']>
+type CoreAdapter = IgniterJobQueueAdapter<any>;
+type CoreMergedExecutor = ReturnType<CoreAdapter["merge"]>;
 
 function toDateArray(values?: Array<string | Date>): Date[] | undefined {
-  if (!values) return undefined
-  return values.map((v) => (v instanceof Date ? v : new Date(v)))
+  if (!values) return undefined;
+  return values.map((v) => (v instanceof Date ? v : new Date(v)));
 }
 
 /**
@@ -48,98 +56,116 @@ function toDateArray(values?: Array<string | Date>): Date[] | undefined {
  * feature parity (workers, queue/job management, advanced scheduling, hooks).
  */
 export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
-  public readonly client: unknown
+  public readonly client: unknown;
 
-  private readonly redis: Redis
-  private readonly publisher: Redis
-  private readonly subscriber: Redis
-  private readonly subscribers = new Map<string, Set<(payload: any) => void>>()
+  private readonly redis: Redis;
+  private readonly publisher: Redis;
+  private readonly subscriber: Redis;
+  private readonly subscribers = new Map<string, Set<(payload: any) => void>>();
 
-  private coreAdapter: IgniterJobQueueAdapter<any> | null = null
-  private coreExecutor: CoreMergedExecutor | null = null
-  private executorDirty = true
+  private coreAdapter: CoreAdapter | null = null;
+  private coreExecutor: CoreMergedExecutor | null = null;
+  private executorDirty = true;
 
-  private readonly jobsByQueue = new Map<string, Map<string, IgniterJobDefinition<any, any, any>>>()
-  private readonly cronsByQueue = new Map<string, Map<string, IgniterCronDefinition<any, any>>>()
+  private readonly jobsByQueue = new Map<
+    string,
+    Map<string, IgniterJobDefinition<any, any, any>>
+  >();
+  private readonly cronsByQueue = new Map<
+    string,
+    Map<string, IgniterCronDefinition<any, any>>
+  >();
 
-  public readonly queues: IgniterJobsQueueManager
+  public readonly queues: IgniterJobsQueueManager;
 
   private constructor(options: IgniterJobsBullMQAdapterOptions) {
-    this.redis = options.redis
-    this.publisher = this.redis
-    this.subscriber = this.redis.duplicate()
-    this.client = { redis: this.redis }
+    this.redis = options.redis;
+    this.publisher = this.redis;
+    this.subscriber = this.redis.duplicate();
+    this.client = { redis: this.redis };
 
-    this.subscriber.on('message', (channel: string, message: string) => {
-      const set = this.subscribers.get(channel)
-      if (!set || set.size === 0) return
-      let payload: any = message
+    this.subscriber.on("message", (channel: string, message: string) => {
+      const set = this.subscribers.get(channel);
+      if (!set || set.size === 0) return;
+      let payload: any = message;
       try {
-        payload = JSON.parse(message)
+        payload = JSON.parse(message);
       } catch {
         // ignore, treat as raw
       }
-      for (const handler of set) handler(payload)
-    })
+      for (const handler of set) handler(payload);
+    });
 
     this.queues = {
       list: async () => this.listQueues(),
       get: async (name) => this.getQueueInfo(name),
       getJobCounts: async (name) => this.getQueueJobCounts(name),
       getJobs: async (name, filter) => {
-        const full = this.toCoreQueueName(name)
-        return this.core().queues.getJobs(full, filter as any) as any
+        const full = this.toCoreQueueName(name);
+        return this.core().queues.getJobs(full, filter as any) as any;
       },
       pause: async (name) => this.pauseQueue(name),
       resume: async (name) => this.resumeQueue(name),
       isPaused: async (name) => {
-        const full = this.toCoreQueueName(name)
-        return this.core().queues.isPaused(full)
+        const full = this.toCoreQueueName(name);
+        return this.core().queues.isPaused(full);
       },
       drain: async (name) => this.drainQueue(name),
       clean: async (name, options) => this.cleanQueue(name, options),
       obliterate: async (name, options) => this.obliterateQueue(name, options),
-    }
+    };
   }
 
-  public static create(options: IgniterJobsBullMQAdapterOptions): IgniterJobsAdapter {
-    return new IgniterJobsBullMQAdapter(options)
+  public static create(
+    options: IgniterJobsBullMQAdapterOptions,
+  ): IgniterJobsAdapter {
+    return new IgniterJobsBullMQAdapter(options);
   }
 
-  public registerJob(queueName: string, jobName: string, definition: IgniterJobDefinition<any, any, any>): void {
-    const map = this.jobsByQueue.get(queueName) ?? new Map()
+  public registerJob(
+    queueName: string,
+    jobName: string,
+    definition: IgniterJobDefinition<any, any, any>,
+  ): void {
+    const map = this.jobsByQueue.get(queueName) ?? new Map();
     if (map.has(jobName)) {
       throw new IgniterJobsError({
-        code: 'JOBS_DUPLICATE_JOB',
+        code: "JOBS_DUPLICATE_JOB",
         message: `Job "${jobName}" is already registered in queue "${queueName}".`,
-      })
+      });
     }
-    map.set(jobName, definition)
-    this.jobsByQueue.set(queueName, map)
-    this.executorDirty = true
+    map.set(jobName, definition);
+    this.jobsByQueue.set(queueName, map);
+    this.executorDirty = true;
   }
 
-  public registerCron(queueName: string, cronName: string, definition: IgniterCronDefinition<any, any>): void {
-    const map = this.cronsByQueue.get(queueName) ?? new Map()
+  public registerCron(
+    queueName: string,
+    cronName: string,
+    definition: IgniterCronDefinition<any, any>,
+  ): void {
+    const map = this.cronsByQueue.get(queueName) ?? new Map();
     if (map.has(cronName)) {
       throw new IgniterJobsError({
-        code: 'JOBS_INVALID_CRON',
+        code: "JOBS_INVALID_CRON",
         message: `Cron "${cronName}" is already registered in queue "${queueName}".`,
-      })
+      });
     }
-    map.set(cronName, definition)
-    this.cronsByQueue.set(queueName, map)
-    this.executorDirty = true
+    map.set(cronName, definition);
+    this.cronsByQueue.set(queueName, map);
+    this.executorDirty = true;
   }
 
-  public async dispatch(params: IgniterJobsAdapterDispatchParams): Promise<string> {
-    const executor = await this.executor()
-    const namespace = (executor as any)[params.queue]
+  public async dispatch(
+    params: IgniterJobsAdapterDispatchParams,
+  ): Promise<string> {
+    const executor = await this.executor();
+    const namespace = (executor as any)[params.queue];
     if (!namespace) {
       throw new IgniterJobsError({
-        code: 'JOBS_QUEUE_NOT_FOUND',
+        code: "JOBS_QUEUE_NOT_FOUND",
         message: `Queue "${params.queue}" is not registered in the adapter.`,
-      })
+      });
     }
     return namespace.enqueue({
       task: params.jobName,
@@ -152,17 +178,19 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
       removeOnComplete: params.removeOnComplete as any,
       removeOnFail: params.removeOnFail as any,
       limiter: params.limiter as any,
-    })
+    });
   }
 
-  public async schedule(params: IgniterJobsAdapterScheduleParams): Promise<string> {
-    const executor = await this.executor()
-    const namespace = (executor as any)[params.queue]
+  public async schedule(
+    params: IgniterJobsAdapterScheduleParams,
+  ): Promise<string> {
+    const executor = await this.executor();
+    const namespace = (executor as any)[params.queue];
     if (!namespace) {
       throw new IgniterJobsError({
-        code: 'JOBS_QUEUE_NOT_FOUND',
+        code: "JOBS_QUEUE_NOT_FOUND",
         message: `Queue "${params.queue}" is not registered in the adapter.`,
-      })
+      });
     }
 
     const schedule: AdvancedScheduleOptions = {
@@ -177,192 +205,253 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
       at: params.at,
       repeat:
         params.cron ||
-          params.every ||
-          params.maxExecutions ||
-          params.skipWeekends ||
-          params.onlyBusinessHours ||
-          params.businessHours ||
-          params.onlyWeekdays ||
-          params.skipDates
+        params.every ||
+        params.maxExecutions ||
+        params.skipWeekends ||
+        params.onlyBusinessHours ||
+        params.businessHours ||
+        params.onlyWeekdays ||
+        params.skipDates
           ? {
-            cron: params.cron,
-            every: params.every,
-            times: params.maxExecutions,
-            skipWeekends: params.skipWeekends,
-            onlyBusinessHours: params.onlyBusinessHours,
-            businessHours: params.businessHours,
-            onlyWeekdays: params.onlyWeekdays,
-            skipDates: toDateArray(params.skipDates),
-          }
+              cron: params.cron,
+              every: params.every,
+              times: params.maxExecutions,
+              skipWeekends: params.skipWeekends,
+              onlyBusinessHours: params.onlyBusinessHours,
+              businessHours: params.businessHours,
+              onlyWeekdays: params.onlyWeekdays,
+              skipDates: toDateArray(params.skipDates),
+            }
           : undefined,
-    }
+    };
 
     return namespace.schedule({
       task: params.jobName,
       input: params.input,
       ...schedule,
-    })
+    });
   }
 
-  public async getJob(jobId: string, queue?: string): Promise<IgniterJobSearchResult | null> {
-    const result = await this.core().job.get(jobId, queue ? this.toCoreQueueName(queue) : undefined)
-    return result ? this.mapJob(result, queue) : null
+  public async getJob(
+    jobId: string,
+    queue?: string,
+  ): Promise<IgniterJobSearchResult | null> {
+    const result = await this.core().job.get(
+      jobId,
+      queue ? this.toCoreQueueName(queue) : undefined,
+    );
+    return result ? this.mapJob(result, queue) : null;
   }
 
-  public async getJobState(jobId: string, queue?: string): Promise<IgniterJobStatus | null> {
-    const state = await this.core().job.getState(jobId, queue ? this.toCoreQueueName(queue) : undefined)
-    return state as any
+  public async getJobState(
+    jobId: string,
+    queue?: string,
+  ): Promise<IgniterJobStatus | null> {
+    const state = await this.core().job.getState(
+      jobId,
+      queue ? this.toCoreQueueName(queue) : undefined,
+    );
+    return state as any;
   }
 
-  public async getJobLogs(jobId: string, queue?: string): Promise<IgniterJobsJobLog[]> {
-    const logs = await this.core().job.getLogs(jobId, queue ? this.toCoreQueueName(queue) : undefined)
-    return logs as any
+  public async getJobLogs(
+    jobId: string,
+    queue?: string,
+  ): Promise<IgniterJobsJobLog[]> {
+    const logs = await this.core().job.getLogs(
+      jobId,
+      queue ? this.toCoreQueueName(queue) : undefined,
+    );
+    return logs as any;
   }
 
   public async getJobProgress(jobId: string, queue?: string): Promise<number> {
-    return this.core().job.getProgress(jobId, queue ? this.toCoreQueueName(queue) : undefined)
+    return this.core().job.getProgress(
+      jobId,
+      queue ? this.toCoreQueueName(queue) : undefined,
+    );
   }
 
   public async retryJob(jobId: string, queue?: string): Promise<void> {
-    await this.core().job.retry(jobId, queue ? this.toCoreQueueName(queue) : undefined)
+    await this.core().job.retry(
+      jobId,
+      queue ? this.toCoreQueueName(queue) : undefined,
+    );
   }
 
   public async removeJob(jobId: string, queue?: string): Promise<void> {
-    await this.core().job.remove(jobId, queue ? this.toCoreQueueName(queue) : undefined)
+    await this.core().job.remove(
+      jobId,
+      queue ? this.toCoreQueueName(queue) : undefined,
+    );
   }
 
   public async promoteJob(jobId: string, queue?: string): Promise<void> {
-    await this.core().job.promote(jobId, queue ? this.toCoreQueueName(queue) : undefined)
+    await this.core().job.promote(
+      jobId,
+      queue ? this.toCoreQueueName(queue) : undefined,
+    );
   }
 
-  public async moveJobToFailed(jobId: string, reason: string, queue?: string): Promise<void> {
-    await this.core().job.moveToFailed(jobId, reason, queue ? this.toCoreQueueName(queue) : undefined)
+  public async moveJobToFailed(
+    jobId: string,
+    reason: string,
+    queue?: string,
+  ): Promise<void> {
+    await this.core().job.moveToFailed(
+      jobId,
+      reason,
+      queue ? this.toCoreQueueName(queue) : undefined,
+    );
   }
 
   public async retryManyJobs(jobIds: string[], queue?: string): Promise<void> {
-    await this.core().job.retryMany(jobIds, queue ? this.toCoreQueueName(queue) : undefined)
+    await this.core().job.retryMany(
+      jobIds,
+      queue ? this.toCoreQueueName(queue) : undefined,
+    );
   }
 
   public async removeManyJobs(jobIds: string[], queue?: string): Promise<void> {
-    await this.core().job.removeMany(jobIds, queue ? this.toCoreQueueName(queue) : undefined)
+    await this.core().job.removeMany(
+      jobIds,
+      queue ? this.toCoreQueueName(queue) : undefined,
+    );
   }
 
-  public async getQueueInfo(queue: string): Promise<IgniterJobsQueueInfo | null> {
-    const info = await this.core().queues.get(this.toCoreQueueName(queue))
-    if (!info) return null
-    return this.mapQueueInfo(info)
+  public async getQueueInfo(
+    queue: string,
+  ): Promise<IgniterJobsQueueInfo | null> {
+    const info = await this.core().queues.get(this.toCoreQueueName(queue));
+    if (!info) return null;
+    return this.mapQueueInfo(info);
   }
 
   public async getQueueJobCounts(queue: string): Promise<any> {
-    const counts = await this.core().queues.getJobCounts(this.toCoreQueueName(queue))
-    return counts as any
+    const counts = await this.core().queues.getJobCounts(
+      this.toCoreQueueName(queue),
+    );
+    return counts as any;
   }
 
   public async listQueues(): Promise<IgniterJobsQueueInfo[]> {
-    const list = await this.core().queues.list()
-    return list.map((q) => this.mapQueueInfo(q))
+    const list = await this.core().queues.list();
+    return list.map((q) => this.mapQueueInfo(q));
   }
 
   public async pauseQueue(queue: string): Promise<void> {
-    await this.core().queues.pause(this.toCoreQueueName(queue))
+    await this.core().queues.pause(this.toCoreQueueName(queue));
   }
 
   public async resumeQueue(queue: string): Promise<void> {
-    await this.core().queues.resume(this.toCoreQueueName(queue))
+    await this.core().queues.resume(this.toCoreQueueName(queue));
   }
 
   public async drainQueue(queue: string): Promise<number> {
-    return this.core().queues.drain(this.toCoreQueueName(queue))
+    return this.core().queues.drain(this.toCoreQueueName(queue));
   }
 
-  public async cleanQueue(queue: string, options: IgniterJobsQueueCleanOptions): Promise<number> {
-    return this.core().queues.clean(this.toCoreQueueName(queue), options as any)
+  public async cleanQueue(
+    queue: string,
+    options: IgniterJobsQueueCleanOptions,
+  ): Promise<number> {
+    return this.core().queues.clean(
+      this.toCoreQueueName(queue),
+      options as any,
+    );
   }
 
-  public async obliterateQueue(queue: string, options?: { force?: boolean }): Promise<void> {
-    await this.core().queues.obliterate(this.toCoreQueueName(queue), options)
+  public async obliterateQueue(
+    queue: string,
+    options?: { force?: boolean },
+  ): Promise<void> {
+    await this.core().queues.obliterate(this.toCoreQueueName(queue), options);
   }
 
   public async retryAllInQueue(queue: string): Promise<number> {
-    const jobs = await this.core().queues.getJobs(this.toCoreQueueName(queue), { status: ['failed'], limit: 1000 } as any)
-    await Promise.all(jobs.map((j) => this.core().job.retry(j.id, this.toCoreQueueName(queue))))
-    return jobs.length
-  }
-
-  public async pauseJobType(queue: string, jobName: string): Promise<void> {
-    void queue
-    void jobName
-    throw new IgniterJobsError({
-      code: 'JOBS_QUEUE_OPERATION_FAILED',
-      message: 'BullMQ backend does not support pausing a single job type; pause the queue or adjust worker filters.',
-    })
-  }
-
-  public async resumeJobType(queue: string, jobName: string): Promise<void> {
-    void queue
-    void jobName
-    throw new IgniterJobsError({
-      code: 'JOBS_QUEUE_OPERATION_FAILED',
-      message: 'BullMQ backend does not support resuming a single job type; resume the queue or adjust worker filters.',
-    })
+    const jobs = await this.core().queues.getJobs(this.toCoreQueueName(queue), {
+      status: ["failed"],
+      limit: 1000,
+    } as any);
+    await Promise.all(
+      jobs.map((j) => this.core().job.retry(j.id, this.toCoreQueueName(queue))),
+    );
+    return jobs.length;
   }
 
   public async searchJobs(filter: any): Promise<IgniterJobSearchResult[]> {
     // Minimal implementation: list jobs from a specific queue when provided, otherwise aggregate known queues.
-    const queue = filter?.queue as string | undefined
-    const status = filter?.status as IgniterJobStatus[] | undefined
-    const limit = filter?.limit ?? 100
-    const offset = filter?.offset ?? 0
+    const queue = filter?.queue as string | undefined;
+    const status = filter?.status as IgniterJobStatus[] | undefined;
+    const limit = filter?.limit ?? 100;
+    const offset = filter?.offset ?? 0;
 
     if (queue) {
-      const jobs = await this.core().queues.getJobs(this.toCoreQueueName(queue), { status, limit, offset } as any)
-      return jobs.map((j) => this.mapJob(j as any, queue))
+      const jobs = await this.core().queues.getJobs(
+        this.toCoreQueueName(queue),
+        { status, limit, offset } as any,
+      );
+      return jobs.map((j) => this.mapJob(j as any, queue));
     }
 
-    const queues = await this.listQueues()
-    const results: IgniterJobSearchResult[] = []
+    const queues = await this.listQueues();
+    const results: IgniterJobSearchResult[] = [];
     for (const q of queues) {
-      const jobs = await this.core().queues.getJobs(this.toCoreQueueName(q.name), { status, limit, offset } as any)
-      results.push(...jobs.map((j) => this.mapJob(j as any, q.name)))
-      if (results.length >= limit) break
+      const jobs = await this.core().queues.getJobs(
+        this.toCoreQueueName(q.name),
+        { status, limit, offset } as any,
+      );
+      results.push(...jobs.map((j) => this.mapJob(j as any, q.name)));
+      if (results.length >= limit) break;
     }
-    return results.slice(0, limit)
+    return results.slice(0, limit);
   }
 
   public async searchQueues(filter: any): Promise<IgniterJobsQueueInfo[]> {
-    const all = await this.listQueues()
-    const name = filter?.name as string | undefined
-    const isPaused = filter?.isPaused as boolean | undefined
+    const all = await this.listQueues();
+    const name = filter?.name as string | undefined;
+    const isPaused = filter?.isPaused as boolean | undefined;
     return all
       .filter((q) => (name ? q.name.includes(name) : true))
-      .filter((q) => (typeof isPaused === 'boolean' ? q.isPaused === isPaused : true))
+      .filter((q) =>
+        typeof isPaused === "boolean" ? q.isPaused === isPaused : true,
+      );
   }
 
   public async searchWorkers(filter: any): Promise<IgniterJobsWorkerHandle[]> {
-    const queue = filter?.queue as string | undefined
-    const isRunning = filter?.isRunning as boolean | undefined
+    const queue = filter?.queue as string | undefined;
+    const isRunning = filter?.isRunning as boolean | undefined;
 
-    const all = Array.from(this.core().getWorkers().values())
+    const all = Array.from(this.core().getWorkers().values());
     return all
       .filter((w) => {
-        if (!queue) return true
-        const coreQueue = this.toCoreQueueName(queue)
-        const queues = (w as any).config?.queues ?? [(w as any).queueName]
-        return Array.isArray(queues) ? queues.includes(coreQueue) : false
+        if (!queue) return true;
+        const coreQueue = this.toCoreQueueName(queue);
+        const queues = (w as any).config?.queues ?? [(w as any).queueName];
+        return Array.isArray(queues) ? queues.includes(coreQueue) : false;
       })
-      .filter((w) => (typeof isRunning === 'boolean' ? (isRunning ? w.isRunning() : !w.isRunning()) : true))
-      .map((w) => this.mapWorker(w))
+      .filter((w) =>
+        typeof isRunning === "boolean"
+          ? isRunning
+            ? w.isRunning()
+            : !w.isRunning()
+          : true,
+      )
+      .map((w) => this.mapWorker(w));
   }
 
-  public async createWorker(config: IgniterJobsWorkerBuilderConfig): Promise<IgniterJobsWorkerHandle> {
+  public async createWorker(
+    config: IgniterJobsWorkerBuilderConfig,
+  ): Promise<IgniterJobsWorkerHandle> {
     // Ensure jobs/crons are registered in the underlying BullMQ adapter before starting workers.
-    await this.executor()
+    await this.executor();
 
-    const queuesSource =
-      config.queues?.length
-        ? config.queues
-        : Array.from(new Set([...this.jobsByQueue.keys(), ...this.cronsByQueue.keys()]))
-    const queues = queuesSource.map((q) => this.toCoreQueueName(q))
+    const queuesSource = config.queues?.length
+      ? config.queues
+      : Array.from(
+          new Set([...this.jobsByQueue.keys(), ...this.cronsByQueue.keys()]),
+        );
+    const queues = queuesSource.map((q) => this.toCoreQueueName(q));
     const coreConfig: JobWorkerConfig = {
       queues,
       concurrency: config.concurrency ?? 1,
@@ -371,109 +460,226 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
       onSuccess: config.handlers?.onSuccess as any,
       onFailure: config.handlers?.onFailure as any,
       onIdle: config.handlers?.onIdle as any,
-    }
-    const handle = await (this.core() as any).worker(coreConfig)
-    return this.mapWorker(handle)
+    };
+    const handle = await (this.core() as any).worker(coreConfig);
+    return this.mapWorker(handle);
   }
 
   public getWorkers(): Map<string, IgniterJobsWorkerHandle> {
-    const out = new Map<string, IgniterJobsWorkerHandle>()
-    for (const [id, handle] of this.core().getWorkers()) out.set(id, this.mapWorker(handle))
-    return out
+    const out = new Map<string, IgniterJobsWorkerHandle>();
+    for (const [id, handle] of this.core().getWorkers())
+      out.set(id, this.mapWorker(handle));
+    return out;
   }
 
   public async publishEvent(channel: string, payload: unknown): Promise<void> {
-    await this.publisher.publish(channel, JSON.stringify(payload))
+    await this.publisher.publish(channel, JSON.stringify(payload));
   }
 
-  public async subscribeEvent(channel: string, handler: IgniterJobsEventHandler): Promise<() => Promise<void>> {
-    const set = this.subscribers.get(channel) ?? new Set<(payload: any) => void>()
-    const wrapped = (payload: any) => void handler(payload as any)
-    set.add(wrapped)
-    this.subscribers.set(channel, set)
+  public async subscribeEvent(
+    channel: string,
+    handler: IgniterJobsEventHandler,
+  ): Promise<() => Promise<void>> {
+    const set =
+      this.subscribers.get(channel) ?? new Set<(payload: any) => void>();
+    const wrapped = (payload: any) => void handler(payload as any);
+    set.add(wrapped);
+    this.subscribers.set(channel, set);
 
     if (set.size === 1) {
-      await this.subscriber.subscribe(channel)
+      await this.subscriber.subscribe(channel);
     }
 
     return async () => {
-      const current = this.subscribers.get(channel)
-      if (!current) return
-      current.delete(wrapped)
+      const current = this.subscribers.get(channel);
+      if (!current) return;
+      current.delete(wrapped);
       if (current.size === 0) {
-        this.subscribers.delete(channel)
-        await this.subscriber.unsubscribe(channel)
+        this.subscribers.delete(channel);
+        await this.subscriber.unsubscribe(channel);
+      }
+    };
+  }
+
+  public async writeJobStreamEvent(
+    params: IgniterJobsAdapterJobStreamWriteParams,
+  ): Promise<string> {
+    const id = String(
+      await this.publisher.incr(
+        this.getJobStreamSequenceKey(params.queue, params.jobId),
+      ),
+    );
+    const event: IgniterJobsJobStreamEvent<string, unknown> = {
+      ...params.event,
+      id,
+    };
+
+    if (params.persistence?.enabled) {
+      const listKey = this.getJobStreamListKey(params.queue, params.jobId);
+      await this.publisher.rpush(listKey, JSON.stringify(event));
+      const maxEvents = params.persistence.maxEvents;
+      if (typeof maxEvents === "number" && maxEvents > 0) {
+        await this.publisher.ltrim(listKey, -maxEvents, -1);
       }
     }
+
+    await this.publisher.publish(
+      this.getJobStreamChannel(params.queue, params.jobId),
+      JSON.stringify(event),
+    );
+
+    return id;
+  }
+
+  public async readJobStream(
+    params: IgniterJobsAdapterJobStreamReadParams,
+  ): Promise<
+    IgniterJobsJobStreamReadResult<IgniterJobsJobStreamEvent<string, unknown>>
+  > {
+    const rows = await this.publisher.lrange(
+      this.getJobStreamListKey(params.queue, params.jobId),
+      0,
+      -1,
+    );
+
+    const after = params.after ? Number(params.after) : undefined;
+    const limit = params.limit ?? 100;
+    const parsed = rows
+      .map((row) => this.parseJobStreamRow(row))
+      .filter((event): event is IgniterJobsJobStreamEvent<string, unknown> =>
+        Boolean(event),
+      )
+      .filter((event) =>
+        typeof after === "number" ? Number(event.id) > after : true,
+      );
+
+    const items = parsed.slice(0, limit);
+    return {
+      items,
+      nextCursor: items.at(-1)?.id,
+      hasMore: parsed.length > items.length,
+    };
+  }
+
+  public async subscribeJobStream(
+    params: IgniterJobsAdapterJobStreamSubscribeParams,
+  ): Promise<() => Promise<void>> {
+    const channel = this.getJobStreamChannel(params.queue, params.jobId);
+    return this.subscribeEvent(channel, async (payload) => {
+      await params.handler(
+        payload as IgniterJobsJobStreamEvent<string, unknown>,
+      );
+    });
   }
 
   public async shutdown(): Promise<void> {
-    await this.subscriber.quit()
+    await this.subscriber.quit();
     // BullMQ adapter does not expose global shutdown on the core adapter in a single method;
     // queue/worker cleanup is handled by worker close and queue obliterate.
   }
 
-  private core(): IgniterJobQueueAdapter<any> {
+  private core(): CoreAdapter {
     if (!this.coreAdapter) {
       // We only need the Redis connection. The wrapped job handlers can create real context.
       this.coreAdapter = createBullMQAdapter({
-        store: ({ client: this.redis } as any),
-      }) as unknown as IgniterJobQueueAdapter<any>
+        store: { client: this.redis } as any,
+      }) as unknown as CoreAdapter;
     }
-
-    return this.coreAdapter
+    return this.coreAdapter;
   }
 
   private async executor(): Promise<CoreMergedExecutor> {
-    if (!this.executorDirty && this.coreExecutor) return this.coreExecutor
+    if (!this.executorDirty && this.coreExecutor) return this.coreExecutor;
 
-    const routers: Record<string, JobsRouter<any>> = {}
-    const flattened: Record<string, CoreJobDefinition<any, any, any>> = {}
+    const routers: Record<string, JobsRouter<any>> = {};
+    const flattened: Record<string, CoreJobDefinition<any, any, any>> = {};
 
-    const allQueues = new Set<string>([...this.jobsByQueue.keys(), ...this.cronsByQueue.keys()])
+    const allQueues = new Set<string>([
+      ...this.jobsByQueue.keys(),
+      ...this.cronsByQueue.keys(),
+    ]);
 
     for (const queueName of allQueues) {
-      const coreJobs: Record<string, CoreJobDefinition<any, any, any>> = {}
+      const coreJobs: Record<string, CoreJobDefinition<any, any, any>> = {};
 
-      const jobs = this.jobsByQueue.get(queueName)
+      const jobs = this.jobsByQueue.get(queueName);
       if (jobs) {
         for (const [jobName, def] of jobs.entries()) {
-          const queue = def.queue ? `${queueName}.${def.queue}` : queueName
-          const fullQueue = IgniterJobsPrefix.buildQueueName(queue)
-          coreJobs[jobName] = this.toCoreJobDefinition(queueName, jobName, def, fullQueue)
+          const queue = def.queue ? `${queueName}.${def.queue}` : queueName;
+          const fullQueue = IgniterJobsPrefix.buildQueueName(queue);
+          coreJobs[jobName] = this.toCoreJobDefinition(
+            queueName,
+            jobName,
+            def,
+            fullQueue,
+          );
         }
       }
 
-      const crons = this.cronsByQueue.get(queueName)
+      const crons = this.cronsByQueue.get(queueName);
       if (crons) {
         for (const [cronName, def] of crons.entries()) {
-          const fullQueue = IgniterJobsPrefix.buildQueueName(queueName)
-          coreJobs[cronName] = this.toCoreCronJobDefinition(queueName, cronName, def, fullQueue)
+          const fullQueue = IgniterJobsPrefix.buildQueueName(queueName);
+          coreJobs[cronName] = this.toCoreCronJobDefinition(
+            queueName,
+            cronName,
+            def,
+            fullQueue,
+          );
         }
       }
 
-      if (Object.keys(coreJobs).length === 0) continue
+      if (Object.keys(coreJobs).length === 0) continue;
 
       routers[queueName] = this.core().router({
         jobs: coreJobs as any,
         namespace: queueName,
-      })
+      });
 
       for (const [jobName, def] of Object.entries(coreJobs)) {
-        flattened[`${queueName}.${jobName}`] = def
+        flattened[`${queueName}.${jobName}`] = def;
       }
     }
 
     // Register jobs in bulk so management APIs and workers can resolve handlers.
-    await this.core().bulkRegister(flattened as any)
+    await this.core().bulkRegister(flattened as any);
 
-    this.coreExecutor = this.core().merge(routers as any) as any
-    this.executorDirty = false
-    return this.coreExecutor as CoreMergedExecutor
+    this.coreExecutor = this.core().merge(routers as any) as any;
+    this.executorDirty = false;
+    return this.coreExecutor as CoreMergedExecutor;
   }
 
   private toCoreQueueName(queueName: string): string {
-    return IgniterJobsPrefix.buildQueueName(queueName)
+    return IgniterJobsPrefix.buildQueueName(queueName);
+  }
+
+  private getJobStreamChannel(queue: string, jobId: string): string {
+    return `${IgniterJobsPrefix.BASE_PREFIX}:stream:${queue}:${jobId}:live`;
+  }
+
+  private getJobStreamListKey(queue: string, jobId: string): string {
+    return `${IgniterJobsPrefix.BASE_PREFIX}:stream:${queue}:${jobId}:events`;
+  }
+
+  private getJobStreamSequenceKey(queue: string, jobId: string): string {
+    return `${IgniterJobsPrefix.BASE_PREFIX}:stream:${queue}:${jobId}:seq`;
+  }
+
+  private parseJobStreamRow(
+    row: string,
+  ): IgniterJobsJobStreamEvent<string, unknown> | null {
+    try {
+      const parsed = JSON.parse(row) as IgniterJobsJobStreamEvent<
+        string,
+        unknown
+      >;
+      return {
+        ...parsed,
+        timestamp: new Date(parsed.timestamp),
+      };
+    } catch {
+      return null;
+    }
   }
 
   private mapQueueInfo(info: any): IgniterJobsQueueInfo {
@@ -481,17 +687,19 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
       name: this.fromCoreQueueName(info.name),
       isPaused: info.isPaused,
       jobCounts: info.jobCounts,
-    }
+    };
   }
 
   private fromCoreQueueName(full: string): string {
-    const prefix = `${IgniterJobsPrefix.BASE_PREFIX}:`
-    return full.startsWith(prefix) ? full.slice(prefix.length) : full
+    const prefix = `${IgniterJobsPrefix.BASE_PREFIX}:`;
+    return full.startsWith(prefix) ? full.slice(prefix.length) : full;
   }
 
   private mapJob(job: any, queue?: string): IgniterJobSearchResult {
-    const q = queue ?? this.fromCoreQueueName(job.metadata?.queue ?? job.queueName ?? '')
-    const scope = (job.metadata as any)?.__igniter_jobs_scope
+    const q =
+      queue ??
+      this.fromCoreQueueName(job.metadata?.queue ?? job.queueName ?? "");
+    const scope = (job.metadata as any)?.__igniter_jobs_scope;
     return {
       id: job.id,
       name: job.name,
@@ -500,7 +708,7 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
       input: job.payload,
       result: job.result,
       error: job.error,
-      progress: 0,
+      progress: typeof job.progress === "number" ? job.progress : 0,
       attemptsMade: job.attemptsMade ?? 0,
       priority: job.priority ?? 0,
       createdAt: job.createdAt,
@@ -508,11 +716,13 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
       completedAt: job.completedAt,
       metadata: job.metadata,
       scope,
-    }
+    };
   }
 
   private mapWorker(handle: any): IgniterJobsWorkerHandle {
-    const queues = (handle as any).config?.queues ?? [(handle as any).queueName]
+    const queues = (handle as any).config?.queues ?? [
+      (handle as any).queueName,
+    ];
     return {
       id: handle.id,
       queues: (queues as string[]).map((q) => this.fromCoreQueueName(q)),
@@ -523,7 +733,7 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
       isPaused: () => handle.isPaused(),
       isClosed: () => handle.isClosed(),
       getMetrics: async () => handle.getMetrics() as IgniterJobsWorkerMetrics,
-    }
+    };
   }
 
   private toCoreJobDefinition(
@@ -533,6 +743,29 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
     fullQueueName: string,
   ): CoreJobDefinition<any, any, any> {
     const handler = async (ctx: CoreJobExecutionContext<any, any>) => {
+      const updateProgress =
+        typeof (ctx.job as any)?.updateProgress === "function"
+          ? async (progress: number, message?: string) => {
+              await (ctx.job as any).updateProgress(progress);
+              await def.onProgress?.({
+                input: ctx.input as any,
+                context: ctx.context as any,
+                job: {
+                  id: ctx.job.id,
+                  name: jobName,
+                  queue: queueName,
+                  attemptsMade: ctx.job.attemptsMade,
+                  createdAt: (ctx.job as any).createdAt,
+                  metadata: ctx.job.metadata,
+                  updateProgress,
+                },
+                scope: (ctx.job.metadata as any)?.__igniter_jobs_scope,
+                progress,
+                message,
+              } as any);
+            }
+          : undefined;
+
       return def.handler({
         input: ctx.input as any,
         context: ctx.context as any,
@@ -543,10 +776,11 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
           attemptsMade: ctx.job.attemptsMade,
           createdAt: (ctx.job as any).createdAt,
           metadata: ctx.job.metadata,
+          updateProgress,
         },
         scope: (ctx.job.metadata as any)?.__igniter_jobs_scope,
-      } as any)
-    }
+      } as any);
+    };
 
     return {
       name: jobName,
@@ -564,7 +798,7 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
       onSuccess: def.onSuccess as any,
       onFailure: def.onFailure as any,
       onProgress: def.onProgress as any,
-    } as any
+    } as any;
   }
 
   private toCoreCronJobDefinition(
@@ -585,8 +819,8 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
           metadata: ctx.job.metadata,
         },
         scope: (ctx.job.metadata as any)?.__igniter_jobs_scope,
-      } as any)
-    }
+      } as any);
+    };
 
     return {
       name: cronName,
@@ -600,18 +834,26 @@ export class IgniterJobsBullMQAdapter implements IgniterJobsAdapter {
         endDate: def.endDate,
       },
       metadata:
-        def.onlyBusinessHours || def.skipWeekends || def.businessHours || def.onlyWeekdays || def.skipDates || (def.startDate && def.endDate)
+        def.onlyBusinessHours ||
+        def.skipWeekends ||
+        def.businessHours ||
+        def.onlyWeekdays ||
+        def.skipDates ||
+        (def.startDate && def.endDate)
           ? {
-            advancedScheduling: {
-              onlyBusinessHours: def.onlyBusinessHours,
-              skipWeekends: def.skipWeekends,
-              businessHours: def.businessHours,
-              skipDates: toDateArray(def.skipDates),
-              onlyWeekdays: def.onlyWeekdays,
-              between: def.startDate && def.endDate ? [def.startDate, def.endDate] : undefined,
-            },
-          }
+              advancedScheduling: {
+                onlyBusinessHours: def.onlyBusinessHours,
+                skipWeekends: def.skipWeekends,
+                businessHours: def.businessHours,
+                skipDates: toDateArray(def.skipDates),
+                onlyWeekdays: def.onlyWeekdays,
+                between:
+                  def.startDate && def.endDate
+                    ? [def.startDate, def.endDate]
+                    : undefined,
+              },
+            }
           : undefined,
-    } as any
+    } as any;
   }
 }

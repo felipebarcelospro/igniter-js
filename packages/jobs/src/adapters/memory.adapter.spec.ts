@@ -314,7 +314,7 @@ describe("IgniterJobsMemoryAdapter", () => {
         handler: async () => {
           throw new Error("Fail");
         },
-        maxAttempts: 3,
+        attempts: 3,
       });
     });
 
@@ -444,7 +444,7 @@ describe("IgniterJobsMemoryAdapter", () => {
         // but we can verify the method runs without error
         const cleaned = await adapter.cleanQueue("email", {
           status: ["completed"],
-          grace: 0,
+          olderThan: 0,
           limit: 100,
         });
 
@@ -618,7 +618,9 @@ describe("IgniterJobsMemoryAdapter", () => {
     describe("subscribeEvent()", () => {
       it("subscribes to events on a channel", async () => {
         const events: any[] = [];
-        const handler = (event: any) => events.push(event);
+        const handler = (event: any) => {
+          events.push(event);
+        };
 
         const unsubscribe = await adapter.subscribeEvent(
           "test-channel",
@@ -741,7 +743,7 @@ describe("IgniterJobsMemoryAdapter", () => {
     it("queues.clean() cleans the queue", async () => {
       const cleaned = await adapter.queues.clean("email", {
         status: ["completed"],
-        grace: 0,
+        olderThan: 0,
         limit: 100,
       });
       expect(typeof cleaned).toBe("number");

@@ -10,7 +10,7 @@
  * @example
  * ```typescript
  * import { IgniterJobs, IgniterQueue } from '@igniter-js/jobs'
- * import { IgniterJobsMemoryAdapter } from '@igniter-js/jobs/adapters'
+ * import { IgniterJobsMemoryAdapter } from '@igniter-js/jobs/adapters/mock'
  * import { z } from 'zod'
  *
  * const emailQueue = IgniterQueue.create('email')
@@ -55,7 +55,7 @@ interface IgniterJobsBuilderState<
   contextFactory?: () => TContext | Promise<TContext>;
   queues: TQueues;
   scope?: { name: TScope; options?: IgniterJobsScopeOptions };
-  queueDefaults?: Partial<IgniterJobDefinition<TContext, any, any>>;
+  queueDefaults?: Partial<IgniterJobDefinition<TContext, any, any, any>>;
   workerDefaults?: Partial<IgniterJobsWorkerBuilderConfig>;
   autoStartWorker?: {
     queues: (keyof TQueues)[];
@@ -237,7 +237,7 @@ export class IgniterJobsBuilder<
    * Applies default job options to all queues.
    */
   public withQueueDefaults(
-    defaults: Partial<IgniterJobDefinition<TContext, any, any>>,
+    defaults: Partial<IgniterJobDefinition<TContext, any, any, any>>,
   ): IgniterJobsBuilder<TContext, TQueues, TScope> {
     return this.clone({ queueDefaults: defaults });
   }
@@ -348,7 +348,7 @@ export class IgniterJobsBuilder<
  * @example
  * ```typescript
  * import { IgniterJobs, IgniterQueue } from '@igniter-js/jobs'
- * import { IgniterJobsMemoryAdapter } from '@igniter-js/jobs/adapters'
+ * import { IgniterJobsMemoryAdapter } from '@igniter-js/jobs/adapters/mock'
  * import { z } from 'zod'
  *
  * const emailQueue = IgniterQueue.create('email')
