@@ -9,11 +9,21 @@ A modern, type-safe, multi-platform bot framework for the Igniter.js ecosystem. 
 
 ---
 
+## Why @igniter-js/bot?
+
+- ✅ **Unified API** — One builder for Telegram, WhatsApp, and Discord
+- ✅ **Type safety** — Zod-backed validation with strong TypeScript types
+- ✅ **Middleware pipeline** — Auth, rate-limit, logging, custom policies
+- ✅ **Session support** — Stateful conversation flows with pluggable stores
+- ✅ **Capabilities-aware** — Guard features by adapter support at runtime
+- ✅ **Framework-ready** — Route adapters for Next.js and TanStack Start
+
 ## Table of Contents
 
 - [Key Features](#key-features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Framework Integration](#framework-integration)
 - [Builder Pattern API](#builder-pattern-api)
 - [Adapters](#adapters)
 - [Commands](#commands)
@@ -24,6 +34,9 @@ A modern, type-safe, multi-platform bot framework for the Igniter.js ecosystem. 
 - [Capabilities System](#capabilities-system)
 - [Examples](#examples)
 - [API Reference](#api-reference)
+- [Configuration](#configuration)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -117,11 +130,38 @@ await bot.start()
 
 // Use in Next.js API route
 export async function POST(req: Request) {
-  return bot.handle('telegram', req)
+  return bot.handle('telegram')(req)
 }
 ```
 
 ---
+
+## Framework Integration
+
+### Next.js (App Router)
+
+```typescript
+import { nextRouteHandlerAdapter } from '@igniter-js/bot/adapters/nextjs'
+
+const handlers = nextRouteHandlerAdapter({
+  'my-bot': bot,
+})
+
+export const GET = handlers.GET
+export const POST = handlers.POST
+```
+
+### TanStack Start
+
+```typescript
+import { tanstackStartRouteHandlerAdapter } from '@igniter-js/bot/adapters/tanstack-start'
+
+const handlers = tanstackStartRouteHandlerAdapter({
+  'my-bot': bot,
+})
+
+export const handler = handlers
+```
 
 ## Builder Pattern API
 
@@ -249,6 +289,8 @@ import {
 })
 ```
 
+**Note:** `onCommand` is stored by the builder but `Bot.process()` does not emit the `command` event yet.
+
 ### Using Plugins
 
 ```typescript
@@ -267,7 +309,7 @@ import { analyticsPlugin } from '@igniter-js/bot/plugins'
 ### Building
 
 ```typescript
-.build() // Creates immutable bot instance
+.build() // Creates the bot instance
 ```
 
 ---
@@ -384,29 +426,44 @@ const myAdapter = Bot.adapter({
   name: 'my-platform',
   parameters: z.object({
     token: z.string(),
-    handle: z.string()
+    handle: z.string().optional(),
   }),
   capabilities: {
-    content: { text: true, image: true, ... },
-    actions: { edit: true, delete: false, ... },
-    features: { webhooks: true, ... },
-    limits: { maxMessageLength: 2000, ... }
+    content: {
+      text: true,
+      image: false,
+      video: false,
+      audio: false,
+      document: false,
+      sticker: false,
+      location: false,
+      contact: false,
+      poll: false,
+      interactive: false,
+    },
+    actions: { edit: false, delete: false, react: false, pin: false, thread: false },
+    features: { webhooks: true, longPolling: false, commands: false, mentions: false, groups: false, channels: false, users: false, files: false },
+    limits: { maxMessageLength: 2000, maxFileSize: 5 * 1024 * 1024, maxButtonsPerMessage: 0 },
   },
-  async init({ config, commands, logger }) {
-    // Initialize (register webhooks, commands, etc)
+  async init({ logger }) {
+    logger?.info?.('Adapter initialized')
   },
-  async send({ channel, content, config, logger }) {
-    // Send message via platform API
-  },
-  async handle({ request, config, logger }) {
-    // Parse webhook and return context
+  async handle({ request }) {
+    const body = await request.json()
     return {
       event: 'message',
       provider: 'my-platform',
-      channel: { ... },
-      message: { ... }
+      channel: { id: body.channelId, name: body.channelId, isGroup: false },
+      message: {
+        content: { type: 'text', content: body.text, raw: body.text },
+        author: { id: body.userId, name: body.userId, username: body.userId },
+        isMentioned: true,
+      },
     }
-  }
+  },
+  async sendText({ client, channel, text }) {
+    await client?.post('/send', { channel, text })
+  },
 })
 ```
 
@@ -486,7 +543,7 @@ import { memoryStore } from '@igniter-js/bot/stores'
 
 const bot = IgniterBot
   .create()
-  .withSessionStore(memoryStore()) // or redisStore(), prismaStore()
+  .withSessionStore(memoryStore())
   .addCommand('survey', {
     name: 'survey',
     async handle(ctx) {
@@ -594,8 +651,7 @@ import { loggingMiddleware, loggingPresets } from '@igniter-js/bot/middlewares'
 ```typescript
 const myMiddleware: Middleware = async (ctx, next) => {
   console.log('Before')
-  await next() // Call next middleware/handler
-  console.log('After')
+  return next()
 }
 
 .addMiddleware(myMiddleware)
@@ -822,8 +878,8 @@ More examples in [`examples/`](./examples/) directory.
 | Method | Description |
 |--------|-------------|
 | `.create()` | Creates new builder instance |
-| `.withId(id)` | Sets bot ID (required) |
-| `.withName(name)` | Sets bot name (required) |
+| `.withId(id)` | Sets bot ID (optional, derived from handle if omitted) |
+| `.withName(name)` | Sets bot name (optional, derived from handle if omitted) |
 | `.withLogger(logger)` | Configures logger |
 | `.withSessionStore(store)` | Configures session storage |
 | `.withOptions(options)` | Advanced options |
@@ -846,7 +902,7 @@ More examples in [`examples/`](./examples/) directory.
 | Method | Description |
 |--------|-------------|
 | `start()` | Initialize bot (webhooks, commands) |
-| `handle(provider, request)` | Handle webhook request |
+| `handle(provider)` | Returns a handler `(request) => Response` |
 | `send(params)` | Send message via adapter |
 | `registerAdapter(key, adapter)` | Add adapter at runtime |
 | `registerCommand(name, command)` | Add command at runtime |
@@ -873,6 +929,76 @@ More examples in [`examples/`](./examples/) directory.
 | `react(emoji)` | Add reaction |
 
 ---
+
+## Configuration
+
+### BotOptions
+
+```typescript
+interface BotOptions {
+  timeout?: number
+  retries?: number
+  autoRegisterCommands?: boolean
+  errorHandler?: (error: BotError, context?: BotContext) => void | Promise<void>
+}
+```
+
+### RateLimitOptions
+
+```typescript
+interface RateLimitOptions {
+  maxRequests: number
+  windowMs: number
+  store?: RateLimitStore
+  keyGenerator?: (ctx: BotContext) => string
+  message?: string | ((ctx: BotContext, retryAfter: number) => string)
+  skip?: (ctx: BotContext) => boolean | Promise<boolean>
+  onLimitReached?: (ctx: BotContext, retryAfter: number) => void | Promise<void>
+}
+```
+
+### AuthOptions
+
+```typescript
+interface AuthOptions<TContext extends BotContext> {
+  allowedUsers?: string[]
+  allowedChannels?: string[]
+  blockedUsers?: string[]
+  blockedChannels?: string[]
+  checkFn?: (ctx: TContext) => boolean | Promise<boolean>
+  unauthorizedMessage?: string | ((ctx: TContext) => string)
+  skip?: (ctx: TContext) => boolean | Promise<boolean>
+  onUnauthorized?: (ctx: TContext) => void | Promise<void>
+}
+```
+
+### LoggingOptions
+
+```typescript
+interface LoggingOptions {
+  logger?: BotLogger
+  logMessages?: boolean
+  logCommands?: boolean
+  logErrors?: boolean
+  logMetrics?: boolean
+  includeUserInfo?: boolean
+  includeContent?: boolean
+  formatter?: (ctx: BotContext, event: string, data: any) => string
+  skip?: (ctx: BotContext) => boolean
+}
+```
+
+### AnalyticsOptions
+
+```typescript
+interface AnalyticsOptions {
+  trackEvent?: (event: string, properties: Record<string, any>) => void | Promise<void>
+  trackMessages?: boolean
+  trackCommands?: boolean
+  trackErrors?: boolean
+  includeUserInfo?: boolean
+}
+```
 
 ## Testing
 
@@ -917,7 +1043,7 @@ describe('My Bot', () => {
 
 ## Performance Tips
 
-- Use **memory store** for development, **Redis** for production
+- Use **memory store** for development, implement a custom store for production
 - Enable **rate limiting** to prevent spam
 - Use **logging presets** appropriate for environment
 - **Check capabilities** before attempting unsupported operations
@@ -929,20 +1055,7 @@ describe('My Bot', () => {
 
 ## Roadmap
 
-| Feature | Status |
-|---------|--------|
-| ✅ Builder Pattern | Completed |
-| ✅ Session Management | Completed |
-| ✅ Plugin System | Completed |
-| ✅ Official Middlewares | Completed |
-| ✅ Capabilities System | Completed |
-| ✅ Discord Adapter | Completed |
-| 📋 Slack Adapter | Planned |
-| 📋 Redis Session Store | Planned |
-| 📋 Prisma Session Store | Planned |
-| 📋 Interactive Components (advanced) | Planned |
-| 📋 Test Utilities | Planned |
-| 📋 CLI for scaffolding | Planned |
+See the GitHub issues and discussions for planned features.
 
 ---
 
@@ -961,11 +1074,7 @@ We welcome contributions! Please:
 ## Documentation
 
 - 📖 [Full Documentation](https://igniterjs.com/docs/bots)
-- 📘 [Builder Pattern Examples](./BUILDER_EXAMPLE.md)
-- 📗 [Migration Guide](./MIGRATION_GUIDE.md)
-- 📙 [Implementation Summary](./IMPLEMENTATION_SUMMARY.md)
 - 📕 [Agent Manual](./AGENTS.md)
-- 💡 [Code Examples](./examples/)
 
 ---
 

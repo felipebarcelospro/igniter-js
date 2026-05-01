@@ -34,9 +34,9 @@ applyTo: "**"
    - Graceful degradation for unsupported features
 
 3. **Session-Aware by Default**
-   - Every context has session access
-   - Pluggable storage backends (Memory, Redis, Prisma)
-   - Automatic cleanup and expiration
+  - Every context has session access
+  - Pluggable storage backends (Memory + custom implementations)
+  - Automatic cleanup and expiration
 
 4. **Middleware Pipeline**
    - Express-like middleware chain
@@ -77,7 +77,9 @@ The package provides organized imports for better code organization:
 - `BotError`, `BotErrorCodes`, `BotErrorCode` - Error handling
 
 **Adapters:**
-- `telegram`, `whatsapp`, `adapters` namespace
+- `telegram`, `whatsapp`, `discord`, `adapters` namespace
+- `nextRouteHandlerAdapter` (Next.js route helper)
+- `tanstackStartRouteHandlerAdapter` (TanStack Start helper)
 
 **Middlewares:**
 - All middleware functions and presets
@@ -94,13 +96,26 @@ The package provides organized imports for better code organization:
 #### Via `@igniter-js/bot/adapters` (Organized)
 
 ```typescript
-import { telegram, whatsapp, builtinAdapters } from '@igniter-js/bot/adapters'
+import { telegram, whatsapp, discord, builtinAdapters } from '@igniter-js/bot/adapters'
 ```
 
 - `telegram` - Telegram adapter factory
 - `whatsapp` - WhatsApp adapter factory
+- `discord` - Discord adapter factory
 - `builtinAdapters` - Namespace with all adapters
 - `BuiltinAdapterName` - Type helper
+
+#### Via `@igniter-js/bot/adapters/nextjs` (Route Helper)
+
+```typescript
+import { nextRouteHandlerAdapter } from '@igniter-js/bot/adapters/nextjs'
+```
+
+#### Via `@igniter-js/bot/adapters/tanstack-start` (Route Helper)
+
+```typescript
+import { tanstackStartRouteHandlerAdapter } from '@igniter-js/bot/adapters/tanstack-start'
+```
 
 #### Via `@igniter-js/bot/middlewares` (Organized)
 
@@ -149,7 +164,9 @@ import type {
 | What You Need | Import Path | Example |
 |---------------|-------------|---------|
 | Everything | `@igniter-js/bot` | `import { IgniterBot, telegram } from '@igniter-js/bot'` |
-| Adapters only | `@igniter-js/bot/adapters` | `import { telegram, whatsapp } from '@igniter-js/bot/adapters'` |
+| Adapters only | `@igniter-js/bot/adapters` | `import { telegram, whatsapp, discord } from '@igniter-js/bot/adapters'` |
+| Next.js route helper | `@igniter-js/bot/adapters/nextjs` | `import { nextRouteHandlerAdapter } from '@igniter-js/bot/adapters/nextjs'` |
+| TanStack Start helper | `@igniter-js/bot/adapters/tanstack-start` | `import { tanstackStartRouteHandlerAdapter } from '@igniter-js/bot/adapters/tanstack-start'` |
 | Middlewares only | `@igniter-js/bot/middlewares` | `import { rateLimitMiddleware } from '@igniter-js/bot/middlewares'` |
 | Plugins only | `@igniter-js/bot/plugins` | `import { analyticsPlugin } from '@igniter-js/bot/plugins'` |
 | Stores only | `@igniter-js/bot/stores` | `import { memoryStore } from '@igniter-js/bot/stores'` |
@@ -189,6 +206,16 @@ src/
       whatsapp.helpers.ts   # Parsing utilities
       whatsapp.schemas.ts   # Zod schemas for WhatsApp config
       index.ts              # Exports adapter factory
+    discord/
+      discord.adapter.ts    # Discord Interactions adapter (implements IBotAdapter)
+      discord.client.ts     # HTTP client factory for Discord API
+      discord.helpers.ts    # Parsing utilities
+      discord.schemas.ts    # Zod schemas for Discord config
+      index.ts              # Exports adapter factory
+    nextjs/
+      index.ts              # Next.js route handler adapter
+    tanstack-start/
+      index.ts              # TanStack Start route handler adapter
     index.ts             # Adapter barrel
   
   middlewares/
@@ -246,7 +273,7 @@ src/
 
 **Stores (`stores/`):**
 - `memory.ts`: In-memory session store implementation
-- Future: Redis and Prisma stores will be added here
+- Custom stores should implement `BotSessionStore`
 
 **Plugins (`plugins/`):**
 - Example plugins demonstrating the plugin system
@@ -280,8 +307,8 @@ const bot = IgniterBot
 
 | Method | Purpose | Required |
 |--------|---------|----------|
-| `withId(id)` | Set bot unique ID | Yes |
-| `withName(name)` | Set bot display name | Yes |
+| `withId(id)` | Set bot unique ID (auto-derived if omitted) | No |
+| `withName(name)` | Set bot display name (auto-derived if omitted) | No |
 | `withLogger(logger)` | Inject logger | No |
 | `withSessionStore(store)` | Configure sessions | No |
 | `withOptions(options)` | Advanced config | No |
@@ -299,19 +326,26 @@ const bot = IgniterBot
 | `onStart(handler)` | Start hook | No |
 | `build()` | Create Bot instance | Yes |
 
+**Note:** `onCommand` is stored in the builder config, but `Bot.process()` does not emit a `command` event yet.
+
 ---
 
 ## 6. Bot Instance API
 
-After calling `.build()`, you get an immutable `Bot` instance:
+After calling `.build()`, you get a `Bot` instance that supports runtime extension:
 
 ### 6.1 Core Methods
 
 | Method | Purpose |
 |--------|---------|
 | `start()` | Initialize adapters (webhooks, command registration) |
-| `handle(provider, request)` | Process webhook HTTP request |
+| `handle(provider)` | Returns a `(request) => Response` handler for GET/POST |
 | `send({ provider, channel, content, options? })` | Send message via adapter - routes to adapter-specific methods based on content type |
+
+**Handle flow:**
+- `GET` → calls `adapter.verify()` if present, otherwise responds `200 OK`
+- `POST` → calls `adapter.handle()`; returns `204` if handler returns `null`
+- Unknown adapter → `404`
 
 **Bot.send() Routing:**
 The `Bot.send()` method automatically routes to the appropriate adapter method based on the content type:
@@ -736,8 +770,7 @@ interface BotSessionStore {
 ```
 
 **Future Stores:**
-- `redisStore(client)` - Redis-backed sessions
-- `prismaStore(prisma)` - Database-backed sessions
+- Implement custom `BotSessionStore` adapters for Redis or databases as needed
 
 ### 10.3 Session Usage
 
@@ -1313,21 +1346,7 @@ chore: update dependencies to latest versions
 
 ## 20. Roadmap
 
-| Feature | Status | Priority |
-|---------|--------|----------|
-| Builder Pattern API | ✅ Complete | - |
-| Session Management | ✅ Complete | - |
-| Plugin System | ✅ Complete | - |
-| Official Middlewares | ✅ Complete | - |
-| Capabilities System | ✅ Complete | - |
-| Discord Adapter | ✅ Complete | - |
-| Slack Adapter | 📋 Planned | High |
-| Redis Session Store | 📋 Planned | High |
-| Prisma Session Store | 📋 Planned | Medium |
-| Test Utilities | 📋 Planned | High |
-| Interactive Components | 📋 Planned | Medium |
-| Long Polling Support | 📋 Planned | Low |
-| CLI Scaffolding | 📋 Planned | Low |
+Roadmap items are tracked in the GitHub issues and discussions to ensure they match the current codebase and priorities.
 
 ---
 

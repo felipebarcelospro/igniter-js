@@ -10,53 +10,8 @@ import { TelegramAdapterParams, TelegramUpdateSchema } from './telegram.schemas'
 import {
   fetchTelegramFileAsFile,
   parseTelegramMessageContent,
-  escapeMarkdownV2,
-  convertMarkdownToTelegramHTML,
-  convertMarkdownToTelegramLegacy,
-  stripMarkdown,
 } from './telegram.helpers'
 import { createTelegramClient } from './telegram.client'
-
-/**
- * Formats text for Telegram based on the parse mode and options.
- * 
- * By default, converts standard Markdown to HTML format (most forgiving).
- * If parseMode is explicitly set, uses that mode with appropriate escaping.
- * If autoFormat is false, sends text as-is (for pre-formatted content).
- * 
- * @param text The text to format
- * @param options Send options including parseMode and autoFormat
- * @returns Object with formatted text and parse_mode to use
- */
-function formatTelegramText(text: string, options?: BotSendOptions): { text: string; parseMode?: string } {
-  // If autoFormat is explicitly false, send as plain text (no formatting)
-  if (options?.autoFormat === false) {
-    return { text: stripMarkdown(text) }
-  }
-  
-  // If parseMode is explicitly set, respect it
-  if (options?.parseMode) {
-    if (options.parseMode === 'MarkdownV2') {
-      // For MarkdownV2, we escape everything (user is responsible for proper formatting)
-      return { text: escapeMarkdownV2(text), parseMode: 'MarkdownV2' }
-    }
-    if (options.parseMode === 'HTML') {
-      // Assume text is already HTML formatted
-      return { text, parseMode: 'HTML' }
-    }
-    if (options.parseMode === 'Markdown') {
-      // Legacy Markdown mode - convert standard Markdown to Telegram's legacy format
-      // This handles bullet points, **bold** -> *bold*, etc.
-      return { text: convertMarkdownToTelegramLegacy(text), parseMode: 'Markdown' }
-    }
-  }
-  
-  // Default: auto-convert Markdown to HTML (most robust for AI-generated content)
-  return { 
-    text: convertMarkdownToTelegramHTML(text), 
-    parseMode: 'HTML' 
-  }
-}
 
 // Helper to build base payload with common options
 function buildBasePayload(channel: string, options?: BotSendOptions) {
@@ -140,7 +95,7 @@ export const telegram = Bot.adapter({
     }
 
     // Build body for webhook configuration
-    const body: { url: string; secret_token?: string } = { url: config.webhook.url }
+    const body: { url: string; secret_token?: string, drop_pending_updates: boolean } = { url: config.webhook.url, drop_pending_updates: config.webhook.dropPendingUpdates ?? true }
 
     // Add secret token if provided
     if (config.webhook.secret) body.secret_token = config.webhook.secret
@@ -174,11 +129,9 @@ export const telegram = Bot.adapter({
     }
 
     const basePayload = buildBasePayload(channel, options)
-    const formatted = formatTelegramText(text, options)
     const payload = { 
       ...basePayload, 
-      text: formatted.text,
-      ...(formatted.parseMode && { parse_mode: formatted.parseMode })
+      text,
     }
     await client.post('/sendMessage', payload)
     logger?.debug?.('[telegram] text message sent', { channel })
@@ -193,9 +146,7 @@ export const telegram = Bot.adapter({
     const basePayload = buildBasePayload(channel, options)
     const payload: any = { ...basePayload, photo: image }
     if (caption) {
-      const formatted = formatTelegramText(caption, options)
-      payload.caption = formatted.text
-      if (formatted.parseMode) payload.parse_mode = formatted.parseMode
+      payload.caption = caption
     }
     await client.post('/sendPhoto', payload)
     logger?.debug?.('[telegram] image sent', { channel })
@@ -210,9 +161,7 @@ export const telegram = Bot.adapter({
     const basePayload = buildBasePayload(channel, options)
     const payload: any = { ...basePayload, video }
     if (caption) {
-      const formatted = formatTelegramText(caption, options)
-      payload.caption = formatted.text
-      if (formatted.parseMode) payload.parse_mode = formatted.parseMode
+      payload.caption = caption
     }
     await client.post('/sendVideo', payload)
     logger?.debug?.('[telegram] video sent', { channel })
@@ -241,9 +190,7 @@ export const telegram = Bot.adapter({
     const payload: any = { ...basePayload, document: file }
     if (filename) payload.filename = filename
     if (caption) {
-      const formatted = formatTelegramText(caption, options)
-      payload.caption = formatted.text
-      if (formatted.parseMode) payload.parse_mode = formatted.parseMode
+      payload.caption = caption
     }
     await client.post('/sendDocument', payload)
     logger?.debug?.('[telegram] document sent', { channel })
@@ -311,11 +258,9 @@ export const telegram = Bot.adapter({
     }
 
     const basePayload = buildBasePayload(channel, options)
-    const formatted = formatTelegramText(text, options)
     const payload: any = { 
       ...basePayload, 
-      text: formatted.text,
-      ...(formatted.parseMode && { parse_mode: formatted.parseMode })
+      text
     }
 
     // Convert BotButton[] to Telegram inline_keyboard format
@@ -393,9 +338,7 @@ export const telegram = Bot.adapter({
 
     // Handle different content types
     if (content.type === 'text') {
-      const formatted = formatTelegramText(content.content, options)
-      payload.text = formatted.text
-      if (formatted.parseMode) payload.parse_mode = formatted.parseMode
+      payload.text = content.content
       if (options?.disableWebPagePreview) payload.disable_web_page_preview = true
 
       await client.post('/editMessageText', payload)
@@ -404,11 +347,9 @@ export const telegram = Bot.adapter({
       // For media messages, we can only edit the caption
       const mediaContent = content as BotImageContent | BotVideoContent
       if (mediaContent.caption !== undefined) {
-        const formatted = formatTelegramText(mediaContent.caption, options)
         await client.post('/editMessageCaption', {
           ...payload,
-          caption: formatted.text,
-          ...(formatted.parseMode && { parse_mode: formatted.parseMode }),
+          caption: mediaContent.caption,
         })
         logger?.debug?.('[telegram] message caption edited', { channel, messageId })
       } else {

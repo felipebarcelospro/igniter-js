@@ -41,6 +41,10 @@ export const TelegramAdapterParams = z
           .optional()
           .default(process.env.TELEGRAM_WEBHOOK_SECRET || '')
           .describe('Optional secret token to validate webhook authenticity (defaults to TELEGRAM_WEBHOOK_SECRET env var if not provided)'),
+        dropPendingUpdates: z
+          .boolean()
+          .optional()
+          .describe('Whether to drop pending updates when setting the webhook (default: true)'),
       })
       .optional()
       .describe('Optional webhook configuration'),
