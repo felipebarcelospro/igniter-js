@@ -14,7 +14,7 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   external: [
-    "@igniter-js/core",
+    "@igniter-js/common",
     "@igniter-js/telemetry",
     "@aws-sdk/client-s3",
     "@aws-sdk/lib-storage",

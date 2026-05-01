@@ -1,7 +1,7 @@
 # AGENTS.md - @igniter-js/storage
 
-> **Last Updated:** 2025-12-23  
-> **Version:** 0.1.1  
+> **Last Updated:** 2026-01-29  
+> **Version:** 0.1.21  
 > **Goal:** This document serves as the complete operational manual for Code Agents maintaining and consuming the @igniter-js/storage package. It is designed to be hyper-robust, training-ready, and exhaustive, aiming for 1,500 lines of high-quality technical intelligence.
 
 ---
@@ -40,16 +40,16 @@ Maintainers must respect the following directory structure and responsibilities 
 This directory contains the concrete implementations of the `IgniterStorageAdapter` abstract class. These files are the only place where direct interaction with third-party SDKs is permitted.
 
 - `storage.adapter.ts`: **The Source of Truth**. Defines the abstract class and interfaces for all storage providers. It specifies the mandatory methods (`put`, `delete`, `list`, `exists`, `stream`) and optional ones (`copy`, `move`). It also provides shared logic like `normalizeKey`.
-- `s3.adapter.ts`: **The S3 Implementation**. Implements the adapter for AWS S3 and compatible APIs (MinIO, R2). It uses `@aws-sdk/client-s3` for commands and `@aws-sdk/lib-storage` for high-performance multipart uploads. It handles bucket auto-creation (best-effort) and public-read policy application.
-- `google-cloud.adapter.ts`: **The GCS Implementation**. Implements the adapter for Google Cloud Storage using the `@google-cloud/storage` library. It supports resumable uploads and handles bucket existence checks during the initialization of the write pipeline.
-- `mock.adapter.ts`: **The Testing Workhorse**. An in-memory, high-fidelity mock that tracks every call and stores data in a `Map`. It is the primary tool for testing both the package itself and consumer applications.
+- `s3.adapter.ts`: **The S3 Implementation**. Exports `IgniterS3StorageAdapter` and `IgniterS3Adapter`. Uses `@aws-sdk/client-s3` for commands and `@aws-sdk/lib-storage` for multipart uploads. Performs best-effort bucket creation and applies a public-read policy when possible.
+- `google-cloud.adapter.ts`: **The GCS Implementation**. Exports `IgniterGoogleCloudStorageAdapter` and `IgniterGoogleAdapter`. Uses `@google-cloud/storage` with `createWriteStream({ resumable: false })` for streams and `file.save(..., { validation: "md5" })` for buffers. Ensures the bucket exists and applies `makePublic()` when `options.public` is true.
+- `mock.adapter.ts`: **The Testing Workhorse**. Exports `MockStorageAdapter` with an in-memory `Map` and `calls` counters for `put/delete/list/exists/stream/copy/move`.
 - `index.ts`: Standard discovery point. It exports all built-in adapters to ensure they can be easily consumed by the main builder.
 
 #### `src/builders/` — The Configuration Factory
 
 This directory houses the "Accumulators" that implement the fluent API. These classes are responsible for collecting configuration state and using advanced TypeScript generics to build a strictly-typed output.
 
-- `main.builder.ts`: **IgniterStorageBuilder**. The entry point of the fluent API. It manages immutable state accumulation and uses recursive generic intersection to track and type-safe added scopes. It is responsible for the final validation and merging of environment variables during the `.build()` call.
+- `main.builder.ts`: **IgniterStorageBuilder**. The fluent entry point that accumulates immutable state and type-safe scopes. It registers default adapter factories (`s3`, `google`), supports `withAdapterFactories`, accepts adapter instances or keys (`withAdapter`), and wires `withLogger`, `withTelemetry`, policy setters, and all lifecycle hooks. It validates `baseUrl` and resolves adapters during `.build()` with environment fallbacks via `IgniterStorageEnv`.
 - `index.ts`: Builder exports.
 
 #### `src/core/` — The Runtime Heart
@@ -163,9 +163,12 @@ For EVERY public method, here is the exhaustive internal step-by-step pipeline d
 8.  **Replace Strategy Execution**:
     - If strategy is `BY_FILENAME_AND_EXTENSION`: Performs a simple `adapter.delete(exactKey)`.
     - If strategy is `BY_FILENAME`: Performs `adapter.list(prefix)`, filters by basename (ignoring extension), and deletes all matching keys in parallel.
-9.  **Physical Upload**: Call `adapter.put(key, body, options)`.
-    - S3 adapter uses the `Upload` class from `@aws-sdk/lib-storage` for optimized chunked uploads.
-    - Google adapter uses `file.save` with MD5 validation.
+9.  **Physical Upload**: Call `adapter.put(key, body, options)` with:
+  - `contentType` inferred by `IgniterStorageMime`
+  - `cacheControl: "public, max-age=31536000"`
+  - `public: true` to request public readability
+  - S3 adapter uses the `Upload` class from `@aws-sdk/lib-storage` for optimized chunked uploads (or `PutObjectCommand` for buffers).
+  - GCS adapter uses `createWriteStream({ resumable: false })` for streams and `file.save(..., { validation: "md5" })` for buffers.
 10. **Envelope Building**: Creates the `IgniterStorageFile` object, including the fully qualified public URL generated by joining `baseUrl` with the storage key.
 11. **Telemetry Success**: Emits `igniter.storage.upload.success` with `storage.duration_ms` and `storage.url`.
 12. **Hook Success**: Awaits the `onUploadSuccess` hook execution, providing the final file reference.
@@ -198,6 +201,65 @@ For EVERY public method, here is the exhaustive internal step-by-step pipeline d
 4.  **Mapping**: Iterates through the returned string array and converts each key into a full `IgniterStorageFile` metadata object using `fileFromKey`.
 5.  **Telemetry Success**: Emits `igniter.storage.list.success` with the total `storage.count`.
 
+#### 4.5 Method: `copy(from, to)`
+
+1.  **Contract Check**: Verifies if `adapter.copy` is implemented. If not, throws `IGNITER_STORAGE_COPY_NOT_SUPPORTED`.
+2.  **Key Resolution**:
+    - `fromKey`: Normalized via `resolvePath` (handles absolute URLs).
+    - `toKey`: Normalized via `resolvePath`.
+3.  **Hook Start**: Awaits `onCopyStarted` with both keys.
+4.  **Telemetry Start**: Emits `igniter.storage.copy.started` with `storage.from` and `storage.to`.
+5.  **Execution**: Calls `adapter.copy(fromKey, toKey)`.
+    - S3: Uses `CopyObjectCommand` with `public-read` ACL.
+    - GCS: Uses `file.copy`.
+6.  **Telemetry Success**: Emits `igniter.storage.copy.success` with `storage.duration_ms`.
+7.  **Hook Success**: Awaits `onCopySuccess`.
+8.  **Return**: Returns the metadata for the NEW file location.
+
+#### 4.6 Method: `move(from, to)`
+
+1.  **Contract Check**: Verifies if `adapter.move` is implemented. If not, throws `IGNITER_STORAGE_MOVE_NOT_SUPPORTED`.
+2.  **Key Resolution**: Normalizes `fromKey` and `toKey`.
+3.  **Hook Start**: Awaits `onMoveStarted`.
+4.  **Telemetry Start**: Emits `igniter.storage.move.started`.
+5.  **Execution**: Calls `adapter.move(fromKey, toKey)`.
+    - Standard implementation (if not overridden by adapter): Calls `this.copy(from, to)` followed by `this.delete(from)`.
+    - Optimized adapters (like S3/GCS) might perform this as a single atomic-ish operation if supported by the provider.
+6.  **Telemetry Success**: Emits `igniter.storage.move.success`.
+7.  **Hook Success**: Awaits `onMoveSuccess`.
+8.  **Return**: Returns the metadata for the NEW file location.
+
+#### 4.7 Method: `stream(pathOrUrl)`
+
+1.  **Key Resolution**: Normalizes input to storage key.
+2.  **Telemetry Start**: Emits `igniter.storage.stream.started`.
+3.  **Execution**: Calls `adapter.stream(key)`.
+    - Returns a `node:stream.Readable`.
+4.  **Telemetry Success**: Emits `igniter.storage.stream.success`.
+5.  **Return**: Returns the readable stream to the consumer.
+
+#### 4.8 Method: `uploadFromUrl(sourceUrl, destination, options?)`
+
+1. **Fetch**: Uses the global `fetch` API to download the remote file.
+2. **Failure Handling**:
+  - Network failure → `IGNITER_STORAGE_FETCH_FAILED`.
+  - Non-2xx response → `IGNITER_STORAGE_FETCH_FAILED` with status metadata.
+3. **Content-Type**: Reads `content-type` header and normalizes it.
+4. **Blob Conversion**: Converts the response to `ArrayBuffer` and wraps in a `Blob`.
+5. **Delegate**: Calls `upload(blob, destination, { _source: { kind: "url" }, _explicitContentType })`.
+
+#### 4.9 Method: `uploadFromBuffer(buffer, destination, options?)`
+
+1. **Normalize**: Converts `Uint8Array` or `ArrayBuffer` to a `Buffer`.
+2. **Blob Conversion**: Wraps bytes in a `Blob` with `contentType` (default `application/octet-stream`).
+3. **Delegate**: Calls `upload(blob, destination, { _source: { kind: "buffer" }, _explicitContentType })`.
+
+#### 4.10 Method: `uploadFromBase64(base64, destination, options?)`
+
+1. **Normalize**: Strips data URL prefix if present.
+2. **Decode**: Converts base64 to bytes.
+3. **Delegate**: Calls `uploadFromBuffer` using the decoded buffer.
+
 ---
 
 ### 5. Dependency & Type Graph
@@ -206,7 +268,7 @@ Maintainers must protect the architecture from "Dependency Bloat." The storage p
 
 #### Dependencies (Peer & Optional)
 
-- **`@igniter-js/core`**: Mandatory. Provides the foundational `IgniterError` class and the `IgniterLogger` interface.
+- **`@igniter-js/common`**: Mandatory. Provides the foundational `IgniterError` class and the `IgniterLogger` interface.
 - **`@igniter-js/telemetry`**: Optional peer dependency. If not present, the manager uses a "no-op" telemetry implementation that safely ignores `emit` calls.
 - **`mime-types`**: Internal dependency for mapping extensions to Content-Types.
 - **`zod`**: (Peer) Used for internal configuration validation and telemetry schema enforcement.
@@ -300,7 +362,34 @@ Fine-grained control over individual upload operations.
 
 ## II. CONSUMER GUIDE (Developer Manual)
 
-### 9. Quick Start & Common Patterns
+### 9. Distribution Anatomy (Consumption)
+
+Developers consuming this package must understand how it is distributed to ensure proper environment compatibility and optimized bundling.
+
+- **`@igniter-js/storage` (Main Entry)**:
+  - Exports the `IgniterStorage` builder and the `IgniterStorageManager`.
+  - Includes core logic, utilities, and common error classes.
+  - Protected by `shim.ts`: If imported in a browser environment, it will throw an error.
+- **`@igniter-js/storage/adapters` (Subpath)**:
+  - Contains concrete implementations for S3, GCS, and the Mock adapter.
+  - Separated to allow consumers to only import the adapter they need, keeping the bundle size small.
+- **`@igniter-js/storage/telemetry` (Subpath)**:
+  - Contains the Zod schemas and the `IgniterStorageTelemetryEvents` registry.
+  - Separated to prevent circular dependencies with the telemetry package.
+
+### 10. Best Practices & Anti-Patterns
+
+| Practice | Why? | Example |
+| :--- | :--- | :--- |
+| ✅ **Always** use scopes for isolation | Prevents path collisions and simplifies path management. | `storage.scope('user', id)` |
+| ✅ **Always** provide a `baseUrl` | Essential for generating absolute links for CDNs. | `.withUrl('https://cdn.com')` |
+| ✅ **Prefer** `uploadFromUrl` | Optimized for remote assets; avoids manual buffer management. | `storage.uploadFromUrl(url, 'dest')` |
+| ✅ **Always** use `MockStorageAdapter` in tests | Fast, deterministic, and doesn't require cloud credentials. | `.withAdapter(new MockStorageAdapter())` |
+| ❌ **Don't** use `upload` in browsers | Storage logic is server-only; use direct-to-S3 signed URLs instead. | `// Don't import in React components` |
+| ❌ **Don't** hardcode credentials | Use `IgniterStorageEnv` or environment variables for security. | `// Don't put keys in source code` |
+| ❌ **Don't** skip error handling | Storage operations can fail; always use `try/catch` or hooks. | `try { ... } catch (e) { ... }` |
+
+### 11. Quick Start & Common Patterns
 
 #### Pattern: The Centralized Storage Definition
 
@@ -393,9 +482,14 @@ await assets.upload(icon, "home.svg");
 **Goal**: Store HIPAA-compliant images with full audit logging via hooks.
 
 ```typescript
-storage.onUploadSuccess(async (p) => {
-  await db.log(p.file.path);
-});
+const storage = IgniterStorage.create()
+  .withUrl("https://cdn.example.com")
+  .withAdapter("s3", { bucket: process.env.S3_BUCKET })
+  .onUploadSuccess(async ({ file }) => {
+    await db.log(file.path);
+  })
+  .build();
+
 await storage.scope("patient", id).upload(xray, "chest-xray.dicom");
 ```
 
@@ -441,6 +535,219 @@ const logo = await theme.get("logo.png");
 await storage.path("health").uploadFromBase64("e30=", "check.json");
 ```
 
+#### Case 11: Bulk Asset Migration
+
+**Goal**: Moving an entire directory of assets from a legacy path to a new structured scope.
+
+```typescript
+const legacyFiles = await storage.list('old-assets/');
+for (const file of legacyFiles) {
+  const newName = file.name.toLowerCase().replace(/\s+/g, '-');
+  await storage.move(file.path, `assets/migrated/${newName}`);
+}
+```
+
+#### Case 12: On-the-fly Image Resizing Integration
+
+**Goal**: Using hooks to trigger a background job for image processing after a successful upload.
+
+```typescript
+const storage = IgniterStorage.create()
+  .withUrl("https://cdn.example.com")
+  .withAdapter("s3", { bucket: process.env.S3_BUCKET })
+  .onUploadSuccess(async ({ file, contentType }) => {
+    if (contentType?.startsWith("image/")) {
+      await jobs.enqueue("resize-image", { path: file.path });
+    }
+  })
+  .build();
+```
+
+#### Case 13: Distributed Log Storage
+
+**Goal**: Storing application logs in date-partitioned folders for easy archival.
+
+```typescript
+const today = new Date().toISOString().split('T')[0];
+await storage.path('logs').path(today).uploadFromBuffer(logBuffer, `${clientId}.log`);
+```
+
+#### Case 14: Secure Document Signing Workflow
+
+**Goal**: Managing a sequence of document states (draft, signed, archived) using path branching.
+
+```typescript
+const docId = 'doc_987';
+const draft = storage.path('documents/drafts');
+const signed = storage.path('documents/signed');
+
+// 1. Upload draft
+await draft.upload(pdf, `${docId}.pdf`);
+
+// 2. After signing, move to signed folder
+await storage.move(`documents/drafts/${docId}.pdf`, `documents/signed/${docId}.pdf`);
+```
+
+#### Case 15: Public Profile Page Generation
+
+**Goal**: Uploading a generated HTML file for a public user profile.
+
+```typescript
+const html = `<html><body><h1>${user.name}</h1></body></html>`;
+await storage.scope('public').path('profiles').uploadFromBuffer(Buffer.from(html), `${user.username}.html`, {
+  contentType: 'text/html'
+});
+```
+
+#### Case 16: Multi-Region Failover Simulation
+
+**Goal**: Mirroring critical assets to a backup storage instance using hooks.
+
+```typescript
+const backupStorage = IgniterStorage.create()
+  .withUrl("https://cdn.backup.example.com")
+  .withAdapter("s3", backupCredentials)
+  .build();
+
+const storage = IgniterStorage.create()
+  .withUrl("https://cdn.primary.example.com")
+  .withAdapter("s3", primaryCredentials)
+  .onUploadSuccess(async ({ file, path }) => {
+    if (path.startsWith("critical/")) {
+      await backupStorage.uploadFromUrl(file.url, path);
+    }
+  })
+  .build();
+```
+
+#### Case 17: User Data Export (Zip Generation)
+
+**Goal**: Uploading a generated zip file containing user data.
+
+```typescript
+const zipBuffer = await generateUserZip(userId);
+await storage.scope('user', userId).uploadFromBuffer(zipBuffer, 'export.zip', {
+  contentType: 'application/zip'
+});
+```
+
+#### Case 18: CDN Cache Invalidation
+
+**Goal**: Triggering a CDN invalidation after deleting a file.
+
+```typescript
+const storage = IgniterStorage.create()
+  .withUrl("https://cdn.example.com")
+  .withAdapter("s3", { bucket: process.env.S3_BUCKET })
+  .onDeleteSuccess(async ({ path }) => {
+    await cdn.invalidate(path);
+  })
+  .build();
+```
+
+#### Case 19: Dynamic Branding per Tenant
+
+**Goal**: Fetching a tenant-specific logo from a scoped path.
+
+```typescript
+const logo = await storage.scope('tenant', tenantId).path('branding').get('logo.png');
+const logoUrl = logo?.url ?? defaultLogo;
+```
+
+#### Case 20: Audit Logging for Compliance
+
+**Goal**: Recording every file access in a database for HIPAA compliance.
+
+```typescript
+const storage = IgniterStorage.create()
+  .withUrl("https://cdn.example.com")
+  .withAdapter("s3", { bucket: process.env.S3_BUCKET })
+  .onUploadSuccess(async ({ file, operation }) => {
+    await db.auditLogs.create({
+      action: operation,
+      resource: file.path,
+      timestamp: new Date(),
+    });
+  })
+  .build();
+```
+#### Case 21: Multi-Step Media Processing Pipeline
+
+**Goal**: Coordinating multiple processing steps (Upload -> Resize -> WebP Conversion -> CDN Invalidation).
+
+```typescript
+const storage = IgniterStorage.create()
+  .withUrl("https://cdn.example.com")
+  .withAdapter("s3", { bucket: process.env.S3_BUCKET })
+  .onUploadSuccess(async ({ file, contentType }) => {
+    if (contentType?.startsWith("image/")) {
+      // 1. Resize
+      const resized = await jobs.enqueue("resize", { path: file.path });
+      // 2. Convert to WebP
+      const webp = await jobs.enqueue("webp", { path: resized.path });
+      // 3. Invalidate CDN
+      await cdn.invalidate(webp.path);
+    }
+  })
+  .build();
+```
+
+#### Case 22: Ephemeral Share Links
+
+**Goal**: Creating a temporary, one-time-use download link for a protected file.
+
+```typescript
+// Create a short-lived server endpoint that streams the file after token validation.
+// The storage package provides the stream; your app controls token issuance.
+const stream = await storage.stream(file.path);
+stream.pipe(response);
+```
+
+#### Case 23: Batch Cleanup of Orphaned Assets
+
+**Goal**: Periodically scanning storage to remove files no longer referenced in the database.
+
+```typescript
+const files = await storage.path('temp-uploads').list();
+for (const file of files) {
+  const existsInDb = await db.files.exists({ path: file.path });
+  if (!existsInDb) {
+    await storage.delete(file.path);
+  }
+}
+```
+
+#### Case 24: Intelligent Content-Type Overrides
+
+**Goal**: Forcing a specific content-type for files that are uploaded with incorrect headers from the source.
+
+```typescript
+await storage.uploadFromBuffer(buffer, "document.pdf", {
+  contentType: "application/pdf",
+});
+```
+
+#### Case 25: Cross-Bucket Migration Utility
+
+**Goal**: Moving files from an old bucket to a new one using two storage instances.
+
+```typescript
+const oldStorage = IgniterStorage.create()
+  .withUrl("https://cdn.old.example.com")
+  .withAdapter(oldAdapter)
+  .build();
+
+const newStorage = IgniterStorage.create()
+  .withUrl("https://cdn.new.example.com")
+  .withAdapter(newAdapter)
+  .build();
+
+const files = await oldStorage.list();
+for (const file of files) {
+  await newStorage.uploadFromUrl(file.url, file.path);
+  await oldStorage.delete(file.path);
+}
+```
 ---
 
 ## III. TECHNICAL REFERENCE & RESILIENCE
@@ -474,7 +781,39 @@ await storage.path("health").uploadFromBase64("e30=", "check.json");
 
 ---
 
-### 12. Detailed Internal Operation Walkthrough
+### 12. State & Immutability Patterns (Maintainer Deep-Dive)
+
+The stability of the `@igniter-js/storage` package rests on its commitment to **Stateless Execution** and **Immutable State Transitions**.
+
+#### 12.1 The Configuration Bridge
+
+When `builder.build()` is called, the internal `IgniterStorageBuilderState` is mapped to an `IgniterStorageManagerConfig`. This config is the "Frozen Intent" of the developer. Once the manager is created, this config is never modified.
+
+#### 12.2 Cloning via Recursive Construction
+
+Methods like `.path()` and `.scope()` do not modify the current `basePath`. Instead, they invoke the constructor again with a merged payload. This ensures that:
+- You can branch multiple storage instances from a single root.
+- There are no race conditions between asynchronous operations.
+- The `basePath` is always deterministic.
+
+```typescript
+// Example of branching
+const root = storage.path('org_1');
+const uploads = root.path('uploads');
+const assets = root.path('assets');
+// 'uploads' and 'assets' share 'org_1' but don't interfere with each other.
+```
+
+#### 12.3 Adapter Contract Nuances
+
+Adapters are expected to follow these strict rules to ensure the Manager behaves consistently:
+- **Idempotent Deletion**: `delete()` should NOT throw if the key is not found.
+- **Normalized Listing**: `list()` must return relative keys, not absolute paths.
+- **Error Propagation**: Adapters should throw original SDK errors, which the Manager will then wrap into `IgniterStorageError`.
+
+---
+
+### 13. Operational Flow Mapping (Pipelines)
 
 #### 12.1 Path Resolution Logic (`resolveDestination`)
 
@@ -498,7 +837,34 @@ await storage.path("health").uploadFromBase64("e30=", "check.json");
 
 ---
 
-### 13. Telemetry Event & Attribute Reference
+### 13. Deep Dive: Type Inference and Scoping
+
+The type safety of `@igniter-js/storage` relies on a sophisticated "recursive intersection" of generic types. When you add a scope, the builder's state is updated to include a new key in its `TScopes` generic parameter.
+
+#### 13.1 The Identifier Detection Logic
+
+The `addScope` method uses the `ContainsIdentifier<TPath>` type to detect if the string literal `[identifier]` is present in the path template.
+
+```typescript
+export type ContainsIdentifier<T extends string> = T extends `${string}[identifier]${string}` ? true : false;
+```
+
+This boolean is stored in the scope definition. At runtime, the `scope()` method uses this boolean to decide if it should require a second argument:
+
+```typescript
+scope<K extends keyof TScopes & string>(
+  scopeKey: K,
+  ...args: TScopes[K] extends { requiresIdentifier: true } ? [string] : [string?]
+)
+```
+
+#### 13.2 Template Interpolation
+
+The interpolation of `[identifier]` is handled by a simple string replacement. Because the builder verifies the template during `addScope`, we can guarantee that the identifier will be placed exactly where intended.
+
+---
+
+### 14. Telemetry Event & Attribute Reference
 
 | Namespace         | Event            | Attributes                                    | Description           |
 | :---------------- | :--------------- | :-------------------------------------------- | :-------------------- |
@@ -507,36 +873,201 @@ await storage.path("health").uploadFromBase64("e30=", "check.json");
 |                   | `upload.error`   | `storage.error.code`, `storage.error.message` | Operation failed.     |
 |                   | `delete.success` | `storage.path`, `storage.duration_ms`         | Object removed.       |
 |                   | `get.success`    | `storage.found` (bool)                        | Metadata lookup done. |
-|                   | `list.success"   | `storage.count` (num)                         | Directory scanned.    |
+|                   | `list.success`   | `storage.count` (num)                         | Directory scanned.    |
+|                   | `copy.success`   | `storage.from`, `storage.to`                  | File copied.          |
+|                   | `move.success`   | `storage.from`, `storage.to`                  | File moved.           |
 
 ---
 
-### 14. Troubleshooting & Error Code Library
+### 15. Testing Strategy (Maintainer Reference)
+
+The storage package requires a robust testing strategy due to its interaction with external cloud providers.
+
+#### 15.1 Unit Testing with `MockStorageAdapter`
+
+The `MockStorageAdapter` is the primary tool for unit testing. It should be used to verify:
+- **Path Resolution**: Ensure `resolvePath` correctly handles different input types and `basePath`.
+- **Policy Enforcement**: Verify that violations are correctly identified and the right error is thrown.
+- **Hook Execution**: Ensure hooks are called in the correct order with expected payloads.
+- **Replacement Logic**: Verify that old files are correctly deleted according to the chosen strategy.
+
+#### 15.2 Integration Testing with Emulators
+
+For adapter-specific logic (S3, Google), maintainers should use local emulators:
+- **S3**: Use `Minio` or `LocalStack` via Docker.
+- **Google Cloud**: Use the official Google Cloud Storage emulator.
+
+#### 15.3 Type Inference Tests
+
+The `builders/main.builder.spec.ts` must include `expectTypeOf` tests to verify that:
+- Adding a scope correctly updates the `TScopes` type.
+- `.scope()` correctly identifies if a second argument is required.
+- Nested `.path()` calls don't lose scope type information.
+
+---
+
+### 16. Maintainer Guide: Adding a New Adapter
+
+To add a new storage provider (e.g., Azure Blob Storage, Cloudflare R2), follow these steps:
+
+1.  **Define Credentials**: Add the credential interface to `src/types/credentials.ts`.
+2.  **Implement Adapter**: Create `src/adapters/[provider].adapter.ts`.
+    - Extend `IgniterStorageAdapter`.
+    - Implement `put`, `delete`, `list`, `exists`, `stream`.
+    - (Optional) Implement `copy`, `move` for provider-native performance.
+3.  **Export Adapter**: Add to `src/adapters/index.ts`.
+4.  **Register Factory**: Add a default factory to `IgniterStorageBuilder.create()` in `src/builders/main.builder.ts`.
+5.  **Update Environment**: Update `IgniterStorageEnv` in `src/utils/env.ts` to support the new provider's environment variables.
+6.  **Add Tests**: Create `src/adapters/[provider].adapter.spec.ts` and use the `MockAdapter` or local emulator (e.g., Azurite) for verification.
+
+---
+
+### 16. Security & Compliance
+
+#### 16.1 Server-Only Safety
+
+The `@igniter-js/storage` package is designed for server-side environments. It contains logic (like stream handling and AWS/GCP SDKs) that is not compatible with browsers. To prevent accidental inclusion in client-side bundles, we use a `shim.ts` protection.
+
+- **`src/shim.ts`**: This file is mapped in `package.json`'s `browser` and `exports` fields. It exports a version of the classes that throw "IgniterStorage is server-only" errors upon instantiation.
+
+#### 16.2 PII and Sensitive Data
+
+- **Telemetry Privacy**: The `telemetryInternal.emit` calls are designed to NEVER include file content or sensitive metadata. Only paths, sizes, and operational metrics are emitted.
+- **Credential Handling**: Credentials should never be hardcoded. The builder prioritizes `IgniterStorageEnv` which pulls from process environment variables.
+
+#### 16.3 Environment Variable Reference
+
+The `IgniterStorageEnv` utility reads configuration from environment variables with the `IGNITER_STORAGE_` prefix. These values are merged into the builder state during `.build()`.
+
+- `IGNITER_STORAGE_ADAPTER`
+- `IGNITER_STORAGE_URL`
+- `IGNITER_STORAGE_BASE_PATH`
+- `IGNITER_STORAGE_MAX_FILE_SIZE`
+- `IGNITER_STORAGE_ALLOWED_MIME_TYPES`
+- `IGNITER_STORAGE_ALLOWED_EXTENSIONS`
+
+S3 credentials:
+
+- `IGNITER_STORAGE_S3_ENDPOINT`
+- `IGNITER_STORAGE_S3_REGION`
+- `IGNITER_STORAGE_S3_BUCKET`
+- `IGNITER_STORAGE_S3_ACCESS_KEY_ID`
+- `IGNITER_STORAGE_S3_SECRET_ACCESS_KEY`
+- `IGNITER_STORAGE_S3_SIGNATURE_VERSION`
+
+Google credentials:
+
+- `IGNITER_STORAGE_GOOGLE_ENDPOINT`
+- `IGNITER_STORAGE_GOOGLE_REGION`
+- `IGNITER_STORAGE_GOOGLE_BUCKET`
+- `IGNITER_STORAGE_GOOGLE_CREDENTIALS_JSON`
+- `IGNITER_STORAGE_GOOGLE_CREDENTIALS_JSON_BASE64`
+
+#### 16.4 Cache Control and Public ACL Defaults
+
+`IgniterStorageManager.upload()` calls `adapter.put()` with:
+
+- `cacheControl: "public, max-age=31536000"`
+- `public: true`
+
+Adapters interpret these values per provider:
+
+- S3 uses `ACL: "public-read"` where supported.
+- GCS calls `makePublic()` after successful upload.
+
+#### 16.5 Telemetry Optionality
+
+Telemetry is optional. If `withTelemetry(...)` is not configured, the manager skips event emission safely.
+
+#### 16.6 Adapter Contract Guarantees
+
+Adapters are infrastructure-only. They must not apply scopes, policies, or any business validation. All path and policy decisions are handled in the manager.
+
+---
+
+### 17. Troubleshooting & Error Code Library
 
 #### `IGNITER_STORAGE_ADAPTER_NOT_CONFIGURED`
-
 - **Context**: Occurs during `.build()`.
-- **Cause**: Developer forgot to call `.withAdapter()` and the environment variable is missing.
-- **Solution**: Call `.withAdapter('s3', credentials)` in your storage setup.
+- **Cause**: Missing adapter OR missing `baseUrl` (required for public URLs).
+- **Solution**: Provide `.withAdapter(...)` and `.withUrl(...)` or set `IGNITER_STORAGE_ADAPTER` and `IGNITER_STORAGE_URL`.
 
 #### `IGNITER_STORAGE_UPLOAD_POLICY_VIOLATION`
-
 - **Context**: Immediately after calling `upload`.
 - **Cause**: File size or type violates configured rules.
 - **Solution**: Check the `violations` array in the error object data.
 
 #### `IGNITER_STORAGE_INVALID_SCOPE`
-
 - **Context**: Calling `.scope('key', ...)`.
 - **Cause**: The key was never registered in the builder.
 - **Solution**: Add `.addScope('key', 'template')` to your builder configuration.
 
-#### `IGNITER_STORAGE_REPLACE_FAILED`
+#### `IGNITER_STORAGE_SCOPE_IDENTIFIER_REQUIRED`
+- **Context**: Calling `.scope('key')` for a scope that requires `[identifier]`.
+- **Cause**: Missing identifier argument for a template containing `[identifier]`.
+- **Solution**: Provide an identifier: `.scope('user', userId)`.
 
+#### `IGNITER_STORAGE_INVALID_PATH_HOST`
+- **Context**: Passing a full URL to `get`, `delete`, `stream`, `copy`, or `move`.
+- **Cause**: URL hostname does not match configured `baseUrl`.
+- **Solution**: Use a URL from the same CDN host or pass a relative path.
+
+#### `IGNITER_STORAGE_REPLACE_FAILED`
 - **Context**: Cleanup phase of an upload with a replace strategy.
 - **Cause**: The adapter failed to delete existing conflicting files (likely permission issue).
 - **Solution**: Ensure your storage credentials have `delete` and `list` permissions.
 
+#### `IGNITER_STORAGE_FETCH_FAILED`
+- **Context**: During `uploadFromUrl`.
+- **Cause**: The remote URL could not be reached or returned a non-2xx status.
+- **Solution**: Check the remote URL's accessibility and ensure the server allows your IP to fetch the asset.
+
+#### `IGNITER_STORAGE_UPLOAD_FAILED`
+- **Context**: During `upload` after adapter interaction.
+- **Cause**: Adapter error (credentials, permissions, network) or stream failure.
+- **Solution**: Validate adapter config and provider permissions.
+
+#### `IGNITER_STORAGE_DELETE_FAILED`
+- **Context**: During `delete`.
+- **Cause**: Adapter error or permission issues.
+- **Solution**: Ensure delete permissions on the backend.
+
+#### `IGNITER_STORAGE_LIST_FAILED`
+- **Context**: During `list`.
+- **Cause**: Adapter error or permission issues.
+- **Solution**: Ensure list permissions on the backend.
+
+#### `IGNITER_STORAGE_STREAM_FAILED`
+- **Context**: During `stream`.
+- **Cause**: Adapter error or missing object.
+- **Solution**: Validate existence and permissions.
+
+#### `IGNITER_STORAGE_GET_FAILED`
+- **Context**: During `get`.
+- **Cause**: Adapter error or missing object.
+- **Solution**: Validate existence and permissions.
+
+#### `IGNITER_STORAGE_COPY_NOT_SUPPORTED`
+- **Context**: Calling `copy()`.
+- **Cause**: The current adapter does not implement the `copy` method.
+- **Solution**: Use an adapter that supports copying (like S3 or GCS) or manually download and re-upload the file.
+
+#### `IGNITER_STORAGE_MOVE_NOT_SUPPORTED`
+- **Context**: Calling `move()`.
+- **Cause**: The current adapter does not implement the `move` method.
+- **Solution**: Use an adapter that supports moving or manually copy and then delete.
+
+#### `IGNITER_STORAGE_COPY_FAILED`
+- **Context**: During `copy`.
+- **Cause**: Provider error (permissions or missing source).
+- **Solution**: Validate source existence and copy permissions.
+
+#### `IGNITER_STORAGE_MOVE_FAILED`
+- **Context**: During `move`.
+- **Cause**: Provider error (permissions or missing source).
+- **Solution**: Validate source existence and move permissions.
+
 ---
 
 _End of AGENTS.md_
+

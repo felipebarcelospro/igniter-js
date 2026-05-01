@@ -1,4 +1,4 @@
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 import type { Stream } from "node:stream";
 import type { IgniterStorageAdapter } from "../adapters/storage.adapter";
@@ -163,6 +163,45 @@ export interface IIgniterStorageManager<
    */
   upload(
     file: File | Blob | Stream | Buffer | Uint8Array | string,
+    destination: string,
+    options?: IgniterStorageUploadOptions & { contentType?: string },
+  ): Promise<IgniterStorageFile>;
+
+  /**
+   * Uploads a file fetched from a remote URL.
+   *
+   * @param sourceUrl - Public URL of the source file.
+   * @param destination - Target path or filename.
+   * @param options - Standard upload options.
+   */
+  uploadFromUrl(
+    sourceUrl: string,
+    destination: string,
+    options?: IgniterStorageUploadOptions,
+  ): Promise<IgniterStorageFile>
+
+  /**
+   * Uploads a file from a memory Buffer or Uint8Array.
+   *
+   * @param buffer - Content as Buffer, Uint8Array or ArrayBuffer.
+   * @param destination - Target path.
+   * @param options - Standard upload options.
+   */
+  uploadFromBuffer(
+    buffer: Uint8Array | ArrayBuffer,
+    destination: string,
+    options?: IgniterStorageUploadOptions & { contentType?: string },
+  ): Promise<IgniterStorageFile>
+
+  /**
+   * Uploads a file from a Base64 encoded string.
+   *
+   * @param base64 - Base64 string.
+   * @param destination - Target path.
+   * @param options - Standard upload options.
+   */
+  uploadFromBase64(
+    base64: string,
     destination: string,
     options?: IgniterStorageUploadOptions & { contentType?: string },
   ): Promise<IgniterStorageFile>;

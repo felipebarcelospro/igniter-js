@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/adapter-mcp-server",
-  "version": "0.3.7",
+  "version": "1.0.0-alpha.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "private": false,

@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/storage",
-  "version": "0.1.2",
+  "version": "0.1.21",
   "description": "Type-safe, adapter-based file storage library for Igniter.js with S3 and Google Cloud Storage support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -74,6 +74,7 @@
   },
   "homepage": "https://igniterjs.com",
   "dependencies": {
+    "@igniter-js/common": ">=0.1.0",
     "@igniter-js/telemetry": ">=0.1.12",
     "mime-types": "^3.0.2"
   },
@@ -81,7 +82,7 @@
     "@aws-sdk/client-s3": "^3.645.0",
     "@aws-sdk/lib-storage": "^3.645.0",
     "@google-cloud/storage": "^7.12.1",
-    "@igniter-js/core": "*",
+    "@igniter-js/common": "*",
     "@igniter-js/telemetry": "*",
     "@types/mime-types": "^3.0.1",
     "@types/node": "^22.7.5",
@@ -91,7 +92,7 @@
     "zod": "^4.2.1"
   },
   "peerDependencies": {
-    "@igniter-js/core": ">=0.3.40",
+    "@igniter-js/common": ">=0.1.0",
     "@igniter-js/telemetry": ">=0.1.12",
     "zod": ">=4.2.1"
   },

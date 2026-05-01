@@ -1,5 +1,12 @@
 # @igniter-js/adapter-mcp-server
 
+## 1.0.0-alpha.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @igniter-js/core@*
+
 ## 0.3.0 (Unreleased)
 
 ### Major Changes
@@ -9,7 +16,6 @@
   The API has been refactored to provide better type inference and a cleaner developer experience.
 
   #### Breaking Changes
-
   1. **New Function Signature**: Changed from `createMcpAdapter(router, options)` to `createMcpAdapter(options)` where `router` is now a required property in the options object.
 
   2. **Automatic Context Inference**: The `context` function option has been removed. Context is now automatically inferred from the router's built-in context, eliminating the need for manual context creation.
@@ -19,66 +25,77 @@
   ```typescript
   // Before (v0.2.x)
   const handler = createMcpAdapter(AppRouter, {
-    serverInfo: { name: 'My Server', version: '1.0.0' },
+    serverInfo: { name: "My Server", version: "1.0.0" },
     context: (req) => ({
-      context: { user: 'test' },
+      context: { user: "test" },
       tools: [],
       request: req,
-      timestamp: Date.now()
-    })
+      timestamp: Date.now(),
+    }),
   });
 
   // After (v0.3.x)
   const handler = createMcpAdapter({
     router: AppRouter,
-    serverInfo: { name: 'My Server', version: '1.0.0' },
+    serverInfo: { name: "My Server", version: "1.0.0" },
     // context is automatically inferred!
   });
   ```
 
 #### New Features
 
-  - **Custom Prompts**: Register prompts that AI agents can use to guide interactions
-    ```typescript
-    prompts: {
-      custom: [{
-        name: 'debugUser',
-        description: 'Debug user account issues',
-        handler: async (args, context) => ({ /* ... */ })
-      }]
-    }
-    ```
+- **Custom Prompts**: Register prompts that AI agents can use to guide interactions
 
-  - **Custom Resources**: Expose resources that AI agents can read
-    ```typescript
-    resources: {
-      custom: [{
-        uri: 'config://app/settings',
-        name: 'Application Settings',
-        handler: async (context) => ({ /* ... */ })
-      }]
-    }
-    ```
+  ```typescript
+  prompts: {
+    custom: [
+      {
+        name: "debugUser",
+        description: "Debug user account issues",
+        handler: async (args, context) => ({
+          /* ... */
+        }),
+      },
+    ];
+  }
+  ```
 
-  - **OAuth Authorization**: First-class support for OAuth-based authorization
-    ```typescript
-    oauth: {
-      issuer: 'https://auth.example.com',
-      resourceMetadataPath: '/.well-known/oauth-protected-resource',
-      scopes: ['mcp:read', 'mcp:write'],
-      verifyToken: async (token, context) => ({ valid: true })
-    }
-    ```
-    - Automatic Bearer token verification
-    - Protected resource metadata endpoint exposure
-    - Proper 401 responses with WWW-Authenticate headers
+- **Custom Resources**: Expose resources that AI agents can read
 
-  #### Improvements
+  ```typescript
+  resources: {
+    custom: [
+      {
+        uri: "config://app/settings",
+        name: "Application Settings",
+        handler: async (context) => ({
+          /* ... */
+        }),
+      },
+    ];
+  }
+  ```
 
-  - **Enhanced Type Inference**: All handlers (prompts, resources, oauth.verifyToken, events) now automatically receive the correctly typed context from the router
-  - **Reduced Boilerplate**: No need to manually create and return context objects
-  - **Better Documentation**: Comprehensive examples showing all new features
-  - **Cleaner API**: Single configuration object is more intuitive and easier to understand
+- **OAuth Authorization**: First-class support for OAuth-based authorization
+  ```typescript
+  oauth: {
+    issuer: 'https://auth.example.com',
+    resourceMetadataPath: '/.well-known/oauth-protected-resource',
+    scopes: ['mcp:read', 'mcp:write'],
+    verifyToken: async (token, context) => ({ valid: true })
+  }
+  ```
+
+  - Automatic Bearer token verification
+  - Protected resource metadata endpoint exposure
+  - Proper 401 responses with WWW-Authenticate headers
+
+#### Improvements
+
+- **Enhanced Type Inference**: All handlers (prompts, resources, oauth.verifyToken, events) now automatically receive the correctly typed context from the router
+- **Reduced Boilerplate**: No need to manually create and return context objects
+- **Better Documentation**: Comprehensive examples showing all new features
+- **Cleaner API**: Single configuration object is more intuitive and easier to understand
 
 ## 0.2.0
 
@@ -89,13 +106,11 @@
   Igniter.js is now a fully modular, type-safe backend framework. This alpha release debuts a robust architecture with first-class type safety, powerful built-in features, and standalone adapters for extensibility and flexibility.
 
   ### Breaking Changes
-
   - New modular package architecture
   - Adapters extracted into standalone packages
   - Updated import paths and API patterns
 
   ### Core Features
-
   - **Type-Safe Router**
     - Procedure-based routing system
     - Middleware chain with execution control
@@ -175,7 +190,6 @@
   ```
 
   ### Key Benefits
-
   - Full type safety across all features
   - Modular architecture - install only what you need
   - Built-in realtime capabilities
@@ -189,7 +203,6 @@
   ### Next Steps
 
   We're currently focused on:
-
   - Completing the new Igniter.js CLI for improved developer experience
   - Finalizing comprehensive unit and integration test coverage
   - Expanding and refining documentation with more examples

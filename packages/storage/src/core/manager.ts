@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import type Stream from "node:stream";
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 import type { IgniterStorageTelemetryEvents } from "../telemetry";
 import { IgniterStorageAdapter } from "../adapters/storage.adapter";

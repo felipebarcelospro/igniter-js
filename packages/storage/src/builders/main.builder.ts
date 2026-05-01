@@ -1,4 +1,4 @@
-import type { IgniterLogger } from "@igniter-js/core";
+import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 import { IgniterGoogleAdapter } from "../adapters/google-cloud.adapter";
 import { IgniterStorageAdapter } from "../adapters/storage.adapter";
