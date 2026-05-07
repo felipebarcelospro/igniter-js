@@ -11,6 +11,7 @@ import type { StandardJSONSchemaV1, StandardSchemaV1, StandardTypedV1 } from "@s
 import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
 import Handlebars from "handlebars";
+import MiniSearch from "minisearch";
 import {
   IgniterCollectionError,
   IGNITER_COLLECTION_ERROR_CODES,
@@ -22,7 +23,8 @@ import type {
   IgniterCollectionDocument,
   IgniterCollectionDocumentSearchFields,
 } from "../types/collection";
-import type { IIgniterCollectionsManager, IIgniterCollectionModel, FindManyResult } from "../types/manager";
+import type { IIgniterCollectionsManagerFull, IIgniterCollectionModel, FindManyResult, IgniterCollectionSubscription } from "../types/manager";
+import type { IgniterCollectionEventHandler, IgniterCollectionModelEvents } from "../types/events";
 import type {
   IgniterCollectionCountArgs,
   IgniterCollectionCreateArgs,
@@ -49,7 +51,7 @@ interface CollectionManagerConfig<
   adapter: IgniterCollectionAdapter;
   basePath: string;
   /** Reference to the parent manager (required for hook context) */
-  manager: IIgniterCollectionsManager;
+  manager: IIgniterCollectionsManagerFull;
   telemetry?: IgniterTelemetryManager<IgniterCollectionTelemetryEventsType>;
   logger?: IgniterLogger;
   globalHooks?: IgniterCollectionModelHooks<TSchema>;
@@ -65,7 +67,7 @@ export class IgniterCollectionModelManager<
   TSchema extends Record<string, any> = Record<string, any>,
 > implements IIgniterCollectionModel<TSchema> {
   readonly definition: IgniterCollectionModelDefinition<TSchema>;
-  readonly manager: IIgniterCollectionsManager;
+  readonly manager: IIgniterCollectionsManagerFull;
   readonly telemetry?: IgniterTelemetryManager<IgniterCollectionTelemetryEventsType>;
   readonly basePath: string;
 
@@ -73,6 +75,8 @@ export class IgniterCollectionModelManager<
   private readonly logger?: IgniterLogger;
   private readonly globalHooks?: IgniterCollectionModelHooks<TSchema>;
   private readonly parentId?: string;
+  private searchIndex: MiniSearch | null = null;
+  private searchIndexDirty = true;
 
   constructor(config: CollectionManagerConfig<TSchema>) {
     this.definition = config.definition;
@@ -307,6 +311,8 @@ export class IgniterCollectionModelManager<
     await this.manager.emit(`${this.definition.name}:created`, {
       value: doc,
     });
+
+    this.searchIndexDirty = true;
 
     return this.applySelectAndExclude({
       doc,
@@ -584,6 +590,8 @@ export class IgniterCollectionModelManager<
       previousValue: existing as any,
     });
 
+    this.searchIndexDirty = true;
+
     // Apply select and exclude
     return this.applySelectAndExclude({
       doc,
@@ -658,6 +666,8 @@ export class IgniterCollectionModelManager<
       value: existing as any,
     });
 
+    this.searchIndexDirty = true;
+
     // Apply select and exclude
     return this.applySelectAndExclude({
       doc: existing,
@@ -672,6 +682,27 @@ export class IgniterCollectionModelManager<
   async count(args?: IgniterCollectionCountArgs<TSchema>): Promise<number> {
     const docs = await this.findMany({ where: args?.where });
     return docs.length;
+  }
+
+  /**
+   * Subscribe to collection-scoped events.
+   */
+  on<K extends keyof IgniterCollectionModelEvents<TSchema>>(
+    event: K,
+    handler: IgniterCollectionEventHandler<IgniterCollectionModelEvents<TSchema>[K]>
+  ): IgniterCollectionSubscription;
+  on(
+    event: string,
+    handler: IgniterCollectionEventHandler<any>
+  ): IgniterCollectionSubscription;
+  on(event: string, handler: any): IgniterCollectionSubscription {
+    const fullEvent = `${this.definition.name}:${event}`;
+    this.manager.on(fullEvent as any, handler);
+    return {
+      off: () => {
+        this.manager.off(fullEvent as any, handler);
+      }
+    };
   }
 
   // ==========================================================================
@@ -989,180 +1020,217 @@ export class IgniterCollectionModelManager<
   }
 
   /**
-   * Apply full-text search to a list of documents.
+   * Build a MiniSearch index from a list of documents.
+   * Dynamically discovers string and string[] fields for indexing.
+   */
+  private buildSearchIndex(
+    docs: IgniterCollectionDocument<TSchema>[]
+  ): MiniSearch {
+    const allFields = new Set<string>();
+
+    // Discover all indexable fields from documents
+    for (const doc of docs as any[]) {
+      const docFields = this.discoverIndexableFields(doc);
+      for (const field of docFields.keys()) {
+        if (field !== "id" && field !== "path" && field !== "parentId" && field !== "_search") {
+          allFields.add(field);
+        }
+      }
+    }
+
+    const fields = Array.from(allFields);
+
+    const miniSearch = new MiniSearch({
+      fields,
+      storeFields: ["id"],
+    });
+
+    // Prepare docs for indexing
+    const indexableDocs = docs.map((doc) => {
+      const indexed: Record<string, any> = { id: (doc as any).id };
+      const docFields = this.discoverIndexableFields(doc);
+      for (const field of fields) {
+        const values = docFields.get(field);
+        if (values && values.length > 0) {
+          indexed[field] = values.join(" ");
+        }
+      }
+      return indexed;
+    });
+
+    miniSearch.addAll(indexableDocs);
+    return miniSearch;
+  }
+
+  /**
+   * Discover all indexable fields from a value recursively.
+   * Returns a map of field paths to arrays of string values.
+   * Also creates parent field entries with all child values concatenated.
+   */
+  private discoverIndexableFields(value: any, prefix = ""): Map<string, string[]> {
+    const result = new Map<string, string[]>();
+
+    if (typeof value === "string") {
+      result.set(prefix, [value]);
+    } else if (Array.isArray(value)) {
+      if (value.every((v) => typeof v === "string")) {
+        // Array of strings
+        result.set(prefix, value);
+      } else {
+        // Array of objects — collect string values from all objects by key
+        const allValues: string[] = [];
+        for (const item of value) {
+          if (item && typeof item === "object") {
+            for (const [key, val] of Object.entries(item)) {
+              const fieldPath = prefix ? `${prefix}.${key}` : key;
+              const nested = this.discoverIndexableFields(val, fieldPath);
+              for (const [k, v] of nested) {
+                if (!result.has(k)) result.set(k, []);
+                result.get(k)!.push(...v);
+                allValues.push(...v);
+              }
+            }
+          }
+        }
+        // Also index the parent field with all collected values
+        if (prefix && allValues.length > 0) {
+          result.set(prefix, allValues);
+        }
+      }
+    } else if (value !== null && typeof value === "object") {
+      // Nested object — collect all leaf values
+      const allValues: string[] = [];
+      for (const [key, val] of Object.entries(value)) {
+        const fieldPath = prefix ? `${prefix}.${key}` : key;
+        const nested = this.discoverIndexableFields(val, fieldPath);
+        for (const [k, v] of nested) {
+          if (!result.has(k)) result.set(k, []);
+          result.get(k)!.push(...v);
+          allValues.push(...v);
+        }
+      }
+      // Also index the parent field with all collected values
+      if (prefix && allValues.length > 0) {
+        result.set(prefix, allValues);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Get a field value from a document using dot notation.
+   * Handles arrays of objects by collecting values from all items.
+   */
+  private getFieldValue(doc: Record<string, any>, field: string): any {
+    const parts = field.split(".");
+    let current = doc;
+
+    for (const part of parts) {
+      if (current === null || current === undefined) return undefined;
+
+      if (Array.isArray(current)) {
+        // Collect values from all array items
+        const values: string[] = [];
+        for (const item of current) {
+          if (item && typeof item === "object" && part in item) {
+            const val = item[part];
+            if (typeof val === "string") values.push(val);
+            else if (Array.isArray(val) && val.every((v) => typeof v === "string")) values.push(...val);
+          }
+        }
+        return values.length > 0 ? values : undefined;
+      }
+
+      current = current[part];
+    }
+
+    return current;
+  }
+
+  /**
+   * Apply full-text search to a list of documents using MiniSearch.
    */
   private applySearch(
     docs: IgniterCollectionDocument<TSchema>[],
     search: IgniterCollectionSearchFilter<TSchema>
   ): IgniterCollectionDocument<TSchema>[] {
     const { term, fields, threshold = 0.1, fuzzy: globalFuzzy } = search;
-    const terms = (Array.isArray(term) ? term : [term]).map((t) => t.toLowerCase());
 
-    const defaultFields = {
-      title: { weight: 2, fuzzy: globalFuzzy ?? true },
-      description: { weight: 1.5, fuzzy: globalFuzzy ?? true },
-      tags: { weight: 1, fuzzy: globalFuzzy ?? false },
-      content: { weight: 1, fuzzy: globalFuzzy ?? true },
-    };
+    // Rebuild index if dirty or missing
+    if (!this.searchIndex || this.searchIndexDirty) {
+      this.searchIndex = this.buildSearchIndex(docs);
+      this.searchIndexDirty = false;
+    }
 
-    const searchFieldsConfig = fields && Object.keys(fields).length > 0 ? fields : defaultFields;
-
-    const levenshtein = (a: string, b: string): number => {
-      if (a === b) return 0;
-      if (a.length === 0) return b.length;
-      if (b.length === 0) return a.length;
-
-      const v0 = new Array(b.length + 1);
-      const v1 = new Array(b.length + 1);
-
-      for (let i = 0; i <= b.length; i++) v0[i] = i;
-
-      for (let i = 0; i < a.length; i++) {
-        v1[0] = i + 1;
-        for (let j = 0; j < b.length; j++) {
-          const cost = a[i] === b[j] ? 0 : 1;
-          v1[j + 1] = Math.min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost);
-        }
-        for (let j = 0; j <= b.length; j++) v0[j] = v1[j];
-      }
-      return v0[b.length];
-    };
-
-    const fuzzySearchMatch = (text: string, term: string, fuzzy: boolean): number => {
-      const a = text.toLowerCase();
-      const b = term.toLowerCase();
-      if (a.includes(b)) return 1;
-
-      if (!fuzzy) return 0;
-
-      // Extract alphanumeric words
-      const words = a.split(/[\s,.-]+/).filter((w) => w.length > 0);
-      let maxSim = 0;
-
-      // Calculate levenshtein distance on closely sized words
-      for (const word of words) {
-        if (Math.abs(word.length - b.length) > 3) continue;
-        const dist = levenshtein(word, b);
-
-        // Strict fuzzy limit
-        const maxDist = Math.min(3, Math.ceil(b.length * 0.3));
-        if (dist > maxDist) continue;
-
-        const sim = 1 - (dist / Math.max(word.length, b.length));
-        if (sim > maxSim) maxSim = sim;
-        if (maxSim === 1) break;
-      }
-
-      // Also check the entire string if it's reasonably small
-      if (a.length > 0 && a.length <= 100) {
-        const distFull = levenshtein(a, b);
-        const maxDist = Math.min(3, Math.ceil(b.length * 0.3));
-        if (distFull <= maxDist) {
-          const simFull = 1 - (distFull / Math.max(a.length, b.length));
-          if (simFull > maxSim) maxSim = simFull;
-        }
-      }
-
-      return maxSim;
-    };
-
-    type SearchFieldContext = {
-      value: string;
-      path: string;
-      weight: number;
-      fuzzy: boolean;
-    };
-
-    const extractFieldsToSearch = (docValue: any, fieldsConfig: any, currentPath: string): SearchFieldContext[] => {
-      if (!fieldsConfig || typeof fieldsConfig !== "object") return [];
-      if (docValue === null || docValue === undefined) return [];
-
-      const contexts: SearchFieldContext[] = [];
-
-      for (const [key, config] of Object.entries(fieldsConfig)) {
-        if (!config) continue;
-
-        const nextPath = currentPath ? `${currentPath}.${key}` : key;
-        const isFieldDef = typeof config === "object" && ("weight" in config || "fuzzy" in config);
-        const docProp = docValue[key];
-
-        if (isFieldDef) {
-          if (docProp !== undefined && docProp !== null) {
-            const conf = config as { weight?: number; fuzzy?: boolean };
-            const weight = typeof conf.weight === "number" ? conf.weight : 1;
-            const fuzzy = typeof conf.fuzzy === "boolean" ? conf.fuzzy : (globalFuzzy ?? true);
-
-            if (Array.isArray(docProp)) {
-              for (let i = 0; i < docProp.length; i++) {
-                if (docProp[i] !== undefined && docProp[i] !== null) {
-                  const val = typeof docProp[i] === "object" ? this.flattenValue(docProp[i]) : String(docProp[i]);
-                  contexts.push({
-                    value: val,
-                    path: `${nextPath}[${i}]`,
-                    weight,
-                    fuzzy,
-                  });
-                }
-              }
-            } else if (typeof docProp === "object") {
-              // Support matching deeply nested values stringified
-              contexts.push({
-                value: this.flattenValue(docProp),
-                path: nextPath,
-                weight,
-                fuzzy,
-              });
+    // Convert fields config to MiniSearch boost object and extract searchable fields
+    const boost: Record<string, number> = {};
+    const searchFields: string[] = [];
+    if (fields && Object.keys(fields).length > 0) {
+      const addBoost = (obj: any, prefix = "") => {
+        for (const [key, config] of Object.entries(obj)) {
+          if (config && typeof config === "object") {
+            const fieldName = prefix ? `${prefix}.${key}` : key;
+            if ("weight" in config) {
+              boost[fieldName] = (config as any).weight;
+              searchFields.push(fieldName);
             } else {
-              contexts.push({
-                value: String(docProp),
-                path: nextPath,
-                weight,
-                fuzzy,
-              });
+              addBoost(config, fieldName);
             }
           }
-        } else if (typeof config === "object") {
-          contexts.push(...extractFieldsToSearch(docProp, config, nextPath));
         }
-      }
-      return contexts;
+      };
+      addBoost(fields);
+    }
+
+    const query = Array.isArray(term) ? term.join(" ") : String(term);
+
+    const searchOptions: any = {
+      fuzzy: globalFuzzy ?? false,
+      prefix: true,
     };
 
-    const results = docs.map((doc) => {
-      const contexts = extractFieldsToSearch(doc, searchFieldsConfig, "");
-      let score = 0;
-      const matches = new Set<string>();
+    if (Object.keys(boost).length > 0) {
+      searchOptions.boost = boost;
+    }
 
-      for (const t of terms) {
-        let termScore = 0;
+    // Only search in specified fields when fields config is provided
+    if (searchFields.length > 0) {
+      searchOptions.fields = searchFields;
+    }
 
-        for (const ctx of contexts) {
-          if (!ctx.value) continue;
+    const miniResults = this.searchIndex.search(query, searchOptions);
 
-          const sim = fuzzySearchMatch(ctx.value, t, ctx.fuzzy);
-          if (sim >= 0.1) {
-            matches.add(ctx.path);
-          }
-
-          if (sim > 0) {
-            termScore += sim * ctx.weight;
+    // Extract field names from match (result.match = { term: [field1, field2] })
+    const resultMap = new Map(
+      miniResults.map((r) => {
+        const matchedFields = new Set<string>();
+        for (const termMatch of Object.values(r.match)) {
+          for (const field of termMatch as string[]) {
+            matchedFields.add(field);
           }
         }
+        return [
+          r.id,
+          {
+            score: r.score,
+            matches: Array.from(matchedFields),
+          },
+        ];
+      })
+    );
 
-        score += termScore;
-      }
+    const results = docs
+      .filter((doc) => resultMap.has((doc as any).id))
+      .map((doc) => ({
+        ...(doc as any),
+        _search: resultMap.get((doc as any).id)!,
+      }));
 
-      const normalizedScore = terms.length > 0 ? score / terms.length : 0;
+    // Apply threshold filtering
+    const filtered = results.filter((r) => (r._search?.score ?? 0) >= threshold);
 
-      return {
-        ...doc as any,
-        _search: {
-          score: Math.round(normalizedScore * 100) / 100,
-          matches: Array.from(matches),
-        },
-      };
-    });
-
-    return results.filter((r) => (r._search?.score ?? 0) >= threshold);
+    // Sort by relevance
+    return filtered.sort((a, b) => (b._search?.score ?? 0) - (a._search?.score ?? 0));
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@igniter-js/collections",
-  "version": "0.2.0",
+  "version": "0.2.102",
   "description": "Type-safe content collections for Igniter.js",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -88,6 +88,7 @@
     "gray-matter": "^4.0.3",
     "handlebars": "^4.7.8",
     "jiti": "^2.4.0",
+    "minisearch": "^7.2.0",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

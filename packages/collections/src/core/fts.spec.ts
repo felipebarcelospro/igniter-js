@@ -217,6 +217,58 @@ describe("IgniterCollectionModelManager - Full-Text Search (FTS)", () => {
     expect(results.map(r => r.id)).toContain("p2");
   });
 
+  it("should match documents by prefix", async () => {
+    const postsDir = join(basePath, "posts");
+    await mkdir(postsDir, { recursive: true });
+
+    await writeFile(
+      join(postsDir, "p1.md"),
+      "---\ntitle: TypeScript Tutorial\n---\nContent"
+    );
+
+    const model = createModel();
+    const results = await model.findMany({
+      where: {
+        search: { term: "typ" }
+      }
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe("p1");
+  });
+
+  it("should rank documents with higher term frequency higher", async () => {
+    const postsDir = join(basePath, "posts");
+    await mkdir(postsDir, { recursive: true });
+
+    // p1: "typescript" appears 1 time
+    await writeFile(
+      join(postsDir, "p1.md"),
+      "---\ntitle: TypeScript Intro\n---\nTypeScript is great."
+    );
+
+    // p2: "typescript" appears 5 times
+    await writeFile(
+      join(postsDir, "p2.md"),
+      "---\ntitle: TypeScript Deep Dive\n---\nTypeScript TypeScript TypeScript TypeScript TypeScript."
+    );
+
+    const model = createModel();
+    const results = await model.findMany({
+      where: {
+        search: {
+          term: "typescript",
+          threshold: 0.01
+        }
+      }
+    });
+
+    expect(results).toHaveLength(2);
+    // p2 should rank higher due to higher term frequency
+    expect(results[0].id).toBe("p2");
+    expect(results[0]._search!.score).toBeGreaterThan(results[1]._search!.score);
+  });
+
   it("should calculate higher scores for multi-term matches", async () => {
     await setupDocuments();
     const model = createModel();
