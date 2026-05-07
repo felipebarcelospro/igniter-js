@@ -1,7 +1,5 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import path from 'node:path';
-import { z } from 'zod';
 import {
   IgniterCollections,
   IgniterCollectionModel,
@@ -24,21 +22,17 @@ describe('Views System Integration (Global)', () => {
       title: 'Dashboard',
       description: 'Overview of all posts',
       tree: [
-        { component: 'Metric', props: { title: 'Total' }, valuePath: '/stats/totalCount' }
+        { component: 'Metric', props: { title: 'Total' }, valuePath: '/totalCount' }
       ],
       getData: async ({ manager }) => {
         const posts = await manager.posts.findMany();
         return {
-          items: posts,
-          stats: {
-            totalCount: posts.length,
-            totalViews: posts.reduce((sum: number, p: any) => sum + (p.views || 0), 0),
-          }
+          posts,
+          totalCount: posts.length,
+          totalViews: posts.reduce((sum: number, p: any) => sum + (p.views || 0), 0),
         };
       },
-      stats: {
-        totalCount: { type: 'count' },
-      }
+      metadata: { icon: 'chart', order: 1 }
     },
     {
       name: 'multi-collection',
@@ -50,11 +44,10 @@ describe('Views System Integration (Global)', () => {
           manager.authors?.findMany?.() || Promise.resolve([]),
         ]);
         return {
-          items: posts,
-          stats: {
-            totalPosts: posts.length,
-            totalAuthors: authors.length,
-          }
+          posts,
+          authors,
+          totalPosts: posts.length,
+          totalAuthors: authors.length,
         };
       }
     },
@@ -71,16 +64,19 @@ describe('Views System Integration (Global)', () => {
       }
     },
     {
-      name: 'transformed',
-      title: 'Transformed View',
-      tree: [],
+      name: 'custom-shape',
+      title: 'Custom Data Shape',
+      tree: [
+        { component: 'Header', valuePath: '/title' },
+        { component: 'List', valuePath: '/items' }
+      ],
       getData: async ({ manager }) => {
         const posts = await manager.posts.findMany();
-        return { items: posts };
-      },
-      transforms: [
-        { type: 'group', field: 'category' }
-      ]
+        return {
+          title: 'Latest Posts',
+          items: posts.map((p: any) => p.title)
+        };
+      }
     }
   ];
 
@@ -125,16 +121,42 @@ describe('Views System Integration (Global)', () => {
     it('should render global view that accesses collection', async () => {
       const result = await docs.views.render('dashboard');
 
-      expect(result.data.items).toHaveLength(3);
-      expect(result.data.stats.totalCount).toBe(3);
+      expect(result.data.posts).toHaveLength(3);
+      expect(result.data.totalCount).toBe(3);
       expect(result.view.name).toBe('dashboard');
     });
 
     it('should support multi-collection views', async () => {
       const result = await docs.views.render('multi-collection');
 
-      expect(result.data.items).toHaveLength(3);
-      expect(result.data.stats.totalPosts).toBe(3);
+      expect(result.data.posts).toHaveLength(3);
+      expect(result.data.totalPosts).toBe(3);
+    });
+
+    it('should return custom data shapes from getData', async () => {
+      const result = await docs.views.render('custom-shape');
+
+      expect(result.data.title).toBe('Latest Posts');
+      expect(result.data.items).toEqual(['Post 1', 'Post 2', 'Post 3']);
+    });
+  });
+
+  describe('View Metadata', () => {
+    it('should expose metadata in view definitions', () => {
+      const view = docs.views.get('dashboard');
+      expect(view?.definition.metadata).toEqual({ icon: 'chart', order: 1 });
+    });
+
+    it('should include metadata in list results', () => {
+      const allViews = docs.views.list();
+      const dashboard = allViews.find(v => v.name === 'dashboard');
+      expect(dashboard?.metadata?.icon).toBe('chart');
+      expect(dashboard?.metadata?.order).toBe(1);
+    });
+
+    it('should return undefined metadata if not set', () => {
+      const view = docs.views.get('actions-view');
+      expect(view?.metadata).toBeUndefined();
     });
   });
 
@@ -142,19 +164,8 @@ describe('Views System Integration (Global)', () => {
     it('should execute getData hook with manager', async () => {
       const result = await docs.views.render('dashboard');
 
-      expect(result.data.items).toHaveLength(3);
-      expect(result.data.stats.totalViews).toBe(600);
-    });
-  });
-
-  describe('Transforms', () => {
-    it('should apply transforms sequentially', async () => {
-      const result = await docs.views.render('transformed');
-
-      // Grouped by category
-      expect(result.data.items).toHaveProperty('news');
-      expect(result.data.items).toHaveProperty('tech');
-      expect((result.data.items as any).news).toHaveLength(2);
+      expect(result.data.posts).toHaveLength(3);
+      expect(result.data.totalViews).toBe(600);
     });
   });
 
@@ -186,14 +197,13 @@ describe('Views System Integration (Global)', () => {
       expect(telemetrySpy).toHaveBeenCalledWith('igniter.collections.view.render.started', expect.objectContaining({
         attributes: expect.objectContaining({
           'ctx.view.name': 'dashboard',
-          'ctx.has_stats': true
+          'ctx.has_actions': false
         })
       }));
 
       expect(telemetrySpy).toHaveBeenCalledWith('igniter.collections.view.render.success', expect.objectContaining({
         attributes: expect.objectContaining({
-          'ctx.view.name': 'dashboard',
-          'ctx.items.count': 3
+          'ctx.view.name': 'dashboard'
         })
       }));
     });

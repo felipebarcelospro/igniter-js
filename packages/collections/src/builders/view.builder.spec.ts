@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { IgniterCollectionViewBuilder, IgniterCollectionView } from "./view.builder";
 
 describe("IgniterCollectionViewBuilder", () => {
-  const getData = async ({ manager }: any) => ({ items: [] });
+  const getData = async ({ manager }: any) => ({ posts: [] });
 
   it("should create a builder with create()", () => {
     const builder = IgniterCollectionViewBuilder.create("dashboard");
@@ -20,31 +20,31 @@ describe("IgniterCollectionViewBuilder", () => {
     const view = IgniterCollectionViewBuilder.create("dashboard")
       .withTitle("Analytics Dashboard")
       .withDescription("Overview")
-      .withGetData(getData)
+      .withMetadata({ icon: "chart", order: 1 })
+      .withData(getData)
       .withTree([{ component: "Metric" }])
       .build();
 
     expect(view.name).toBe("dashboard");
     expect(view.title).toBe("Analytics Dashboard");
     expect(view.description).toBe("Overview");
+    expect(view.metadata).toEqual({ icon: "chart", order: 1 });
     expect(view.tree).toHaveLength(1);
   });
 
-  it("should accumulate transforms", () => {
+  it("should merge metadata across multiple withMetadata calls", () => {
     const view = IgniterCollectionViewBuilder.create("dashboard")
-      .withGetData(getData)
-      .withTransform({ type: "group", field: "category" })
-      .withTransform({ type: "flatten" })
+      .withData(getData)
+      .withMetadata({ icon: "chart" })
+      .withMetadata({ order: 1, color: "blue" })
       .build();
 
-    expect(view.transforms).toHaveLength(2);
-    expect(view.transforms![0].type).toBe("group");
-    expect(view.transforms![1].type).toBe("flatten");
+    expect(view.metadata).toEqual({ icon: "chart", order: 1, color: "blue" });
   });
 
   it("should accumulate actions", () => {
     const view = IgniterCollectionViewBuilder.create("dashboard")
-      .withGetData(getData)
+      .withData(getData)
       .addAction("export", {
         description: "Export data",
         handler: async () => ({ success: true }),
@@ -70,7 +70,7 @@ describe("IgniterCollectionViewBuilder", () => {
 
   it("should use name as default title", () => {
     const view = IgniterCollectionViewBuilder.create("dashboard")
-      .withGetData(getData)
+      .withData(getData)
       .build();
 
     expect(view.title).toBe("dashboard");
@@ -78,7 +78,7 @@ describe("IgniterCollectionViewBuilder", () => {
 
   it("should work with IgniterCollectionView alias", () => {
     const view = IgniterCollectionView.create("dashboard")
-      .withGetData(getData)
+      .withData(getData)
       .build();
 
     expect(view.name).toBe("dashboard");

@@ -4,13 +4,9 @@ const analyticsHook: IgniterCollectionViewDataHook = async ({ manager }) => {
   const posts = await manager.posts.findMany();
 
   return {
-    items: posts.map((item: any) => ({ ...item, enriched: true })),
-    stats: {
-      customStat: 100
-    },
-    extra: {
-      source: 'file-hook'
-    }
+    posts: posts.map((item: any) => ({ ...item, enriched: true })),
+    customStat: 100,
+    source: 'file-hook'
   };
 };
 

@@ -12,29 +12,22 @@ describe("IgniterCollectionViewManager", () => {
       name: "dashboard",
       title: "Dashboard",
       tree: [
-        { component: "Metric", props: { title: "Total" }, valuePath: "/stats/count" }
+        { component: "Metric", props: { title: "Total" }, valuePath: "/totalCount" }
       ],
       getData: async ({ manager }) => ({
-        items: [{ id: "1", val: 10 }, { id: "2", val: 20 }],
-        stats: { count: 2 }
+        posts: [{ id: "1", val: 10 }, { id: "2", val: 20 }],
+        totalCount: 2
       }),
-      stats: {
-        count: { type: "count" }
-      }
+      metadata: { icon: "chart", order: 1 }
     },
     {
-      name: "with-transforms",
-      title: "With Transforms",
+      name: "custom-shape",
+      title: "Custom Shape",
       tree: [],
       getData: async ({ manager }) => ({
-        items: [
-          { id: "1", category: "news" },
-          { id: "2", category: "tech" },
-        ],
-      }),
-      transforms: [
-        { type: "group", field: "category" }
-      ]
+        title: "Hello",
+        items: ["a", "b", "c"]
+      })
     },
     {
       name: "with-actions",
@@ -75,19 +68,25 @@ describe("IgniterCollectionViewManager", () => {
     expect(manager.list()[0].name).toBe("dashboard");
   });
 
-  it("should get a specific view", () => {
+  it("should get a specific view instance", () => {
     const manager = new IgniterCollectionViewManager({ views, manager: mockManager });
     const view = manager.get("dashboard");
     expect(view).toBeDefined();
-    expect(view?.name).toBe("dashboard");
+    expect(view?.definition.name).toBe("dashboard");
+  });
+
+  it("should include metadata in view definitions", () => {
+    const manager = new IgniterCollectionViewManager({ views, manager: mockManager });
+    const view = manager.get("dashboard");
+    expect(view?.definition.metadata).toEqual({ icon: "chart", order: 1 });
   });
 
   it("should render a view with getData hook", async () => {
     const manager = new IgniterCollectionViewManager({ views, manager: mockManager });
     const result = await manager.render("dashboard");
 
-    expect(result.data.items).toHaveLength(2);
-    expect(result.data.stats.count).toBe(2);
+    expect(result.data.posts).toHaveLength(2);
+    expect(result.data.totalCount).toBe(2);
     expect(result.renderedAt).toBeDefined();
     expect(mockTelemetry.emit).toHaveBeenCalledWith("igniter.collections.view.render.started", expect.any(Object));
     expect(mockTelemetry.emit).toHaveBeenCalledWith("igniter.collections.view.render.success", expect.any(Object));
@@ -97,17 +96,15 @@ describe("IgniterCollectionViewManager", () => {
     const manager = new IgniterCollectionViewManager({ views, manager: mockManager });
     const result = await manager.render("dashboard");
 
-    // The getData hook should have received the manager
-    expect(result.data.items).toHaveLength(2);
+    expect(result.data.posts).toHaveLength(2);
   });
 
-  it("should apply transforms after hook", async () => {
+  it("should return custom data shapes from getData", async () => {
     const manager = new IgniterCollectionViewManager({ views, manager: mockManager });
-    const result = await manager.render("with-transforms");
+    const result = await manager.render("custom-shape");
 
-    // Grouped by category
-    expect(result.data.items).toHaveProperty("news");
-    expect(result.data.items).toHaveProperty("tech");
+    expect(result.data.title).toBe("Hello");
+    expect(result.data.items).toEqual(["a", "b", "c"]);
   });
 
   it("should list available actions", () => {
@@ -128,16 +125,16 @@ describe("IgniterCollectionViewManager", () => {
 
   it("should throw error if action parameters are invalid", async () => {
     const manager = new IgniterCollectionViewManager({ views, manager: mockManager });
-    
+
     await expect(manager.executeAction("with-actions", "test-action", { id: 123 }))
       .rejects.toThrow("Invalid action parameters");
-    
+
     expect(mockTelemetry.emit).toHaveBeenCalledWith("igniter.collections.view.action.error", expect.any(Object));
   });
 
   it("should throw error if view not found", async () => {
     const manager = new IgniterCollectionViewManager({ views, manager: mockManager });
-    
+
     await expect(manager.render("unknown"))
       .rejects.toThrow("View not found");
   });
@@ -151,7 +148,7 @@ describe("IgniterCollectionViewManager", () => {
       } as any
     ];
     const manager = new IgniterCollectionViewManager({ views: badViews, manager: mockManager });
-    
+
     await expect(manager.render("bad"))
       .rejects.toThrow("missing required getData hook");
   });

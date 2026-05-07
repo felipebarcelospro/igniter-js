@@ -5,15 +5,15 @@ import { IgniterCollectionMockAdapter } from "../adapters/mock.adapter";
 describe("IgniterCollectionSchemaRegistry Multi-Source", () => {
   const adapter = IgniterCollectionMockAdapter.create({
     "/base/.fractal/schemas/posts.schema.json": JSON.stringify({
-      collectionName: "posts",
+      name: "posts",
       schema: { title: "string" },
     }),
     "/base/plugins/blog/schemas/posts.schema.json": JSON.stringify({
-      collectionName: "posts",
+      name: "posts",
       schema: { title: "string", tags: "array" },
     }),
     "/base/plugins/news/schemas/articles.schema.json": JSON.stringify({
-      collectionName: "articles",
+      name: "articles",
       schema: { headline: "string" },
     }),
   });
@@ -67,11 +67,11 @@ describe("IgniterCollectionSchemaRegistry Multi-Source", () => {
   it("should use the parent directory of 'schemas' as prefix", async () => {
     const adapter = IgniterCollectionMockAdapter.create({
       "/base/main/schemas/user.schema.json": JSON.stringify({
-        collectionName: "user",
+        name: "user",
         schema: { name: "string" },
       }),
       "/base/addons/shop/schemas/user.schema.json": JSON.stringify({
-        collectionName: "user",
+        name: "user",
         schema: { name: "string", role: "string" },
       }),
     });
