@@ -101,7 +101,7 @@ console.log('Created post:', post.id);
 │                   Your Application                       │
 ├─────────────────────────────────────────────────────────┤
 │  docs.posts.findMany({ where: { published: true } })    │
-│  docs.views.render('dashboard')                         │
+│  docs.views.get('dashboard').render()                         │
 └────────────┬────────────────────────────────────────────┘
              │ Type-safe API
              ▼
@@ -195,13 +195,14 @@ await docs.posts.delete({
 
 ### Advanced Queries (Prisma-like)
 
+#### Complex Filtering
+
 ```typescript
-// Complex filtering
 const results = await docs.posts.findMany({
   where: {
     published: true,
     category: { in: ['tutorial', 'guide'] },
-    title: { contains: 'TypeScript' },
+    title: { contains: 'TypeScript', startsWith: 'Getting' },
     views: { gte: 100, lt: 1000 },
     tags: { has: 'featured' },
   },
@@ -209,24 +210,67 @@ const results = await docs.posts.findMany({
   take: 10,
   skip: 0,
 });
+```
 
-// Full-Text Search (FTS) with Fuzzy Matching
-const searchResults = await docs.posts.findMany({
+#### String Operators
+
+Filter string fields with precision:
+
+```typescript
+// Exact match and negation
+await docs.posts.findMany({ where: { status: { equals: 'published', not: 'draft' } } });
+
+// Substring matching
+await docs.posts.findMany({ where: { title: { contains: 'TypeScript' } } });
+
+// Prefix and suffix matching
+await docs.posts.findMany({ where: { slug: { startsWith: 'getting-started' } } });
+await docs.posts.findMany({ where: { email: { endsWith: '@example.com' } } });
+
+// Combined string operators
+await docs.posts.findMany({
   where: {
-    search: {
-      term: 'TypeScript',
-      fields: { 
-        title: { weight: 2, fuzzy: true }, 
-        description: { weight: 1.5, fuzzy: true },
-        content: { weight: 1 }
-      },
-      threshold: 0.1,
-      fuzzy: true
-    }
+    title: { contains: 'TypeScript', startsWith: 'Getting' },
+    slug: { startsWith: 'tutorial' },
   }
 });
+```
 
-// Field Selection (Select & Exclude)
+#### Array Operators
+
+Filter documents based on array field contents:
+
+```typescript
+// Array contains a specific value
+await docs.posts.findMany({ where: { tags: { has: 'featured' } } });
+
+// Array contains ALL values
+await docs.posts.findMany({ where: { tags: { hasEvery: ['featured', 'typescript'] } } });
+
+// Array contains at least ONE of these values
+await docs.posts.findMany({ where: { tags: { hasSome: ['tutorial', 'guide', 'news'] } } });
+
+// Array is empty or not empty
+await docs.posts.findMany({ where: { comments: { isEmpty: false } } });
+
+// Array exact length
+await docs.posts.findMany({ where: { tags: { length: 3 } } });
+
+// Combined array operators
+await docs.posts.findMany({
+  where: {
+    tags: { has: 'featured', hasEvery: ['ts', 'node'], isEmpty: false },
+    categories: { hasSome: ['tech', 'programming', 'devops'] },
+  }
+});
+```
+
+#### Nested Select & Exclude
+
+Shape the returned data by selecting or excluding specific fields, including nested objects:
+
+```typescript
+// Select only top-level fields
 const lightweightPosts = await docs.posts.findMany({
   select: {
     id: true,
@@ -234,7 +278,83 @@ const lightweightPosts = await docs.posts.findMany({
   }
 });
 
-// Count matching documents
+// Select nested fields
+const postsWithAuthorName = await docs.posts.findMany({
+  select: {
+    id: true,
+    title: true,
+    author: { name: true, email: true },
+    seo: { title: true, description: true },
+  }
+});
+
+// Exclude specific fields (including nested)
+const postsWithoutContent = await docs.posts.findMany({
+  exclude: {
+    content: true,
+    seo: { image: true, keywords: true },
+  }
+});
+```
+
+> **Note:** `select` and `exclude` are mutually exclusive. Using both at the same time throws a `VALIDATION_ERROR`. TypeScript automatically infers the return type based on your selection.
+
+#### Full-Text Search (FTS) with Fuzzy Matching
+
+Search across document fields with weighted relevance scoring and fuzzy matching:
+
+```typescript
+// Basic FTS with default fields
+const searchResults = await docs.posts.findMany({
+  where: {
+    search: {
+      term: 'TypeScript',
+      threshold: 0.1,
+      fuzzy: true
+    }
+  }
+});
+
+// Advanced FTS with weighted fields and nested search
+const advancedSearch = await docs.posts.findMany({
+  where: {
+    search: {
+      term: 'getting started typescript',
+      fields: {
+        title: { weight: 3, fuzzy: true },
+        description: { weight: 2, fuzzy: true },
+        tags: { weight: 1.5, fuzzy: false },
+        content: { weight: 1, fuzzy: true },
+        'author.name': { weight: 2, fuzzy: true },
+        'seo.keywords': { weight: 1, fuzzy: false },
+      },
+      threshold: 0.15,
+      fuzzy: true,
+    }
+  }
+});
+```
+
+**How FTS works:**
+- **BM25 ranking**: Industry-standard algorithm used by Elasticsearch and Solr. Term frequency and document rarity determine relevance — rare terms are boosted, common terms are penalized
+- **Field weights**: Higher weights increase relevance for matches in that field
+- **Prefix matching**: Partial terms match full words out of the box — searching `"typ"` finds `"typescript"`
+- **Fuzzy matching**: Tolerates typos and spelling variations with configurable edit distance
+- **Term frequency**: Documents with more occurrences of a term rank higher
+- **Threshold filtering**: Results below the threshold score are excluded (0-1 scale)
+- **Search metadata**: Each result includes `_search.score` and `_search.matches` (matched field paths)
+
+```typescript
+// Results include search metadata automatically
+for (const post of advancedSearch) {
+  console.log(post._search.score);   // 0.85
+  console.log(post._search.matches); // ['title', 'content']
+}
+```
+
+#### Count Matching Documents
+
+```typescript
 const count = await docs.posts.count({
   where: { published: true },
 });
@@ -286,19 +406,77 @@ const Posts = IgniterCollectionModel.create('posts')
 
 The manager emits global and scoped events on every CRUD operation, making it easy to integrate with external systems (like WebSockets, cache invalidation, or search indexers).
 
+#### Global Events
+
+Listen to all collections at once:
+
 ```typescript
 // Global event (any collection)
-docs.on('created', ({ collection, value }) => {
+const { off } = docs.on('created', ({ collection, value }) => {
   console.log(`New document in ${collection}: ${value.id}`);
 });
 
-// Scoped event (specific collection)
-docs.on('posts:updated', ({ newValue, previousValue }) => {
+// Unsubscribe later
+off();
+```
+
+#### Typed Scoped Events
+
+Subscribe directly on a collection manager for **schema-typed** event payloads. TypeScript automatically infers the shape of `value`, `newValue`, `previousValue`, and `items` from the collection's schema:
+
+```typescript
+// Scoped events are fully typed — autocomplete works!
+const sub = docs.posts.on('created', ({ value }) => {
+  // TypeScript knows: value.title, value.author, value.published, etc.
+  console.log(`Post created: ${value.title} by ${value.author}`);
+});
+
+sub.off(); // Unsubscribe
+```
+
+**Available scoped events:** `created`, `updated`, `deleted`, `read`, `list`
+
+#### Global vs Scoped Comparison
+
+| Aspect | Global (`docs.on(...)`) | Scoped (`docs.posts.on(...)`) |
+|--------|-------------------------|-------------------------------|
+| Payload | `{ collection, value }` | `{ value }` (typed) |
+| Type Safety | `any` | Schema-inferred |
+| Use Case | Cross-cutting concerns | Collection-specific logic |
+
+```typescript
+// Global — receives collection name as string
+docs.on('updated', ({ collection, newValue, previousValue }) => {
+  console.log(`${collection} updated`);
+});
+
+// Scoped — receives typed payload from the schema
+docs.posts.on('updated', ({ newValue, previousValue }) => {
+  // newValue.title is autocompleted by TypeScript
   if (newValue.published && !previousValue.published) {
     console.log(`Post published: ${newValue.title}`);
   }
 });
+
+// Scoped list event
+docs.posts.on('list', ({ items }) => {
+  // items is typed as IgniterCollectionDocument<PostSchema>[]
+  console.log(`Listed ${items.length} posts`);
+});
 ```
+
+#### Custom Events
+
+The event system also supports custom event names for extensibility:
+
+```typescript
+// Subscribe to a custom event
+docs.posts.on('custom:approved', ({ value }) => {
+  console.log('Custom approval:', value);
+});
+```
+
+> **Note:** All `.on()` calls return a subscription handle with `{ off }` for easy cleanup.
 
 ### Schema Validation (Type-safe Frontmatter)
 
@@ -351,7 +529,7 @@ import { IgniterCollectionView } from '@igniter-js/collections';
 
 const DashboardView = IgniterCollectionView.create('dashboard')
   .withTitle('Blog Dashboard')
-  .withGetData(async ({ manager }) => {
+  .withData(async ({ manager }) => {
     const [posts, authors, comments] = await Promise.all([
       manager.posts.findMany(),
       manager.authors.findMany(),
@@ -391,7 +569,7 @@ const docs = IgniterCollections.create()
   .build();
 
 // Render the global view
-const dashboard = await docs.views.render('dashboard');
+const dashboard = await docs.views.get('dashboard').render();
 console.log(dashboard.stats.totalPosts);    // 42
 console.log(dashboard.stats.totalAuthors);  // 8
 console.log(dashboard.items);               // All posts
@@ -420,7 +598,7 @@ import { IgniterCollectionView } from '@igniter-js/collections';
 
 export default IgniterCollectionView.create('dashboard')
   .withTitle('Analytics Dashboard')
-  .withGetData(async ({ manager }) => {
+  .withData(async ({ manager }) => {
     const posts = await manager.posts.findMany();
     return {
       items: posts,
@@ -435,9 +613,13 @@ export default IgniterCollectionView.create('dashboard')
 
 ### Executing View Actions
 
+Views can define interactive actions with parameter validation, confirmation dialogs, and optimistic state updates.
+
+#### Basic Action Execution
+
 ```typescript
 // Execute an action on a global view
-const result = await docs.views.executeAction('dashboard', 'export', {
+const result = await docs.views.get('dashboard').actions.execute('export', {
   format: 'csv'
 });
 
@@ -447,6 +629,118 @@ if (result.success) {
   console.error('Export failed:', result.error);
 }
 ```
+
+#### Parameter Validation
+
+Actions can enforce typed parameters using Zod schemas. Invalid parameters automatically throw `ACTION_INVALID_PARAMS`:
+
+```typescript
+const DashboardView = IgniterCollectionView.create('dashboard')
+  .withTitle('Blog Dashboard')
+  .withData(async ({ manager }) => ({ items: [] }))
+  .addAction('export', {
+    description: 'Export posts to file',
+    params: z.object({
+      format: z.enum(['csv', 'json', 'xml']),
+      includeDrafts: z.boolean().default(false),
+    }),
+    handler: async ({ manager, params }) => {
+      const posts = await manager.posts.findMany({
+        where: { published: !params.includeDrafts }
+      });
+      // ... export logic
+      return { success: true, fileUrl: '/exports/posts.csv' };
+    }
+  })
+  .build();
+
+// Valid parameters — executes successfully
+await docs.views.get('dashboard').actions.execute('export', {
+  format: 'csv',
+  includeDrafts: true
+});
+
+// Invalid parameters — throws ACTION_INVALID_PARAMS
+await docs.views.get('dashboard').actions.execute('export', {
+  format: 'pdf' // ❌ Not in enum
+});
+```
+
+#### Confirmation Dialogs
+
+Destructive or sensitive actions can require user confirmation before execution:
+
+```typescript
+const DashboardView = IgniterCollectionView.create('dashboard')
+  .withTitle('Blog Dashboard')
+  .withData(async ({ manager }) => ({ items: [] }))
+  .addAction('deleteAll', {
+    description: 'Delete all draft posts',
+    confirm: {
+      title: 'Delete All Drafts?',
+      message: 'This will permanently remove all unpublished posts. This action cannot be undone.',
+      variant: 'danger' // 'danger' | 'warning' | 'info'
+    },
+    handler: async ({ manager }) => {
+      const drafts = await manager.posts.findMany({
+        where: { published: false }
+      });
+      for (const draft of drafts) {
+        await manager.posts.delete({ where: { id: draft.id } });
+      }
+      return { success: true, deletedCount: drafts.length };
+    }
+  })
+  .build();
+```
+
+**Variant options:**
+- `danger` — Critical destructive actions (delete, purge)
+- `warning` — Potentially risky operations (bulk updates)
+- `info` — Non-destructive but important confirmations
+
+#### Optimistic Updates
+
+Actions can return partial state patches using JSON Pointer paths, allowing the frontend to update the view without a full re-render:
+
+```typescript
+const DashboardView = IgniterCollectionView.create('dashboard')
+  .withTitle('Blog Dashboard')
+  .withData(async ({ manager }) => {
+    const posts = await manager.posts.findMany();
+    return {
+      items: posts,
+      stats: { totalPosts: posts.length, pendingCount: posts.filter(p => !p.published).length }
+    };
+  })
+  .addAction('publishPost', {
+    description: 'Publish a pending post',
+    params: z.object({ postId: z.string() }),
+    handler: async ({ manager, params }) => {
+      await manager.posts.update({
+        where: { id: params.postId },
+        data: { published: true }
+      });
+
+      // Return partial updates instead of full re-render
+      return {
+        success: true,
+        updates: {
+          '/items/0/status': 'published',        // Update item status
+          '/stats/pendingCount': 3,              // Decrement pending count
+          '/lastAction': `Published post ${params.postId}`
+        }
+      };
+    }
+  })
+  .build();
+```
+
+**How optimistic updates work:**
+- The action returns `updates` with JSON Pointer paths as keys
+- The frontend (or json-render consumer) applies these patches to the current view state
+- No full `.render()` re-fetch is needed, reducing perceived latency
+- Paths follow RFC 6901: `/items/0/status`, `/stats/totalPosts`, `/nested/deep/value`
 
 ---
 
@@ -469,7 +763,7 @@ const docs = IgniterCollections.create()
 
 // Collections and views are available automatically!
 const posts = await docs.posts.findMany();
-const dashboard = await docs.views.render('dashboard');
+const dashboard = await docs.views.get('dashboard').render();
 ```
 
 ### Multiple Directories (Plugin System)
@@ -551,7 +845,7 @@ const docs = IgniterCollections.create()
   .build();
 
 // Start watching for file changes
-await docs.startWatching();
+await docs.watcher.start();
 
 // Now edit .fractal/schemas/posts.schema.ts
 // The manager automatically reloads the schema!
@@ -560,7 +854,7 @@ await docs.startWatching();
 await docs.refresh();
 
 // Stop watching
-docs.stopWatching();
+docs.watcher.stop();
 ```
 
 ### Watcher Options
@@ -574,13 +868,102 @@ interface IgniterCollectionWatcherConfig {
 }
 ```
 
+### Source Tracking
+
+Collections and views loaded through the watcher are marked with a `source` property, distinguishing between programmatic definitions and dynamically discovered ones:
+
+```typescript
+// Inspect collection sources
+const entries = docs.collections.entries();
+for (const [name, meta] of Object.entries(entries)) {
+  console.log(`${name}: ${meta.source}`); // 'built-in' | 'discovered'
+}
+```
+
+- **`built-in`** — Added programmatically via `.addCollection()` or `.addView()`
+- **`discovered`** — Loaded from filesystem via `.withWatcher()`
+
+Programmatic definitions always take precedence when names collide.
+
+---
+
+## 🔄 Lifecycle Methods
+
+Control the manager's lifecycle with manual refresh and cleanup methods.
+
+### `refresh()` — Manual Reload
+
+Reload schemas and views from disk without waiting for the watcher. Useful when `autoWatch` is disabled or when you need to force an immediate reload after external changes.
+
+```typescript
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withWatcher('.fractal', {
+    collections: '**/schema.{json,ts}',
+    views: '**/view.{json,ts}',
+    autoWatch: false, // Manual control
+  })
+  .build();
+
+// External process modified a schema file
+// Force immediate reload
+await docs.refresh();
+
+// New collections and views are now available
+console.log(docs.collections.entries());
+```
+
+### `dispose()` — Cleanup Resources
+
+Stop watching, clear collection managers, and release all resources. Call this when shutting down the application or between test runs to prevent memory leaks.
+
+```typescript
+// Server shutdown
+process.on('SIGTERM', () => {
+  docs.dispose();
+  console.log('Collections manager cleaned up');
+});
+
+// Test cleanup
+afterEach(() => {
+  docs.dispose();
+});
+```
+
 ---
 
 ## 📐 Templates & Dynamic Content
 
-When creating a collection, you can define a `template` path. This allows the `content` property in `.create()` and `.update()` to be a strongly-typed object instead of a raw string.
+Collections support document templates using **Handlebars** as the underlying engine. When you define a template with `.withTemplate()`, the `content` property in `.create()` and `.update()` becomes a **typed object** instead of a raw string. Handlebars automatically substitutes variables from the object into the template file.
 
-Igniter uses Handlebars to automatically hydrate the template with the provided object.
+### How Templates Work
+
+1. Define a `.hbs` template file with Handlebars syntax
+2. Call `.withTemplate()` on your collection builder pointing to that file
+3. Pass a typed object as `content` when creating or updating documents
+4. The engine renders the template with your data and stores the result
+
+### Template File Example
+
+Create a Handlebars template file:
+
+```handlebars
+<!-- templates/prompt.hbs -->
+# {{title}}
+
+You are {{content.agent}}, an AI assistant.
+
+## Instructions
+
+{{content.instructions}}
+
+## Context
+{{#if content.context}}
+{{content.context}}
+{{/if}}
+```
+
+### Collection with Template
 
 ```typescript
 const Prompts = IgniterCollectionModel.create('prompts')
@@ -590,19 +973,64 @@ const Prompts = IgniterCollectionModel.create('prompts')
     title: z.string(),
     content: z.object({
       agent: z.string(),
-      instructions: z.string()
+      instructions: z.string(),
+      context: z.string().optional()
     })
   }))
   .build();
 
-// Creating a document
+// Creating a document with typed content object
 const doc = await docs.prompts.create({
   data: {
     title: "System Prompt",
     content: {
       agent: "Lia",
-      instructions: "Be helpful."
+      instructions: "Be helpful, concise, and accurate.",
+      context: "User is a senior developer."
     }
+  }
+});
+
+// The stored file contains the rendered template:
+// # System Prompt
+// You are Lia, an AI assistant.
+// ## Instructions
+// Be helpful, concise, and accurate.
+// ## Context
+// User is a senior developer.
+```
+
+### Updating with Templates
+
+Templates work the same way for updates:
+
+```typescript
+await docs.prompts.update({
+  where: { id: doc.id },
+  data: {
+    content: {
+      agent: "Lia",
+      instructions: "Be creative and inspiring."
+    }
+  }
+});
+```
+
+### Without Templates (Raw Strings)
+
+If no template is defined, `content` must be a plain string:
+
+```typescript
+const Notes = IgniterCollectionModel.create('notes')
+  .withPatterns(['notes/{id}.md'])
+  .withSchema(z.object({ title: z.string() }))
+  .build();
+
+// Without template, content is a raw string
+await docs.notes.create({
+  data: {
+    title: "My Note",
+    content: "This is raw markdown content..."
   }
 });
 ```
@@ -733,7 +1161,7 @@ import { IgniterCollectionView } from '@igniter-js/collections';
 
 const AnalyticsView = IgniterCollectionView.create('analytics')
   .withTitle('Site Analytics')
-  .withGetData(async ({ manager }) => {
+  .withData(async ({ manager }) => {
     const [posts, authors, comments] = await Promise.all([
       manager.posts.findMany(),
       manager.authors.findMany(),
@@ -765,7 +1193,7 @@ const docs = IgniterCollections.create()
   .addView(AnalyticsView)
   .build();
 
-const dashboard = await docs.views.render('analytics');
+const dashboard = await docs.views.get('analytics').render();
 ```
 
 ### Example 4: Configuration Management
@@ -856,9 +1284,9 @@ class IgniterCollectionViewBuilder {
   
   withTitle(title: string): this
   withDescription(description: string): this
-  withGetData(hook: ViewDataHook): this        // Required
+  withData(hook: ViewDataHook): this           // Required
   withTree(tree: ViewNode[]): this
-  withTransform(transform: Transform): this
+  withMetadata(metadata: Record<string, any>): this
   addAction(name: string, action: ViewAction): this
   
   build(): IgniterCollectionViewDefinition
@@ -872,7 +1300,7 @@ class IgniterCollectionViewBuilder {
 | `create()` | `name: string` | `Builder` | Start building a view |
 | `withTitle()` | `title: string` | `this` | Set display title |
 | `withDescription()` | `description: string` | `this` | Set description |
-| `withGetData()` | `hook: Function` | `this` | **Required.** Data fetching hook |
+| `withData()` | `hook: Function` | `this` | **Required.** Data fetching hook |
 | `withTree()` | `tree: Node[]` | `this` | UI component tree |
 | `withTransform()` | `transform: Transform` | `this` | Add data transformation |
 | `addAction()` | `name, action` | `this` | Add view action |
@@ -1048,7 +1476,7 @@ const Posts = IgniterCollectionModel.create('posts')
 
 // ✅ Use global views for multi-collection dashboards
 .addView(IgniterCollectionView.create('dashboard')
-  .withGetData(async ({ manager }) => {
+  .withData(async ({ manager }) => {
     const posts = await manager.posts.findMany();
     return { items: posts };
   })
@@ -1143,8 +1571,8 @@ const BadView = IgniterCollectionView.create('bad').build();
 
 // ✅ Always provide getData
 const GoodView = IgniterCollectionView.create('good')
-  .withGetData(async ({ manager }) => ({
-    items: await manager.posts.findMany()
+  .withData(async ({ manager }) => ({
+    posts: await manager.posts.findMany()
   }))
   .build();
 ```
@@ -1177,7 +1605,7 @@ const page1 = await docs.posts.findMany({ take: 50, skip: 0 });
 3. Use views with pre-filtered data:
 ```typescript
 const RecentView = IgniterCollectionView.create('recent')
-  .withGetData(async ({ manager }) => {
+  .withData(async ({ manager }) => {
     const posts = await manager.posts.findMany({
       take: 20,
       orderBy: { createdAt: 'desc' }

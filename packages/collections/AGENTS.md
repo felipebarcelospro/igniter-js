@@ -1,16 +1,19 @@
 # AGENTS.md - @igniter-js/collections
 
-> **Last Updated:** 2026-05-01
-> **Version:** 0.2.0
+> **Last Updated:** 2026-05-07
+> **Version:** 0.2.102
 > **Goal:** This document serves as the complete operational manual for Code Agents (Lia, Kai, Nova, Rex) and maintainers working with the `@igniter-js/collections` package. It follows the 1,000-line "Gold Standard" for robust agent training, ensuring deep understanding of architecture, flows, and troubleshooting.
 
-## Key Changes in v2.0.0
+## Key Changes in v0.2
 
 - **Decoupled Views:** Views are no longer tied to collections. They are global entities with access to the full `IIgniterCollectionsManager`.
 - **Unified Watcher:** `withWatcher()` replaces `withSchemaRegistry()`, supporting both collections and views.
 - **TypeScript Discovery:** `.schema.ts` and `.view.ts` files are supported via jiti with hot reload.
 - **Mandatory getData:** All views must define a `getData` hook.
 - **Immutable ViewBuilder:** `IgniterCollectionView.create()` follows the immutable builder pattern.
+- **Namespace API:** Manager methods reorganized into `collections`, `views`, and `watcher` namespaces for better DX.
+- **Source Tracking:** All definitions now have `source: 'built-in' | 'discovered'` to distinguish programmatic vs watcher-loaded.
+- **Subscription Pattern:** `on()` returns `{ off }` for easier event unsubscription.
 
 ---
 
@@ -86,13 +89,19 @@ All configuration in `@igniter-js/collections` happens via immutable builders. E
 
 **Design Decision:** We avoid mutation to prevent accidental state leakage when multiple managers are built from the same base configuration (e.g., in a multi-tenant setup where tenants share a base adapter but have different base paths).
 
-#### 3.2 Dynamic Collection Proxy
+#### 3.2 Dynamic Collection Proxy & Namespaces
 The `IgniterCollectionManager` uses a JavaScript `Proxy` to provide a clean, property-based API.
 - **The Trap:** When you access `docs.posts`, the `get` trap is triggered.
 - **The Logic:**
-  1. If the key matches a standard manager method (`collection`, `on`, `refreshSchemas`, `definitions`), return that method.
+  1. If the key matches a standard manager method (`collections`, `views`, `watcher`, `on`, `refresh`), return that method.
   2. If the key exists in the `collectionManagers` Map, return the manager for that collection.
-  3. This allows the user to write `await docs.posts.findMany()` instead of `await docs.collection('posts').findMany()`.
+  3. This allows the user to write `await docs.posts.findMany()` or `await docs.collections.get('posts').findMany()`.
+- **Namespaces:**
+  - `docs.collections.get('posts')` — Explicit collection access (preferred)
+  - `docs.collections.list()` — Array of all collection definitions
+  - `docs.collections.entries()` — Map of all collection definitions
+  - `docs.views.get('dashboard')` — Returns ViewInstance with `.render()`, `.actions`
+  - `docs.watcher.start()` / `docs.watcher.stop()` — File watching control
 - **Typing:** We use an intersection type `IIgniterCollectionsManagerMethods & IgniterCollectionsAccessor<TCollections>` to ensure full IDE support and type-safety.
 
 #### 3.3 Schema Registry & Runtime Discovery
@@ -131,7 +140,7 @@ The `IgniterCollectionWatcher` (configured via `withWatcher()`) is the central o
 1. `withWatcher(paths, { collections, views, autoWatch })` stores config in builder state.
 2. `build()` passes config to `IgniterCollectionManager`.
 3. Manager initializes `SchemaRegistry` and `ViewRegistry`.
-4. If `autoWatch: true`, `startWatching()` is called automatically.
+4. If `autoWatch: true`, `docs.watcher.start()` is called automatically.
 5. `refresh()` reloads both collections and views, merging with programmatic definitions.
 
 #### 3.6 TypeScript File Loading via jiti
@@ -179,7 +188,7 @@ The `findMany` operation is a read-heavy pipeline that applies filtering in-memo
     -   Calls `adapter.read()`.
     -   Parses frontmatter.
     -   Validates against schema.
-5.  **Filtering:** Applies `where` clause (in-memory). Supports operators: `contains`, `in`, `gt`, `lt`, `gte`, `lte`.
+5.  **Filtering:** Applies `where` clause (in-memory). Supports operators: `contains`, `in`, `gt`, `lt`, `gte`, `lte`. When `search` is present, builds a MiniSearch inverted index dynamically and queries it with BM25 ranking, prefix matching, and fuzzy matching.
 6.  **Sorting:** Applies `orderBy`.
 7.  **Pagination:** Applies `skip` and `take`.
 8.  **Hook (onList):** Calls `hooks.onList` to transform the final result set.
@@ -267,13 +276,13 @@ Views are **global** and **independent** of collections. They are defined via `I
 - **No defaultQuery:** Views fetch data entirely through the `getData` hook.
 - **No collection property:** The hook receives `manager: IIgniterCollectionsManager` and can access any collection.
 - **Mandatory getData:** `IgniterCollectionViewBuilder.build()` throws `VIEW_INVALID_CONFIGURATION` if `getData` is missing.
-- **Global Manager:** `docs.views.render('dashboard')` accesses the single `IgniterCollectionViewManager` instance.
+- **Global Manager:** `docs.views.get('dashboard').render()` accesses the single `IgniterCollectionViewManager` instance.
 
 #### 6.2 View Builder API
 ```typescript
 const DashboardView = IgniterCollectionView.create('dashboard')
   .withTitle('Analytics Dashboard')
-  .withGetData(async ({ manager }) => {
+  .withData(async ({ manager }) => {
     const [posts, authors] = await Promise.all([
       manager.posts.findMany(),
       manager.authors.findMany(),
@@ -348,7 +357,7 @@ import { IgniterCollectionView } from '@igniter-js/collections';
 
 export default IgniterCollectionView.create('dashboard')
   .withTitle('Analytics Dashboard')
-  .withGetData(async ({ manager }) => {
+  .withData(async ({ manager }) => {
     const [posts, authors] = await Promise.all([
       manager.posts.findMany(),
       manager.authors.findMany(),
@@ -530,9 +539,9 @@ Understanding how `@igniter-js/collections` is distributed helps in selecting th
 | `create(name)` | `name: string` | `Builder` | Starts building a view named `name`. |
 | `withTitle()` | `title: string` | `this` | Sets the display title. |
 | `withDescription()` | `description: string` | `this` | Sets the description. |
-| `withGetData()` | `hook: Hook` | `this` | Sets the data hook (**Mandatory**). |
+| `withMetadata()` | `metadata: Record<string, any>` | `this` | Sets free-form metadata (icon, order, color, etc.). |
+| `withData()` | `hook: Hook` | `this` | Sets the data hook (**Mandatory**). |
 | `withTree()` | `tree: Node[]` | `this` | Sets the UI component tree. |
-| `withTransform()` | `transform: Transform` | `this` | Adds a data transformation. |
 | `addAction()` | `name: string, action: Action` | `this` | Adds an action. |
 | `build()` | None | `Definition` | Returns the immutable view definition. |
 
@@ -561,20 +570,102 @@ Understanding how `@igniter-js/collections` is distributed helps in selecting th
 | `update()` | `{ where, data }` | `Promise<Doc>` | Partially updates an existing document. |
 | `delete()` | `{ where }` | `Promise<Doc>` | Removes a document and returns its last state. |
 | `count()` | `{ where? }` | `Promise<number>` | Returns the number of matching documents. |
+| `on()` | `event: string, handler: Function` | `{ off: () => void }` | Subscribe to collection-scoped events. Returns subscription handle. |
+
+#### 12.4 Collections Namespace (`manager.collections`)
+
+| Method | Arguments | Returns | Description |
+|--------|-----------|---------|-------------|
+| `get(name)` | `name: string` | `CollectionManager` | Get a collection manager by name. |
+| `list()` | None | `Definition[]` | List all collection definitions as an array. |
+| `entries()` | None | `Record<string, Definition>` | Get all collection definitions as a map. |
+
+#### 12.5 Views Namespace (`manager.views`)
+
+| Method | Arguments | Returns | Description |
+|--------|-----------|---------|-------------|
+| `get(name)` | `name: string` | `ViewInstance` | Get a view instance with `.render()`, `.actions`, `.definition`. |
+| `list()` | None | `Definition[]` | List all view definitions. |
+| `entries()` | None | `Record<string, Definition>` | Get all view definitions as a map. |
+
+#### 12.6 ViewInstance (`manager.views.get('name')`)
+
+| Property/Method | Returns | Description |
+|-----------------|---------|-------------|
+| `definition` | `ViewDefinition` | The view definition (includes metadata, source, etc.). |
+| `render(options?)` | `Promise<RenderResult>` | Render the view with optional query overrides. |
+| `actions.list()` | `string[]` | List available action IDs. |
+| `actions.execute(actionId, params)` | `Promise<ActionResult>` | Execute an action with validated parameters. |
+
+#### 12.7 Watcher Namespace (`manager.watcher`)
+
+| Property/Method | Returns | Description |
+|-----------------|---------|-------------|
+| `start()` | `Promise<boolean>` | Start watching files for changes. |
+| `stop()` | `void` | Stop watching files for changes. |
+| `isWatching` | `boolean` | Check if file watching is active. |
 
 ### 13. Telemetry & Observability Registry
 
-The `@igniter-js/collections` package emits high-granularity events to ensure the framework is fully observable.
+The `@igniter-js/collections` package emits high-granularity events to ensure the framework is fully observable. All events follow the attribute naming convention `ctx.<domain>.<field>`.
 
-| Event Name | Group | Attributes | Meaning |
-|------------|-------|------------|---------|
-| `findMany.started` | `document` | `ctx.query.where`, `ctx.query.take` | Initialized a bulk read operation. |
-| `findMany.success` | `document` | `ctx.document.count`, `ctx.duration_ms` | Bulk read completed successfully. |
-| `create.success` | `document` | `ctx.document.id`, `ctx.document.path` | A new document was persisted. |
-| `view.render.started` | `view` | `ctx.view.name`, `ctx.view.collection` | A view rendering process started. |
-| `view.render.success` | `view` | `ctx.view.items_count`, `ctx.duration_ms` | View result is ready for the UI. |
-| `registry.refresh.started` | `registry` | `ctx.registry.path_count` | Started scanning for schema files. |
-| `adapter.read.error` | `adapter` | `ctx.adapter.type`, `ctx.error.code` | A low-level storage read failed. |
+#### Document Operations
+
+| Event Name | Group | Key Attributes | Meaning |
+|------------|-------|----------------|---------|
+| `create.started` | `document` | `ctx.collection.collection`, `ctx.collection.document_id?`, `ctx.collection.has_content` | Document creation initiated. |
+| `create.success` | `document` | `ctx.collection.collection`, `ctx.collection.document_id`, `ctx.collection.duration_ms` | Document persisted successfully. |
+| `create.error` | `document` | `ctx.collection.collection`, `ctx.collection.error.code`, `ctx.collection.error.message` | Document creation failed (validation, hook cancel, etc.). |
+| `findUnique.started` | `document` | `ctx.collection.collection`, `ctx.collection.document_id` | Single document lookup initiated. |
+| `findUnique.success` | `document` | `ctx.collection.collection`, `ctx.collection.document_id`, `ctx.collection.found`, `ctx.collection.duration_ms` | Single document lookup completed. |
+| `findUnique.error` | `document` | `ctx.collection.collection`, `ctx.collection.document_id`, `ctx.collection.error.code`, `ctx.collection.error.message` | Single document lookup failed. |
+| `findMany.started` | `document` | `ctx.collection.collection`, `ctx.collection.has_filters`, `ctx.collection.take?`, `ctx.collection.skip?` | Bulk document read initiated. |
+| `findMany.success` | `document` | `ctx.collection.collection`, `ctx.collection.count`, `ctx.collection.duration_ms` | Bulk document read completed. |
+| `findMany.error` | `document` | `ctx.collection.collection`, `ctx.collection.error.code`, `ctx.collection.error.message` | Bulk document read failed. |
+| `update.started` | `document` | `ctx.collection.collection`, `ctx.collection.document_id` | Document update initiated. |
+| `update.success` | `document` | `ctx.collection.collection`, `ctx.collection.document_id`, `ctx.collection.duration_ms` | Document updated successfully. |
+| `update.error` | `document` | `ctx.collection.collection`, `ctx.collection.document_id`, `ctx.collection.error.code`, `ctx.collection.error.message` | Document update failed. |
+| `delete.started` | `document` | `ctx.collection.collection`, `ctx.collection.document_id` | Document deletion initiated. |
+| `delete.success` | `document` | `ctx.collection.collection`, `ctx.collection.document_id`, `ctx.collection.duration_ms` | Document deleted successfully. |
+| `delete.error` | `document` | `ctx.collection.collection`, `ctx.collection.document_id`, `ctx.collection.error.code`, `ctx.collection.error.message` | Document deletion failed. |
+| `count.started` | `document` | `ctx.collection.collection`, `ctx.collection.has_filters` | Document count initiated. |
+| `count.success` | `document` | `ctx.collection.collection`, `ctx.collection.count`, `ctx.collection.duration_ms` | Document count completed. |
+| `count.error` | `document` | `ctx.collection.collection`, `ctx.collection.error.code`, `ctx.collection.error.message` | Document count failed. |
+
+#### Collection Operations
+
+| Event Name | Group | Key Attributes | Meaning |
+|------------|-------|----------------|---------|
+| `initialized` | `collection` | `ctx.collection.collection`, `ctx.collection.base_path`, `ctx.collection.has_schema` | Collection manager initialized. |
+| `list.started` | `collection` | `ctx.collection.collection` | Document list operation initiated. |
+| `list.success` | `collection` | `ctx.collection.collection`, `ctx.collection.file_count`, `ctx.collection.duration_ms` | Document list operation completed. |
+
+#### Validation Events
+
+| Event Name | Group | Key Attributes | Meaning |
+|------------|-------|----------------|---------|
+| `started` | `validation` | `ctx.collection.collection`, `ctx.collection.document_id?` | Schema validation initiated. |
+| `success` | `validation` | `ctx.collection.collection`, `ctx.collection.document_id?`, `ctx.collection.duration_ms` | Schema validation passed. |
+| `error` | `validation` | `ctx.collection.collection`, `ctx.collection.document_id?`, `ctx.collection.issue_count` | Schema validation failed. |
+
+#### Hook Events
+
+| Event Name | Group | Key Attributes | Meaning |
+|------------|-------|----------------|---------|
+| `executed` | `hook` | `ctx.collection.collection`, `ctx.collection.hook_type`, `ctx.collection.document_id?`, `ctx.collection.was_cancelled`, `ctx.collection.duration_ms` | Hook executed (may have cancelled operation). |
+| `cancelled` | `hook` | `ctx.collection.collection`, `ctx.collection.hook_type`, `ctx.collection.document_id?` | Hook cancelled the operation. |
+
+#### View Operations
+
+| Event Name | Group | Key Attributes | Meaning |
+|------------|-------|----------------|---------|
+| `render.started` | `view` | `ctx.collection.name`, `ctx.view.name`, `ctx.has_hook`, `ctx.has_stats`, `ctx.has_transforms` | View rendering initiated. |
+| `render.success` | `view` | `ctx.collection.name`, `ctx.view.name`, `ctx.duration_ms`, `ctx.items.count`, `ctx.stats.count?` | View rendered successfully. |
+| `render.error` | `view` | `ctx.collection.name`, `ctx.view.name`, `ctx.error.code`, `ctx.error.message` | View rendering failed. |
+| `hook.executed` | `view` | `ctx.collection.name`, `ctx.view.name`, `ctx.hook.type` (`file` \| `inline`), `ctx.duration_ms` | View data hook executed. |
+| `action.started` | `view` | `ctx.collection.name`, `ctx.view.name`, `ctx.action.name`, `ctx.action.params_size` | View action execution initiated. |
+| `action.success` | `view` | `ctx.collection.name`, `ctx.view.name`, `ctx.action.name`, `ctx.action.duration_ms`, `ctx.action.success` | View action completed. |
+| `action.error` | `view` | `ctx.collection.name`, `ctx.view.name`, `ctx.action.name`, `ctx.action.duration_ms`, `ctx.error.code`, `ctx.error.message` | View action failed. |
 
 ### 14. Real-World Use Case Library (Expanded)
 
@@ -596,7 +687,7 @@ Using hooks to implement an approval state machine.
 ```
 
 #### Case 9: Global Search Implementation
-By utilizing the native **Full-Text Search (FTS)** capabilities of `findMany`, developers can build powerful global search engines over their Markdown content without external search services. The FTS engine supports `fields` weighting, `threshold` filtering, and Levenshtein-based `fuzzy` matching, automatically attaching `_search` scores to results.
+By utilizing the native **Full-Text Search (FTS)** capabilities of `findMany`, developers can build powerful global search engines over their Markdown content without external search services. The FTS engine uses **MiniSearch** with BM25 ranking (same algorithm as Elasticsearch), supporting `fields` weighting, `threshold` filtering, prefix matching, and fuzzy matching, automatically attaching `_search` scores to results.
 
 #### Case 10: Automatic Image Optimization on Upload
 A collection that manages image metadata in Markdown. An `onCreated` hook triggers an asynchronous process to optimize the image on S3 and update the Markdown file with the new optimized URL.
@@ -643,7 +734,7 @@ const docs = IgniterCollections.create()
   .addCollection(IgniterCollectionModel.create('v2').withPatterns(['.content/v2/{id}.mdx']).build())
   .addView(IgniterCollectionView.create('latest')
     .withTitle('Latest Documentation')
-    .withGetData(async ({ manager }) => {
+    .withData(async ({ manager }) => {
       const v2Docs = await manager.v2.findMany();
       return { items: v2Docs };
     })
@@ -714,7 +805,7 @@ A view that aggregates untranslated content across multiple language collections
 ```typescript
 const TranslationView = IgniterCollectionView.create('pending-translations')
   .withTitle('Pending Translations')
-  .withGetData(async ({ manager }) => {
+  .withData(async ({ manager }) => {
     const [en, es, fr] = await Promise.all([
       manager.en.findMany(),
       manager.es.findMany(),
@@ -770,7 +861,7 @@ const forms = IgniterCollectionModel.create('forms')
 
 const FormView = IgniterCollectionView.create('form-list')
   .withTitle('Available Forms')
-  .withGetData(async ({ manager }) => {
+  .withData(async ({ manager }) => {
     const items = await manager.forms.findMany();
     return {
       items,
@@ -809,7 +900,7 @@ A global view aggregates data from multiple collections for a unified analytics 
 ```typescript
 const Dashboard = IgniterCollectionView.create('dashboard')
   .withTitle('Site Analytics')
-  .withGetData(async ({ manager }) => {
+  .withData(async ({ manager }) => {
     const [posts, authors, comments] = await Promise.all([
       manager.posts.findMany(),
       manager.authors.findMany(),
@@ -860,7 +951,7 @@ Using views to migrate content between different storage backends.
 ```typescript
 const MigrationView = IgniterCollectionView.create('migration')
   .withTitle('Content Migration')
-  .withGetData(async ({ manager }) => {
+  .withData(async ({ manager }) => {
     const posts = await manager.posts.findMany();
     for (const post of posts) {
       await manager.archivedPosts.create({ data: post });
@@ -883,7 +974,7 @@ const docs = IgniterCollections.create()
 
 // Dashboard view is automatically reloaded when file changes
 setInterval(async () => {
-  const dashboard = await docs.views.render('dashboard');
+  const dashboard = await docs.views.get('dashboard').render();
   broadcastToClients(dashboard);
 }, 5000);
 ```
@@ -920,15 +1011,112 @@ setInterval(async () => {
 - **Cause:** The requested document ID does not match any file in the collection's patterns.
 - **Solution:** Verify the ID exists. Use `findMany()` to list available documents.
 
-#### `SCHEMA_VALIDATION_FAILED`
+#### `VALIDATION_ERROR`
 - **Context:** During `create()` or `update()` when data does not match the schema.
-- **Cause:** Missing required fields, wrong types, or values outside constraints.
-- **Solution:** Inspect `error.details.validation.errors` for specific field failures. Ensure all required fields are present.
+- **Cause:** Missing required fields, wrong types, or values outside constraints. Also thrown when using both `select` and `exclude` simultaneously.
+- **Solution:** Inspect `error.details.issues` for specific field failures. Ensure all required fields are present and types are correct.
+```typescript
+try {
+  await docs.posts.create({ data: { title: '' } });
+} catch (error) {
+  console.log(error.details.issues);
+  // [{ path: ['title'], message: 'String must contain at least 1 character(s)' }]
+}
+```
+
+#### `HOOK_CANCELLED`
+- **Context:** Any CRUD operation.
+- **Cause:** A hook returned `false`, cancelling the operation.
+- **Solution:** Check business rules in hooks. If cancellation is intentional, catch the error gracefully.
+```typescript
+try {
+  await docs.posts.create({ data: { title: 'Test' } });
+} catch (error) {
+  if (error.code === 'COLLECTION_HOOK_CANCELLED') {
+    console.log('Operation cancelled by business rule');
+  }
+}
+```
+
+#### `PARSE_ERROR`
+- **Context:** During document read.
+- **Cause:** The file has invalid frontmatter (bad YAML/JSON) or the file is corrupted.
+- **Solution:** Validate the file structure. For Markdown, ensure frontmatter is valid YAML between `---` delimiters.
+
+#### `WRITE_ERROR`
+- **Context:** During `create()` or `update()` persistence.
+- **Cause:** Adapter failed to write to storage (disk full, permission denied, network error for S3/Redis).
+- **Solution:** Check storage capacity, permissions, and network connectivity.
+
+#### `DELETE_ERROR`
+- **Context:** During `delete()`.
+- **Cause:** Adapter failed to delete the file (permission denied, file locked, network error).
+- **Solution:** Check file permissions and ensure the file is not locked by another process.
+
+#### `INVALID_PATTERN`
+- **Context:** Collection definition with malformed file patterns.
+- **Cause:** Pattern contains invalid characters or unsupported placeholders.
+- **Solution:** Use valid patterns like `{id}.mdx`, `posts/{id}.md`. Only `{id}`, `{parent_id}`, and data field names are supported.
+
+#### `BASE_PATH_REQUIRED`
+- **Context:** During manager initialization.
+- **Cause:** No base path configured and `process.cwd()` is not accessible.
+- **Solution:** Explicitly set `.withBasePath('/absolute/path/to/content')`.
+
+#### `REGISTRY_ERROR`
+- **Context:** During schema or view registry load/refresh.
+- **Cause:** Watcher path does not exist, registry file is malformed, or glob pattern is invalid.
+- **Solution:** Verify watcher paths exist and are accessible. Check schema/view files for syntax errors.
 
 #### `VIEW_INVALID_CONFIGURATION`
 - **Context:** Calling `IgniterCollectionViewBuilder.build()` without `getData`.
 - **Cause:** The view builder was not provided a mandatory `getData` hook.
-- **Solution:** Always call `.withGetData(hook)` before `.build()`.
+- **Solution:** Always call `.withData(hook)` before `.build()`.
+```typescript
+const GoodView = IgniterCollectionView.create('dashboard')
+  .withData(async ({ manager }) => ({ items: [] }))
+  .build();
+```
+
+#### `VIEW_NOT_FOUND`
+- **Context:** `views.get('name').render()` or `viewManager.render('name')`.
+- **Cause:** Requesting a view name that wasn't registered or discovered.
+- **Solution:** Verify view names in `docs.views.entries()`. Check for typos.
+
+#### `HOOK_EXECUTION_FAILED`
+- **Context:** During view render with file-based hooks.
+- **Cause:** The `getData` hook file threw an exception during execution.
+- **Solution:** Check the hook file for runtime errors. Ensure all imports are resolvable and the function signature is correct.
+
+#### `HOOK_INVALID`
+- **Context:** Loading a hook from file via registry or view manager.
+- **Cause:** The hook file does not export a valid function.
+- **Solution:** Ensure the hook file exports a default function or a named function matching the expected signature.
+
+#### `TRANSFORM_ERROR` / `STAT_EXPRESSION_ERROR` / `TRANSFORM_UNKNOWN`
+- **Context:** View render with transforms/stats (legacy).
+- **Cause:** Invalid transform configuration or stat expression.
+- **Solution:** These are legacy errors. Modern views use free-form `getData` hooks instead of declarative transforms.
+
+#### `ACTION_NOT_FOUND`
+- **Context:** `view.actions.execute('unknownAction', {})`.
+- **Cause:** The requested action ID does not exist on the view.
+- **Solution:** List available actions with `view.actions.list()` before executing.
+
+#### `ACTION_INVALID_PARAMS`
+- **Context:** Executing a view action with parameters that don't match the `params` schema.
+- **Cause:** Missing required fields, wrong types, or values outside constraints.
+- **Solution:** Validate parameters against the action's schema before calling.
+```typescript
+// Action expects: params: z.object({ format: z.enum(['csv', 'json']) })
+await view.actions.execute('export', { format: 'csv' }); // ✅
+await view.actions.execute('export', { format: 'pdf' }); // ❌ Throws ACTION_INVALID_PARAMS
+```
+
+#### `UNSUPPORTED_FILE_FORMAT`
+- **Context:** Registry or loader trying to load a file.
+- **Cause:** File extension is not `.json` or `.ts`.
+- **Solution:** Only `.schema.json`, `.schema.ts`, `.view.json`, and `.view.ts` files are supported.
 
 #### `TRANSPILE_FAILED`
 - **Context:** Loading a `.schema.ts` or `.view.ts` file via jiti.
@@ -939,11 +1127,6 @@ setInterval(async () => {
 - **Context:** Starting `autoWatch` on an unsupported adapter.
 - **Cause:** The adapter does not implement the `watch` method.
 - **Solution:** Use an adapter that supports watching (e.g., `BunFsAdapter`, `NodeFsAdapter`). Disable `autoWatch` for adapters without watch support.
-
-#### `HOOK_EXECUTION_ERROR`
-- **Context:** A hook throws an unhandled exception.
-- **Cause:** Logic error inside a custom hook function.
-- **Solution:** Wrap hook logic in try/catch. Log the error with context before re-throwing.
 
 ---
 
@@ -956,7 +1139,7 @@ When migrating from JSON schemas to TypeScript schemas:
 3. Import Zod or your schema library at the top
 4. Move hooks from string paths to inline functions (or import them)
 5. Update `withWatcher` globs to include `*.schema.ts`
-6. Verify hot reload works by modifying the file and checking `manager.definitions()`
+6. Verify hot reload works by modifying the file and checking `manager.collections.entries()`
 
 ### 15.2 jiti Performance Tuning
 
@@ -973,6 +1156,123 @@ When a watched view and a programmatic view share the same name:
 2. A `logger.warn` is emitted: `View "X" from watcher overridden by programmatic definition`
 3. The watched view is silently discarded
 4. To avoid conflicts, use namespaced view names in watched files: `team-dashboard.view.ts` → `team-dashboard`
+
+---
+
+### 15.4 API Migration Guide (v0.2)
+
+When migrating from the old flat API to the new namespace-based API:
+
+#### Manager Methods
+
+| Before (Deprecated) | After (New) |
+|---------------------|-------------|
+| `docs.startWatching()` | `docs.watcher.start()` |
+| `docs.stopWatching()` | `docs.watcher.stop()` |
+| `docs.isWatching()` | `docs.watcher.isWatching` |
+| `docs.collection('posts')` | `docs.collections.get('posts')` |
+| `docs.definitions()` | `docs.collections.entries()` |
+| `docs.views.render('dashboard')` | `docs.views.get('dashboard').render()` |
+| `docs.views.listActions('dashboard')` | `docs.views.get('dashboard').actions.list()` |
+| `docs.views.executeAction('dashboard', 'export', {})` | `docs.views.get('dashboard').actions.execute('export', {})` |
+| `docs.on('created', handler); docs.off('created', handler)` | `const { off } = docs.on('created', handler); off();` |
+
+#### Proxy Access (Still Supported - But will receive a type error, prefer don`t use it)
+
+```typescript
+// These still work as shorthand
+await docs.posts.findMany();
+await docs.dashboard.render(); // Note: now returns ViewInstance
+
+// But explicit access is preferred for clarity
+await docs.collections.get('posts').findMany();
+await docs.views.get('dashboard').render();
+```
+
+#### Definition Source Tracking
+
+All collection and view definitions carry a `source` property indicating their origin:
+
+```typescript
+// All definitions now have a source property
+const collection = docs.collections.get('posts');
+console.log(collection.definition.source); // 'built-in' | 'discovered'
+
+const view = docs.views.get('dashboard');
+console.log(view.definition.source); // 'built-in' | 'discovered'
+```
+
+**How sources are assigned:**
+- **Programmatic definitions** (`built-in`): Collections added via `.addCollection()` and views via `.addView()` are marked `built-in` at initialization (see `manager.ts` lines 192-193).
+- **Discovered definitions** (`discovered`): Files loaded by the watcher from `.schema.{json,ts}` and `.view.{json,ts}` patterns are marked `discovered` (see `schema-registry.ts` line 531 and `view-registry.ts` line 439).
+
+**Conflict resolution:** When a programmatic definition and a watched definition share the same name, the programmatic one always wins. A `logger.warn` is emitted: `View "X" from watcher overridden by programmatic definition`.
+
+#### Event Subscriptions
+
+The event system supports three tiers of events with different typing strategies.
+
+**1. Global Events (`IgniterCollectionGlobalEvents`)**
+
+Emitted from the main manager. Payloads are generic (`any`) because the manager doesn't know which collection triggered the event.
+
+```typescript
+// Global events receive { collection: string, value: any }
+const { off } = docs.on('created', ({ collection, value }) => {
+  console.log(`Created in ${collection}: ${value.id}`);
+});
+```
+
+**2. Scoped Events (`IgniterCollectionScopedEvents<TCollections>`)**
+
+Collection-prefixed events emitted from the main manager. Types are keyed by collection name.
+
+```typescript
+// Scoped events: docs.on('posts:created', ...)
+docs.on('posts:created', ({ value }) => {
+  // value is typed based on the "posts" collection schema
+  console.log(value.title);
+});
+```
+
+**3. Typed Model Events (`IgniterCollectionModelEvents<TSchema>`)**
+
+The most precise tier. Subscribing directly on a collection manager gives schema-typed payloads.
+
+```typescript
+// Typed scoped events: docs.posts.on('created', ...)
+// TypeScript infers the schema type automatically
+const sub = docs.posts.on('created', ({ value }) => {
+  // value.title, value.author, value.published are all autocompleted
+  console.log(`Post created: ${value.title} by ${value.author}`);
+});
+
+sub.off(); // Cleanup
+```
+
+**Event type mapping:**
+
+| Event | Global Payload | Scoped Payload | Model Payload |
+|-------|---------------|----------------|---------------|
+| `created` | `{ collection, value }` | `{ value }` | `{ value: Document<TSchema> }` |
+| `updated` | `{ collection, newValue, previousValue }` | `{ newValue, previousValue }` | `{ newValue, previousValue: Document<TSchema> }` |
+| `deleted` | `{ collection, value }` | `{ value }` | `{ value: Document<TSchema> }` |
+| `read` | `{ collection, value }` | `{ value }` | `{ value: Document<TSchema> }` |
+| `list` | — | — | `{ items: Document<TSchema>[] }` |
+
+**Type inference verification:** Tests use `expectTypeOf` to verify that inference remains stable across changes. If `docs.posts.on('created', ...)` loses type inference, it indicates a regression in the generic propagation chain.
+
+**Subscription pattern:**
+
+```typescript
+// All .on() calls return a subscription handle
+const { off } = docs.on('created', handler);
+const sub = docs.posts.on('updated', handler);
+
+// Cleanup
+off();
+sub.off();
+```
 
 ---
 
