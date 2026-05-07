@@ -41,6 +41,18 @@
  *   where: { published: true },
  *   orderBy: { createdAt: 'desc' }
  * });
+ *
+ * // New namespace API
+ * const { off } = docs.on('created', ({ collection, value }) => {
+ *   console.log(`Created in ${collection}: ${value.id}`);
+ * });
+ *
+ * // Explicit collection access
+ * const explicitPosts = await docs.collections.get('posts').findMany();
+ * const definitions = docs.collections.entries();
+ *
+ * // Watcher control
+ * await docs.watcher.start();
  * ```
  */
 
@@ -63,6 +75,18 @@ export {
 export {
   IgniterCollectionViewManager,
 } from "./core/view-manager";
+
+export {
+  IgniterCollectionWatcher,
+} from "./core/watcher";
+
+export {
+  IgniterCollectionsAccessor,
+} from "./core/collections-accessor";
+
+export {
+  IgniterCollectionViewInstance,
+} from "./core/view-instance";
 
 // =============================================================================
 // BUILDERS
@@ -126,6 +150,7 @@ export type {
   IgniterCollectionEvents,
   IgniterCollectionGlobalEvents,
   IgniterCollectionScopedEvents,
+  IgniterCollectionModelEvents,
 } from "./types/events";
 
 export type {
@@ -147,6 +172,10 @@ export type {
 export type {
   IIgniterCollectionModel,
   IIgniterCollectionsManager,
+  IIgniterCollectionsManagerFull,
+  IIgniterCollectionWatcher,
+  IIgniterCollectionsAccessor,
+  IgniterCollectionSubscription,
 } from "./types/manager";
 
 export type {
@@ -170,18 +199,14 @@ export type {
   IgniterCollectionViewActionResult,
   IgniterCollectionViewNode,
   IgniterCollectionViewQuery,
-  IgniterCollectionViewStats,
-  IgniterCollectionViewStatDefinition,
-  IgniterCollectionViewStatCount,
-  IgniterCollectionViewStatAggregate,
-  IgniterCollectionViewStatCustom,
-  IgniterCollectionViewTransform,
   IgniterCollectionViewDataHookContext,
   IgniterCollectionViewDataHook,
-  IgniterCollectionViewDataHookResult,
   IgniterCollectionViewRenderResult,
   IgniterCollectionViewRenderOptions,
   IIgniterCollectionViewManager,
+  IIgniterCollectionViewManagerInternal,
+  IIgniterCollectionViewInstance,
+  IIgniterCollectionViewActions,
 } from "./types/view";
 
 // =============================================================================
@@ -200,14 +225,6 @@ export {
 export {
   IgniterCollectionId,
 } from "./utils/id";
-
-export {
-  IgniterCollectionViewStatsCalculator,
-} from "./utils/view-stats";
-
-export {
-  IgniterCollectionViewTransformEngine,
-} from "./utils/view-transforms";
 
 export {
   IgniterCollectionViewJSONPointer,

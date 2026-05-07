@@ -5,7 +5,7 @@
 
 import type { StandardJSONSchemaV1 } from "@standard-schema/spec";
 import type { IgniterCollectionModelDefinition, IgniterCollectionDocument, DeepPrettify, IgniterCollectionDocumentSystemFields, IgniterCollectionDocumentSearchFields } from "./collection";
-import type { IgniterCollectionEventHandler, IgniterCollectionEvents } from "./events";
+import type { IgniterCollectionEventHandler, IgniterCollectionEvents, IgniterCollectionModelEvents } from "./events";
 import type { IIgniterCollectionViewManager } from "./view";
 import type {
   IgniterCollectionCountArgs,
@@ -25,7 +25,7 @@ import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
  */
 export type IgniterCollectionSchemaChangeCallback = (
   event: "added" | "updated" | "removed",
-  collectionName: string
+  collection: string
 ) => void;
 
 export type FindManyResult<TSchema, TArgs extends IgniterCollectionFindManyArgs<TSchema>> =
@@ -37,6 +37,87 @@ export type FindManyResult<TSchema, TArgs extends IgniterCollectionFindManyArgs<
     >]:
     IgniterCollectionDocument<TSchema, TArgs extends { select: infer S } ? S : undefined, TArgs extends { exclude: infer E } ? E : undefined>[K];
   }> & IgniterCollectionDocumentSearchFields>[];
+
+/**
+ * Event subscription handle returned by on().
+ */
+export interface IgniterCollectionSubscription {
+  /** Unsubscribe the handler */
+  off(): void;
+}
+
+/**
+ * Watcher namespace for file system watching.
+ */
+export interface IIgniterCollectionWatcher {
+  /**
+   * Start watching files for changes.
+   * @returns Promise that resolves to true if watching started successfully
+   */
+  start(): Promise<boolean>;
+
+  /**
+   * Stop watching files for changes.
+   */
+  stop(): void;
+
+  /**
+   * Check if file watching is active.
+   */
+  readonly isWatching: boolean;
+}
+
+/**
+ * Collections namespace for accessing and listing collections.
+ */
+export interface IIgniterCollectionsAccessor<
+  TCollections extends Record<string, IgniterCollectionModelDefinition<any>> = {
+    [key: string]: IgniterCollectionModelDefinition<any>;
+  },
+> {
+  /**
+   * Get a collection manager by name.
+   *
+   * @param name - Collection name
+   * @returns The collection manager
+   */
+  get<K extends keyof TCollections>(
+    name: K
+  ): TCollections[K] extends IgniterCollectionModelDefinition<infer TSchema>
+    ? IIgniterCollectionModel<TSchema>
+    : never;
+
+  /**
+   * Get a collection manager by name (dynamic fallback).
+   *
+   * Accepts any string for runtime-discovered collections.
+   * Returns `IIgniterCollectionModel<any>` when the collection
+   * is not statically known.
+   */
+  get(name: string): IIgniterCollectionModel<any>;
+
+  /**
+   * List all registered collection definitions as an array.
+   */
+  list(): Array<{
+    name: string;
+    patterns: string[];
+    schema: StandardJSONSchemaV1 | undefined;
+    source?: 'built-in' | 'discovered';
+  }>;
+
+  /**
+   * Get all registered collection definitions as an entries map.
+   */
+  entries(): {
+    [K in keyof TCollections]: {
+      name: string;
+      patterns: string[];
+      schema: StandardJSONSchemaV1 | undefined;
+      source?: 'built-in' | 'discovered';
+    };
+  };
+}
 
 /**
  * Interface for collection manager operations.
@@ -112,14 +193,38 @@ export interface IIgniterCollectionModel<
    * @returns Number of matching documents
    */
   count(args?: IgniterCollectionCountArgs<TSchema>): Promise<number>;
+
+  /**
+   * Subscribe to collection-scoped events.
+   *
+   * @param event - Event name (e.g., 'created', 'updated', 'deleted')
+   * @param handler - Event handler
+   * @returns Subscription handle with off() method
+   */
+  on<K extends keyof IgniterCollectionModelEvents<TSchema>>(
+    event: K,
+    handler: IgniterCollectionEventHandler<IgniterCollectionModelEvents<TSchema>[K]>
+  ): IgniterCollectionSubscription;
+
+  /**
+   * Subscribe to a custom collection-scoped event.
+   *
+   * @param event - Custom event name
+   * @param handler - Event handler
+   * @returns Subscription handle with off() method
+   */
+  on(
+    event: string,
+    handler: IgniterCollectionEventHandler<any>
+  ): IgniterCollectionSubscription;
 }
 
 /**
- * Type for dynamically accessing collection managers.
+ * Type for dynamically accessing collection managers via Proxy.
  *
  * @typeParam TCollections - Map of collection definitions
  */
-export type IgniterCollectionsAccessor<
+export type IgniterCollectionsProxy<
   TCollections extends Record<string, IgniterCollectionModelDefinition<any>>,
 > = {
     [K in keyof TCollections]: TCollections[K] extends IgniterCollectionModelDefinition<
@@ -130,76 +235,36 @@ export type IgniterCollectionsAccessor<
   };
 
 /**
- * Interface for the main markdown manager methods.
+ * Public API interface for the main markdown manager.
+ *
+ * This is the interface returned by `build()`. It only exposes
+ * the official public API — internal methods are hidden from
+ * IntelliSense to improve DX.
  *
  * @typeParam TCollections - Map of collection definitions
  */
-export interface IIgniterCollectionsManagerMethods<
+export interface IIgniterCollectionsManager<
   TCollections extends Record<string, IgniterCollectionModelDefinition<any>> = {
     [key: string]: IgniterCollectionModelDefinition<any>;
   },
 > {
   /**
-   * Get a collection manager by name.
-   *
-   * @param name - Collection name
-   * @returns The collection manager
-   */
-  collection<K extends keyof TCollections>(
-    name: K
-  ): TCollections[K] extends IgniterCollectionModelDefinition<infer TSchema>
-    ? IIgniterCollectionModel<TSchema>
-    : never;
-
-  /**
-   * List all registered collection names.
-   */
-  definitions(): {
-    [K in keyof TCollections]: {
-      name: string;
-      patterns: string[];
-      schema: StandardJSONSchemaV1 | undefined;
-    };
-  };
-
-  /**
    * Subscribe to a global or scoped event.
    *
    * @param event - Event name (e.g., 'created', 'posts:updated')
    * @param handler - Event handler
+   * @returns Subscription handle with off() method
    *
    * @example
    * ```typescript
-   * docs.on('created', ({ collection, value }) => { ... });
-   * docs.on('posts:updated', ({ newValue }) => { ... });
+   * const { off } = docs.on('created', ({ collection, value }) => { ... });
+   * // later: off();
    * ```
    */
   on<K extends keyof IgniterCollectionEvents<TCollections>>(
     event: K,
     handler: IgniterCollectionEventHandler<IgniterCollectionEvents<TCollections>[K]>
-  ): void;
-
-  /**
-   * Unsubscribe from an event.
-   *
-   * @param event - Event name
-   * @param handler - Event handler to remove
-   */
-  off<K extends keyof IgniterCollectionEvents<TCollections>>(
-    event: K,
-    handler: IgniterCollectionEventHandler<IgniterCollectionEvents<TCollections>[K]>
-  ): void;
-
-  /**
-   * Subscribe to an event once.
-   *
-   * @param event - Event name
-   * @param handler - Event handler
-   */
-  once<K extends keyof IgniterCollectionEvents<TCollections>>(
-    event: K,
-    handler: IgniterCollectionEventHandler<IgniterCollectionEvents<TCollections>[K]>
-  ): void;
+  ): IgniterCollectionSubscription;
 
   /**
    * Refresh collections and views from the registry.
@@ -212,58 +277,91 @@ export interface IIgniterCollectionsManagerMethods<
   refresh(): Promise<void>;
 
   /**
-   * Start watching files for changes.
-   *
-   * When schema or view files change, the registry automatically refreshes
-   * and collection managers and views are updated accordingly.
-   *
-   * @returns Promise that resolves to true if watching started successfully
+   * Global view manager for rendering views across all collections.
    */
-  startWatching(): Promise<boolean>;
+  readonly views: IIgniterCollectionViewManager;
 
   /**
-   * Stop watching files for changes.
+   * Collections namespace for accessing and listing collections.
    */
-  stopWatching(): void;
+  readonly collections: IIgniterCollectionsAccessor<TCollections>;
 
   /**
-   * Check if file watching is active.
-   *
-   * @returns True if watching is active
+   * Watcher namespace for file system watching.
    */
-  isWatching(): boolean;
+  readonly watcher: IIgniterCollectionWatcher;
+}
 
-  /**
-   * Dispose the manager and clean up all resources.
-   *
-   * Stops schema watching and releases any held resources.
-   */
-  dispose(): void;
+/**
+ * Internal methods not exposed in the public API.
+ *
+ * These methods exist on the runtime object but are hidden from
+ * the public type to keep IntelliSense clean.
+ *
+ * @internal
+ */
+export interface IIgniterCollectionsManagerInternal<
+  TCollections extends Record<string, IgniterCollectionModelDefinition<any>> = {
+    [key: string]: IgniterCollectionModelDefinition<any>;
+  },
+> extends IIgniterCollectionsManager<TCollections> {
+  /** Unsubscribe from an event. */
+  off<K extends keyof IgniterCollectionEvents<TCollections>>(
+    event: K,
+    handler: IgniterCollectionEventHandler<IgniterCollectionEvents<TCollections>[K]>
+  ): void;
 
-  /**
-   * Emit an event internally.
-   * @internal
-   */
+  /** Subscribe to an event once. */
+  once<K extends keyof IgniterCollectionEvents<TCollections>>(
+    event: K,
+    handler: IgniterCollectionEventHandler<IgniterCollectionEvents<TCollections>[K]>
+  ): void;
+
+  /** Emit an event. */
   emit<K extends keyof IgniterCollectionEvents<TCollections>>(
     event: K,
     data: IgniterCollectionEvents<TCollections>[K]
   ): Promise<void>;
 
-  /**
-   * Global view manager for rendering views across all collections.
-   */
-  readonly views: IIgniterCollectionViewManager;
+  /** Dispose the manager. */
+  dispose(): void;
+
+  /** Get a collection manager by name (legacy). */
+  collection<K extends keyof TCollections>(
+    name: K
+  ): TCollections[K] extends IgniterCollectionModelDefinition<infer TSchema>
+    ? IIgniterCollectionModel<TSchema>
+    : never;
+
+  /** List all registered collection names (legacy). */
+  definitions(): {
+    [K in keyof TCollections]: {
+      name: string;
+      patterns: string[];
+      schema: StandardJSONSchemaV1 | undefined;
+      source?: 'built-in' | 'discovered';
+    };
+  };
+
+  /** Start watching (legacy). */
+  startWatching(): Promise<boolean>;
+
+  /** Stop watching (legacy). */
+  stopWatching(): void;
+
+  /** Check if watching (legacy). */
+  isWatching(): boolean;
 }
 
 /**
- * Interface for the main markdown manager.
+ * Full manager interface including public API, internal methods,
+ * and dynamic proxy access for collection shorthand.
  *
- * @typeParam TCollections - Map of collection definitions
+ * @internal
  */
-export type IIgniterCollectionsManager<
+export type IIgniterCollectionsManagerFull<
   TCollections extends Record<string, IgniterCollectionModelDefinition<Record<string, any>>> = Record<
     string,
     IgniterCollectionModelDefinition<Record<string, any>>
   >,
-> = IIgniterCollectionsManagerMethods<TCollections> & IgniterCollectionsAccessor<TCollections>;
-
+> = IIgniterCollectionsManagerInternal<TCollections> & IgniterCollectionsProxy<TCollections>;

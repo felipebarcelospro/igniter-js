@@ -15,7 +15,6 @@ import type {
   IgniterCollectionViewDefinition,
   IgniterCollectionViewDataHook,
   IgniterCollectionViewNode,
-  IgniterCollectionViewTransform,
   IgniterCollectionViewAction,
 } from "../types/view";
 
@@ -28,8 +27,8 @@ interface ViewBuilderState {
   description?: string;
   getData?: IgniterCollectionViewDataHook;
   tree: IgniterCollectionViewNode[];
-  transforms: IgniterCollectionViewTransform[];
   actions: Map<string, IgniterCollectionViewAction>;
+  metadata?: Record<string, any>;
 }
 
 /**
@@ -44,12 +43,14 @@ interface ViewBuilderState {
  * ```typescript
  * const DashboardView = IgniterCollectionView.create('dashboard')
  *   .withTitle('Analytics Dashboard')
- *   .withGetData(async ({ manager }) => {
+ *   .withMetadata({ icon: 'chart', order: 1 })
+ *   .withData(async ({ manager }) => {
  *     const posts = await manager.posts.findMany();
- *     return { items: posts, stats: { total: posts.length } };
+ *     return { posts, total: posts.length };
  *   })
  *   .withTree([
- *     { component: 'Metric', valuePath: '/stats/total' },
+ *     { component: 'Metric', valuePath: '/total' },
+ *     { component: 'Table', valuePath: '/posts' },
  *   ])
  *   .build();
  * ```
@@ -58,7 +59,7 @@ interface ViewBuilderState {
  * ```typescript
  * const DashboardView = IgniterCollectionView.create('dashboard')
  *   .withTitle('Dashboard')
- *   .withGetData(async ({ manager }) => ({ items: [] }))
+ *   .withData(async ({ manager }) => ({ posts: [] }))
  *   .addAction('export', {
  *     description: 'Export to CSV',
  *     handler: async ({ manager, params }) => ({ success: true }),
@@ -86,7 +87,6 @@ export class IgniterCollectionViewBuilder<
     return new IgniterCollectionViewBuilder({
       name,
       tree: [],
-      transforms: [],
       actions: new Map(),
     });
   }
@@ -120,15 +120,39 @@ export class IgniterCollectionViewBuilder<
   }
 
   /**
+   * Set free-form metadata for this view.
+   *
+   * Useful for UI properties like icon, order, color, category, etc.
+   *
+   * @param metadata - Arbitrary key-value metadata
+   * @returns New builder instance
+   *
+   * @example
+   * ```typescript
+   * .withMetadata({ icon: 'chart', order: 1, color: 'blue' })
+   * ```
+   */
+  withMetadata(
+    metadata: Record<string, any>
+  ): IgniterCollectionViewBuilder<TName> {
+    return new IgniterCollectionViewBuilder({
+      ...this.state,
+      metadata: { ...this.state.metadata, ...metadata },
+    });
+  }
+
+  /**
    * Set the data hook for this view.
    *
    * The hook receives the full `IIgniterCollectionsManager` and can
    * access any collection. This is **mandatory** for global views.
    *
+   * Returns any data structure — the developer controls the shape.
+   *
    * @param hook - Data hook function
    * @returns New builder instance
    */
-  withGetData(
+  withData(
     hook: IgniterCollectionViewDataHook
   ): IgniterCollectionViewBuilder<TName> {
     return new IgniterCollectionViewBuilder({
@@ -149,23 +173,6 @@ export class IgniterCollectionViewBuilder<
     return new IgniterCollectionViewBuilder({
       ...this.state,
       tree,
-    });
-  }
-
-  /**
-   * Add a data transformation to this view.
-   *
-   * Multiple transforms can be chained and are applied sequentially.
-   *
-   * @param transform - Transform definition
-   * @returns New builder instance
-   */
-  withTransform(
-    transform: IgniterCollectionViewTransform
-  ): IgniterCollectionViewBuilder<TName> {
-    return new IgniterCollectionViewBuilder({
-      ...this.state,
-      transforms: [...this.state.transforms, transform],
     });
   }
 
@@ -197,7 +204,7 @@ export class IgniterCollectionViewBuilder<
   build(): IgniterCollectionViewDefinition {
     if (!this.state.getData) {
       throw new IgniterCollectionError({
-        message: `View "${this.state.name}" is missing required getData hook. Use .withGetData() to configure.`,
+        message: `View "${this.state.name}" is missing required getData hook. Use .withData() to configure.`,
         code: IGNITER_COLLECTION_ERROR_CODES.VIEW_INVALID_CONFIGURATION,
         statusCode: 400,
         details: {
@@ -214,8 +221,8 @@ export class IgniterCollectionViewBuilder<
       description: this.state.description,
       getData: this.state.getData,
       tree: this.state.tree,
-      transforms: this.state.transforms,
       actions: Object.fromEntries(this.state.actions),
+      metadata: this.state.metadata,
     };
   }
 }
@@ -227,9 +234,10 @@ export class IgniterCollectionViewBuilder<
  * ```typescript
  * const DashboardView = IgniterCollectionView.create('dashboard')
  *   .withTitle('Analytics Dashboard')
- *   .withGetData(async ({ manager }) => {
+ *   .withMetadata({ icon: 'chart' })
+ *   .withData(async ({ manager }) => {
  *     const posts = await manager.posts.findMany();
- *     return { items: posts, stats: { total: posts.length } };
+ *     return { posts, total: posts.length };
  *   })
  *   .build();
  * ```

@@ -1,7 +1,7 @@
 import { IgniterCollections } from "../../src/index"
 import { BunFsAdapter } from "../../src/adapters/bun-fs.adapter";
 
-const collections = IgniterCollections.create()
+const manager = IgniterCollections.create()
   .withAdapter(new BunFsAdapter())
   .withBasePath(process.cwd())
   .withWatcher('.', {
@@ -12,7 +12,7 @@ const collections = IgniterCollections.create()
 
 async function runSample() {
   // Create a new post
-  const newPost = await collections.posts.create({
+  const newPost = await manager.collections.get('posts').create({
     data: {
       title: "My First Post",
       content: "This is the content of my first post.",
@@ -29,30 +29,30 @@ async function runSample() {
   console.log("Created Post:", newPost.id);
 
   // Find the post by ID
-  const foundPost = await collections.posts.findUnique({
+  const foundPost = await manager.collections.get('posts').findUnique({
     where: { id: newPost.id },
   });
 
   console.log("Found Post:", foundPost?.id);
   // Update the post
-  const updatedPost = await collections.posts.update({
+  const updatedPost = await manager.collections.get('posts').update({
     where: { id: newPost.id },
     data: { published: false },
   });
 
   console.log("Updated Post:", updatedPost.id);
 
-  const definitions = collections.definitions();
+  const definitions = manager.collections.entries();
   console.log("Collection Definitions:", definitions);
 
   // // Delete the post
-  // await collections.posts.delete({
+  // await manager.collections.get('posts').delete({
   //   where: { id: newPost.id },
   // });
   // console.log("Deleted Post with ID:", newPost.id);
 }
 
 runSample().catch((error) => {
-  collections.stopWatching();
+  manager.watcher.stop();
   console.error("Error running sample:", error);
 });

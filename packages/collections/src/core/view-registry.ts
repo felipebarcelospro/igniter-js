@@ -436,6 +436,8 @@ export class IgniterCollectionViewRegistry {
         }
       }
 
+      definition.source = 'discovered';
+
       return definition;
     } catch (error) {
       this.logger?.error(`Error loading view file: ${filePath}`, { error });

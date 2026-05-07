@@ -8,27 +8,26 @@ import type { IIgniterCollectionsManager } from './manager';
 export interface IgniterCollectionViewDefinition {
   /** Unique view name within the collection */
   name: string;
-  
+
   /** Human-readable title for UI display */
   title: string;
-  
+
   /** Optional description */
   description?: string;
-  
+
   /** UI component tree (json-render compatible) */
   tree: IgniterCollectionViewNode[];
-  
-  /** Declarative stats definitions */
-  stats?: IgniterCollectionViewStats;
-  
+
   /** Custom data processing hook (file path or function) */
   getData?: string | IgniterCollectionViewDataHook;
-  
-  /** Data transformations to apply */
-  transforms?: IgniterCollectionViewTransform[];
-  
+
   /** Actions available for this view (compatible with json-render) */
   actions?: Record<string, IgniterCollectionViewAction>;
+
+  /** Free-form metadata for the view (icon, order, color, etc.) */
+  metadata?: Record<string, any>;
+  /** Source of the definition: built-in (programmatic) or discovered (watcher) */
+  source?: 'built-in' | 'discovered';
 }
 
 /**
@@ -38,13 +37,13 @@ export interface IgniterCollectionViewDefinition {
 export interface IgniterCollectionViewAction {
   /** Zod schema for action parameters (StandardSchemaV1) */
   params?: StandardSchemaV1;
-  
+
   /** Human-readable description of what this action does */
   description: string;
-  
+
   /** Action handler (file path or inline function) */
   handler: string | IgniterCollectionViewActionHandler;
-  
+
   /** Optional confirmation configuration */
   confirm?: {
     title: string;
@@ -66,13 +65,13 @@ export type IgniterCollectionViewActionHandler<TParams = any, TResult = any> = (
 export interface IgniterCollectionViewActionContext<TParams = any> {
   /** Global collections manager (access to all collections) */
   manager: IIgniterCollectionsManager;
-  
+
   /** View that triggered the action */
   view: IgniterCollectionViewDefinition;
-  
+
   /** Action ID */
   actionId: string;
-  
+
   /** Validated action parameters */
   params: TParams;
 }
@@ -84,13 +83,13 @@ export interface IgniterCollectionViewActionContext<TParams = any> {
 export interface IgniterCollectionViewActionResult<TData = any> {
   /** Success status */
   success: boolean;
-  
+
   /** Result data */
   data?: TData;
-  
+
   /** Error message if failed */
   error?: string;
-  
+
   /** Optional state updates (json-pointer paths) */
   updates?: Record<string, any>;
 }
@@ -102,13 +101,13 @@ export interface IgniterCollectionViewActionResult<TData = any> {
 export interface IgniterCollectionViewNode {
   /** Component type (e.g., "Metric", "Table", "Chart") */
   component: string;
-  
+
   /** Component props */
   props?: Record<string, any>;
-  
+
   /** JSON Pointer to data (e.g., "/stats/totalCount") */
   valuePath?: string;
-  
+
   /** Nested children components */
   children?: IgniterCollectionViewNode[];
 }
@@ -124,46 +123,6 @@ export interface IgniterCollectionViewQuery {
 }
 
 /**
- * Stats definitions (keyed by stat name).
- */
-export interface IgniterCollectionViewStats {
-  [statName: string]: IgniterCollectionViewStatDefinition;
-}
-
-/**
- * Single stat definition.
- */
-export type IgniterCollectionViewStatDefinition =
-  | IgniterCollectionViewStatCount
-  | IgniterCollectionViewStatAggregate
-  | IgniterCollectionViewStatCustom;
-
-export interface IgniterCollectionViewStatCount {
-  type: 'count';
-  where?: Record<string, any>;
-}
-
-export interface IgniterCollectionViewStatAggregate {
-  type: 'sum' | 'avg' | 'min' | 'max';
-  field: string;
-  where?: Record<string, any>;
-}
-
-export interface IgniterCollectionViewStatCustom {
-  type: 'custom';
-  expression: string;
-}
-
-/**
- * Transform definition.
- */
-export interface IgniterCollectionViewTransform {
-  type: 'group' | 'flatten' | 'pivot';
-  field?: string;
-  config?: Record<string, any>;
-}
-
-/**
  * Context provided to data hooks for global views.
  */
 export interface IgniterCollectionViewDataHookContext {
@@ -176,55 +135,22 @@ export interface IgniterCollectionViewDataHookContext {
 
 /**
  * Data hook function signature for global views.
+ * Returns any data structure — the developer controls the shape.
  */
 export type IgniterCollectionViewDataHook = (
   context: IgniterCollectionViewDataHookContext
-) => Promise<IgniterCollectionViewDataHookResult>;
-
-/**
- * Result from data hook execution.
- */
-export interface IgniterCollectionViewDataHookResult {
-  /** Processed items */
-  items: any[];
-  
-  /** Additional/overridden stats */
-  stats?: Record<string, any>;
-  
-  /** Extra data (e.g., from external APIs) */
-  extra?: Record<string, any>;
-}
+) => Promise<any>;
 
 /**
  * Final render result returned to user.
- * Supports type inference for items, stats, and extra data.
  */
-export interface IgniterCollectionViewRenderResult<
-  TSchema = any,
-  TStats extends Record<string, any> = Record<string, any>,
-  TExtra extends Record<string, any> = Record<string, any>
-> {
+export interface IgniterCollectionViewRenderResult {
   /** View definition */
   view: IgniterCollectionViewDefinition;
-  
-  /** Rendered data */
-  data: {
-    /** Collection items (typed by TSchema) */
-    items: TSchema[];
-    
-    /** Calculated stats (typed by TStats) */
-    stats: TStats;
-    
-    /** Extra data from hooks */
-    extra?: Record<string, any>;
-    
-    /** Metadata */
-    meta: {
-      total: number;
-      query?: IgniterCollectionViewQuery;
-    };
-  };
-  
+
+  /** Rendered data (free-form, controlled by getData hook) */
+  data: any;
+
   /** Timestamp of render */
   renderedAt: string;
 }
@@ -235,37 +161,93 @@ export interface IgniterCollectionViewRenderResult<
 export interface IgniterCollectionViewRenderOptions {
   /** Override default where clause */
   where?: Record<string, any>;
-  
+
   /** Override default orderBy */
   orderBy?: Record<string, 'asc' | 'desc'>;
-  
+
   /** Override default take */
   take?: number;
-  
+
   /** Skip for pagination */
   skip?: number;
 }
 
 /**
- * Interface for the global view manager.
+ * View action accessor interface.
+ */
+export interface IIgniterCollectionViewActions {
+  /**
+   * List available action IDs for this view.
+   */
+  list(): string[];
+
+  /**
+   * Execute an action with validated parameters.
+   *
+   * @param actionId - Action identifier
+   * @param params - Action parameters
+   * @returns Action execution result
+   */
+  execute<TParams = any, TResult = any>(
+    actionId: string,
+    params: TParams
+  ): Promise<IgniterCollectionViewActionResult<TResult>>;
+}
+
+/**
+ * Active view instance with render and action capabilities.
+ */
+export interface IIgniterCollectionViewInstance {
+  /** View definition */
+  readonly definition: IgniterCollectionViewDefinition;
+
+  /** Render the view with optional query overrides */
+  render(options?: IgniterCollectionViewRenderOptions): Promise<IgniterCollectionViewRenderResult>;
+
+  /** View actions accessor */
+  readonly actions: IIgniterCollectionViewActions;
+}
+
+/**
+ * Public interface for the global view manager.
+ *
+ * Only exposes namespace methods (get, list, entries).
+ * Internal methods (render, executeAction, listActions) are hidden
+ * from IntelliSense via IIgniterCollectionViewManagerInternal.
  */
 export interface IIgniterCollectionViewManager {
   /**
-   * List all registered views.
+   * List all registered view definitions.
    */
   list(): IgniterCollectionViewDefinition[];
-  
+
   /**
-   * Get a specific view by name.
-   * 
-   * @param name - View name
-   * @returns View definition or undefined if not found
+   * Get all registered view definitions as an entries map.
    */
-  get(name: string): IgniterCollectionViewDefinition | undefined;
-  
+  entries(): Record<string, IgniterCollectionViewDefinition>;
+
+  /**
+   * Get a specific view instance by name.
+   *
+   * @param name - View name
+   * @returns View instance or undefined if not found
+   */
+  get(name: string): IIgniterCollectionViewInstance | undefined;
+}
+
+/**
+ * Internal interface extending the public view manager.
+ *
+ * These methods exist on the runtime object but are not exposed
+ * in the public type to keep IntelliSense clean.
+ *
+ * @internal
+ */
+export interface IIgniterCollectionViewManagerInternal
+  extends IIgniterCollectionViewManager {
   /**
    * Render a view with data.
-   * 
+   *
    * @param name - View name
    * @param options - Optional query overrides
    * @returns Rendered view result with data
@@ -274,21 +256,21 @@ export interface IIgniterCollectionViewManager {
     name: string,
     options?: IgniterCollectionViewRenderOptions
   ): Promise<IgniterCollectionViewRenderResult>;
-  
+
   /**
    * List available actions for a view.
-   * 
+   *
    * @param viewId - View name
    * @returns Array of action IDs
    */
   listActions(viewId: string): string[];
-  
+
   /**
    * Execute an action with validated parameters.
-   * 
+   *
    * @param viewId - View name
    * @param actionId - Action identifier
-   * @param params - Action parameters (validated against action schema)
+   * @param params - Action parameters
    * @returns Action execution result
    */
   executeAction<TParams = any, TResult = any>(

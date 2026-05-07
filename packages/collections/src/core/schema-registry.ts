@@ -30,7 +30,7 @@ import { IgniterCollectionLoader } from "../utils/loader";
  */
 export type IgniterCollectionSchemaChangeCallback = (
   event: "added" | "updated" | "removed",
-  collectionName: string
+  collection: string
 ) => void;
 
 /**
@@ -57,8 +57,8 @@ export type IgniterCollectionSchemaChangeCallback = (
  * await registry.refresh();
  *
  * // Start watching for changes
- * registry.startWatching((event, collectionName) => {
- *   console.log(`Schema ${event}: ${collectionName}`);
+ * registry.startWatching((event, collection) => {
+ *   console.log(`Schema ${event}: ${collection}`);
  * });
  *
  * // Stop watching
@@ -150,21 +150,21 @@ export class IgniterCollectionSchemaRegistry {
               filePath
             );
 
-            let collectionName = definition.name;
+            let collection = definition.name;
 
             // Conflict Resolution Logic
-            if (nameToPath.has(collectionName)) {
+            if (nameToPath.has(collection)) {
               const prefix = this.calculatePrefix(filePath);
-              collectionName = `${prefix}:${collectionName}`;
-              definition.name = collectionName;
+              collection = `${prefix}:${collection}`;
+              definition.name = collection;
               this.logger?.debug(
-                `Conflict detected for ${loadedSchema.schema.collectionName}. Renamed to ${collectionName}`
+                `Conflict detected for ${loadedSchema.schema.name}. Renamed to ${collection}`
               );
             }
 
-            this.cache.set(collectionName, definition);
+            this.cache.set(collection, definition);
             this.loadedSchemas.set(filePath, loadedSchema);
-            nameToPath.set(collectionName, filePath);
+            nameToPath.set(collection, filePath);
 
             this.logger?.debug(`Loaded schema: ${definition.name} from ${filePath}`);
           } else {
@@ -253,8 +253,8 @@ export class IgniterCollectionSchemaRegistry {
    *
    * @example
    * ```typescript
-   * registry.startWatching((event, collectionName) => {
-   *   console.log(`Schema ${event}: ${collectionName}`);
+   * registry.startWatching((event, collection) => {
+   *   console.log(`Schema ${event}: ${collection}`);
    *   // Optionally reload collection managers
    * });
    * ```
@@ -474,12 +474,12 @@ export class IgniterCollectionSchemaRegistry {
       const parsed = await this.loader.load(filePath) as IgniterCollectionSchemaFile;
 
       // Validate required fields
-      if (!parsed.collectionName) {
+      if (!parsed.name) {
         return {
           filePath,
           schema: parsed,
           success: false,
-          error: "Missing required field: collectionName",
+          error: "Missing required field: collection",
         };
       }
 
@@ -521,13 +521,14 @@ export class IgniterCollectionSchemaRegistry {
     }
 
     return {
-      name: schemaFile.collectionName,
+      name: schemaFile.name,
       patterns,
       template: schemaFile.template,
       defaultIdGenerator: () => IgniterCollectionId.uuid(),
       schema: schema,
       hooks: hooks as IgniterCollectionModelHooks<Record<string, any>>,
       subCollections: new Map(),
+      source: 'discovered',
     };
   }
 
@@ -541,25 +542,30 @@ export class IgniterCollectionSchemaRegistry {
     const hooks: IgniterCollectionModelHooks<unknown> = {};
     const schemaDir = IgniterCollectionPath.dirname(schemaFilePath);
 
-    for (const [hookName, hookPath] of Object.entries(hooksConfig)) {
-      if (!hookPath) continue;
+    for (const [hookName, hookValue] of Object.entries(hooksConfig)) {
+      if (!hookValue) continue;
 
+      // If hook is already a function (e.g., from TypeScript schema builder),
+      // use it directly without trying to import as a module
+      if (typeof hookValue === "function") {
+        (hooks as Record<string, unknown>)[hookName] = hookValue;
+        continue;
+      }
+
+      // Otherwise, treat it as a file path and try to import the module
       try {
-        // Resolve hook file path relative to schema file
         const absolutePath = IgniterCollectionPath.resolve(
           this.config.basePath,
           schemaDir,
-          hookPath
+          hookValue as string
         );
 
-        // Try to dynamically import the hook module
-        // Note: This requires the hook file to be a valid module
         const hookModule = await this.loadHookModule(absolutePath, hookName);
         if (hookModule) {
           (hooks as Record<string, unknown>)[hookName] = hookModule;
         }
       } catch (error) {
-        this.logger?.warn(`Failed to load hook ${hookName} from ${hookPath}`, { error });
+        this.logger?.warn(`Failed to load hook ${hookName} from ${hookValue}`, { error });
       }
     }
 

@@ -50,6 +50,10 @@ import type { IgniterCollectionViewDefinition } from "../types/view";
  *
  * // Type-safe collection access
  * const post = await docs.posts.create({ data: { title: 'Hello', draft: true } });
+ *
+ * // Explicit access via collections namespace
+ * const allPosts = await docs.collections.get('posts').findMany();
+ * const collectionsList = docs.collections.list();
  * ```
  */
 export class IgniterCollectionsBuilder<
@@ -164,7 +168,7 @@ export class IgniterCollectionsBuilder<
    * ```typescript
    * const DashboardView = IgniterCollectionView.create('dashboard')
    *   .withTitle('Dashboard')
-   *   .withGetData(async ({ manager }) => ({ items: [] }))
+   *   .withData(async ({ manager }) => ({ items: [] }))
    *   .build();
    *
    * const docs = IgniterCollections.create()

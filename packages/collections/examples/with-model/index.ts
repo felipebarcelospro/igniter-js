@@ -1,7 +1,6 @@
 import z from "zod";
 import { IgniterCollections, IgniterCollectionModel } from "../../src/index"
 import { BunFsAdapter } from "../../src/adapters/bun-fs.adapter";
-import { NodeFsAdapter } from "src/adapters/node-fs.adapter";
 
 const postSchema = z.object({
   title: z.string(),
@@ -31,22 +30,18 @@ const Posts = IgniterCollectionModel.create("posts")
   })
   .build();
 
-const collections = IgniterCollections.create()
-  .withAdapter(new NodeFsAdapter())
+const manager = IgniterCollections.create()
+  .withAdapter(new BunFsAdapter())
   .withBasePath(process.cwd())
   .addCollection(Posts)
   .build();
 
-collections.on('posts:created', (context) => {
-  console.log(`Global hook - Document created in collection ${context.collection}: ${context.value.id}`);
-});
-
 async function runSample() {
-  const earlyPosts = await collections.posts.findMany();
+  const earlyPosts = await manager.collections.get('posts').findMany();
   console.log("Early Posts:", earlyPosts);
 
   // Create a new post
-  const newPost = await collections.posts.create({
+  const newPost = await manager.collections.get('posts').create({
     data: {
       title: "My First Post",
       content: "This is the content of my first post.",
@@ -56,13 +51,13 @@ async function runSample() {
   console.log("Created Post:", newPost);
 
   // Find the post by ID
-  const foundPost = await collections.posts.findUnique({
-    where: { id: newPost.id }
+  const foundPost = await manager.collections.get('posts').findUnique({
+    where: { id: newPost.id },
   });
 
   console.log("Found Post:", foundPost?.id);
   // Update the post
-  const updatedPost = await collections.posts.update({
+  const updatedPost = await manager.collections.get('posts').update({
     where: { id: newPost.id },
     data: {
       published: false,
@@ -71,7 +66,7 @@ async function runSample() {
 
   console.log("Updated Post:", updatedPost.id);
 
-  const definitions = collections.definitions();
+  const definitions = manager.collections.list();
   console.log("Collection Definitions:", definitions);
 
   // // Delete the post
@@ -83,7 +78,7 @@ async function runSample() {
   // create a fake delay on second thread with 5s
   await new Promise((resolve) => setTimeout(resolve, 5000));
 
-  const listPosts = await collections.posts.findMany();
+  const listPosts = await manager.collections.get('posts').findMany();
 
   console.log("List Posts:", listPosts);
 }

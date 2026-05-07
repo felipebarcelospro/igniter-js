@@ -94,7 +94,7 @@ export interface IgniterCollectionSchemaHooksConfig {
  * @example Schema file (posts.schema.json)
  * ```json
  * {
- *   "collectionName": "posts",
+ *   "name": "posts",
  *   "patterns": [".content/posts/{id}.mdx"],
  *   "schema": {
  *     "title": "string",
@@ -112,7 +112,7 @@ export interface IgniterCollectionSchemaHooksConfig {
  */
 export interface IgniterCollectionSchemaFile {
   /** Collection name (used for manager access, e.g., docs.posts) */
-  collectionName: string;
+  name: string;
   /** Multiple file patterns for flexible storage */
   patterns: string[];
   /** Path to a template file for document generation */

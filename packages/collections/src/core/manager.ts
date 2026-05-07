@@ -21,15 +21,18 @@ import type {
 import type {
   IIgniterCollectionsManager,
   IIgniterCollectionModel,
-  IIgniterCollectionsManagerMethods,
+  IIgniterCollectionsManagerFull,
+  IIgniterCollectionsManagerInternal,
 } from "../types/manager";
 import type { IgniterCollectionWatcherConfig } from "../types/builder";
-import type { IgniterCollectionViewDefinition } from "../types/view";
+import type { IgniterCollectionViewDefinition, IIgniterCollectionViewManager } from "../types/view";
 import { IgniterCollectionModelManager } from "./model";
 import { IgniterCollectionEventEmitter } from "./event-emitter";
 import { IgniterCollectionSchemaRegistry } from "./schema-registry";
 import { IgniterCollectionViewRegistry } from "./view-registry";
 import { IgniterCollectionViewManager } from "./view-manager";
+import { IgniterCollectionWatcher } from "./watcher";
+import { IgniterCollectionsAccessor } from "./collections-accessor";
 import { StdSchema } from "../utils/schema";
 import type { StandardJSONSchemaV1 } from "@standard-schema/spec";
 import { IGNITER_COLLECTION_ERROR_CODES, IgniterCollectionError } from "../errors";
@@ -69,11 +72,11 @@ interface ManagerConfig<TCollections> {
  * await docs.posts.create({ data: { title: 'Hello' } });
  * await docs.pages.findMany();
  *
- * // Explicit collection access
- * await docs.collection('posts').findUnique({ where: { id: 'abc' } });
+ * // Explicit collection access (preferred)
+ * await docs.collections.get('posts').findUnique({ where: { id: 'abc' } });
  *
- * // Global events
- * docs.on('created', ({ collection, value }) => {
+ * // Global events with subscription handle
+ * const { off } = docs.on('created', ({ collection, value }) => {
  *   console.log(`Document created in ${collection}: ${value.id}`);
  * });
  *
@@ -81,6 +84,13 @@ interface ManagerConfig<TCollections> {
  * docs.on('posts:updated', ({ newValue }) => {
  *   console.log(`Post updated: ${newValue.id}`);
  * });
+ *
+ * // Watcher control
+ * await docs.watcher.start();
+ * console.log(docs.watcher.isWatching);
+ *
+ * // List collections
+ * const allCollections = docs.collections.list();
  * ```
  */
 export class IgniterCollectionManager<
@@ -88,7 +98,7 @@ export class IgniterCollectionManager<
     string,
     IgniterCollectionModelDefinition<any>
   > = Record<string, IgniterCollectionModelDefinition<any>>,
-> implements IIgniterCollectionsManagerMethods<TCollections> {
+> implements IIgniterCollectionsManagerInternal<TCollections> {
   private readonly config: ManagerConfig<TCollections>;
   private readonly collectionManagers: Map<string, IIgniterCollectionModel<any>> =
     new Map();
@@ -96,7 +106,9 @@ export class IgniterCollectionManager<
   private schemaRegistry?: IgniterCollectionSchemaRegistry;
   private viewRegistry?: IgniterCollectionViewRegistry;
   private viewManager: IgniterCollectionViewManager;
-  private proxyInstance: IIgniterCollectionsManager<TCollections>;
+  private _watcher: IgniterCollectionWatcher;
+  private _collections: IgniterCollectionsAccessor<TCollections>;
+  private proxyInstance: IIgniterCollectionsManagerFull<TCollections>;
 
   constructor(config: ManagerConfig<TCollections>) {
     this.config = config;
@@ -119,7 +131,9 @@ export class IgniterCollectionManager<
           prop === "off" ||
           prop === "once" ||
           prop === "emit" ||
-          prop === "views"
+          prop === "views" ||
+          prop === "watcher" ||
+          prop === "collections"
         ) {
           return target[prop as keyof typeof target];
         }
@@ -132,10 +146,13 @@ export class IgniterCollectionManager<
         // Default property access
         return target[prop as keyof typeof target];
       },
-    }) as any as IIgniterCollectionsManager<TCollections>;
+    }) as any as IIgniterCollectionsManagerFull<TCollections>;
 
     // Initialize collection managers (they need the proxy as manager reference)
     this.initializeCollections();
+
+    // Initialize collections accessor
+    this._collections = new IgniterCollectionsAccessor(this.collectionManagers);
 
     // Initialize view manager with programmatic views
     this.viewManager = new IgniterCollectionViewManager({
@@ -144,13 +161,21 @@ export class IgniterCollectionManager<
       logger: config.logger,
     });
 
-    // Initialize watcher if configured
+    // Initialize watcher
+    this._watcher = new IgniterCollectionWatcher(
+      this.schemaRegistry,
+      this.viewRegistry,
+      () => this.refresh(),
+      (name, definition) => this.addCollectionManager(name, definition)
+    );
+
+    // Initialize watcher registries if configured
     if (config.watcherConfig) {
       this.initializeWatcher(config.watcherConfig);
 
       // Auto-start watching if configured
       if (config.watcherConfig.autoWatch) {
-        this.startWatching();
+        this._watcher.start();
       }
     }
 
@@ -163,11 +188,15 @@ export class IgniterCollectionManager<
    */
   private initializeCollections(): void {
     for (const [name, definition] of Object.entries(this.config.collections)) {
+      // Mark programmatic collections as built-in
+      if (!definition.source) {
+        definition.source = 'built-in';
+      }
       const manager = new IgniterCollectionModelManager({
         definition: definition as IgniterCollectionModelDefinition<any>,
         adapter: this.config.adapter,
         basePath: this.config.basePath,
-        manager: this.proxyInstance as any as IIgniterCollectionsManager,
+        manager: this.proxyInstance as any as IIgniterCollectionsManagerFull,
         telemetry: this.config.telemetry,
         logger: this.config.logger,
         globalHooks: this.config.globalHooks,
@@ -221,7 +250,7 @@ export class IgniterCollectionManager<
         definition,
         adapter: this.config.adapter,
         basePath: this.config.basePath,
-        manager: this.proxyInstance as any as IIgniterCollectionsManager,
+        manager: this.proxyInstance as any as IIgniterCollectionsManagerFull,
         telemetry: this.config.telemetry,
         logger: this.config.logger,
         globalHooks: this.config.globalHooks,
@@ -234,8 +263,22 @@ export class IgniterCollectionManager<
   /**
    * Get the global view manager.
    */
-  get views(): IgniterCollectionViewManager {
-    return this.viewManager;
+  get views(): IIgniterCollectionViewManager {
+    return this.viewManager as IIgniterCollectionViewManager;
+  }
+
+  /**
+   * Get the collections namespace.
+   */
+  get collections(): IgniterCollectionsAccessor<TCollections> {
+    return this._collections;
+  }
+
+  /**
+   * Get the watcher namespace.
+   */
+  get watcher(): IgniterCollectionWatcher {
+    return this._watcher;
   }
 
   /**
@@ -448,8 +491,13 @@ export class IgniterCollectionManager<
   on<K extends keyof IgniterCollectionEvents<TCollections>>(
     event: K,
     handler: IgniterCollectionEventHandler<IgniterCollectionEvents<TCollections>[K]>
-  ): void {
+  ): { off: () => void } {
     this.events.on(event, handler);
+    return {
+      off: () => {
+        this.events.off(event, handler);
+      }
+    };
   }
 
   /**

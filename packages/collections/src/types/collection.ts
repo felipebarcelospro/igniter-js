@@ -138,6 +138,8 @@ export interface IgniterCollectionModelDefinition<
   subCollections: Map<string, IgniterCollectionSubCollectionDefinition<unknown>>;
   /** Parent collection name (for sub-collections) */
   parentCollection?: string;
+  /** Source of the definition: built-in (programmatic) or discovered (watcher) */
+  source?: 'built-in' | 'discovered';
 }
 
 /**

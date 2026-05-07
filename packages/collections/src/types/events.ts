@@ -49,6 +49,30 @@ export type IgniterCollectionScopedEvents<TCollections extends Record<string, an
 };
 
 /**
+ * Event payloads for a single collection instance (scoped, no name prefix).
+ *
+ * Used by `collectionManager.on()` to provide typed handlers
+ * based on the collection's schema.
+ *
+ * @typeParam TSchema - Document schema type
+ */
+export interface IgniterCollectionModelEvents<TSchema = any> {
+  /** Document was created */
+  created: { value: IgniterCollectionDocument<TSchema> };
+  /** Document was updated */
+  updated: {
+    newValue: IgniterCollectionDocument<TSchema>;
+    previousValue: IgniterCollectionDocument<TSchema>;
+  };
+  /** Document was deleted */
+  deleted: { value: IgniterCollectionDocument<TSchema> };
+  /** Document was read */
+  read: { value: IgniterCollectionDocument<TSchema> };
+  /** Documents were listed */
+  list: { items: IgniterCollectionDocument<TSchema>[] };
+}
+
+/**
  * Combined event types.
  *
  * @typeParam TCollections - Map of collection definitions

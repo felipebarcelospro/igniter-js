@@ -1,7 +1,7 @@
 /**
  * @fileoverview View manager for @igniter-js/collections
  * @module @igniter-js/collections/core/view-manager
- * 
+ *
  * @description
  * Handles rendering, action execution, and data processing for global views.
  * Views have unrestricted access to the full IIgniterCollectionsManager.
@@ -14,20 +14,20 @@ import {
   IGNITER_COLLECTION_ERROR_CODES
 } from "../errors/collection.error";
 import type {
-  IIgniterCollectionsManager
+  IIgniterCollectionsManagerFull
 } from "../types/manager";
 import type {
   IgniterCollectionViewActionHandler,
   IgniterCollectionViewActionResult,
   IgniterCollectionViewDataHook,
-  IgniterCollectionViewDataHookResult,
   IgniterCollectionViewDefinition,
   IgniterCollectionViewRenderOptions,
   IgniterCollectionViewRenderResult,
   IIgniterCollectionViewManager,
+  IIgniterCollectionViewManagerInternal,
+  IIgniterCollectionViewInstance,
 } from "../types/view";
-import { IgniterCollectionViewStatsCalculator } from "../utils/view-stats";
-import { IgniterCollectionViewTransformEngine } from "../utils/view-transforms";
+import { IgniterCollectionViewInstance } from "./view-instance";
 import { StdSchema } from "../utils/schema";
 import { IgniterCollectionPath } from "../utils/path";
 import type { IgniterCollectionTelemetryEventsType } from "../telemetry";
@@ -36,17 +36,17 @@ import type { IgniterCollectionTelemetryEventsType } from "../telemetry";
  * Manager for global collection views.
  * Handles listing, retrieval, and rendering of views with multi-collection access.
  */
-export class IgniterCollectionViewManager implements IIgniterCollectionViewManager {
+export class IgniterCollectionViewManager implements IIgniterCollectionViewManagerInternal {
 
   private readonly views: Map<string, IgniterCollectionViewDefinition>;
-  private readonly manager: IIgniterCollectionsManager;
+  private readonly manager: IIgniterCollectionsManagerFull;
   private readonly logger?: IgniterLogger;
   private readonly hookCache: Map<string, IgniterCollectionViewDataHook>;
   private readonly handlerCache: Map<string, IgniterCollectionViewActionHandler>;
 
   constructor(config: {
     views: IgniterCollectionViewDefinition[];
-    manager: IIgniterCollectionsManager;
+    manager: IIgniterCollectionsManagerFull;
     logger?: IgniterLogger;
   }) {
     this.views = new Map(config.views.map(v => [v.name, v]));
@@ -71,10 +71,23 @@ export class IgniterCollectionViewManager implements IIgniterCollectionViewManag
   }
 
   /**
-   * Get a specific view.
+   * Get all registered view definitions as an entries map.
    */
-  get(name: string): IgniterCollectionViewDefinition | undefined {
-    return this.views.get(name);
+  entries(): Record<string, IgniterCollectionViewDefinition> {
+    const result: Record<string, IgniterCollectionViewDefinition> = {};
+    for (const [name, view] of this.views.entries()) {
+      result[name] = view;
+    }
+    return result;
+  }
+
+  /**
+   * Get a specific view instance.
+   */
+  get(name: string): IIgniterCollectionViewInstance | undefined {
+    const view = this.views.get(name);
+    if (!view) return undefined;
+    return new IgniterCollectionViewInstance(view, this);
   }
 
   /**
@@ -113,8 +126,7 @@ export class IgniterCollectionViewManager implements IIgniterCollectionViewManag
       attributes: {
         'ctx.view.name': view.name,
         'ctx.has_hook': !!view.getData,
-        'ctx.has_stats': !!view.stats,
-        'ctx.has_transforms': !!(view.transforms && view.transforms.length > 0)
+        'ctx.has_actions': !!view.actions && Object.keys(view.actions).length > 0
       }
     });
 
@@ -142,8 +154,6 @@ export class IgniterCollectionViewManager implements IIgniterCollectionViewManag
         attributes: {
           'ctx.view.name': view.name,
           'ctx.duration_ms': Date.now() - startTime,
-          'ctx.items.count': result.data.items.length,
-          'ctx.stats.count': Object.keys(result.data.stats).length
         }
       });
 
@@ -324,6 +334,7 @@ export class IgniterCollectionViewManager implements IIgniterCollectionViewManag
 
   /**
    * Render using data hook.
+   * Returns whatever the hook returns — no transforms or stats applied.
    */
   private async renderWithHook(
     view: IgniterCollectionViewDefinition,
@@ -333,8 +344,8 @@ export class IgniterCollectionViewManager implements IIgniterCollectionViewManag
     const hook = await this.loadHook(view.getData!);
 
     // Execute hook
-    let hookResult: IgniterCollectionViewDataHookResult;
     const hookStartTime = Date.now();
+    let hookResult: any;
 
     try {
       hookResult = await hook({
@@ -366,45 +377,9 @@ export class IgniterCollectionViewManager implements IIgniterCollectionViewManag
       });
     }
 
-    // Apply transforms
-    let items = hookResult.items;
-    if (view.transforms && view.transforms.length > 0) {
-      items = IgniterCollectionViewTransformEngine.applyTransforms(
-        items,
-        view.transforms
-      );
-    }
-
-    // Calculate declarative stats (complement hook stats)
-    const statsStartTime = Date.now();
-    const declarativeStats = view.stats
-      ? IgniterCollectionViewStatsCalculator.calculate(
-        items,
-        view.stats
-      )
-      : {};
-
-    if (view.stats) {
-      this.telemetry?.emit('igniter.collections.view.stats.calculated', {
-        attributes: {
-          'ctx.view.name': view.name,
-          'ctx.stats.count': Object.keys(declarativeStats).length,
-          'ctx.items.count': items.length,
-          'ctx.duration_ms': Date.now() - statsStartTime
-        }
-      });
-    }
-
     return {
       view,
-      data: {
-        items,
-        stats: { ...declarativeStats, ...hookResult.stats },
-        extra: hookResult.extra,
-        meta: {
-          total: items.length,
-        }
-      },
+      data: hookResult,
       renderedAt: new Date().toISOString()
     };
   }
