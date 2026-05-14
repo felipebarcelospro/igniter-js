@@ -190,9 +190,6 @@ Thumbs.db
 .artifacts
 .claude
 .fractal
-.github/agents
-.github/instructions
-.github/prompts
 .github/skills
 apps/studio
 packages/studio
