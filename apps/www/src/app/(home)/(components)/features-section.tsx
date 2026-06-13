@@ -36,13 +36,10 @@ export function FeaturesSection() {
               transition={{ type: "spring", stiffness: 300 }}
             >
               <div className="px-4 py-6 lg:px-6">
+                <span className="mr-2">{feature.icon}</span>
+
                 <div className="flex items-center mb-4 sm:mb-6">
-                  <span className="mr-2">
-                    {feature.icon}
-                  </span>
-                  <h3 className="text-sm font-semibold">
-                    {feature.title}
-                  </h3>
+                  <h3 className="text-sm font-semibold">{feature.title}</h3>
                 </div>
                 <p className="text-base text-muted-foreground">
                   {feature.description}
