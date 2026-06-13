@@ -1,7 +1,7 @@
 # AGENTS.md - @igniter-js/caller
 
-> **Last Updated:** 2025-12-23  
-> **Version:** 0.1.3  
+> **Last Updated:** 2026-06-02  
+> **Version:** 0.1.58  
 > **Goal:** Complete operational manual for Code Agents maintaining and developing the HTTP client package.
 
 ---
@@ -2429,7 +2429,7 @@ All telemetry attributes follow the pattern `ctx.<domain>.<attribute>`:
 | `IgniterCallerFileResponse`   | File download response with `file: File \| null`, `error: Error \| null`                                |
 | `IgniterCallerHttpMethod`     | Union: `'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE' \| 'HEAD'`                                      |
 | `IgniterCallerUrlPattern`     | Union: `string \| RegExp`                                                                               |
-| `IgniterCallerEventCallback`  | Signature: `(result: IgniterApiResponse, context: { url, method, timestamp }) => void \| Promise<void>` |
+| `IgniterCallerEventCallback`  | Signature: `(result: IgniterCallerApiResponse<T>, context: { url, method, timestamp }) => void \| Promise<void>` |
 
 #### 16.2 Builder Types
 
@@ -2474,6 +2474,171 @@ All telemetry attributes follow the pattern `ctx.<domain>.<attribute>`:
 | `IgniterCallerResponseMarker`         | `File \| Blob \| ReadableStream \| ArrayBuffer \| FormData`                                         |
 
 ---
+
+### 17. Testing Conventions
+
+#### 17.1 Test Structure
+
+All test files live alongside their implementation files with `.spec.ts` extension:
+
+```
+src/
+├── builders/
+│   ├── main.builder.spec.ts        # Builder type inference tests
+│   ├── mock.builder.spec.ts        # Mock builder tests
+│   └── schema.builder.spec.ts      # Schema builder tests
+├── core/
+│   ├── manager.spec.ts             # Manager runtime tests
+│   └── mock.spec.ts                # Mock manager tests
+├── utils/
+│   ├── body.spec.ts                # Body normalization tests
+│   ├── cache.spec.ts               # Cache utility tests
+│   ├── schema.spec.ts              # Schema matching/validation tests
+│   ├── testing.spec.ts             # Testing utility tests
+│   └── url.spec.ts                 # URL construction tests
+├── client/
+│   └── client.types.spec.ts        # Client type inference tests
+└── builders/__tests__/
+    └── type-inference.spec.ts      # Deep type inference tests
+```
+
+#### 17.2 Testing Patterns
+
+**Builder Tests** (`main.builder.spec.ts`):
+- Use `expectTypeOf` from vitest for type-level assertions
+- Test public `.create()` → chained methods → `.build()` lifecycle
+- Verify immutability: each `with*` call returns a new instance
+
+**Utility Tests** (`*.spec.ts`):
+- Each static method gets at least one `it` block
+- Test edge cases: empty input, null, undefined, boundary values
+- Schema tests cover exact match, param extraction, and validation failure
+
+**Manager Tests** (`manager.spec.ts`):
+- Integration-style: build manager → make request → assert response shape
+- Test all HTTP methods: GET, POST, PUT, PATCH, DELETE, HEAD
+- Test error paths: timeout, network failure, validation rejection
+
+**Mock Tests** (`mock.spec.ts`):
+- Test mock resolution for exact paths and parameterized paths
+- Test fallback when no mock matches
+- Test dynamic handler invocation with typed request body/params
+
+#### 17.3 Test Helpers (`src/utils/testing.ts`)
+
+The package provides `IgniterCallerHttpMock` for test scaffolding:
+
+```typescript
+import { IgniterCallerHttpMock } from '@igniter-js/caller';
+
+// Create mock successful response
+const mockResponse = IgniterCallerHttpMock.mockResponse({ id: 'test' });
+
+// Create mock error response
+const mockError = IgniterCallerHttpMock.mockError('IGNITER_CALLER_HTTP_ERROR', 'Not found');
+
+// Create mock file download
+const mockFile = IgniterCallerHttpMock.mockFile('test.pdf', 'file content');
+
+// Create mock file download error
+const mockFileError = IgniterCallerHttpMock.mockFileError('Download failed');
+```
+
+#### 17.4 Running Tests
+
+```bash
+# Run all tests
+pnpm --filter @igniter-js/caller test
+
+# Run with watch mode
+pnpm --filter @igniter-js/caller test:watch
+
+# Run specific test file
+pnpm --filter @igniter-js/caller vitest run src/core/manager.spec.ts
+
+# Type check tests
+pnpm --filter @igniter-js/caller typecheck
+```
+
+#### 17.5 Type Inference Testing
+
+For deep type-level assertions, use `expectTypeOf`:
+
+```typescript
+import { expectTypeOf } from 'vitest';
+
+// Verify response type is inferred from schema
+const result = await api.get('/users/:id').params({ id: '1' }).execute();
+expectTypeOf(result.data).toEqualTypeOf<User | undefined>();
+
+// Verify request body is typed from schema
+const builder = api.post('/users');
+expectTypeOf(builder.body).parameter(0).toEqualTypeOf<CreateUserRequest>();
+```
+
+---
+
+### 18. Naming Conventions
+
+#### 18.1 Class Names
+
+| Pattern | Example | Rule |
+|---------|---------|------|
+| Builder classes | `IgniterCallerBuilder`, `IgniterCallerMockBuilder` | `IgniterCaller` + `Purpose` + `Builder` |
+| Runtime classes | `IgniterCallerManager`, `IgniterCallerMockManager` | `IgniterCaller` + `Purpose` + `Manager` |
+| Utility classes | `IgniterCallerCacheUtils`, `IgniterCallerSchemaUtils` | `IgniterCaller` + `Purpose` + `Utils` |
+| Error classes | `IgniterCallerError` | `IgniterCaller` + `Error` |
+| Event classes | `IgniterCallerEvents` | `IgniterCaller` + `Events` |
+
+#### 18.2 Public Entrypoint Aliases
+
+| Internal Class | Public Export | Pattern |
+|---------------|---------------|---------|
+| `IgniterCallerBuilder` | `IgniterCaller` (object with `.create()`) | Drop `Builder` suffix for consumer-facing API |
+| `IgniterCallerMockBuilder` | `IgniterCallerMock` (object with `.create()`) | Drop `Builder` suffix for consumer-facing API |
+| `IgniterCallerSchema` | `IgniterCallerSchema` (class with `static .create()`) | Used directly |
+
+#### 18.3 Method Naming
+
+| Pattern | Example | Usage |
+|---------|---------|-------|
+| `with*` | `withBaseUrl()`, `withHeaders()` | Builder configuration methods (immutable) |
+| `get`/`post`/`put`/`patch`/`delete`/`head` | `api.get('/users')` | HTTP method factories on the manager |
+| `static create()` | `IgniterCaller.create()` | Public factory for builders |
+| `_set*` (internal) | `_setMethod()`, `_setUrl()` | Internal-only methods (prefixed with `_`) |
+| `build()` | `.build()` | Terminal builder method producing runtime instance |
+
+#### 18.4 File Naming
+
+| Pattern | Example | Rule |
+|---------|---------|------|
+| Builder files | `main.builder.ts`, `schema.builder.ts` | `{purpose}.builder.ts` |
+| Runtime files | `manager.ts`, `events.ts` | `{purpose}.ts` |
+| Type files | `builder.ts`, `response.ts` | `{purpose}.ts` (inside `types/`) |
+| Utility files | `cache.ts`, `url.ts` | `{purpose}.ts` (inside `utils/`) |
+| Test files | `manager.spec.ts` | `{source}.spec.ts` |
+
+#### 18.5 Directory Naming
+
+| Directory | Rule |
+|-----------|------|
+| `builders/` | Plural — contains builder classes |
+| `types/` | Plural — contains type-only files |
+| `utils/` | Plural — contains utility classes |
+| `adapters/` | Plural — contains adapter implementations |
+| `core/` | Singular — contains runtime classes |
+| `client/` | Singular — contains React client layer |
+| `telemetry/` | Singular — contains telemetry definitions |
+| `errors/` | Plural — contains error classes |
+
+#### 18.6 No `igniter-` File Prefixes
+
+Files must NEVER use `igniter-` prefixes in their names. This was a legacy convention that has been removed:
+
+- ❌ `igniter-caller.ts` → ✅ `manager.ts`
+- ❌ `igniter-caller-events.ts` → ✅ `events.ts`
+- ❌ `igniter-caller.error.ts` → ✅ `caller.error.ts`
+
 
 ## End of Document
 

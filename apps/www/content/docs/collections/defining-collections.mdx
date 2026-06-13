@@ -1,0 +1,218 @@
+---
+title: Defining Collections
+description: Define type-safe content collections with Zod schemas, file patterns, sub-collections, templates, and custom ID generators.
+---
+
+## Defining Collections
+
+A **collection** is the core building block of `@igniter-js/collections`. It defines:
+- A **name** for access (`docs.posts`)
+- A **schema** for frontmatter validation
+- **File patterns** for where documents are stored
+- Optional **hooks** for lifecycle control
+- Optional **sub-collections** for nested documents
+
+---
+
+## Basic Collection
+
+The simplest collection requires a name, a file pattern, and a schema:
+
+```typescript
+import { IgniterCollectionModel } from '@igniter-js/collections';
+import { z } from 'zod';
+
+const Posts = IgniterCollectionModel.create('posts')
+  .withPatterns(['.content/posts/{id}.mdx'])
+  .withSchema(z.object({
+    title: z.string(),
+    description: z.string(),
+    published: z.boolean().default(false),
+    tags: z.array(z.string()).optional(),
+    author: z.string(),
+  }))
+  .build();
+```
+
+<Callout type="info">
+  The collection name (`'posts'`) determines the accessor on the manager: `docs.posts.create(...)`.
+  Use descriptive, plural names that match your domain.
+</Callout>
+
+---
+
+## File Patterns
+
+File patterns define where and how documents are stored on disk. The pattern uses placeholder variables inside `{braces}`.
+
+### Built-in Placeholders
+
+| Placeholder | Description | Example |
+|-------------|-------------|---------|
+| `{id}` | Document UUID | `posts/{id}.mdx` → `posts/a1b2c3d4.mdx` |
+| `{parent_id}` | Parent document ID (sub-collections) | `{parent_id}/comments/{id}.mdx` |
+| `{year}`, `{month}`, `{day}` | Date-based (from `createdAt`) | `posts/{year}/{month}/{id}.mdx` |
+| Custom fields | Any schema field | `posts/{author}/{id}.mdx` |
+
+### Pattern Examples
+
+```typescript
+// Flat structure
+.withPatterns(['.content/posts/{id}.mdx'])
+
+// Date-based organization (auto-resolved from createdAt)
+.withPatterns(['.content/posts/{year}/{month}/{id}.mdx'])
+
+// Author-based organization
+.withPatterns(['.content/posts/{author}/{id}.mdx'])
+
+// Multiple patterns — the best match is used
+.withPatterns([
+  '.content/posts/{year}/{month}/{id}.mdx',
+  '.content/posts/{id}.mdx',
+])
+```
+
+<Callout type="warn">
+  **Pattern variables must exist in the schema or be a built-in placeholder.** If a variable like `{author}` is used, the schema must include an `author` field. Built-in placeholders (`id`, `parent_id`, date fields) are always available.
+</Callout>
+
+---
+
+## Schema Validation
+
+Collections uses Zod (via the StandardSchemaV1 interface) for frontmatter validation. Every `create` and `update` call runs through the validator before writing to disk.
+
+```typescript
+const Posts = IgniterCollectionModel.create('posts')
+  .withSchema(z.object({
+    title: z.string().min(1, 'Title is required'),
+    slug: z.string().regex(/^[a-z0-9-]+$/, 'Slug must be URL-safe'),
+    published: z.boolean().default(false),
+    views: z.number().int().min(0).default(0),
+    tags: z.array(z.string()).max(10).default([]),
+    metadata: z.object({
+      seoTitle: z.string().optional(),
+      seoDescription: z.string().max(160).optional(),
+    }).optional(),
+  }))
+  .build();
+```
+
+When validation fails, an `IgniterCollectionError` is thrown with code `COLLECTION_VALIDATION_ERROR` and detailed issue information.
+
+### Type Inference
+
+The TypeScript type is **automatically inferred** from your Zod schema:
+
+```typescript
+// Posts.data is typed as:
+type PostData = {
+  title: string;
+  slug: string;
+  published: boolean;
+  views: number;
+  tags: string[];
+  metadata?: {
+    seoTitle?: string;
+    seoDescription?: string;
+  };
+};
+
+// create() gets full IntelliSense:
+const post = await docs.posts.create({
+  data: {
+    title: 'Hello',      // ✅ string
+    slug: 'hello-world', // ✅ string
+    // published: 'yes', // ❌ Type error — expected boolean
+  }
+});
+```
+
+---
+
+## Document Content
+
+Every document has two parts: **frontmatter** (validated by the schema) and **content** (the Markdown body). Content is passed alongside frontmatter data:
+
+```typescript
+const post = await docs.posts.create({
+  data: {
+    title: 'My First Post',
+    description: 'An introduction to collections',
+    published: true,
+    author: 'Felipe',
+    content: `## Introduction
+
+This is the **Markdown body** of the document.
+
+It supports full Markdown syntax including code blocks, images, and tables.`,
+  }
+});
+
+// Access content separately from frontmatter
+console.log(post.title);       // 'My First Post'
+console.log(post.content);     // '## Introduction\n\nThis is the **Markdown body**...'
+```
+
+---
+
+## Sub-Collections
+
+Sub-collections allow nested document hierarchies — perfect for comments on posts, tasks in a project, or variants of a product.
+
+```typescript
+const Posts = IgniterCollectionModel.create('posts')
+  .withPatterns(['.content/posts/{id}.mdx'])
+  .withSchema(postSchema)
+  .build();
+
+// Define a sub-collection using the parent
+const Comments = Posts.collections.create('comments')
+  .withPatterns(['{parent_id}/comments/{id}.mdx'])
+  .withSchema(z.object({
+    author: z.string(),
+    body: z.string(),
+    approved: z.boolean().default(false),
+  }))
+  .build();
+```
+
+Sub-collections are accessed through the parent document and stored relative to it. The `{parent_id}` placeholder resolves to the parent document's ID.
+
+---
+
+
+## Custom ID Generators
+
+By default, collections generates **UUID v4** IDs. You can provide a custom generator for human-friendly slugs or sequential IDs:
+
+```typescript
+const Posts = IgniterCollectionModel.create('posts')
+  .withPatterns(['.content/posts/{id}.mdx'])
+  .withSchema(postSchema)
+  .build();
+
+// Override the ID when creating
+const post = await docs.posts.create({
+  id: 'getting-started-with-igniter', // Custom slug
+  data: {
+    title: 'Getting Started',
+    author: 'Felipe',
+  }
+});
+```
+
+<Callout type="info">
+  The `id` parameter on `create()` accepts any string. If omitted, the default UUID v4 generator runs automatically.
+</Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="CRUD Operations" description="Learn create, findUnique, findMany, update, delete, and count." href="/docs/collections/crud-operations" />
+  <Card title="Querying" description="Filter, sort, paginate, and search your collections." href="/docs/collections/querying" />
+  <Card title="Hooks" description="Add lifecycle hooks for validation, enrichment, and cancellation." href="/docs/collections/hooks" />
+</Cards>

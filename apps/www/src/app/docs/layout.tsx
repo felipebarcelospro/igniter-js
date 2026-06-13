@@ -6,6 +6,8 @@ import {
   ChartBarIcon,
   ClockIcon,
   DatabaseIcon,
+  LibraryIcon,
+  NetworkIcon,
   ServerIcon,
   TerminalIcon,
 } from "lucide-react";
@@ -45,10 +47,34 @@ export default function Layout({ children }: LayoutProps<"/docs">) {
             icon: <ServerIcon className="size-3 mt-1 text-orange-500" />,
           },
           {
+            title: "Caller",
+            description: "Type-safe HTTP client with retry, interceptors, and validation.",
+            url: "/docs/caller",
+            icon: <NetworkIcon className="size-3 mt-1 text-orange-500" />,
+          },
+          {
+            title: "Collections",
+            description: "Type-safe ORM for content with schema validation and hooks.",
+            url: "/docs/collections",
+            icon: <LibraryIcon className="size-3 mt-1 text-orange-500" />,
+          },
+          {
             title: "Bots",
             description: "Create bots easily for Telegram, Whatsapp and eg.",
             url: "/docs/bots",
             icon: <BotIcon className="size-3 mt-1 text-orange-500" />,
+          },
+          {
+            title: "CLI",
+            description: "Scaffold projects, generate features, and manage development.",
+            url: "/docs/cli",
+            icon: <TerminalIcon className="size-3 mt-1 text-orange-500" />,
+          },
+          {
+            title: "Telemetry",
+            description: "Centralized observability with typed events and adapter support.",
+            url: "/docs/telemetry",
+            icon: <ChartBarIcon className="size-3 mt-1 text-orange-500" />,
           },
         ],
       }}

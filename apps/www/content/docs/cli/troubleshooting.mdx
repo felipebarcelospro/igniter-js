@@ -1,0 +1,341 @@
+---
+title: Troubleshooting
+description: Common CLI errors and their solutions. Init failures, schema generation errors, file watcher issues, port conflicts, and framework detection gotchas.
+---
+
+## Troubleshooting
+
+Solutions for common issues you may encounter while using `@igniter-js/cli`.
+
+---
+
+## Init Errors
+
+### "Could not locate the CLI templates directory"
+
+**Symptom:** The CLI exits with a template resolution error.
+
+**Cause:** The Handlebars template engine cannot find the `templates/` directory. This can happen if the CLI is installed in an unusual location or if the package is corrupted.
+
+**Solution:**
+
+1. Verify the CLI installation:
+
+   ```bash
+   igniter --version
+   # Should print: 0.0.1
+   ```
+
+2. Reinstall the CLI:
+
+   ```bash
+   npm uninstall -g @igniter-js/cli
+   npm install -g @igniter-js/cli
+   ```
+
+3. If using `npx`, ensure the cache is fresh:
+
+   ```bash
+   npx @igniter-js/cli@0.0.1 init my-app
+   ```
+
+---
+
+### "Starter not found"
+
+**Symptom:** `p.log.error("Starter not found")` is printed during init.
+
+**Cause:** The `--template` value doesn't match any registered starter.
+
+**Solution:** Use one of the valid template values:
+
+```bash
+# ✅ Valid values
+igniter init --template nextjs
+igniter init --template tanstack-start
+igniter init --template express-rest-api
+igniter init --template bun-rest-api
+igniter init --template bun-react-app
+igniter init --template deno-rest-api
+
+# ❌ Invalid
+igniter init --template react
+igniter init --template vue
+```
+
+---
+
+### "Project initialization failed"
+
+**Symptom:** The init process fails with a generic error message.
+
+**Common causes:**
+
+1. **Network issues** — `create-next-app` or framework CLI cannot download templates.
+2. **Permission issues** — Cannot write to the target directory.
+3. **Name conflicts** — A directory with the project name already exists.
+
+**Solutions:**
+
+- Check your internet connection
+- Ensure you have write permissions in the target directory
+- Use a unique project name or pass `--mode install` for existing directories
+
+---
+
+## Generate Errors
+
+### "No registered schema provider can handle 'prisma:X'"
+
+**Symptom:** Feature generation fails with a schema provider error.
+
+**Cause:** The schema provider isn't registered, or the schema file wasn't found.
+
+**Solutions:**
+
+1. Ensure a `prisma/schema.prisma` file exists in your project:
+
+   ```bash
+   ls prisma/schema.prisma
+   ```
+
+2. If using a custom schema path, use `--schema-path`:
+
+   ```bash
+   igniter generate feature users --schema prisma:User --schema-path ./custom/schema.prisma
+   ```
+
+3. Verify the model name exists in your schema:
+
+   ```prisma
+   // prisma/schema.prisma
+   model User {  // ← This name must match --schema prisma:User
+     id String @id
+   }
+   ```
+
+---
+
+### "Feature 'X' already exists"
+
+**Symptom:** `Feature 'users' already exists at src/features/users.`
+
+**Cause:** A feature with the same name already exists.
+
+**Solutions:**
+
+1. Use a different feature name:
+
+   ```bash
+   igniter generate feature user-management --schema prisma:User
+   ```
+
+2. Or scaffold individual controllers/procedures inside the existing feature:
+
+   ```bash
+   igniter generate controller profile --feature users
+   igniter generate procedure send-welcome --feature users
+   ```
+
+---
+
+### OpenAPI Generation Fails
+
+**Symptom:** `igniter generate docs` or `igniter generate caller` fails.
+
+**Common causes:**
+
+1. Router file not found at the expected path
+2. OpenAPI document is not valid 3.x
+3. Invalid YAML syntax in the OpenAPI file
+
+**Solutions:**
+
+- Verify the router path:
+
+  ```bash
+  ls src/igniter.router.ts
+  ```
+
+- For `caller`, ensure the OpenAPI document is 3.x (not Swagger 2.0):
+
+  ```bash
+  # Check the openapi version in the document
+  cat openapi.json | grep '"openapi"'
+  # Should be "3.x.x"
+  ```
+
+- Validate JSON/YAML syntax:
+
+  ```bash
+  # JSON
+  cat openapi.json | python -m json.tool > /dev/null
+
+  # YAML
+  cat openapi.yaml | python -c "import yaml; yaml.safe_load(open('openapi.yaml'))"
+  ```
+
+---
+
+## Dev Errors
+
+### "Router file not found"
+
+**Symptom:** Dev mode exits with `Router file not found: /path/to/igniter.router.ts`.
+
+**Cause:** The router file doesn't exist at the expected location.
+
+**Solution:** Specify the correct router path:
+
+```bash
+igniter dev --router ./src/custom/path/igniter.router.ts
+```
+
+---
+
+### File Watcher Not Detecting Changes
+
+**Symptom:** Schema and docs don't regenerate when files change.
+
+**Possible causes:**
+
+1. **File in ignored directory** — Files in `node_modules/`, `.git/`, `dist/`, `.next/`, `.turbo/`, `.cache/` are ignored
+2. **Test files are ignored** — `*.test.ts` and `*.spec.ts` files are ignored
+3. **Debounce delay** — There's a 300ms debounce; changes within 300ms are batched
+
+**Solutions:**
+
+- Move source files outside ignored directories
+- Wait 300ms after saving before checking for regeneration
+- Check the Igniter Logs panel in the TUI for file change events
+
+---
+
+### "Failed to regenerate" Errors
+
+**Symptom:** Dev mode shows red error logs for schema or doc regeneration.
+
+**Common causes:**
+
+1. TypeScript compilation errors in the router or features
+2. Circular imports in feature modules
+3. Invalid Zod schemas in procedure definitions
+
+**Solutions:**
+
+- Check your application logs for compilation errors:
+
+  ```bash
+  pnpm dev
+  # Look for TypeScript errors in the output
+  ```
+
+- Ensure procedures export valid Zod schemas:
+
+  ```typescript
+  // ✅ Valid
+  export const createUserProcedure = IgniterProcedure.create()
+    .input(z.object({ name: z.string() }))
+    .handler(async ({ input }) => { ... });
+
+  // ❌ Invalid — schema type error causes regeneration failure
+  export const brokenProcedure = IgniterProcedure.create()
+    .input(z.object({ name: z.nonexistent() }))  // This method doesn't exist
+    .handler(async ({ input }) => { ... });
+  ```
+
+---
+
+## Port Conflicts
+
+### Docker Port Already in Use
+
+**Symptom:** Docker setup fails because port 5432 or 6379 is in use.
+
+**Cause:** Another service is using the port that Docker Compose needs.
+
+**Solutions:**
+
+1. Check what's using the port:
+
+   ```bash
+   # macOS/Linux
+   lsof -i :5432
+   lsof -i :6379
+
+   # Or
+   sudo lsof -i -P | grep LISTEN
+   ```
+
+2. Stop the conflicting process:
+
+   ```bash
+   kill -9 <PID>
+   ```
+
+3. Or skip Docker setup entirely:
+
+   ```bash
+   igniter init my-app --no-docker
+   ```
+
+---
+
+## Package Manager Issues
+
+### Wrong Package Manager Detected
+
+**Symptom:** The CLI uses `npm` but you expected `pnpm`.
+
+**Cause:** `npm_config_user_agent` is not set or is set to a different package manager.
+
+**Solution:** Always use the `--pm` flag for explicit control:
+
+```bash
+igniter init my-app --template nextjs --pm pnpm
+```
+
+---
+
+## Permission Errors
+
+### "EACCES: permission denied"
+
+**Symptom:** The CLI cannot write files to the target directory.
+
+**Solutions:**
+
+1. Check directory permissions:
+
+   ```bash
+   ls -la /path/to/target
+   ```
+
+2. Run with appropriate permissions or change directory ownership:
+
+   ```bash
+   sudo chown -R $(whoami) /path/to/target
+   ```
+
+3. For global installation issues, use a Node.js version manager (nvm, fnm, volta) instead of system Node.js.
+
+---
+
+## Still Having Issues?
+
+If you encounter an error not covered here:
+
+1. Run the command with verbose output
+2. Check the Igniter Logs panel in `igniter dev` for detailed error messages
+3. Verify the error against the implementation in `packages/cli/src/`
+4. Open an issue on the Igniter.js repository
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Best Practices" description="Avoid common issues with production-ready patterns." href="/docs/cli/best-practices" />
+  <Card title="API Reference" description="Verify flag behavior and defaults against the complete reference." href="/docs/cli/api-reference" />
+  <Card title="Real-World Scenarios" description="See working examples of all CLI features in production contexts." href="/docs/cli/real-world" />
+</Cards>

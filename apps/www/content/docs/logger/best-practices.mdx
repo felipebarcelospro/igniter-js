@@ -1,0 +1,297 @@
+---
+title: Best Practices
+description: Production logging patterns, structured context conventions, and common anti-patterns to avoid with @igniter-js/logger.
+---
+
+## Best Practices
+
+Guidelines for effective, maintainable, and performant logging with `@igniter-js/logger`.
+
+---
+
+## ✅ Do's
+
+### 1. Always set `appName` and `component`
+
+These fields identify the source of every log entry — essential in multi-service environments:
+
+```typescript
+// ✅ Good — identifiable in aggregated logs
+const logger = IgniterLogger.create()
+  .withAppName('payment-service')
+  .withComponent('stripe')
+  .build();
+```
+
+### 2. Use structured context instead of string interpolation
+
+Pino is a structured logger. Pass data as objects, not string concatenation:
+
+```typescript
+// ✅ Good — queryable, filterable
+logger.info('User created', { userId: 'u-123', plan: 'pro' });
+
+// ❌ Bad — can't filter or query
+logger.info(`User u-123 created with pro plan`);
+```
+
+### 3. Create child loggers for request-scoped context
+
+Avoid passing `requestId` to every log call:
+
+```typescript
+// ✅ Good — requestId is set once on the child
+const reqLogger = logger.child('http', { requestId: crypto.randomUUID() });
+reqLogger.info('Request received');
+reqLogger.info('Response sent', { statusCode: 200 });
+
+// ❌ Bad — repeating requestId everywhere
+logger.info('Request received', { requestId });
+logger.info('Response sent', { requestId, statusCode: 200 });
+```
+
+### 4. Flush before process exit
+
+Always flush when using file or HTTP transports:
+
+```typescript
+// ✅ Good
+process.on('SIGTERM', async () => {
+  logger.info('Shutting down');
+  await logger.flush();
+  process.exit(0);
+});
+```
+
+### 5. Use the right log level
+
+Choose the appropriate level for each message:
+
+| Level | When to Use |
+|-------|-------------|
+| `fatal` | Service cannot continue — database is down, port in use |
+| `error` | Operation failed but service continues — API call failed, validation error |
+| `warn` | Degraded but functional — retry, fallback used, deprecated API |
+| `info` | Normal operations — server started, user created, job completed |
+| `debug` | Development details — query parameters, intermediate state |
+| `trace` | Extremely granular — function entry/exit, loop iterations |
+
+### 6. Configure transports per environment
+
+```typescript
+const isDev = process.env.NODE_ENV !== 'production';
+
+const logger = IgniterLogger.create()
+  .withLevel(isDev ? IgniterLogLevel.Debug : IgniterLogLevel.Info)
+  .withAppName('api');
+
+// Always log to console — pretty in dev, JSON in prod
+logger.addTransport({
+  target: 'console',
+  options: { pretty: isDev, colorize: isDev },
+});
+
+// File + HTTP only in production
+if (!isDev) {
+  logger.addTransport({
+    target: 'file',
+    options: { path: '/var/log/api/app.log', mkdir: true },
+  });
+  logger.addTransport({
+    target: 'http',
+    options: { url: process.env.LOG_INGEST_URL! },
+  });
+}
+
+const log = logger.build();
+```
+
+### 7. Use `success()` for positive milestones
+
+Signal completions, startups, and milestones clearly:
+
+```typescript
+logger.success('Database connection established');
+logger.success('Migration complete');
+logger.success('Server listening on port 3000');
+```
+
+### 8. Wrap risky operations in groups
+
+Use groups for multi-step operations to visually structure console output:
+
+```typescript
+logger.group('Deployment');
+
+try {
+  logger.info('Building...');
+  // ... build ...
+  logger.info('Testing...');
+  // ... test ...
+  logger.success('Deployment successful');
+} catch (err) {
+  logger.error('Deployment failed', err);
+} finally {
+  logger.groupEnd();
+}
+```
+
+---
+
+## ❌ Don'ts
+
+### 1. Don't log sensitive data
+
+Never log passwords, tokens, API keys, or PII:
+
+```typescript
+// ❌ Dangerous — leaks credentials
+logger.info('User login', { email: user.email, password: user.password });
+
+// ✅ Safe — only non-sensitive fields
+logger.info('User login', { userId: user.id, email: user.email });
+```
+
+### 2. Don't create a new logger instance per request
+
+Child loggers are lightweight — they share the parent's Pino instance. Creating a new builder per request is expensive:
+
+```typescript
+// ❌ Expensive — new Pino instance per request
+app.get('/users', (req, res) => {
+  const logger = IgniterLogger.create()
+    .withContext({ requestId: req.id })
+    .build();
+  logger.info('Request');
+});
+
+// ✅ Efficient — child shares Pino instance
+const rootLogger = IgniterLogger.create().build();
+
+app.get('/users', (req, res) => {
+  const logger = rootLogger.child('http', { requestId: req.id });
+  logger.info('Request');
+});
+```
+
+### 3. Don't log in hot loops
+
+Logging has a cost. Avoid log calls inside tight loops:
+
+```typescript
+// ❌ Bad — thousands of log lines
+for (const item of largeArray) {
+  logger.debug('Processing', { item });  // expensive
+}
+
+// ✅ Good — log once, summarize
+logger.info('Processing batch', { count: largeArray.length });
+for (const item of largeArray) {
+  // process silently
+}
+logger.success('Batch complete', { count: largeArray.length });
+```
+
+### 4. Don't ignore flush
+
+File and HTTP transports buffer output. Without `flush()`, the last log entries are lost on exit:
+
+```typescript
+// ❌ Lost — process exits before buffer is flushed
+logger.info('Process exiting');
+process.exit(0);
+
+// ✅ Safe — flush before exit
+logger.info('Process exiting');
+await logger.flush();
+process.exit(0);
+```
+
+### 5. Don't use `console.log` alongside the logger
+
+Mixing `console.log` with Pino leads to inconsistent formatting and lost structured context:
+
+```typescript
+// ❌ Inconsistent — raw output mixed with pretty
+console.log('Something happened');
+logger.info('Something happened');
+
+// ✅ Consistent — all through the logger
+logger.info('Something happened');
+```
+
+### 6. Don't swallow errors silently
+
+Log errors with context, not just a message:
+
+```typescript
+// ❌ Vague
+try { await riskyOp(); } catch (err) {
+  logger.error('Operation failed');  // where's the error?
+}
+
+// ✅ Complete
+try { await riskyOp(); } catch (err) {
+  logger.error('Operation failed', {
+    operation: 'riskyOp',
+    error: err,
+  });
+}
+```
+
+---
+
+## Naming Conventions
+
+### App Name
+
+Use kebab-case matching your service name:
+
+```typescript
+.withAppName('payment-service')
+.withAppName('user-api')
+.withAppName('worker-scheduler')
+```
+
+### Component
+
+Use a short, descriptive label for the subsystem:
+
+```typescript
+.withComponent('http')       // HTTP handling
+.withComponent('database')   // Database operations
+.withComponent('cache')      // Cache layer
+.withComponent('auth')       // Authentication
+.withComponent('stripe')     // Payment provider
+```
+
+### Child Logger Component
+
+Children usually represent a more specific subsystem or a request scope:
+
+```typescript
+logger.child('http', { requestId })          // request-scoped
+logger.child('database', { query: 'SELECT' }) // query-scoped
+logger.child('tenant-id', { tenantId })       // tenant-scoped
+```
+
+---
+
+## Performance Checklist
+
+- [ ] Use child loggers instead of creating new instances per request
+- [ ] Avoid logging inside hot loops — summarize instead
+- [ ] Set appropriate log levels per environment (debug in dev, info in prod)
+- [ ] Use HTTP transport `batchSize` of 50+ in production to reduce network calls
+- [ ] Call `flush()` before process exit for file and HTTP transports
+- [ ] Use `pretty: false` in production for faster console output (or drop console entirely)
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Framework Integration" description="Logger with Next.js, Express, Fastify, and NestJS." href="/docs/logger/framework-integration" />
+  <Card title="Troubleshooting" description="Common errors and how to debug them." href="/docs/logger/troubleshooting" />
+  <Card title="API Reference" description="Complete reference for every method and type." href="/docs/logger/api-reference" />
+</Cards>

@@ -1,12 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { IgniterCollectionModelManager } from "../core/model";
 import { NodeFsAdapter } from "../adapters/node-fs.adapter";
-import { IgniterCollectionPath } from "../utils/path";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdir, writeFile, rm } from "node:fs/promises";
 
-describe("IgniterCollectionModelManager - Multi-Pattern & Templates", () => {
+describe("IgniterCollectionModelManager - Multi-Pattern", () => {
   const basePath = join(tmpdir(), "igniter-test-" + Math.random().toString(36).slice(2));
   const adapter = new NodeFsAdapter();
 
@@ -15,7 +14,7 @@ describe("IgniterCollectionModelManager - Multi-Pattern & Templates", () => {
     await mkdir(basePath, { recursive: true });
   });
 
-  const createModel = (patterns: string[], template?: string): IgniterCollectionModelManager<{
+  const createModel = (patterns: string[]): IgniterCollectionModelManager<{
     title: string;
     agent?: string;
     content: any;
@@ -32,7 +31,6 @@ describe("IgniterCollectionModelManager - Multi-Pattern & Templates", () => {
       definition: {
         name: "test",
         patterns: patterns.map(p => "content/" + p),
-        template,
         defaultIdGenerator: () => "id-123",
         hooks: {},
         subCollections: new Map(),
@@ -87,25 +85,4 @@ describe("IgniterCollectionModelManager - Multi-Pattern & Templates", () => {
     expect(exists).toBe(true);
   });
 
-  it("should render content using Handlebars template", async () => {
-    const templatePath = "templates/memory.md";
-    await mkdir(join(basePath, "templates"), { recursive: true });
-    await writeFile(join(basePath, templatePath), "Agent: {{agent}}\nTopic: {{content.topic}}\nBody: {{content.body}}");
-
-    const model = createModel(["memories/{id}.md"], templatePath);
-
-    const doc = await model.create({
-      id: "t1",
-      data: {
-        title: "Lia Memory",
-        agent: "lia",
-        content: {
-          topic: "Search"
-        }
-      }
-    });
-
-    expect(doc.content).toContain("Agent: lia");
-    expect(doc.content).toContain("Topic: Search");
-  });
 });

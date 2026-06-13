@@ -1,0 +1,353 @@
+---
+title: Platform Adapters
+description: Configure and use Telegram, WhatsApp, and Discord adapters. Capability comparison, configuration reference, and platform-specific features.
+---
+
+## Platform Adapters
+
+Adapters translate between platform-specific APIs and the normalized `BotContext`. This page covers the three first-party adapters in detail.
+
+---
+
+## Telegram Adapter
+
+The Telegram adapter supports the **full Bot API surface** — webhooks, long polling, commands, inline keyboards, and all content types.
+
+### Configuration
+
+```typescript
+import { telegram } from '@igniter-js/bot';
+
+const tg = telegram({
+  token: '123456:ABC-DEF...',
+  handle: '@your_bot', // Optional: overrides global handle
+  webhook: {
+    url: 'https://your-domain.com/api/bot/telegram',
+    secret: 'my-webhook-secret', // Optional: validates webhook authenticity
+    dropPendingUpdates: true,     // Clear pending updates on restart (default: true)
+  },
+});
+```
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `token` | `string` | ✅ | `TELEGRAM_TOKEN` env | Bot API token from @BotFather |
+| `handle` | `string` | ❌ | Global bot handle | Bot @username for mention detection |
+| `webhook.url` | `string` | ❌ | `TELEGRAM_WEBHOOK_URL` env | Public HTTPS endpoint |
+| `webhook.secret` | `string` | ❌ | `TELEGRAM_WEBHOOK_SECRET` env | Validates webhook authenticity |
+| `webhook.dropPendingUpdates` | `boolean` | ❌ | `true` | Clear pending updates on init |
+
+### Initialization
+
+During `.start()`, the Telegram adapter:
+1. Deletes any existing webhook
+2. Registers bot commands via `setMyCommands`
+3. Sets the new webhook with the configured URL and secret
+
+If no `webhook.url` is provided, the adapter skips webhook setup and logs a warning — you can use long polling instead.
+
+### Inline Keyboards
+
+Telegram supports both inline keyboards (within messages) and reply keyboards (below input):
+
+```typescript
+// Inline keyboard (buttons inside the message)
+async handle(ctx) {
+  await ctx.replyWithButtons('Choose an option:', [
+    [
+      { id: 'buy', label: '🛒 Buy Now', action: 'url', data: { url: 'https://shop.com' } },
+      { id: 'info', label: 'ℹ️ More Info', action: 'callback', data: 'more_info' },
+    ],
+    [
+      { id: 'share', label: '📤 Share', action: 'share', data: '' },
+    ],
+  ]);
+}
+```
+
+### Send Methods
+
+All content types are supported:
+
+```typescript
+// Text
+await ctx.reply('Hello!');
+
+// Image
+await ctx.replyWithImage('https://example.com/photo.jpg', 'Check this out!');
+
+// Document
+await ctx.replyWithDocument(file, 'report.pdf');
+
+// Location
+await ctx.bot.send({
+  provider: 'telegram',
+  channel: ctx.channel.id,
+  content: {
+    type: 'location',
+    latitude: 40.7128,
+    longitude: -74.0060,
+    name: 'New York City',
+  },
+});
+
+// Poll
+await ctx.bot.send({
+  provider: 'telegram',
+  channel: ctx.channel.id,
+  content: {
+    type: 'poll',
+    question: 'What is your favorite language?',
+    options: ['TypeScript', 'Rust', 'Go', 'Python'],
+    isAnonymous: true,
+  },
+});
+
+// Interactive with inline keyboard
+await ctx.replyWithButtons('Confirm?', [
+  { id: 'yes', label: '✅ Yes', action: 'callback', data: 'confirm_yes' },
+  { id: 'no', label: '❌ No', action: 'callback', data: 'confirm_no' },
+]);
+```
+
+### Actions
+
+```typescript
+// Edit message
+await ctx.editMessage!('12345', { type: 'text', content: 'Updated!' });
+
+// Delete message
+await ctx.deleteMessage!('12345');
+
+// Typing indicator
+await ctx.sendTyping!();
+```
+
+<Callout type="info">
+  Telegram does **not** support message reactions via the Bot API, so `ctx.react()` is not available.
+</Callout>
+
+---
+
+## WhatsApp Adapter
+
+The WhatsApp adapter works with the **Meta WhatsApp Cloud API**. It supports text, media, interactive buttons, and location/contact sharing.
+
+### Configuration
+
+```typescript
+import { whatsapp } from '@igniter-js/bot';
+
+const wa = whatsapp({
+  token: 'EAAx...',            // Cloud API access token
+  phone: '1234567890',         // Phone number ID
+});
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `token` | `string` | ✅ | WhatsApp Cloud API access token |
+| `phone` | `string` | ✅ | WhatsApp Business phone number ID |
+
+<Callout type="warn">
+  WhatsApp webhook setup is managed through the **Meta Developer Dashboard**, not the adapter's `init()` method. The `init()` call is a no-op that logs a confirmation message.
+</Callout>
+
+### Interactive Buttons (max 3)
+
+WhatsApp limits interactive messages to 3 buttons:
+
+```typescript
+async handle(ctx) {
+  await ctx.replyWithButtons('Confirm your order:', [
+    { id: 'confirm', label: '✅ Confirm', action: 'callback', data: 'order_confirm' },
+    { id: 'cancel', label: '❌ Cancel', action: 'callback', data: 'order_cancel' },
+    { id: 'help', label: '🆘 Help', action: 'callback', data: 'order_help' },
+  ]);
+}
+```
+
+The adapter automatically converts buttons to the WhatsApp interactive message format.
+
+### Media Handling
+
+WhatsApp requires media URLs. The adapter handles File objects by converting them to data URLs:
+
+```typescript
+// URL (preferred for production)
+await ctx.replyWithImage('https://cdn.example.com/product.jpg', 'New arrival!');
+
+// File object (converted to data URL — works for small files)
+const file = new File([buffer], 'receipt.pdf', { type: 'application/pdf' });
+await ctx.replyWithDocument(file, 'Your receipt');
+```
+
+### Platform Limitations
+
+WhatsApp does **not** support:
+- Editing or deleting messages via the Cloud API
+- Polls
+- Traditional slash commands (commands are parsed from message text by the framework)
+- Message pinning
+
+---
+
+## Discord Adapter
+
+The Discord adapter uses the **Interactions API** for slash commands, buttons, and select menus. It includes signature verification for webhook security.
+
+### Configuration
+
+```typescript
+import { discord } from '@igniter-js/bot';
+
+const dc = discord({
+  token: 'MTIz...',                     // Bot token
+  applicationId: '123456789012345678',   // Application ID
+  publicKey: 'abc123...',                // Public key for signature verification
+});
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `token` | `string` | ✅ | Discord bot token |
+| `applicationId` | `string` | ❌ | Application ID (required for slash command registration) |
+| `publicKey` | `string` | ❌ | Public key for Ed25519 signature verification |
+
+### Signature Verification
+
+The Discord adapter validates interaction signatures using Ed25519. If `publicKey` is configured, every incoming interaction is verified before processing. Requests with invalid signatures receive a `401 Unauthorized` response.
+
+### Slash Commands
+
+Commands are automatically registered as Discord slash commands during `init()`:
+
+```typescript
+// This command becomes a Discord slash command
+builder.addCommand('ping', {
+  name: 'ping',
+  aliases: [],
+  description: 'Check latency', // Used as slash command description
+  help: 'Use /ping to check bot responsiveness',
+  async handle(ctx) {
+    await ctx.reply('🏓 Pong!');
+  },
+});
+```
+
+### Message Components (Buttons & Select Menus)
+
+Discord supports up to **5 buttons per row** and **5 rows per message**:
+
+```typescript
+async handle(ctx) {
+  await ctx.replyWithButtons('Select an action:', [
+    [
+      { id: 'primary', label: 'Primary', action: 'callback', data: 'action_primary' },
+      { id: 'secondary', label: 'Secondary', action: 'callback', data: 'action_secondary' },
+    ],
+    [
+      { id: 'docs', label: '📚 Documentation', action: 'url', data: { url: 'https://docs.example.com' } },
+    ],
+  ]);
+}
+```
+
+### Thread Support
+
+Discord supports threads natively. The adapter detects thread context and routes messages accordingly.
+
+### Embeds
+
+For image URLs, the adapter automatically creates Discord embeds:
+
+```typescript
+await ctx.replyWithImage('https://example.com/photo.jpg', 'A beautiful photo');
+// Creates an embed with the image, not a plain URL
+```
+
+---
+
+## Adapter Client
+
+Every adapter exposes a pre-configured HTTP client for making direct API calls:
+
+```typescript
+const bot = IgniterBot.create()
+  .addAdapter('telegram', tg)
+  .build();
+
+// Get the adapter's client
+const tgAdapter = bot.getAdapter('telegram');
+const client = tgAdapter?.client;
+
+if (client) {
+  // Direct Telegram API calls
+  const me = await client.get('/getMe');
+  const chat = await client.post('/getChat', { chat_id: '123456' });
+
+  // Raw Discord API calls
+  const guild = await client.get('/guilds/123456789');
+}
+```
+
+The client is pre-configured with the platform's base URL, authentication headers, and content type negotiation. All methods return typed responses.
+
+---
+
+## Custom Adapters
+
+You can build adapters for any chat platform. See the `Bot.adapter()` static method:
+
+```typescript
+const myAdapter = Bot.adapter({
+  name: 'my-platform',
+  parameters: z.object({
+    apiKey: z.string(),
+    endpoint: z.string().url(),
+  }),
+  capabilities: {
+    content: { text: true, image: false, /* ... */ },
+    actions: { edit: false, delete: false, /* ... */ },
+    features: { webhooks: true, /* ... */ },
+    limits: { maxMessageLength: 1000, maxFileSize: 10 * 1024 * 1024, maxButtonsPerMessage: 3 },
+  },
+  init: async ({ config, commands, logger }) => {
+    // Setup webhook, register commands, etc.
+  },
+  handle: async ({ request, config, logger }) => {
+    // Parse request → return BotContext or null
+    const body = await request.json();
+    return {
+      event: 'message',
+      provider: 'my-platform',
+      channel: { id: body.chat_id, name: 'Chat', isGroup: false },
+      message: {
+        author: { id: body.user_id, name: body.user_name, username: body.user_handle },
+        content: { type: 'text', content: body.text, raw: body.text },
+        isMentioned: body.text.includes('@mybot'),
+      },
+    };
+  },
+  sendText: async ({ channel, text, config }) => {
+    // Send text message to platform API
+    await fetch(config.endpoint + '/messages', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+      body: JSON.stringify({ chat_id: channel, text }),
+    });
+  },
+});
+```
+
+Custom adapters automatically integrate with the entire middleware, plugin, session, and event system — no extra wiring needed.
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Middlewares" description="Add auth, rate-limiting, and logging to your bot." href="/docs/bots/middlewares" />
+  <Card title="Framework Integration" description="Wire up your bot with Next.js, Express, Fastify, and more." href="/docs/bots/framework-integration" />
+  <Card title="API Reference" description="Complete API documentation for all classes and methods." href="/docs/bots/api-reference" />
+</Cards>

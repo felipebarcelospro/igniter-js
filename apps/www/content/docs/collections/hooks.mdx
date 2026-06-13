@@ -1,0 +1,395 @@
+---
+title: Lifecycle Hooks
+description: Intercept and control document operations with lifecycle hooks. Modify data, enrich documents, and cancel operations by returning false.
+---
+
+## Lifecycle Hooks
+
+Hooks let you intercept document operations to **validate**, **enrich**, **transform**, or **cancel** them. Each hook receives a typed context object with the document, collection, and manager references.
+
+There are five hooks, one for each lifecycle event:
+
+| Hook | When It Runs | Can Cancel? | Can Modify? |
+|------|-------------|-------------|-------------|
+| `onCreated` | Before a document is written to disk | ✅ | ✅ |
+| `onUpdated` | Before an updated document is written | ✅ | ✅ |
+| `onDeleted` | Before a document is deleted | ✅ | ❌ |
+| `onRead` | After a document is read from disk | ✅ | ✅ |
+| `onList` | After documents are listed | ✅ | ✅ |
+
+---
+
+## Hook Context
+
+Every hook receives a context object with these fields:
+
+```typescript
+interface HookContext<TSchema> {
+  /** The collection manager (for CRUD on this collection) */
+  collection: IIgniterCollectionModel<TSchema>;
+  /** The main manager (for access to other collections) */
+  manager: IIgniterCollectionsManager;
+  /** User-defined context from withContext() */
+  context: unknown;
+}
+```
+
+Additional fields depend on the hook type:
+
+| Hook | Extra Fields |
+|------|-------------|
+| `onCreated` | `value` — the document being created |
+| `onUpdated` | `newValue`, `previousValue` |
+| `onDeleted` | `value` — the document being deleted |
+| `onRead` | `value` — the document that was read |
+| `onList` | `values` — array of documents |
+
+---
+
+## `onCreated`
+
+Runs **before** a document is written to disk. You can modify the document or cancel creation.
+
+### Enrich the Document
+
+```typescript
+const Posts = IgniterCollectionModel.create('posts')
+  .withSchema(postSchema)
+  .onCreated(async ({ value }) => {
+    // Auto-generate a slug from the title
+    value.data.slug = value.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    return value; // Continue with modified document
+  })
+  .build();
+```
+
+### Cancel Creation
+
+```typescript
+const Posts = IgniterCollectionModel.create('posts')
+  .withSchema(postSchema)
+  .onCreated(async ({ value, manager }) => {
+    // Prevent duplicate slugs
+    const existing = await manager.posts.findMany({
+      where: { slug: value.data.slug },
+    });
+
+    if (existing.length > 0) {
+      return false; // Cancel creation
+    }
+
+    return value;
+  })
+  .build();
+```
+
+<Callout type="warn">
+  Returning `false` throws an `IgniterCollectionError` with code `COLLECTION_HOOK_CANCELLED`. Make sure to handle this in your calling code.
+</Callout>
+
+### Side Effects (Notifications, Indexing)
+
+```typescript
+.onCreated(async ({ value }) => {
+  await sendNotification({
+    channel: '#blog-updates',
+    message: `New post: ${value.title} by ${value.author}`,
+  });
+
+  return value; // Don't forget to return!
+})
+```
+
+---
+
+## `onUpdated`
+
+Runs **before** an updated document is written. You have access to both `newValue` and `previousValue`.
+
+### Track Publishing Timestamps
+
+```typescript
+const Posts = IgniterCollectionModel.create('posts')
+  .withSchema(postSchema)
+  .onUpdated(({ newValue, previousValue }) => {
+    // Set publishedAt when first published
+    if (newValue.data.published && !previousValue.data.published) {
+      newValue.data.publishedAt = new Date().toISOString();
+    }
+
+    return newValue;
+  })
+  .build();
+```
+
+### Prevent Unpublishing
+
+```typescript
+.onUpdated(({ newValue, previousValue }) => {
+  if (!newValue.data.published && previousValue.data.published) {
+    // Don't allow unpublishing a post that already went live
+    return false;
+  }
+
+  return newValue;
+})
+```
+
+### Audit Trail
+
+```typescript
+.onUpdated(async ({ newValue, previousValue }) => {
+  // Log changes to an audit collection
+  await manager.audit.create({
+    data: {
+      collection: 'posts',
+      documentId: newValue.id,
+      changedFields: Object.keys(newValue.data).filter(
+        k => newValue.data[k] !== previousValue.data[k]
+      ),
+      timestamp: new Date().toISOString(),
+    }
+  });
+
+  return newValue;
+})
+```
+
+---
+
+## `onDeleted`
+
+Runs **before** a document is deleted. Return `true` to proceed or `false` to cancel.
+
+### Soft Delete
+
+```typescript
+.onDeleted(async ({ value, manager }) => {
+  // Move to archive instead of deleting
+  await manager.archive.create({
+    data: {
+      originalCollection: 'posts',
+      originalId: value.id,
+      data: value,
+      archivedAt: new Date().toISOString(),
+    }
+  });
+
+  return true; // Allow deletion (archive already created)
+})
+```
+
+### Prevent Deletion of Published Content
+
+```typescript
+.onDeleted(({ value }) => {
+  if (value.data.published) {
+    return false; // Cannot delete published posts
+  }
+
+  return true;
+})
+```
+
+---
+
+## `onRead`
+
+Runs **after** a document is read. Modify the returned value or suppress it.
+
+### Enrich with Computed Data
+
+```typescript
+.onRead(({ value }) => {
+  // Add computed reading time
+  const wordCount = (value.content || '').split(/\s+/).length;
+  value.data.readingTime = Math.ceil(wordCount / 200); // minutes
+
+  return value;
+})
+```
+
+### Access Control
+
+```typescript
+.onRead(({ value, context }) => {
+  const { user } = context as { user: User };
+
+  // Hide draft posts from non-admins
+  if (!value.data.published && !user.isAdmin) {
+    return false; // Suppress — returns null to the caller
+  }
+
+  return value;
+})
+```
+
+---
+
+## `onList`
+
+Runs **after** documents are listed. Filter, sort, or enrich the array.
+
+### Filter Sensitive Content
+
+```typescript
+.onList(({ values, context }) => {
+  const { user } = context as { user: User };
+
+  if (!user.isAdmin) {
+    // Non-admins only see published posts
+    return values.filter(v => v.data.published);
+  }
+
+  return values;
+})
+```
+
+### Enrich All Documents
+
+```typescript
+.onList(async ({ values, manager }) => {
+  // Batch-enrich with author profiles
+  const authorNames = [...new Set(values.map(v => v.data.author))];
+  const authors = await manager.authors.findMany({
+    where: { name: { in: authorNames } },
+  });
+
+  const authorMap = new Map(authors.map(a => [a.data.name, a]));
+
+  return values.map(v => ({
+    ...v,
+    data: { ...v.data, authorProfile: authorMap.get(v.data.author) },
+  }));
+})
+```
+
+---
+
+## Global Hooks
+
+Apply hooks to **all collections** at once using `withGlobalHooks()` on the builder:
+
+```typescript
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withBasePath(process.cwd())
+  .withGlobalHooks({
+    onCreated: async ({ value, collection }) => {
+      console.log(`[${collection.definition.name}] Created: ${value.id}`);
+      return value;
+    },
+    onDeleted: async ({ value, collection }) => {
+      console.log(`[${collection.definition.name}] Deleted: ${value.id}`);
+      return true;
+    },
+  })
+  .addCollection(Posts)
+  .addCollection(Pages)
+  .build();
+```
+
+Global hooks run **before** collection-specific hooks. Collection hooks can still override or cancel after the global hook runs.
+
+---
+
+## Context Injection
+
+Use `withContext()` to inject dependencies (database connections, auth, config) into every hook:
+
+```typescript
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withContext(async () => {
+    const db = await Database.connect();
+    const auth = await getCurrentAuth();
+    return { db, auth };
+  })
+  .addCollection(Posts)
+  .build();
+
+// Access in hooks
+Posts.onCreated(async ({ value, context }) => {
+  const { db, auth } = context as { db: Database; auth: Auth };
+  await db.activityLog.insert({
+    userId: auth.userId,
+    action: 'post_created',
+    documentId: value.id,
+  });
+  return value;
+});
+```
+
+The context factory is called **fresh for every operation**, so you always have the latest state.
+
+---
+
+## Hook Execution Order
+
+For a single operation, hooks execute in this order:
+
+1. **Global hooks** (from `withGlobalHooks()`)
+2. **Collection-specific hooks** (from `.onCreated()`, etc.)
+3. **Adapter write/read**
+4. **Event emission** (see [Events](/docs/collections/events))
+
+If any hook returns `false`, the operation is **immediately cancelled** — no subsequent hooks run and no event is emitted.
+
+---
+
+## Real-World Example: CMS Publishing Workflow
+
+```typescript
+const Posts = IgniterCollectionModel.create('posts')
+  .withSchema(postSchema)
+  .onCreated(async ({ value }) => {
+    // Auto-slug
+    value.data.slug = slugify(value.title);
+    return value;
+  })
+  .onUpdated(({ newValue, previousValue }) => {
+    // Timestamp tracking
+    if (newValue.data.published && !previousValue.data.published) {
+      newValue.data.publishedAt = new Date().toISOString();
+    }
+
+    // Version bump
+    newValue.data.version = (previousValue.data.version || 1) + 1;
+
+    return newValue;
+  })
+  .onDeleted(({ value }) => {
+    // Prevent deletion of published content
+    return !value.data.published;
+  })
+  .onRead(({ value, context }) => {
+    // Computed reading time
+    value.data.readingTime = estimateReadingTime(value.content);
+    return value;
+  })
+  .onList(({ values, context }) => {
+    const { user } = context as { user: User };
+
+    // Role-based filtering
+    if (user.role === 'editor') {
+      return values; // Editors see everything
+    }
+
+    return values.filter(v => v.data.published);
+  })
+  .build();
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Events" description="Subscribe to document lifecycle events globally or per-collection." href="/docs/collections/events" />
+  <Card title="Views" description="Define data-driven views with component trees and actions." href="/docs/collections/views" />
+  <Card title="Advanced" description="Context injection, telemetry, and advanced patterns." href="/docs/collections/advanced" />
+</Cards>

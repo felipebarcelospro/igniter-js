@@ -1,0 +1,112 @@
+---
+title: Installation
+description: Install and configure @igniter-js/connectors with your preferred package manager. Peers, environment variables, and TypeScript setup.
+---
+
+## Installation
+
+### Core Package
+
+Connectors depends on `@igniter-js/common` for shared types and error handling. Both are installed together:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/connectors @igniter-js/common zod
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/connectors @igniter-js/common zod
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/connectors @igniter-js/common zod
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/connectors @igniter-js/common zod
+    ```
+  </Tab>
+</Tabs>
+
+### Adapters Subpath
+
+If using the Prisma adapter, import from the subpath:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/connectors prisma @prisma/client
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/connectors prisma @prisma/client
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/connectors prisma @prisma/client
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/connectors prisma @prisma/client
+    ```
+  </Tab>
+</Tabs>
+
+### Peer Dependencies
+
+| Package | Required | Purpose |
+|---------|----------|---------|
+| `@igniter-js/common` | **Yes** | Shared types (`IgniterLogger`, `StandardSchemaV1`, `IgniterError`) |
+| `zod` | Optional* | Schema validation (required if using Zod schemas for config/actions) |
+
+<Callout type="info">
+  Connectors supports any `StandardSchemaV1`-compatible validation library. While Zod is the most common choice, you can use Valibot, ArkType, or any schema library that implements Standard Schema v1.
+</Callout>
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `IGNITER_SECRET` | **Yes** (if using encryption) | AES-256-GCM encryption key. Must be at least 32 characters. Generate with `openssl rand -hex 32`. |
+| `IGNITER_BASE_URL` | Recommended | Base URL for OAuth callback and webhook URL generation (e.g., `https://myapp.com`) |
+| `IGNITER_BASE_PATH` | Optional | Base path prefix for URL generation (e.g., `/api/v1`) |
+
+```bash
+# .env
+IGNITER_SECRET=your-64-character-hex-secret-at-least-32-chars
+IGNITER_BASE_URL=https://myapp.com
+IGNITER_BASE_PATH=/api/v1
+```
+
+### TypeScript Configuration
+
+No special TypeScript configuration is required. The package ships with full type declarations. For best results:
+
+```json
+// tsconfig.json
+{
+  "compilerOptions": {
+    "strict": true,
+    "moduleResolution": "bundler",
+    "module": "ESNext"
+  }
+}
+```
+
+<Callout type="warn">
+  Connectors requires **Node.js 22+** and **TypeScript 5.6+**. The package uses `StandardSchemaV1` from the TC39 proposal, which requires TypeScript 5.6+ for full inference.
+</Callout>
+
+---
+
+## Next Steps
+
+- [Getting Started](/docs/connectors/getting-started) — Build your first integration in minutes
+- [Defining Connectors](/docs/connectors/defining-connectors) — Learn the connector builder API

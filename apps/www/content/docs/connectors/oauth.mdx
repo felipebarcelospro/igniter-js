@@ -1,0 +1,269 @@
+---
+title: OAuth
+description: "Add OAuth 2.0 authentication to your connectors. Full lifecycle: authorization URL generation, PKCE, token exchange, refresh, and user info fetching."
+---
+
+## OAuth
+
+OAuth connectors handle the **full OAuth 2.0 lifecycle** — authorization, callback, token exchange, refresh, and user info fetching. Define it once in your connector definition and the manager handles the rest.
+
+---
+
+## Enabling OAuth
+
+Add `.withOAuth()` to your connector definition:
+
+```typescript
+const mailchimp = IgniterConnector.create()
+  .withConfig(
+    z.object({
+      dc: z.string().describe("Data center prefix (e.g., us6)"),
+    }),
+  )
+  .withDefaultConfig({ dc: "us6" })  // Default DC, user provides the rest via OAuth
+  .withOAuth({
+    authorizationUrl: "https://login.mailchimp.com/oauth2/authorize",
+    tokenUrl: "https://login.mailchimp.com/oauth2/token",
+    clientId: process.env.MAILCHIMP_CLIENT_ID!,
+    clientSecret: process.env.MAILCHIMP_CLIENT_SECRET!,
+    scopes: [],
+  })
+  .addAction("lists", {
+    input: z.object({}),
+    handler: async ({ config, oauth }) => {
+      const res = await fetch(
+        `https://${config.dc}.api.mailchimp.com/3.0/lists`,
+        {
+          headers: { Authorization: `Bearer ${oauth?.accessToken}` },
+        },
+      );
+      return res.json();
+    },
+  })
+  .build();
+```
+
+<Callout type="info">
+  When OAuth is enabled, **`config` requires `.withDefaultConfig()`**. The system-managed OAuth fields (tokens) are stored separately from user-provided config. Use `.withConfig()` for user fields and `.withDefaultConfig()` for system defaults.
+</Callout>
+
+---
+
+## OAuth Options
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `authorizationUrl` | **Yes** | OAuth provider's authorization endpoint |
+| `tokenUrl` | **Yes** | OAuth provider's token endpoint |
+| `clientId` | **Yes** | Your app's client ID |
+| `clientSecret` | **Yes** | Your app's client secret |
+| `scopes` | No | Array of OAuth scopes to request |
+| `pkce` | No | Enable PKCE (S256). Recommended for public clients. |
+| `extraParams` | No | Extra query params added to authorization URL |
+| `userInfoUrl` | No | Endpoint to fetch user profile after OAuth |
+| `parseTokenResponse` | No | Custom parser for non-standard token responses |
+| `parseUserInfoResponse` | No | Custom parser for non-standard user info responses |
+
+---
+
+## The OAuth Flow
+
+### Step 1 — Generate Authorization URL
+
+Call `.connect()` on an OAuth connector to get the authorization URL:
+
+```typescript
+const scoped = connectors.scope("organization", "org_123");
+
+const result = await scoped.connect("mailchimp");
+
+// For OAuth connectors, connect() returns a Response with the auth URL
+// You should redirect the user to this URL
+return result; // HTTP 302 redirect to authorizationUrl
+```
+
+Internally, the manager:
+1. Generates a state token for CSRF protection
+2. Generates PKCE code verifier + challenge (if enabled)
+3. Stores the pending state in memory (10-minute expiration)
+4. Returns a redirect response to the authorization URL
+
+### Step 2 — Handle the Callback
+
+After the user authorizes, the provider redirects to your callback URL. Handle it with:
+
+```typescript
+// app/api/oauth/callback/route.ts
+export async function GET(request: Request) {
+  const response = await connectors.handle("oauth.callback", request);
+  return response; // Redirects user to success page or back to app
+}
+```
+
+Or at the scoped level:
+
+```typescript
+const scoped = connectors.scope("organization", "org_123");
+await scoped.oauth.handleCallback(request);
+```
+
+The manager:
+1. Validates the state token (CSRF protection)
+2. Exchanges the authorization code for tokens
+3. Fetches user info (if `userInfoUrl` is configured)
+4. Encrypts and saves tokens
+5. Emits `oauth.completed` event
+
+### Step 3 — Use OAuth Tokens in Actions
+
+OAuth tokens are automatically injected into action handlers:
+
+```typescript
+.addAction("lists", {
+  input: z.object({}),
+  handler: async ({ oauth }) => {
+    // oauth.accessToken  — always available
+    // oauth.refreshToken — if provided by the OAuth provider
+    // oauth.expiresAt    — if returned
+    // oauth.expiresIn    — if returned
+    // oauth.userInfo     — from userInfoUrl response
+
+    const res = await fetch("https://api.service.com/data", {
+      headers: { Authorization: `Bearer ${oauth?.accessToken}` },
+    });
+    return res.json();
+  },
+})
+```
+
+---
+
+## PKCE (Proof Key for Code Exchange)
+
+Enable PKCE for enhanced security — recommended for all OAuth flows:
+
+```typescript
+.withOAuth({
+  authorizationUrl: "https://provider.com/oauth/authorize",
+  tokenUrl: "https://provider.com/oauth/token",
+  clientId: process.env.CLIENT_ID!,
+  clientSecret: process.env.CLIENT_SECRET!,
+  pkce: true,  // ✅ Enable PKCE (S256)
+  scopes: ["read", "write"],
+})
+```
+
+The manager handles code verifier generation, S256 challenge, and includes the verifier in the token exchange.
+
+---
+
+## Custom Token Parsing
+
+If your OAuth provider returns non-standard token responses, use `parseTokenResponse`:
+
+```typescript
+.withOAuth({
+  authorizationUrl: "https://custom-provider.com/auth",
+  tokenUrl: "https://custom-provider.com/token",
+  clientId: process.env.CLIENT_ID!,
+  clientSecret: process.env.CLIENT_SECRET!,
+  parseTokenResponse: (response) => ({
+    accessToken: String(response.data.token),
+    refreshToken: String(response.data.refresh),
+    expiresIn: Number(response.data.expires_in_seconds),
+  }),
+})
+```
+
+The default parser auto-detects common formats (`access_token`, `accessToken`, `token`), but custom parsing gives you full control.
+
+---
+
+## Custom User Info Parsing
+
+```typescript
+.withOAuth({
+  // ...
+  userInfoUrl: "https://custom-provider.com/api/me",
+  parseUserInfoResponse: (response) => ({
+    id: String(response.account.id),
+    email: String(response.account.email),
+    name: String(response.account.display_name),
+    avatar: String(response.account.avatar_url),
+  }),
+})
+```
+
+---
+
+## Token Refresh
+
+The manager handles token refresh automatically when possible. You can also trigger it manually:
+
+```typescript
+const scoped = connectors.scope("organization", "org_123");
+
+// Refresh tokens for a connector
+await scoped.oauth.refreshToken("mailchimp");
+```
+
+<Callout type="warn">
+  Token refresh requires the connector to have a valid `refreshToken`. Not all OAuth providers return refresh tokens. Check your provider's documentation.
+</Callout>
+
+---
+
+## OAuth Events
+
+| Event | When |
+|-------|------|
+| `oauth.started` | Authorization URL generated |
+| `oauth.completed` | Successful token exchange |
+| `oauth.refreshed` | Token refresh successful |
+| `oauth.failed` | Any OAuth step fails |
+
+```typescript
+connectors.on((event) => {
+  if (event.type === "oauth.completed") {
+    console.log(`✅ OAuth complete for ${event.connector}`);
+  }
+  if (event.type === "oauth.failed") {
+    console.error(
+      `❌ OAuth failed for ${event.connector}: ${event.errorMessage}`
+    );
+  }
+});
+```
+
+---
+
+## Real-World Example: Full OAuth Endpoints (Next.js)
+
+```typescript
+// app/api/integrations/[provider]/connect/route.ts
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { provider: string } },
+) {
+  const scoped = connectors.scope("organization", getOrgId(req));
+  const response = await scoped.connect(params.provider);
+  return response;
+}
+
+// app/api/integrations/[provider]/callback/route.ts
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { provider: string } },
+) {
+  const response = await connectors.handle("oauth.callback", req as any);
+  return response;
+}
+```
+
+---
+
+## Next Steps
+
+- [Webhooks](/docs/connectors/webhooks) — Incoming webhook handling
+- [Events](/docs/connectors/events) — Full event system reference
+- [Troubleshooting](/docs/connectors/troubleshooting) — Common OAuth errors and solutions

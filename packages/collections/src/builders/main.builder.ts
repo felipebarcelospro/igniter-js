@@ -215,6 +215,45 @@ export class IgniterCollectionsBuilder<
   }
 
   /**
+   * Set a context factory for dependency injection.
+   *
+   * The factory is called on every operation (create, read, update, delete,
+   * list, view render, view action) to provide a fresh context object.
+   * This enables injecting dependencies like database connections, auth state,
+   * or configuration into hooks and view handlers.
+   *
+   * @param factory - Function that returns the context object or a Promise
+   * @returns New builder instance
+   *
+   * @example
+   * ```typescript
+   * const docs = IgniterCollections.create()
+   *   .withAdapter(adapter)
+   *   .withContext(async () => ({
+   *     db: await Database.connect(),
+   *     auth: await getAuth(),
+   *   }))
+   *   .addCollection(Posts)
+   *   .build();
+   *
+   * // Access context in hooks
+   * Posts.onCreated(async ({ value, context }) => {
+   *   const { db } = context as MyContext;
+   *   await db.audit.log('post_created', value);
+   *   return value;
+   * });
+   * ```
+   */
+  withContext(
+    factory: () => unknown | Promise<unknown>
+  ): IgniterCollectionsBuilder<TCollections> {
+    return new IgniterCollectionsBuilder({
+      ...this.state,
+      contextFactory: factory,
+    });
+  }
+
+  /**
    * Set global hooks applied to all collections.
    *
    * @param hooks - Hook configuration
@@ -283,6 +322,7 @@ export class IgniterCollectionsBuilder<
       telemetry: this.state.telemetry,
       logger: this.state.logger,
       globalHooks: this.state.globalHooks,
+      contextFactory: this.state.contextFactory,
     }) as unknown as IIgniterCollectionsManager<TCollections>;
   }
 }

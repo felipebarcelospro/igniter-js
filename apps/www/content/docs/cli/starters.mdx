@@ -1,0 +1,214 @@
+---
+title: Starters
+description: All 6 Igniter.js starters compared — Next.js, TanStack Start, Express, Bun, Deno. Frameworks, runtimes, env vars, and templates.
+---
+
+## Starters
+
+Starters are project templates that bootstrap a working Igniter.js application. Each starter targets a specific framework and runtime, and includes the core Igniter.js wiring (router, client, context) plus a scaffolded example feature.
+
+<Callout type="info">
+  Starters use `create-next-app`, `create-tanstack-app`, or framework equivalents to initialize the project, then layer Igniter.js templates on top. This means you get the framework's standard project structure plus Igniter.js integration.
+</Callout>
+
+---
+
+## Comparison
+
+| Starter | Framework | Runtime | Type | App Router |
+|---------|-----------|---------|------|------------|
+| **nextjs** | Next.js 15 | Node.js | Full-stack | Yes |
+| **tanstack-start** | TanStack Start | Node.js | Full-stack | Yes |
+| **express-rest-api** | Express | Node.js | Backend API | N/A |
+| **bun-rest-api** | Bun | Bun | Backend API | N/A |
+| **bun-react-app** | Bun + React | Bun | Full-stack | N/A |
+| **deno-rest-api** | Deno | Deno | Backend API | N/A |
+
+---
+
+## `nextjs`
+
+The most full-featured starter. Uses `create-next-app` with TypeScript, ESLint, Tailwind CSS, App Router, Turbopack, and `src/` directory.
+
+**Init command:** `npx create-next-app@latest`
+
+**Dependencies:** `@igniter-js/core` (latest)
+
+### Generated Files
+
+| Template | Output |
+|----------|--------|
+| `starters/nextjs/route-handler.hbs` | `src/app/api/v1/[[...all]]/route.ts` |
+| `starters/igniter.router.hbs` | `src/igniter.router.ts` |
+| `starters/igniter.client.hbs` | `src/igniter.client.ts` |
+| `starters/igniter.context.hbs` | `src/igniter.context.ts` |
+| `starters/igniter.hbs` | `src/igniter.ts` |
+| `scaffold/example-feature/*.hbs` | `src/features/example/` |
+| `starters/nextjs/tsconfig.hbs` | `tsconfig.json` |
+| `starters/open-api.hbs` | `src/docs/openapi.json` |
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IGNITER_APP_NAME` | `Igniter App` | Application name |
+| `IGNITER_APP_SECRET` | `my-secret-key` | Application secret |
+| `IGNITER_API_URL` | `http://localhost:3000/` | Server-side API URL |
+| `IGNITER_API_BASE_PATH` | `/api/v1` | API base path |
+| `NEXT_PUBLIC_IGNITER_API_URL` | `http://localhost:3000/` | Client-side API URL |
+| `NEXT_PUBLIC_IGNITER_API_BASE_PATH` | `/api/v1` | Client-side API base path |
+
+### Example
+
+```bash
+igniter init my-app --template nextjs
+```
+
+---
+
+## `tanstack-start`
+
+Full-stack starter using TanStack Start with a similar structure to the Next.js starter.
+
+**Dependencies:** `@igniter-js/core` (latest)
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IGNITER_APP_NAME` | `Igniter App` | Application name |
+| `IGNITER_APP_SECRET` | `my-secret-key` | Application secret |
+| `IGNITER_API_URL` | `http://localhost:3000/` | Server-side API URL |
+| `IGNITER_API_BASE_PATH` | `/api/v1` | API base path |
+| `REACT_APP_IGNITER_API_URL` | `http://localhost:3000/` | Client-side API URL |
+| `REACT_APP_IGNITER_API_BASE_PATH` | `/api/v1` | Client-side API base path |
+
+### Example
+
+```bash
+igniter init my-app --template tanstack-start
+```
+
+---
+
+## `express-rest-api`
+
+A backend-only starter using Express.js. Includes the core Igniter.js router, client, and context — without any frontend framework.
+
+**Dependencies:** `@igniter-js/core` (latest)
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IGNITER_APP_NAME` | — | Application name |
+| `IGNITER_APP_SECRET` | — | Application secret |
+| `IGNITER_API_URL` | — | API URL |
+| `IGNITER_API_BASE_PATH` | — | API base path |
+
+### Example
+
+```bash
+igniter init my-api --template express-rest-api
+```
+
+---
+
+## `bun-rest-api`
+
+A backend-only starter targeting the **Bun** runtime. Uses Bun's native HTTP server with Igniter.js integration.
+
+**Dependencies:** `@igniter-js/core` (latest)
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IGNITER_APP_NAME` | — | Application name |
+| `IGNITER_APP_SECRET` | — | Application secret |
+| `IGNITER_API_URL` | — | API URL |
+| `IGNITER_API_BASE_PATH` | — | API base path |
+
+### Example
+
+```bash
+igniter init my-bun-api --template bun-rest-api
+```
+
+---
+
+## `bun-react-app`
+
+A full-stack starter using **Bun + React**. Combines Bun's server with a React frontend.
+
+**Dependencies:** `@igniter-js/core` (latest)
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IGNITER_APP_NAME` | — | Application name |
+| `IGNITER_APP_SECRET` | — | Application secret |
+| `IGNITER_API_URL` | — | API URL |
+| `IGNITER_API_BASE_PATH` | — | API base path |
+
+### Example
+
+```bash
+igniter init my-bun-react --template bun-react-app
+```
+
+---
+
+## `deno-rest-api`
+
+A backend-only starter targeting the **Deno** runtime. Uses Deno's native HTTP server with Igniter.js integration.
+
+**Dependencies:** `@igniter-js/core` (latest)
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IGNITER_APP_NAME` | — | Application name |
+| `IGNITER_APP_SECRET` | — | Application secret |
+| `IGNITER_API_URL` | — | API URL |
+| `IGNITER_API_BASE_PATH` | — | API base path |
+
+### Example
+
+```bash
+igniter init my-deno-api --template deno-rest-api
+```
+
+---
+
+## Starter Architecture
+
+All starters extend `BaseStarter` and implement a common interface:
+
+```typescript
+interface Starter {
+  id: string;           // CLI identifier (e.g., 'nextjs')
+  name: string;         // Display name
+  description: string;  // Short description
+  hint: string;         // Category hint for prompts
+  repository: string;   // Source repository name
+  templates: Template[]; // Handlebars templates to apply
+  dependencies: Dep[];  // Package dependencies
+  envVars: EnvVar[];    // Environment variables
+  install(dir, config): Promise<void>;  // Installation logic
+}
+```
+
+New starters can be added by extending `BaseStarter`, implementing the `install` method, and registering with the `StarterRegistry`.
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Add-ons" description="Layer database, auth, jobs, and more on top of any starter." href="/docs/cli/add-ons" />
+  <Card title="Real-World Scenarios" description="See which starter + add-on combinations work best for common use cases." href="/docs/cli/real-world" />
+  <Card title="init Command" description="Full reference for the init command — modes, flags, and inline options." href="/docs/cli/commands/init" />
+</Cards>

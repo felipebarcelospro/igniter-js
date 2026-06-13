@@ -1,0 +1,228 @@
+---
+title: API Reference
+description: Complete reference for every CLI command, flag, option, and subcommand. Includes all supported values and default behaviors.
+---
+
+## API Reference
+
+This page documents every command, flag, and option available in `@igniter-js/cli`. All defaults and behaviors are verified against the actual implementation in `packages/cli/src/`.
+
+---
+
+## Global Options
+
+These apply to the top-level `igniter` command:
+
+| Option | Description |
+|--------|-------------|
+| `--help` | Show help for the current command |
+| `--version` | Show the CLI version (`0.0.1`) |
+
+---
+
+## `igniter init`
+
+```
+igniter init [project-name] [options]
+```
+
+### Arguments
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `project-name` | `string` | No | Name of the project directory. If omitted, prompts interactively. |
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--mode` | `"install" \| "new-project"` | `new-project` | Operation mode |
+| `--pm, --package-manager` | `"npm" \| "yarn" \| "pnpm" \| "bun"` | auto-detected | Package manager |
+| `--template` | `string` | interactive prompt | Starter template |
+| `--add-ons` | `string` | — | Comma-separated add-ons with inline options |
+| `--database` | `"none" \| "postgresql" \| "mysql" \| "sqlite"` | — | Database provider (shorthand) |
+| `--no-git` | flag | `false` | Skip git init |
+| `--no-install` | flag | `false` | Skip dependency installation |
+| `--no-docker` | flag | `false` | Skip Docker setup |
+
+### Template Values
+
+| Value | Framework | Runtime | Type |
+|-------|-----------|---------|------|
+| `nextjs` | Next.js 15 | Node.js | Full-stack |
+| `tanstack-start` | TanStack Start | Node.js | Full-stack |
+| `express-rest-api` | Express | Node.js | Backend API |
+| `bun-rest-api` | Bun | Bun | Backend API |
+| `bun-react-app` | Bun + React | Bun | Full-stack |
+| `deno-rest-api` | Deno | Deno | Backend API |
+
+### Add-on Values
+
+| Value | Has Options | Description |
+|-------|-------------|-------------|
+| `database` | Yes | ORM + provider selection |
+| `auth` | Yes | Better Auth + plugins |
+| `jobs` | No | Background job processing |
+| `store` | No | Redis key-value store |
+| `mcp` | No | MCP server for AI agents |
+| `logging` | No | Structured logging |
+| `telemetry` | No | OpenTelemetry |
+| `bots` | No | Multi-platform bots |
+| `shadcn-ui` | No | shadcn/ui init |
+
+### Inline Add-on Notation
+
+```
+--add-ons "addon-id[:option1[:option2+value2]]"
+```
+
+| Separator | Purpose |
+|-----------|---------|
+| `,` | Separate add-ons |
+| `:` | Separate positional options |
+| `+` | Separate multi-select values |
+
+---
+
+## `igniter generate`
+
+```
+igniter generate <subcommand> [options]
+```
+
+### Subcommands
+
+#### `generate feature`
+
+```
+igniter generate feature [name] [options]
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `[name]` | `string` | interactive | Feature name (kebab-case) |
+| `--schema` | `string` | — | Schema provider + model (e.g., `prisma:User`) |
+| `--schema-path` | `string` | auto-detected | Custom schema file path |
+
+#### `generate controller`
+
+```
+igniter generate controller [name] [options]
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `[name]` | `string` | interactive | Controller name (kebab-case) |
+| `-f, --feature` | `string` | interactive | Target feature name |
+
+#### `generate procedure`
+
+```
+igniter generate procedure [name] [options]
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `[name]` | `string` | interactive | Procedure name (kebab-case) |
+| `-f, --feature` | `string` | interactive | Target feature name |
+
+#### `generate docs`
+
+```
+igniter generate docs [options]
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--router` | `string` | `src/igniter.router.ts` | Router file path |
+| `--output` | `string` | `./src/docs` | Output directory |
+
+#### `generate schema`
+
+```
+igniter generate schema [options]
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--router` | `string` | `src/igniter.router.ts` | Router file path |
+| `--output` | `string` | `src/igniter.schema.ts` | Output file path |
+
+#### `generate caller`
+
+```
+igniter generate caller [options]
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--name` | `string` | interactive | Caller name prefix |
+| `--url` | `string` | — | Remote OpenAPI URL |
+| `--path` | `string` | — | Local OpenAPI path |
+| `--output` | `string` | `src/callers/<hostname>` | Output directory |
+
+---
+
+## `igniter dev`
+
+```
+igniter dev [options]
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--router` | `string` | `src/igniter.router.ts` | Router file path |
+| `--output` | `string` | `src/igniter.schema.ts` | Schema output path |
+| `--docs-output` | `string` | `./src/docs` | Docs output directory |
+| `--cmd` | `string` | auto-detected | Dev server command |
+
+### Auto-detected Dev Commands
+
+| Package Manager | Default Command |
+|----------------|----------------|
+| `npm` | `npm run dev` |
+| `pnpm` | `pnpm dev` |
+| `yarn` | `yarn dev` |
+| `bun` | `bun dev` |
+
+---
+
+## Package Manager Detection
+
+The CLI detects your package manager from `process.env.npm_config_user_agent`:
+
+| User Agent Prefix | Package Manager | Executor |
+|-------------------|----------------|----------|
+| `yarn/` | `yarn` | `yarn dlx` |
+| `pnpm/` | `pnpm` | `pnpx` |
+| `bun/` | `bun` | `bunx` |
+| (any other) | `npm` | `npx` |
+
+---
+
+## Framework Detection (Install Mode)
+
+| Detection Rule | Detected Framework |
+|---------------|-------------------|
+| `next.config.js` or `next.config.ts` exists | `nextjs` |
+| `@tanstack/react-start` in `package.json` dependencies | `tanstack-start` |
+| Neither matched | `generic` |
+
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Error (initialization failed, file not found, validation error) |
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Best Practices" description="Production patterns for init, generate, and dev workflows." href="/docs/cli/best-practices" />
+  <Card title="Troubleshooting" description="Fix common errors — file not found, port conflicts, watcher issues." href="/docs/cli/troubleshooting" />
+  <Card title="Real-World Scenarios" description="See the CLI in action across common production patterns." href="/docs/cli/real-world" />
+</Cards>

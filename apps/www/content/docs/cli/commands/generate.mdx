@@ -1,0 +1,302 @@
+---
+title: generate
+description: Scaffold features, controllers, procedures, client schema, OpenAPI docs, and typed callers. Schema-aware generation with Prisma support.
+---
+
+## `igniter generate`
+
+The `generate` command scaffolds code from templates and schemas. It has six subcommands — each focused on a specific code generation task.
+
+```bash
+igniter generate <subcommand> [options]
+```
+
+---
+
+## Subcommands
+
+| Subcommand | Description |
+|-----------|-------------|
+| `feature` | Scaffold a complete feature module (controller + procedure + interfaces) |
+| `controller` | Scaffold a controller within an existing feature |
+| `procedure` | Scaffold a procedure within an existing feature |
+| `docs` | Generate an OpenAPI specification from your router |
+| `schema` | Generate a TypeScript client schema from your router |
+| `caller` | Generate a typed Igniter Caller from an OpenAPI spec |
+
+---
+
+## `generate feature`
+
+Creates a complete feature module — controllers, procedures, and interfaces. Can generate from a **Prisma schema model** for schema-aware, type-safe scaffolding.
+
+```bash
+igniter generate feature [name] [options]
+```
+
+### Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `[name]` | `string` | Feature name (kebab-case). If omitted, prompts interactively |
+| `--schema` | `string` | Generate from a schema provider (e.g., `prisma:User`) |
+| `--schema-path` | `string` | Custom path to the schema file |
+
+### Schema-Aware Generation
+
+When you pass `--schema prisma:User`, the CLI:
+1. Finds the **PrismaSchemaProvider** in the schema provider registry
+2. Parses the `prisma:User` option → extracts `modelName = "User"`
+3. Validates that the `User` model exists in your Prisma schema
+4. Reads column names, types, and relations from the model
+5. Generates a controller with Zod-validated CRUD routes
+6. Generates procedures with Prisma queries matching your schema
+7. Generates interfaces with types derived from the model
+
+```bash
+# Schema-aware generation from a Prisma model
+igniter generate feature users --schema prisma:User
+
+# With a custom schema file path
+igniter generate feature users --schema prisma:User --schema-path ./prisma/custom/schema.prisma
+```
+
+### Empty Feature
+
+Without `--schema`, the CLI generates an empty feature skeleton:
+
+```bash
+igniter generate feature products
+```
+
+This creates:
+
+```
+src/features/products/
+├── controllers/
+│   └── products.controller.ts    ← Empty controller with base scaffold
+├── procedures/
+│   └── .gitkeep
+└── products.interfaces.ts        ← Empty interfaces file
+```
+
+### Interactive Mode
+
+When no name is provided, the CLI prompts interactively. If a Prisma schema is detected, it offers to generate from an available model:
+
+```bash
+igniter generate feature
+# ? Generate from an available schema provider?
+#   ○ No, create an empty feature
+#   ● Prisma
+# ? Which model would you like to scaffold?
+#   ● User
+#   ○ Post
+#   ○ Comment
+```
+
+---
+
+## `generate controller`
+
+Scaffolds a controller within an existing feature.
+
+```bash
+igniter generate controller [name] [options]
+```
+
+### Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `[name]` | `string` | Controller name in kebab-case (e.g., `profile`) |
+| `-f, --feature` | `string` | Target feature name |
+
+```bash
+# Scaffold a profile controller inside the users feature
+igniter generate controller profile --feature users
+```
+
+The generated controller uses the `empty.controller.hbs` template and exports a class with `ControllerDisplayName` and `controllerRoute` derived from the name.
+
+---
+
+## `generate procedure`
+
+Scaffolds a procedure within an existing feature. Removes the `.gitkeep` placeholder from the procedures directory.
+
+```bash
+igniter generate procedure [name] [options]
+```
+
+### Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `[name]` | `string` | Procedure name in kebab-case (e.g., `send-welcome-email`) |
+| `-f, --feature` | `string` | Target feature name |
+
+```bash
+# Scaffold a send-welcome-email procedure inside the users feature
+igniter generate procedure send-welcome-email --feature users
+```
+
+---
+
+## `generate docs`
+
+Generates an OpenAPI 3.x specification from your Igniter router.
+
+```bash
+igniter generate docs [options]
+```
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--router` | `string` | `src/igniter.router.ts` | Path to the router file |
+| `--output` | `string` | `./src/docs` | Output directory for the OpenAPI spec |
+
+```bash
+# Default paths
+igniter generate docs
+
+# Custom paths
+igniter generate docs --router ./custom/igniter.router.ts --output ./public/api-docs
+```
+
+---
+
+## `generate schema`
+
+Generates a TypeScript client schema from your Igniter router. This schema provides full type inference for client-side API calls.
+
+```bash
+igniter generate schema [options]
+```
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--router` | `string` | `src/igniter.router.ts` | Path to the router file |
+| `--output` | `string` | `src/igniter.schema.ts` | Output path for the schema file |
+
+```bash
+# Default paths
+igniter generate schema
+
+# Custom output
+igniter generate schema --output ./src/generated/api.schema.ts
+```
+
+---
+
+## `generate caller`
+
+Generates a fully typed, Zod-validated **Igniter Caller** from any OpenAPI 3.x specification. The caller includes typed request methods, Zod schema validation, and automatic response parsing.
+
+```bash
+igniter generate caller [options]
+```
+
+### Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--name` | `string` | Name prefix for generated schemas and caller export |
+| `--url` | `string` | URL to a remote OpenAPI document |
+| `--path` | `string` | Local path to an OpenAPI document |
+| `--output` | `string` | Output directory (defaults to `src/callers/<hostname>`) |
+
+### From a Remote URL
+
+```bash
+igniter generate caller --name stripe --url https://api.stripe.com/openapi.json
+```
+
+### From a Local File
+
+```bash
+igniter generate caller --name internal --path ./openapi.json
+```
+
+### Interactive Mode
+
+Without `--url` or `--path`, the CLI prompts:
+
+```bash
+igniter generate caller
+# ? Caller name (e.g., facebook, billing) stripe
+# ? Where is your OpenAPI spec? Remote URL
+# ? OpenAPI URL https://api.stripe.com/openapi.json
+```
+
+### Generated Output
+
+The command produces two files:
+
+```
+src/callers/api.stripe.com/
+├── schema.ts    ← Zod schemas for all request/response types
+└── index.ts     ← Preconfigured IgniterCaller instance
+```
+
+The schema file contains Zod schemas for every component in the OpenAPI spec. The caller file exports a preconfigured `IgniterCaller` with:
+
+- Base URL inferred from the OpenAPI `servers[0].url` or the source URL
+- All schemas registered in `strict` mode
+- Type-safe method calls for every path
+
+```typescript
+// Generated index.ts
+import { IgniterCaller } from "@igniter-js/caller";
+import { stripeCallerSchemas } from "./schema";
+
+export const stripeCaller = IgniterCaller.create()
+  .withBaseUrl("https://api.stripe.com")
+  .withSchemas(stripeCallerSchemas, { mode: "strict" })
+  .build();
+```
+
+<Callout type="warn">
+  Only **OpenAPI 3.x** documents are supported. Swagger 2.0 documents must be converted first.
+</Callout>
+
+---
+
+## Template Engine
+
+All `generate` subcommands use the **Handlebars template engine**. Templates are resolved from multiple candidate locations:
+
+1. `packages/cli/templates/` (bundled with the CLI)
+2. `node_modules/@igniter-js/new-cli/templates/` (installed dependency)
+3. `./templates/` (project-local overrides)
+
+### Custom Handlebars Helpers
+
+The CLI registers custom helpers available in all templates:
+
+| Helper | Example | Output |
+|--------|---------|--------|
+| `includes` | `{{#if (includes enabledAddOns "store")}}` | Boolean check |
+| `isEmpty` | `{{#if (isEmpty enabledAddOns)}}` | Empty check |
+| `isDefined` | `{{#if (isDefined addOnOptions.database)}}` | Defined check |
+| `join` | `{{join addOnOptions.auth.plugins ", "}}` | `"email, passkey, jwt"` |
+| `capitalizeSlug` | `{{capitalizeSlug projectName}}` | `"My App"` |
+| `get` | `{{#if (get addOnOptions "database.orm")}}` | Nested access |
+| `eq` | `{{#if (eq starter "nextjs")}}` | Equality check |
+| `camelCase` | `{{camelCase "two-factor"}}` | `"twoFactor"` |
+| `filterPlugins` | `{{#each (filterPlugins plugins)}}` | Iterate plugins |
+| `generatePluginImports` | `{{{generatePluginImports plugins}}}` | Import statements |
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="dev" description="Watch mode — auto-regenerate schema and docs as you code." href="/docs/cli/commands/dev" />
+  <Card title="Real-World Scenarios" description="Production patterns: generate callers, CI/CD pipelines, and team workflows." href="/docs/cli/real-world" />
+  <Card title="API Reference" description="Complete reference for every flag, option, and subcommand." href="/docs/cli/api-reference" />
+</Cards>

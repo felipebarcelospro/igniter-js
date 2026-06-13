@@ -1,0 +1,413 @@
+---
+title: Transport Adapters
+description: All 10 built-in transport adapters — Logger, HTTP, OTLP, Sentry, Slack, Discord, Telegram, Memory, Mock, and Store. Compare features, see configuration, and build custom adapters.
+---
+
+## Transport Adapters
+
+Transport adapters are **pluggable destinations** for telemetry events. Each adapter receives the event envelope and routes it to its target — a log file, a monitoring service, a chat platform, or your own backend.
+
+---
+
+## Adapter Comparison
+
+| Adapter | Use Case | Dependencies | Import Path |
+|---------|----------|-------------|-------------|
+| Logger | Console/file logging | None | `@igniter-js/telemetry/adapters` |
+| HTTP | Webhook POST to any URL | None | `@igniter-js/telemetry/adapters` |
+| OTLP | OpenTelemetry collector | None | `@igniter-js/telemetry/adapters` |
+| Sentry | Error monitoring | `@sentry/node` | `@igniter-js/telemetry/adapters` |
+| Slack | Team notifications | None | `@igniter-js/telemetry/adapters` |
+| Discord | Team notifications | None | `@igniter-js/telemetry/adapters` |
+| Telegram | Team notifications | None | `@igniter-js/telemetry/adapters` |
+| Memory | Testing/debugging | None | `@igniter-js/telemetry/adapters` |
+| Mock | Unit testing | None | `@igniter-js/telemetry/adapters` |
+| Store | Redis Streams persistence | `@igniter-js/store` | `@igniter-js/telemetry/adapters` |
+
+---
+
+## Logger Adapter
+
+Outputs events to any logger with `info()`, `warn()`, `error()`, and `debug()` methods.
+
+```typescript
+import { LoggerTransportAdapter } from "@igniter-js/telemetry/adapters";
+
+const logger = LoggerTransportAdapter.create({
+  logger: console,
+  format: "json",           // "json" | "pretty"
+  minLevel: "info",         // Minimum level to log
+  includeTimestamp: true,   // Include ISO timestamp
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `logger` | `object` | required | Any object with `info/warn/error/debug` methods |
+| `format` | `"json" \| "pretty"` | `"pretty"` | Output format |
+| `minLevel` | `string` | `"debug"` | Minimum level to log |
+| `includeTimestamp` | `boolean` | `true` | Include ISO 8601 timestamp |
+
+```typescript
+// JSON format output
+const jsonLogger = LoggerTransportAdapter.create({
+  logger: console,
+  format: "json",
+});
+
+// Filter to errors only
+const errorLogger = LoggerTransportAdapter.create({
+  logger: console,
+  format: "pretty",
+  minLevel: "error",
+});
+```
+
+---
+
+## HTTP Adapter
+
+Sends events as JSON via HTTP POST to any URL.
+
+```typescript
+import { HttpTransportAdapter } from "@igniter-js/telemetry/adapters";
+
+const http = HttpTransportAdapter.create({
+  url: "https://webhook.example.com/telemetry",
+  headers: {
+    Authorization: `Bearer ${process.env.TELEMETRY_TOKEN}`,
+    "X-Service-Name": "billing-api",
+  },
+  timeout: 4000,    // Request timeout in ms
+  retries: 2,       // Number of retries on failure
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `url` | `string` | required | Target webhook URL |
+| `headers` | `Record<string, string>` | `{}` | Custom HTTP headers |
+| `timeout` | `number` | `5000` | Request timeout in ms |
+| `retries` | `number` | `0` | Number of retries on failure |
+
+---
+
+## OTLP Adapter
+
+Sends events to an OpenTelemetry collector via OTLP HTTP.
+
+```typescript
+import { OtlpTransportAdapter } from "@igniter-js/telemetry/adapters";
+
+const otlp = OtlpTransportAdapter.create({
+  url: "http://localhost:4318/v1/logs",
+  headers: {
+    "x-api-key": process.env.OTEL_API_KEY ?? "",
+  },
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `url` | `string` | required | OTLP HTTP endpoint |
+| `headers` | `Record<string, string>` | `{}` | Custom headers |
+
+<Callout type="info">
+  The OTLP adapter sends events as **OTLP Logs** over HTTP. Point it at any OTEL collector (Jaeger, Grafana Tempo, Datadog Agent with OTLP ingest).
+</Callout>
+
+---
+
+## Sentry Adapter
+
+Forwards error-level events to Sentry for error monitoring.
+
+```typescript
+import * as Sentry from "@sentry/node";
+import { SentryTransportAdapter } from "@igniter-js/telemetry/adapters";
+
+Sentry.init({ dsn: process.env.SENTRY_DSN });
+
+const sentry = SentryTransportAdapter.create({
+  sentry: Sentry,
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `sentry` | `typeof Sentry` | required | Initialized Sentry SDK instance |
+
+<Callout type="info">
+  The Sentry adapter only forwards **error-level** events. Info, debug, and warn events are ignored. Initialize Sentry with `Sentry.init()` before creating the adapter.
+</Callout>
+
+---
+
+## Slack Adapter
+
+Posts events to a Slack channel via webhook.
+
+```typescript
+import { SlackTransportAdapter } from "@igniter-js/telemetry/adapters";
+
+const slack = SlackTransportAdapter.create({
+  webhookUrl: process.env.SLACK_WEBHOOK_URL ?? "",
+  minLevel: "error",                    // Only error+ events
+  username: "Igniter Bot",
+  iconEmoji: ":rotating_light:",
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `webhookUrl` | `string` | required | Slack incoming webhook URL |
+| `minLevel` | `string` | `"warn"` | Minimum event level to post |
+| `username` | `string` | `"Igniter Telemetry"` | Bot display name |
+| `iconEmoji` | `string` | `":bar_chart:"` | Bot icon emoji |
+
+---
+
+## Discord Adapter
+
+Posts events to a Discord channel via webhook.
+
+```typescript
+import { DiscordTransportAdapter } from "@igniter-js/telemetry/adapters";
+
+const discord = DiscordTransportAdapter.create({
+  webhookUrl: process.env.DISCORD_WEBHOOK_URL ?? "",
+  minLevel: "warn",
+  username: "Igniter Bot",
+  avatarUrl: "https://example.com/bot-avatar.png",
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `webhookUrl` | `string` | required | Discord webhook URL |
+| `minLevel` | `string` | `"warn"` | Minimum event level |
+| `username` | `string` | `"Igniter Telemetry"` | Bot display name |
+| `avatarUrl` | `string` | — | Bot avatar URL |
+
+---
+
+## Telegram Adapter
+
+Sends events to a Telegram chat via bot API.
+
+```typescript
+import { TelegramTransportAdapter } from "@igniter-js/telemetry/adapters";
+
+const telegram = TelegramTransportAdapter.create({
+  botToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
+  chatId: process.env.TELEGRAM_CHAT_ID ?? "",
+  minLevel: "error",
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `botToken` | `string` | required | Telegram bot token from @BotFather |
+| `chatId` | `string` | required | Target chat ID |
+| `minLevel` | `string` | `"error"` | Minimum event level |
+
+---
+
+## In-Memory Adapter
+
+Stores events in memory. Ideal for testing and debugging.
+
+```typescript
+import { InMemoryTransportAdapter } from "@igniter-js/telemetry/adapters";
+
+const memory = InMemoryTransportAdapter.create();
+
+const telemetry = IgniterTelemetry.create()
+  .withService("test")
+  .addTransport(memory)
+  .build();
+
+telemetry.emit("test.event.one", {
+  attributes: { "ctx.value": 1 },
+});
+telemetry.emit("test.event.two", {
+  attributes: { "ctx.value": 2 },
+});
+
+// Inspect captured events
+const events = memory.getEvents();
+console.log(events.length);       // 2
+console.log(events[0].name);      // "test.event.one"
+console.log(events[0].attributes); // { "ctx.value": 1 }
+
+// Clear events
+memory.clear();
+```
+
+| Method | Description |
+|--------|-------------|
+| `.getEvents()` | Returns all captured events |
+| `.clear()` | Clears all captured events |
+
+---
+
+## Mock Adapter
+
+Records events and provides assertion helpers. Designed for unit tests.
+
+```typescript
+import { MockTelemetryAdapter } from "@igniter-js/telemetry/adapters";
+
+const mock = MockTelemetryAdapter.create();
+
+const telemetry = IgniterTelemetry.create()
+  .withService("test")
+  .addTransport(mock)
+  .build();
+
+telemetry.emit("user.created", {
+  attributes: { "ctx.user.id": "usr_001" },
+});
+
+// Assertions
+expect(mock.getLastEvent()?.name).toBe("user.created");
+expect(mock.getLastEvent()?.attributes).toEqual({
+  "ctx.user.id": "usr_001",
+});
+```
+
+| Method | Description |
+|--------|-------------|
+| `.getLastEvent()` | Returns the most recent event |
+| `.getEvents()` | Returns all captured events |
+| `.clear()` | Clears captured events |
+
+---
+
+## Store Stream Adapter
+
+Persists events to Redis Streams via `@igniter-js/store`. Best for durable event storage and replay.
+
+```typescript
+import { IgniterStore } from "@igniter-js/store";
+import { StoreStreamTransportAdapter } from "@igniter-js/telemetry/adapters";
+
+const store = IgniterStore.create()
+  .withAdapter(redisAdapter)
+  .withNamespace("telemetry")
+  .build();
+
+const storeTransport = StoreStreamTransportAdapter.create({
+  store,
+  stream: "telemetry:events",
+  maxLen: 10000,   // Max stream length (capped)
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `store` | `IgniterStore` | required | Initialized store instance |
+| `stream` | `string` | `"telemetry:events"` | Redis Stream key |
+| `maxLen` | `number` | `10000` | Maximum stream length (capped) |
+
+<Callout type="info">
+  The Store adapter requires `@igniter-js/store` as a peer dependency. Install it separately: `npm install @igniter-js/store`.
+</Callout>
+
+---
+
+## Multiple Transports
+
+Add as many transports as you need — events fan out to all of them:
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withService("api")
+  .addTransport(LoggerTransportAdapter.create({ logger: console }))
+  .addTransport(HttpTransportAdapter.create({ url: "https://..." }))
+  .addTransport(SentryTransportAdapter.create({ sentry: Sentry }))
+  .addTransport(SlackTransportAdapter.create({ webhookUrl: "..." }))
+  .build();
+
+// All four transports receive every event
+telemetry.emit("payment.failed", {
+  level: "error",
+  error: { name: "PaymentError", message: "..." },
+});
+```
+
+<Callout type="warn">
+  If **all** transports fail for a given event, telemetry throws `TELEMETRY_TRANSPORT_FAILED`. Individual transport failures are silently logged but do not prevent other transports from receiving the event.
+</Callout>
+
+---
+
+## Custom Transport Adapter
+
+Implement the `IgniterTelemetryTransportAdapter` interface to create your own adapter:
+
+```typescript
+import type {
+  IgniterTelemetryTransportAdapter,
+  IgniterTelemetryEnvelope,
+  IgniterTelemetryTransportMeta,
+} from "@igniter-js/telemetry";
+
+class DatadogTransport implements IgniterTelemetryTransportAdapter {
+  readonly type = "datadog" as const;
+
+  async init(meta: IgniterTelemetryTransportMeta): Promise<void> {
+    // Optional: validate API key, open connection
+    console.log(`Datadog transport initialized for ${meta.service}`);
+  }
+
+  async handle(envelope: IgniterTelemetryEnvelope): Promise<void> {
+    await fetch("https://http-intake.logs.datadoghq.com/api/v2/logs", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "DD-API-KEY": process.env.DD_API_KEY!,
+      },
+      body: JSON.stringify({
+        ddsource: envelope.service,
+        ddtags: `env:${envelope.environment}`,
+        service: envelope.service,
+        message: envelope.name,
+        ...envelope,
+      }),
+    });
+  }
+
+  async flush(): Promise<void> {
+    // Optional: flush any buffered events
+  }
+
+  async shutdown(): Promise<void> {
+    // Optional: close connections, cleanup
+  }
+}
+
+// Use it
+const telemetry = IgniterTelemetry.create()
+  .withService("api")
+  .addTransport(new DatadogTransport())
+  .build();
+```
+
+### Adapter Interface
+
+| Method | Required | Description |
+|--------|----------|-------------|
+| `type` | Yes | Unique adapter identifier string |
+| `init(meta)` | No | Called during `.build()` — validate/set up |
+| `handle(envelope)` | Yes | Process a telemetry event |
+| `flush()` | No | Flush buffered events |
+| `shutdown()` | No | Graceful cleanup |
+
+---
+
+## Next Steps
+
+- [Sampling & Redaction](/docs/telemetry/sampling-redaction) — Control volume and protect PII
+- [Emitting Events](/docs/telemetry/emitting-events) — Attributes, levels, errors, and source metadata
+- [API Reference](/docs/telemetry/api-reference) — Complete API documentation

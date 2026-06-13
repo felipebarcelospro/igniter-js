@@ -1,0 +1,236 @@
+---
+title: API Reference
+description: Complete reference for IgniterCollectionsBuilder, IgniterCollectionModelBuilder, IgniterCollectionViewBuilder, and all manager types.
+---
+
+## API Reference
+
+Complete reference for all public builders, managers, and types in `@igniter-js/collections`.
+
+---
+
+## `IgniterCollectionsBuilder`
+
+The main entry point. Creates the collections manager.
+
+```typescript
+import { IgniterCollections } from '@igniter-js/collections';
+```
+
+### Static Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `IgniterCollections.create()` | `IgniterCollectionsBuilder<{}>` | Create a new builder instance |
+
+### Builder Methods
+
+| Method | Parameters | Returns | Description |
+|--------|-----------|---------|-------------|
+| `withAdapter(adapter)` | `IgniterCollectionAdapter` | Builder | Set the storage adapter (required) |
+| `withBasePath(path)` | `string \| string[]` | Builder | Set content root path(s) |
+| `addCollection(collection)` | `IgniterCollectionModelDefinition` | Builder with added type | Register a collection |
+| `addView(view)` | `IgniterCollectionViewDefinition` | Builder | Register a programmatic view |
+| `withWatcher(paths, opts?)` | `string \| string[], { collections?, views?, autoWatch? }` | Builder | Enable auto-discovery |
+| `withContext(factory)` | `() => unknown \| Promise<unknown>` | Builder | Inject dependencies into hooks |
+| `withGlobalHooks(hooks)` | `IgniterCollectionModelHooks` | Builder | Hooks for all collections |
+| `withTelemetry(telemetry)` | `IgniterTelemetryManager` | Builder | Observability integration |
+| `withLogger(logger)` | `IgniterLogger` | Builder | Custom logger |
+| `build()` | — | `IIgniterCollectionsManager` | Build the manager |
+
+### Returned Manager (`build()`)
+
+The returned manager provides:
+
+```typescript
+interface IIgniterCollectionsManager<TCollections> {
+  // Dynamic collection access (e.g., docs.posts.create())
+  [collectionName]: IIgniterCollectionModel;
+
+  // Subscribe to events
+  on(event, handler): IgniterCollectionSubscription;
+
+  // Manual refresh
+  refresh(): Promise<void>;
+
+  // Namespaces
+  readonly views: IIgniterCollectionViewManager;
+  readonly collections: IIgniterCollectionsAccessor;
+  readonly watcher: IIgniterCollectionWatcher;
+}
+```
+
+---
+
+## `IgniterCollectionModelBuilder`
+
+Defines a collection's schema, patterns, hooks, and sub-collections.
+
+```typescript
+import { IgniterCollectionModel } from '@igniter-js/collections';
+```
+
+### Static Methods
+
+| Method | Parameters | Returns | Description |
+|--------|-----------|---------|-------------|
+| `IgniterCollectionModel.create(name)` | `string` | Builder | Create a new collection builder |
+
+### Builder Methods
+
+| Method | Parameters | Returns | Description |
+|--------|-----------|---------|-------------|
+| `withPatterns(patterns)` | `string[]` | Builder | Set file patterns (e.g., `['posts/{id}.mdx']`) |
+| `withSchema(schema)` | `StandardSchemaV1` (Zod) | Builder with inferred type | Set frontmatter validation schema |
+| `onCreated(hook)` | `(ctx) => value \| false` | Builder | Hook before document creation |
+| `onUpdated(hook)` | `(ctx) => value \| false` | Builder | Hook before document update |
+| `onDeleted(hook)` | `(ctx) => boolean` | Builder | Hook before document deletion |
+| `onRead(hook)` | `(ctx) => value \| false` | Builder | Hook after document read |
+| `onList(hook)` | `(ctx) => values \| false` | Builder | Hook after document listing |
+| `collections.create(name)` | `string` | SubCollectionBuilder | Create a sub-collection |
+| `build()` | — | `IgniterCollectionModelDefinition` | Build the collection definition |
+
+---
+
+## Collection Manager (`IIgniterCollectionModel`)
+
+The CRUD interface returned by `docs.posts` (or `docs.collections.get('posts')`).
+
+### Methods
+
+| Method | Parameters | Returns |
+|--------|-----------|---------|
+| `create(args)` | `{ data, id?, select?, exclude? }` | `Promise<Document<TSchema>>` |
+| `findUnique(args)` | `{ where: { id }, select?, exclude? }` | `Promise<Document<TSchema> \| null>` |
+| `findMany(args?)` | `{ where?, orderBy?, take?, skip?, select?, exclude?, include? }` | `Promise<Document<TSchema>[]>` |
+| `update(args)` | `{ where: { id }, data, select?, exclude? }` | `Promise<Document<TSchema>>` |
+| `delete(args)` | `{ where: { id }, select?, exclude? }` | `Promise<Document<TSchema>>` |
+| `count(args?)` | `{ where? }` | `Promise<number>` |
+| `on(event, handler)` | `string, (data) => void` | `IgniterCollectionSubscription` |
+
+---
+
+## `IgniterCollectionViewBuilder`
+
+Defines a declarative view with data hooks and UI component trees.
+
+```typescript
+import { IgniterCollectionView } from '@igniter-js/collections';
+```
+
+### Static Methods
+
+| Method | Parameters | Returns | Description |
+|--------|-----------|---------|-------------|
+| `IgniterCollectionView.create(name)` | `string` | Builder | Create a new view builder |
+
+### Builder Methods
+
+| Method | Parameters | Returns | Description |
+|--------|-----------|---------|-------------|
+| `withTitle(title)` | `string` | Builder | Display title |
+| `withDescription(desc)` | `string` | Builder | View description |
+| `withMetadata(meta)` | `Record<string, any>` | Builder | UI metadata (icon, order, etc.) |
+| `withData(hook)` | `(ctx) => Promise<any>` | Builder | Data hook (required) |
+| `withTree(tree)` | `ViewNode[]` | Builder | Component tree |
+| `addAction(name, action)` | `string, ViewAction` | Builder | Executable action |
+| `build()` | — | `IgniterCollectionViewDefinition` | Build view definition |
+
+---
+
+## `IgniterCollectionsAccessor`
+
+Provides explicit access to collection managers.
+
+```typescript
+interface IIgniterCollectionsAccessor<TCollections> {
+  get(name): IIgniterCollectionModel;   // Get a collection manager
+  list(): Array<{ name, patterns, schema, source }>;  // List all collections
+  entries(): Record<string, { name, patterns, schema, source }>;
+}
+```
+
+---
+
+## `IgniterCollectionWatcher`
+
+Controls the file watcher.
+
+```typescript
+interface IIgniterCollectionWatcher {
+  start(): Promise<boolean>;  // Start watching
+  stop(): void;               // Stop watching
+  readonly isWatching: boolean; // Current state
+}
+```
+
+---
+
+## Where Clause Operators
+
+### Scalar Operators (`IgniterCollectionScalarFilterOperators<T>`)
+
+| Operator | Type | Description |
+|----------|------|-------------|
+| `equals` | `T` | Exact match |
+| `not` | `T` | Not equal |
+| `in` | `T[]` | In array of values |
+| `notIn` | `T[]` | Not in array |
+| `lt` | `T` | Less than |
+| `lte` | `T` | Less than or equal |
+| `gt` | `T` | Greater than |
+| `gte` | `T` | Greater than or equal |
+| `contains` | `string` | Substring match (strings only) |
+| `startsWith` | `string` | Starts with (strings only) |
+| `endsWith` | `string` | Ends with (strings only) |
+
+### Array Operators (`IgniterCollectionArrayFilterOperators<T>`)
+
+| Operator | Type | Description |
+|----------|------|-------------|
+| `has` | `T` | Array contains value |
+| `hasEvery` | `T[]` | Array contains ALL values |
+| `hasSome` | `T[]` | Array contains at least ONE value |
+| `isEmpty` | `boolean` | Array is empty or not |
+| `length` | `number` | Array length equals |
+
+### Search Filter (`IgniterCollectionSearchFilter<T>`)
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `term` | `string \| string[]` | required | Search terms |
+| `fields` | `SearchFields<T>` | Common fields | Field weights and fuzziness |
+| `threshold` | `number` (0-1) | `0.2` | Minimum score |
+| `fuzzy` | `boolean` | `false` | Enable fuzzy matching |
+| `includeSubCollections` | `boolean` | `false` | Search sub-collections |
+
+---
+
+## Error Codes
+
+All codes exported from `IGNITER_COLLECTION_ERROR_CODES`:
+
+| Code | Description |
+|------|-------------|
+| `COLLECTION_ADAPTER_REQUIRED` | Adapter not configured |
+| `COLLECTION_NOT_FOUND` | Collection not in registry |
+| `COLLECTION_DOCUMENT_NOT_FOUND` | Document not found at path |
+| `COLLECTION_VALIDATION_ERROR` | Schema validation failed |
+| `COLLECTION_HOOK_CANCELLED` | Hook returned false |
+| `COLLECTION_PARSE_ERROR` | Failed to parse frontmatter |
+| `COLLECTION_WRITE_ERROR` | Failed to write document |
+| `COLLECTION_DELETE_ERROR` | Failed to delete document |
+| `COLLECTION_REGISTRY_ERROR` | Schema registry load failed |
+| `COLLECTION_VIEW_NOT_FOUND` | View not found |
+| `COLLECTION_ACTION_NOT_FOUND` | Action not found |
+| `COLLECTION_CONTEXT_FACTORY_ERROR` | Context factory failed |
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Troubleshooting" description="Common errors and how to fix them." href="/docs/collections/troubleshooting" />
+  <Card title="Best Practices" description="Patterns, anti-patterns, and performance tips." href="/docs/collections/best-practices" />
+  <Card title="Framework Integration" description="Next.js, Express, Astro, and Remix examples." href="/docs/collections/framework-integration" />
+</Cards>

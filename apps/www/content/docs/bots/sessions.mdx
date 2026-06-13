@@ -1,0 +1,374 @@
+---
+title: Sessions
+description: Persist conversational state across messages. Use in-memory storage for development, or plug in Redis, Prisma, or any custom backend for production.
+---
+
+## Sessions
+
+Sessions persist conversational state across multiple messages. They're essential for **multi-step workflows**, **form filling**, **shopping carts**, **onboarding flows**, and any interaction that spans more than one message.
+
+---
+
+## Architecture
+
+```
+Incoming Message
+    ↓
+Session Loader (auto-loads from store)
+    ↓
+Middleware Pipeline
+    ↓
+Command Handler (reads/writes ctx.session)
+    ↓
+Session Auto-Save (persists changes after handler completes)
+```
+
+Sessions are keyed by `userId:channelId` — each user has a separate session per chat.
+
+---
+
+## Quick Start
+
+```typescript
+import { IgniterBot, memoryStore } from '@igniter-js/bot';
+
+const bot = IgniterBot.create()
+  .withSessionStore(memoryStore())
+  // ... adapters, commands, etc.
+  .build();
+```
+
+Now every handler has access to `ctx.session`:
+
+```typescript
+builder.addCommand('start', {
+  name: 'start',
+  aliases: [],
+  description: 'Start onboarding',
+  help: 'Use /start to begin',
+  async handle(ctx) {
+    await ctx.session.update({ step: 'awaiting_name' });
+    await ctx.reply('Welcome! What is your name?');
+  },
+});
+```
+
+---
+
+## The BotSession Interface
+
+```typescript
+interface BotSession {
+  userId: string          // Unique user identifier
+  channelId: string       // Chat/channel identifier
+  data: Record<string, any> // Your application state
+  createdAt: Date         // Session creation timestamp
+  updatedAt: Date         // Last update timestamp
+  expiresAt?: Date        // Auto-cleanup on expiration
+}
+```
+
+---
+
+## BotSessionHelper (ctx.session)
+
+The `ctx.session` object extends `BotSession` with convenience methods:
+
+```typescript
+interface BotSessionHelper extends BotSession {
+  save(): Promise<void>
+  delete(): Promise<void>
+  update(data: Partial<Record<string, any>>): Promise<void>
+}
+```
+
+| Method | Description |
+|--------|-------------|
+| `ctx.session.data` | Read current session state |
+| `ctx.session.update({ key: value })` | Merge data into the session and auto-save |
+| `ctx.session.save()` | Explicitly persist the session |
+| `ctx.session.delete()` | Remove the session from the store |
+
+---
+
+## Multi-Step Workflow Example
+
+A complete onboarding flow using sessions:
+
+```typescript
+builder.addCommand('onboard', {
+  name: 'onboard',
+  aliases: ['setup'],
+  description: 'Start onboarding',
+  help: 'Use /onboard to begin setup',
+  async handle(ctx) {
+    await ctx.session.update({ step: 'name', data: {} });
+    await ctx.reply('Step 1/3: What is your name?');
+  },
+});
+
+builder.addMiddleware(async (ctx, next) => {
+  const step = ctx.session.data.step;
+
+  if (!step || ctx.message.content?.type === 'command') {
+    return next();
+  }
+
+  const text = ctx.message.content?.type === 'text'
+    ? ctx.message.content.content
+    : '';
+
+  switch (step) {
+    case 'name':
+      await ctx.session.update({
+        step: 'email',
+        data: { ...ctx.session.data, name: text },
+      });
+      await ctx.reply(`Nice to meet you, ${text}! Step 2/3: What is your email?`);
+      return; // Don't process commands during onboarding
+
+    case 'email':
+      await ctx.session.update({
+        step: 'confirm',
+        data: { ...ctx.session.data, email: text },
+      });
+      const data = ctx.session.data;
+      await ctx.reply(
+        `Step 3/3: Please confirm:\n\n` +
+        `Name: **${data.name}**\n` +
+        `Email: **${text}**\n\n` +
+        `Type /confirm to save or /cancel to discard.`,
+      );
+      return;
+
+    default:
+      return next();
+  }
+});
+
+builder.addCommand('confirm', {
+  name: 'confirm',
+  aliases: ['yes', 'ok'],
+  description: 'Confirm onboarding data',
+  help: 'Use /confirm to save your information',
+  async handle(ctx) {
+    if (ctx.session.data.step !== 'confirm') {
+      await ctx.reply('No pending confirmation. Use /onboard to start.');
+      return;
+    }
+
+    await saveUser(ctx.session.data);
+    await ctx.session.delete();
+    await ctx.reply('✅ Your profile has been saved! Welcome aboard.');
+  },
+});
+```
+
+---
+
+## Memory Session Store
+
+The built-in `MemorySessionStore` is suitable for **development and single-instance deployments**:
+
+```typescript
+import { memoryStore } from '@igniter-js/bot';
+
+const store = memoryStore({
+  cleanupIntervalMs: 60_000, // Clean expired sessions every 60 seconds (default)
+});
+
+builder.withSessionStore(store);
+```
+
+Features:
+- In-memory `Map` storage — fast but ephemeral
+- Automatic expired session cleanup
+- `store.size()` to check active session count
+- `store.destroy()` to stop cleanup interval
+
+<Callout type="warn">
+  Memory sessions are lost on process restart. For production, use a persistent store.
+</Callout>
+
+---
+
+## Custom Session Stores
+
+Implement the `BotSessionStore` interface to use any storage backend:
+
+```typescript
+interface BotSessionStore {
+  get(userId: string, channelId: string): Promise<BotSession | null>
+  set(userId: string, channelId: string, session: BotSession): Promise<void>
+  delete(userId: string, channelId: string): Promise<void>
+  clear(userId: string): Promise<void> // Delete all sessions for a user
+}
+```
+
+### Redis Example
+
+```typescript
+import type { BotSessionStore, BotSession } from '@igniter-js/bot';
+import { Redis } from 'ioredis';
+
+class RedisSessionStore implements BotSessionStore {
+  constructor(private redis: Redis, private prefix = 'bot:session:') {}
+
+  private key(userId: string, channelId: string): string {
+    return `${this.prefix}${userId}:${channelId}`;
+  }
+
+  async get(userId: string, channelId: string): Promise<BotSession | null> {
+    const raw = await this.redis.get(this.key(userId, channelId));
+    if (!raw) return null;
+
+    const session = JSON.parse(raw);
+    // Check expiration
+    if (session.expiresAt && new Date(session.expiresAt) < new Date()) {
+      await this.redis.del(this.key(userId, channelId));
+      return null;
+    }
+    return {
+      ...session,
+      createdAt: new Date(session.createdAt),
+      updatedAt: new Date(session.updatedAt),
+      expiresAt: session.expiresAt ? new Date(session.expiresAt) : undefined,
+    };
+  }
+
+  async set(userId: string, channelId: string, session: BotSession): Promise<void> {
+    const key = this.key(userId, channelId);
+    const ttl = session.expiresAt
+      ? Math.ceil((session.expiresAt.getTime() - Date.now()) / 1000)
+      : 86_400; // Default: 24 hours
+
+    await this.redis.setex(key, ttl, JSON.stringify({
+      ...session,
+      updatedAt: new Date(),
+    }));
+  }
+
+  async delete(userId: string, channelId: string): Promise<void> {
+    await this.redis.del(this.key(userId, channelId));
+  }
+
+  async clear(userId: string): Promise<void> {
+    const keys = await this.redis.keys(`${this.prefix}${userId}:*`);
+    if (keys.length > 0) {
+      await this.redis.del(...keys);
+    }
+  }
+}
+```
+
+Usage:
+
+```typescript
+import Redis from 'ioredis';
+
+const redis = new Redis(process.env.REDIS_URL!);
+const store = new RedisSessionStore(redis, 'mybot:session:');
+
+builder.withSessionStore(store);
+```
+
+### Prisma Example
+
+```typescript
+import type { BotSessionStore, BotSession } from '@igniter-js/bot';
+import { PrismaClient } from '@prisma/client';
+
+class PrismaSessionStore implements BotSessionStore {
+  constructor(private prisma: PrismaClient) {}
+
+  async get(userId: string, channelId: string): Promise<BotSession | null> {
+    const record = await this.prisma.botSession.findUnique({
+      where: { userId_channelId: { userId, channelId } },
+    });
+    if (!record) return null;
+
+    if (record.expiresAt && record.expiresAt < new Date()) {
+      await this.prisma.botSession.delete({ where: { id: record.id } });
+      return null;
+    }
+
+    return {
+      userId: record.userId,
+      channelId: record.channelId,
+      data: record.data as Record<string, any>,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      expiresAt: record.expiresAt ?? undefined,
+    };
+  }
+
+  async set(userId: string, channelId: string, session: BotSession): Promise<void> {
+    await this.prisma.botSession.upsert({
+      where: { userId_channelId: { userId, channelId } },
+      create: {
+        userId,
+        channelId,
+        data: session.data,
+        expiresAt: session.expiresAt,
+      },
+      update: {
+        data: session.data,
+        expiresAt: session.expiresAt,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  async delete(userId: string, channelId: string): Promise<void> {
+    await this.prisma.botSession.deleteMany({ where: { userId, channelId } });
+  }
+
+  async clear(userId: string): Promise<void> {
+    await this.prisma.botSession.deleteMany({ where: { userId } });
+  }
+}
+```
+
+---
+
+## Session Expiration
+
+Set `expiresAt` on sessions for automatic cleanup:
+
+```typescript
+async handle(ctx) {
+  await ctx.session.update({
+    step: 'checkout',
+    cart: items,
+  });
+
+  // Session expires in 30 minutes (for abandoned carts)
+  ctx.session.expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  await ctx.session.save();
+}
+```
+
+The memory store includes a background cleanup interval. Custom stores should handle expiration in their `get()` method by checking `expiresAt`.
+
+---
+
+## Best Practices
+
+- ✅ **Use `ctx.session.update()`** instead of modifying `ctx.session.data` directly — it auto-saves
+- ✅ **Set expiration** for time-sensitive flows (checkout, verification codes)
+- ✅ **Use a persistent store** (Redis, Prisma) in production — memory store loses data on restart
+- ✅ **Keep session data small** — avoid storing large objects; use IDs and fetch from database
+- ✅ **Clear sessions** when a flow completes (`ctx.session.delete()`)
+- ❌ **Don't store sensitive data** in sessions without encryption
+- ❌ **Don't use sessions as a database** — they're for temporary conversational state
+- ❌ **Don't share session stores across unrelated bots** — use a prefix or separate Redis DB
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Framework Integration" description="Wire up your bot with Next.js, Express, and Fastify." href="/docs/bots/framework-integration" />
+  <Card title="Real-World Examples" description="Complete production bot scenarios with code." href="/docs/bots/real-world" />
+  <Card title="API Reference" description="Complete API documentation for all types and methods." href="/docs/bots/api-reference" />
+</Cards>

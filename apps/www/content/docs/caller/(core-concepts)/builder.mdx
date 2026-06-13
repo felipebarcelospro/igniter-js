@@ -1,20 +1,18 @@
 ---
 title: Request Builder
-description: Master the fluent API for building type-safe HTTP requests. Learn how to configure URLs, bodies, headers, timeouts, and more with chainable methods.
+description: Master the fluent API for building type-safe HTTP requests. Learn how to configure URLs, bodies, headers, timeouts, caching, retries, and more with chainable methods.
 ---
 
 ## Overview
 
-The **Request Builder** is the heart of Caller's developer experience. Instead of passing complex configuration objects, you chain methods together to build your request step by step. Each method returns the builder, enabling a fluid, readable syntax that makes your intentions crystal clear.
-
-This pattern isn't just about aesthetics—it provides better IntelliSense, catches errors at compile time, and makes complex requests trivially composable.
+The **Request Builder** is the heart of Caller's developer experience. Instead of passing complex configuration objects, you chain methods together to build your request step by step. Each method returns the builder, enabling a fluid, readable syntax.
 
 ```typescript
 const response = await api.post('/users')
   .body({ name: 'John', email: 'john@example.com' })
   .headers({ 'X-Idempotency-Key': crypto.randomUUID() })
   .timeout(5000)
-  .retry({ attempts: 3 })
+  .retry(3, { backoff: 'exponential' })
   .execute();
 ```
 
@@ -24,29 +22,22 @@ Every method in the chain is optional. Use only what you need.
 
 ## Starting a Request
 
-Requests begin by calling an HTTP method on your API client. This returns a `IgniterCallerRequestBuilder` instance:
+Requests begin by calling an HTTP method on your API client:
 
 ```typescript
-// GET request
-const builder = api.get('/users');
-
-// POST request  
-const builder = api.post('/users');
-
-// PUT request
-const builder = api.put('/users/:id');
-
-// PATCH request
-const builder = api.patch('/users/:id');
-
-// DELETE request
-const builder = api.delete('/users/:id');
+// All methods return an IgniterCallerRequestBuilder
+const getBuilder = api.get('/users');
+const postBuilder = api.post('/users');
+const putBuilder = api.put('/users/:id');
+const patchBuilder = api.patch('/users/:id');
+const deleteBuilder = api.delete('/users/:id');
+const headBuilder = api.head('/status');
 ```
 
-The HTTP method is locked once you start—you can't change a GET to a POST later. This ensures type safety throughout the chain.
+The HTTP method is locked once you start — you can't change a GET to a POST later. This ensures type safety throughout the chain.
 
 <Callout type="info" title="URL Parameters">
-  Notice the `:id` syntax? Caller supports URL parameters that you fill in with `.params()`. More on this below.
+  The `:id` syntax lets you define parameterized URLs. Fill them in with `.params()`. Extra params become query string parameters.
 </Callout>
 
 ---
@@ -54,28 +45,40 @@ The HTTP method is locked once you start—you can't change a GET to a POST late
 ## Core Methods
 
 <Accordions>
-  <Accordion title=".params(params: Record<string, string | number | boolean>)">
-    Fills in URL parameters (path variables) and query string parameters in your endpoint.
-    
+  <Accordion title=".url(url: string)">
+    Sets the request URL or path. Useful when the URL isn't known at the time you call the HTTP method.
+
     ```typescript
-    // Path variables: /users/:id/posts/:postId
+    const result = await api.get()
+      .url('/users')
+      .params({ page: 1 })
+      .execute();
+    ```
+  </Accordion>
+
+  <Accordion title=".params(params)">
+    Fills in URL path parameters and query string parameters.
+
+    ```typescript
+    // Path parameters: /users/:id/posts/:postId
     await api.get('/users/:id/posts/:postId')
       .params({ id: '123', postId: '456' })
       .execute();
     // Final URL: /users/123/posts/456
 
-    // Query parameters: /users?page=1&limit=20
+    // Query string: extra params become query parameters
     await api.get('/users')
-      .params({ page: 1, limit: 20 })
+      .params({ page: 1, limit: 20, status: 'active' })
       .execute();
+    // Final URL: /users?page=1&limit=20&status=active
     ```
-    
-    If you're using schemas, TypeScript will require all path parameters to be provided. Any extra parameters are automatically appended as query string parameters.
+
+    When using schemas, TypeScript enforces that all path parameters are provided.
   </Accordion>
-  
-  <Accordion title=".body(data: T)">
-    Sets the request body for POST, PUT, and PATCH requests. The body is automatically serialized to JSON for objects and arrays.
-    
+
+  <Accordion title=".body(data)">
+    Sets the request body for POST, PUT, and PATCH requests. Objects and arrays are automatically serialized to JSON.
+
     ```typescript
     await api.post('/users')
       .body({
@@ -84,24 +87,26 @@ The HTTP method is locked once you start—you can't change a GET to a POST late
       })
       .execute();
     ```
-    
-    **Type Safety:** If you have schemas defined, TypeScript validates the body payload.
-    
-    **Raw Bodies:** For FormData, Blobs, or other types, use the same `.body()` method. Caller automatically detects raw types and sets headers correctly.
-    
+
+    **Raw Bodies:** For FormData, Blobs, URLSearchParams, or other types, use the same `.body()` method. Caller detects the body type and sets `Content-Type` automatically.
+
     ```typescript
+    // FormData — Content-Type: multipart/form-data
     const formData = new FormData();
     formData.append('file', file);
-    
-    await api.post('/upload')
-      .body(formData)
-      .execute();
+    await api.post('/upload').body(formData).execute();
+
+    // URLSearchParams — Content-Type: application/x-www-form-urlencoded
+    const params = new URLSearchParams({ username: 'john', password: 'secret' });
+    await api.post('/login').body(params).execute();
     ```
+
+    **GET with body:** For GET and HEAD requests, body data is automatically converted to query parameters.
   </Accordion>
-  
-  <Accordion title=".headers(headers: Record<string, string>)">
-    Adds headers to the request. These merge with (and override) default headers from the client configuration.
-    
+
+  <Accordion title=".headers(headers)">
+    Adds per-request headers. These merge with (and override) default headers from the client configuration.
+
     ```typescript
     await api.post('/orders')
       .headers({
@@ -111,39 +116,31 @@ The HTTP method is locked once you start—you can't change a GET to a POST late
       .body(orderData)
       .execute();
     ```
-    
+
     **Header Precedence:**
     1. Default headers from `IgniterCaller.create().withHeaders()`
     2. Per-request headers from `.headers()`
-    3. Auto-generated headers (Content-Type, Accept)
-    
+    3. Auto-generated headers (`Content-Type`, etc.)
+
     Per-request headers override defaults with the same name.
   </Accordion>
-  
-  <Accordion title=".timeout(ms: number)">
-    Sets a timeout for this specific request in milliseconds. Overrides any default timeout.
-    
+
+  <Accordion title=".timeout(ms)">
+    Sets a timeout for this specific request in milliseconds (default: 30,000).
+
     ```typescript
     // Short timeout for health checks
-    await api.get('/health')
-      .timeout(2000)
-      .execute();
-    
+    await api.get('/health').timeout(2000).execute();
+
     // Long timeout for file uploads
-    await api.post('/upload')
-      .body(largeFile)
-      .timeout(60000)
-      .execute();
+    await api.post('/upload').body(largeFile).timeout(60_000).execute();
     ```
-    
-    When timeout is reached, the request fails with a `TIMEOUT` error:
-    
+
+    On timeout, the request fails with an `IGNITER_CALLER_TIMEOUT` error:
+
     ```typescript
-    const { error } = await api.get('/slow-endpoint')
-      .timeout(1000)
-      .execute();
-    
-    if (error?.code === 'TIMEOUT') {
+    const { error } = await api.get('/slow-endpoint').timeout(1000).execute();
+    if (error && IgniterCallerError.is(error) && error.code === 'IGNITER_CALLER_TIMEOUT') {
       console.log('Request timed out');
     }
     ```
@@ -155,85 +152,96 @@ The HTTP method is locked once you start—you can't change a GET to a POST late
 ## Resilience Methods
 
 <Accordions>
-  <Accordion title=".retry(options)">
-    Configures automatic retry behavior for transient failures.
-    
+  <Accordion title=".retry(maxAttempts, options?)">
+    Configures automatic retry behavior for transient failures. The first parameter is the **number of retry attempts** (total calls = 1 + maxAttempts).
+
     ```typescript
     await api.get('/external-api')
-      .retry({
-        attempts: 3,
+      .retry(3, {
         backoff: 'exponential',
-        baseDelay: 1000,
-        maxDelay: 10000,
-        retryOn: [502, 503, 504, 429],
+        baseDelay: 500,
+        retryOnStatus: [502, 503, 504],
       })
       .execute();
     ```
-    
+
     **Options:**
-    
+
     | Option | Type | Default | Description |
     |--------|------|---------|-------------|
-    | `attempts` | number | 3 | Maximum retry attempts |
-    | `backoff` | `'linear'` \| `'exponential'` | `'exponential'` | Delay strategy |
+    | `backoff` | `'linear'` \| `'exponential'` | `'linear'` | Delay strategy |
     | `baseDelay` | number | 1000 | Initial delay in ms |
-    | `maxDelay` | number | 30000 | Maximum delay between retries |
-    | `retryOn` | number[] | `[502, 503, 504]` | HTTP status codes to retry |
-    
+    | `retryOnStatus` | number[] | `[408, 429, 500, 502, 503, 504]` | Status codes to retry on |
+
     **Backoff Strategies:**
     - `linear`: delay = baseDelay × attempt
-    - `exponential`: delay = baseDelay × 2^attempt
-    
-    See [Retries](/docs/caller/retries) for advanced patterns.
+    - `exponential`: delay = baseDelay × 2^(attempt - 1)
+
+    <Callout type="warn" title="Non-idempotent requests">
+      Be cautious when retrying POST/PATCH requests. Use idempotency keys to prevent duplicate operations.
+    </Callout>
   </Accordion>
-  
-  <Accordion title=".fallback(value: T)">
-    Returns a fallback value if the request fails, instead of throwing or returning an error.
-    
+
+  <Accordion title=".fallback(factoryFn)">
+    Provides a **factory function** that returns a fallback value if all retries fail. The result is returned as `data` with no error.
+
     ```typescript
     const { data } = await api.get('/feature-flags')
-      .fallback({ darkMode: false, newUI: false })
+      .fallback(() => ({ darkMode: false, newUI: false }))
       .execute();
-    
+
     // data is always defined, even on failure
     console.log(data.darkMode);
     ```
-    
-    This is useful for non-critical data where you have sensible defaults.
+
+    <Callout type="info" title="Fallback is a factory, not a value">
+      Use `.fallback(() => defaultValue)` — the factory is only called if the request actually fails.
+    </Callout>
   </Accordion>
-  
-  <Accordion title=".cache(options)">
-    Enables response caching for this request.
-    
+
+  <Accordion title=".cache(strategy, key?)">
+    Sets the fetch `RequestCache` strategy and an optional custom cache key for programmatic invalidation.
+
     ```typescript
-    await api.get('/config')
-      .cache({ 
-        ttl: 3600, // 1 hour
-        key: 'app:config',
-      })
+    // Standard fetch cache strategies
+    await api.get('/data')
+      .cache('force-cache')
+      .execute();
+
+    // Custom key for manual invalidation
+    await api.get('/users')
+      .cache('default', 'users:list')
+      .stale(60_000)
       .execute();
     ```
-    
-    See [Caching](/docs/caller/caching) for cache strategies and invalidation.
+
+    Valid strategies: `'default'`, `'no-store'`, `'reload'`, `'force-cache'`, `'only-if-cached'`.
   </Accordion>
-  
-  <Accordion title=".stale(options)">
-    Implements stale-while-revalidate: returns cached data immediately while fetching fresh data in the background.
-    
+
+  <Accordion title=".stale(milliseconds)">
+    Enables response caching for the specified duration in milliseconds. Subsequent identical requests within the stale window return cached data without a network call.
+
     ```typescript
-    const { data, isStale } = await api.get('/users')
-      .stale({
-        maxAge: 60,           // Fresh for 60 seconds
-        staleWhileRevalidate: 300, // Stale but usable for 5 minutes
-      })
+    // Cache for 30 seconds
+    const { data } = await api.get('/users')
+      .stale(30_000)
       .execute();
-    
-    if (isStale) {
-      console.log('Data is from cache, fresh data loading...');
-    }
+
+    // Second call (within 30s) returns cached data instantly
+    const { data: cached } = await api.get('/users')
+      .stale(30_000)
+      .execute();
+
+    // Cache for 5 minutes with a custom key
+    const { data } = await api.get('/config')
+      .cache('default', 'app:config')
+      .stale(300_000)
+      .execute();
     ```
-    
-    This pattern dramatically improves perceived performance for frequently-accessed data.
+
+    <Callout type="info" title="Invalidation">
+      Cache is automatically invalidated after the stale time expires. For programmatic invalidation, use `IgniterCallerManager.on()` to observe mutations and clear relevant keys.
+    </Callout>
   </Accordion>
 </Accordions>
 
@@ -243,23 +251,24 @@ The HTTP method is locked once you start—you can't change a GET to a POST late
 
 <Accordions>
   <Accordion title=".responseType<T>(schema?)">
-    Explicitly sets the expected response type for TypeScript inference and optional runtime validation.
-    
+    Explicitly sets the expected response type for TypeScript inference. If a Zod or StandardSchemaV1 schema is passed, the response is **validated at runtime** (JSON/XML/CSV only). If only a type parameter is provided, it's for typing only with no runtime validation.
+
     ```typescript
     import { z } from 'zod';
-    
+
     const UserSchema = z.object({
       id: z.string(),
       name: z.string(),
     });
-    
-    // With schema: validates JSON response at runtime
+
+    // With Zod schema — validates at runtime (only for JSON/XML/CSV)
     const { data } = await api.get('/users/:id')
       .params({ id: '123' })
       .responseType(UserSchema)
       .execute();
-    
-    // With type marker: typing only, no validation
+    // data is validated and typed
+
+    // With type marker — typing only, no validation
     const { data: blob } = await api.get('/files/:id')
       .responseType<Blob>()
       .execute();
@@ -269,6 +278,8 @@ The HTTP method is locked once you start—you can't change a GET to a POST late
       .responseType<ReadableStream>()
       .execute();
     ```
+
+    **Content-Type Detection:** Caller auto-detects the response content type from headers. Schema validation only runs for text-based content types (`application/json`, `text/xml`/`application/xml`, `text/csv`). Binary responses are returned as-is.
   </Accordion>
 </Accordions>
 
@@ -276,50 +287,74 @@ The HTTP method is locked once you start—you can't change a GET to a POST late
 
 ## Executing Requests
 
-The `.execute()` method sends the request and returns a Promise with the result:
+The `.execute()` method sends the request and returns a Promise:
 
 ```typescript
 const result = await api.get('/users').execute();
 ```
 
-The result object contains:
+### Response Envelope
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `data` | `T \| null` | Parsed response data (null on error) |
-| `error` | `IgniterCallerError \| null` | Error object (null on success) |
-| `status` | `number` | HTTP status code |
-| `headers` | `Headers` | Response headers |
-| `isStale` | `boolean` | True if data came from stale cache |
+| `data` | `T \| undefined` | Parsed response body. Undefined on error. |
+| `error` | `IgniterError \| undefined` | Error object. Undefined on success. |
+| `status` | `number \| undefined` | HTTP status code. |
+| `headers` | `Headers \| undefined` | Response headers. |
 
 ### Error Handling Patterns
 
 ```typescript
-// Pattern 1: Check error property
+// Pattern 1: Guard clause (most common)
 const { data, error } = await api.get('/users').execute();
 if (error) {
   console.error(`${error.code}: ${error.message}`);
   return;
 }
-console.log(data); // TypeScript knows data is not null
+console.log(data); // TypeScript narrows data to T
 
-// Pattern 2: Destructure with defaults
-const { data = [], error } = await api.get('/users').execute();
-// data is always an array
+// Pattern 2: Fallback for safe defaults
+const { data } = await api.get('/optional-data')
+  .fallback(() => ({ default: true }))
+  .execute();
+// data is always defined
 
-// Pattern 3: Throw on error
-const { data, error } = await api.get('/users').execute();
-if (error) throw error;
+// Pattern 3: Match on status
+const result = await api.post('/users').body(payload).execute();
+switch (result.status) {
+  case 201: return result.data;
+  case 400: throw new ValidationError(result.error!);
+  case 409: throw new ConflictError(result.error!);
+  default: throw result.error;
+}
 ```
+
+---
+
+## Execution Pipeline
+
+When you call `.execute()`, Caller runs through this pipeline:
+
+1. **Cache Check** — If `.stale()` is set and a cached response exists, return it immediately
+2. **Request Interceptors** — Run all registered request interceptors in order
+3. **Schema Validation (Request)** — If schemas are configured, validate the request body
+4. **Fetch with Retry** — Send the request; retry on failure according to `.retry()` config
+5. **Response Parsing** — Auto-detect content type and parse (JSON, text, blob, etc.)
+6. **Schema Validation (Response)** — If schemas are configured and content type is validatable, validate the response
+7. **Response Interceptors** — Run all registered response interceptors in order
+8. **Cache Store** — If `.stale()` is set and the request succeeded, store in cache
+9. **Fallback** — If the request failed and `.fallback()` is configured, return the fallback value
+10. **Telemetry Emission** — Emit success/error telemetry events
 
 ---
 
 ## Complete Example
 
-Here's a real-world example combining multiple builder methods:
+Here's a production-ready example combining multiple builder methods:
 
 ```typescript
 import { api } from '@/lib/api';
+import { IgniterCallerError } from '@igniter-js/caller';
 
 async function createOrder(items: CartItem[], userId: string) {
   const { data, error, status } = await api.post('/orders')
@@ -337,24 +372,24 @@ async function createOrder(items: CartItem[], userId: string) {
     .headers({
       'X-Idempotency-Key': `order-${userId}-${Date.now()}`,
     })
-    .timeout(10000)
-    .retry({
-      attempts: 2,
-      retryOn: [502, 503],
+    .timeout(10_000)
+    .retry(2, {
+      backoff: 'linear',
+      retryOnStatus: [502, 503],
     })
     .execute();
-  
+
   if (error) {
-    if (error.status === 400) {
-      return { success: false, message: 'Invalid order data' };
+    if (status === 400) {
+      return { success: false, message: 'Invalid order data', details: error.details };
     }
-    if (error.status === 409) {
+    if (status === 409) {
       return { success: false, message: 'Duplicate order' };
     }
-    throw error; // Unexpected error
+    throw error; // Unexpected error — propagate
   }
-  
-  return { success: true, orderId: data.id };
+
+  return { success: true, orderId: data!.id };
 }
 ```
 
@@ -364,14 +399,22 @@ async function createOrder(items: CartItem[], userId: string) {
 
 <Callout type="success" title="Builder Method Order">
   While methods can be called in any order, we recommend this sequence for readability:
-  
-  1. `.params()` and `.query()` — URL configuration
-  2. `.body()` — Request payload
-  3. `.headers()` — Custom headers
-  4. `.timeout()` — Timing configuration
-  5. `.retry()` and `.cache()` — Resilience
-  6. `.responseType()` — Response typing
-  7. `.execute()` — Always last
+
+  1. `.url()` — URL configuration (if not set by HTTP method)
+  2. `.params()` — Path and query parameters
+  3. `.body()` — Request payload
+  4. `.headers()` — Custom headers
+  5. `.timeout()` — Timing configuration
+  6. `.retry()`, `.cache()`, `.stale()` — Resilience
+  7. `.responseType()` — Response typing
+  8. `.execute()` — Always last
+</Callout>
+
+<Callout type="warn" title="Common Mistakes">
+  - **Don't** call `.execute()` before `.retry()` — the request executes immediately
+  - **Don't** use `.query()` — it doesn't exist. Use `.params()` for both path and query params
+  - **Do** use `.fallback(() => value)` — it's a factory function, not a plain value
+  - **Do** check for `error` before accessing `data` — `data` is `undefined` on failure
 </Callout>
 
 ---
@@ -381,7 +424,7 @@ async function createOrder(items: CartItem[], userId: string) {
 <Cards>
   <Card
     title="Caller Manager"
-    description="Learn about the runtime engine and global configuration"
+    description="Learn about the runtime engine, batch requests, and global events"
     href="/docs/caller/manager"
   />
   <Card
@@ -393,5 +436,10 @@ async function createOrder(items: CartItem[], userId: string) {
     title="Schema Validation"
     description="Add type-safe validation to your requests"
     href="/docs/caller/schemas"
+  />
+  <Card
+    title="API Reference"
+    description="Complete reference for all classes, methods, and types"
+    href="/docs/caller/api-reference"
   />
 </Cards>

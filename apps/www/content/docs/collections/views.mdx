@@ -1,0 +1,300 @@
+---
+title: Views
+description: Define data-driven views with component trees, data hooks, and executable actions. Build dashboards, tables, and analytics in pure TypeScript.
+---
+
+## Views
+
+Views are first-class, global objects that define how data is fetched, rendered, and interacted with. They live alongside collections and have unrestricted access to the full manager via the `withData` hook.
+
+---
+
+## View Anatomy
+
+A view has four core parts:
+
+```typescript
+import { IgniterCollectionView } from '@igniter-js/collections';
+
+const DashboardView = IgniterCollectionView.create('dashboard')
+  .withTitle('Analytics Dashboard')           // Display title
+  .withDescription('Key metrics and KPIs')     // Description
+  .withMetadata({ icon: 'chart', order: 1 })   // UI metadata
+  .withData(async ({ manager }) => {           // Data hook
+    const posts = await manager.posts.findMany();
+    return { posts, total: posts.length };
+  })
+  .withTree([                                   // Component tree
+    { component: 'Metric', valuePath: '/total' },
+    { component: 'Table', valuePath: '/posts' },
+  ])
+  .addAction('export', {                        // Actions
+    description: 'Export to CSV',
+    handler: async ({ manager, params }) => ({ success: true }),
+  })
+  .build();
+```
+
+---
+
+## The Data Hook (`withData`)
+
+The heart of every view. Receives the full `IIgniterCollectionsManager` and returns any data shape you need:
+
+```typescript
+.withData(async ({ manager }) => {
+  const [posts, pages, authors] = await Promise.all([
+    manager.posts.findMany({ where: { published: true }, take: 10 }),
+    manager.pages.findMany({ take: 20 }),
+    manager.authors.count(),
+  ]);
+
+  return {
+    recentPosts: posts,
+    pages,
+    authorCount: authors,
+    lastUpdated: new Date().toISOString(),
+  };
+})
+```
+
+The returned object becomes the data context for the component tree. The `valuePath` in each tree node references paths within this data object.
+
+---
+
+## The Component Tree (`withTree`)
+
+The component tree defines the UI structure. Each node has a `component` name and a `valuePath` that binds to data:
+
+```typescript
+.withTree([
+  {
+    component: 'Section',
+    title: 'Overview',
+    children: [
+      { component: 'Metric', valuePath: '/totalPosts', title: 'Total Posts' },
+      { component: 'Metric', valuePath: '/totalPages', title: 'Pages' },
+      { component: 'Metric', valuePath: '/totalAuthors', title: 'Authors' },
+    ],
+  },
+  {
+    component: 'Section',
+    title: 'Recent Posts',
+    children: [
+      { component: 'Table', valuePath: '/recentPosts' },
+    ],
+  },
+])
+```
+
+<Callout type="info">
+  Component names map to the centralized Fractal view component registry. Use `fractal views components` to list all available components and their accepted props.
+</Callout>
+
+---
+
+## Actions (`addAction`)
+
+Actions are executable functions bound to a view. They receive the manager, request params, and optional user context:
+
+```typescript
+const DashboardView = IgniterCollectionView.create('dashboard')
+  .withData(async ({ manager }) => {
+    const posts = await manager.posts.findMany({ take: 50 });
+    return { posts, total: posts.length };
+  })
+  .addAction('export', {
+    description: 'Export posts to CSV',
+    handler: async ({ manager, params }) => {
+      const { format = 'csv' } = params as { format?: string };
+      const posts = await manager.posts.findMany();
+
+      if (format === 'csv') {
+        const csv = convertToCSV(posts);
+        return { success: true, data: csv, contentType: 'text/csv' };
+      }
+
+      return { success: true, data: posts, contentType: 'application/json' };
+    },
+  })
+  .addAction('publishAll', {
+    description: 'Publish all draft posts',
+    handler: async ({ manager }) => {
+      const drafts = await manager.posts.findMany({
+        where: { published: false },
+      });
+
+      for (const draft of drafts) {
+        await manager.posts.update({
+          where: { id: draft.id },
+          data: { published: true },
+        });
+      }
+
+      return { success: true, count: drafts.length };
+    },
+  })
+  .build();
+```
+
+### Action Context
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `manager` | `IIgniterCollectionsManager` | Full access to all collections |
+| `params` | `Record<string, unknown>` | Parameters from the action call |
+| `context` | `unknown` | User-defined context from `withContext()` |
+
+---
+
+## Rendering Views
+
+Views are registered on the manager and can be rendered programmatically:
+
+```typescript
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .addCollection(Posts)
+  .addView(DashboardView)
+  .build();
+
+// Render a view
+const result = await docs.views.render('dashboard');
+
+console.log(result.data);   // { posts: [...], total: 42 }
+console.log(result.tree);   // Component tree nodes
+console.log(result.meta);   // { title, description, metadata }
+
+// Execute an action
+const actionResult = await docs.views.execute('dashboard', 'export', {
+  format: 'csv',
+});
+```
+
+---
+
+## Programmatic vs Watched Views
+
+Views can be defined two ways:
+
+### Programmatic (Builder API)
+
+```typescript
+const view = IgniterCollectionView.create('dashboard')
+  .withData(async ({ manager }) => ({ items: [] }))
+  .build();
+
+docs.addView(view);
+```
+
+### File-Based (Auto-Discovery)
+
+```typescript
+// .fractal/views/dashboard.view.ts
+export default {
+  name: 'dashboard',
+  title: 'Dashboard',
+  getData: async ({ manager }) => {
+    const posts = await manager.posts.findMany();
+    return { posts };
+  },
+  tree: [{ component: 'Table', valuePath: '/posts' }],
+};
+```
+
+```typescript
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withWatcher('.fractal', { views: '*.view.{ts,json}' })
+  .build();
+
+// Views auto-discovered from .fractal/views/*.view.ts
+```
+
+Programmatic views take precedence over watched views when there's a name conflict.
+
+---
+
+## Real-World Example: Content Dashboard
+
+```typescript
+const ContentDashboard = IgniterCollectionView.create('content-dashboard')
+  .withTitle('Content Dashboard')
+  .withDescription('Overview of all content across collections')
+  .withMetadata({ icon: 'layout-dashboard', order: 1 })
+  .withData(async ({ manager }) => {
+    const [posts, pages, drafts, featuredPosts] = await Promise.all([
+      manager.posts.findMany({
+        orderBy: { createdAt: 'desc' as const },
+        take: 10,
+        select: { id: true, title: true, author: true, published: true, createdAt: true },
+      }),
+      manager.pages.count(),
+      manager.posts.count({ where: { published: false } }),
+      manager.posts.findMany({
+        where: { published: true, featured: true },
+        take: 5,
+      }),
+    ]);
+
+    return {
+      totalPosts: await manager.posts.count(),
+      totalPages: pages,
+      draftCount: drafts,
+      recentPosts: posts,
+      featuredPosts,
+      lastUpdated: new Date().toISOString(),
+    };
+  })
+  .withTree([
+    {
+      component: 'Section',
+      title: 'Overview',
+      children: [
+        { component: 'Metric', valuePath: '/totalPosts', title: 'Total Posts' },
+        { component: 'Metric', valuePath: '/totalPages', title: 'Pages' },
+        { component: 'Metric', valuePath: '/draftCount', title: 'Drafts', variant: 'warning' },
+      ],
+    },
+    {
+      component: 'Section',
+      title: 'Featured Posts',
+      children: [
+        { component: 'Table', valuePath: '/featuredPosts' },
+      ],
+    },
+    {
+      component: 'Section',
+      title: 'Recent Posts',
+      children: [
+        { component: 'Table', valuePath: '/recentPosts' },
+      ],
+    },
+  ])
+  .addAction('createPost', {
+    description: 'Create a new draft post',
+    handler: async ({ manager, params }) => {
+      const { title, author } = params as { title: string; author: string };
+      const post = await manager.posts.create({
+        data: {
+          title,
+          author,
+          published: false,
+          tags: [],
+        },
+      });
+      return { success: true, post };
+    },
+  })
+  .build();
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Adapters" description="Choose the right storage adapter for your environment." href="/docs/collections/adapters" />
+  <Card title="Watcher" description="Auto-discover schemas and views with file watching." href="/docs/collections/watcher" />
+  <Card title="Advanced" description="Context injection, telemetry, and global hooks." href="/docs/collections/advanced" />
+</Cards>

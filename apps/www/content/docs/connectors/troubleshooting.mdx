@@ -1,0 +1,287 @@
+---
+title: Troubleshooting
+description: Common errors, their causes, and solutions when working with @igniter-js/connectors. Error codes, encryption issues, OAuth failures, and adapter problems.
+---
+
+## Troubleshooting
+
+This guide covers **common errors and solutions** when working with `@igniter-js/connectors`.
+
+---
+
+## Error Reference
+
+All connector errors extend `IgniterConnectorError` and include a stable `code` property. Catch them with:
+
+```typescript
+import { IgniterConnectorError } from "@igniter-js/connectors";
+
+try {
+  // connector operations
+} catch (error) {
+  if (IgniterConnectorError.isConnectorError(error)) {
+    console.log(`[${error.code}] ${error.message}`);
+  }
+}
+```
+
+### Connector Errors
+
+| Error Code | Cause | Fix |
+|------------|-------|-----|
+| `CONNECTOR_NOT_FOUND` | Connector key not registered in manager | Check `addConnector()` calls match the key used in `scope.action()` |
+| `CONNECTOR_NOT_CONNECTED` | No connection exists for this scope | Call `scoped.connect()` before `scoped.action()` |
+| `CONNECTOR_ALREADY_CONNECTED` | Connection already exists | Disconnect first or use `scoped.update()` to change config |
+| `CONNECTOR_DISABLED` | Connector is toggled off | Call `scoped.toggle("key", true)` to re-enable |
+| `CONNECTOR_CONFIG_INVALID` | Config validation failed | Check your Zod schema matches the config shape |
+
+### Action Errors
+
+| Error Code | Cause | Fix |
+|------------|-------|-----|
+| `CONNECTOR_ACTION_NOT_FOUND` | Action key doesn't exist on connector | Verify action key spelling matches `addAction()` calls |
+| `CONNECTOR_ACTION_INPUT_INVALID` | Input validation failed | Check input shape against the action's Zod schema |
+| `CONNECTOR_ACTION_OUTPUT_INVALID` | Handler returned invalid output | Fix handler to return shape matching output schema |
+
+### Scope Errors
+
+| Error Code | Cause | Fix |
+|------------|-------|-----|
+| `CONNECTOR_SCOPE_INVALID` | Scope key not registered | Add scope with `addScope()` before using it |
+| `CONNECTOR_SCOPE_IDENTIFIER_REQUIRED` | Required scope missing identity | Pass identity to `connectors.scope("key", "identity")` |
+
+### OAuth Errors
+
+| Error Code | Cause | Fix |
+|------------|-------|-----|
+| `CONNECTOR_OAUTH_NOT_CONFIGURED` | OAuth used but not configured | Add `.withOAuth()` to connector definition |
+| `CONNECTOR_OAUTH_STATE_INVALID` | State token expired or missing | Redirect user to authorization URL again (state expires in 10 minutes) |
+| `CONNECTOR_OAUTH_TOKEN_FAILED` | Token exchange failed | Check clientId/clientSecret, verify provider response |
+| `CONNECTOR_OAUTH_PARSE_TOKEN_FAILED` | Cannot parse token response | Use `parseTokenResponse` option for non-standard providers |
+| `CONNECTOR_OAUTH_REFRESH_FAILED` | Token refresh failed | Token may be revoked; prompt user to reconnect |
+
+### Webhook Errors
+
+| Error Code | Cause | Fix |
+|------------|-------|-----|
+| `CONNECTOR_WEBHOOK_NOT_CONFIGURED` | Webhook used but not configured | Add `.withWebhook()` to connector definition |
+| `CONNECTOR_WEBHOOK_VALIDATION_FAILED` | Payload doesn't match schema | Check webhook payload shape against schema |
+| `CONNECTOR_WEBHOOK_VERIFICATION_FAILED` | Signature verification failed | Check `verify` function and webhook secret |
+
+### Encryption Errors
+
+| Error Code | Cause | Fix |
+|------------|-------|-----|
+| `CONNECTOR_ENCRYPT_FAILED` | Encryption failed | Check `IGNITER_SECRET` is set (min 32 chars) |
+| `CONNECTOR_DECRYPT_FAILED` | Decryption failed | Same secret must be used for encrypt/decrypt |
+| `CONNECTOR_ENCRYPTION_SECRET_REQUIRED` | No encryption secret configured | Set `IGNITER_SECRET` environment variable |
+
+### Builder Errors
+
+| Error Code | Cause | Fix |
+|------------|-------|-----|
+| `CONNECTOR_BUILD_CONFIG_REQUIRED` | Missing config on connector | Add `.withConfig()` before `.build()` |
+| `CONNECTOR_BUILD_SCOPES_REQUIRED` | No scopes defined | Add at least one `.addScope()` |
+| `CONNECTOR_BUILD_CONNECTORS_REQUIRED` | No connectors registered | Add at least one `.addConnector()` |
+
+---
+
+## Common Issues
+
+### "Encryption: Secret not configured"
+
+**Symptom:** `CONNECTOR_ENCRYPTION_SECRET_REQUIRED` error when connecting or reading connectors.
+
+**Cause:** `IGNITER_SECRET` environment variable is not set.
+
+**Fix:**
+
+```bash
+# Generate a secret
+openssl rand -hex 32
+
+# Set in your environment
+export IGNITER_SECRET="your-64-character-hex-secret"
+
+# Or in .env
+IGNITER_SECRET=your-64-character-hex-secret
+```
+
+<Callout type="warn">
+  **Never commit `IGNITER_SECRET` to your repository.** Use environment variables or a secrets manager. If the secret changes, existing encrypted data becomes unreadable.
+</Callout>
+
+---
+
+### "Connector not connected even after connect()"
+
+**Symptom:** Connection appears to succeed but `scoped.get()` returns `null` or `scoped.list()` doesn't include the connector.
+
+**Cause:** Scope mismatch — calling `connect()` on a different scope than where you're reading.
+
+**Fix:**
+
+```typescript
+// ❌ Wrong: Different scopes
+const orgA = connectors.scope("organization", "org-a");
+const orgB = connectors.scope("organization", "org-b");
+
+await orgA.connect("telegram", config);
+const instances = await orgB.list(); // Empty! orgB doesn't have the connection
+
+// ✅ Right: Same scope
+const orgA = connectors.scope("organization", "org-a");
+await orgA.connect("telegram", config);
+const instances = await orgA.list(); // Includes telegram
+```
+
+---
+
+### "OAuth state invalid or expired"
+
+**Symptom:** `CONNECTOR_OAUTH_STATE_INVALID` error during OAuth callback.
+
+**Cause:** The state token expired (10-minute TTL) or was consumed already.
+
+**Fix:**
+
+1. **State expired** — Redirect user to re-authorize. The authorization flow must complete within 10 minutes.
+2. **State consumed twice** — Don't call the callback endpoint multiple times with the same state. Each state token is single-use.
+3. **CSRF attack** — If this happens unexpectedly, check for CSRF attempts. The state token prevents authorization code injection.
+
+---
+
+### "Prisma adapter: cannot find model"
+
+**Symptom:** Runtime error about missing model when using the Prisma adapter.
+
+**Cause:** Prisma model name doesn't match or schema not migrated.
+
+**Fix:**
+
+1. Verify the Prisma schema has the `Connector` model (or your custom name)
+2. Run `prisma generate`
+3. Run `prisma db push` or `prisma migrate dev`
+4. If using a custom model name, pass it to the adapter:
+
+```typescript
+IgniterConnectorPrismaAdapter.create(prisma, { model: "Integration" })
+```
+
+---
+
+### "Action handler hangs or times out"
+
+**Symptom:** Action calls never resolve.
+
+**Cause:** Handler Promise not resolving or infinite loop.
+
+**Fix:**
+
+1. Ensure handler returns a value (or void):
+
+```typescript
+// ❌ Bad: Never resolves
+handler: async () => {
+  await someAsyncOperation();
+  // Missing return!
+}
+
+// ✅ Good: Returns a value
+handler: async () => {
+  const result = await someAsyncOperation();
+  return result;
+}
+```
+
+2. Add timeout logic for external API calls:
+
+```typescript
+handler: async ({ input, config }) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    return response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+```
+
+---
+
+### "Types don't infer correctly"
+
+**Symptom:** TypeScript shows `any` or `unknown` for action inputs/outputs.
+
+**Cause:** Schema library or TypeScript version issue.
+
+**Fix:**
+
+1. Use **Zod 3+** — the most tested schema library
+2. Enable strict mode in `tsconfig.json`
+3. Ensure `moduleResolution` is set to `bundler` or `node16`
+4. Use TypeScript 5.6+ for `StandardSchemaV1` support
+
+```json
+// tsconfig.json
+{
+  "compilerOptions": {
+    "strict": true,
+    "moduleResolution": "bundler",
+    "module": "ESNext"
+  }
+}
+```
+
+---
+
+## Debugging Tips
+
+### Enable Logger
+
+Add a logger to see internal operations:
+
+```typescript
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(adapter)
+  .withLogger({
+    debug: (msg, ...args) => console.debug(`[CONNECTOR:debug] ${msg}`, ...args),
+    info: (msg, ...args) => console.info(`[CONNECTOR:info] ${msg}`, ...args),
+    warn: (msg, ...args) => console.warn(`[CONNECTOR:warn] ${msg}`, ...args),
+    error: (msg, ...args) => console.error(`[CONNECTOR:error] ${msg}`, ...args),
+  })
+  .build();
+```
+
+### Subscribe to Events
+
+Monitor all connector activity:
+
+```typescript
+connectors.on((event) => {
+  if (event.type === "error.occurred") {
+    console.error("Error event:", event);
+  }
+});
+```
+
+### Inspect Adapter Records
+
+Check what's actually stored:
+
+```typescript
+const adapter = connectors.getAdapter();
+const records = await adapter.list("organization", "org_123");
+console.log("Stored records:", records);
+```
+
+---
+
+## Next Steps
+
+- [API Reference](/docs/connectors/api-reference) — Full type and method reference
+- [Best Practices](/docs/connectors/best-practices) — Production patterns
+- [Events](/docs/connectors/events) — Event system debugging

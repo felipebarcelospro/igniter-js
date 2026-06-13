@@ -1,0 +1,295 @@
+---
+title: Emitting Events
+description: Master the three telemetry emit modes — direct, session, and scoped execution. Learn attributes, levels, error details, source metadata, and event envelope structure.
+---
+
+## Emitting Events
+
+The `emit()` method is the primary way to send telemetry events. It supports three distinct patterns — choose the right one for each scenario.
+
+---
+
+## The Three Emit Modes
+
+### Mode A: Direct Emit
+
+No session required. Each event stands alone. Best for background jobs, startup events, or one-off emissions.
+
+```typescript
+telemetry.emit("service.booted", {
+  attributes: { "ctx.service.startup_ms": 142 },
+});
+
+telemetry.emit("cache.warmed", {
+  level: "debug",
+  attributes: { "ctx.cache.keys_loaded": 1200 },
+});
+```
+
+### Mode B: Manual Session Handle
+
+Create a session, bind actor/scope, emit events, and end it. Best for request handlers that need explicit session control.
+
+```typescript
+const session = telemetry.session()
+  .actor("user", "usr_123", { role: "admin" })
+  .scope("organization", "org_456")
+  .attributes({ "ctx.request.id": "req_abc" });
+
+session.emit("user.profile.updated", {
+  attributes: { "ctx.user.field": "email" },
+});
+
+session.emit("user.notification.sent", {
+  attributes: { "ctx.notification.type": "email" },
+});
+
+await session.end();
+```
+
+### Mode C: Scoped Execution
+
+All events inside `run()` automatically inherit the session context via `AsyncLocalStorage`. Best for HTTP request handlers — no manual context passing.
+
+```typescript
+await telemetry.session()
+  .actor("user", "usr_123")
+  .scope("organization", "org_456")
+  .run(async () => {
+    // These events automatically carry user + org context
+    telemetry.emit("request.started", { ... });
+    await doWork();
+    telemetry.emit("request.completed", { ... });
+  });
+```
+
+<Callout type="info">
+  **Mode C is the recommended approach** for request-response cycles. It uses Node.js `AsyncLocalStorage` to maintain session context across async boundaries without explicit passing.
+</Callout>
+
+---
+
+## Event Levels
+
+Telemetry supports five severity levels, matching OpenTelemetry conventions:
+
+| Level | Typical Use | Default Sampling |
+|-------|-------------|-----------------|
+| `debug` | Verbose diagnostic information | 1% |
+| `info` | General operational events | 10% |
+| `warn` | Unexpected but handled situations | 100% |
+| `error` | Failures that need attention | 100% |
+| `fatal` | Critical failures requiring immediate action | 100% |
+
+```typescript
+// Default level is "info"
+telemetry.emit("user.login.succeeded", { ... });
+
+// Explicit levels
+telemetry.emit("cache.miss", { level: "debug", ... });
+telemetry.emit("payment.processed", { level: "info", ... });
+telemetry.emit("rate_limit.approaching", { level: "warn", ... });
+telemetry.emit("payment.failed", { level: "error", ... });
+telemetry.emit("database.corrupted", { level: "fatal", ... });
+```
+
+---
+
+## Attributes
+
+Attributes are a flat key-value map attached to every event. They provide the structured data that makes telemetry queryable.
+
+### Naming Convention
+
+Use `ctx.` prefix with dot-separated names for consistency:
+
+```typescript
+telemetry.emit("order.shipped", {
+  attributes: {
+    "ctx.order.id": "ord_789",
+    "ctx.order.total": 14999,
+    "ctx.order.currency": "usd",
+    "ctx.shipment.carrier": "fedex",
+    "ctx.shipment.tracking_number": "1Z999AA10123456784",
+    "ctx.shipment.weight_kg": 2.3,
+  },
+});
+```
+
+### Merging with Session Attributes
+
+Event attributes are merged with session attributes — event-level values override session values:
+
+```typescript
+const session = telemetry.session()
+  .attributes({
+    "ctx.request.id": "req_abc",
+    "ctx.request.method": "POST",
+  });
+
+// Event attributes override session attributes
+session.emit("request.completed", {
+  attributes: {
+    "ctx.request.status": 200,         // Added
+    "ctx.request.method": "GET",       // Overrides session "POST"
+  },
+});
+// Result: { "ctx.request.id": "req_abc", "ctx.request.method": "GET", "ctx.request.status": 200 }
+```
+
+---
+
+## Error Details
+
+Pass structured error information alongside events using the `error` field:
+
+```typescript
+telemetry.emit("payment.failed", {
+  level: "error",
+  error: {
+    name: "PaymentError",
+    message: "Card declined by issuer",
+    code: "CARD_DECLINED",
+    stack: undefined,  // Optional stack trace
+  },
+  attributes: {
+    "ctx.payment.id": "pay_456",
+    "ctx.payment.provider": "stripe",
+  },
+});
+```
+
+### Error Object Structure
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `string` | Error class name (e.g., `"PaymentError"`) |
+| `message` | `string` | Human-readable error description |
+| `code` | `string?` | Machine-readable error code |
+| `stack` | `string?` | Stack trace (optional) |
+
+<Callout type="info">
+  Error details are preserved in the envelope and can be used by transports like Sentry, Slack, or Discord for rich error reporting.
+</Callout>
+
+---
+
+## Source Metadata
+
+Tag events with their origin in the codebase using the `source` field:
+
+```typescript
+telemetry.emit("feature.flag.evaluated", {
+  source: {
+    causer: "@myapp/flags",
+    file: "flags/evaluate.ts",
+    line: 142,
+  },
+  attributes: {
+    "ctx.flag.key": "new-dashboard",
+    "ctx.flag.value": true,
+  },
+});
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `causer` | `string?` | Package or module responsible |
+| `file` | `string?` | Source file path |
+| `line` | `number?` | Line number |
+
+---
+
+## The Event Envelope
+
+Every `emit()` call produces an envelope — a normalized payload sent to all transports:
+
+```typescript
+interface IgniterTelemetryEnvelope {
+  name: string;              // Event name
+  time: string;              // ISO 8601 timestamp
+  level: string;             // debug | info | warn | error | fatal
+  service: string;           // From withService()
+  environment: string;       // From withEnvironment()
+  version?: string;          // From withVersion()
+  sessionId: string;         // Auto-generated or from session
+  actor?: {                  // From session or emit input
+    type: string;
+    id?: string;
+    tags?: Record<string, unknown>;
+  };
+  scope?: {                  // From session or emit input
+    type: string;
+    id: string;
+    tags?: Record<string, unknown>;
+  };
+  attributes?: Record<string, unknown>;  // Redacted
+  error?: {
+    name: string;
+    message: string;
+    code?: string;
+    stack?: string;
+  };
+  source?: {
+    causer?: string;
+    file?: string;
+    line?: number;
+  };
+}
+```
+
+---
+
+## Emit with Custom Session ID
+
+Override the auto-generated session ID:
+
+```typescript
+telemetry.emit("request.started", {
+  sessionId: "trace_abc_123",  // Custom session ID
+  attributes: {
+    "ctx.request.path": "/api/orders",
+  },
+});
+```
+
+---
+
+## Emit with Custom Timestamp
+
+Override the auto-generated timestamp:
+
+```typescript
+telemetry.emit("historical.event", {
+  time: "2024-01-15T10:30:00.000Z",  // Custom timestamp
+  attributes: {
+    "ctx.event.recorded_at": "2024-01-15T10:30:00.000Z",
+  },
+});
+```
+
+---
+
+## Flushing and Shutdown
+
+For transports that buffer events (like HTTP with retries), you can explicitly flush:
+
+```typescript
+// Flush pending events without shutting down
+await telemetry.flush();
+
+// Graceful shutdown: flush + clean up
+await telemetry.shutdown();
+```
+
+<Callout type="warn">
+  **Always call `shutdown()`** before process exit. Transports may have buffered events or open connections that need cleanup.
+</Callout>
+
+---
+
+## Next Steps
+
+- [Sessions](/docs/telemetry/sessions) — Deep dive into session lifecycle and scoped execution
+- [Sampling & Redaction](/docs/telemetry/sampling-redaction) — Control volume and protect PII
+- [Adapters](/docs/telemetry/adapters) — Route events to different destinations

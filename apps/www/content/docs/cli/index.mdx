@@ -1,0 +1,129 @@
+---
+title: Introduction
+description: The official Igniter.js CLI. Create projects, scaffold features, wire add-ons, and keep schema + docs in sync — all from the terminal.
+---
+
+## Overview
+
+`@igniter-js/cli` is the **command-line interface for Igniter.js**. It is your single entry point for creating new projects, scaffolding features from database schemas, wiring add-ons (database, auth, jobs, and more), and keeping your TypeScript client schema and OpenAPI docs synchronized as you code.
+
+No boilerplate. No manual wiring. One command, and you have a working project.
+
+<Callout type="info">
+  The CLI is designed for **speed and consistency across teams**. Every command follows predictable conventions — same flags, same output structure, same template engine — so onboarding new developers takes minutes, not hours.
+</Callout>
+
+### Key Capabilities
+
+- **Project Creation** — `igniter init` creates a project with any of 6 starters (Next.js, TanStack Start, Express, Bun, Deno) plus 9 configurable add-ons
+- **Schema-aware Scaffolding** — `igniter generate feature --schema prisma:User` reads your Prisma schema and generates type-safe controllers, procedures, and interfaces
+- **Auto-regeneration** — `igniter dev` watches your router and features, then regenerates the client schema and OpenAPI spec on every change
+- **OpenAPI Client Generation** — `igniter generate caller` takes any OpenAPI spec and produces a fully typed, Zod-validated Igniter Caller
+- **Multi-runtime** — starters target different runtimes; add-ons adapt based on the detected framework
+- **Extensible** — starters, add-ons, and schema providers are registry-based; the community can add new ones
+
+---
+
+## Architecture
+
+The CLI is structured around three top-level commands, each backed by a composable architecture of registries, template engines, and file watchers.
+
+```
+igniter
+├── init           ← Create a new project or install into existing
+│   ├── Starters   (6: nextjs, tanstack-start, express, bun-api, bun-react, deno)
+│   ├── Add-ons    (9: database, auth, jobs, store, mcp, logging, telemetry, bots, shadcn-ui)
+│   └── Generator  (template engine + file system)
+│
+├── generate       ← Scaffold code from schemas
+│   ├── feature    (with optional Prisma schema provider)
+│   ├── controller (inside a feature)
+│   ├── procedure  (inside a feature)
+│   ├── docs       (OpenAPI spec generation)
+│   ├── schema     (client TypeScript schema)
+│   └── caller     (OpenAPI → typed IgniterCaller)
+│
+└── dev            ← Watch mode with TUI
+    ├── Watcher    (chokidar — router + features directory)
+    ├── Generator  (schema + OpenAPI on change)
+    └── TUI        (Ink-based split-pane terminal UI)
+```
+
+### Core Systems
+
+| System | Purpose |
+|--------|---------|
+| **Template Engine** | Handlebars-based rendering with custom helpers (`includes`, `isEmpty`, `camelCase`, `filterPlugins`, etc.) |
+| **Starter Registry** | Extensible registry of project starters (each with templates, env vars, dependencies) |
+| **Add-on Registry** | Extensible registry of add-ons (each with templates, dependencies, Docker config, env vars) |
+| **Schema Provider Registry** | Extensible registry of schema providers (currently: Prisma) for schema-aware scaffolding |
+| **Package Manager Detection** | Auto-detects npm, yarn, pnpm, or bun from `npm_config_user_agent` |
+| **Framework Detection** | Auto-detects Next.js or TanStack Start when installing into existing projects |
+
+---
+
+## Quick Start
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install -g @igniter-js/cli
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add -g @igniter-js/cli
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn global add @igniter-js/cli
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add -g @igniter-js/cli
+    ```
+  </Tab>
+</Tabs>
+
+```bash
+# Create a Next.js project with database + auth in 60 seconds
+igniter init my-app \
+  --template nextjs \
+  --add-ons database,auth \
+  --database postgresql
+
+cd my-app
+
+# Generate a Prisma-backed feature
+igniter generate feature users --schema prisma:User
+
+# Start dev mode — schema + docs regenerate on file change
+igniter dev
+```
+
+---
+
+## Real-World Use Cases
+
+| Scenario | What the CLI Provides |
+|----------|----------------------|
+| **New SaaS project** | Next.js starter + database (Prisma/PostgreSQL) + auth (Better Auth) + jobs — all in one `init` |
+| **Microservice API** | Express starter + logging + telemetry + MCP server for AI agent integration |
+| **Existing Next.js app** | `igniter init . --mode install` — adds Igniter.js without overwriting your code |
+| **Schema-first development** | `igniter generate feature` from Prisma models — controllers and procedures generated from schema |
+| **API client generation** | `igniter generate caller` from any OpenAPI spec → typed, validated caller in seconds |
+| **Team onboarding** | One `igniter init` command replaces pages of setup docs; new devs are productive in minutes |
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Installation" description="Global and per-project installation — runtime requirements and TypeScript setup." href="/docs/cli/installation" />
+  <Card title="Quick Start" description="Create your first project in 2 minutes — starter, add-ons, and feature scaffolding." href="/docs/cli/quick-start" />
+  <Card title="Commands" description="Deep dive into init, generate, and dev — every flag, option, and workflow." href="/docs/cli/commands/init" />
+  <Card title="Starters" description="Compare all 6 starters — frameworks, runtimes, and configuration details." href="/docs/cli/starters" />
+  <Card title="Add-ons" description="All 9 add-ons — inline option notation, templates, and environment variables." href="/docs/cli/add-ons" />
+</Cards>

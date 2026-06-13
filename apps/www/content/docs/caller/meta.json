@@ -3,11 +3,15 @@
   "root": true,
   "pages": [
     "index",
+    "quick-start",
     "installation",
     "comparison",
     "...(core-concepts)",
     "...(advanced)",
+    "schemas",
+    "real-world-examples",
     "...(integration)",
-    "api-reference"
+    "api-reference",
+    "cli"
   ]
 }

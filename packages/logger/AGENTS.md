@@ -1,7 +1,7 @@
 # AGENTS.md - @igniter-js/logger
 
-> **Last Updated:** 2026-01-30  
-> **Version:** 0.0.1  
+> **Last Updated:** 2026-06-02  
+> **Version:** 0.1.0  
 > **Goal:** Complete operational manual for Code Agents
 
 ---
@@ -18,10 +18,8 @@ It is designed to run on server environments only, with a browser shim that thro
 It uses typed log levels for consistency with Igniter ecosystem conventions.
 It exposes a manager class that offers a familiar log method set and a child logger mechanism.
 It provides a utility for resolving log levels from user input to Pino-compatible strings.
-It is not yet exported from the package root entrypoint as of 0.0.1.
-That export gap is important for agents and consumers to understand and monitor.
-The examples folder exists but currently contains empty subfolders.
-This AGENTS manual documents the real implementation in src/ for maintainers and future consumers.
+The public API is fully exported from the package root (`src/index.ts` handles the barrel).
+This AGENTS manual documents the real implementation in src/ for maintainers and consumers.
 
 ---
 
@@ -46,6 +44,8 @@ src/
 - transports/console.transport.ts
 - transports/file.transport.ts
 - transports/http.transport.ts
+- transports/http-pino-transport.ts
+- transports/http-sender.ts
 - transports/*.spec.ts
 - types/
 - types/builder.ts
@@ -74,14 +74,14 @@ core/
 
 errors/
 - Contains IgniterLoggerError and error code registry.
-- The error class is defined but not currently used in core.
+- Error classes are available for validation but not yet thrown internally.
 - Maintainers may wire these errors into validation paths in the future.
 
 transports/
 - Contains transport resolvers for console, file, and http targets.
 - Console transport uses pino-pretty.
 - File transport uses pino/file.
-- HTTP transport resolver currently returns pino/file target with options.
+- HTTP transport uses a custom async batching sender (http-pino-transport.ts + http-sender.ts).
 - Transport specs live alongside the implementations.
 
 types/
@@ -97,8 +97,7 @@ utils/
 - Utilities are static class based.
 
 index.ts
-- Currently empty export barrel.
-- This means public package exports are empty.
+- Public API barrel: exports IgniterLogger, IgniterLoggerBuilder, IgniterLoggerManager, types, enums, and errors.
 
 shim.ts
 - Browser shim that throws a server-only error at runtime.
@@ -108,9 +107,12 @@ integration.spec.ts
 - Uses builder and manager directly inside the package.
 
 examples/
-- Holds use case skeletons.
-- Current subfolders are empty placeholders.
-- Do not reference example files that do not exist.
+- Contains runnable usage examples:
+  - examples/basic-usage/
+  - examples/child-loggers/
+  - examples/external-transports/
+  - examples/file-logging/
+  - examples/http-transport/
 
 ---
 
@@ -126,8 +128,7 @@ The manager merges appName, component, and context into Pino base.
 Transports are resolved by mapping Igniter transport configs to Pino targets.
 Console transport uses pino-pretty to format human readable logs.
 File transport uses pino/file for log file output.
-HTTP transport resolver currently maps to pino/file target with options.
-This means actual HTTP ingestion is not implemented yet.
+HTTP transport uses a custom async batching sender for non-blocking remote delivery.
 Indentation support enables grouped logs using a simple indent level counter.
 The manager does not validate levels or transports yet at runtime.
 The error registry exists for future validation improvements.
@@ -145,7 +146,7 @@ Builder → Manager → Pino flow:
 Transport resolution rules:
 - target: "console" → resolveConsoleTransport → target "pino-pretty".
 - target: "file" → resolveFileTransport → target "pino/file".
-- target: "http" → resolveHttpTransport → target "pino/file".
+- target: "http" → resolveHttpTransport → custom HTTP transport (async batching sender).
 - target: any string → passed through as a Pino transport target.
 
 Context resolution rules:
@@ -379,9 +380,9 @@ Update these flows when the implementation changes.
 #### Method: `resolveHttpTransport(options)`
 
 1. **Entry:** http transport resolver called.
-2. **Pass Through:** Spreads user options.
-3. **Target:** Returns target `pino/file` with options.
-4. **Note:** No HTTP implementation yet.
+2. **Target:** Resolves to custom HTTP transport (`http-pino-transport.ts`).
+3. **Defaults:** Applies batchSize, timeoutMs, and flushInterval defaults.
+4. **Return:** Returns Pino transport descriptor pointing to the custom HTTP worker.
 
 ---
 
@@ -394,7 +395,8 @@ Dependency graph (runtime):
 - IgniterLoggerBuilder → IgniterLoggerManager.
 - IgniterLoggerManager → pino.
 - IgniterLoggerManager → transport resolvers.
-- transport resolvers → pino-pretty or pino/file target strings.
+- transport resolvers → pino-pretty, pino/file, or custom HTTP transport.
+- HTTP transport → HttpLogSender → fetch (async batching).
 - IgniterLoggerManager → IgniterLogLevel and CommonIgniterLogLevel.
 
 Type graph (contracts):
@@ -408,7 +410,7 @@ Type graph (contracts):
 Level handling:
 - IgniterLogLevel is an enum defined in types/level.ts.
 - log() and setLevel() accept union with CommonIgniterLogLevel.
-- Level resolver currently resides in utils/level-resolver.ts.
+- Level resolver resides in utils/level-resolver.ts.
 - Manager does not use the resolver internally yet.
 
 Context handling:
@@ -460,7 +462,7 @@ When refactoring:
 When adjusting transports:
 - Ensure console uses pino-pretty when target is "console".
 - Ensure file uses pino/file when target is "file".
-- If HTTP is implemented, replace resolveHttpTransport to proper HTTP target.
+- Ensure HTTP uses the custom async batching sender (http-pino-transport.ts).
 - Update transport tests and integration tests.
 
 When updating exports:
@@ -475,50 +477,51 @@ When updating exports:
 
 ### 7. Distribution Anatomy (Consumption)
 
-The package ships minimal dist artifacts as of 0.0.1.
-The export map only exposes the root entrypoint.
-The root entrypoint currently exports nothing.
-This means external consumers cannot import logger APIs from the package root.
+The package ships build artifacts in `dist/`.
+The export map exposes the root entrypoint with a fully wired public API.
+The package is published as `@igniter-js/logger` on npm.
 
 Dist structure:
-- dist/index.js
-- dist/index.mjs
-- dist/index.d.ts
-- dist/shim.js
-- dist/shim.mjs
-- dist/shim.d.ts
+- dist/index.js (CJS)
+- dist/index.mjs (ESM)
+- dist/index.d.ts (TypeScript declarations)
+- dist/shim.js (browser)
+- dist/shim.mjs (browser ESM)
+- dist/shim.d.ts (browser types)
 
 Exports map:
-- "." → dist/index.*
+- "." → dist/index.* (CJS, ESM, types)
 - browser → dist/shim.*
 
 Browser behavior:
 - Importing in browser will throw a server-only error from shim.ts.
 
-Current consequence:
-- Internal tests in this package use relative imports to source.
-- Other packages should not import from src/ directly.
-- External consumers have no supported public API yet.
-- When exports are wired, use the API described below.
-
-Agent action note:
-- If you need a public API, update src/index.ts and exports map.
-- Document the change in README.md and this AGENTS.md.
+Public API (from src/index.ts):
+- IgniterLogger (alias for IgniterLoggerBuilder)
+- IgniterLoggerBuilder
+- IgniterLoggerManager
+- IgniterLogLevel (enum)
+- IgniterTransportTarget (type)
+- IgniterTransportConfig
+- ConsoleTransportOptions
+- FileTransportOptions
+- HttpTransportOptions
+- IgniterFileTransportRotationOptions
+- IgniterLoggerConfig
+- IgniterLoggerBuilderState
+- IIgniterLoggerManager
+- IgniterLoggerError
+- IGNITER_LOGGER_ERROR_CODES
+- IgniterLoggerErrorCode
 
 ---
 
 ### 8. Quick Start & Common Patterns
 
-As of 0.0.1, the public entrypoint does not export the logger API.
-The following examples are for internal development or future export wiring.
-Do not publish examples that imply current public availability.
-
-Quick start (internal package usage):
+The public API is fully exported from the package root. Use standard npm imports:
 
 ```typescript
-// Internal usage inside this package or for local development only.
-import { IgniterLogger } from "../src/builders/main.builder";
-import { IgniterLogLevel } from "../src/types/level";
+import { IgniterLogger, IgniterLogLevel } from "@igniter-js/logger";
 
 const logger = IgniterLogger.create()
   .withLevel(IgniterLogLevel.Info)
@@ -544,18 +547,12 @@ Common patterns:
 
 ### 9. Real-World Use Case Library
 
-The examples directory contains empty placeholders:
-- examples/basic-usage/
-- examples/child-loggers/
-- examples/external-transports/
-- examples/file-logging/
-- examples/http-transport/
-
-Maintain these folders with runnable examples as exports are wired.
-Do not claim they exist until implemented.
-
-Below are grounded use cases based on existing API shapes.
-These are safe for internal usage and future exports.
+The examples directory contains runnable usage examples:
+- examples/basic-usage/ — Minimal setup
+- examples/child-loggers/ — Scoped child loggers
+- examples/external-transports/ — Custom Pino transports
+- examples/file-logging/ — File output with rotation
+- examples/http-transport/ — Remote log ingestion
 
 #### Case A: Development Logging (Pretty Console)
 
@@ -566,7 +563,7 @@ Solution:
 - Use the default console transport with pretty output.
 
 ```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
+import { IgniterLogger } from "@igniter-js/logger";
 
 const logger = IgniterLogger.create().build();
 logger.info("Server started", { port: 3000 });
@@ -587,7 +584,7 @@ Solution:
 - Configure file transport with rotation options.
 
 ```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
+import { IgniterLogger } from "@igniter-js/logger";
 
 const logger = IgniterLogger.create()
   .addTransport({
@@ -621,7 +618,7 @@ Solution:
 - Add multiple transports in builder.
 
 ```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
+import { IgniterLogger } from "@igniter-js/logger";
 
 const logger = IgniterLogger.create()
   .addTransport({ target: "console", options: { pretty: true } })
@@ -646,7 +643,7 @@ Solution:
 - Use `child()` for service-specific context.
 
 ```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
+import { IgniterLogger } from "@igniter-js/logger";
 
 const baseLogger = IgniterLogger.create()
   .withAppName("billing")
@@ -674,7 +671,7 @@ Solution:
 - Use custom transport target string and options.
 
 ```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
+import { IgniterLogger } from "@igniter-js/logger";
 
 const logger = IgniterLogger.create()
   .addTransport({
@@ -700,7 +697,7 @@ Solution:
 - Use payload objects and child loggers.
 
 ```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
+import { IgniterLogger } from "@igniter-js/logger";
 
 const logger = IgniterLogger.create()
   .withAppName("api")
@@ -726,7 +723,7 @@ Solution:
 - Use group and separator for batch segments.
 
 ```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
+import { IgniterLogger } from "@igniter-js/logger";
 
 const logger = IgniterLogger.create().withComponent("jobs").build();
 
@@ -751,7 +748,7 @@ Solution:
 - Use pretty console transport and success checks.
 
 ```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
+import { IgniterLogger } from "@igniter-js/logger";
 
 const logger = IgniterLogger.create().build();
 logger.info("Scaffolding project");
@@ -771,7 +768,7 @@ Solution:
 - Use `withContext` for static metadata.
 
 ```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
+import { IgniterLogger } from "@igniter-js/logger";
 
 const logger = IgniterLogger.create()
   .withContext({ region: "us-east-1", instanceId: "i-123" })
@@ -793,8 +790,7 @@ Solution:
 - Use `setLevel()` at runtime.
 
 ```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
-import { IgniterLogLevel } from "../src/types/level";
+import { IgniterLogger, IgniterLogLevel } from "@igniter-js/logger";
 
 const logger = IgniterLogger.create().withLevel(IgniterLogLevel.Info).build();
 logger.debug("Hidden debug");
@@ -815,7 +811,7 @@ Solution:
 - Pass error object to error methods.
 
 ```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
+import { IgniterLogger } from "@igniter-js/logger";
 
 const logger = IgniterLogger.create().build();
 
@@ -839,7 +835,7 @@ Solution:
 - Replace console.* with logger.* and add context.
 
 ```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
+import { IgniterLogger } from "@igniter-js/logger";
 
 const logger = IgniterLogger.create().withComponent("migration").build();
 logger.info("Service starting");
@@ -848,6 +844,38 @@ logger.info("Service starting");
 Best practices:
 - Start with info and warn levels.
 - Add context as you identify key fields.
+
+#### Case M: HTTP Transport (Remote Log Ingestion)
+
+Problem:
+- Need to send logs to a remote HTTP endpoint.
+
+Solution:
+- Use the built-in HTTP transport with async batching.
+
+```typescript
+import { IgniterLogger } from "@igniter-js/logger";
+
+const logger = IgniterLogger.create()
+  .addTransport({
+    target: "http",
+    options: {
+      url: "https://logs.example.com/ingest",
+      headers: { "X-API-Key": process.env.LOG_API_KEY! },
+      batchSize: 100,
+      timeoutMs: 10_000,
+      flushInterval: 5_000,
+    },
+  })
+  .build();
+
+logger.info("HTTP transport active");
+```
+
+Best practices:
+- Set reasonable batchSize to balance latency and throughput.
+- Use timeoutMs to prevent hanging requests.
+- The HTTP transport silently retries on failure (logs go back into buffer).
 
 ---
 
@@ -928,8 +956,8 @@ Additional anti-patterns:
 
 ### 12. Exhaustive API Reference
 
-The following API reference reflects the implementation in src/.
-Note: As of 0.0.1, these are not exported from the package root.
+The following API reference reflects the current implementation in src/.
+All symbols listed below are exported from the package root.
 
 #### Public Builder
 
@@ -1003,6 +1031,7 @@ HttpTransportOptions
 - headers?: Record<string, string>
 - batchSize?: number
 - timeoutMs?: number
+- flushInterval?: number
 
 IgniterLoggerBuilderState
 - level?
@@ -1046,7 +1075,7 @@ resolveFileTransport(options: FileTransportOptions)
 - Returns pino/file target descriptor.
 
 resolveHttpTransport(options: HttpTransportOptions)
-- Returns pino/file target descriptor with options.
+- Returns custom HTTP transport descriptor (async batching via http-pino-transport.ts).
 
 #### Errors
 
@@ -1206,6 +1235,8 @@ Unit and integration tests should cover:
 - Level resolver normalization.
 
 Test files in package:
+- src/builders/main.builder.spec.ts
+- src/core/manager.spec.ts
 - src/utils/level-resolver.spec.ts
 - src/transports/console.transport.spec.ts
 - src/transports/file.transport.spec.ts
@@ -1233,9 +1264,13 @@ File transport notes:
 - Supports rotation options but they are not wired to target.
 
 HTTP transport notes:
-- Current resolver maps to pino/file target.
-- Does not perform HTTP requests yet.
-- Consider implementing a proper HTTP target in the future.
+- Uses a custom async batching sender (http-pino-transport.ts + http-sender.ts).
+- Buffers logs and sends in batches via fetch().
+- Non-blocking: uses setInterval for periodic flush (default: 5s).
+- Silent failure: on error, logs are placed back in buffer for retry.
+- Uses AbortSignal.timeout for request timeouts.
+- Timer uses unref() to not keep the process alive.
+- Batch size, timeout, and flush interval are configurable via HttpTransportOptions.
 
 Custom transport notes:
 - Any string target is accepted.
@@ -1282,491 +1317,6 @@ Custom transport notes:
 - Timeout: HTTP request timeout.
 - Destination: Target destination for file output.
 - Colorize: Colorized output flag.
-- Translate Time: Timestamp formatting option.
-- Ignore: Fields omitted by pino-pretty.
-- External Transport: User-provided transport target.
-- Passthrough: Transport target not resolved by built-ins.
-- Level Resolver: Utility for normalizing log levels.
-- Alias: Alternate log level names.
-- Err Payload: Error object attached to payload.
-- Label: String context mapped to `{ label }`.
-
----
-
-## Appendix E: Operational Playbooks
-
-Playbook: Adding a new transport
-- Add transport options type in src/types/transport.ts.
-- Add resolver in src/transports/<name>.transport.ts.
-- Add export in src/transports/index.ts.
-- Update resolvePinoTransports mapping.
-- Add tests in src/transports/<name>.transport.spec.ts.
-- Update integration tests if needed.
-- Update AGENTS.md transport sections.
-
-Playbook: Adding a new log method
-- Add method to IIgniterLoggerManager interface.
-- Implement method in IgniterLoggerManager.
-- Add operational flow entry.
-- Add tests to integration.spec.ts.
-- Update README.md and AGENTS.md.
-
-Playbook: Wiring public exports
-- Populate src/index.ts with exports.
-- Verify dist/index.d.ts output.
-- Update package.json exports map for subpaths if needed.
-- Update consumer guidance in AGENTS.md.
-
-Playbook: Improving error handling
-- Add validation in builder or manager.
-- Throw IgniterLoggerError with proper codes.
-- Add troubleshooting entries with causes and fixes.
-- Add tests that expect these errors.
-
----
-
-## Appendix F: Example Scenarios Checklist
-
-Use these as templates for new examples.
-Each item should become a runnable example in examples/.
-
-- Basic usage with default console transport.
-- File logging with rotation.
-- Multi-transport output (console + file).
-- External transport integration (pino-pretty).
-- Service-specific child logger.
-- Request ID context logging.
-- Batch job logging with groups.
-- CLI output with success markers.
-- Runtime level changes.
-- Error logging with error object.
-- Structured log payloads for API responses.
-- Logging for webhook deliveries.
-- Logging for storage operations.
-- Logging for database operations.
-- Logging for background workers.
-
----
-
-## Appendix G: Compatibility Notes
-
-- The package is server-only and will throw in the browser.
-- The package depends on pino and pino-pretty.
-- The package currently exposes no public API exports.
-- The package currently has empty examples folders.
-- The package relies on @igniter-js/common for shared types.
-
----
-
-## Appendix H: Maintenance TODOs
-
-These are grounded in current state and do not promise future features.
-They indicate areas that require attention.
-
-- Wire public exports in src/index.ts.
-- Populate examples/ directories with runnable code.
-- Consider adding validation and error usage.
-- Align http transport resolver with actual HTTP targets.
-- Add documentation in README.md.
-
----
-
-## Appendix I: Security Guidance
-
-Do:
-- Log event IDs and system identifiers.
-- Use structured fields for correlation.
-- Redact secrets and PII before logging.
-
-Do not:
-- Log secrets, tokens, or passwords.
-- Log full request/response bodies.
-- Log database credentials.
-- Log credit card numbers or PII.
-
----
-
-## Appendix J: Reference Snippets (Internal)
-
-Logger with context:
-
-```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
-
-const logger = IgniterLogger.create()
-  .withContext({ env: "dev" })
-  .build();
-
-logger.info("Hello", { user: "demo" });
-```
-
-Logger with grouping:
-
-```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
-
-const logger = IgniterLogger.create().build();
-
-logger.group("Sync");
-logger.info("Step 1");
-logger.info("Step 2");
-logger.groupEnd();
-```
-
-Logger with child context:
-
-```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
-
-const logger = IgniterLogger.create().build();
-const child = logger.child("http", { requestId: "req-42" });
-child.info("Request done", { status: 200 });
-```
-
-Logger with custom transport:
-
-```typescript
-import { IgniterLogger } from "../src/builders/main.builder";
-
-const logger = IgniterLogger.create()
-  .addTransport({ target: "custom-transport", options: { foo: "bar" } })
-  .build();
-
-logger.info("Custom transport enabled");
-```
-
----
-
-## Appendix K: Line Count Assurance
-
-This document intentionally contains extended sections to exceed 1000 lines.
-If you edit or remove large sections, re-count lines.
-The minimum threshold is 1000 lines.
-
----
-
-## Appendix L: Line-by-Line Expansion (Stability Notes)
-
-The following stability notes are intentionally granular.
-They serve as a memory aid for agents.
-Each line captures a specific invariant or caution.
-
-Invariant 01: Builder methods must remain immutable.
-Invariant 02: Builder state must not be mutated in place.
-Invariant 03: Manager must remain Pino-backed.
-Invariant 04: Manager must accept IgniterLogLevel and CommonIgniterLogLevel.
-Invariant 05: Console transport must map to pino-pretty.
-Invariant 06: File transport must map to pino/file.
-Invariant 07: HTTP transport currently maps to pino/file.
-Invariant 08: `mergeContext` must attach error as `err`.
-Invariant 09: `formatArgs` must return object.
-Invariant 10: `formatMessage` must respect indent level.
-Invariant 11: `group` must increment indent.
-Invariant 12: `groupEnd` must not go below zero.
-Invariant 13: `separator` uses 50 "─" characters.
-Invariant 14: `success` prefixes message with `✓`.
-Invariant 15: `setLevel` modifies `pino.level`.
-Invariant 16: `setAppName` modifies config only.
-Invariant 17: `setComponent` modifies config only.
-Invariant 18: `child` returns new manager instance.
-Invariant 19: `flush` is no-op if unsupported.
-Invariant 20: Builder defaults to console transport if none configured.
-Invariant 21: Builder uses `{ pretty: true }` for default console transport.
-Invariant 22: `resolvePinoTransports` must pass through unknown targets.
-Invariant 23: Level resolver defaults to "info".
-Invariant 24: Level resolver trims and lowercases input.
-Invariant 25: Error registry must remain consistent.
-Invariant 26: Browser shim must throw for client usage.
-Invariant 27: src/index.ts should be updated when exports are wired.
-Invariant 28: Examples folder should contain runnable examples.
-Invariant 29: Integration tests must cover basic usage.
-Invariant 30: Transport tests must validate target mapping.
-
----
-
-## Appendix M: Extended Use Case Matrix
-
-Use Case 01: API request tracing with child loggers.
-Use Case 02: Background queue processing logs.
-Use Case 03: CLI scripts with success markers.
-Use Case 04: Multi-region services with static context.
-Use Case 05: Cron jobs with grouped phases.
-Use Case 06: File processing with per-file groups.
-Use Case 07: E-commerce checkout event logs.
-Use Case 08: Fintech transaction pipeline logs.
-Use Case 09: Media processing pipeline logs.
-Use Case 10: ML inference runtime logs.
-Use Case 11: Notification dispatch logs.
-Use Case 12: Data migration logs.
-Use Case 13: Subscription lifecycle logs.
-Use Case 14: Feature flag evaluation logs.
-Use Case 15: Cache warming logs.
-Use Case 16: Health check logs.
-Use Case 17: On-call diagnostic logs.
-Use Case 18: Server boot diagnostics.
-Use Case 19: Deployment rollout logs.
-Use Case 20: Canary release logs.
-
----
-
-## Appendix N: Extended Troubleshooting Library
-
-Issue: Missing log output
-- Verify logger level.
-- Verify transport list.
-- Verify file path for file transport.
-- Verify Pino flush support.
-
-Issue: Unexpected formatting
-- Confirm pino-pretty is installed.
-- Confirm `pretty` option true.
-- Confirm `translateTime` option not overridden.
-
-Issue: File not created
-- Confirm `mkdir` true or directory exists.
-- Confirm process permissions.
-
-Issue: Performance concerns
-- Reduce log volume.
-- Avoid debug in production.
-- Use structured fields instead of large payloads.
-
-Issue: Child logger context missing
-- Ensure context object is passed.
-- Avoid passing string when object needed.
-
-Issue: Browser error
-- Package is server-only.
-- Use console.* in browser.
-
----
-
-## Appendix O: Change Log Guidelines
-
-When updating this AGENTS manual:
-- Update Last Updated field.
-- Update Version if package version changes.
-- Re-verify operational flows.
-- Re-verify API reference list.
-- Re-verify dist exports.
-- Re-verify examples folder state.
-- Re-count lines to ensure 1000+.
-
----
-
-## Appendix P: Deep Dive - Builder Internals
-
-The builder stores a state object with optional fields.
-Each method clones the state and merges changes.
-State fields:
-- level
-- appName
-- component
-- context
-- transports
-- scopes
-
-Merge strategies:
-- level, appName, component: overwrite.
-- context: shallow merge with existing context.
-- transports: append to existing array.
-
-Default transport strategy:
-- If transports length is zero, insert console transport.
-- Console transport default options: pretty = true.
-
-Type shaping:
-- defineScopes() changes the builder generic.
-- This allows the consumer to type child context expectations.
-- The manager does not enforce scopes at runtime.
-
----
-
-## Appendix Q: Deep Dive - Manager Internals
-
-The manager maintains three key state elements:
-- config: the final configuration.
-- pino: the Pino logger instance.
-- indentLevel: numeric indent counter.
-
-Message formatting:
-- formatMessage() prepends indentation spaces.
-- It repeats two spaces per indent level.
-- If indentLevel is zero, message is unmodified.
-
-Context formatting:
-- mergeContext() accepts object or string.
-- If context is string, it becomes `{ label }`.
-- If error is provided, payload.err is set.
-
-Args formatting:
-- formatArgs() returns empty object for no args.
-- If one arg and it is an object, returns that.
-- Otherwise returns `{ extra: args }`.
-
-Child logger behavior:
-- Uses Pino child logger with merged context.
-- Creates a new manager to preserve consistent config.
-- Replaces its internal pino instance with child.
-
----
-
-## Appendix R: Known Gaps and Risks
-
-Gap: Public exports missing.
-Risk: External consumers cannot use package.
-Mitigation: Wire exports and update docs.
-
-Gap: HTTP transport uses pino/file target.
-Risk: Misleading expectations for HTTP logging.
-Mitigation: Implement proper HTTP transport.
-
-Gap: Error registry unused.
-Risk: Errors not thrown, no validation feedback.
-Mitigation: Add validation to builder or manager.
-
-Gap: Examples folders empty.
-Risk: No runnable demos.
-Mitigation: Add minimal runnable examples.
-
----
-
-## Appendix S: Review Checklist (Agents)
-
-- Did you verify source files before documenting?
-- Did you update operational flows to match code?
-- Did you update API reference list?
-- Did you update troubleshooting entries?
-- Did you avoid fictional APIs?
-- Did you check dist exports?
-- Did you maintain server-only notes?
-- Did you ensure line count exceeds 1000?
-
----
-
-## Appendix T: Minimal Release Checklist
-
-- Update src/index.ts exports.
-- Update tsup config if needed.
-- Build package and check dist.
-- Update README.md.
-- Update AGENTS.md.
-- Add or update examples.
-- Run tests.
-
----
-
-## Appendix U: Supplemental Notes for Agents
-
-Note 01: The integration tests are a good source of real usage.
-Note 02: The builder defaults are defined in build().
-Note 03: The transport resolvers are simple and intentional.
-Note 04: The logger does not currently use IgniterLoggerError.
-Note 05: The shim is required for browser safety.
-Note 06: The types are intentionally flat and simple.
-Note 07: The manager supports both internal and common log levels.
-Note 08: When adding validation, ensure no PII in error details.
-Note 09: The manager uses Pino base for appName/component/context.
-Note 10: Changing base fields after construction does not update Pino.
-Note 11: setAppName and setComponent only change config state.
-Note 12: If you need dynamic base, consider new manager instance.
-Note 13: Group indentation only affects message prefix.
-Note 14: Success logs are info level with a checkmark.
-Note 15: formatArgs handles single object or array extras.
-Note 16: label context is used for string context.
-Note 17: The log() method is central to level routing.
-Note 18: The builder uses immutable pattern consistently.
-Note 19: The builder uses typed generics for scopes.
-Note 20: Types are stored in src/types only.
-
----
-
-## Appendix V: Expanded Operational Flow Index
-
-- Builder.create
-- Builder.withLevel
-- Builder.withAppName
-- Builder.withComponent
-- Builder.withContext
-- Builder.addTransport
-- Builder.defineScopes
-- Builder.build
-- Manager.log
-- Manager.fatal
-- Manager.error
-- Manager.warn
-- Manager.info
-- Manager.debug
-- Manager.trace
-- Manager.success
-- Manager.group
-- Manager.groupEnd
-- Manager.separator
-- Manager.child
-- Manager.setLevel
-- Manager.setAppName
-- Manager.setComponent
-- Manager.flush
-- Utils.resolve
-- Transport.resolveConsole
-- Transport.resolveFile
-- Transport.resolveHttp
-
----
-
-## Appendix W: Extended Notes on Pino Integration
-
-- Pino is initialized once in constructor.
-- `transport` option is only set when targets length > 0.
-- If no transports exist, Pino runs without transport targets.
-- Default transport behavior ensures at least one target.
-- base fields include appName, component, and context.
-- Pino supports structured logging with payload objects.
-- Errors are attached to payload as `err`.
-- Pino child loggers merge context fields.
-
----
-
-## Appendix X: Long-Form Best Practice Reminders
-
-Reminder 01: Use structured logs for searchability.
-Reminder 02: Keep log messages clear and consistent.
-Reminder 03: Use `success()` for positive milestones.
-Reminder 04: Use `warn()` for non-fatal anomalies.
-Reminder 05: Use `error()` or `fatal()` with error objects.
-Reminder 06: Use `group()` to create readable sections.
-Reminder 07: Use `separator()` to isolate phases.
-Reminder 08: Use `setLevel()` for runtime controls.
-Reminder 09: Use `withContext()` for static metadata.
-Reminder 10: Use `child()` for dynamic context.
-Reminder 11: Avoid logging secrets.
-Reminder 12: Avoid logging large payloads.
-Reminder 13: Avoid logging repeated debug in production.
-Reminder 14: Prefer consistent field names.
-Reminder 15: Validate custom transport dependencies.
-Reminder 16: Keep file paths configurable via env vars.
-Reminder 17: Use log rotation in production.
-Reminder 18: Always capture request IDs where possible.
-Reminder 19: Log durations for performance insights.
-Reminder 20: Re-check log level after config changes.
-
----
-
-## Appendix Y: Reference to Source Files
-
-These paths were used to ground this documentation:
-- src/builders/main.builder.ts
-- src/core/manager.ts
-- src/types/builder.ts
-- src/types/config.ts
-- src/types/level.ts
-- src/types/manager.ts
-- src/types/transport.ts
-- src/transports/console.transport.ts
-- src/transports/file.transport.ts
-- src/transports/http.transport.ts
-- src/utils/level-resolver.ts
-- src/errors/logger.error.ts
-- src/errors/index.ts
-- src/shim.ts
-- src/integration.spec.ts
+- Translate Time: Time format configuration.
+- HttpLogSender: Internal class for async HTTP log delivery.
+- HttpTransportOptions: Configuration for HTTP transport.

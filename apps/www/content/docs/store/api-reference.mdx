@@ -1,487 +1,634 @@
 ---
 title: API Reference
-description: Complete API reference for the Store adapter. Detailed documentation of all methods, types, and interfaces.
+description: Complete API reference for @igniter-js/store. All builder methods, manager namespaces, event types, adapter interfaces, and error codes.
 ---
 
 ## Overview
 
-This document provides a complete reference for the Store adapter API. All methods are type-safe and return Promises for asynchronous operations.
+This document provides the complete API reference for `@igniter-js/store`. Every method and type documented here reflects the actual implementation.
 
 ---
 
-## IgniterStoreAdapter Interface
+## IgniterStore — Builder
 
-The Store adapter implements the `IgniterStoreAdapter` interface, which provides a unified API for various storage backends.
+The entry point is `IgniterStore.create()` which returns an `IgniterStoreBuilder`.
+
+### `static create()`
+
+Creates a new builder instance.
 
 ```typescript
-interface IgniterStoreAdapter<TClient extends unknown = unknown> {
-  readonly client: TClient;
-  
-  // Key-Value Operations
-  get<T = any>(key: string): Promise<T | null>;
-  set(key: string, value: any, options?: KeyValueOptions): Promise<void>;
-  delete(key: string): Promise<void>;
-  has(key: string): Promise<boolean>;
-  
-  // Atomic Operations
-  increment(key: string): Promise<number>;
-  expire(key: string, ttl: number): Promise<void>;
-  
-  // Pub/Sub Operations
-  publish(channel: string, message: any): Promise<void>;
-  subscribe(channel: string, callback: EventCallback): Promise<void>;
-  unsubscribe(channel: string, callback?: EventCallback): Promise<void>;
-}
+const builder = IgniterStore.create();
 ```
 
----
+### `withAdapter(adapter)`
 
-## Key-Value Operations
+Sets the storage adapter. **Required.**
 
-### `get<T>(key: string): Promise<T | null>`
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `adapter` | `IgniterStoreAdapter` | The adapter instance |
 
-Retrieves a value from the store by its key. The value is automatically deserialized from JSON.
-
-**Parameters:**
-- `key` (string): The key to retrieve
-
-**Returns:** `Promise<T | null>` - The deserialized value, or `null` if the key doesn't exist
-
-**Example:**
 ```typescript
-const user = await igniter.store.get<User>('user:123');
-if (user) {
-  console.log(user.name);
-}
+.withAdapter(IgniterStoreRedisAdapter.create({ redis }))
 ```
 
-**Type Safety:**
+### `withService(service)`
+
+Sets the service name for key prefix isolation. **Required.**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `service` | `string` | Service name (e.g., `"api"`, `"worker"`) |
+
 ```typescript
-// TypeScript infers the return type
-const user = await igniter.store.get<User>('user:123');
-// user is typed as User | null
+.withService("my-api")
 ```
 
----
+### `withSerializer(serializer)`
 
-### `set(key: string, value: any, options?: KeyValueOptions): Promise<void>`
+Sets a custom serializer.
 
-Stores a value in the store. The value is automatically serialized to JSON.
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `serializer` | `IgniterStoreSerializer` | Object with `encode` and `decode` |
 
-**Parameters:**
-- `key` (string): The key to store the value under
-- `value` (any): The value to store (must be JSON-serializable)
-- `options` (optional): Configuration options
-  - `ttl` (number): Time-to-live in seconds
-
-**Returns:** `Promise<void>`
-
-**Example:**
 ```typescript
-// Store without TTL
-await igniter.store.set('user:123', { name: 'John', email: 'john@example.com' });
-
-// Store with TTL (expires in 1 hour)
-await igniter.store.set('user:123', userData, { ttl: 3600 });
+.withSerializer({
+  encode: (value) => JSON.stringify(value),
+  decode: (value) => JSON.parse(value),
+})
 ```
 
-**Serialization:**
-```typescript
-// Complex objects are automatically serialized
-const data = {
-  nested: { value: 123 },
-  array: [1, 2, 3],
-  date: new Date(), // Will be serialized as ISO string
-};
+### `withLogger(logger)`
 
-await igniter.store.set('complex:data', data);
+Sets a logger instance.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `logger` | `IgniterLogger` | Logger with `info`, `warn`, `error`, `debug` |
+
+### `withTelemetry(telemetry)`
+
+Sets the telemetry manager for observability.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `telemetry` | `IgniterTelemetryManager<any>` | Telemetry instance from `@igniter-js/telemetry` |
+
+### `addScope(key, options?)`
+
+Adds a typed scope definition.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `string` | Scope key (e.g., `"organization"`) |
+| `options.required` | `boolean?` | Whether scope is required (default: `true`) |
+| `options.description` | `string?` | Human-readable description |
+
+```typescript
+.addScope("organization", { required: true, description: "Tenant org" })
+.addScope("workspace")
 ```
 
----
+### `addEvents(events, validation?)`
 
-### `delete(key: string): Promise<void>`
+Adds typed events for a namespace.
 
-Deletes a key from the store.
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `events` | `{ namespace, events }` | Built with `IgniterStoreEvents.create().build()` |
+| `validation.validatePublish` | `boolean?` | Validate when publishing (default: `true`) |
+| `validation.validateSubscribe` | `boolean?` | Validate when subscribing (default: `false`) |
+| `validation.throwOnValidationError` | `boolean?` | Throw on invalid payload (default: `true`) |
 
-**Parameters:**
-- `key` (string): The key to delete
-
-**Returns:** `Promise<void>`
-
-**Example:**
 ```typescript
-await igniter.store.delete('user:123');
+.addEvents(UserEvents, {
+  validatePublish: true,
+  validateSubscribe: false,
+  throwOnValidationError: true,
+})
 ```
 
----
+### `build()`
 
-### `has(key: string): Promise<boolean>`
+Builds and returns the `IgniterStoreManager` instance.
 
-Checks if a key exists in the store without retrieving its value. More efficient than `get()` when you only need to check existence.
-
-**Parameters:**
-- `key` (string): The key to check
-
-**Returns:** `Promise<boolean>` - `true` if the key exists, `false` otherwise
-
-**Example:**
 ```typescript
-const exists = await igniter.store.has('user:123');
-if (!exists) {
-  // Key doesn't exist, fetch and cache
-  const user = await fetchUser();
-  await igniter.store.set('user:123', user);
-}
+const store = builder.build();
 ```
 
 ---
 
-## Atomic Operations
+## IgniterStoreManager
 
-### `increment(key: string): Promise<number>`
+The runtime store instance returned by `.build()`.
 
-Atomically increments a numeric value stored at a key. If the key doesn't exist, it's initialized to 0 before incrementing.
+### Namespaced Operations
 
-**Parameters:**
-- `key` (string): The key to increment
+| Property | Type | Purpose |
+|----------|------|---------|
+| `store.kv` | `IgniterStoreKV` | Key-value operations |
+| `store.counter` | `IgniterStoreCounter` | Atomic counters |
+| `store.claim` | `IgniterStoreClaim` | Distributed claims (locks) |
+| `store.batch` | `IgniterStoreBatch` | Multi-key operations |
+| `store.events` | `IgniterStoreEventsManager` | Pub/Sub (string + proxy APIs) |
+| `store.streams` | `IgniterStoreStreams` | Redis Streams |
+| `store.dev` | `IgniterStoreDev` | Development/debugging tools |
+| `store.logger` | `IgniterLogger \| undefined` | Logger instance |
 
-**Returns:** `Promise<number>` - The new value after incrementing
+### `scope(scopeKey, identifier)`
 
-**Example:**
-```typescript
-// First call: returns 1 (key didn't exist, initialized to 0, then incremented)
-const count = await igniter.store.increment('page:views');
+Creates a scoped store instance.
 
-// Second call: returns 2
-const newCount = await igniter.store.increment('page:views');
-```
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `scopeKey` | `string` | Scope key (type-safe if defined via `addScope()`) |
+| `identifier` | `string \| number` | Scope identifier |
 
-**Use Cases:**
-- Page view counters
-- Rate limiting
-- Request counting
-- Feature usage tracking
-
----
-
-### `expire(key: string, ttl: number): Promise<void>`
-
-Sets or updates the time-to-live (TTL) on a key. If the key doesn't exist, the operation has no effect.
-
-**Parameters:**
-- `key` (string): The key to set expiration on
-- `ttl` (number): Time-to-live in seconds
-
-**Returns:** `Promise<void>`
-
-**Example:**
-```typescript
-// Set TTL on existing key
-await igniter.store.set('user:123', userData);
-await igniter.store.expire('user:123', 3600); // Expires in 1 hour
-
-// Update TTL
-await igniter.store.expire('user:123', 7200); // Extend to 2 hours
-```
-
-**Common Patterns:**
-```typescript
-// Set expiration on first increment
-const count = await igniter.store.increment('counter');
-if (count === 1) {
-  await igniter.store.expire('counter', 3600);
-}
-
-// Refresh expiration on access
-const value = await igniter.store.get('key');
-if (value) {
-  await igniter.store.expire('key', 3600); // Refresh TTL
-}
-```
+Returns: `IgniterStoreManager` — a new scoped instance with auto-prefixed keys.
 
 ---
 
-## Pub/Sub Operations
+## Key-Value (`store.kv`)
 
-### `publish(channel: string, message: any): Promise<void>`
+### `get<T>(key)`
 
-Publishes a message to a specific channel. The message is automatically serialized to JSON.
+Retrieves a value.
 
-**Parameters:**
-- `channel` (string): The channel to publish the message to
-- `message` (any): The message to publish (must be JSON-serializable)
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `string` | The key to retrieve |
 
-**Returns:** `Promise<void>`
+Returns: `Promise<T | null>`
 
-**Example:**
 ```typescript
-await igniter.store.publish('notifications', {
-  userId: '123',
-  message: 'You have a new notification',
-  timestamp: new Date().toISOString(),
-});
+const user = await store.kv.get<User>("user:123");
 ```
 
-**Channel Naming:**
+### `set(key, value, options?)`
+
+Stores a value.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `string` | The key |
+| `value` | `unknown` | The value (JSON-serializable) |
+| `options.ttl` | `number?` | TTL in seconds |
+
+Returns: `Promise<void>`
+
 ```typescript
-// Use descriptive channel names
-await igniter.store.publish('user:created', userData);
-await igniter.store.publish('order:status:changed', orderData);
-await igniter.store.publish('tenant:123:events', eventData);
+await store.kv.set("user:123", { name: "Avery" }, { ttl: 3600 });
 ```
+
+### `remove(key)`
+
+Deletes a key.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `string` | The key to delete |
+
+Returns: `Promise<void>`
+
+### `exists(key)`
+
+Checks if a key exists.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `string` | The key to check |
+
+Returns: `Promise<boolean>`
+
+### `expire(key, ttlSeconds)`
+
+Sets a TTL on an existing key.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `string` | The key |
+| `ttlSeconds` | `number` | TTL in seconds |
+
+Returns: `Promise<void>`
+
+### `touch(key, ttlSeconds)`
+
+Updates a key's TTL (like `expire`, signals access).
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `string` | The key |
+| `ttlSeconds` | `number` | TTL in seconds |
+
+Returns: `Promise<void>`
 
 ---
 
-### `subscribe(channel: string, callback: EventCallback): Promise<void>`
+## Counter (`store.counter`)
 
-Subscribes to a channel to receive messages. Multiple callbacks can be registered for the same channel.
+### `increment(key)`
 
-**Parameters:**
-- `channel` (string): The channel to subscribe to
-- `callback` (EventCallback): The function to execute when a message is received
+Atomically increments a counter.
 
-**Returns:** `Promise<void>`
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `string` | The counter key |
 
-**EventCallback Type:**
+Returns: `Promise<number>` — new value after increment
+
 ```typescript
-type EventCallback = (message: any) => void | Promise<void>;
+const views = await store.counter.increment("page-views"); // → 1
 ```
 
-**Example:**
+### `decrement(key)`
+
+Atomically decrements a counter.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `string` | The counter key |
+
+Returns: `Promise<number>` — new value after decrement
+
 ```typescript
-await igniter.store.subscribe('notifications', async (message) => {
-  console.log('Received notification:', message);
-  
-  // Process the notification
-  await processNotification(message);
-});
+const remaining = await store.counter.decrement("stock"); // → -1
 ```
 
-**Multiple Subscribers:**
-```typescript
-// Multiple callbacks can subscribe to the same channel
-await igniter.store.subscribe('events', callback1);
-await igniter.store.subscribe('events', callback2);
-await igniter.store.subscribe('events', callback3);
+### `expire(key, ttlSeconds)`
 
-// All callbacks will receive all messages published to 'events'
-```
+Sets TTL on a counter.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `string` | The counter key |
+| `ttlSeconds` | `number` | TTL in seconds |
+
+Returns: `Promise<void>`
 
 ---
 
-### `unsubscribe(channel: string, callback?: EventCallback): Promise<void>`
+## Claim (`store.claim`)
 
-Unsubscribes from a channel. If a callback is provided, only that specific callback is removed. Otherwise, all callbacks for that channel are removed.
+### `once(key, value, options?)`
 
-**Parameters:**
-- `channel` (string): The channel to unsubscribe from
-- `callback` (optional): Specific callback to remove. If not provided, all callbacks are removed.
+Acquires a distributed lock using SETNX.
 
-**Returns:** `Promise<void>`
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `string` | The claim key |
+| `value` | `unknown` | Owner identifier |
+| `options.ttl` | `number?` | Auto-expire after N seconds |
 
-**Example:**
-```typescript
-// Define callback
-const handleNotification = async (message: any) => {
-  await processNotification(message);
-};
-
-// Subscribe
-await igniter.store.subscribe('notifications', handleNotification);
-
-// Later, unsubscribe specific callback
-await igniter.store.unsubscribe('notifications', handleNotification);
-
-// Or unsubscribe all callbacks
-await igniter.store.unsubscribe('notifications');
-```
-
----
-
-## Types and Interfaces
-
-### `KeyValueOptions`
-
-Options for setting a key-value pair.
+Returns: `Promise<boolean>` — `true` if acquired, `false` if already held
 
 ```typescript
-interface KeyValueOptions {
-  /**
-   * Time-to-live for the key, in seconds.
-   */
-  ttl?: number;
-}
-```
-
-**Example:**
-```typescript
-await igniter.store.set('key', value, { ttl: 3600 });
+const claimed = await store.claim.once("job:cleanup", "worker-1", { ttl: 30 });
 ```
 
 ---
 
-### `EventCallback`
+## Batch (`store.batch`)
 
-Callback function for handling messages from subscribed channels.
+### `get<T>(keys)`
+
+Retrieves multiple values.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `keys` | `string[]` | Array of keys |
+
+Returns: `Promise<(T | null)[]>` — values in same order, `null` for missing
 
 ```typescript
-type EventCallback = (message: any) => void | Promise<void>;
+const users = await store.batch.get<User>(["user:1", "user:2", "user:3"]);
 ```
 
-**Example:**
-```typescript
-const callback: EventCallback = async (message) => {
-  console.log('Received:', message);
-  await processMessage(message);
-};
+### `set(entries)`
 
-await igniter.store.subscribe('channel', callback);
+Stores multiple values.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `entries` | `Array<{ key: string; value: unknown; ttl?: number }>` | Key-value entries |
+
+Returns: `Promise<void>`
+
+```typescript
+await store.batch.set([
+  { key: "user:1", value: { name: "Alice" }, ttl: 3600 },
+  { key: "user:2", value: { name: "Bob" } },
+]);
 ```
 
 ---
 
-## Client Access
+## Events (`store.events`)
 
-### `client: TClient`
+`store.events` exposes both string-based and proxy-based APIs.
 
-Access to the underlying client instance. Useful for advanced operations not covered by the adapter.
+### String-Based API
 
-**Example:**
-```typescript
-// Access the underlying Redis client
-const redis = igniter.store.client as Redis;
+**`publish(event, message)`**
 
-// Use Redis-specific features
-await redis.hset('hash:key', 'field', 'value');
-await redis.sadd('set:key', 'member');
-await redis.zadd('sorted:set', 1, 'member');
-```
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `event` | `string` | Event name (e.g., `"user:created"`) |
+| `message` | (typed) | Payload (typed from schema) |
 
-<Callout type="warn">
-  Using the underlying client directly bypasses the adapter's serialization and may require manual JSON handling. Use with caution.
-</Callout>
+Returns: `Promise<void>`
+
+**`subscribe(event, handler)`**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `event` | `string` | Event name or wildcard (`"user:*"`, `"*"`) |
+| `handler` | `(ctx: IgniterStoreEventContext) => void \| Promise<void>` | Callback |
+
+Returns: `Promise<IgniterStoreUnsubscribeFn>`
+
+### Proxy-Based API
+
+For each registered event, `store.events.namespace.eventName` provides:
+
+**`.publish(message)`** — Publish a message (typed).
+
+**`.subscribe(handler)`** — Subscribe to the event (typed context). Returns unsubscribe function.
+
+### IgniterStoreEventContext
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | `string` | Full event name |
+| `data` | `TPayload` | Event payload |
+| `timestamp` | `string` | ISO 8601 timestamp |
+| `scope?` | `{ key: string; identifier: string }` | Current scope if scoped |
 
 ---
 
-## Error Handling
+## Streams (`store.streams`)
 
-All Store operations can throw errors. Common error scenarios:
+### `append(stream, message, options?)`
 
-### Connection Errors
+Appends to a stream.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `stream` | `string` | Stream name |
+| `message` | `unknown` | Message payload |
+| `options.maxLen` | `number?` | Max stream length |
+| `options.approximate` | `boolean?` | Use ~ for trimming |
+
+Returns: `Promise<string>` — message ID
+
+### `group(group, consumer)`
+
+Creates a consumer in a consumer group.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `group` | `string` | Group name |
+| `consumer` | `string` | Consumer name |
+
+Returns: `IgniterStoreStreamConsumerGroup`
+
+**Consumer Group Methods:**
+
+- **`ensure(stream, options?)`** — Create group (idempotent)
+- **`read<T>(stream, options?)`** — Read messages
+- **`ack(stream, ids)`** — Acknowledge messages
+
+### `range<T>(stream, options?)`
+
+Reads a range of messages.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `stream` | `string` | Stream name |
+| `options.startId` | `string?` | Start ID (default: `"-"`) |
+| `options.endId` | `string?` | End ID (default: `"+"`) |
+| `options.count` | `number?` | Max messages |
+| `options.reverse` | `boolean?` | Reverse order |
+
+Returns: `Promise<IgniterStoreStreamMessage<T>[]>`
+
+---
+
+## Dev Tools (`store.dev`)
+
+### `scan(pattern, options?)`
+
+Scans keys matching a pattern.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `pattern` | `string` | Pattern (e.g., `"user:*"`) |
+| `options.cursor` | `string?` | Pagination cursor (default: `"0"`) |
+| `options.count` | `number?` | Keys per iteration (default: 10) |
+
+Returns: `Promise<{ keys: string[]; cursor: string }>`
 
 ```typescript
-try {
-  await igniter.store.get('key');
-} catch (error) {
-  if (error.code === 'ECONNREFUSED') {
-    // Redis connection refused
-  } else if (error.code === 'ETIMEDOUT') {
-    // Connection timeout
-  }
-}
+const { keys, cursor } = await store.dev.scan("user:*", { count: 100 });
 ```
+
+---
+
+## IgniterStoreEvents
+
+### `static create(namespace)`
+
+Creates a new events builder for a namespace.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `namespace` | `string` | Unique namespace (e.g., `"user"`) |
+
+### `event(name, schema)`
+
+Adds an event with a Zod/StandardSchemaV1 schema.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | Event name (no dots/colons) |
+| `schema` | `StandardSchemaV1` | Zod schema for the payload |
+
+### `group(name, builder)`
+
+Creates a nested group of events.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | Group name (prefix) |
+| `builder` | `(group: IgniterStoreEventsGroupBuilder) => IgniterStoreEventsGroupBuilder` | Group config function |
+
+### `build()`
+
+Returns the events descriptor for `addEvents()`.
+
+Returns: `{ namespace: string; events: IgniterStoreEventsDirectory }`
+
+---
+
+## Adapters
+
+### IgniterStoreRedisAdapter
+
+```typescript
+import { IgniterStoreRedisAdapter } from "@igniter-js/store/adapters";
+
+IgniterStoreRedisAdapter.create({ redis: Redis })
+```
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `redis` | `Redis` | ioredis client instance |
+
+### IgniterStoreMemoryAdapter
+
+```typescript
+import { IgniterStoreMemoryAdapter } from "@igniter-js/store/adapters";
+
+IgniterStoreMemoryAdapter.create()
+```
+
+No constructor options. Supports all operations including streams.
+
+---
+
+## Error Codes
+
+All errors extend `IgniterStoreError` (which extends `IgniterError`).
+
+### Configuration Errors
+
+| Code | Message |
+|------|---------|
+| `STORE_ADAPTER_REQUIRED` | Adapter not configured |
+| `STORE_SERVICE_REQUIRED` | Service name not configured |
+| `STORE_CONFIGURATION_INVALID` | Invalid configuration |
+
+### Scope Errors
+
+| Code | Message |
+|------|---------|
+| `STORE_SCOPE_KEY_REQUIRED` | Scope key is required |
+| `STORE_SCOPE_IDENTIFIER_REQUIRED` | Scope identifier is required |
+| `STORE_INVALID_SCOPE_KEY` | Scope key not defined |
+| `STORE_DUPLICATE_SCOPE` | Scope already defined |
+
+### Namespace & Event Errors
+
+| Code | Message |
+|------|---------|
+| `STORE_MISSING_NAMESPACE` | Events namespace required |
+| `STORE_INVALID_NAMESPACE` | Invalid namespace format |
+| `STORE_RESERVED_NAMESPACE` | Reserved prefix used |
+| `STORE_DUPLICATE_NAMESPACE` | Namespace already registered |
+| `STORE_INVALID_EVENT_NAME` | Invalid event name |
+| `STORE_DUPLICATE_EVENT` | Event/group already defined |
+
+### Schema Errors
+
+| Code | Message |
+|------|---------|
+| `STORE_SCHEMA_VALIDATION_FAILED` | Payload doesn't match schema |
+| `STORE_SCHEMA_CHANNEL_NOT_FOUND` | Channel not found in registry |
+
+### Operation Errors
+
+| Code | Message |
+|------|---------|
+| `STORE_OPERATION_FAILED` | Generic operation failure |
+| `STORE_GET_FAILED` | Get operation failed |
+| `STORE_SET_FAILED` | Set operation failed |
+| `STORE_DELETE_FAILED` | Delete operation failed |
+| `STORE_INCREMENT_FAILED` | Increment failed |
+| `STORE_PUBLISH_FAILED` | Publish failed |
+| `STORE_SUBSCRIBE_FAILED` | Subscribe failed |
+
+### Batch Errors
+
+| Code | Message |
+|------|---------|
+| `STORE_BATCH_FAILED` | Batch operation failed |
+| `STORE_BATCH_KEYS_REQUIRED` | Keys array is required |
+| `STORE_BATCH_ENTRIES_REQUIRED` | Entries array is required |
+
+### Claim Errors
+
+| Code | Message |
+|------|---------|
+| `STORE_CLAIM_FAILED` | Claim operation failed |
+
+### Stream Errors
+
+| Code | Message |
+|------|---------|
+| `STORE_STREAM_APPEND_FAILED` | Stream append failed |
+| `STORE_STREAM_READ_FAILED` | Stream read failed |
+| `STORE_STREAM_GROUP_CREATE_FAILED` | Group creation failed |
+| `STORE_STREAM_ACK_FAILED` | Acknowledgment failed |
+| `STORE_STREAM_NAME_REQUIRED` | Stream name required |
+| `STORE_STREAM_GROUP_REQUIRED` | Group name required |
+| `STORE_STREAM_CONSUMER_REQUIRED` | Consumer name required |
 
 ### Serialization Errors
 
+| Code | Message |
+|------|---------|
+| `STORE_SERIALIZATION_FAILED` | Value serialization failed |
+| `STORE_DESERIALIZATION_FAILED` | Value deserialization failed |
+
+### Connection Errors
+
+| Code | Message |
+|------|---------|
+| `STORE_CONNECTION_FAILED` | Connection failed |
+| `STORE_NOT_CONNECTED` | Not connected to backend |
+
+### Error Handling
+
 ```typescript
+import { IgniterStoreError } from "@igniter-js/store";
+
 try {
-  // Objects with circular references will fail
-  const circular = { self: null as any };
-  circular.self = circular;
-  
-  await igniter.store.set('key', circular);
+  await store.kv.get("key");
 } catch (error) {
-  // JSON.stringify will fail
-  console.error('Serialization failed:', error);
-}
-```
-
-### Graceful Error Handling
-
-```typescript
-const getCached = async <T>(key: string, context: AppContext): Promise<T | null> => {
-  try {
-    return await igniter.store.get<T>(key);
-  } catch (error) {
-    // Log error but don't fail the request
-    context.logger.warn('Cache read failed', { error, key });
-    return null;
+  if (IgniterStoreError.is(error)) {
+    console.log(error.code);     // e.g., "STORE_GET_FAILED"
+    console.log(error.message);  // Human-readable message
+    console.log(error.statusCode); // HTTP status code
   }
-};
-```
-
----
-
-## Method Summary
-
-| Method | Description | Returns |
-|--------|-------------|---------|
-| `get<T>(key)` | Retrieve a value by key | `Promise<T \| null>` |
-| `set(key, value, options?)` | Store a value with optional TTL | `Promise<void>` |
-| `delete(key)` | Delete a key | `Promise<void>` |
-| `has(key)` | Check if key exists | `Promise<boolean>` |
-| `increment(key)` | Atomically increment a counter | `Promise<number>` |
-| `expire(key, ttl)` | Set/update key expiration | `Promise<void>` |
-| `publish(channel, message)` | Publish message to channel | `Promise<void>` |
-| `subscribe(channel, callback)` | Subscribe to channel | `Promise<void>` |
-| `unsubscribe(channel, callback?)` | Unsubscribe from channel | `Promise<void>` |
-
----
-
-## Best Practices
-
-### 1. Use Type Inference
-
-```typescript
-// ✅ Good: Type inference
-const user = await igniter.store.get<User>('user:123');
-
-// ❌ Bad: No type safety
-const user = await igniter.store.get('user:123');
-```
-
-### 2. Handle Null Values
-
-```typescript
-// ✅ Good: Check for null
-const user = await igniter.store.get<User>('user:123');
-if (user) {
-  // Use user
 }
-
-// ❌ Bad: Assume value exists
-const user = await igniter.store.get<User>('user:123')!;
-// May cause runtime errors
-```
-
-### 3. Set Appropriate TTLs
-
-```typescript
-// ✅ Good: TTL matches data volatility
-await igniter.store.set('session', data, { ttl: 3600 }); // 1 hour
-await igniter.store.set('config', data, { ttl: 86400 }); // 1 day
-
-// ❌ Bad: Missing or inappropriate TTL
-await igniter.store.set('session', data); // Never expires
-await igniter.store.set('temp', data, { ttl: 31536000 }); // 1 year for temp data
-```
-
-### 4. Use Meaningful Key Names
-
-```typescript
-// ✅ Good: Clear and descriptive
-await igniter.store.set('user:123:profile', profileData);
-await igniter.store.set('order:456:status', statusData);
-
-// ❌ Bad: Vague or unclear
-await igniter.store.set('data', someData);
-await igniter.store.set('key1', value);
 ```
 
 ---
 
-- Learn about [caching operations](/docs/store/caching)
-- Explore [Pub/Sub messaging](/docs/store/pubsub)
-- Master [atomic operations](/docs/store/atomic-operations)
-- Check out [advanced usage patterns](/docs/store/advanced)
+## Telemetry
 
+### IgniterStoreTelemetryEvents
+
+```typescript
+import { IgniterStoreTelemetryEvents } from "@igniter-js/store/telemetry";
+```
+
+Returns a typed events registry for `@igniter-js/telemetry`. Use with:
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withService("api")
+  .addEvents(IgniterStoreTelemetryEvents)
+  .build();
+```
+
+Events span every operation namespace: `igniter.store.kv.*`, `igniter.store.counter.*`, `igniter.store.batch.*`, `igniter.store.claim.*`, `igniter.store.events.*`, `igniter.store.stream.*`, `igniter.store.dev.*`.
+
+---
+
+## Next Steps
+
+- See [troubleshooting](/docs/store/troubleshooting) for common errors
+- Explore [advanced patterns](/docs/store/advanced) for production usage
+- Read the [package README](https://github.com/igniter-js/igniter-js/blob/main/packages/store/README.md) for exhaustive real-world examples

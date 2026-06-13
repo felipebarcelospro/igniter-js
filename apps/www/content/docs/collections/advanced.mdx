@@ -1,0 +1,275 @@
+---
+title: Advanced Patterns
+description: Context injection, telemetry, global hooks, multi-pattern files, and custom logging.
+---
+
+## Advanced Patterns
+
+Once you've mastered the basics, these patterns unlock the full power of collections for production applications.
+
+---
+
+## Context Injection
+
+Use `withContext()` to inject dependencies into every hook, view data handler, and view action. The factory runs **fresh for every operation** — you always get the latest state.
+
+```typescript
+import { IgniterCollections } from '@igniter-js/collections';
+
+interface AppContext {
+  db: Database;
+  auth: AuthState;
+  config: AppConfig;
+}
+
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withContext(async (): Promise<AppContext> => {
+    const [db, auth, config] = await Promise.all([
+      Database.connect(),
+      getCurrentAuth(),
+      loadConfig(),
+    ]);
+    return { db, auth, config };
+  })
+  .addCollection(Posts)
+  .build();
+
+// Access in hooks
+Posts.onCreated(async ({ value, context }) => {
+  const { db, auth } = context as AppContext;
+  await db.auditLog.create({
+    userId: auth.userId,
+    action: 'post:created',
+    documentId: value.id,
+  });
+  return value;
+});
+
+// Access in views
+const DashboardView = IgniterCollectionView.create('dashboard')
+  .withData(async ({ manager, context }) => {
+    const { auth } = context as AppContext;
+    const posts = auth.isAdmin
+      ? await manager.posts.findMany()
+      : await manager.posts.findMany({ where: { published: true } });
+    return { posts };
+  })
+  .build();
+```
+
+<Callout type="info">
+  The context factory is called **once per operation**. For batch operations like `findMany`, it's called once. Every hook on a single `create` call shares the same context instance.
+</Callout>
+
+---
+
+## Telemetry
+
+Integrate `@igniter-js/telemetry` for observability — track operation duration, error rates, and throughput.
+
+```typescript
+import { IgniterTelemetry } from '@igniter-js/telemetry';
+import { IgniterCollections } from '@igniter-js/collections';
+
+const telemetry = IgniterTelemetry.create()
+  .withAdapter(telemetryAdapter)
+  .build();
+
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withTelemetry(telemetry)
+  .addCollection(Posts)
+  .build();
+
+// Collections automatically reports:
+// - Operation duration (create, read, update, delete, list)
+// - Error rates and error codes
+// - Collection name context
+// - Document count per operation
+```
+
+---
+
+## Global Hooks
+
+Apply hooks to every collection at once — perfect for logging, audit trails, and cross-cutting concerns:
+
+```typescript
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withGlobalHooks({
+    onCreated: async ({ value, collection }) => {
+      console.log(`[${collection.definition.name}] Created: ${value.id}`);
+      return value;
+    },
+    onUpdated: async ({ newValue, previousValue, collection }) => {
+      console.log(
+        `[${collection.definition.name}] Updated: ${newValue.id}`,
+        Object.keys(newValue.data).filter(
+          k => newValue.data[k] !== previousValue.data[k]
+        )
+      );
+      return newValue;
+    },
+    onDeleted: async ({ value, collection }) => {
+      console.log(`[${collection.definition.name}] Deleted: ${value.id}`);
+      return true;
+    },
+    onRead: async ({ value, collection }) => {
+      console.log(`[${collection.definition.name}] Read: ${value.id}`);
+      return value;
+    },
+    onList: async ({ values, collection }) => {
+      console.log(`[${collection.definition.name}] Listed: ${values.length} docs`);
+      return values;
+    },
+  })
+  .addCollection(Posts)
+  .addCollection(Pages)
+  .build();
+```
+
+<Callout type="info">
+  Global hooks run **before** collection-specific hooks. If a global hook returns `false`, the operation cancels and collection hooks never run.
+</Callout>
+
+---
+
+## Multi-Pattern Files
+
+Collections supports multiple file patterns per collection. The best-match pattern is used based on available data fields:
+
+```typescript
+const Posts = IgniterCollectionModel.create('posts')
+  .withPatterns([
+    // Organized by year/month when metadata is available
+    '.content/posts/{year}/{month}/{id}.mdx',
+    // Flat structure as fallback
+    '.content/posts/{id}.mdx',
+    // Author-organized for team content
+    '.content/posts/{author}/{id}.mdx',
+  ])
+  .withSchema(z.object({
+    title: z.string(),
+    author: z.string(),
+    published: z.boolean(),
+  }))
+  .build();
+```
+
+The system selects the pattern with the most placeholders that can be resolved from the document data. If your data has `year`, `month`, and `author`, the date-based pattern wins.
+
+---
+
+## Custom Logger
+
+Pass a logger for debug output and operation tracking:
+
+```typescript
+import type { IgniterLogger } from '@igniter-js/common';
+
+const logger: IgniterLogger = {
+  debug: (msg, meta) => console.debug(`[Collections] ${msg}`, meta),
+  info: (msg, meta) => console.info(`[Collections] ${msg}`, meta),
+  warn: (msg, meta) => console.warn(`[Collections] ${msg}`, meta),
+  error: (msg, meta) => console.error(`[Collections] ${msg}`, meta),
+};
+
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withLogger(logger)
+  .addCollection(Posts)
+  .build();
+
+// Now you'll see:
+// [Collections] Document created: posts/a1b2c3d4 { duration: 12 }
+// [Collections] Registered collection from schema: pages
+```
+
+---
+
+
+## Multiple Base Paths
+
+Support content from multiple directories:
+
+```typescript
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withBasePath(['.content', '.docs', '.blog']) // Multiple base paths
+  .addCollection(Posts)
+  .build();
+```
+
+The first path in the array is used as the primary base path. Additional paths can be used for pattern-based resolution.
+
+---
+
+## Sub-Collection Depth
+
+Create deeply nested document structures:
+
+```typescript
+const Projects = IgniterCollectionModel.create('projects')
+  .withPatterns(['.content/projects/{id}.mdx'])
+  .withSchema(projectSchema)
+  .build();
+
+const Tasks = Projects.collections.create('tasks')
+  .withPatterns(['{parent_id}/tasks/{id}.mdx'])
+  .withSchema(taskSchema)
+  .build();
+
+const Comments = Tasks.collections.create('comments')
+  .withPatterns(['{parent_id}/comments/{id}.mdx'])
+  .withSchema(commentSchema)
+  .build();
+
+// Nested files: .content/projects/proj-1/tasks/task-1/comments/comment-1.mdx
+```
+
+---
+
+## Full-Text Search Configuration
+
+Fine-tune the search index with field weights and fuzzy matching:
+
+```typescript
+const Posts = IgniterCollectionModel.create('posts')
+  .withSchema(z.object({
+    title: z.string(),
+    description: z.string(),
+    body: z.string(),
+    tags: z.array(z.string()),
+    author: z.string(),
+  }))
+  .build();
+
+// Search with weighted fields
+const results = await docs.posts.findMany({
+  where: {
+    search: {
+      term: 'TypeScript patterns',
+      fields: {
+        title: { weight: 3, fuzzy: true },
+        description: { weight: 1.5 },
+        body: { weight: 0.5 },
+        tags: { weight: 2 },
+      },
+      threshold: 0.15,
+      fuzzy: false,
+    },
+  },
+});
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="API Reference" description="Complete reference for every builder, manager, and type." href="/docs/collections/api-reference" />
+  <Card title="Troubleshooting" description="Common errors, error codes, and debugging strategies." href="/docs/collections/troubleshooting" />
+  <Card title="Best Practices" description="Do's and Don'ts, production patterns, and anti-patterns." href="/docs/collections/best-practices" />
+</Cards>

@@ -115,8 +115,6 @@ export interface IgniterCollectionSchemaFile {
   name: string;
   /** Multiple file patterns for flexible storage */
   patterns: string[];
-  /** Path to a template file for document generation */
-  template?: string;
   /** Schema definition mapping field names to types */
   schema?: IgniterCollectionSchemaDefinition;
   /** Hook file references */

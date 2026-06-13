@@ -1,0 +1,19 @@
+{
+  "title": "Agents",
+  "pages": [
+    "index",
+    "installation",
+    "quick-start",
+    "building-agents",
+    "tools-toolsets",
+    "prompts",
+    "memory",
+    "mcp-integration",
+    "multi-agent",
+    "hooks-telemetry",
+    "real-world",
+    "best-practices",
+    "troubleshooting",
+    "api-reference"
+  ]
+}

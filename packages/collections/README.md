@@ -51,7 +51,7 @@ bun add @igniter-js/collections zod
 
 ```typescript
 import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters/node';
 import { z } from 'zod';
 
 // 1️⃣ Define your content schema
@@ -155,7 +155,7 @@ console.log('Created post:', post.id);
 
 ```typescript
 import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters/node';
 import { z } from 'zod';
 
 const Posts = IgniterCollectionModel.create('posts')
@@ -360,6 +360,77 @@ const count = await docs.posts.count({
 });
 ```
 
+### Context Injection (Dependency Injection)
+
+Inject dependencies into hooks, views, and actions using `.withContext()`. The factory is called **fresh on every operation**, ensuring you always have up-to-date context (auth state, database connections, configuration).
+
+```typescript
+interface MyContext {
+  db: Database;
+  auth: { userId: string; role: string };
+}
+
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withContext(async () => ({
+    db: await Database.connect(),
+    auth: await getAuth(),
+  }))
+  .addCollection(Posts)
+  .build();
+
+// Access context in hooks
+const Posts = IgniterCollectionModel.create('posts')
+  .withPatterns(['.content/posts/{id}.mdx'])
+  .withSchema(postSchema)
+  .onCreated(async ({ value, context }) => {
+    const ctx = context as MyContext;
+    await ctx.db.audit.log('post_created', value);
+    return { ...value, createdBy: ctx.auth.userId };
+  })
+  .onUpdated(async ({ newValue, context }) => {
+    const ctx = context as MyContext;
+    await ctx.db.audit.log('post_updated', newValue);
+    return newValue;
+  })
+  .onDeleted(async ({ value, context }) => {
+    const ctx = context as MyContext;
+    await ctx.db.audit.log('post_deleted', value);
+    return true;
+  })
+  .build();
+
+// Access context in views
+const DashboardView = IgniterCollectionView.create('dashboard')
+  .withTitle('Dashboard')
+  .withData(async ({ manager, context }) => {
+    const ctx = context as MyContext;
+    const posts = await manager.posts.findMany();
+    return {
+      items: posts,
+      currentUser: ctx.auth.userId,
+    };
+  })
+  .addAction('export', {
+    description: 'Export to CSV',
+    handler: async ({ manager, context, params }) => {
+      const ctx = context as MyContext;
+      const posts = await manager.posts.findMany();
+      // ... export logic
+      return { success: true };
+    },
+  })
+  .build();
+```
+
+**Context is available in:**
+- All lifecycle hooks (`onCreated`, `onUpdated`, `onDeleted`, `onRead`, `onList`)
+- View `getData` hooks
+- View action handlers
+- Global events (`docs.on('created', ...)`)
+- Scoped events (`docs.on('posts:created', ...)`)
+- Collection model events (`docs.posts.on('created', ...)`)
+
 ### Lifecycle Hooks (Powerful Control Flow)
 
 ```typescript
@@ -412,8 +483,9 @@ Listen to all collections at once:
 
 ```typescript
 // Global event (any collection)
-const { off } = docs.on('created', ({ collection, value }) => {
+const { off } = docs.on('created', ({ collection, value, context }) => {
   console.log(`New document in ${collection}: ${value.id}`);
+  // context is available if withContext() was configured
 });
 
 // Unsubscribe later
@@ -426,9 +498,10 @@ Subscribe directly on a collection manager for **schema-typed** event payloads. 
 
 ```typescript
 // Scoped events are fully typed — autocomplete works!
-const sub = docs.posts.on('created', ({ value }) => {
+const sub = docs.posts.on('created', ({ value, context }) => {
   // TypeScript knows: value.title, value.author, value.published, etc.
   console.log(`Post created: ${value.title} by ${value.author}`);
+  // context is available if withContext() was configured
 });
 
 sub.off(); // Unsubscribe
@@ -440,28 +513,31 @@ sub.off(); // Unsubscribe
 
 | Aspect | Global (`docs.on(...)`) | Scoped (`docs.posts.on(...)`) |
 |--------|-------------------------|-------------------------------|
-| Payload | `{ collection, value }` | `{ value }` (typed) |
+| Payload | `{ collection, value, context }` | `{ value, context }` (typed) |
 | Type Safety | `any` | Schema-inferred |
 | Use Case | Cross-cutting concerns | Collection-specific logic |
 
 ```typescript
 // Global — receives collection name as string
-docs.on('updated', ({ collection, newValue, previousValue }) => {
+docs.on('updated', ({ collection, newValue, previousValue, context }) => {
   console.log(`${collection} updated`);
+  // context is available if withContext() was configured
 });
 
 // Scoped — receives typed payload from the schema
-docs.posts.on('updated', ({ newValue, previousValue }) => {
+docs.posts.on('updated', ({ newValue, previousValue, context }) => {
   // newValue.title is autocompleted by TypeScript
   if (newValue.published && !previousValue.published) {
     console.log(`Post published: ${newValue.title}`);
   }
+  // context is available if withContext() was configured
 });
 
 // Scoped list event
-docs.posts.on('list', ({ items }) => {
+docs.posts.on('list', ({ items, context }) => {
   // items is typed as IgniterCollectionDocument<PostSchema>[]
   console.log(`Listed ${items.length} posts`);
+  // context is available if withContext() was configured
 });
 ```
 
@@ -529,7 +605,7 @@ import { IgniterCollectionView } from '@igniter-js/collections';
 
 const DashboardView = IgniterCollectionView.create('dashboard')
   .withTitle('Blog Dashboard')
-  .withData(async ({ manager }) => {
+  .withData(async ({ manager, context }) => {
     const [posts, authors, comments] = await Promise.all([
       manager.posts.findMany(),
       manager.authors.findMany(),
@@ -552,7 +628,7 @@ const DashboardView = IgniterCollectionView.create('dashboard')
   ])
   .addAction('export', {
     description: 'Export to CSV',
-    async handler({ manager, params }) {
+    async handler({ manager, context, params }) {
       const posts = await manager.posts.findMany();
       // ... export logic
       return { success: true, fileUrl: '/exports/posts.csv' };
@@ -932,117 +1008,13 @@ afterEach(() => {
 
 ---
 
-## 📐 Templates & Dynamic Content
-
-Collections support document templates using **Handlebars** as the underlying engine. When you define a template with `.withTemplate()`, the `content` property in `.create()` and `.update()` becomes a **typed object** instead of a raw string. Handlebars automatically substitutes variables from the object into the template file.
-
-### How Templates Work
-
-1. Define a `.hbs` template file with Handlebars syntax
-2. Call `.withTemplate()` on your collection builder pointing to that file
-3. Pass a typed object as `content` when creating or updating documents
-4. The engine renders the template with your data and stores the result
-
-### Template File Example
-
-Create a Handlebars template file:
-
-```handlebars
-<!-- templates/prompt.hbs -->
-# {{title}}
-
-You are {{content.agent}}, an AI assistant.
-
-## Instructions
-
-{{content.instructions}}
-
-## Context
-{{#if content.context}}
-{{content.context}}
-{{/if}}
-```
-
-### Collection with Template
-
-```typescript
-const Prompts = IgniterCollectionModel.create('prompts')
-  .withPatterns(['prompts/{id}.md'])
-  .withTemplate('templates/prompt.hbs')
-  .withSchema(z.object({
-    title: z.string(),
-    content: z.object({
-      agent: z.string(),
-      instructions: z.string(),
-      context: z.string().optional()
-    })
-  }))
-  .build();
-
-// Creating a document with typed content object
-const doc = await docs.prompts.create({
-  data: {
-    title: "System Prompt",
-    content: {
-      agent: "Lia",
-      instructions: "Be helpful, concise, and accurate.",
-      context: "User is a senior developer."
-    }
-  }
-});
-
-// The stored file contains the rendered template:
-// # System Prompt
-// You are Lia, an AI assistant.
-// ## Instructions
-// Be helpful, concise, and accurate.
-// ## Context
-// User is a senior developer.
-```
-
-### Updating with Templates
-
-Templates work the same way for updates:
-
-```typescript
-await docs.prompts.update({
-  where: { id: doc.id },
-  data: {
-    content: {
-      agent: "Lia",
-      instructions: "Be creative and inspiring."
-    }
-  }
-});
-```
-
-### Without Templates (Raw Strings)
-
-If no template is defined, `content` must be a plain string:
-
-```typescript
-const Notes = IgniterCollectionModel.create('notes')
-  .withPatterns(['notes/{id}.md'])
-  .withSchema(z.object({ title: z.string() }))
-  .build();
-
-// Without template, content is a raw string
-await docs.notes.create({
-  data: {
-    title: "My Note",
-    content: "This is raw markdown content..."
-  }
-});
-```
-
----
 
 ## 🧩 Multi-Runtime Adapters
 
 ### Bun (High Performance)
 
 ```typescript
-import { BunFsAdapter } from '@igniter-js/collections/adapters';
+import { BunFsAdapter } from '@igniter-js/collections/adapters/bun';
 
 const docs = IgniterCollections.create()
   .withAdapter(new BunFsAdapter())
@@ -1053,7 +1025,7 @@ const docs = IgniterCollections.create()
 ### Node.js (Cross-Runtime)
 
 ```typescript
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters/node';
 
 const docs = IgniterCollections.create()
   .withAdapter(new NodeFsAdapter())
@@ -1064,12 +1036,12 @@ const docs = IgniterCollections.create()
 ### Redis (Distributed)
 
 ```typescript
-import { BunRedisAdapter } from '@igniter-js/collections/adapters';
+import { BunRedisAdapter } from '@igniter-js/collections/adapters/bun';
 
 const docs = IgniterCollections.create()
   .withAdapter(new BunRedisAdapter({
     url: 'redis://localhost:6379',
-    keyPrefix: 'content:',
+    prefix: 'content:',
     ttl: 3600,
   }))
   .addCollection(Posts)
@@ -1079,7 +1051,7 @@ const docs = IgniterCollections.create()
 ### S3 (Cloud Storage)
 
 ```typescript
-import { BunS3Adapter } from '@igniter-js/collections/adapters';
+import { BunS3Adapter } from '@igniter-js/collections/adapters/bun';
 
 const docs = IgniterCollections.create()
   .withAdapter(new BunS3Adapter({
@@ -1094,9 +1066,9 @@ const docs = IgniterCollections.create()
 ### Mock (Testing)
 
 ```typescript
-import { MockAdapter } from '@igniter-js/collections/adapters';
+import { IgniterCollectionMockAdapter } from '@igniter-js/collections/adapters/mock';
 
-const mockAdapter = new MockAdapter();
+const mockAdapter = new IgniterCollectionMockAdapter();
 const docs = IgniterCollections.create()
   .withAdapter(mockAdapter)
   .addCollection(Posts)
@@ -1111,7 +1083,7 @@ const docs = IgniterCollections.create()
 
 ```typescript
 import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters/node';
 import { z } from 'zod';
 
 const Docs = IgniterCollectionModel.create('docs')
@@ -1229,6 +1201,7 @@ class IgniterCollectionsBuilder<TCollections> {
   
   withBasePath(path: string | string[]): this
   withAdapter(adapter: IgniterCollectionAdapter): this
+  withContext(factory: () => unknown | Promise<unknown>): this
   withWatcher(paths: string | string[], options?: WatcherConfig): this
   withTelemetry(telemetry: IgniterTelemetryManager): this
   withLogger(logger: IgniterLogger): this
@@ -1248,6 +1221,7 @@ class IgniterCollectionsBuilder<TCollections> {
 | `create()` | None | `Builder` | Static factory for new builder |
 | `withBasePath()` | `path: string \| string[]` | `this` | Set root path(s) for collections |
 | `withAdapter()` | `adapter: IgniterCollectionAdapter` | `this` | **Required.** Set storage adapter |
+| `withContext()` | `factory: () => unknown \| Promise<unknown>` | `this` | Inject dependencies into hooks and views |
 | `withWatcher()` | `paths, options?` | `this` | Enable filesystem discovery with auto-watch |
 | `withTelemetry()` | `telemetry: IgniterTelemetryManager` | `this` | Connect to telemetry system |
 | `withLogger()` | `logger: IgniterLogger` | `this` | Set custom logger |
@@ -1263,7 +1237,6 @@ class IgniterCollectionModelBuilder<TSchema, TName> {
   static create<TName>(name: TName): Builder<unknown, TName>
   
   withPatterns(patterns: string[]): this
-  withTemplate(path: string): this
   withSchema<S>(schema: S): Builder<InferSchema<S>, TName>
   
   onCreated(hook: OnCreatedHook<TSchema>): this
@@ -1302,7 +1275,6 @@ class IgniterCollectionViewBuilder {
 | `withDescription()` | `description: string` | `this` | Set description |
 | `withData()` | `hook: Function` | `this` | **Required.** Data fetching hook |
 | `withTree()` | `tree: Node[]` | `this` | UI component tree |
-| `withTransform()` | `transform: Transform` | `this` | Add data transformation |
 | `addAction()` | `name, action` | `this` | Add view action |
 | `build()` | None | `Definition` | Build immutable definition |
 
@@ -1398,15 +1370,15 @@ Customize file naming:
 ```typescript
 import { describe, it, expect, beforeEach } from 'vitest';
 import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
-import { MockAdapter } from '@igniter-js/collections/adapters';
+import { IgniterCollectionMockAdapter } from '@igniter-js/collections/adapters/mock';
 import { z } from 'zod';
 
 describe('Posts Collection', () => {
   let docs: ReturnType<typeof createDocs>;
-  let mockAdapter: MockAdapter;
+  let mockAdapter: IgniterCollectionMockAdapter;
   
   beforeEach(() => {
-    mockAdapter = new MockAdapter();
+    mockAdapter = new IgniterCollectionMockAdapter();
     docs = createDocs(mockAdapter);
     mockAdapter.reset();
   });
@@ -1418,7 +1390,7 @@ describe('Posts Collection', () => {
     
     expect(post.id).toBeDefined();
     expect(post.title).toBe('Test Post');
-    expect(mockAdapter.calls.write).toHaveLength(1);
+    expect(mockAdapter.getCallsFor('write')).toHaveLength(1);
   });
   
   it('should validate schema', async () => {
@@ -1430,7 +1402,7 @@ describe('Posts Collection', () => {
   });
 });
 
-function createDocs(adapter: MockAdapter) {
+function createDocs(adapter: IgniterCollectionMockAdapter) {
   const Posts = IgniterCollectionModel.create('posts')
     .withPatterns(['content/posts/{id}.mdx'])
     .withSchema(z.object({
@@ -1624,7 +1596,7 @@ const RecentView = IgniterCollectionView.create('recent')
 ```typescript
 // lib/collections.ts
 import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters/node';
 
 const Posts = IgniterCollectionModel.create('posts')
   .withPatterns(['content/posts/{id}.mdx'])
@@ -1664,7 +1636,7 @@ export default async function BlogPage() {
 ```typescript
 import express from 'express';
 import { IgniterCollections } from '@igniter-js/collections';
-import { BunRedisAdapter } from '@igniter-js/collections/adapters';
+import { BunRedisAdapter } from '@igniter-js/collections/adapters/bun';
 
 const app = express();
 app.use(express.json());

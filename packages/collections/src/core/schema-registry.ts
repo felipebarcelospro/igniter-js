@@ -523,7 +523,6 @@ export class IgniterCollectionSchemaRegistry {
     return {
       name: schemaFile.name,
       patterns,
-      template: schemaFile.template,
       defaultIdGenerator: () => IgniterCollectionId.uuid(),
       schema: schema,
       hooks: hooks as IgniterCollectionModelHooks<Record<string, any>>,

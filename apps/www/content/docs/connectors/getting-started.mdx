@@ -1,0 +1,310 @@
+---
+title: Getting Started
+description: Build a complete multi-tenant integration from scratch. Define a Telegram connector, set up the manager, and execute actions with full type safety.
+---
+
+## Getting Started
+
+This guide walks through building a **real multi-tenant Telegram integration** from zero to production-ready — including encryption, scoping, and error handling.
+
+By the end, you'll have a type-safe connector system that can send Telegram messages across multiple organizations.
+
+<Callout type="info">
+  We assume you have a Prisma database set up. If you don't have one, the [Mock Adapter](/docs/connectors/adapters#mock-adapter) lets you develop without a database.
+</Callout>
+
+---
+
+## Step 1 — Define Your Connector
+
+A connector definition describes the configuration, actions, metadata, and optionally OAuth or webhook setup.
+
+```typescript
+// connectors/telegram.ts
+import { IgniterConnector } from "@igniter-js/connectors";
+import { z } from "zod";
+
+export const telegramConnector = IgniterConnector.create()
+  .withConfig(
+    z.object({
+      botToken: z.string().describe("Your Telegram bot token from @BotFather"),
+      chatId: z.string().describe("Target chat ID (user, group, or channel)"),
+    }),
+  )
+  .withMetadata(
+    z.object({
+      name: z.string(),
+      icon: z.string(),
+      description: z.string().optional(),
+    }),
+    {
+      name: "Telegram",
+      icon: "telegram.svg",
+      description: "Send messages to Telegram users, groups, and channels",
+    },
+  )
+  .addAction("sendMessage", {
+    description: "Send a text message to the configured chat",
+    input: z.object({
+      message: z.string().min(1).max(4096),
+      parseMode: z.enum(["HTML", "Markdown"]).optional(),
+    }),
+    output: z.object({
+      messageId: z.string(),
+      timestamp: z.date(),
+    }),
+    handler: async ({ input, config }) => {
+      const body: Record<string, unknown> = {
+        chat_id: config.chatId,
+        text: input.message,
+      };
+      if (input.parseMode) body.parse_mode = input.parseMode;
+
+      const res = await fetch(
+        `https://api.telegram.org/bot${config.botToken}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+
+      const data = await res.json() as any;
+      if (!data.ok) throw new Error(data.description);
+
+      return {
+        messageId: String(data.result.message_id),
+        timestamp: new Date(),
+      };
+    },
+  })
+  .build();
+```
+
+## Step 2 — Set Up the Manager
+
+The manager wires adapters, encryption, scopes, and connectors together.
+
+```typescript
+// connectors/manager.ts
+import { IgniterConnectorManager } from "@igniter-js/connectors";
+import { IgniterConnectorPrismaAdapter } from "@igniter-js/connectors/adapters";
+import { PrismaClient } from "@prisma/client";
+import { telegramConnector } from "./telegram";
+
+const prisma = new PrismaClient();
+
+export const connectors = IgniterConnectorManager.create()
+  .withDatabase(IgniterConnectorPrismaAdapter.create(prisma))
+  .withEncrypt(["botToken"]) // botToken encrypted at rest
+  .addScope("organization", { required: true })
+  .addConnector("telegram", telegramConnector)
+  .build();
+```
+
+<Callout type="warn">
+  **Encryption requires `IGNITER_SECRET`** in your environment variables. Without it, encrypted fields will throw on read/write. Generate one with `openssl rand -hex 32`.
+</Callout>
+
+### Prisma Schema
+
+The Prisma adapter expects a model with specific fields. Add this to your Prisma schema:
+
+```prisma
+model Connector {
+  id        String   @id @default(cuid())
+  scope     String
+  identity  String
+  provider  String
+  value     Json
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([scope, identity, provider])
+  @@index([provider])
+}
+```
+
+## Step 3 — Connect a Tenant
+
+Each "tenant" (organization, workspace, user) gets a scoped instance:
+
+```typescript
+// api/orgs/[orgId]/telegram/connect.ts
+import { connectors } from "@/connectors/manager";
+
+export async function connectTelegram(orgId: string, config: {
+  botToken: string;
+  chatId: string;
+}) {
+  const scoped = connectors.scope("organization", orgId);
+
+  await scoped.connect("telegram", config);
+
+  return { success: true };
+}
+```
+
+## Step 4 — Execute Actions
+
+Once connected, execute typed actions on the scoped instance:
+
+```typescript
+// api/orgs/[orgId]/telegram/send.ts
+import { connectors } from "@/connectors/manager";
+
+export async function sendTelegramMessage(
+  orgId: string,
+  message: string,
+  parseMode?: "HTML" | "Markdown",
+) {
+  const scoped = connectors.scope("organization", orgId);
+
+  const { data, error } = await scoped
+    .action("telegram", "sendMessage")
+    .call({ message, parseMode });
+
+  if (error) {
+    console.error("Failed to send message:", error);
+    throw error;
+  }
+
+  return data; // { messageId: string, timestamp: Date }
+}
+```
+
+<Callout type="info">
+  The return type of `data` is **fully inferred** from your Zod schemas — `{ messageId: string; timestamp: Date }`. No manual type annotations needed.
+</Callout>
+
+## Step 5 — Handle Errors
+
+Connectors throws typed errors with stable codes. Catch and handle them:
+
+```typescript
+import { IgniterConnectorError } from "@igniter-js/connectors";
+
+try {
+  await scoped.action("telegram", "sendMessage").call({ message: "Hi!" });
+} catch (error) {
+  if (IgniterConnectorError.isConnectorError(error)) {
+    switch (error.code) {
+      case "CONNECTOR_NOT_CONNECTED":
+        // Prompt user to connect first
+        return { status: 400, error: "Telegram not connected" };
+      case "CONNECTOR_ACTION_INPUT_INVALID":
+        // Show validation errors to the user
+        return { status: 400, error: error.message };
+      default:
+        // Log unknown connector errors
+        console.error(`[${error.code}]`, error);
+    }
+  }
+  throw error; // Re-throw unexpected errors
+}
+```
+
+---
+
+## Full Example: Complete API Route
+
+Putting it all together in a **Next.js API route**:
+
+```typescript
+// app/api/orgs/[orgId]/notify/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { connectors } from "@/connectors/manager";
+import { IgniterConnectorError } from "@igniter-js/connectors";
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { orgId: string } },
+) {
+  try {
+    const { message, parseMode } = await req.json();
+    const scoped = connectors.scope("organization", params.orgId);
+
+    const { data, error } = await scoped
+      .action("telegram", "sendMessage")
+      .call({ message, parseMode });
+
+    if (error) throw error;
+    return NextResponse.json({ messageId: data.messageId });
+  } catch (error) {
+    if (IgniterConnectorError.isConnectorError(error)) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.statusCode },
+      );
+    }
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
+  }
+}
+```
+
+## Adding a Second Connector
+
+The power of connectors shines when you add more integrations. Here's a Discord connector added to the same manager:
+
+```typescript
+// connectors/discord.ts
+const discordConnector = IgniterConnector.create()
+  .withConfig(
+    z.object({
+      webhookUrl: z.string().url(),
+    }),
+  )
+  .addAction("sendEvent", {
+    input: z.object({
+      title: z.string(),
+      description: z.string(),
+      color: z.number().optional(),
+    }),
+    handler: async ({ input, config }) => {
+      await fetch(config.webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          embeds: [{
+            title: input.title,
+            description: input.description,
+            color: input.color ?? 0x5865F2,
+          }],
+        }),
+      });
+    },
+  })
+  .build();
+
+// Add to manager
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(IgniterConnectorPrismaAdapter.create(prisma))
+  .withEncrypt(["botToken"])
+  .addScope("organization", { required: true })
+  .addConnector("telegram", telegramConnector)
+  .addConnector("discord", discordConnector)
+  .build();
+
+// Both work on the same scoped instance
+const scoped = connectors.scope("organization", "org_123");
+await scoped.action("telegram", "sendMessage").call({ message: "Hi!" });
+await scoped.action("discord", "sendEvent").call({
+  title: "Deploy Complete",
+  description: "Production deployed successfully",
+});
+```
+
+**✅ Success!** You now have a production-ready multi-tenant integration system with two connectors, encrypted configs, and full type safety.
+
+---
+
+## Next Steps
+
+- [Defining Connectors](/docs/connectors/defining-connectors) — Deep dive into connector definitions
+- [Manager Setup](/docs/connectors/manager-setup) — Adapters, encryption, telemetry, and scopes
+- [Scopes & Multi-Tenancy](/docs/connectors/scopes) — Advanced scoping patterns
+- [OAuth](/docs/connectors/oauth) — Add OAuth authentication to connectors

@@ -66,6 +66,9 @@ export interface IgniterCollectionViewActionContext<TParams = any> {
   /** Global collections manager (access to all collections) */
   manager: IIgniterCollectionsManager;
 
+  /** User-defined context from withContext() factory */
+  context: unknown;
+
   /** View that triggered the action */
   view: IgniterCollectionViewDefinition;
 
@@ -128,6 +131,9 @@ export interface IgniterCollectionViewQuery {
 export interface IgniterCollectionViewDataHookContext {
   /** Global collections manager (access to all collections) */
   manager: IIgniterCollectionsManager;
+
+  /** User-defined context from withContext() factory */
+  context: unknown;
 
   /** User-provided query options */
   options?: IgniterCollectionViewQuery;

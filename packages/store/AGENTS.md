@@ -1,8 +1,34 @@
 # AGENTS.md - @igniter-js/store
 
-> **Last Updated:** 2026-01-29  
-> **Version:** 0.1.25  
+> **Last Updated:** 2026-06-02  
+> **Version:** 0.1.26  
 > **Goal:** This document serves as the complete operational manual for Code Agents maintaining and consuming the @igniter-js/store package. It is designed to be hyper-robust, training-ready, and exhaustive, aiming for at least 1,500 lines of high-quality content to ensure the agent fully dominates the package's domain, architecture, and usage.
+
+---
+
+## Table of Contents
+
+- [1. Package Vision & Context](#1-package-vision--context)
+- [I. MAINTAINER GUIDE](#i-maintainer-guide-internal-architecture)
+  - [2. FileSystem Topology](#2-filesystem-topology-maintenance)
+  - [3. Architecture Deep-Dive](#3-architecture-deep-dive)
+  - [4. Operational Flow Mapping](#4-operational-flow-mapping-pipelines)
+  - [5. Dependency & Type Graph](#5-dependency--type-graph)
+  - [6. Maintenance Checklist](#6-maintenance-checklist)
+  - [7. Maintainer Troubleshooting](#7-maintainer-troubleshooting)
+- [II. CONSUMER GUIDE](#ii-consumer-guide-developer-manual)
+  - [8. Distribution Anatomy](#8-distribution-anatomy-consumption)
+  - [9. Quick Start & Common Patterns](#9-quick-start--common-patterns)
+  - [10. Real-World Use Case Library](#10-real-world-use-case-library-industry-specific)
+  - [11. Domain-Specific Guidance](#11-domain-specific-guidance)
+  - [12. Best Practices & Anti-Patterns](#12-best-practices--anti-patterns-maintenance-table)
+- [III. TECHNICAL REFERENCE](#iii-technical-reference--resilience)
+  - [13. Exhaustive API Reference](#13-exhaustive-api-reference-class--type-directory)
+  - [14. Telemetry & Observability Registry](#14-telemetry--observability-registry)
+  - [15. Adapter Reference](#15-adapter-reference)
+  - [16. Error Code Catalog](#16-error-code-catalog)
+  - [17. Testing Strategy](#17-testing-strategy)
+  - [18. Consumer Troubleshooting & FAQ](#18-consumer-troubleshooting--faq)
 
 ---
 
@@ -49,7 +75,8 @@ Maintainers must respect the following directory structure and responsibilities 
 This directory contains the concrete implementations of the `IgniterStoreAdapter` interface. These files are the only place where direct interaction with third-party drivers (like `ioredis`) is permitted.
 
 - `redis.adapter.ts`: **The Core Redis Implementation.** This is the primary production adapter. It manages two distinct Redis connections: a "command client" for standard KV/Counter/Claim operations and a "subscriber client" dedicated to Pub/Sub. This separation is required because a Redis client in "subscriber" mode enters a specialized state and cannot execute standard commands.
-- `index.ts`: Standard discovery point. It exports all available adapters to ensure they can be easily consumed by the main builder.
+- `memory.adapter.ts`: **IgniterStoreMemoryAdapter.** A full-featured in-memory adapter for testing, desktop apps (Electron, Tauri, Bun), and development environments. Supports all store operations including KV, counters, claims, batch, Pub/Sub (via EventEmitter), and simulated Redis Streams with consumer groups.
+- `index.ts`: Standard discovery point. It exports all available adapters (`IgniterStoreRedisAdapter`, `IgniterStoreMemoryAdapter`) to ensure they can be easily consumed by the main builder.
 
 #### `src/builders/` — The Configuration Factory
 
@@ -433,7 +460,7 @@ When performing maintenance, follow these rules strictly to ensure long-term sta
 - **`@igniter-js/store`**: The primary entry point. Contains the `IgniterStore` factory and the `IgniterStoreEvents` builder.
 - **`@igniter-js/store/adapters`**: Contains the physical implementation of the store (e.g., `IgniterStoreRedisAdapter`).
 - **`@igniter-js/store/telemetry`**: Contains the event registry needed to register store observability in your application's telemetry manager.
-- **`@igniter-js/store/errors`**: Contains error codes and checking utilities like `IgniterStoreError.is()`.
+- **`IgniterStoreError` and `IGNITER_STORE_ERROR_CODES`**: Available from the main `@igniter-js/store` entry point. Use `IgniterStoreError.is()` as a type guard for predictable error handling.
 
 **Golden Rule**: Never import from deep file paths like `@igniter-js/store/dist/core/manager.js`. These are internal implementation details and will break during minor updates.
 
@@ -1036,7 +1063,7 @@ If using globally distributed Redis (like Upstash or Fly.io Redis):
 18. **Is it compatible with Deno?** Yes, as long as `ioredis` dependencies are met.
 19. **How do I handle binary data?** Encode as base64/hex before storing, or implement a custom adapter that supports binary payloads.
 20. **Can I use it with Redis Cluster?** Yes, just pass a Cluster client to the adapter.
-21. **How do I mock the store in tests?** Create a lightweight in-memory adapter that implements `IgniterStoreAdapter`.
+21. **How do I mock the store in tests?** Use the built-in `IgniterStoreMemoryAdapter` from `@igniter-js/store/adapters` — it provides a complete in-memory implementation with full support for KV, counters, claims, batch ops, Pub/Sub, and simulated streams. See the adapter's source for details.
 22. **What happens if validation fails on publish?** It throws `STORE_SCHEMA_VALIDATION_FAILED` by default.
 23. **Can I disable validation?** Yes, via the `eventsValidation` configuration in the builder.
 24. **How do I monitor performance?** Use the provided telemetry attributes and events.

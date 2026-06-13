@@ -112,8 +112,8 @@ console.log(user?.name); // "Avery"
 
 | Path | Description |
 |------|-------------|
-| `@igniter-js/store` | Main API (`IgniterStore`, `IgniterStoreEvents`, types, errors) |
-| `@igniter-js/store/adapters` | Redis adapter and adapter exports |
+| `@igniter-js/store` | Main API (`IgniterStore`, `IgniterStoreEvents`, types, `IgniterStoreError`, error codes) |
+| `@igniter-js/store/adapters` | Redis adapter, memory adapter, and adapter exports |
 | `@igniter-js/store/telemetry` | Typed telemetry events registry |
 
 ---
@@ -288,8 +288,7 @@ const off = await store.events.user.created.subscribe((ctx) => {
 
 ### Wildcard Note
 
-TypeScript supports wildcard patterns, but Redis Pub/Sub requires `PSUBSCRIBE`.  
-The built-in Redis adapter uses `SUBSCRIBE`, so use explicit channels unless you implement a custom adapter.
+The type system supports wildcard patterns for handler inference — `store.events.subscribe('user:*', ...)` narrows `ctx.type` and `ctx.data` to the union of all matching events. However, the built-in Redis adapter uses `SUBSCRIBE` (not `PSUBSCRIBE`), which does not support channel patterns. Use explicit channel names for production Redis usage, or implement a custom adapter with `PSUBSCRIBE` for wildcard subscriptions.
 
 ---
 
@@ -413,6 +412,10 @@ import { IgniterStoreTelemetryEvents } from "@igniter-js/store/telemetry";
 const telemetry = IgniterTelemetry.create()
   .withService("api")
   .addEvents(IgniterStoreTelemetryEvents)
+  .withRedaction({
+    denylistKeys: ["value", "message", "payload", "data"],
+    hashKeys: ["ctx.store.key"],
+  })
   .build();
 
 const store = IgniterStore.create()
@@ -456,7 +459,27 @@ const redis = new Redis(process.env.REDIS_URL);
 const adapter = IgniterStoreRedisAdapter.create({ redis });
 ```
 
-### Custom Adapter (Example)
+### Memory Adapter (Built-in)
+
+The package ships with `IgniterStoreMemoryAdapter` — ideal for testing, desktop apps (Electron/Tauri/Bun), and development. It supports all operations including KV, counters, claims, batch, Pub/Sub (EventEmitter-based), and simulated Redis Streams.
+
+```typescript
+import { IgniterStoreMemoryAdapter } from "@igniter-js/store/adapters";
+
+const adapter = IgniterStoreMemoryAdapter.create();
+
+const store = IgniterStore.create()
+  .withAdapter(adapter)
+  .withService("test")
+  .build();
+
+// Full API works identically without Redis
+await store.kv.set("key", { hello: "world" });
+await store.counter.increment("views");
+await store.events.publish("test", { data: 42 });
+```
+
+### Custom Adapter (Advanced)
 
 ```typescript
 import type { IgniterStoreAdapter } from "@igniter-js/store";
@@ -553,11 +576,14 @@ class MemoryAdapter implements IgniterStoreAdapter<Map<string, string>> {
 
 ## 🧪 Testing
 
+Use the built-in `IgniterStoreMemoryAdapter` for fast, deterministic tests without Redis:
+
 ```typescript
 import { IgniterStore } from "@igniter-js/store";
+import { IgniterStoreMemoryAdapter } from "@igniter-js/store/adapters";
 
 const store = IgniterStore.create()
-  .withAdapter(new MemoryAdapter())
+  .withAdapter(IgniterStoreMemoryAdapter.create())
   .withService("test")
   .build();
 

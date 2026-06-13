@@ -1,0 +1,558 @@
+---
+title: Framework Integration
+description: Integrate @igniter-js/telemetry with Next.js (App Router + Middleware), Express, and Fastify. Production-ready patterns with session correlation per request.
+---
+
+## Framework Integration
+
+Telemetry is framework-agnostic, but these patterns make it feel native in popular frameworks. All examples are verified and production-ready.
+
+---
+
+## Next.js (App Router)
+
+### Singleton Telemetry Instance
+
+Create a shared instance once:
+
+```typescript
+// lib/telemetry.ts
+import { IgniterTelemetry } from "@igniter-js/telemetry";
+import {
+  LoggerTransportAdapter,
+  SentryTransportAdapter,
+} from "@igniter-js/telemetry/adapters";
+import * as Sentry from "@sentry/nextjs";
+
+const createTelemetry = () => {
+  if (process.env.NODE_ENV === "development") {
+    return IgniterTelemetry.create()
+      .withService("my-next-app")
+      .withEnvironment("development")
+      .addTransport(LoggerTransportAdapter.create({
+        logger: console,
+        format: "pretty",
+      }))
+      .build();
+  }
+
+  Sentry.init({ dsn: process.env.SENTRY_DSN });
+
+  return IgniterTelemetry.create()
+    .withService("my-next-app")
+    .withEnvironment("production")
+    .withVersion(process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0")
+    .addActor("user")
+    .addScope("organization")
+    .addTransport(LoggerTransportAdapter.create({
+      logger: console,
+      format: "json",
+      minLevel: "info",
+    }))
+    .addTransport(SentryTransportAdapter.create({ sentry: Sentry }))
+    .withSampling({
+      debugRate: 0.0,
+      infoRate: 0.1,
+      warnRate: 1.0,
+      errorRate: 1.0,
+    })
+    .withRedaction({
+      denylistKeys: ["password", "token", "authorization"],
+      hashKeys: ["email", "ip"],
+    })
+    .build();
+};
+
+// Singleton — avoid globalThis pattern in Next.js
+declare global {
+  var __telemetry: ReturnType<typeof createTelemetry> | undefined;
+}
+const telemetry = globalThis.__telemetry ?? createTelemetry();
+if (process.env.NODE_ENV !== "production") globalThis.__telemetry = telemetry;
+
+export { telemetry };
+```
+
+### Middleware: Session Per Request
+
+```typescript
+// middleware.ts
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { telemetry } from "@/lib/telemetry";
+
+export async function middleware(request: NextRequest) {
+  const userId = request.headers.get("x-user-id") ?? "anonymous";
+  const orgId = request.headers.get("x-org-id") ?? "unknown";
+
+  return telemetry.session()
+    .actor("user", userId)
+    .scope("organization", orgId)
+    .attributes({
+      "ctx.request.method": request.method,
+      "ctx.request.path": request.nextUrl.pathname,
+      "ctx.request.ip": request.ip ?? "unknown",
+    })
+    .run(async () => {
+      telemetry.emit("request.started", {
+        attributes: { "ctx.request.path": request.nextUrl.pathname },
+      });
+
+      const response = NextResponse.next();
+
+      telemetry.emit("request.completed", {
+        attributes: { "ctx.request.status": response.status },
+      });
+
+      return response;
+    });
+}
+
+export const config = {
+  matcher: "/api/:path*",
+};
+```
+
+### API Route Handler
+
+```typescript
+// app/api/orders/[id]/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { telemetry } from "@/lib/telemetry";
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  try {
+    // Session context auto-inherited from middleware
+    telemetry.emit("order.fetch.started", {
+      attributes: { "ctx.order.id": params.id },
+    });
+
+    const order = await fetchOrder(params.id);
+
+    telemetry.emit("order.fetch.completed", {
+      attributes: {
+        "ctx.order.id": params.id,
+        "ctx.order.status": order.status,
+      },
+    });
+
+    return NextResponse.json(order);
+  } catch (error) {
+    telemetry.emit("order.fetch.failed", {
+      level: "error",
+      error: {
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+      attributes: { "ctx.order.id": params.id },
+    });
+
+    return NextResponse.json(
+      { error: "Failed to fetch order" },
+      { status: 500 },
+    );
+  }
+}
+```
+
+### Server Action
+
+```typescript
+// app/actions/create-invoice.ts
+"use server";
+
+import { telemetry } from "@/lib/telemetry";
+
+export async function createInvoice(formData: FormData) {
+  return telemetry.session()
+    .actor("user", formData.get("userId") as string)
+    .scope("organization", formData.get("orgId") as string)
+    .run(async () => {
+      telemetry.emit("igniter.billing.invoice.created", {
+        attributes: {
+          "ctx.invoice.amount": Number(formData.get("amount")),
+          "ctx.invoice.currency": formData.get("currency") as string,
+        },
+      });
+
+      // ... create invoice logic ...
+
+      return { success: true };
+    });
+}
+```
+
+### Graceful Shutdown (Next.js)
+
+```typescript
+// instrumentation.ts
+import { telemetry } from "@/lib/telemetry";
+
+export async function register() {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    process.on("SIGTERM", async () => {
+      await telemetry.shutdown();
+    });
+
+    process.on("SIGINT", async () => {
+      await telemetry.shutdown();
+    });
+  }
+}
+```
+
+---
+
+## Express
+
+### Singleton Instance
+
+```typescript
+// lib/telemetry.ts
+import { IgniterTelemetry } from "@igniter-js/telemetry";
+import { LoggerTransportAdapter } from "@igniter-js/telemetry/adapters";
+
+export const telemetry = IgniterTelemetry.create()
+  .withService("express-api")
+  .withEnvironment(process.env.NODE_ENV ?? "development")
+  .addActor("user")
+  .addScope("organization")
+  .addTransport(LoggerTransportAdapter.create({
+    logger: console,
+    format: process.env.NODE_ENV === "production" ? "json" : "pretty",
+  }))
+  .build();
+```
+
+### Request Middleware
+
+```typescript
+// middleware/telemetry.ts
+import { Request, Response, NextFunction } from "express";
+import { telemetry } from "../lib/telemetry";
+
+export function telemetryMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  const userId = (req.headers["x-user-id"] as string) ?? "anonymous";
+  const orgId = (req.headers["x-org-id"] as string) ?? "unknown";
+
+  telemetry.session()
+    .actor("user", userId)
+    .scope("organization", orgId)
+    .attributes({
+      "ctx.request.method": req.method,
+      "ctx.request.path": req.path,
+      "ctx.request.ip": req.ip,
+    })
+    .run(async () => {
+      telemetry.emit("request.started", {
+        attributes: { "ctx.request.path": req.path },
+      });
+
+      const startTime = Date.now();
+
+      // Track response completion
+      res.on("finish", () => {
+        const duration = Date.now() - startTime;
+        telemetry.emit("request.completed", {
+          attributes: {
+            "ctx.request.status": res.statusCode,
+            "ctx.request.duration_ms": duration,
+          },
+        });
+      });
+
+      next();
+    });
+}
+```
+
+### Route Handler
+
+```typescript
+// routes/orders.ts
+import { Router } from "express";
+import { telemetry } from "../lib/telemetry";
+
+const router = Router();
+
+router.get("/:id", async (req, res) => {
+  try {
+    // Session context auto-inherited from middleware
+    telemetry.emit("order.fetch.started", {
+      attributes: { "ctx.order.id": req.params.id },
+    });
+
+    const order = await fetchOrder(req.params.id);
+
+    telemetry.emit("order.fetch.completed", {
+      attributes: {
+        "ctx.order.id": req.params.id,
+        "ctx.order.status": order.status,
+      },
+    });
+
+    res.json(order);
+  } catch (error) {
+    telemetry.emit("order.fetch.failed", {
+      level: "error",
+      error: {
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    });
+
+    res.status(500).json({ error: "Failed to fetch order" });
+  }
+});
+
+export default router;
+```
+
+### App Entry Point
+
+```typescript
+// app.ts
+import express from "express";
+import { telemetry } from "./lib/telemetry";
+import { telemetryMiddleware } from "./middleware/telemetry";
+import ordersRouter from "./routes/orders";
+
+const app = express();
+
+// Apply telemetry middleware before routes
+app.use(telemetryMiddleware);
+
+app.use("/api/orders", ordersRouter);
+
+const server = app.listen(3000, () => {
+  telemetry.emit("service.booted", {
+    attributes: { "ctx.service.port": 3000 },
+  });
+});
+
+// Graceful shutdown
+process.on("SIGTERM", async () => {
+  console.log("Shutting down...");
+  server.close(async () => {
+    await telemetry.shutdown();
+    process.exit(0);
+  });
+});
+```
+
+---
+
+## Fastify
+
+### Singleton Instance
+
+```typescript
+// lib/telemetry.ts
+import { IgniterTelemetry } from "@igniter-js/telemetry";
+import { LoggerTransportAdapter } from "@igniter-js/telemetry/adapters";
+
+export const telemetry = IgniterTelemetry.create()
+  .withService("fastify-api")
+  .withEnvironment(process.env.NODE_ENV ?? "development")
+  .addActor("user")
+  .addScope("organization")
+  .addTransport(LoggerTransportAdapter.create({
+    logger: console,
+    format: "json",
+  }))
+  .build();
+```
+
+### Plugin (Hook-Based)
+
+```typescript
+// plugins/telemetry.ts
+import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import fp from "fastify-plugin";
+import { telemetry } from "../lib/telemetry";
+
+async function telemetryPlugin(fastify: FastifyInstance) {
+  // onRequest hook — enters session context
+  fastify.addHook("onRequest", async (request, reply) => {
+    const userId = (request.headers["x-user-id"] as string) ?? "anonymous";
+    const orgId = (request.headers["x-org-id"] as string) ?? "unknown";
+
+    // Store session state for the request lifecycle
+    (request as any).__telemetrySession = telemetry.session()
+      .actor("user", userId)
+      .scope("organization", orgId)
+      .attributes({
+        "ctx.request.method": request.method,
+        "ctx.request.path": request.url,
+        "ctx.request.ip": request.ip,
+      });
+
+    telemetry.emit("request.started", {
+      attributes: { "ctx.request.path": request.url },
+    });
+  });
+
+  // onResponse hook — emit completion
+  fastify.addHook("onResponse", async (request, reply) => {
+    const session = (request as any).__telemetrySession;
+    if (session) {
+      session.emit("request.completed", {
+        attributes: {
+          "ctx.request.status": reply.statusCode,
+          "ctx.request.duration_ms": reply.elapsedTime,
+        },
+      });
+      await session.end();
+    }
+  });
+
+  // Decorate with emit helper
+  fastify.decorateRequest("emitTelemetry", function (
+    this: FastifyRequest,
+    name: string,
+    input?: Record<string, unknown>,
+  ) {
+    const session = (this as any).__telemetrySession;
+    if (session) {
+      session.emit(name, input as any);
+    } else {
+      telemetry.emit(name, input as any);
+    }
+  });
+}
+
+export default fp(telemetryPlugin, { name: "telemetry" });
+```
+
+### Route Handler
+
+```typescript
+// routes/orders.ts
+import { FastifyInstance } from "fastify";
+
+export default async function ordersRoutes(fastify: FastifyInstance) {
+  fastify.get("/api/orders/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    try {
+      (request as any).emitTelemetry("order.fetch.started", {
+        attributes: { "ctx.order.id": id },
+      });
+
+      const order = await fetchOrder(id);
+
+      (request as any).emitTelemetry("order.fetch.completed", {
+        attributes: { "ctx.order.id": id, "ctx.order.status": order.status },
+      });
+
+      return order;
+    } catch (error) {
+      (request as any).emitTelemetry("order.fetch.failed", {
+        level: "error",
+        error: {
+          name: error instanceof Error ? error.name : "Error",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+
+      reply.status(500).send({ error: "Failed to fetch order" });
+    }
+  });
+}
+```
+
+### App Entry
+
+```typescript
+// app.ts
+import Fastify from "fastify";
+import { telemetry } from "./lib/telemetry";
+import telemetryPlugin from "./plugins/telemetry";
+import ordersRoutes from "./routes/orders";
+
+const fastify = Fastify({ logger: true });
+
+// Register telemetry plugin
+await fastify.register(telemetryPlugin);
+
+// Register routes
+await fastify.register(ordersRoutes);
+
+// Start
+await fastify.listen({ port: 3000 });
+
+telemetry.emit("service.booted", {
+  attributes: { "ctx.service.port": 3000 },
+});
+
+// Graceful shutdown
+process.on("SIGTERM", async () => {
+  await telemetry.shutdown();
+  await fastify.close();
+  process.exit(0);
+});
+```
+
+---
+
+## Background Jobs
+
+For worker processes, background jobs, and cron handlers — use manual session handles:
+
+```typescript
+// workers/invoice-generator.ts
+import { telemetry } from "../lib/telemetry";
+
+export async function generateInvoices() {
+  const session = telemetry.session()
+    .actor("system", "invoice-generator", { schedule: "daily" });
+
+  try {
+    session.emit("batch.invoices.started");
+
+    const invoices = await fetchPendingInvoices();
+
+    for (const invoice of invoices) {
+      await telemetry.session()
+        .scope("organization", invoice.orgId)
+        .run(async () => {
+          session.emit("igniter.billing.invoice.created", {
+            attributes: {
+              "ctx.invoice.id": invoice.id,
+              "ctx.invoice.amount": invoice.amount,
+            },
+          });
+        });
+    }
+
+    session.emit("batch.invoices.completed", {
+      attributes: { "ctx.batch.count": invoices.length },
+    });
+  } catch (error) {
+    session.emit("batch.invoices.failed", {
+      level: "error",
+      error: {
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    });
+  } finally {
+    await session.end();
+  }
+}
+```
+
+---
+
+## Next Steps
+
+- [Best Practices](/docs/telemetry/best-practices) — Production-tested patterns
+- [Sessions](/docs/telemetry/sessions) — Deep dive into session lifecycle
+- [API Reference](/docs/telemetry/api-reference) — Complete API documentation

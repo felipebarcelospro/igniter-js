@@ -24,6 +24,8 @@ export interface IgniterCollectionHookContext<TSchema> {
   collection: IIgniterCollectionModel<NormalizeSchema<TSchema>>;
   /** The main manager instance (allows access to other collections) */
   manager: IIgniterCollectionsManager;
+  /** User-defined context from withContext() factory */
+  context: unknown;
 }
 
 /**

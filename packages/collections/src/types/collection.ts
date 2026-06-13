@@ -126,8 +126,6 @@ export interface IgniterCollectionModelDefinition<
   name: TName;
   /** Multiple file patterns for flexible storage */
   patterns: string[];
-  /** Path to a template file for document generation */
-  template?: string;
   /** Default ID generator function */
   defaultIdGenerator: () => string;
   /** Zod schema for frontmatter validation */

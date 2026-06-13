@@ -1,0 +1,19 @@
+{
+  "title": "Logger",
+  "root": true,
+  "pages": [
+    "---Getting Started---",
+    "index",
+    "installation",
+    "quick-start",
+    "---Core Concepts---",
+    "transports",
+    "child-loggers",
+    "advanced",
+    "---Reference---",
+    "api-reference",
+    "troubleshooting",
+    "best-practices",
+    "framework-integration"
+  ]
+}

@@ -1,0 +1,300 @@
+---
+title: Best Practices
+description: Production-ready patterns for agent design, tool implementation, memory management, MCP configuration, and multi-agent orchestration.
+---
+
+## Best Practices
+
+Guidelines for building production-grade agents with `@igniter-js/agents`.
+
+---
+
+## Agent Design
+
+### ✅ Do: Create focused, single-purpose agents
+
+```typescript
+// Good: Each agent has a clear domain
+const supportBot = IgniterAgent.create('support')
+  .withPrompt(IgniterAgentPrompt.create('You are customer support.'))
+  .addToolset(supportToolset)
+  .build()
+
+const codeBot = IgniterAgent.create('code')
+  .withPrompt(IgniterAgentPrompt.create('You are a code assistant.'))
+  .addToolset(codeToolset)
+  .build()
+```
+
+### ❌ Don't: Overload a single agent with too many responsibilities
+
+```typescript
+// Bad: One agent trying to do everything
+const megaBot = IgniterAgent.create('everything')
+  .addToolset(supportToolset)
+  .addToolset(codeToolset)
+  .addToolset(analyticsToolset)
+  .addToolset(devopsToolset)
+  .addToolset(salesToolset)
+  .build()
+// → Slow, confused, expensive
+```
+
+### ✅ Do: Set clear context schemas
+
+```typescript
+const agent = IgniterAgent.create('typed')
+  .withContextSchema(
+    z.object({
+      userId: z.string(),
+      userRole: z.enum(['admin', 'user']),
+      tenantId: z.string(),
+    })
+  )
+  .build()
+```
+
+### ❌ Don't: Skip context schemas in production
+
+```typescript
+// Bad: Untyped context opens the door to runtime errors
+const agent = IgniterAgent.create('untyped').build()
+
+await agent.generate({
+  chatId: 'x',
+  userId: 'x',
+  context: { usrRole: 'admin' }, // Typo caught zero times
+  message: { role: 'user', content: '...' },
+})
+```
+
+---
+
+## Tool Design
+
+### ✅ Do: Write specific, actionable descriptions
+
+```typescript
+// Good: The AI knows exactly when to use this
+IgniterAgentTool.create('get_order')
+  .withDescription(
+    'Retrieve order details by order ID. Use this when a customer asks about their order status, delivery, or items.'
+  )
+```
+
+### ❌ Don't: Write vague descriptions
+
+```typescript
+// Bad: The AI won't know when to call this
+IgniterAgentTool.create('get_order')
+  .withDescription('Gets stuff')
+```
+
+### ✅ Do: Validate inputs with Zod
+
+```typescript
+// Good: Compile-time and runtime safety
+.withInput(
+  z.object({
+    orderId: z.string().min(1).describe('Order ID in format ORD-XXXX'),
+    includeItems: z.boolean().default(true),
+  })
+)
+```
+
+### ❌ Don't: Use `z.any()` or `z.unknown()` for inputs
+
+```typescript
+// Bad: No type safety
+.withInput(z.any())
+```
+
+### ✅ Do: Return structured data from tools
+
+```typescript
+// Good: Predictable, typed output
+.withExecute(async ({ orderId }) => {
+  return {
+    found: true,
+    orderId,
+    status: 'shipped',
+    items: [{ name: 'Widget', qty: 2 }],
+  }
+})
+```
+
+### ❌ Don't: Return raw API responses directly
+
+```typescript
+// Bad: The AI gets an opaque blob
+.withExecute(async ({ orderId }) => {
+  return api.get(`/orders/${orderId}`) // Returns raw HTTP response
+})
+```
+
+---
+
+## Memory Management
+
+### ✅ Do: Enable memory for multi-turn conversations
+
+```typescript
+const agent = IgniterAgent.create('bot')
+  .withMemory({
+    provider: adapter,
+    working: { enabled: true, scope: 'chat' },
+    history: { enabled: true, limit: 100 },
+    chats: { enabled: true },
+  })
+  .build()
+```
+
+### ❌ Don't: Use in-memory adapter in production
+
+```typescript
+// Bad: Lost on restart
+const memory = IgniterAgentInMemoryAdapter.create({ namespace: 'prod' })
+```
+
+### ✅ Do: Build a persistent adapter for production
+
+```typescript
+// Redis, PostgreSQL, or file-based for production
+const memory = new RedisMemoryAdapter(redis)
+```
+
+---
+
+## MCP Configuration
+
+### ✅ Do: Handle MCP connection errors gracefully
+
+```typescript
+const agent = IgniterAgent.create('bot')
+  .addMCP(filesystemMCP)
+  .onMCPError((agent, mcp, err) => {
+    logger.warn(`MCP '${mcp}' unavailable: ${err.message}`)
+    // Continue with reduced capabilities
+  })
+  .build()
+```
+
+### ❌ Don't: Ignore MCP connection failures
+
+```typescript
+// Bad: Unhandled MCP error crashes the agent
+await agent.start() // throws if MCP unreachable
+```
+
+### ✅ Do: Use environment variables for sensitive MCP config
+
+```typescript
+.withEnv({
+  API_KEY: process.env.MCP_API_KEY!,
+  // Never hardcode secrets
+})
+```
+
+### ❌ Don't: Hardcode credentials in MCP config
+
+```typescript
+// Bad: Committed to source control
+.withEnv({
+  API_KEY: 'sk-prod-abc123',
+})
+```
+
+---
+
+## Observability
+
+### ✅ Do: Instrument with hooks and telemetry
+
+```typescript
+const agent = IgniterAgent.create('bot')
+  .withTelemetry(telemetry)
+  .onAgentError((name, err) => alerting.error(err))
+  .onToolCallError((agent, tool, err) => metrics.increment('tool.errors'))
+  .build()
+```
+
+### ❌ Don't: Run agents in production without observability
+
+```typescript
+// Bad: Silent failures, no audit trail
+const agent = IgniterAgent.create('bot').withModel(openai('gpt-4o')).build()
+```
+
+---
+
+## Multi-Agent Patterns
+
+### ✅ Do: Use the manager for shared resources
+
+```typescript
+const manager = IgniterAgentManager.create()
+  .withTelemetry(sharedTelemetry)
+  .withLogger(sharedLogger)
+  .addAgent('support', supportBot)
+  .addAgent('sales', salesBot)
+  .build()
+```
+
+### ❌ Don't: Duplicate telemetry/logger per agent
+
+```typescript
+// Bad: Redundant configuration
+const supportBot = IgniterAgent.create('support')
+  .withTelemetry(t1)
+  .withLogger(l1)
+  .build()
+const salesBot = IgniterAgent.create('sales')
+  .withTelemetry(t2)
+  .withLogger(l2)
+  .build()
+```
+
+### ✅ Do: Set `continueOnError: true` for resilient multi-agent systems
+
+```typescript
+const manager = IgniterAgentManager.create()
+  .withContinueOnError(true) // One failing agent won't crash the others
+  .build()
+```
+
+---
+
+## Performance
+
+### ✅ Do: Reuse agent instances
+
+```typescript
+// Good: Create once, use many times
+const agent = IgniterAgent.create('bot').withModel(openai('gpt-4o')).build()
+await agent.start()
+
+for (const message of messages) {
+  await agent.generate({ chatId, userId, context, message })
+}
+```
+
+### ❌ Don't: Create new agents per request
+
+```typescript
+// Bad: Expensive — MCP reconnection on every request
+async function handle(msg) {
+  const agent = IgniterAgent.create('bot')...build()
+  await agent.start()
+  return agent.generate(...)
+}
+```
+
+### ✅ Do: Use `gpt-4o-mini` for development and `gpt-4o` for production
+
+### ✅ Do: Limit message history to reduce token costs
+
+```typescript
+const memoryConfig = {
+  history: { enabled: true, limit: 20 }, // Keep last 20 messages
+}
+```

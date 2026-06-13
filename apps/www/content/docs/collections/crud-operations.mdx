@@ -1,0 +1,449 @@
+---
+title: CRUD Operations
+description: Complete guide to create, findUnique, findMany, update, delete, and count operations with full TypeScript type safety.
+---
+
+## CRUD Operations
+
+Every collection provides six core operations. All are fully typed — your Zod schema drives the TypeScript inference for every parameter and return type.
+
+<Callout type="info">
+  All examples assume a `Posts` collection is registered on `docs`. See [Defining Collections](/docs/collections/defining-collections) for setup.
+</Callout>
+
+---
+
+## `create()`
+
+Creates a new document with validated frontmatter and optional Markdown content.
+
+### Signature
+
+```typescript
+create(args: {
+  data: PostData & { content?: string };
+  id?: string;
+  select?: SelectObject<PostData>;
+  exclude?: ExcludeObject<PostData>;
+}): Promise<IgniterCollectionDocument<PostData>>
+```
+
+### Basic Usage
+
+```typescript
+const post = await docs.posts.create({
+  data: {
+    title: 'Getting Started with Igniter.js',
+    description: 'Learn the basics',
+    published: true,
+    tags: ['tutorial', 'typescript'],
+    author: 'Felipe Barcelos',
+  }
+});
+
+console.log(post.id);        // 'a1b2c3d4-...' (auto-generated UUID)
+console.log(post.title);     // 'Getting Started with Igniter.js'
+console.log(post.createdAt); // ISO timestamp
+```
+
+### With Content
+
+```typescript
+const post = await docs.posts.create({
+  data: {
+    title: 'My First Post',
+    published: true,
+    author: 'Felipe',
+    content: `## Introduction
+
+This is the full Markdown body of the document.`,
+  }
+});
+```
+
+### With Custom ID
+
+```typescript
+const post = await docs.posts.create({
+  id: 'getting-started', // Custom slug
+  data: {
+    title: 'Getting Started',
+    published: true,
+    author: 'Felipe',
+  }
+});
+```
+
+### Return Value
+
+The returned `IgniterCollectionDocument` includes:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Document ID |
+| `path` | `string` | Absolute file path |
+| `content` | `string` | Markdown body |
+| `createdAt` | `string` | ISO creation timestamp |
+| `updatedAt` | `string` | ISO update timestamp |
+| `parentId` | `string \| undefined` | Parent document ID (sub-collections) |
+| `...schemaFields` | Inferred from Zod | All frontmatter fields |
+
+---
+
+## `findUnique()`
+
+Finds a single document by its ID. Returns `null` if not found.
+
+### Signature
+
+```typescript
+findUnique(args: {
+  where: { id: string };
+  select?: SelectObject<PostData>;
+  exclude?: ExcludeObject<PostData>;
+}): Promise<IgniterCollectionDocument<PostData> | null>
+```
+
+### Basic Usage
+
+```typescript
+const post = await docs.posts.findUnique({
+  where: { id: 'a1b2c3d4-...' }
+});
+
+if (post) {
+  console.log(post.title); // 'Getting Started'
+} else {
+  console.log('Post not found');
+}
+```
+
+### With Field Selection
+
+```typescript
+const post = await docs.posts.findUnique({
+  where: { id: 'a1b2c3d4-...' },
+  select: { title: true, author: true, published: true },
+});
+// Only title, author, and published are returned
+```
+
+---
+
+## `findMany()`
+
+Queries documents with filters, sorting, pagination, and full-text search.
+
+### Signature
+
+```typescript
+findMany(args?: {
+  where?: WhereClause<PostData>;
+  orderBy?: OrderByClause<PostData>;
+  take?: number;
+  skip?: number;
+  select?: SelectObject<PostData>;
+  exclude?: ExcludeObject<PostData>;
+  include?: IncludeClause;
+}): Promise<IgniterCollectionDocument<PostData>[]>
+```
+
+### Basic Usage
+
+```typescript
+// Get all posts
+const allPosts = await docs.posts.findMany();
+
+// Get published posts, newest first
+const published = await docs.posts.findMany({
+  where: { published: true },
+  orderBy: { createdAt: 'desc' as const },
+});
+
+// Paginate
+const page = await docs.posts.findMany({
+  take: 10,
+  skip: 20,  // page 3
+  orderBy: { createdAt: 'desc' as const },
+});
+```
+
+### Filtering
+
+```typescript
+// Exact match
+await docs.posts.findMany({ where: { author: 'Felipe' } });
+
+// Multiple conditions
+await docs.posts.findMany({
+  where: {
+    published: true,
+    author: 'Felipe',
+  }
+});
+
+// Filter operators
+await docs.posts.findMany({
+  where: {
+    views: { gte: 100 },
+    tags: { has: 'featured' },
+  }
+});
+```
+
+See [Querying](/docs/collections/querying) for the complete filtering reference.
+
+---
+
+## `update()`
+
+Updates an existing document. Only the fields you provide are changed.
+
+### Signature
+
+```typescript
+update(args: {
+  where: { id: string };
+  data: Partial<PostData & { content?: string }>;
+  select?: SelectObject<PostData>;
+  exclude?: ExcludeObject<PostData>;
+}): Promise<IgniterCollectionDocument<PostData>>
+```
+
+### Basic Usage
+
+```typescript
+const updated = await docs.posts.update({
+  where: { id: 'a1b2c3d4-...' },
+  data: {
+    title: 'Updated Title',
+    published: true,
+  }
+});
+
+// Only title and published change; all other fields remain
+console.log(updated.title);     // 'Updated Title'
+console.log(updated.published); // true
+```
+
+### Updating Content
+
+```typescript
+const updated = await docs.posts.update({
+  where: { id: 'a1b2c3d4-...' },
+  data: {
+    content: '## Updated Content\n\nThe body has been revised.',
+  }
+});
+```
+
+<Callout type="warn">
+  **Partial updates only.** You don't need to pass all fields — collections merges the provided data with the existing document.
+</Callout>
+
+---
+
+## `delete()`
+
+Permanently deletes a document.
+
+### Signature
+
+```typescript
+delete(args: {
+  where: { id: string };
+  select?: SelectObject<PostData>;
+  exclude?: ExcludeObject<PostData>;
+}): Promise<IgniterCollectionDocument<PostData>>
+```
+
+### Usage
+
+```typescript
+const deleted = await docs.posts.delete({
+  where: { id: 'a1b2c3d4-...' }
+});
+
+console.log(deleted.id); // The deleted document is returned
+```
+
+<Callout type="warn">
+  **Deletion is permanent.** The file is removed from the adapter. Use an `onDeleted` hook if you need soft-delete or archival behavior.
+</Callout>
+
+---
+
+## `count()`
+
+Counts documents matching optional filters.
+
+### Signature
+
+```typescript
+count(args?: {
+  where?: WhereClause<PostData>;
+}): Promise<number>
+```
+
+### Usage
+
+```typescript
+// Count all posts
+const total = await docs.posts.count();
+
+// Count published posts
+const publishedCount = await docs.posts.count({
+  where: { published: true }
+});
+
+// Count with operators
+const popularCount = await docs.posts.count({
+  where: { views: { gte: 1000 } }
+});
+```
+
+---
+
+## Select & Exclude
+
+Both `select` and `exclude` control which fields are returned. They are **mutually exclusive** — use one or the other, not both.
+
+### Select (whitelist)
+
+```typescript
+const posts = await docs.posts.findMany({
+  select: { id: true, title: true, author: true },
+});
+// Only id, title, and author returned
+```
+
+### Exclude (blacklist)
+
+```typescript
+const posts = await docs.posts.findMany({
+  exclude: { content: true },
+});
+// Everything except content returned
+```
+
+### Deep Select
+
+```typescript
+const posts = await docs.posts.findMany({
+  select: {
+    id: true,
+    title: true,
+    metadata: {
+      seoTitle: true,
+      // seoDescription excluded from metadata
+    },
+  },
+});
+```
+
+---
+
+## Error Handling
+
+All CRUD operations throw `IgniterCollectionError` with structured error codes:
+
+```typescript
+import { IgniterCollectionError, IGNITER_COLLECTION_ERROR_CODES } from '@igniter-js/collections';
+
+try {
+  await docs.posts.create({ data: { title: '' } }); // Fails validation
+} catch (error) {
+  if (error instanceof IgniterCollectionError) {
+    console.log(error.code);    // 'COLLECTION_VALIDATION_ERROR'
+    console.log(error.message); // 'Validation failed: Title is required'
+    console.log(error.details); // { issues: [...] }
+  }
+}
+```
+
+See [Troubleshooting](/docs/collections/troubleshooting) for all error codes and solutions.
+
+---
+
+## Real-World Example: Blog Engine
+
+A complete blog engine with drafts, publishing workflow, and pagination:
+
+```typescript
+// Define the collection
+const Posts = IgniterCollectionModel.create('posts')
+  .withPatterns(['.content/posts/{year}/{month}/{id}.mdx'])
+  .withSchema(z.object({
+    title: z.string().min(1),
+    slug: z.string(),
+    excerpt: z.string().max(300),
+    published: z.boolean().default(false),
+    featured: z.boolean().default(false),
+    tags: z.array(z.string()).default([]),
+    author: z.string(),
+    coverImage: z.string().url().optional(),
+  }))
+  .build();
+
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withBasePath(process.cwd())
+  .addCollection(Posts)
+  .build();
+
+// --- Operations ---
+
+// 1. Create a draft
+const draft = await docs.posts.create({
+  id: 'my-awesome-post',
+  data: {
+    title: 'My Awesome Post',
+    slug: 'my-awesome-post',
+    excerpt: 'A deep dive into modern TypeScript patterns.',
+    published: false,
+    featured: true,
+    tags: ['typescript', 'patterns'],
+    author: 'Felipe Barcelos',
+  }
+});
+
+// 2. Publish it
+const published = await docs.posts.update({
+  where: { id: draft.id },
+  data: { published: true },
+});
+
+// 3. Query the blog homepage
+const featured = await docs.posts.findMany({
+  where: { published: true, featured: true },
+  orderBy: { createdAt: 'desc' as const },
+  take: 5,
+});
+
+// 4. Tag archive page
+const typescriptPosts = await docs.posts.findMany({
+  where: {
+    published: true,
+    tags: { has: 'typescript' },
+  },
+  orderBy: { createdAt: 'desc' as const },
+  take: 20,
+});
+
+// 5. Stats
+const stats = {
+  total: await docs.posts.count(),
+  published: await docs.posts.count({ where: { published: true } }),
+  drafts: await docs.posts.count({ where: { published: false } }),
+};
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Querying" description="Deep dive into filtering, sorting, pagination, and full-text search." href="/docs/collections/querying" />
+  <Card title="Hooks" description="Add lifecycle hooks for validation, enrichment, and cancellation." href="/docs/collections/hooks" />
+  <Card title="Events" description="Subscribe to document lifecycle events." href="/docs/collections/events" />
+</Cards>

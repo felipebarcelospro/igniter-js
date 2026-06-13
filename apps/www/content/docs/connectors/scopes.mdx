@@ -1,0 +1,240 @@
+---
+title: Scopes & Multi-Tenancy
+description: Isolate integrations per organization, user, or environment with typed scopes. Learn required vs optional scopes, nesting, and cross-scope operations.
+---
+
+## Scopes & Multi-Tenancy
+
+Scopes are the **multi-tenancy model** in connectors. They let you isolate integrations by organization, user, workspace, environment, or any custom dimension — each with its own connections, configs, and state.
+
+---
+
+## How Scopes Work
+
+A scope is a **dimension of isolation**. When you create a scoped instance, all operations (connect, disconnect, actions, events) are bound to that scope:
+
+```typescript
+// Define scopes at manager level
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(adapter)
+  .addScope("organization", { required: true })
+  .addScope("user", { required: true })
+  .addConnector("telegram", telegram)
+  .build();
+
+// Create scoped instances
+const orgScoped = connectors.scope("organization", "org_123");
+const userScoped = connectors.scope("user", "user_456");
+
+// Each has independent connections
+await orgScoped.connect("telegram", { botToken: "...", chatId: "..." });
+await userScoped.connect("telegram", { botToken: "...", chatId: "..." });
+```
+
+---
+
+## Required vs Optional Scopes
+
+### Required Scopes
+
+When a scope is **required**, you must provide an identity:
+
+```typescript
+.addScope("organization", { required: true })
+
+// Must provide identity
+const scoped = connectors.scope("organization", "org_123"); // ✅
+
+// Throws IgniterConnectorError: CONNECTOR_SCOPE_IDENTIFIER_REQUIRED
+const scoped = connectors.scope("organization"); // ❌
+```
+
+### Optional Scopes
+
+Optional scopes can be used without an identity — useful for system-wide connectors:
+
+```typescript
+.addScope("system", { required: false })
+
+// With identity
+const scoped = connectors.scope("system", "production");
+
+// Without identity
+const scoped = connectors.scope("system"); // ✅ identity = ""
+```
+
+---
+
+## Scoped Operations
+
+A scoped instance provides the full connector API:
+
+### Connect & Disconnect
+
+```typescript
+const scoped = connectors.scope("organization", "org_123");
+
+// Connect with config
+await scoped.connect("telegram", {
+  botToken: "123:abc",
+  chatId: "-100123",
+});
+
+// Disconnect
+await scoped.disconnect("telegram");
+
+// Toggle enabled state
+await scoped.toggle("telegram");       // toggle current state
+await scoped.toggle("telegram", true); // explicitly enable
+await scoped.toggle("telegram", false);// explicitly disable
+```
+
+### List & Get
+
+```typescript
+// List all connected connectors for this scope
+const instances = await scoped.list();
+// [{ key: "telegram", type: "custom", enabled: true, config: {...}, ... }]
+
+// Filter by enabled state
+const enabled = await scoped.list({ where: { enabled: true } });
+
+// Get a specific connector
+const telegram = await scoped.get("telegram");
+if (telegram) {
+  console.log("Connected:", telegram.enabled);
+  console.log("Last updated:", telegram.updatedAt);
+}
+
+// Count connections
+const count = await scoped.count();
+const enabledCount = await scoped.count({ where: { enabled: true } });
+```
+
+### Execute Actions
+
+```typescript
+const { data, error } = await scoped
+  .action("telegram", "sendMessage")
+  .call({ message: "Hello!" });
+
+if (error) throw error;
+console.log(data.messageId);
+```
+
+### Update Config
+
+```typescript
+await scoped.update("telegram", { chatId: "-100456" });
+```
+
+### Event Subscriptions
+
+```typescript
+// Listen to events for this scope only
+const sub = scoped.on((event) => {
+  console.log(`[${event.type}] ${event.connector}`);
+});
+
+// Unsubscribe when done
+sub.unsubscribe();
+```
+
+---
+
+## Scope Combinations
+
+You can define multiple scopes for **compound isolation**:
+
+```typescript
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(adapter)
+  .addScope("organization", { required: true })
+  .addScope("user", { required: true })
+  .addScope("environment", { required: false })
+  .addConnector("telegram", telegram)
+  .build();
+
+// Each scope creates independent instances
+const orgA = connectors.scope("organization", "org_123");
+const orgB = connectors.scope("organization", "org_456");
+const user1 = connectors.scope("user", "user_789");
+const prodEnv = connectors.scope("environment", "production");
+```
+
+<Callout type="warn">
+  Each scope+identity pair gets its **own database records**. A Telegram connection for `organization:org_123` is completely independent from `organization:org_456`. They don't share configs, tokens, or state.
+</Callout>
+
+---
+
+## Type Inference with Scopes
+
+The manager infers all scope keys from your definitions:
+
+```typescript
+const connectors = IgniterConnectorManager.create()
+  .addScope("organization", { required: true })
+  .addScope("user", { required: true })
+  .addConnector("telegram", telegram)
+  .addConnector("discord", discord)
+  .build();
+
+// $Infer extracts all types
+import { $Infer } from "@igniter-js/connectors";
+type Types = $Infer<typeof connectors>;
+
+type ScopeKey = Types["ScopeKey"]; // "organization" | "user"
+type Scoped = Types["Scoped"];     // IgniterConnectorScoped<...>
+
+// Typed function parameters
+async function notifyOrg(
+  scoped: Types["Scoped"],
+  orgId: string,
+  message: string,
+) {
+  await scoped.action("telegram", "sendMessage").call({ message });
+}
+```
+
+---
+
+## Real-World Example: SaaS Multi-Tenant
+
+A SaaS platform with organizations, each having multiple users and Slack integrations:
+
+```typescript
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(adapter)
+  .addScope("organization", { required: true })
+  .addScope("user", { required: false })
+  .addConnector("slack", slackConnector)
+  .addConnector("github", githubConnector)
+  .build();
+
+// Organization-wide Slack integration
+const orgSlack = connectors.scope("organization", "org_acme");
+await orgSlack.connect("slack", { webhookUrl: "https://hooks.slack.com/..." });
+
+// Per-user GitHub integration
+const userGithub = connectors.scope("user", "user_42");
+await userGithub.connect("github", { accessToken: "ghp_..." });
+
+// Execute actions
+await orgSlack.action("slack", "postMessage").call({
+  channel: "#general",
+  text: "New deployment complete!",
+});
+
+const { data: repos } = await userGithub
+  .action("github", "listRepos")
+  .call({});
+```
+
+---
+
+## Next Steps
+
+- [Actions](/docs/connectors/actions) — Execute typed connector actions
+- [Manager Setup](/docs/connectors/manager-setup) — Full manager configuration
+- [Lifecycle Hooks](/docs/connectors/hooks) — Hook into connector lifecycle

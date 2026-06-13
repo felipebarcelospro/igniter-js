@@ -1,0 +1,252 @@
+---
+title: Database Adapters
+description: Persist connector configurations with Prisma, in-memory storage for testing, or build your own custom adapter. The adapter interface and implementation guide.
+---
+
+## Database Adapters
+
+Adapters are the **persistence layer** for connectors. They handle CRUD operations on connector configurations — storing scoped records, toggling enabled state, and tracking webhook metadata.
+
+Connectors ships with two built-in adapters: **Prisma** for production and **Mock** for testing.
+
+---
+
+## Prisma Adapter
+
+The Prisma adapter uses your existing Prisma schema to store connector configurations.
+
+### Setup
+
+```typescript
+import { IgniterConnectorPrismaAdapter } from "@igniter-js/connectors/adapters";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(IgniterConnectorPrismaAdapter.create(prisma))
+  // ...
+  .build();
+```
+
+### Prisma Schema
+
+Add this model to your Prisma schema:
+
+```prisma
+model Connector {
+  id        String   @id @default(cuid())
+  scope     String
+  identity  String
+  provider  String
+  value     Json
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([scope, identity, provider])
+  @@index([provider])
+}
+```
+
+### Custom Model Name
+
+Override the default model name (`Connector`) if needed:
+
+```typescript
+.withDatabase(
+  IgniterConnectorPrismaAdapter.create(prisma, { model: "Integration" })
+)
+```
+
+### Supported Databases
+
+The Prisma adapter works with any Prisma-supported database: PostgreSQL, MySQL, SQLite, SQL Server, CockroachDB, MongoDB.
+
+---
+
+## Mock Adapter
+
+The mock adapter stores data **in memory** — perfect for testing, development, and CI environments:
+
+```typescript
+import { IgniterConnectorMockAdapter } from "@igniter-js/connectors/adapters";
+
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(IgniterConnectorMockAdapter.create())
+  // ...
+  .build();
+```
+
+### Testing with Mock Adapter
+
+```typescript
+import { describe, it, expect, beforeEach } from "vitest";
+import { IgniterConnectorManager } from "@igniter-js/connectors";
+import { IgniterConnectorMockAdapter } from "@igniter-js/connectors/adapters";
+
+describe("Telegram Integration", () => {
+  let connectors;
+
+  beforeEach(() => {
+    connectors = IgniterConnectorManager.create()
+      .withDatabase(IgniterConnectorMockAdapter.create())
+      .addScope("organization", { required: true })
+      .addConnector("telegram", telegramConnector)
+      .build();
+  });
+
+  it("connects and sends a message", async () => {
+    const scoped = connectors.scope("organization", "test-org");
+
+    await scoped.connect("telegram", {
+      botToken: "test-token",
+      chatId: "test-chat",
+    });
+
+    const instance = await scoped.get("telegram");
+    expect(instance).not.toBeNull();
+    expect(instance?.enabled).toBe(true);
+  });
+
+  it("isolates scopes", async () => {
+    const orgA = connectors.scope("organization", "org-a");
+    const orgB = connectors.scope("organization", "org-b");
+
+    await orgA.connect("telegram", { botToken: "a", chatId: "a" });
+    await orgB.connect("telegram", { botToken: "b", chatId: "b" });
+
+    const listA = await orgA.list();
+    const listB = await orgB.list();
+    expect(listA).toHaveLength(1);
+    expect(listB).toHaveLength(1);
+
+    expect(listA[0].config.chatId).toBe("a");
+    expect(listB[0].config.chatId).toBe("b");
+  });
+});
+```
+
+---
+
+## Custom Adapter
+
+Implement the `IgniterConnectorAdapter` interface to create adapters for any database:
+
+```typescript
+import type { IgniterConnectorAdapter, IgniterConnectorRecord } from "@igniter-js/connectors";
+
+class MyCustomAdapter implements IgniterConnectorAdapter {
+  async get(scope: string, identity: string, provider: string) {
+    // Fetch a single record
+    return db.connectors.findFirst({
+      where: { scope, identity, provider },
+    });
+  }
+
+  async list(scope: string, identity: string) {
+    // List all records for a scope/identity
+    return db.connectors.findMany({
+      where: { scope, identity },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  async save(scope, identity, provider, value, enabled) {
+    // Upsert a record
+    return db.connectors.upsert({
+      where: { scope_identity_provider: { scope, identity, provider } },
+      create: { scope, identity, provider, value, enabled },
+      update: { value, enabled },
+    });
+  }
+
+  async update(scope, identity, provider, data) {
+    // Partial update
+    return db.connectors.update({
+      where: { scope_identity_provider: { scope, identity, provider } },
+      data,
+    });
+  }
+
+  async delete(scope, identity, provider) {
+    await db.connectors.deleteMany({
+      where: { scope, identity, provider },
+    });
+  }
+
+  async exists(scope, identity, provider) {
+    const count = await db.connectors.count({
+      where: { scope, identity, provider },
+    });
+    return count > 0;
+  }
+
+  async countConnections(provider) {
+    return db.connectors.count({ where: { provider } });
+  }
+
+  async findByWebhookSecret(provider, secret) {
+    // Find by webhook secret stored in JSON value
+    return db.connectors.findFirst({
+      where: {
+        provider,
+        value: { path: ["webhook", "secret"], equals: secret },
+      },
+    });
+  }
+
+  async updateWebhookMetadata(provider, secret, metadata) {
+    await db.connectors.updateMany({
+      where: {
+        provider,
+        value: { path: ["webhook", "secret"], equals: secret },
+      },
+      data: {
+        value: db.raw(`jsonb_set(value, '{webhook,lastEventAt}', ...)`),
+      },
+    });
+  }
+}
+```
+
+### Adapter Interface
+
+| Method | Description |
+|--------|-------------|
+| `get(scope, identity, provider)` | Fetch a single connector record |
+| `list(scope, identity)` | List all records for scope+identity |
+| `save(scope, identity, provider, value, enabled)` | Upsert a connector record |
+| `update(scope, identity, provider, data)` | Partially update a record |
+| `delete(scope, identity, provider)` | Remove a record |
+| `exists(scope, identity, provider)` | Check if record exists |
+| `countConnections(provider)` | Count all connections for a provider |
+| `findByWebhookSecret(provider, secret)` | Find record by webhook secret |
+| `updateWebhookMetadata(provider, secret, metadata)` | Update webhook tracking data |
+
+---
+
+## Adapter Record Shape
+
+Every adapter returns records with this shape:
+
+```typescript
+interface IgniterConnectorRecord {
+  id: string;
+  scope: string;       // Scope type (e.g., "organization")
+  identity: string;    // Scope identifier (e.g., "org_123")
+  provider: string;    // Connector key (e.g., "telegram")
+  value: Record<string, unknown>;  // JSON config (may contain encrypted fields)
+  enabled: boolean;    // Whether the connector is enabled
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+---
+
+## Next Steps
+
+- [Manager Setup](/docs/connectors/manager-setup) — Wire adapters into the manager
+- [Telemetry](/docs/connectors/telemetry) — Adapter operation telemetry
+- [API Reference](/docs/connectors/api-reference) — Full adapter type reference

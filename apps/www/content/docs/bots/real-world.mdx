@@ -1,0 +1,597 @@
+---
+title: Real-World Examples
+description: Production-grade bot examples with complete code. Customer support, e-commerce, community management, onboarding flows, and more.
+---
+
+## Real-World Examples
+
+Complete, production-ready bot scenarios showing how `@igniter-js/bot` solves real problems. Each example is self-contained and can be adapted for your use case.
+
+---
+
+## 1. Customer Support Bot (Multi-Platform)
+
+A support bot that routes inquiries across Telegram, WhatsApp, and Discord with session tracking and human escalation.
+
+### Features
+- Multi-platform (Telegram + WhatsApp + Discord)
+- Ticket creation with session tracking
+- FAQ self-service
+- Escalation to human agents
+- Proactive status updates
+
+```typescript
+// lib/bot.ts
+import { IgniterBot, telegram, whatsapp, discord, memoryStore } from '@igniter-js/bot';
+import { supportCommands } from './commands/support';
+import { supportMiddleware } from './middleware/support';
+
+export const supportBot = IgniterBot.create()
+  .withHandle('@support_bot')
+  .withSessionStore(memoryStore())
+  .addAdapters({
+    telegram: telegram({ token: process.env.TELEGRAM_TOKEN! }),
+    whatsapp: whatsapp({ token: process.env.WHATSAPP_TOKEN!, phone: process.env.WHATSAPP_PHONE! }),
+    discord: discord({ token: process.env.DISCORD_TOKEN!, applicationId: process.env.DISCORD_APP_ID! }),
+  })
+  .addMiddlewares([supportMiddleware])
+  .addCommands(supportCommands)
+  .onError(async (ctx) => {
+    await ctx.reply('Our support system encountered an error. A human agent will assist you shortly.');
+  })
+  .build();
+
+await supportBot.start();
+```
+
+```typescript
+// commands/support.ts
+export const supportCommands = {
+  help: Bot.command({
+    name: 'help',
+    aliases: ['support', 'faq'],
+    description: 'Get help',
+    help: 'Use /help to see support options',
+    async handle(ctx) {
+      await ctx.replyWithButtons('How can we help?', [
+        { id: 'faq_order', label: '📦 Order Issues', action: 'callback', data: 'faq_order' },
+        { id: 'faq_account', label: '👤 Account Help', action: 'callback', data: 'faq_account' },
+        { id: 'faq_billing', label: '💳 Billing', action: 'callback', data: 'faq_billing' },
+      ]);
+    },
+  }),
+
+  ticket: Bot.command({
+    name: 'ticket',
+    aliases: ['report', 'issue'],
+    description: 'Create a support ticket',
+    help: 'Use /ticket &lt;description&gt; to report an issue',
+    async handle(ctx) {
+      const ticketId = await createSupportTicket({
+        userId: ctx.message.author.id,
+        platform: ctx.provider,
+        description: ctx.args.description,
+      });
+
+      await ctx.session.update({ activeTicket: ticketId });
+      await ctx.reply(
+        `✅ Ticket **#${ticketId}** created!\n\n` +
+        `We'll respond within 24 hours. Reply to this message to add more details.`,
+      );
+    },
+  }),
+
+  status: Bot.command({
+    name: 'status',
+    aliases: ['check'],
+    description: 'Check ticket status',
+    help: 'Use /status to check your open tickets',
+    async handle(ctx) {
+      const tickets = await getOpenTickets(ctx.message.author.id);
+
+      if (tickets.length === 0) {
+        await ctx.reply('You have no open tickets.');
+        return;
+      }
+
+      const statusList = tickets.map(t =>
+        `**#${t.id}** — ${t.status} — ${t.subject}`
+      ).join('\n');
+
+      await ctx.reply(`📋 **Your Open Tickets:**\n\n${statusList}`);
+    },
+  }),
+};
+```
+
+```typescript
+// middleware/support.ts
+export const supportMiddleware = async (ctx, next) => {
+  // If there's an active ticket, append messages to it
+  const activeTicket = ctx.session.data.activeTicket;
+
+  if (activeTicket && ctx.message.content?.type === 'text') {
+    await appendToTicket(activeTicket, {
+      author: ctx.message.author.name,
+      content: ctx.message.content.content,
+      platform: ctx.provider,
+    });
+    await ctx.reply('✅ Message added to your ticket.');
+    return; // Don't process as a command
+  }
+
+  await next();
+};
+```
+
+---
+
+## 2. E-Commerce Bot
+
+A shopping bot with product search, cart management, and order tracking across platforms.
+
+### Features
+- Product catalog search
+- Shopping cart with session persistence
+- Order placement and tracking
+- Interactive product browsing with buttons
+- Multi-currency pricing
+
+```typescript
+// commands/shop.ts
+import { z } from 'zod';
+import { Bot } from '@igniter-js/bot';
+
+export const shopCommands = {
+  search: Bot.command({
+    name: 'search',
+    aliases: ['find', 'browse'],
+    description: 'Search products',
+    help: 'Use /search &lt;query&gt; to find products',
+    args: z.object({ query: z.string().min(2) }),
+    async handle(ctx, args) {
+      await ctx.sendTyping!();
+
+      const products = await searchProducts(args.query);
+
+      if (products.length === 0) {
+        await ctx.reply(`No products found for "${args.query}".`);
+        return;
+      }
+
+      await ctx.session.update({ searchResults: products.slice(0, 10) });
+
+      await ctx.replyWithButtons(
+        `🔍 **${products.length}** results for "${args.query}":\n\n` +
+        products.slice(0, 5).map((p, i) => `${i + 1}. **${p.name}** — $${p.price}`).join('\n'),
+        products.slice(0, 5).map((p, i) => ({
+          id: `add_${p.id}`,
+          label: `🛒 Add ${p.name}`,
+          action: 'callback' as const,
+          data: p.id,
+        })),
+      );
+    },
+  }),
+
+  cart: Bot.command({
+    name: 'cart',
+    aliases: ['basket'],
+    description: 'View your cart',
+    help: 'Use /cart to see items in your cart',
+    async handle(ctx) {
+      const cart = ctx.session.data.cart || [];
+
+      if (cart.length === 0) {
+        await ctx.reply('🛒 Your cart is empty. Use /search to find products.');
+        return;
+      }
+
+      const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+      await ctx.replyWithButtons(
+        `🛒 **Your Cart** (${cart.length} items)\n\n` +
+        cart.map((item, i) =>
+          `${i + 1}. ${item.name} ×${item.quantity} — $${item.price * item.quantity}`
+        ).join('\n') +
+        `\n\n**Total: $${total.toFixed(2)}**`,
+        [
+          { id: 'checkout', label: '💳 Checkout', action: 'callback', data: 'checkout' },
+          { id: 'clear', label: '🗑 Clear Cart', action: 'callback', data: 'clear_cart' },
+        ],
+      );
+    },
+  }),
+
+  checkout: Bot.command({
+    name: 'checkout',
+    aliases: ['buy', 'order'],
+    description: 'Place your order',
+    help: 'Use /checkout to complete your purchase',
+    async handle(ctx) {
+      const cart = ctx.session.data.cart || [];
+
+      if (cart.length === 0) {
+        await ctx.reply('Your cart is empty. Add items first with /search.');
+        return;
+      }
+
+      const order = await createOrder({
+        userId: ctx.message.author.id,
+        items: cart,
+        platform: ctx.provider,
+      });
+
+      await ctx.session.update({ cart: [], lastOrder: order.id });
+      await ctx.reply(
+        `✅ Order **#${order.id}** placed!\n\n` +
+        `Total: $${order.total.toFixed(2)}\n` +
+        `Track with: /track ${order.id}`,
+      );
+    },
+  }),
+
+  track: Bot.command({
+    name: 'track',
+    aliases: ['order'],
+    description: 'Track an order',
+    help: 'Use /track &lt;order_id&gt; to check status',
+    args: z.object({ orderId: z.string() }),
+    async handle(ctx, args) {
+      const order = await getOrder(args.orderId);
+
+      if (!order) {
+        await ctx.reply('Order not found. Check the ID and try again.');
+        return;
+      }
+
+      const statusEmoji = {
+        processing: '📦',
+        shipped: '🚚',
+        delivered: '✅',
+        cancelled: '❌',
+      };
+
+      await ctx.reply(
+        `${statusEmoji[order.status]} Order **#${order.id}**\n\n` +
+        `Status: **${order.status.toUpperCase()}**\n` +
+        `Items: ${order.itemCount}\n` +
+        `Placed: ${order.createdAt.toLocaleDateString()}`,
+      );
+    },
+  }),
+};
+```
+
+---
+
+## 3. Community Moderation Bot
+
+A Discord-first moderation bot with admin commands, welcome messages, and automated moderation.
+
+### Features
+- Admin command group with role-based access
+- Welcome messages for new members
+- Message logging
+- Auto-moderation (banned words, spam detection)
+- `/stats` for server analytics
+
+```typescript
+// lib/bot.ts
+import { IgniterBot, discord, authMiddleware, roleMiddleware } from '@igniter-js/bot';
+
+const bot = IgniterBot.create()
+  .withHandle('@mod_bot')
+  .addAdapter('discord', discord({
+    token: process.env.DISCORD_TOKEN!,
+    applicationId: process.env.DISCORD_APP_ID!,
+    publicKey: process.env.DISCORD_PUBLIC_KEY!,
+  }))
+  .addMiddleware(roleMiddleware({
+    getRoles: async (userId) => {
+      const member = await discordApi.getGuildMember(process.env.GUILD_ID!, userId);
+      return member.roles;
+    },
+    requiredRoles: ['admin', 'moderator'],
+    unauthorizedMessage: '🔒 This command requires admin or moderator role.',
+  }))
+  .addCommandGroup('mod', {
+    ban: {
+      name: 'ban',
+      aliases: [],
+      description: 'Ban a user',
+      help: 'Use /mod_ban &lt;user_id&gt; [reason]',
+      async handle(ctx) {
+        await banUser(ctx.args.userId, ctx.args.reason);
+        await ctx.reply(`🚫 User ${ctx.args.userId} banned. Reason: ${ctx.args.reason || 'No reason provided'}`);
+      },
+    },
+    kick: {
+      name: 'kick',
+      aliases: [],
+      description: 'Kick a user',
+      help: 'Use /mod_kick &lt;user_id&gt;',
+      async handle(ctx) {
+        await kickUser(ctx.args.userId);
+        await ctx.reply(`👢 User ${ctx.args.userId} kicked.`);
+      },
+    },
+    warn: {
+      name: 'warn',
+      aliases: [],
+      description: 'Warn a user',
+      help: 'Use /mod_warn &lt;user_id&gt; &lt;reason&gt;',
+      async handle(ctx) {
+        const warning = await addWarning(ctx.args.userId, ctx.args.reason);
+        await ctx.reply(`⚠️ User ${ctx.args.userId} warned (${warning.count}/3). Reason: ${ctx.args.reason}`);
+      },
+    },
+    clear: {
+      name: 'clear',
+      aliases: ['purge'],
+      description: 'Clear messages',
+      help: 'Use /mod_clear &lt;count&gt;',
+      async handle(ctx) {
+        await clearMessages(ctx.channel.id, ctx.args.count);
+        await ctx.reply(`🧹 Cleared ${ctx.args.count} messages.`);
+      },
+    },
+  })
+  .build();
+```
+
+---
+
+## 4. SaaS Onboarding Bot
+
+A step-by-step onboarding bot that guides new users through setup.
+
+### Features
+- Multi-step guided flow
+- Persistent session progress
+- Input validation at each step
+- Skip and reset capabilities
+- Progress tracking
+
+```typescript
+// commands/onboarding.ts
+export const onboardingCommands = {
+  start: Bot.command({
+    name: 'start',
+    aliases: ['onboard', 'setup'],
+    description: 'Start onboarding',
+    help: 'Use /start to begin setting up your account',
+    async handle(ctx) {
+      await ctx.session.update({
+        step: 1,
+        data: { startedAt: new Date().toISOString() },
+      });
+      await ctx.reply(
+        '🚀 **Welcome to Acme SaaS!**\n\n' +
+        'I\'ll guide you through setup in 4 quick steps.\n\n' +
+        '**Step 1/4:** What is your company name?',
+      );
+    },
+  }),
+
+  skip: Bot.command({
+    name: 'skip',
+    aliases: [],
+    description: 'Skip current step',
+    help: 'Use /skip to skip the current onboarding step',
+    async handle(ctx) {
+      const step = ctx.session.data.step;
+      if (!step) {
+        await ctx.reply('No onboarding in progress. Use /start to begin.');
+        return;
+      }
+      await ctx.session.update({ step: step + 1 });
+      await sendStepPrompt(ctx, step + 1);
+    },
+  }),
+
+  reset: Bot.command({
+    name: 'reset',
+    aliases: ['restart'],
+    description: 'Restart onboarding',
+    help: 'Use /reset to restart the onboarding process',
+    async handle(ctx) {
+      await ctx.session.delete();
+      await ctx.reply('🔄 Onboarding reset. Use /start to begin again.');
+    },
+  }),
+};
+
+// middleware/onboarding-flow.ts
+export const onboardingFlowMiddleware = async (ctx, next) => {
+  const step = ctx.session.data.step;
+
+  // Only intercept non-command text messages during onboarding
+  if (!step || ctx.message.content?.type === 'command') {
+    return next();
+  }
+
+  const text = ctx.message.content?.type === 'text' ? ctx.message.content.content : '';
+
+  switch (step) {
+    case 1: // Company name
+      if (!text.trim()) {
+        await ctx.reply('Please enter a valid company name.');
+        return;
+      }
+      await ctx.session.update({
+        step: 2,
+        data: { ...ctx.session.data, companyName: text },
+      });
+      await ctx.reply(
+        '✅ Company: **' + text + '**\n\n' +
+        '**Step 2/4:** What industry are you in?\n\n' +
+        'Options: Tech, Retail, Healthcare, Finance, Education, Other',
+      );
+      return;
+
+    case 2: // Industry
+      const validIndustries = ['tech', 'retail', 'healthcare', 'finance', 'education', 'other'];
+      if (!validIndustries.includes(text.toLowerCase())) {
+        await ctx.reply('Please choose from: Tech, Retail, Healthcare, Finance, Education, Other');
+        return;
+      }
+      await ctx.session.update({
+        step: 3,
+        data: { ...ctx.session.data, industry: text },
+      });
+      await ctx.reply(
+        '✅ Industry: **' + text + '**\n\n' +
+        '**Step 3/4:** How many team members will use Acme?',
+      );
+      return;
+
+    case 3: // Team size
+      const size = parseInt(text);
+      if (isNaN(size) || size < 1) {
+        await ctx.reply('Please enter a valid number (e.g., 5, 25, 100).');
+        return;
+      }
+      await ctx.session.update({
+        step: 4,
+        data: { ...ctx.session.data, teamSize: size },
+      });
+      await ctx.replyWithButtons(
+        '✅ Team size: **' + size + '** members\n\n' +
+        '**Step 4/4:** Ready to complete setup?\n\n' +
+        `Company: **${ctx.session.data.companyName}**\n` +
+        `Industry: **${ctx.session.data.industry}**\n` +
+        `Team: **${ctx.session.data.teamSize}** members`,
+        [
+          { id: 'confirm', label: '✅ Complete Setup', action: 'callback', data: 'confirm_onboarding' },
+          { id: 'restart', label: '🔄 Start Over', action: 'callback', data: 'restart_onboarding' },
+        ],
+      );
+      return;
+
+    case 4:
+      await ctx.reply('Please use the buttons above to confirm or restart.');
+      return;
+  }
+};
+
+async function sendStepPrompt(ctx, step) {
+  const prompts = {
+    1: '**Step 1/4:** What is your company name?',
+    2: '**Step 2/4:** What industry are you in?',
+    3: '**Step 3/4:** How many team members?',
+    4: '**Step 4/4:** Confirm your setup with the buttons below.',
+  };
+  await ctx.reply(prompts[step] || 'Onboarding complete!');
+}
+```
+
+---
+
+## 5. Notification Service Bot
+
+A bot that sends proactive notifications to users on their preferred platform.
+
+### Features
+- User preference management (preferred platform)
+- Proactive push notifications
+- Scheduled reminders
+- Multi-channel delivery
+- Notification templates
+
+```typescript
+// services/notifications.ts
+import { bot } from '../lib/bot';
+
+export async function sendOrderUpdate(userId: string, orderId: string, status: string) {
+  const user = await getUserPreferences(userId);
+  if (!user) return;
+
+  const messages = {
+    confirmed: '✅ Your order has been confirmed!',
+    shipped: '🚚 Your order is on the way!',
+    delivered: '📦 Your order has been delivered!',
+    cancelled: '❌ Your order has been cancelled.',
+  };
+
+  await bot.send({
+    provider: user.preferredPlatform,
+    channel: user.platformChannelId,
+    content: {
+      type: 'interactive',
+      text: `${messages[status]}\n\nOrder: **#${orderId}**`,
+      buttons: [
+        { id: 'track', label: '📍 Track', action: 'callback', data: `track_${orderId}` },
+        { id: 'support', label: '🆘 Support', action: 'callback', data: `support_${orderId}` },
+      ],
+    },
+  });
+}
+
+export async function sendDailyReminder(userId: string) {
+  const user = await getUserPreferences(userId);
+  if (!user) return;
+
+  await bot.send({
+    provider: user.preferredPlatform,
+    channel: user.platformChannelId,
+    content: {
+      type: 'text',
+      content: `☀️ Good morning, ${user.name}! Don't forget to check your tasks for today.`,
+    },
+  });
+}
+
+// Cron job (using node-cron or similar)
+import cron from 'node-cron';
+
+cron.schedule('0 9 * * *', async () => {
+  const users = await getUsersWithReminders();
+  for (const user of users) {
+    await sendDailyReminder(user.id);
+  }
+});
+```
+
+---
+
+## Architecture Pattern: Multi-Tenant Bot
+
+A pattern for serving multiple organizations from a single bot instance:
+
+```typescript
+// lib/bot.ts
+const bot = IgniterBot.create()
+  .withHandle('@platform_bot')
+  .addAdapters({
+    telegram: telegram({ token: process.env.TELEGRAM_TOKEN! }),
+    whatsapp: whatsapp({ token: process.env.WHATSAPP_TOKEN!, phone: process.env.WHATSAPP_PHONE! }),
+  })
+  .addMiddleware(async (ctx, next) => {
+    // Resolve tenant from user mapping
+    const tenant = await tenantResolver.resolve(ctx.message.author.id, ctx.provider);
+    if (!tenant) {
+      await ctx.reply('Your account is not associated with any organization.');
+      return;
+    }
+    await next();
+    return { tenant };
+  })
+  .addMiddleware(async (ctx, next) => {
+    // Switch database context
+    const db = await getTenantDatabase(ctx.tenant.id);
+    await next();
+    return { db };
+  })
+  .build();
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="API Reference" description="Complete API documentation for all methods and types." href="/docs/bots/api-reference" />
+  <Card title="Best Practices" description="Production patterns, security tips, and anti-patterns." href="/docs/bots/best-practices" />
+  <Card title="Troubleshooting" description="Solve common errors and debug issues." href="/docs/bots/troubleshooting" />
+</Cards>

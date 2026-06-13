@@ -6,6 +6,7 @@
 
 ## Key Changes in v0.2
 
+- **Context Injection:** `.withContext()` enables dependency injection into hooks, views, actions, and event listeners. The factory is called fresh on every operation.
 - **Decoupled Views:** Views are no longer tied to collections. They are global entities with access to the full `IIgniterCollectionsManager`.
 - **Unified Watcher:** `withWatcher()` replaces `withSchemaRegistry()`, supporting both collections and views.
 - **TypeScript Discovery:** `.schema.ts` and `.view.ts` files are supported via jiti with hot reload.
@@ -143,7 +144,30 @@ The `IgniterCollectionWatcher` (configured via `withWatcher()`) is the central o
 4. If `autoWatch: true`, `docs.watcher.start()` is called automatically.
 5. `refresh()` reloads both collections and views, merging with programmatic definitions.
 
-#### 3.6 TypeScript File Loading via jiti
+#### 3.6 Context Injection Architecture
+Context injection provides dependency injection into all operational layers of the collections package.
+
+**Design Decisions:**
+- **Fresh context per operation:** The factory is invoked before every CRUD operation, view render, and action execution. This ensures context is always up-to-date (e.g., current auth state).
+- **No type inference:** Context is typed as `unknown` and consumers cast it to their expected type. This simplifies the generic chain and avoids complex type propagation.
+- **Optional:** Packages work without context. If no factory is configured, `context` is `undefined`.
+- **Propagation:** Context flows from `IgniterCollectionManager` → `IgniterCollectionModelManager` → hooks/events and → `IgniterCollectionViewManager` → view hooks/actions.
+
+**Flow:**
+1. `IgniterCollectionsBuilder.withContext(factory)` stores the factory in builder state.
+2. `IgniterCollectionManager.build()` passes `contextFactory` to all child managers.
+3. Before every operation:
+   - `CollectionManager.resolveContext()` calls the factory.
+   - Context is injected into hook contexts (`onCreated`, `onRead`, `onList`, `onUpdated`, `onDeleted`).
+   - Context is injected into event payloads (`created`, `updated`, `deleted`, `read`).
+4. View operations:
+   - `ViewManager.resolveContext()` calls the factory.
+   - Context is injected into `getData` hooks and action handlers.
+
+**Error Handling:**
+If the context factory throws, the operation fails with `COLLECTION_CONTEXT_FACTORY_ERROR`. The error includes the original cause for debugging.
+
+#### 3.7 TypeScript File Loading via jiti
 `jiti` (from UnJS) provides runtime TypeScript transpilation without ts-node.
 
 **Why jiti:**
@@ -180,30 +204,32 @@ const jiti = createJiti(import.meta.url, {
 #### 4.1 Pipeline: `collectionManager.findMany(args)`
 The `findMany` operation is a read-heavy pipeline that applies filtering in-memory.
 
-1.  **Telemetry (Started):** Emits `igniter.collections.document.findMany.started`.
-2.  **Pattern Conversion:** Combines `basePath` + collection `patterns`, replacing variables like `{id}` with glob wildcards (`*`).
-3.  **Listing:** Calls `adapter.list()` using the glob pattern. Native filesystem adapters support hidden directories implicitly. 
-4.  **Parallel Load:**
+1.  **Context Resolution:** Calls `manager.resolveContext()` to get fresh context for this operation.
+2.  **Telemetry (Started):** Emits `igniter.collections.document.findMany.started`.
+3.  **Pattern Conversion:** Combines `basePath` + collection `patterns`, replacing variables like `{id}` with glob wildcards (`*`).
+4.  **Listing:** Calls `adapter.list()` using the glob pattern. Native filesystem adapters support hidden directories implicitly. 
+5.  **Parallel Load:**
     -   Iterates over file list.
     -   Calls `adapter.read()`.
     -   Parses frontmatter.
     -   Validates against schema.
-5.  **Filtering:** Applies `where` clause (in-memory). Supports operators: `contains`, `in`, `gt`, `lt`, `gte`, `lte`. When `search` is present, builds a MiniSearch inverted index dynamically and queries it with BM25 ranking, prefix matching, and fuzzy matching.
-6.  **Sorting:** Applies `orderBy`.
-7.  **Pagination:** Applies `skip` and `take`.
-8.  **Hook (onList):** Calls `hooks.onList` to transform the final result set.
-9.  **Telemetry (Success):** Emits `igniter.collections.document.findMany.success`.
+6.  **Filtering:** Applies `where` clause (in-memory). Supports operators: `contains`, `in`, `gt`, `lt`, `gte`, `lte`. When `search` is present, builds a MiniSearch inverted index dynamically and queries it with BM25 ranking, prefix matching, and fuzzy matching.
+7.  **Sorting:** Applies `orderBy`.
+8.  **Pagination:** Applies `skip` and `take`.
+9.  **Hook (onList):** Calls `hooks.onList` with `{ items, context }` to transform the final result set.
+10. **Telemetry (Success):** Emits `igniter.collections.document.findMany.success`.
 
 #### 4.2 Pipeline: `collectionManager.delete(args)`
 The `delete` operation removes a document and emits lifecycle events.
 
-1.  **Fetch Document:** Reads the existing document to pass it to hooks and events.
-2.  **Hook: `onDeleted` (Pre-Deletion):**
-    -   Executes hook. 
+1.  **Context Resolution:** Calls `manager.resolveContext()` to get fresh context for this operation.
+2.  **Fetch Document:** Reads the existing document to pass it to hooks and events.
+3.  **Hook: `onDeleted` (Pre-Deletion):**
+    -   Executes hook with `{ value, context }`. 
     -   If returns `false`, aborts with `HOOK_CANCELLED`.
-3.  **Persistence:** Calls `adapter.delete(path)`.
-4.  **Events:** Emits global `deleted` and scoped `${name}:deleted`.
-5.  **Telemetry:** Emits `igniter.collections.document.delete.success`.
+4.  **Persistence:** Calls `adapter.delete(path)`.
+5.  **Events:** Emits global `deleted` with `{ collection, value, context }` and scoped `${name}:deleted` with `{ value, context }`.
+6.  **Telemetry:** Emits `igniter.collections.document.delete.success`.
 
 #### 4.3 Pipeline: `manager.refreshSchemas()`
 Reloads the dynamic schema registry.
@@ -227,14 +253,15 @@ Efficiently counts matching documents.
 #### 4.5 Pipeline: `manager.views.render(name)`
 Renders a global view with multi-collection data.
 
-1.  **View Lookup:** Finds view in `IgniterCollectionViewManager.views` Map.
-2.  **Validation:** Confirms `getData` hook exists (throws `VIEW_INVALID_CONFIGURATION` if missing).
-3.  **Telemetry (Started):** Emits `igniter.collections.view.render.started`.
-4.  **Hook Execution:** Calls `getData({ manager, options })`.
-5.  **Transform Engine:** Applies transforms sequentially to `hookResult.items`.
-6.  **Stats Calculation:** Computes declarative stats over transformed items.
-7.  **Telemetry (Success):** Emits `igniter.collections.view.render.success`.
-8.  **Return Result:** Returns `IgniterCollectionViewRenderResult`.
+1.  **Context Resolution:** Calls `viewManager.resolveContext()` to get fresh context for this render.
+2.  **View Lookup:** Finds view in `IgniterCollectionViewManager.views` Map.
+3.  **Validation:** Confirms `getData` hook exists (throws `VIEW_INVALID_CONFIGURATION` if missing).
+4.  **Telemetry (Started):** Emits `igniter.collections.view.render.started`.
+5.  **Hook Execution:** Calls `getData({ manager, context, options })`.
+6.  **Transform Engine:** Applies transforms sequentially to `hookResult.items`.
+7.  **Stats Calculation:** Computes declarative stats over transformed items.
+8.  **Telemetry (Success):** Emits `igniter.collections.view.render.success`.
+9.  **Return Result:** Returns `IgniterCollectionViewRenderResult`.
 
 #### 4.6 Pipeline: `manager.refresh()`
 Reloads both collections and views from disk.
@@ -405,11 +432,11 @@ Hooks are the primary mechanism for extending collection behavior without modify
 
 | Hook | Timing | Mutates Data | Context |
 |------|--------|--------------|---------|
-| `onCreated` | After validation, before persistence | Yes | `{ value, id?, manager }` |
-| `onUpdated` | After read, before persistence | Yes | `{ value, previousValue, id, manager }` |
-| `onDeleted` | After read, before deletion | Yes (can abort) | `{ value, id, manager }` |
-| `onRead` | After read, before return | Yes | `{ value, id, manager }` |
-| `onList` | After filtering, before return | Yes | `{ items, manager }` |
+| `onCreated` | After validation, before persistence | Yes | `{ value, collection, manager, context }` |
+| `onUpdated` | After read, before persistence | Yes | `{ newValue, previousValue, collection, manager, context }` |
+| `onDeleted` | After read, before deletion | Yes (can abort) | `{ value, collection, manager, context }` |
+| `onRead` | After read, before return | Yes | `{ value, collection, manager, context }` |
+| `onList` | After filtering, before return | Yes | `{ values, collection, manager, context }` |
 
 #### 8.2 Hook Execution Order
 
@@ -456,6 +483,143 @@ Global hooks execute BEFORE collection-specific hooks. If a global hook returns 
 
 ---
 
+### 8.5 Context Injection (Dependency Injection)
+
+Context injection allows you to pass runtime dependencies (auth state, database connections, request context) into hooks, views, actions, and event listeners.
+
+#### 8.5.1 Basic Usage
+
+```typescript
+interface RequestContext {
+  userId: string;
+  tenantId: string;
+  db: DatabaseConnection;
+}
+
+const docs = IgniterCollections.create()
+  .withAdapter(adapter)
+  .withContext((): RequestContext => ({
+    userId: getCurrentUserId(),
+    tenantId: getCurrentTenantId(),
+    db: getDatabaseConnection(),
+  }))
+  .addCollection(
+    IgniterCollectionModel.create('posts')
+      .withSchema(PostSchema)
+      .onCreated(async ({ value, context }) => {
+        const ctx = context as RequestContext;
+        value.authorId = ctx.userId;
+        value.tenantId = ctx.tenantId;
+        return value;
+      })
+      .build()
+  )
+  .build();
+```
+
+#### 8.5.2 Context in Hooks
+
+All hooks receive `context` as part of their payload:
+
+```typescript
+const Posts = IgniterCollectionModel.create('posts')
+  .withSchema(PostSchema)
+  .onCreated(async ({ value, context }) => {
+    const ctx = context as RequestContext;
+    // Use ctx.userId, ctx.db, etc.
+    return value;
+  })
+  .onList(async ({ values, context }) => {
+    const ctx = context as RequestContext;
+    // Filter by tenant or apply access control
+    return values;
+  })
+  .build();
+```
+
+#### 8.5.3 Context in Views
+
+Views receive `context` in both `getData` and action handlers:
+
+```typescript
+const DashboardView = IgniterCollectionView.create('dashboard')
+  .withTitle('Dashboard')
+  .withData(async ({ manager, context }) => {
+    const ctx = context as RequestContext;
+    const posts = await manager.posts.findMany({
+      where: { tenantId: { eq: ctx.tenantId } },
+    });
+    return { items: posts, stats: { total: posts.length } };
+  })
+  .addAction('publish', {
+    description: 'Publish post',
+    async handler({ manager, context, params }) {
+      const ctx = context as RequestContext;
+      // Validate permissions using ctx.userId
+      await manager.posts.update({ where: { id: params.id }, data: { published: true } });
+      return { success: true };
+    },
+  });
+```
+
+#### 8.5.4 Context in Events
+
+Event listeners receive `context` in their payloads:
+
+```typescript
+// Global events
+docs.on('created', ({ collection, value, context }) => {
+  const ctx = context as RequestContext;
+  console.log(`Created by user ${ctx.userId}`);
+});
+
+// Scoped events
+docs.posts.on('created', ({ value, context }) => {
+  const ctx = context as RequestContext;
+  // Access runtime context
+});
+```
+
+#### 8.5.5 Context Factory Pattern
+
+The factory is called **fresh on every operation**, ensuring context is always up-to-date:
+
+```typescript
+.withContext(() => {
+  // Called before every CRUD operation, view render, and action execution
+  return {
+    userId: getCurrentUserId(),     // Always fresh
+    requestId: generateRequestId(), // Unique per operation
+    startTime: Date.now(),          // Operation timing
+  };
+})
+```
+
+#### 8.5.6 Best Practices
+
+| Practice | Why? |
+|----------|------|
+| ✅ Keep factory lightweight | Called on every operation |
+| ✅ Use type casting | Context is `unknown`; cast with `as MyContext` |
+| ✅ Handle factory errors | Factory throws → operation fails with `CONTEXT_FACTORY_ERROR` |
+| ✅ Use for auth/tenant | Perfect for injecting user/tenant context |
+| ❌ Put heavy I/O in factory | Slows every operation |
+| ❌ Assume context exists | Always check if factory is configured |
+
+#### 8.5.7 Error Handling
+
+If the context factory throws, the operation fails with:
+
+```typescript
+{
+  code: 'CONTEXT_FACTORY_ERROR',
+  message: 'Context factory failed: ...',
+  details: { ctx: { package: 'collections', operation: 'create' } }
+}
+```
+
+---
+
 ## III. TECHNICAL REFERENCE & RESILIENCE
 
 ### 9. Exhaustive Error Code Library
@@ -479,6 +643,12 @@ Global hooks execute BEFORE collection-specific hooks. If a global hook returns 
 - **Context:** `views.render()`.
 - **Cause:** Requesting a view name that wasn't registered.
 - **Solution:** Verify view names in `definitions()`.
+
+#### `CONTEXT_FACTORY_ERROR`
+- **Context:** Any CRUD operation, view render, or action execution.
+- **Cause:** The context factory function threw an error.
+- **Mitigation:** Wrap factory logic in try/catch and return safe defaults.
+- **Solution:** Inspect `error.message` for the original error. Fix the factory logic.
 
 ---
 
@@ -504,9 +674,10 @@ Understanding how `@igniter-js/collections` is distributed helps in selecting th
   - Contains the `IgniterCollections` and `IgniterCollectionModel` builders.
   - Contains the core manager logic and lifecycle management.
   - Excludes specific adapters and telemetry to avoid bloating consumer bundles with unused dependencies.
-- **Adapters Subpath (`@igniter-js/collections/adapters`):**
-  - Contains all production adapters (`BunFs`, `NodeFs`, `BunRedis`, `BunS3`).
-  - Contains the `MockAdapter` for testing.
+- **Adapters Subpaths:**
+  - `@igniter-js/collections/adapters/node` — Node.js filesystem adapter (`NodeFsAdapter`).
+  - `@igniter-js/collections/adapters/bun` — Bun adapters (`BunFsAdapter`, `BunRedisAdapter`, `BunS3Adapter`).
+  - `@igniter-js/collections/adapters/mock` — In-memory mock adapter for testing (`IgniterCollectionMockAdapter`).
   - *Recommendation:* Always import only the adapter you need to minimize runtime overhead.
 - **Telemetry Subpath (`@igniter-js/collections/telemetry`):**
   - Contains the telemetry event definitions.
@@ -551,7 +722,7 @@ Understanding how `@igniter-js/collections` is distributed helps in selecting th
 |--------|------------|---------|-------------|
 | `create(name)` | `name: string` | `Builder` | Starts building a collection named `name`. |
 | `withPatterns()` | `patterns: string[]` | `this` | Sets file patterns for resolution (e.g., `['.content/posts/{id}.mdx']`). |
-| `withTemplate()` | `path: string` | `this` | Sets a predefined template path for generating content. |
+
 | `withSchema()` | `schema: S` | `Builder<Infer<S>>` | Sets the validation schema and updates type inference. |
 | `onCreated()` | `hook: Hook` | `this` | Register a callback for the creation lifecycle. |
 | `onUpdated()` | `hook: Hook` | `this` | Register a callback for the update lifecycle. |
@@ -670,7 +841,7 @@ The `@igniter-js/collections` package emits high-granularity events to ensure th
 ### 14. Real-World Use Case Library (Expanded)
 
 #### Case 6: Dynamic Plugin Content
-A multi-plugin CMS where each plugin provides its own content types. The main app uses `withSchemaRegistry` pointing to the `node_modules` of plugins to automatically discover their schemas and build the management UI dynamically.
+A multi-plugin CMS where each plugin provides its own content types. The main app uses `withWatcher` pointing to the `node_modules` of plugins to automatically discover their schemas and build the management UI dynamically.
 
 #### Case 7: High-Frequency Cache for Microservices
 Using `BunRedisAdapter` with `@igniter-js/collections` as a type-safe cache layer. Service A writes complex objects to Redis, and Service B reads them with full validation, ensuring that data corruption in Redis (due to manual intervention) is caught immediately at the ORM layer.
@@ -1280,7 +1451,7 @@ sub.off();
 
 - [ ] Every public method has TSDoc with `@example`.
 - [ ] Every new feature includes telemetry events.
-- [ ] `MockAdapter` is updated to support new capabilities.
+- [ ] `IgniterCollectionMockAdapter` is updated to support new capabilities.
 - [ ] Unit tests cover 100% of the new logic.
 - [ ] This `AGENTS.md` is updated with the latest architectural changes.
 - [ ] Line count exceeds 1,000 to ensure deep training data.

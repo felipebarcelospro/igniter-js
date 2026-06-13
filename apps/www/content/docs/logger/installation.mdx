@@ -1,0 +1,155 @@
+---
+title: Installation
+description: Install and configure @igniter-js/logger. Runtime requirements, peer dependencies, and verifying your setup in under a minute.
+---
+
+## Installation
+
+`@igniter-js/logger` works on **Node.js 18+** and **Bun 1.0+**. It bundles Pino v9 and its companion packages (`pino-pretty`, `pino-abstract-transport`) as direct dependencies — no extra installs needed for the built-in transports.
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/logger
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/logger
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/logger
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/logger
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  **No peer dependencies required.** Pino, pino-pretty, and pino-abstract-transport are bundled as direct dependencies. You only need `@igniter-js/logger`.
+</Callout>
+
+---
+
+## Runtime Requirements
+
+### Node.js
+
+```json title="package.json"
+{
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+```
+
+Logger uses `pino` and `pino-pretty` internally. The **console transport** (default) works out of the box. The **file transport** relies on `node:fs`. The **HTTP transport** uses the global `fetch` API (available in Node.js 18+).
+
+### Bun
+
+```json title="package.json"
+{
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
+```
+
+All transports work in Bun. The HTTP transport uses Bun's built-in `fetch`. The file transport uses Bun's native filesystem APIs via Pino.
+
+<Callout type="warn">
+  **Browser support:** Logger exports a **shim** for browser environments (`browser` field in `package.json`). The shim is a no-op — browser logging is not supported. Use the logger only in server-side runtimes.
+</Callout>
+
+---
+
+## TypeScript Configuration
+
+Logger requires TypeScript 5.0+ for the builder generic inference (`defineScopes<T>()`). Ensure your `tsconfig.json` includes:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "strict": true,
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "target": "ES2022"
+  }
+}
+```
+
+The `"bundler"` module resolution lets TypeScript resolve `@igniter-js/logger` exports correctly from both ESM and CJS consumers.
+
+---
+
+## Dependencies
+
+Logger ships with three direct dependencies:
+
+| Package | Purpose | Version |
+|---------|---------|---------|
+| `pino` | Core logging engine | ^9.0.0 |
+| `pino-pretty` | Console pretty-printing | ^13.0.0 |
+| `pino-abstract-transport` | Custom HTTP transport worker | ^2.0.0 |
+
+For **external transports** (Logtail, Datadog, Loki, etc.), install the corresponding package separately:
+
+```bash
+npm install @logtail/pino
+# or
+npm install pino-datadog-transport
+```
+
+---
+
+## Verifying Installation
+
+Create a minimal script to confirm everything works:
+
+```typescript title="verify.ts"
+import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
+
+// Console transport (default)
+const logger = IgniterLogger.create()
+  .withLevel(IgniterLogLevel.Info)
+  .withAppName('verify')
+  .build();
+
+logger.info('Logger is working');
+logger.success('Installation verified');
+
+// Flush and check
+await logger.flush();
+console.log('✅ @igniter-js/logger installed correctly');
+```
+
+Run it:
+
+```bash
+npx tsx verify.ts
+```
+
+You should see pretty-formatted log output with timestamps and a `✅` success message.
+
+---
+
+## Version Compatibility
+
+| Logger Version | Pino | Node.js | Bun |
+|----------------|------|---------|-----|
+| 0.1.x | 9.x | 18+ | 1.0+ |
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Quick Start" description="Create your first logger with custom configuration in 2 minutes." href="/docs/logger/quick-start" />
+  <Card title="Transports" description="Configure console, file, HTTP, and external transport targets." href="/docs/logger/transports" />
+  <Card title="API Reference" description="Complete reference for every builder method and manager operation." href="/docs/logger/api-reference" />
+</Cards>

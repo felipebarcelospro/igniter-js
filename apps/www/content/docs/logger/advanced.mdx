@@ -1,0 +1,328 @@
+---
+title: Advanced Features
+description: Visual log formatting with groups and separators, runtime level changes, flush strategies, error handling, and the full log() method.
+---
+
+## Advanced Features
+
+Beyond basic logging, Logger provides visual formatting tools, runtime control, and fine-grained APIs for production use.
+
+---
+
+## Visual Formatting
+
+### Groups
+
+Use `group()` and `groupEnd()` to create indented sections in console output:
+
+```typescript
+import { IgniterLogger } from '@igniter-js/logger';
+
+const logger = IgniterLogger.create()
+  .addTransport({ target: 'console', options: { pretty: true } })
+  .build();
+
+logger.group('User Import');
+logger.info('Reading CSV file...');
+logger.info('Parsing 1,423 records...');
+logger.debug('Record 1: { name: "Alice" }');
+logger.debug('Record 2: { name: "Bob" }');
+logger.success('Import complete');
+logger.groupEnd();
+
+logger.info('Next task starting...');
+```
+
+Console output:
+
+```
+┌ User Import
+  Reading CSV file...
+  Parsing 1,423 records...
+  Record 1: { name: "Alice" }
+  Record 2: { name: "Bob" }
+  ✓ Import complete
+Next task starting...
+```
+
+Groups are **nestable** — each `group()` call increments the indent level:
+
+```typescript
+logger.group('Deployment');
+logger.info('Step 1: Build');
+
+logger.group('Docker');
+logger.info('Building image...');
+logger.info('Tagging image...');
+logger.groupEnd();
+
+logger.info('Step 2: Deploy');
+logger.groupEnd();
+```
+
+Output:
+
+```
+┌ Deployment
+  Step 1: Build
+  ┌ Docker
+    Building image...
+    Tagging image...
+  Step 2: Deploy
+```
+
+<Callout type="info">
+  Groups only affect **console output**. File and HTTP transports receive the raw messages without indentation.
+</Callout>
+
+### Separators
+
+Draw visual dividers with `separator()`:
+
+```typescript
+logger.separator();
+// ──────────────────────────────────────────────────
+
+logger.info('Section 1 content');
+logger.info('More section 1');
+
+logger.separator();
+
+logger.info('Section 2 content');
+```
+
+Output:
+
+```
+──────────────────────────────────────────────────
+Section 1 content
+More section 1
+──────────────────────────────────────────────────
+Section 2 content
+```
+
+---
+
+## Success Messages
+
+`success()` is a convenience method that logs at `info` level with a `✓` prefix and a `type: "success"` field:
+
+```typescript
+logger.success('Database connection established');
+// [12:34:56] INFO: ✓ Database connection established
+// (also includes { type: "success" } in structured output)
+
+// Equivalent to:
+// logger.info('✓ Database connection established', { type: 'success' });
+```
+
+---
+
+## Runtime Control
+
+### Changing Log Level
+
+Use `setLevel()` to change the minimum log level at runtime — useful for toggling debug output without restarting:
+
+```typescript
+import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
+
+const logger = IgniterLogger.create()
+  .withLevel(IgniterLogLevel.Info)
+  .build();
+
+logger.debug('Not logged');      // Below Info — suppressed
+logger.setLevel(IgniterLogLevel.Debug);
+logger.debug('Now logged');      // Visible after level change
+```
+
+### Changing App Name and Component
+
+Update `appName` and `component` at runtime:
+
+```typescript
+logger.setAppName('worker-v2');
+logger.setComponent('scheduler');
+
+logger.info('Running job');
+// Includes appName=worker-v2, component=scheduler
+```
+
+Pass `undefined` to clear:
+
+```typescript
+logger.setAppName(undefined);
+logger.setComponent(undefined);
+```
+
+---
+
+## The `log()` Method
+
+When you need programmatic control over the log level, use the generic `log()` method:
+
+```typescript
+logger.log('error', 'Something went wrong', { code: 500 }, new Error('boom'));
+logger.log('info', 'Operation complete', { duration: 42 });
+
+// Evaluates level dynamically
+function logAtDynamicLevel(
+  logger: ReturnType<typeof IgniterLogger.create>,
+  severity: 'low' | 'high',
+  message: string,
+) {
+  const level = severity === 'high' ? 'error' : 'debug';
+  logger.log(level, message);
+}
+```
+
+### Signature
+
+```typescript
+log(
+  level: IgniterLogLevel | string,
+  message: string,
+  context?: Record<string, unknown> | string,
+  error?: Error | unknown,
+): void
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `level` | `"fatal" \| "error" \| "warn" \| "info" \| "debug" \| "trace"` | Log level. |
+| `message` | `string` | The log message. |
+| `context` | `Record<string, unknown> \| string` | Optional context payload. Strings are wrapped as `{ label: value }`. |
+| `error` | `Error \| unknown` | Optional error object. Set as `err` in the structured payload. |
+
+---
+
+## Flush Strategies
+
+### Graceful Shutdown
+
+For file and HTTP transports, flush buffered logs before process exit:
+
+```typescript
+import { IgniterLogger } from '@igniter-js/logger';
+
+const logger = IgniterLogger.create()
+  .addTransport({ target: 'file', options: { path: './logs/app.log' } })
+  .addTransport({ target: 'http', options: { url: process.env.LOG_URL! } })
+  .build();
+
+// SIGTERM (e.g., Docker stop, Kubernetes pod termination)
+process.on('SIGTERM', async () => {
+  logger.info('Received SIGTERM — flushing logs');
+  await logger.flush();
+  process.exit(0);
+});
+
+// SIGINT (Ctrl+C)
+process.on('SIGINT', async () => {
+  logger.info('Received SIGINT — flushing logs');
+  await logger.flush();
+  process.exit(0);
+});
+
+// beforeExit (natural exit)
+process.on('beforeExit', async () => {
+  await logger.flush();
+});
+```
+
+### What `flush()` Does
+
+| Transport | Behavior |
+|-----------|----------|
+| **Console** | No-op (console writes are synchronous). |
+| **File** | Flushes Pino's internal buffer to disk. |
+| **HTTP** | Sends all buffered log entries to the remote endpoint immediately. |
+| **External** | Delegates to the transport's flush mechanism if available. |
+
+<Callout type="warn">
+  **Always call `flush()` before process exit** when using file or HTTP transports. Unflushed logs are lost. The HTTP transport timer uses `.unref()` — it won't keep the process alive.
+</Callout>
+
+---
+
+## Error Handling
+
+### Logging Errors
+
+Pass `Error` objects as the second argument to `error()` and `fatal()`:
+
+```typescript
+try {
+  await dangerousOperation();
+} catch (err) {
+  logger.error('Operation failed', err);
+  // Structured output includes: { err: { message, stack, ... } }
+}
+```
+
+### Logger Errors Are Non-Fatal
+
+Logger never throws from `log()`, `info()`, `error()`, etc. Transport failures are handled silently:
+
+```typescript
+// Even with an invalid file path, logging won't crash your app
+const logger = IgniterLogger.create()
+  .addTransport({
+    target: 'file',
+    options: { path: '/invalid/path/app.log' },
+  })
+  .build();
+
+logger.info('Application still running');
+// No exception thrown — the file transport may fail silently
+```
+
+### Custom Error Classes
+
+Logger exports typed error classes for programmatic error handling:
+
+```typescript
+import {
+  IgniterLoggerError,
+  IGNITER_LOGGER_ERROR_CODES,
+} from '@igniter-js/logger';
+
+try {
+  // Your logger setup
+} catch (err) {
+  if (err instanceof IgniterLoggerError) {
+    switch (err.code) {
+      case IGNITER_LOGGER_ERROR_CODES.TRANSPORT_INVALID:
+        console.error('Invalid transport target:', err.details);
+        break;
+      case IGNITER_LOGGER_ERROR_CODES.CONFIG_INVALID:
+        console.error('Invalid configuration:', err.message);
+        break;
+    }
+  }
+}
+```
+
+---
+
+## Complete Log Level Reference
+
+| Level | Method | Typical Use |
+|-------|--------|-------------|
+| `fatal` | `logger.fatal(msg, err?)` | Unrecoverable errors — service is going down |
+| `error` | `logger.error(msg, err?)` | Operation failures, exceptions |
+| `warn` | `logger.warn(msg, ...args)` | Degraded state, deprecation warnings |
+| `info` | `logger.info(msg, ...args)` | Normal operations, state transitions |
+| `debug` | `logger.debug(msg, ...args)` | Development details, variable inspection |
+| `trace` | `logger.trace(msg, ...args)` | Extremely granular — function entry/exit |
+| — | `logger.success(msg, ...args)` | Positive outcomes: starts, completions, milestones |
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="API Reference" description="Complete reference for every builder method, manager operation, type, and error class." href="/docs/logger/api-reference" />
+  <Card title="Troubleshooting" description="Common errors, transport failures, level issues, and how to fix them." href="/docs/logger/troubleshooting" />
+  <Card title="Best Practices" description="Do's and Don'ts for production logging with structured context." href="/docs/logger/best-practices" />
+</Cards>

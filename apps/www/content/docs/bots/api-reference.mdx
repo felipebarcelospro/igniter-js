@@ -1,367 +1,629 @@
 ---
 title: API Reference
-description: Complete API reference for the Bots package.
+description: Complete API reference for @igniter-js/bot. Builder methods, Bot class, adapters, middlewares, plugins, types, and error codes.
 ---
 
-Complete reference for all public APIs in the Bots package.
+## API Reference
+
+This page documents every public API surface of `@igniter-js/bot`. All methods, types, and exports are listed with their signatures and descriptions.
+
+---
+
+## IgniterBotBuilder
+
+The main entry point for constructing bots.
+
+### Static Methods
+
+#### `IgniterBot.create()`
+
+Creates a new builder instance.
+
+```typescript
+static create(): IgniterBotBuilder
+```
+
+### Identity Methods
+
+#### `withHandle(handle: string): this`
+
+Sets the bot handle (e.g., `@mybot`). Auto-generates `id` and `name` from the handle if not set explicitly.
+
+```typescript
+withHandle(handle: string): this
+```
+
+#### `withId(id: string): this`
+
+Sets a unique bot identifier. Optional — derived from handle if not provided.
+
+```typescript
+withId(id: string): this
+```
+
+#### `withName(name: string): this`
+
+Sets a human-readable display name. Optional — derived from handle if not provided.
+
+```typescript
+withName(name: string): this
+```
+
+### Configuration Methods
+
+#### `withLogger(logger: BotLogger): this`
+
+Configures a structured logger for the bot and all adapters.
+
+```typescript
+withLogger(logger: BotLogger): this
+```
+
+The `BotLogger` interface:
+
+```typescript
+interface BotLogger {
+  debug?: (...args: any[]) => void
+  info?: (...args: any[]) => void
+  warn?: (...args: any[]) => void
+  error?: (...args: any[]) => void
+}
+```
+
+#### `withSessionStore(store: BotSessionStore): this`
+
+Configures session storage for conversational state.
+
+```typescript
+withSessionStore(store: BotSessionStore): this
+```
+
+#### `withOptions(options: BotOptions): this`
+
+Sets advanced bot options.
+
+```typescript
+withOptions(options: BotOptions): this
+
+interface BotOptions {
+  timeout?: number                      // Request timeout in ms
+  retries?: number                      // Retry attempts for failed operations
+  autoRegisterCommands?: boolean        // Auto-register with platforms
+  errorHandler?: (error: BotError, context?: BotContext) => void | Promise<void>
+}
+```
+
+### Adapter Methods
+
+#### `addAdapter(key: string, adapter: IBotAdapter): IgniterBotBuilder`
+
+Adds a single platform adapter. Returns a new builder with updated generic types.
+
+```typescript
+addAdapter<K extends string, A extends IBotAdapter<any>>(
+  key: K,
+  adapter: A
+): IgniterBotBuilder<TAdapters & Record<K, A>, TCommands, TContext>
+```
+
+#### `addAdapters(adapters: Record<string, IBotAdapter>): IgniterBotBuilder`
+
+Adds multiple adapters at once.
+
+```typescript
+addAdapters<A extends Record<string, IBotAdapter<any>>>(
+  adapters: A
+): IgniterBotBuilder<TAdapters & A, TCommands, TContext>
+```
+
+### Command Methods
+
+#### `addCommand(name: string, command: BotCommand): IgniterBotBuilder`
+
+Registers a command. Returns a new builder with updated types.
+
+```typescript
+addCommand<K extends string, C extends BotCommand<TContext>>(
+  name: K,
+  command: C
+): IgniterBotBuilder<TAdapters, TCommands & Record<K, C>, TContext>
+```
+
+#### `addCommands(commands: Record<string, BotCommand>): IgniterBotBuilder`
+
+Registers multiple commands at once.
+
+```typescript
+addCommands<C extends Record<string, BotCommand<TContext>>>(
+  commands: C
+): IgniterBotBuilder<TAdapters, TCommands & C, TContext>
+```
+
+#### `addCommandGroup(prefix: string, commands: Record<string, BotCommand>): IgniterBotBuilder`
+
+Registers prefixed commands (e.g., `admin_ban`, `admin_kick`).
+
+```typescript
+addCommandGroup<C extends Record<string, BotCommand<TContext>>>(
+  prefix: string,
+  commands: C
+): IgniterBotBuilder<TAdapters, TCommands, TContext>
+```
+
+### Middleware Methods
+
+#### `addMiddleware(middleware: Middleware): IgniterBotBuilder`
+
+Adds a middleware to the pipeline.
+
+```typescript
+addMiddleware<TContextAdditions>(
+  middleware: Middleware<TContext, TContextAdditions>
+): IgniterBotBuilder<TAdapters, TCommands, TContext & Awaited<TContextAdditions>>
+```
+
+#### `addMiddlewares(middlewares: Middleware[]): this`
+
+Adds multiple middlewares at once.
+
+```typescript
+addMiddlewares(middlewares: Middleware<TContext, any>[]): this
+```
+
+### Plugin Methods
+
+#### `usePlugin(plugin: BotPlugin): this`
+
+Loads a plugin, registering all its commands, middlewares, adapters, and hooks.
+
+```typescript
+usePlugin(plugin: BotPlugin): this
+```
+
+### Event Listener Methods
+
+#### `onMessage(handler: BotEventHandler): this`
+
+Registers a message event listener.
+
+```typescript
+onMessage(handler: BotEventHandler<TContext>): this
+
+type BotEventHandler<TContext> = (ctx: TContext) => Promise<void> | void
+```
+
+#### `onError(handler: BotErrorHandler): this`
+
+Registers an error event listener.
+
+```typescript
+onError(handler: BotErrorHandler<TContext>): this
+
+type BotErrorHandler<TContext> = (
+  ctx: TContext & { error: BotError },
+) => Promise<void> | void
+```
+
+#### `onCommand(handler: BotEventHandler): this`
+
+Registers a command event listener (called for all commands).
+
+```typescript
+onCommand(handler: BotEventHandler<TContext>): this
+```
+
+#### `onStart(handler: BotStartHandler): this`
+
+Registers a startup hook.
+
+```typescript
+onStart(handler: BotStartHandler): this
+
+type BotStartHandler = () => Promise<void> | void
+```
+
+### Build Method
+
+#### `build(): Bot`
+
+Validates configuration and returns the immutable Bot instance.
+
+```typescript
+build(): Bot<TAdapters, Middleware<TContext, any>[], TCommands>
+```
+
+Throws if:
+- No adapters are registered
+- No handle is configured (neither global nor in any adapter)
 
 ---
 
 ## Bot Class
 
-### `Bot.create(options)`
+The runtime bot instance. Returned by `builder.build()`.
 
-Creates a new bot instance.
+### Properties
 
-**Parameters:**
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Unique bot identifier |
+| `name` | `string` | Display name |
+| `botHandle` | `string \| undefined` | Global handle |
+
+### Methods
+
+#### `start(): Promise<void>`
+
+Initializes all adapters (registers webhooks, commands, etc.) and runs startup hooks.
 
 ```typescript
-{
-  id: string
-  name: string
-  adapters: Record<string, IBotAdapter<any>>
-  middlewares?: Middleware[]
-  commands?: Record<string, BotCommand>
-  on?: Partial<Record<BotEvent, (ctx: BotContext) => Promise<void>>>
-  logger?: BotLogger
-}
+async start(): Promise<void>
 ```
 
-**Returns:** `Bot` instance
+#### `handle(provider: string, request: Request): Promise<Response>`
 
-**Example:**
+Routes an incoming request to the appropriate adapter.
 
 ```typescript
-const bot = Bot.create({
-  id: 'my-bot',
-  name: 'My Bot',
-  adapters: {
-    telegram: telegram({ /* ... */ })
-  }
-})
+async handle(provider: string, request: Request): Promise<Response>
 ```
 
----
+Throws `BotError` with code `PROVIDER_NOT_FOUND` if the adapter isn't registered.
 
-### Instance Methods
+#### `send(params: BotSendParams): Promise<void>`
 
-#### `bot.start()`
-
-Initializes all adapters (webhooks, command sync).
-
-**Returns:** `Promise<void>`
-
-**Example:**
+Sends an outbound message through a specific adapter.
 
 ```typescript
-await bot.start()
-```
+async send(params: BotSendParams): Promise<void>
 
----
-
-#### `bot.handle(provider, request)`
-
-Processes an incoming webhook request.
-
-**Parameters:**
-- `provider`: `string` - Adapter name (e.g., `'telegram'`)
-- `request`: `Request` - HTTP request object
-
-**Returns:** `Promise<Response>`
-
-**Example:**
-
-```typescript
-export async function POST(req: Request) {
-  return bot.handle('telegram', req)
-}
-```
-
----
-
-#### `bot.send(params)`
-
-Sends a message via the specified adapter.
-
-**Parameters:**
-
-```typescript
-{
+type BotSendParams<TConfig> = {
   provider: string
   channel: string
-  content: { type: 'text'; content: string }
+  content: BotOutboundContent
+  options?: BotSendOptions
+  config: TConfig
 }
 ```
 
-**Returns:** `Promise<void>`
+Throws `BotError` with code `CONTENT_TYPE_NOT_SUPPORTED` if the adapter doesn't support the content type.
 
-**Example:**
+#### `on(event: BotEvent, callback: Function): void`
 
-```typescript
-await bot.send({
-  provider: 'telegram',
-  channel: ctx.channel.id,
-  content: {
-    type: 'text',
-    content: 'Hello!'
-  }
-})
-```
-
----
-
-#### `bot.use(middleware)`
-
-Adds middleware dynamically.
-
-**Parameters:**
-- `middleware`: `Middleware`
-
-**Returns:** `Bot` instance (chainable)
-
-**Example:**
+Registers a runtime event listener.
 
 ```typescript
-bot.use(async (ctx, next) => {
-  console.log('Middleware')
-  await next()
-})
+on(event: BotEvent, callback: (ctx: BotContext) => Promise<void>): void
+
+type BotEvent = 'start' | 'message' | 'error'
 ```
 
----
+#### `registerCommand(name: string, command: BotCommand): this`
 
-#### `bot.registerCommand(name, command)`
-
-Registers a command dynamically.
-
-**Parameters:**
-- `name`: `string` - Command name
-- `command`: `BotCommand` - Command definition
-
-**Returns:** `Bot` instance (chainable)
-
-**Example:**
+Dynamically registers a command at runtime.
 
 ```typescript
-bot.registerCommand('echo', {
-  name: 'echo',
-  aliases: [],
-  description: 'Echo command',
-  help: 'Usage: /echo <text>',
-  async handle(ctx, params) {
-    // ...
-  }
-})
+registerCommand(name: string, command: BotCommand): this
 ```
 
----
+#### `registerAdapter(key: string, adapter: IBotAdapter): this`
 
-#### `bot.registerAdapter(key, adapter)`
-
-Registers an adapter dynamically.
-
-**Parameters:**
-- `key`: `string` - Adapter key
-- `adapter`: `IBotAdapter<any>` - Adapter instance
-
-**Returns:** `Bot` instance (chainable)
-
-**Example:**
+Dynamically registers an adapter at runtime.
 
 ```typescript
-bot.registerAdapter('custom', customAdapter({ /* ... */ }))
+registerAdapter<K extends string, A extends IBotAdapter<any>>(key: K, adapter: A): this
 ```
 
----
+#### `use(middleware: Middleware): this`
 
-#### `bot.on(event, handler)`
-
-Subscribes to an event.
-
-**Parameters:**
-- `event`: `BotEvent` - Event name (`'message'`, `'error'`, `'start'`)
-- `handler`: `(ctx: BotContext) => Promise<void>` - Event handler
-
-**Returns:** `void`
-
-**Example:**
+Dynamically adds a middleware at runtime.
 
 ```typescript
-bot.on('message', async (ctx) => {
-  console.log('Message received')
-})
+use(mw: Middleware<any, any>): this
 ```
 
----
+#### `onPreProcess(hook: Function): this`
 
-#### `bot.emit(event, ctx)`
-
-Manually emits an event.
-
-**Parameters:**
-- `event`: `BotEvent` - Event name
-- `ctx`: `BotContext` - Context object
-
-**Returns:** `Promise<void>`
-
-**Example:**
+Registers a hook that runs before the middleware pipeline (for session loading, context enrichment).
 
 ```typescript
-await bot.emit('message', mockContext)
+onPreProcess(hook: (ctx: BotContext) => Promise<void> | void): this
 ```
 
----
+#### `onPostProcess(hook: Function): this`
 
-#### `bot.onPreProcess(hook)`
-
-Adds a pre-process hook.
-
-**Parameters:**
-- `hook`: `(ctx: BotContext) => Promise<void> | void`
-
-**Returns:** `Bot` instance (chainable)
-
-**Example:**
+Registers a hook that runs after successful processing.
 
 ```typescript
-bot.onPreProcess(async (ctx) => {
-  // Load session
-})
+onPostProcess(hook: (ctx: BotContext) => Promise<void> | void): this
 ```
 
----
+#### `emit(event: BotEvent, ctx: BotContext): Promise<void>`
 
-#### `bot.onPostProcess(hook)`
-
-Adds a post-process hook.
-
-**Parameters:**
-- `hook`: `(ctx: BotContext) => Promise<void> | void`
-
-**Returns:** `Bot` instance (chainable)
-
-**Example:**
+Manually emits an event to registered listeners.
 
 ```typescript
-bot.onPostProcess(async (ctx) => {
-  // Save session
-})
+async emit(event: BotEvent, ctx: BotContext): Promise<void>
 ```
 
----
+#### `getAdapter(provider: string): IBotAdapter | undefined`
+
+Returns the adapter for a specific provider.
+
+```typescript
+getAdapter(provider: string): IBotAdapter<any> | undefined
+```
+
+#### `getAdapters(): Record<string, IBotAdapter>`
+
+Returns all registered adapters.
+
+```typescript
+getAdapters(): Record<string, IBotAdapter<any>>
+```
 
 ### Static Methods
 
-#### `Bot.adapter<TConfig>(adapter)`
+#### `Bot.adapter(config): AdapterFactory`
 
-Creates an adapter factory.
-
-**Parameters:**
+Creates a typed adapter factory. Used internally by built-in adapters and for custom adapters.
 
 ```typescript
-{
+static adapter<TConfig extends ZodObject<any>>(config: {
   name: string
-  parameters: ZodObject<TConfig>
-  init: (params: { config: TypeOf<TConfig>; commands: BotCommand[]; logger?: BotLogger }) => Promise<void>
-  send: (params: BotSendParams<TConfig> & { logger?: BotLogger }) => Promise<void>
-  handle: (params: BotHandleParams<TConfig> & { logger?: BotLogger }) => Promise<Omit<BotContext, 'bot'> | null>
-}
+  parameters: TConfig
+  capabilities: BotAdapterCapabilities
+  verify?: (params: AdapterVerifyParams) => Promise<Response | null>
+  init: (params: AdapterInitParams) => Promise<void>
+  handle: (params: AdapterHandleParams) => Promise<Omit<BotContext, 'bot' | 'session' | ...> | null>
+  sendTyping?: (params: AdapterSendTypingParams) => Promise<void>
+  client?: (config, logger?) => AdapterClient
+  sendText?: (params: AdapterSendTextParams) => Promise<void>
+  sendImage?: (params: AdapterSendImageParams) => Promise<void>
+  // ... all send methods, editMessage, deleteMessage
+}): (config?: Partial<TypeOf<TConfig>>) => IBotAdapter<TConfig>
 ```
 
-**Returns:** `(config: TypeOf<TConfig>) => IBotAdapter<TConfig>`
+#### `Bot.command(command): BotCommand`
 
-**Example:**
+Validates and returns a command definition.
 
 ```typescript
-const myAdapter = Bot.adapter({
-  name: 'my-platform',
-  parameters: z.object({ apiKey: z.string() }),
-  // ...
-})
+static command<TContext, TContextAdditions>(
+  command: BotCommand<TContext, TContextAdditions>
+): BotCommand<TContext, TContextAdditions>
+```
+
+#### `Bot.middleware(middleware): Middleware`
+
+Validates and returns a middleware function.
+
+```typescript
+static middleware<TContext, TContextAdditions>(
+  middleware: Middleware<TContext, TContextAdditions>
+): Middleware<TContext, TContextAdditions>
+```
+
+#### `Bot.create(config): Bot`
+
+Internal factory. **Deprecated:** Use `IgniterBot` builder instead.
+
+```typescript
+static create<TAdapters, TMiddlewares, TCommands>(config: {
+  id: string
+  name: string
+  handle?: string
+  adapters: TAdapters
+  middlewares?: TMiddlewares
+  commands?: TCommands
+  on?: Partial<Record<BotEvent, (ctx: BotContext) => Promise<void>>>
+  logger?: BotLogger
+  sessionStore?: BotSessionStore
+}): Bot<TAdapters, TMiddlewares, TCommands>
 ```
 
 ---
 
-## Adapters
-
-### `telegram(config)`
-
-Creates a Telegram adapter.
-
-**Parameters:**
+## BotCommand Interface
 
 ```typescript
-{
-  token: string
-  handle: string
-  webhook?: {
-    url: string
-    secret?: string
+interface BotCommand<TContext = BotContext, TArgs = any> {
+  name: string
+  aliases: string[]
+  description: string
+  help: string
+  args?: ZodType<TArgs>
+  handle: (ctx: TContext, params: TArgs) => Promise<void>
+  subcommands?: Record<string, Omit<BotCommand<TContext>, 'name' | 'aliases'>>
+}
+```
+
+---
+
+## BotContext Interface
+
+```typescript
+interface BotContext {
+  event: BotEvent                               // 'start' | 'message' | 'error'
+  provider: string                               // 'telegram' | 'whatsapp' | 'discord'
+
+  bot: {
+    id: string
+    name: string
+    send: (params: Omit<BotSendParams<any>, 'config'>) => Promise<void>
+    getAdapter?: (provider: string) => IBotAdapter | undefined
+    getAdapters?: () => Record<string, IBotAdapter>
   }
+
+  channel: {
+    id: string
+    name: string
+    isGroup: boolean
+  }
+
+  message: {
+    id?: string
+    content?: BotContent
+    attachments?: BotAttachmentContent[]
+    author: {
+      id: string
+      name: string
+      username: string
+    }
+    isMentioned: boolean
+  }
+
+  session: BotSessionHelper
+
+  reply(content: BotOutboundContent | string, options?: BotSendOptions): Promise<void>
+  replyWithButtons(text: string, buttons: BotButton[], options?: BotSendOptions): Promise<void>
+  replyWithImage(image: string | File, caption?: string, options?: BotSendOptions): Promise<void>
+  replyWithDocument(file: File, caption?: string, options?: BotSendOptions): Promise<void>
+  editMessage?(messageId: string, content: BotOutboundContent): Promise<void>
+  deleteMessage?(messageId: string): Promise<void>
+  react?(emoji: string, messageId?: string): Promise<void>
+  sendTyping?(): Promise<void>
 }
 ```
 
-**Returns:** `IBotAdapter`
-
 ---
 
-### `whatsapp(config)`
+## Content Types
 
-Creates a WhatsApp adapter.
-
-**Parameters:**
+### BotOutboundContent (Send)
 
 ```typescript
-{
-  token: string
-  phone: string
-  handle: string
+type BotOutboundContent =
+  | BotTextContent        // { type: 'text', content: string }
+  | BotImageContent       // { type: 'image', content: string, file?: File, caption?: string }
+  | BotVideoContent       // { type: 'video', content: string, file?: File, caption?: string }
+  | BotAudioContent       // { type: 'audio', content: string, file?: File }
+  | BotDocumentContent    // { type: 'document', content: string, file: File, filename?: string, caption?: string }
+  | BotStickerContent     // { type: 'sticker', content: string, file?: File }
+  | BotLocationContent    // { type: 'location', latitude: number, longitude: number, name?: string, address?: string }
+  | BotContactContent     // { type: 'contact', phoneNumber: string, firstName: string, lastName?: string }
+  | BotPollContent        // { type: 'poll', question: string, options: string[], ... }
+  | BotInteractiveContent // { type: 'interactive', text: string, buttons?: BotButton[], inlineKeyboard?: BotInlineKeyboardRow[] }
+  | BotReplyContent       // { type: 'reply', messageId: string, content: BotOutboundContent }
+```
+
+### BotSendOptions
+
+```typescript
+interface BotSendOptions {
+  replyToMessageId?: string
+  disableWebPagePreview?: boolean
+  disableNotification?: boolean
+  parseMode?: 'HTML' | 'Markdown' | 'MarkdownV2'
+  protectContent?: boolean
+  autoFormat?: boolean
 }
 ```
 
-**Returns:** `IBotAdapter`
-
 ---
 
-## Errors
-
-### `BotError`
-
-Error class for bot errors.
-
-**Properties:**
-- `code`: `BotErrorCode` - Error code
-- `message`: `string` - Error message
-- `meta?`: `Record<string, unknown>` - Additional metadata
-
-**Example:**
+## BotError
 
 ```typescript
-throw new BotError(BotErrorCodes.COMMAND_NOT_FOUND, 'Command not found')
+class BotError extends Error {
+  code: BotErrorCode
+  meta?: Record<string, unknown>
+
+  constructor(code: BotErrorCode, message?: string, meta?: Record<string, unknown>)
+}
+
+type BotErrorCode =
+  | 'CLIENT_NOT_PROVIDED'
+  | 'PROVIDER_NOT_FOUND'
+  | 'COMMAND_NOT_FOUND'
+  | 'INVALID_COMMAND_PARAMETERS'
+  | 'ADAPTER_HANDLE_RETURNED_NULL'
+  | 'CONTENT_TYPE_NOT_SUPPORTED'
+  | 'INVALID_CONTENT'
 ```
 
 ---
 
-### `BotErrorCodes`
+## Session Interfaces
 
-Error code constants:
+### BotSessionStore
 
-- `PROVIDER_NOT_FOUND`
-- `COMMAND_NOT_FOUND`
-- `INVALID_COMMAND_PARAMETERS`
-- `ADAPTER_HANDLE_RETURNED_NULL`
+```typescript
+interface BotSessionStore {
+  get(userId: string, channelId: string): Promise<BotSession | null>
+  set(userId: string, channelId: string, session: BotSession): Promise<void>
+  delete(userId: string, channelId: string): Promise<void>
+  clear(userId: string): Promise<void>
+}
+```
+
+### BotSessionHelper
+
+```typescript
+interface BotSessionHelper extends BotSession {
+  save(): Promise<void>
+  delete(): Promise<void>
+  update(data: Partial<Record<string, any>>): Promise<void>
+}
+```
 
 ---
 
-## Types
+## Plugin Interface
 
-See the [Types](/docs/bots/types) documentation for complete type definitions.
+```typescript
+interface BotPlugin {
+  name: string
+  version: string
+  description?: string
+  commands?: Record<string, BotCommand>
+  middlewares?: Middleware<any, any>[]
+  adapters?: Record<string, IBotAdapter<any>>
+  hooks?: {
+    onStart?: () => Promise<void> | void
+    onMessage?: (ctx: BotContext) => Promise<void> | void
+    onError?: (ctx: BotContext & { error: BotError }) => Promise<void> | void
+    onStop?: () => Promise<void> | void
+  }
+  config?: Record<string, any>
+}
+```
+
+---
+
+## Exports
+
+### Main Exports
+
+```typescript
+export { IgniterBot, IgniterBotBuilder } from './builder'
+export { Bot, BotError, BotErrorCodes } from './bot.provider'
+export { telegram } from './adapters/telegram'
+export { whatsapp } from './adapters/whatsapp'
+export { discord } from './adapters/discord'
+export { nextRouteHandlerAdapter } from './adapters/nextjs'
+export { tanstackStartRouteHandlerAdapter } from './adapters/tanstack-start'
+export { adapters } from './index' // Convenience: { telegram, whatsapp, discord }
+export { VERSION } from './index'
+
+// Middlewares
+export { authMiddleware, authPresets, roleMiddleware } from './middlewares/auth'
+export { rateLimitMiddleware, rateLimitPresets, memoryRateLimitStore } from './middlewares/rate-limit'
+export { loggingMiddleware, loggingPresets, commandLoggingMiddleware } from './middlewares/logging'
+
+// Plugins
+export { analyticsPlugin } from './plugins/analytics'
+
+// Stores
+export { memoryStore, MemorySessionStore } from './stores/memory'
+```
 
 ---
 
 ## Next Steps
 
-- **[Types](/docs/bots/types)** - Complete type definitions
-- **[Getting Started](/docs/bots/installation)** - Setup guide
-- **[Best Practices](/docs/bots/best-practices)** - Production patterns
-
+<Cards>
+  <Card title="Best Practices" description="Production patterns, security tips, and anti-patterns to avoid." href="/docs/bots/best-practices" />
+  <Card title="Troubleshooting" description="Common errors, debugging techniques, and solutions." href="/docs/bots/troubleshooting" />
+  <Card title="Real-World Examples" description="Complete production bot scenarios with code." href="/docs/bots/real-world" />
+</Cards>

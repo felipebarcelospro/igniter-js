@@ -14,14 +14,15 @@ export type IgniterCollectionEventHandler<T = any> = (data: T) => void | Promise
  * Global event payloads.
  */
 export interface IgniterCollectionGlobalEvents {
-  created: { collection: string; value: IgniterCollectionDocument<any> };
+  created: { collection: string; value: IgniterCollectionDocument<any>; context: unknown };
   updated: {
     collection: string;
     newValue: IgniterCollectionDocument<any>;
     previousValue: IgniterCollectionDocument<any>;
+    context: unknown;
   };
-  deleted: { collection: string; value: IgniterCollectionDocument<any> };
-  read: { collection: string; value: IgniterCollectionDocument<any> };
+  deleted: { collection: string; value: IgniterCollectionDocument<any>; context: unknown };
+  read: { collection: string; value: IgniterCollectionDocument<any>; context: unknown };
 }
 
 /**
@@ -32,19 +33,23 @@ export interface IgniterCollectionGlobalEvents {
 export type IgniterCollectionScopedEvents<TCollections extends Record<string, any>> = {
   [K in keyof TCollections as `${string & K}:created`]: {
     value: IgniterCollectionDocument<any>;
+    context: unknown;
   };
 } & {
   [K in keyof TCollections as `${string & K}:updated`]: {
     newValue: IgniterCollectionDocument<any>;
     previousValue: IgniterCollectionDocument<any>;
+    context: unknown;
   };
 } & {
   [K in keyof TCollections as `${string & K}:deleted`]: {
     value: IgniterCollectionDocument<any>;
+    context: unknown;
   };
 } & {
   [K in keyof TCollections as `${string & K}:read`]: {
     value: IgniterCollectionDocument<any>;
+    context: unknown;
   };
 };
 
@@ -58,18 +63,19 @@ export type IgniterCollectionScopedEvents<TCollections extends Record<string, an
  */
 export interface IgniterCollectionModelEvents<TSchema = any> {
   /** Document was created */
-  created: { value: IgniterCollectionDocument<TSchema> };
+  created: { value: IgniterCollectionDocument<TSchema>; context: unknown };
   /** Document was updated */
   updated: {
     newValue: IgniterCollectionDocument<TSchema>;
     previousValue: IgniterCollectionDocument<TSchema>;
+    context: unknown;
   };
   /** Document was deleted */
-  deleted: { value: IgniterCollectionDocument<TSchema> };
+  deleted: { value: IgniterCollectionDocument<TSchema>; context: unknown };
   /** Document was read */
-  read: { value: IgniterCollectionDocument<TSchema> };
+  read: { value: IgniterCollectionDocument<TSchema>; context: unknown };
   /** Documents were listed */
-  list: { items: IgniterCollectionDocument<TSchema>[] };
+  list: { items: IgniterCollectionDocument<TSchema>[]; context: unknown };
 }
 
 /**

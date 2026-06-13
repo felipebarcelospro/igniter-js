@@ -1,7 +1,7 @@
 # AGENTS.md - @igniter-js/connectors
 
-> **Last Updated:** 2026-01-29  
-> **Version:** 0.1.1  
+> **Last Updated:** 2026-06-02  
+> **Version:** 0.1.11  
 > **Goal:** This document is the complete operational manual for Code Agents working on @igniter-js/connectors.
 
 ---
@@ -1499,9 +1499,9 @@ IgniterConnectorManager.create().addConnector("slack", slack);
 
 # @igniter-js/connectors - AI Agent Instructions
 
-> **Package Version:** 0.1.0  
-> **Last Updated:** 2025-01-16  
-> **Status:** Ready for Publication with Telemetry Integration
+> **Package Version:** 0.1.11  
+> **Last Updated:** 2026-06-02  
+> **Status:** Published with Telemetry Integration
 
 ---
 
@@ -2257,6 +2257,14 @@ const connector = Connector.create()
 ---
 
 ## Version History
+
+### 0.1.11 (2026-06-02)
+
+- Current release
+- Manager-level `.action()` with defaultConfig support
+- Framework integration examples (Next.js, Express, Fastify, Astro)
+- Enhanced telemetry redaction guidance
+- Comprehensive documentation updates
 
 ### 0.1.0 (2025-01-16)
 

@@ -1,0 +1,785 @@
+---
+title: Real-World Examples
+description: Production-ready patterns for common API workflows. Covers authentication, CRUD operations, file uploads, pagination, external API integration, and more.
+---
+
+This page demonstrates production-ready patterns using `@igniter-js/caller`. Each example is complete, copy-paste ready, and grounded in real-world scenarios.
+
+---
+
+## 1. Authenticated API Client
+
+How to build an API client with automatic token management, refresh logic, and auth error handling.
+
+```typescript title="lib/api.ts"
+import { IgniterCaller, IgniterCallerError } from '@igniter-js/caller';
+
+// Shared auth state
+let accessToken: string | null = null;
+let refreshPromise: Promise<string> | null = null;
+
+async function getAccessToken(): Promise<string> {
+  if (accessToken) return accessToken;
+
+  // Avoid concurrent refresh calls
+  if (!refreshPromise) {
+    refreshPromise = fetch('/api/auth/refresh', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        accessToken = data.accessToken;
+        return accessToken!;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+}
+
+export const api = IgniterCaller.create()
+  .withBaseUrl(process.env.API_URL!)
+
+  // Inject auth token on every request
+  .withRequestInterceptor(async (config) => {
+    const token = await getAccessToken();
+    return {
+      ...config,
+      headers: {
+        ...config.headers,
+        'Authorization': `Bearer ${token}`,
+      },
+    };
+  })
+
+  // Handle 401s — clear token and retry
+  .withResponseInterceptor(async (response) => {
+    if (response.status === 401) {
+      accessToken = null; // Force token refresh on next request
+    }
+    return response;
+  })
+
+  .build();
+```
+
+**Usage:**
+
+```typescript
+// Token is automatically attached
+const { data: user } = await api.get('/me')
+  .stale(30_000) // Cache profile for 30 seconds
+  .execute();
+
+// If token expires, it's refreshed automatically
+const { data: orders } = await api.get('/orders').execute();
+```
+
+---
+
+## 2. CRUD Service with Validation
+
+A complete CRUD service for a User resource, with schema validation and error handling.
+
+```typescript title="services/user.service.ts"
+import { IgniterCallerSchema } from '@igniter-js/caller';
+import { z } from 'zod';
+import type { api } from '@/lib/api';
+
+// --- Schemas ---
+const UserSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+  email: z.string().email(),
+  role: z.enum(['admin', 'user']),
+  createdAt: z.string().datetime(),
+});
+
+const CreateUserSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+});
+
+const UpdateUserSchema = z.object({
+  name: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  role: z.enum(['admin', 'user']).optional(),
+});
+
+const PaginatedResponse = <T extends z.ZodTypeAny>(schema: T) =>
+  z.object({
+    data: z.array(schema),
+    meta: z.object({
+      page: z.number(),
+      limit: z.number(),
+      total: z.number(),
+      totalPages: z.number(),
+    }),
+  });
+
+export const userSchemas = IgniterCallerSchema.create()
+  .path('/users', (path) =>
+    path.get({
+      responses: { 200: PaginatedResponse(UserSchema) },
+    })
+    .post({
+      request: CreateUserSchema,
+      responses: {
+        201: UserSchema,
+        400: z.object({ message: z.string(), errors: z.record(z.array(z.string())) }),
+        409: z.object({ message: z.string() }),
+      },
+    })
+  )
+  .path('/users/:id', (path) =>
+    path.get({
+      responses: {
+        200: UserSchema,
+        404: z.object({ message: z.string() }),
+      },
+    })
+    .patch({
+      request: UpdateUserSchema,
+      responses: {
+        200: UserSchema,
+        404: z.object({ message: z.string() }),
+      },
+    })
+    .delete({
+      responses: {
+        204: undefined,
+        404: z.object({ message: z.string() }),
+      },
+    })
+  )
+  .build();
+
+// --- Service ---
+export const UserService = {
+  async list(page = 1, limit = 20) {
+    const { data, error } = await api.get('/users')
+      .params({ page, limit })
+      .stale(10_000)
+      .execute();
+
+    if (error) throw error;
+    return data!;
+  },
+
+  async getById(id: string) {
+    const { data, error } = await api.get('/users/:id')
+      .params({ id })
+      .stale(30_000)
+      .execute();
+
+    if (error) {
+      if (error.code === 'IGNITER_CALLER_HTTP_ERROR' && (error as any).statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
+    return data!;
+  },
+
+  async create(input: z.infer<typeof CreateUserSchema>) {
+    const { data, error, status } = await api.post('/users')
+      .body(input)
+      .execute();
+
+    if (error) {
+      if (status === 400) {
+        throw new ValidationError('Invalid user data', (error as any).details);
+      }
+      if (status === 409) {
+        throw new ConflictError('User already exists');
+      }
+      throw error;
+    }
+    return data!;
+  },
+
+  async update(id: string, input: z.infer<typeof UpdateUserSchema>) {
+    const { data, error } = await api.patch('/users/:id')
+      .params({ id })
+      .body(input)
+      .execute();
+
+    if (error) throw error;
+    return data!;
+  },
+
+  async remove(id: string): Promise<boolean> {
+    const { error } = await api.delete('/users/:id')
+      .params({ id })
+      .execute();
+
+    return !error;
+  },
+};
+
+// Custom errors
+class ValidationError extends Error {
+  constructor(message: string, public errors: Record<string, string[]>) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+class ConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConflictError';
+  }
+}
+```
+
+---
+
+## 3. File Upload with Progress
+
+Handling file uploads with FormData, progress tracking, and timeout management.
+
+```typescript title="services/upload.service.ts"
+import { api } from '@/lib/api';
+
+interface UploadResult {
+  id: string;
+  url: string;
+  filename: string;
+  size: number;
+}
+
+export async function uploadFile(
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<UploadResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('folder', 'documents');
+
+  const { data, error } = await api.post('/uploads')
+    .body(formData)
+    .timeout(120_000) // 2 minutes for large files
+    .retry(2, { retryOnStatus: [502, 503] })
+    .execute();
+
+  if (error) {
+    if (error.code === 'IGNITER_CALLER_TIMEOUT') {
+      throw new Error('Upload timed out. File may be too large.');
+    }
+    throw error;
+  }
+
+  return data as UploadResult;
+}
+
+// Multiple files
+export async function uploadMultipleFiles(
+  files: File[],
+): Promise<UploadResult[]> {
+  const formData = new FormData();
+  files.forEach((file, i) => {
+    formData.append(`files[${i}]`, file);
+  });
+
+  const { data, error } = await api.post('/uploads/batch')
+    .body(formData)
+    .timeout(300_000) // 5 minutes for batch uploads
+    .execute();
+
+  if (error) throw error;
+  return data as UploadResult[];
+}
+
+// Download with progress
+export async function downloadFile(fileId: string): Promise<Blob> {
+  const { data, error } = await api.get('/files/:id/download')
+    .params({ id: fileId })
+    .responseType<Blob>()
+    .execute();
+
+  if (error) throw error;
+  return data!;
+}
+```
+
+---
+
+## 4. External API Integration (Stripe)
+
+Integrating with a third-party API with error classification, retry strategy, and response normalization.
+
+```typescript title="services/stripe.service.ts"
+import { IgniterCaller } from '@igniter-js/caller';
+
+const stripe = IgniterCaller.create()
+  .withBaseUrl('https://api.stripe.com/v1')
+  .withHeaders({
+    'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}`,
+    'Stripe-Version': '2024-06-20',
+  })
+  .withRequestInterceptor(async (config) => ({
+    ...config,
+    headers: {
+      ...config.headers,
+      'Idempotency-Key': config.headers?.['Idempotency-Key'] || crypto.randomUUID(),
+    },
+  }))
+  .build();
+
+export async function createPaymentIntent(amount: number, currency = 'usd') {
+  const body = new URLSearchParams({
+    amount: String(amount),
+    currency,
+  });
+
+  const { data, error } = await stripe.post('/payment_intents')
+    .body(body)
+    .headers({ 'Content-Type': 'application/x-www-form-urlencoded' })
+    .retry(3, {
+      backoff: 'exponential',
+      baseDelay: 1000,
+      retryOnStatus: [429, 500, 502, 503],
+    })
+    .execute();
+
+  if (error) {
+    throw classifyStripeError(error);
+  }
+
+  return data as PaymentIntent;
+}
+
+function classifyStripeError(error: any): Error {
+  switch (error.statusCode) {
+    case 400: return new StripeError('Invalid request', error.details);
+    case 401: return new StripeError('Invalid API key', error.details);
+    case 402: return new StripeError('Payment required', error.details);
+    case 429: return new StripeError('Rate limited — please retry', error.details);
+    default: return new StripeError('Stripe API error', error.details);
+  }
+}
+```
+
+---
+
+## 5. Paginated Data Fetching
+
+A reusable utility for fetching paginated APIs with cursor or offset-based pagination.
+
+```typescript title="lib/pagination.ts"
+import type { IgniterCallerManager } from '@igniter-js/caller';
+
+interface PaginationParams {
+  page?: number;
+  limit?: number;
+  cursor?: string;
+}
+
+interface PaginatedResponse<T> {
+  data: T[];
+  nextCursor?: string;
+  hasMore: boolean;
+  total?: number;
+}
+
+/**
+ * Generic paginated fetcher. Works with both cursor-based and offset-based pagination.
+ */
+export async function fetchPaginated<T>(
+  api: IgniterCallerManager<any>,
+  path: string,
+  params: PaginationParams = {},
+): Promise<PaginatedResponse<T>> {
+  const { data, error } = await api.get(path)
+    .params(params as any)
+    .stale(15_000)
+    .retry(2)
+    .execute();
+
+  if (error) throw error;
+
+  return data as PaginatedResponse<T>;
+}
+
+/**
+ * Fetches all pages automatically (use with caution for large datasets).
+ */
+export async function fetchAllPages<T>(
+  api: IgniterCallerManager<any>,
+  path: string,
+  pageSize = 50,
+): Promise<T[]> {
+  const results: T[] = [];
+  let page = 1;
+
+  while (true) {
+    const response = await fetchPaginated<T>(api, path, {
+      page,
+      limit: pageSize,
+    });
+
+    results.push(...response.data);
+
+    if (!response.hasMore) break;
+    page++;
+  }
+
+  return results;
+}
+```
+
+**Usage:**
+
+```typescript
+// Fetch a single page
+const page1 = await fetchPaginated<User>(api, '/users', {
+  page: 1,
+  limit: 20,
+});
+console.log(`Page 1: ${page1.data.length} users, hasMore: ${page1.hasMore}`);
+
+// Fetch all pages (with built-in retry and caching)
+const allUsers = await fetchAllPages<User>(api, '/users', 50);
+console.log(`Total users: ${allUsers.length}`);
+```
+
+---
+
+## 6. Parallel Requests with Batch
+
+Fetching multiple resources simultaneously using `IgniterCallerManager.batch()`.
+
+```typescript title="services/dashboard.service.ts">
+import { IgniterCallerManager } from '@igniter-js/caller';
+import { api } from '@/lib/api';
+
+interface DashboardData {
+  stats: DashboardStats;
+  recentOrders: Order[];
+  activeUsers: User[];
+  notifications: Notification[];
+}
+
+export async function loadDashboard(): Promise<DashboardData> {
+  const [statsRes, ordersRes, usersRes, notifRes] =
+    await IgniterCallerManager.batch([
+      api.get('/dashboard/stats').stale(30_000).execute(),
+      api.get('/orders').params({ limit: 5, sort: 'recent' }).stale(10_000).execute(),
+      api.get('/users').params({ status: 'active', limit: 10 }).stale(30_000).execute(),
+      api.get('/notifications').params({ unread: true, limit: 10 }).execute(),
+    ]);
+
+  // Handle partial failures gracefully
+  return {
+    stats: statsRes.data ?? { revenue: 0, orders: 0, users: 0 },
+    recentOrders: ordersRes.data ?? [],
+    activeUsers: usersRes.data ?? [],
+    notifications: notifRes.error ? [] : notifRes.data ?? [],
+  };
+}
+
+// Typed batch with heterogeneous results
+async function loadUserContext(userId: string) {
+  const [profile, permissions, preferences] =
+    await IgniterCallerManager.batch([
+      api.get('/users/:id').params({ id: userId }).execute(),
+      api.get('/users/:id/permissions').params({ id: userId }).execute(),
+      api.get('/users/:id/preferences').params({ id: userId }).stale(60_000).execute(),
+    ]);
+
+  return {
+    profile: profile.data,
+    permissions: permissions.data ?? [],
+    preferences: preferences.data ?? getDefaultPreferences(),
+  };
+}
+```
+
+---
+
+## 7. Optimistic Updates with React
+
+React pattern for optimistic UI updates with rollback on failure.
+
+```tsx title="components/todo-list.tsx"
+import { useIgniterCaller } from '@igniter-js/caller/client';
+
+const useCaller = useIgniterCaller<{ main: typeof api }>();
+
+function TodoList() {
+  const main = useCaller('main');
+
+  const { data: todos, isLoading, refetch } = main
+    .get('/todos')
+    .useQuery({ staleTime: 5_000 });
+
+  const handleToggle = async (todoId: string, completed: boolean) => {
+    // Optimistically update
+    const previousTodos = todos;
+    // local state update logic here...
+
+    const { error } = await main.patch('/todos/:id')
+      .params({ id: todoId })
+      .body({ completed })
+      .execute();
+
+    if (error) {
+      // Rollback: restore previous state
+      refetch();
+    }
+  };
+
+  const handleDelete = async (todoId: string) => {
+    // Optimistically remove
+    const { error } = await main.delete('/todos/:id')
+      .params({ id: todoId })
+      .execute();
+
+    if (error) {
+      refetch(); // Rollback
+    }
+  };
+
+  if (isLoading) return <div>Loading...</div>;
+
+  return (
+    <ul>
+      {todos?.map(todo => (
+        <li key={todo.id}>
+          <input
+            type="checkbox"
+            checked={todo.completed}
+            onChange={() => handleToggle(todo.id, !todo.completed)}
+          />
+          {todo.title}
+          <button onClick={() => handleDelete(todo.id)}>Delete</button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+## 8. Rate-Limited API Client
+
+Handling APIs with rate limits by respecting `Retry-After` headers.
+
+```typescript title="lib/rate-limited-api.ts">
+import { IgniterCaller } from '@igniter-js/caller';
+
+const rateLimitedApi = IgniterCaller.create()
+  .withBaseUrl('https://api.third-party.com')
+  .withHeaders({ 'X-API-Key': process.env.API_KEY! })
+
+  .withResponseInterceptor(async (response) => {
+    const headers = response.headers;
+
+    if (headers) {
+      const remaining = parseInt(headers.get('X-RateLimit-Remaining') || '0');
+      const reset = parseInt(headers.get('X-RateLimit-Reset') || '0');
+
+      // Log rate limit status
+      console.debug(`Rate limit: ${remaining} remaining, resets at ${new Date(reset * 1000)}`);
+
+      // If rate limited, wait and retry
+      if (response.status === 429) {
+        const retryAfter = parseInt(headers.get('Retry-After') || '60');
+        console.warn(`Rate limited. Waiting ${retryAfter}s...`);
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+
+        // Note: for automatic retry, use .retry() on individual requests
+        // Interceptors return the original response — they don't retry
+      }
+    }
+
+    return response;
+  })
+  .build();
+
+// Usage with preemptive rate limit handling
+export async function fetchWithRateLimit<T>(path: string) {
+  return rateLimitedApi.get(path)
+    .retry(5, {
+      backoff: 'exponential',
+      baseDelay: 1000,
+      retryOnStatus: [429, 503],
+    })
+    .execute();
+}
+```
+
+---
+
+## 9. Server-Side API Client (Next.js App Router)
+
+Using Caller in Next.js Server Components and Route Handlers.
+
+```typescript title="lib/api-server.ts">
+import { IgniterCaller } from '@igniter-js/caller';
+import { cookies, headers } from 'next/headers';
+
+/**
+ * Server-side API client — runs on the server, never exposed to the browser.
+ * Uses process.env directly (no NEXT_PUBLIC_ prefix needed).
+ */
+export const serverApi = IgniterCaller.create()
+  .withBaseUrl(process.env.API_URL!)
+  .withHeaders({
+    'X-Service-Key': process.env.API_SERVICE_KEY!,
+  })
+  .build();
+
+/**
+ * Proxied API client — forwards client cookies/auth to the backend.
+ */
+export async function createAuthenticatedServerApi() {
+  const cookieStore = await cookies();
+  const headersList = await headers();
+
+  return IgniterCaller.create()
+    .withBaseUrl(process.env.API_URL!)
+    .withCookies({
+      'session': cookieStore.get('session')?.value || '',
+    })
+    .withHeaders({
+      'X-Forwarded-For': headersList.get('x-forwarded-for') || '',
+      'X-Service-Key': process.env.API_SERVICE_KEY!,
+    })
+    .build();
+}
+```
+
+**Usage in a Server Component:**
+
+```typescript title="app/users/page.tsx"
+import { serverApi } from '@/lib/api-server';
+
+export default async function UsersPage() {
+  const { data: users } = await serverApi
+    .get('/users')
+    .params({ limit: 20 })
+    .stale(60_000)
+    .fallback(() => [])
+    .execute();
+
+  return (
+    <ul>
+      {users?.map(user => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+## 10. Error Classification Utility
+
+A reusable pattern for classifying and handling API errors.
+
+```typescript title="lib/errors.ts">
+import { IgniterCallerError } from '@igniter-js/caller';
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public status?: number,
+    public details?: unknown,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+
+  static from(error: unknown): ApiError {
+    if (IgniterCallerError.is(error)) {
+      return new ApiError(
+        error.message,
+        error.code,
+        (error as any).statusCode,
+        (error as any).details,
+      );
+    }
+
+    if (error instanceof Error) {
+      return new ApiError(error.message, 'UNKNOWN');
+    }
+
+    return new ApiError(String(error), 'UNKNOWN');
+  }
+
+  get isNotFound(): boolean { return this.status === 404; }
+  get isUnauthorized(): boolean { return this.status === 401; }
+  get isForbidden(): boolean { return this.status === 403; }
+  get isValidationError(): boolean { return this.status === 400 || this.status === 422; }
+  get isConflict(): boolean { return this.status === 409; }
+  get isServerError(): boolean { return this.status !== undefined && this.status >= 500; }
+  get isNetworkError(): boolean { return this.code === 'IGNITER_CALLER_UNKNOWN_ERROR'; }
+  get isTimeout(): boolean { return this.code === 'IGNITER_CALLER_TIMEOUT'; }
+}
+
+// Usage
+export async function safeRequest<T>(promise: Promise<{ data?: T; error?: any }>): Promise<T> {
+  const { data, error } = await promise;
+  if (error) throw ApiError.from(error);
+  return data as T;
+}
+```
+
+**Usage:**
+
+```typescript
+try {
+  const user = await safeRequest(
+    api.get('/users/:id').params({ id: '123' }).execute()
+  );
+} catch (error) {
+  const apiError = ApiError.from(error);
+
+  if (apiError.isNotFound) {
+    redirect('/404');
+  } else if (apiError.isUnauthorized) {
+    redirect('/login');
+  } else if (apiError.isTimeout) {
+    showToast('Request timed out. Please try again.');
+  } else {
+    console.error('Unhandled API error:', apiError);
+  }
+}
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Request Builder"
+    description="Master the fluent API for building requests"
+    href="/docs/caller/builder"
+  />
+  <Card
+    title="Schema Validation"
+    description="Define type-safe API contracts with Zod"
+    href="/docs/caller/schemas"
+  />
+  <Card
+    title="React Integration"
+    description="React hooks for data fetching and mutations"
+    href="/docs/caller/react"
+  />
+  <Card
+    title="Interceptors"
+    description="Transform requests and responses globally"
+    href="/docs/caller/interceptors"
+  />
+  <Card
+    title="API Reference"
+    description="Complete reference for all classes, methods, and types"
+    href="/docs/caller/api-reference"
+  />
+</Cards>

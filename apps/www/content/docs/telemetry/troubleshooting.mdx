@@ -1,0 +1,275 @@
+---
+title: Troubleshooting
+description: Diagnose and fix common telemetry issues — error codes, transport failures, session problems, event validation errors, and performance concerns.
+---
+
+## Troubleshooting
+
+This guide covers the most common issues, their error codes, and step-by-step solutions.
+
+---
+
+## Error Code Reference
+
+Telemetry uses 22 stable error codes. Use them for programmatic error handling.
+
+### Configuration Errors
+
+| Code | Cause | Solution |
+|------|-------|----------|
+| `TELEMETRY_SERVICE_REQUIRED` | Service name not set | Call `.withService("my-api")` before `.build()` |
+| `TELEMETRY_ENVIRONMENT_REQUIRED` | Environment not set | Call `.withEnvironment("production")` before `.build()` |
+| `TELEMETRY_CONFIGURATION_INVALID` | Invalid config state | Check all builder methods. Verify no conflicting options. |
+
+### Transport Errors
+
+| Code | Cause | Solution |
+|------|-------|----------|
+| `TELEMETRY_INVALID_TRANSPORT` | Falsy transport passed to `.addTransport()` | Pass a valid adapter instance |
+| `TELEMETRY_TRANSPORT_FAILED` | All transports failed for an event | Check transport configs (URLs, tokens). Check network connectivity. |
+| `TELEMETRY_TRANSPORT_INIT_FAILED` | Transport failed during `.build()` initialization | Fix the failing transport or remove it |
+
+### Event Errors
+
+| Code | Cause | Solution |
+|------|-------|----------|
+| `TELEMETRY_INVALID_EVENT_NAME` | Event name format is invalid | Use dot-separated names: `"namespace.group.action"` |
+| `TELEMETRY_UNKNOWN_EVENT` | Emitting unregistered event in strict mode | Register the event or disable strict mode |
+| `TELEMETRY_DUPLICATE_EVENT` | Event name already registered in namespace | Use unique event names within a namespace |
+
+### Schema & Validation Errors
+
+| Code | Cause | Solution |
+|------|-------|----------|
+| `TELEMETRY_SCHEMA_VALIDATION_FAILED` | Event attributes don't match Zod schema | Check attribute names and types against registered schema |
+| `TELEMETRY_INVALID_NAMESPACE` | Namespace format is invalid | Use dot-separated names: `"igniter.feature"` |
+| `TELEMETRY_RESERVED_NAMESPACE` | Using a reserved namespace prefix | Avoid `igniter.*` unless part of an Igniter.js integration |
+| `TELEMETRY_DUPLICATE_NAMESPACE` | Same namespace registered twice | Merge events into a single namespace or use different namespaces |
+
+### Session Errors
+
+| Code | Cause | Solution |
+|------|-------|----------|
+| `TELEMETRY_SESSION_ENDED` | Modifying or emitting after `.end()` | Create a new session if needed |
+| `TELEMETRY_SESSION_INVALID` | Session in invalid state | Create a fresh session |
+
+### Scope & Actor Errors
+
+| Code | Cause | Solution |
+|------|-------|----------|
+| `TELEMETRY_DUPLICATE_SCOPE` | Same scope key added twice | Use unique scope keys |
+| `TELEMETRY_INVALID_SCOPE` | Scope key is invalid | Use alphanumeric scope keys |
+| `TELEMETRY_DUPLICATE_ACTOR` | Same actor key added twice | Use unique actor keys |
+| `TELEMETRY_INVALID_ACTOR` | Actor key is invalid | Use alphanumeric actor keys |
+
+### Emit & Runtime Errors
+
+| Code | Cause | Solution |
+|------|-------|----------|
+| `TELEMETRY_EMIT_FAILED` | Emit pipeline failed | Check transports are healthy. Check event attributes. |
+| `TELEMETRY_RUNTIME_NOT_INITIALIZED` | Manager not built yet | Call `.build()` before using the manager |
+
+---
+
+## Common Issues
+
+### 1. "No events are showing up in my transport"
+
+**Symptom:** You call `telemetry.emit()` but nothing appears in logs/Sentry/Slack.
+
+**Likely causes:**
+
+- **Sampling is filtering events.** Check your sampling config — if `infoRate: 0.1`, only 10% of info events are sent.
+
+```typescript
+// Temporarily set all rates to 1.0 for debugging
+.withSampling({ debugRate: 1.0, infoRate: 1.0, warnRate: 1.0, errorRate: 1.0 })
+```
+
+- **Event name matches a `never` pattern.** Check `never: ["health.check"]` — events with matching names are dropped.
+
+- **Transport is filtering by level.** Check `minLevel` on Logger/Slack/Discord adapters.
+
+```typescript
+// Check: minLevel: "error" means debug/info/warn are dropped
+LoggerTransportAdapter.create({ logger: console, minLevel: "debug" })
+```
+
+---
+
+### 2. "TELEMETRY_TRANSPORT_FAILED — all transports failed"
+
+**Symptom:** Events throw because every transport failed.
+
+**Likely causes:**
+
+- **Network issues.** HTTP/OTLP adapters can't reach their endpoints.
+- **Invalid credentials.** Slack/Discord/Telegram webhook URLs are wrong or expired.
+- **Missing peer dependency.** Sentry adapter needs `@sentry/node` installed.
+
+**Solutions:**
+
+1. Test each transport individually — remove all but one, verify it works
+2. Check environment variables are set in the running process
+3. Add a Logger transport as a fallback:
+
+```typescript
+.addTransport(LoggerTransportAdapter.create({ logger: console })) // Always works
+.addTransport(HttpTransportAdapter.create({ url: "..." }))
+```
+
+---
+
+### 3. "TELEMETRY_DUPLICATE_NAMESPACE — namespace already registered"
+
+**Symptom:** Adding a second event descriptor with the same namespace throws.
+
+**Fix:** Merge events into a single namespace:
+
+```typescript
+// ❌ Two separate registries with same namespace
+const AuthLogin = IgniterTelemetryEvents
+  .namespace("igniter.auth")
+  .event("login.succeeded", schema)
+  .build();
+
+const AuthLogout = IgniterTelemetryEvents
+  .namespace("igniter.auth")    // DUPLICATE!
+  .event("logout", schema)
+  .build();
+
+// ✅ Single registry with all events
+const AuthEvents = IgniterTelemetryEvents
+  .namespace("igniter.auth")
+  .event("login.succeeded", schema)
+  .event("logout", schema)
+  .build();
+```
+
+---
+
+### 4. "TELEMETRY_SCHEMA_VALIDATION_FAILED — event validation failed"
+
+**Symptom:** Emitting typed events throws schema validation errors.
+
+**Likely causes:**
+
+- **Missing required attributes.** Check your Zod schema for required fields.
+- **Wrong attribute types.** Schema expects `z.number()` but you passed a string.
+- **Attribute key mismatch.** Schema uses `"ctx.order.id"` but you emitted `"orderId"`.
+
+**Fix:**
+
+```typescript
+// Check the schema definition
+const schema = z.object({
+  "ctx.order.id": z.string(),        // Required, string
+  "ctx.order.total": z.number(),     // Required, number
+  "ctx.order.currency": z.string().length(3).optional(), // Optional
+});
+
+// Match your emit exactly:
+telemetry.emit("igniter.orders.completed", {
+  attributes: {
+    "ctx.order.id": "ord_123",       // ✅ string
+    "ctx.order.total": 2999,         // ✅ number (not "2999")
+    "ctx.order.currency": "usd",     // ✅ optional, 3 chars
+  },
+});
+```
+
+---
+
+### 5. "TELEMETRY_SESSION_ENDED — cannot modify session"
+
+**Symptom:** Trying to call `.actor()`, `.scope()`, or `.emit()` on an ended session.
+
+**Fix:** Sessions are single-use. Create a new one:
+
+```typescript
+// ❌ Reusing an ended session
+const session = telemetry.session().actor("user", "usr_123");
+await session.end();
+session.emit("event", {});  // Throws!
+
+// ✅ Create a new session
+const newSession = telemetry.session().actor("user", "usr_123");
+newSession.emit("event", {});
+await newSession.end();
+```
+
+---
+
+### 6 "Redaction isn't working — sensitive data still visible"
+
+**Symptom:** You configured denylistKeys but passwords still appear in logs.
+
+**Likely causes:**
+
+- **Case mismatch.** Redaction is case-insensitive — but your key might use a different convention.
+- **Nested keys not matched.** Redaction matches top-level attribute keys only. If your attribute value is an object containing a sensitive field, it won't be redacted.
+
+```typescript
+// ✅ Works — top-level key matched
+attributes: {
+  "ctx.auth.password": "s3cret!"   // Removed!
+}
+
+// ❌ Doesn't work — password is nested inside an object value
+attributes: {
+  "ctx.auth": {
+    password: "s3cret!"            // NOT removed — it's inside an object
+  }
+}
+```
+
+**Fix:** Always flatten sensitive data to top-level attribute keys:
+
+```typescript
+// ✅ Flatten sensitive fields
+attributes: {
+  "ctx.auth.method": "password",
+  "ctx.auth.password": "s3cret!",   // Will be redacted
+}
+```
+
+---
+
+### 7. "Telemetry is slowing down my application"
+
+**Symptom:** High latency or throughput drops when telemetry is enabled.
+
+**Likely causes:**
+
+- **Too many transports.** Each transport processes every event.
+- **Sync operations in transport.** Custom adapters with blocking code.
+- **No sampling in production.** All debug/info events being processed.
+
+**Solutions:**
+
+1. Enable aggressive sampling in production (see [Sampling & Redaction](/docs/telemetry/sampling-redaction))
+2. Reduce transport count to essentials
+3. Use `minLevel` to filter noisy transports
+4. Ensure custom transport `handle()` is async and non-blocking
+
+---
+
+## Debugging Checklist
+
+When something isn't working, run through this checklist:
+
+1. **Is `.build()` called?** The manager is only created after `.build()`.
+2. **Is at least one transport added?** Without transports, events go nowhere.
+3. **Are events being sampled out?** Set all rates to 1.0 temporarily.
+4. **Is strict mode hiding errors?** Set `strict: false` to log instead of throw.
+5. **Are environment variables set?** Check `process.env` for transport credentials.
+6. **Is the logger configured?** Add `.withLogger(...)` to see internal telemetry logs.
+7. **Is `shutdown()` called on exit?** Buffered events may be lost without it.
+
+---
+
+## Next Steps
+
+- [API Reference](/docs/telemetry/api-reference) — Complete API documentation
+- [Best Practices](/docs/telemetry/best-practices) — Production patterns
+- [Framework Integration](/docs/telemetry/framework-integration) — Next.js, Express, Fastify

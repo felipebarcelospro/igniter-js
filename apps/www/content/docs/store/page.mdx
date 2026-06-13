@@ -1,0 +1,135 @@
+---
+title: Store
+description: Type-safe distributed state, events, and streams for modern TypeScript apps. Redis-backed storage with scoped keys, typed Pub/Sub, and stream processing.
+---
+
+## Overview
+
+`@igniter-js/store` is a **standalone, builder-based** distributed store library for TypeScript applications. It provides a unified, type-safe interface for key-value storage, counters, distributed locks (claims), batch operations, typed Pub/Sub events, and Redis Streams — all backed by a pluggable adapter architecture.
+
+<Callout type="info">
+  Store is **not a caching layer glued onto Igniter Core**. It's a fully independent package you can use in any Node.js or Bun application — whether you're building an Express API, a Next.js app, a Fastify service, or a background worker.
+</Callout>
+
+### Key Features
+
+- **Namespaced API** — Clean separation: `store.kv`, `store.counter`, `store.claim`, `store.batch`, `store.events`, `store.streams`, `store.dev`
+- **Typed Events** — Schema-driven Pub/Sub with Zod schemas, dual API (string + proxy), and wildcard subscriptions
+- **Multi-Tenant Scopes** — Isolate data per organization, workspace, or environment with chained scope prefixes
+- **Redis Streams** — Append, range queries, consumer groups with acknowledgment
+- **Distributed Claims** — SETNX-based locks for leader election, cron deduplication
+- **Two Adapters** — Production Redis adapter + in-memory adapter for testing/desktop
+- **Observability** — Built-in telemetry events for every operation (`igniter.store.kv.*`, `igniter.store.stream.*`, etc.)
+
+---
+
+## Quick Start
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/store ioredis zod
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/store ioredis zod
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/store ioredis zod
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/store ioredis zod
+    ```
+  </Tab>
+</Tabs>
+
+```typescript
+import Redis from "ioredis";
+import { IgniterStore } from "@igniter-js/store";
+import { IgniterStoreRedisAdapter } from "@igniter-js/store/adapters";
+
+const redis = new Redis(process.env.REDIS_URL);
+
+const store = IgniterStore.create()
+  .withAdapter(IgniterStoreRedisAdapter.create({ redis }))
+  .withService("api")
+  .build();
+
+// ✅ Key-value
+await store.kv.set("user:123", { name: "Avery" }, { ttl: 3600 });
+const user = await store.kv.get("user:123");
+
+// ✅ Counter
+const views = await store.counter.increment("page-views");
+
+// ✅ Distributed claim
+const claimed = await store.claim.once("job:cleanup", "worker-1", { ttl: 30 });
+
+// ✅ Batch
+const users = await store.batch.get(["user:1", "user:2", "user:3"]);
+```
+
+---
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                      Your Application                         │
+│  store.kv.set() • store.events.publish() • store.streams...   │
+└───────────────┬──────────────────────────────────────────────┘
+                │ Typed API + Scopes
+                ▼
+┌──────────────────────────────────────────────────────────────┐
+│                 IgniterStoreManager                           │
+│  KV • Counter • Claim • Batch • Events • Streams • Dev        │
+└───────────────┬──────────────────────────────────────────────┘
+                │ Adapter Contract
+                ▼
+┌──────────────────────────────────────────────────────────────┐
+│              IgniterStoreAdapter (Redis / Memory)             │
+└───────────────┬──────────────────────────────────────────────┘
+                │
+                ▼
+┌──────────────────────────────────────────────────────────────┐
+│                         Redis / Memory                        │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Key Abstractions
+
+| Component | Role |
+|-----------|------|
+| **Builder** (`IgniterStore.create()`) | Immutable, fluent configuration chain |
+| **Manager** (`IgniterStoreManager`) | Runtime API with namespaced operations |
+| **Adapter** (`IgniterStoreAdapter`) | Storage backend contract (Redis, Memory) |
+| **Events** (`IgniterStoreEvents`) | Declarative typed event definitions with Zod |
+| **Scopes** | Multi-tenant isolation via key prefix chaining |
+| **Telemetry** | Optional event emission for every operation |
+
+---
+
+## Package Exports
+
+| Path | Description |
+|------|-------------|
+| `@igniter-js/store` | Main API — `IgniterStore`, `IgniterStoreEvents`, types, errors |
+| `@igniter-js/store/adapters` | Redis adapter (`IgniterStoreRedisAdapter`) |
+| `@igniter-js/store/telemetry` | Typed telemetry events registry (`IgniterStoreTelemetryEvents`) |
+
+---
+
+## Next Steps
+
+- [Install and configure](/docs/store/installation) the package with Redis
+- Master [key-value operations](/docs/store/caching) with cache patterns
+- Build [typed events and Pub/Sub](/docs/store/pubsub) with schema validation
+- Use [counters, claims, and batch operations](/docs/store/atomic-operations)
+- Process [Redis Streams](/docs/store/streams) with consumer groups
+- Explore [scopes, telemetry, and custom adapters](/docs/store/advanced)
+- Browse the complete [API reference](/docs/store/api-reference)

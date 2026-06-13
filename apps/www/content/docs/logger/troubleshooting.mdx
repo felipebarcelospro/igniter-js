@@ -1,0 +1,312 @@
+---
+title: Troubleshooting
+description: Common errors, transport failures, log level issues, and debugging strategies for @igniter-js/logger.
+---
+
+## Troubleshooting
+
+Common issues and how to fix them when working with `@igniter-js/logger`.
+
+---
+
+## Debug Messages Not Appearing
+
+**Symptom:** You call `logger.debug(...)` or `logger.trace(...)` but nothing appears in the output.
+
+**Cause:** The log level is set higher than `Debug`. Logger filters out messages below the configured minimum level.
+
+**Solution:** Set the level to `Debug` or `Trace`:
+
+```typescript
+// In the builder
+const logger = IgniterLogger.create()
+  .withLevel(IgniterLogLevel.Debug)
+  .build();
+
+// Or at runtime
+logger.setLevel(IgniterLogLevel.Debug);
+```
+
+<Callout type="info">
+  The default level (when not set) is `info` — which means `debug` and `trace` are suppressed by default.
+</Callout>
+
+---
+
+## File Transport Not Writing
+
+**Symptom:** You configured a file transport but no file is created or the file is empty.
+
+**Causes and Solutions:**
+
+### 1. Missing flush before exit
+
+File transport buffers output. Without `flush()`, logs may not be written before the process exits:
+
+```typescript
+process.on('beforeExit', async () => {
+  await logger.flush();
+});
+```
+
+### 2. Invalid file path
+
+Ensure the directory exists or `mkdir: true` is set:
+
+```typescript
+.addTransport({
+  target: 'file',
+  options: {
+    path: './logs/app.log',
+    mkdir: true,  // creates ./logs/ if missing
+  },
+})
+```
+
+### 3. Permission denied
+
+Check write permissions on the target directory:
+
+```bash
+ls -la ./logs/
+# drwxr-xr-x  ... logs/
+```
+
+### 4. Verify the file
+
+Add a small delay after logging and flush to confirm:
+
+```typescript
+logger.info('Test message');
+await logger.flush();
+await new Promise(r => setTimeout(r, 100));
+
+import { readFileSync } from 'fs';
+console.log(readFileSync('./logs/app.log', 'utf-8'));
+```
+
+---
+
+## HTTP Transport Not Sending
+
+**Symptom:** HTTP transport is configured but logs are not reaching the remote endpoint.
+
+**Causes and Solutions:**
+
+### 1. Batch not yet full
+
+By default, HTTP transport batches 10 entries before sending. Log more entries or lower the `batchSize`:
+
+```typescript
+.addTransport({
+  target: 'http',
+  options: {
+    url: 'https://logs.example.com/ingest',
+    batchSize: 1,   // send every entry immediately
+    flushInterval: 1000,  // or flush every 1s
+  },
+})
+```
+
+### 2. Missing flush on exit
+
+The HTTP transport uses `setInterval` with `.unref()` — it won't keep the process alive. Call `flush()` before exit:
+
+```typescript
+process.on('SIGTERM', async () => {
+  await logger.flush();
+  process.exit(0);
+});
+```
+
+### 3. Network errors
+
+HTTP transport silently retries on failure (puts logs back in buffer). Check your URL, headers, and network:
+
+```typescript
+// Verify the endpoint independently
+fetch('https://logs.example.com/ingest', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-API-Key': '...' },
+  body: JSON.stringify({ logs: [], timestamp: new Date().toISOString() }),
+}).then(r => console.log('Status:', r.status));
+```
+
+### 4. Firewall / CORS
+
+If your log endpoint is behind a firewall, ensure the process has outbound access to the URL.
+
+---
+
+## Console Output Is Raw JSON Instead of Pretty
+
+**Symptom:** Console output shows raw JSON like `{"level":30,"msg":"hello"}` instead of formatted text.
+
+**Cause:** Pretty printing is disabled. This is the default when `pretty: false` or when piping output to a file.
+
+**Solution:** Explicitly enable pretty printing:
+
+```typescript
+.addTransport({
+  target: 'console',
+  options: { pretty: true, colorize: true },
+})
+```
+
+Or use the default (which adds console with pretty automatically if no transports are configured):
+
+```typescript
+const logger = IgniterLogger.create().build();
+// Defaults to console with pretty formatting
+```
+
+---
+
+## Duplicate Log Entries
+
+**Symptom:** Each log message appears twice.
+
+**Cause:** You added the console transport explicitly AND the default console transport was also added. The default is only added when **zero transports** are configured.
+
+**Solution:** Either rely on the default (no `.addTransport()` calls) or configure all transports explicitly:
+
+```typescript
+// ❌ Duplicate: explicit console + implicit default
+const logger = IgniterLogger.create()
+  .addTransport({ target: 'console' })  // explicit
+  .build();
+// Builder sees 1 transport — no default added. This is fine.
+
+// ✅ Explicit is fine — the default only kicks in when 0 transports exist
+```
+
+The duplicate scenario happens when you inadvertently call `.addTransport()` and expect a console default. The rule: **if any transports are configured, no default is added.**
+
+---
+
+## `flush()` Hangs or Times Out
+
+**Symptom:** `await logger.flush()` never resolves.
+
+**Cause:** The HTTP transport may be waiting on a slow endpoint. The Pino file transport may be stuck.
+
+**Solution:** Add a timeout:
+
+```typescript
+const flushWithTimeout = async (logger: IIgniterLoggerManager, ms = 5000) => {
+  await Promise.race([
+    logger.flush(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Flush timed out')), ms)
+    ),
+  ]);
+};
+
+process.on('SIGTERM', async () => {
+  try {
+    await flushWithTimeout(logger, 3000);
+  } catch {
+    console.error('Flush timed out — exiting anyway');
+  }
+  process.exit(0);
+});
+```
+
+---
+
+## Child Logger Doesn't Inherit Parent Context
+
+**Symptom:** A child logger isn't picking up the parent's default context.
+
+**Cause:** Child loggers inherit context from the **Pino base object** (set at `.build()` time), not from the builder state directly. If the parent logger was built without `.withContext()`, children won't have it.
+
+**Solution:** Ensure parent context is configured in the builder before `.build()`:
+
+```typescript
+// ✅ Context is in the builder — child inherits it
+const logger = IgniterLogger.create()
+  .withContext({ service: 'api' })
+  .build();
+
+const child = logger.child('http');
+child.info('Request');  // includes service=api
+```
+
+---
+
+## TypeScript Errors with `defineScopes<T>()`
+
+**Symptom:** TypeScript complains about missing properties on child logger context.
+
+**Cause:** `defineScopes<T>()` makes the scope properties **required** on `child()` context.
+
+**Solution:** Make properties optional in the type if they aren't always present:
+
+```typescript
+const logger = IgniterLogger.create()
+  .defineScopes<{
+    tenantId?: string;    // optional
+    userId?: string;      // optional
+  }>()
+  .build();
+
+// Both work now
+logger.child('tenant', { tenantId: 't-1' });
+logger.child('tenant', {});  // also valid
+```
+
+---
+
+## `group()` / `groupEnd()` Mismatch
+
+**Symptom:** Indentation is wrong — logs are permanently indented or not indented at all.
+
+**Cause:** `group()` and `groupEnd()` calls are unbalanced — more `group()` calls than `groupEnd()` (or vice versa).
+
+**Solution:** Ensure every `group()` has a matching `groupEnd()`:
+
+```typescript
+logger.group('Section');
+
+try {
+  // ... work ...
+} finally {
+  logger.groupEnd();  // always end, even on error
+}
+```
+
+---
+
+## Pino Version Conflicts
+
+**Symptom:** `Error: Cannot find module 'pino'` or version mismatch errors.
+
+**Cause:** Multiple Pino versions in your dependency tree.
+
+**Solution:** Check for duplicate Pino installations:
+
+```bash
+npm ls pino
+# or
+pnpm why pino
+```
+
+Logger requires Pino v9 (`"pino": "^9.0.0"`). If another package depends on Pino v8, use `overrides` or `resolutions`:
+
+```json title="package.json"
+{
+  "overrides": {
+    "pino": "^9.0.0"
+  }
+}
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Best Practices" description="Production logging patterns, structured context conventions, and anti-patterns." href="/docs/logger/best-practices" />
+  <Card title="Framework Integration" description="Logger with Next.js, Express, Fastify, and NestJS — request-scoped patterns." href="/docs/logger/framework-integration" />
+  <Card title="API Reference" description="Complete reference for every method, type, and error class." href="/docs/logger/api-reference" />
+</Cards>

@@ -1,0 +1,373 @@
+---
+title: Best Practices
+description: Production-tested patterns and anti-patterns for @igniter-js/telemetry — session management, event design, transport configuration, error handling, and performance optimization.
+---
+
+## Best Practices
+
+This guide covers patterns that make telemetry reliable, performant, and maintainable in production. Every recommendation is grounded in the actual implementation.
+
+---
+
+## Session Management
+
+### ✅ Do: Use scoped execution for HTTP handlers
+
+```typescript
+// ✅ Session context auto-propagates across all async calls
+app.get("/api/orders/:id", async (req, res) => {
+  await telemetry.session()
+    .actor("user", req.userId)
+    .scope("organization", req.orgId)
+    .run(async () => {
+      telemetry.emit("request.started");
+
+      const order = await fetchOrder(req.params.id);
+      telemetry.emit("order.fetched", {
+        attributes: { "ctx.order.id": order.id },
+      });
+
+      res.json(order);
+
+      telemetry.emit("request.completed", {
+        attributes: { "ctx.request.status": 200 },
+      });
+    });
+});
+```
+
+### ❌ Don't: Pass context manually to every emit
+
+```typescript
+// ❌ Repetitive, error-prone, easy to miss a call
+telemetry.emit("request.started", {
+  actor: { type: "user", id: req.userId },
+  scope: { type: "organization", id: req.orgId },
+});
+telemetry.emit("order.fetched", {
+  actor: { type: "user", id: req.userId },    // Repeated
+  scope: { type: "organization", id: req.orgId }, // Repeated
+});
+```
+
+### ✅ Do: End sessions explicitly for manual handles
+
+```typescript
+const session = telemetry.session().actor("system", "batch");
+try {
+  session.emit("batch.started");
+  await processBatch();
+  session.emit("batch.completed");
+} finally {
+  await session.end();   // Always end
+}
+```
+
+---
+
+## Event Design
+
+### ✅ Do: Use descriptive, dot-separated names
+
+```typescript
+// ✅ Clear hierarchy, easy to filter
+telemetry.emit("igniter.billing.invoice.paid", { ... });
+telemetry.emit("igniter.billing.payment.failed", { ... });
+telemetry.emit("igniter.auth.login.succeeded", { ... });
+```
+
+### ❌ Don't: Use vague or inconsistent names
+
+```typescript
+// ❌ Inconsistent, hard to query
+telemetry.emit("payment_done", { ... });
+telemetry.emit("billingFail", { ... });
+telemetry.emit("login", { ... });
+```
+
+### ✅ Do: Use `ctx.*` prefix for attribute keys
+
+```typescript
+telemetry.emit("order.shipped", {
+  attributes: {
+    "ctx.order.id": "ord_789",
+    "ctx.order.total": 14999,
+    "ctx.shipment.carrier": "fedex",
+  },
+});
+```
+
+### ✅ Do: Use past tense for completed events
+
+```typescript
+// ✅ Events describe what happened
+"succeeded", "failed", "completed", "created", "updated", "deleted", "shipped"
+```
+
+### ❌ Don't: Use present tense for completed events
+
+```typescript
+// ❌ Ambiguous — did it happen or is it happening?
+"create", "update", "delete", "process", "send"
+```
+
+---
+
+## Transport Configuration
+
+### ✅ Do: Use multiple transports for different audiences
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .addTransport(LoggerTransportAdapter.create({ logger: pinoLogger }))  // Dev + ops
+  .addTransport(SentryTransportAdapter.create({ sentry: Sentry }))       // Errors only
+  .addTransport(SlackTransportAdapter.create({                          // Team alerts
+    webhookUrl: process.env.SLACK_WEBHOOK_URL!,
+    minLevel: "error",
+  }))
+  .build();
+```
+
+### ✅ Do: Filter noisy transports by level
+
+```typescript
+// Slack — only errors
+const slack = SlackTransportAdapter.create({
+  webhookUrl: "...",
+  minLevel: "error",
+});
+
+// Logger — everything
+const logger = LoggerTransportAdapter.create({
+  logger: console,
+  minLevel: "debug",
+});
+```
+
+### ❌ Don't: Send everything to every transport
+
+```typescript
+// ❌ Slack flooded with debug events, high Sentry costs
+const slack = SlackTransportAdapter.create({ webhookUrl: "...", minLevel: "debug" });
+```
+
+---
+
+## Sampling
+
+### ✅ Do: Always sample errors
+
+```typescript
+sampling: {
+  errorRate: 1.0,      // 100% of errors
+  always: ["*.error", "*.failed", "security.*"],
+}
+```
+
+### ✅ Do: Aggressively sample debug in production
+
+```typescript
+sampling: {
+  debugRate: 0.0,       // 0% in production
+  infoRate: 0.05,       // 5% in production
+}
+```
+
+### ❌ Don't: Run with defaults in production
+
+```typescript
+// ❌ 10% info sampling means you lose 90% of operational data
+// No `always` patterns means critical events may be dropped
+sampling: {}  // Uses defaults: infoRate=0.1, no always patterns
+```
+
+---
+
+## Redaction
+
+### ✅ Do: Redact secrets at the edge
+
+```typescript
+redaction: {
+  denylistKeys: [
+    "password", "token", "secret", "authorization",
+    "apiKey", "jwt", "cookie",
+  ],
+}
+```
+
+### ✅ Do: Hash PII for correlation without exposure
+
+```typescript
+redaction: {
+  hashKeys: ["email", "ip", "userId", "phone"],
+}
+```
+
+### ❌ Don't: Log raw user data
+
+```typescript
+// ❌ PII in plain text — violates GDPR, HIPAA
+telemetry.emit("user.login", {
+  attributes: {
+    email: "alice@example.com",       // PII!
+    ip: "192.168.1.100",              // PII!
+    password: "s3cret!",              // SECRET!
+  },
+});
+```
+
+---
+
+## Error Handling
+
+### ✅ Do: Catch and handle telemetry errors gracefully
+
+```typescript
+import { IgniterTelemetryError } from "@igniter-js/telemetry";
+
+try {
+  telemetry.emit("unknown.event", { attributes: {} });
+} catch (error) {
+  if (IgniterTelemetryError.is(error)) {
+    console.error(`[${error.code}] ${error.message}`);
+    // Don't crash — telemetry errors should never bring down your app
+  }
+}
+```
+
+### ✅ Do: Graceful shutdown
+
+```typescript
+process.on("SIGTERM", async () => {
+  console.log("Shutting down telemetry...");
+  await telemetry.shutdown();
+  process.exit(0);
+});
+```
+
+### ❌ Don't: Let telemetry crash your application
+
+```typescript
+// ❌ Uncaught telemetry errors can crash the process
+telemetry.emit("unknown.event", { attributes: {} });
+
+// ✅ Always wrap in production
+try {
+  telemetry.emit(event, input);
+} catch (error) {
+  // Log but don't crash
+}
+```
+
+---
+
+## Performance
+
+### ✅ Do: Use `withLogger()` for internal telemetry logging
+
+```typescript
+import { IgniterLogger } from "@igniter-js/common";
+
+const telemetry = IgniterTelemetry.create()
+  .withLogger(IgniterLogger.create({ name: "telemetry" }))
+  .addTransport(loggerAdapter)
+  .build();
+// Now you see transport init/shutdown logs
+```
+
+### ✅ Do: Disable debug in production
+
+```typescript
+const logger = LoggerTransportAdapter.create({
+  logger: console,
+  minLevel: "info",   // No debug in production
+});
+```
+
+### ❌ Don't: Create a new telemetry instance per request
+
+```typescript
+// ❌ Creates a new builder + manager on every request — expensive!
+app.get("/api/data", async (req, res) => {
+  const telemetry = IgniterTelemetry.create()
+    .withService("api")
+    .addTransport(loggerAdapter)
+    .build();
+  telemetry.emit("request.handled");
+});
+
+// ✅ Create once, reuse everywhere
+const telemetry = IgniterTelemetry.create()
+  .withService("api")
+  .addTransport(loggerAdapter)
+  .build();
+
+app.get("/api/data", async (req, res) => {
+  telemetry.emit("request.handled");
+});
+```
+
+---
+
+## Testing
+
+### ✅ Do: Use Mock adapter in unit tests
+
+```typescript
+import { MockTelemetryAdapter } from "@igniter-js/telemetry/adapters";
+
+const mock = MockTelemetryAdapter.create();
+const telemetry = IgniterTelemetry.create()
+  .withService("test")
+  .addTransport(mock)
+  .build();
+
+telemetry.emit("user.created", {
+  attributes: { "ctx.user.id": "usr_001" },
+});
+
+expect(mock.getLastEvent()?.name).toBe("user.created");
+expect(mock.getLastEvent()?.attributes).toEqual({
+  "ctx.user.id": "usr_001",
+});
+```
+
+### ✅ Do: Use Memory adapter for integration tests
+
+```typescript
+const memory = InMemoryTransportAdapter.create();
+const telemetry = IgniterTelemetry.create()
+  .addTransport(memory)
+  .build();
+
+await handleRequest(req, telemetry);
+
+const events = memory.getEvents();
+expect(events).toHaveLength(2);
+expect(events[0].name).toBe("request.started");
+expect(events[1].name).toBe("request.completed");
+```
+
+---
+
+## Quick Reference
+
+| Scenario | Recommendation |
+|----------|---------------|
+| HTTP handlers | Scoped execution (`session.run()`) |
+| Background jobs | Manual session handle |
+| Startup events | Direct emit |
+| Production sampling | `infoRate: 0.05`, `errorRate: 1.0`, explicit `always` patterns |
+| PII handling | Denylist secrets, hash emails/IPs |
+| Error monitoring | Sentry adapter for errors, Slack for team alerts |
+| Testing | Mock adapter for unit tests, Memory adapter for integration tests |
+| Shutdown | Always call `telemetry.shutdown()` on SIGTERM |
+
+---
+
+## Next Steps
+
+- [Troubleshooting](/docs/telemetry/troubleshooting) — Common errors and solutions
+- [Framework Integration](/docs/telemetry/framework-integration) — Next.js, Express, and Fastify patterns
+- [API Reference](/docs/telemetry/api-reference) — Complete API documentation

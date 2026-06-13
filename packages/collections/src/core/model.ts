@@ -10,7 +10,6 @@
 import type { StandardJSONSchemaV1, StandardSchemaV1, StandardTypedV1 } from "@standard-schema/spec";
 import type { IgniterLogger } from "@igniter-js/common";
 import type { IgniterTelemetryManager } from "@igniter-js/telemetry";
-import Handlebars from "handlebars";
 import MiniSearch from "minisearch";
 import {
   IgniterCollectionError,
@@ -56,6 +55,8 @@ interface CollectionManagerConfig<
   logger?: IgniterLogger;
   globalHooks?: IgniterCollectionModelHooks<TSchema>;
   parentId?: string;
+  /** Context factory for dependency injection */
+  contextFactory?: () => unknown | Promise<unknown>;
 }
 
 /**
@@ -75,6 +76,7 @@ export class IgniterCollectionModelManager<
   private readonly logger?: IgniterLogger;
   private readonly globalHooks?: IgniterCollectionModelHooks<TSchema>;
   private readonly parentId?: string;
+  private readonly contextFactory?: () => unknown | Promise<unknown>;
   private searchIndex: MiniSearch | null = null;
   private searchIndexDirty = true;
 
@@ -87,6 +89,18 @@ export class IgniterCollectionModelManager<
     this.logger = config.logger;
     this.globalHooks = config.globalHooks;
     this.parentId = config.parentId;
+    this.contextFactory = config.contextFactory;
+  }
+
+  /**
+   * Resolve context from the configured factory.
+   * Called before every operation to ensure fresh context.
+   */
+  private async resolveContext(): Promise<unknown> {
+    if (!this.contextFactory) {
+      return undefined;
+    }
+    return await this.contextFactory();
   }
 
   /**
@@ -115,33 +129,18 @@ export class IgniterCollectionModelManager<
   }
 
   /**
-   * Render document content using template if defined.
+   * Normalize document body content.
    */
-  private async renderContent(data: Record<string, any>, content: unknown): Promise<string> {
-    if (!this.definition.template) {
-      if (typeof content === "object" && content !== null) {
-        throw new IgniterCollectionError({
-          message: "Content must be a string when no template is defined",
-          code: IGNITER_COLLECTION_ERROR_CODES.VALIDATION_ERROR,
-          statusCode: 400,
-        });
-      }
-      return String(content ?? "");
-    }
-
-    const templatePath = IgniterCollectionPath.resolve(this.basePath, this.definition.template);
-    const templateRaw = await this.adapter.read(templatePath);
-
-    if (!templateRaw) {
+  private renderContent(content: unknown): string {
+    if (typeof content === "object" && content !== null) {
       throw new IgniterCollectionError({
-        message: `Template not found: ${this.definition.template}`,
-        code: IGNITER_COLLECTION_ERROR_CODES.DOCUMENT_NOT_FOUND,
-        statusCode: 500,
+        message: "Content must be a string",
+        code: IGNITER_COLLECTION_ERROR_CODES.VALIDATION_ERROR,
+        statusCode: 400,
       });
     }
 
-    const template = Handlebars.compile(templateRaw);
-    return template({ ...data, content });
+    return String(content ?? "");
   }
 
   /**
@@ -255,8 +254,7 @@ export class IgniterCollectionModelManager<
     // Validate frontmatter
     const validatedData = await this.validate(frontmatter);
 
-    // Render content if template is defined
-    const renderedContent = await this.renderContent(validatedData as Record<string, any>, content);
+    const renderedContent = this.renderContent(content);
 
     // Build document
     const path = this.getDocumentPath(id, validatedData as Record<string, any>);
@@ -269,12 +267,14 @@ export class IgniterCollectionModelManager<
     } as any;
 
     // Execute hooks
+    const context = await this.resolveContext();
     const hooks = this.definition.hooks;
     if (hooks.onCreated) {
       const result = await hooks.onCreated({
         value: doc as any,
         collection: this as any,
         manager: this.manager,
+        context,
       });
 
       if (result === false) {
@@ -306,10 +306,12 @@ export class IgniterCollectionModelManager<
     await this.manager.emit("created", {
       collection: this.definition.name,
       value: doc as any,
+      context,
     });
 
     await this.manager.emit(`${this.definition.name}:created`, {
       value: doc,
+      context,
     });
 
     this.searchIndexDirty = true;
@@ -344,12 +346,14 @@ export class IgniterCollectionModelManager<
     }
 
     // Execute hooks
+    const context = await this.resolveContext();
     const hooks = this.definition.hooks;
     if (hooks.onRead) {
       const result = await hooks.onRead({
         value: doc as any,
         collection: this as any,
         manager: this.manager,
+        context,
       });
 
       if (result === false) {
@@ -363,10 +367,12 @@ export class IgniterCollectionModelManager<
     await this.manager.emit("read", {
       collection: this.definition.name,
       value: doc as any,
+      context,
     });
 
     await this.manager.emit(`${this.definition.name}:read`, {
       value: doc,
+      context,
     });
 
     // Apply Select/Exclude
@@ -470,12 +476,14 @@ export class IgniterCollectionModelManager<
     }
 
     // Execute hooks
+    const context = await this.resolveContext();
     const hooks = this.definition.hooks;
     if (hooks.onList) {
       const hookResult = await hooks.onList({
         values: result as any,
         collection: this as any,
         manager: this.manager,
+        context,
       });
 
       if (hookResult === false) {
@@ -531,10 +539,8 @@ export class IgniterCollectionModelManager<
     // Validate
     const validatedData = await this.validate(mergedData);
 
-    // @ts-expect-error - Expected
-    // Render content if template is defined (use new content if provided, else existing)
-    const contentToRender = content !== undefined ? content : existing.content;
-    const renderedContent = await this.renderContent(validatedData as Record<string, any>, contentToRender);
+    const contentToRender = content !== undefined ? content : (existing as any).content;
+    const renderedContent = this.renderContent(contentToRender);
 
     // Build document (path might change if frontmatter variables changed)
     const path = this.getDocumentPath(id, validatedData as Record<string, any>);
@@ -548,6 +554,7 @@ export class IgniterCollectionModelManager<
     } as any;
 
     // Execute hooks
+    const context = await this.resolveContext();
     const hooks = this.definition.hooks;
     if (hooks.onUpdated) {
       const result = await hooks.onUpdated({
@@ -555,6 +562,7 @@ export class IgniterCollectionModelManager<
         previousValue: existing as any,
         collection: this as any,
         manager: this.manager,
+        context,
       });
 
       if (result === false) {
@@ -582,12 +590,14 @@ export class IgniterCollectionModelManager<
       collection: this.definition.name,
       newValue: doc as any,
       previousValue: existing as any,
+      context,
     });
 
     // Emit collection-specific event
     await this.manager.emit(`${this.definition.name}:updated`, {
       newValue: doc,
       previousValue: existing as any,
+      context,
     });
 
     this.searchIndexDirty = true;
@@ -629,12 +639,14 @@ export class IgniterCollectionModelManager<
     }
 
     // Execute hooks
+    const context = await this.resolveContext();
     const hooks = this.definition.hooks;
     if (hooks.onDeleted) {
       const result = await hooks.onDeleted({
         value: existing as any,
         collection: this as any,
         manager: this.manager,
+        context,
       });
 
       if (result === false) {
@@ -659,11 +671,13 @@ export class IgniterCollectionModelManager<
     await this.manager.emit("deleted", {
       collection: this.definition.name,
       value: existing as any,
+      context,
     });
 
     // Emit collection-specific event
     await this.manager.emit(`${this.definition.name}:deleted`, {
       value: existing as any,
+      context,
     });
 
     this.searchIndexDirty = true;

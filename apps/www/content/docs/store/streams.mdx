@@ -1,0 +1,318 @@
+---
+title: Redis Streams
+description: Append, read, and process Redis Streams with consumer groups. Build reliable message queues, event sourcing, and log processing with store.streams.
+---
+
+## Overview
+
+`store.streams` provides a typed interface for Redis Streams — an append-only log data structure perfect for reliable message processing, event sourcing, and log aggregation. Unlike Pub/Sub (fire-and-forget), streams support consumer groups, message acknowledgment, and message replay.
+
+<Callout type="info">
+  Streams are ideal when you need **at-least-once delivery**, message persistence, or the ability to replay events. For simple real-time notifications, use [Pub/Sub](/docs/store/pubsub) instead.
+</Callout>
+
+---
+
+## Appending Messages
+
+### Basic Append
+
+```typescript
+const messageId = await store.streams.append("events", {
+  type: "user_signup",
+  userId: "u_123",
+  email: "avery@example.com",
+  timestamp: new Date().toISOString(),
+});
+
+console.log(messageId); // "1685654738123-0"
+```
+
+### Append with Stream Capping
+
+Limit stream length to prevent unbounded growth:
+
+```typescript
+await store.streams.append("events", payload, {
+  maxLen: 10000,       // Keep at most 10,000 messages
+  approximate: true,   // Use ~ for better performance
+});
+
+// Without approximate — exact trimming (slower)
+await store.streams.append("events", payload, { maxLen: 10000 });
+```
+
+---
+
+## Reading Messages
+
+### Range Queries
+
+Read a slice of the stream:
+
+```typescript
+// All messages
+const all = await store.streams.range("events", {
+  startId: "0",   // From beginning
+  endId: "+",     // To end
+});
+
+// Last 100 messages
+const recent = await store.streams.range("events", {
+  startId: "-",
+  endId: "+",
+  count: 100,
+});
+
+// Messages after a specific ID
+const after = await store.streams.range("events", {
+  startId: "1685654738123-0",
+  endId: "+",
+});
+
+// Each message: { id: "1685654738123-0", message: { type: "user_signup", ... } }
+for (const msg of recent) {
+  console.log(`${msg.id}:`, msg.message);
+}
+```
+
+---
+
+## Consumer Groups
+
+Consumer groups enable multiple consumers to distribute message processing — each message is delivered to exactly one consumer in the group.
+
+### Setup
+
+```typescript
+// Create a consumer in a group
+const consumer = store.streams.group("processors", "worker-1");
+
+// Ensure the consumer group exists (idempotent)
+await consumer.ensure("events", { startId: "0" }); // Start from beginning
+// Or: await consumer.ensure("events", { startId: "$" }); // Start from latest
+```
+
+### Reading as a Consumer
+
+```typescript
+// Read new messages (blocking)
+const messages = await consumer.read("events", {
+  count: 10,       // Max 10 messages
+  blockMs: 5000,   // Block up to 5 seconds for new messages
+});
+
+for (const msg of messages) {
+  console.log(msg.id, msg.message);
+
+  // Process the message...
+  await processMessage(msg.message);
+}
+```
+
+### Acknowledging Messages
+
+After processing, acknowledge messages to remove them from the pending list:
+
+```typescript
+const messages = await consumer.read("events", { count: 10 });
+
+for (const msg of messages) {
+  try {
+    await processMessage(msg.message);
+  } catch (error) {
+    console.error(`Failed to process ${msg.id}:`, error);
+    continue; // Don't ack — it will be retried
+  }
+}
+
+// Acknowledge all successfully processed messages
+await consumer.ack("events", messages.map((m) => m.id));
+```
+
+### Multiple Workers
+
+Scale out by creating consumers on the same group:
+
+```typescript
+// Worker 1
+const worker1 = store.streams.group("processors", "worker-1");
+await worker1.ensure("events");
+
+// Worker 2 (separate process)
+const worker2 = store.streams.group("processors", "worker-2");
+await worker2.ensure("events");
+
+// Worker 3 (separate process)
+const worker3 = store.streams.group("processors", "worker-3");
+await worker3.ensure("events");
+
+// Messages are distributed across workers — each message
+// goes to exactly one worker in the "processors" group.
+```
+
+---
+
+## Real-World Example: Order Processing Pipeline
+
+```typescript
+import { IgniterStore } from "@igniter-js/store";
+import { IgniterStoreRedisAdapter } from "@igniter-js/store/adapters";
+import Redis from "ioredis";
+
+const store = IgniterStore.create()
+  .withAdapter(IgniterStoreRedisAdapter.create({ redis: new Redis() }))
+  .withService("orders")
+  .build();
+
+// --- Producer: Append to stream ---
+async function submitOrder(order: Order) {
+  const messageId = await store.streams.append("orders", order, {
+    maxLen: 100000,
+    approximate: true,
+  });
+
+  console.log(`Order ${order.id} submitted as ${messageId}`);
+  return messageId;
+}
+
+// --- Consumer: Process orders ---
+async function startOrderProcessor(workerId: string) {
+  const consumer = store.streams.group("order-processors", workerId);
+  await consumer.ensure("orders", { startId: "$" });
+
+  console.log(`Worker ${workerId} started`);
+
+  while (true) {
+    const messages = await consumer.read("orders", {
+      count: 5,
+      blockMs: 5000,
+    });
+
+    if (messages.length === 0) continue;
+
+    console.log(`Worker ${workerId}: Processing ${messages.length} orders`);
+
+    const acked: string[] = [];
+
+    for (const msg of messages) {
+      try {
+        await processOrder(msg.message);
+        acked.push(msg.id);
+      } catch (error) {
+        console.error(`Worker ${workerId}: Failed ${msg.id}:`, error);
+      }
+    }
+
+    if (acked.length > 0) {
+      await consumer.ack("orders", acked);
+    }
+  }
+}
+
+// Start 3 workers (in separate processes or threads)
+startOrderProcessor("worker-1");
+startOrderProcessor("worker-2");
+startOrderProcessor("worker-3");
+```
+
+---
+
+## Chat Message Processing
+
+```typescript
+// Producer: Chat message
+await store.streams.append("chat:room:general", {
+  from: "alice",
+  text: "Hello everyone!",
+  timestamp: Date.now(),
+}, { maxLen: 5000, approximate: true });
+
+// Consumer: Chat archiver
+const archiver = store.streams.group("archivers", "archiver-1");
+await archiver.ensure("chat:room:general");
+
+const messages = await archiver.read("chat:room:general", {
+  count: 50,
+  blockMs: 10000,
+});
+
+for (const msg of messages) {
+  await db.message.create({ data: msg.message });
+  await archiver.ack("chat:room:general", [msg.id]);
+}
+```
+
+---
+
+## Stream API Reference
+
+### `store.streams.append(stream, message, options?)`
+
+Append a message to a stream.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `stream` | `string` | Stream name |
+| `message` | `unknown` | Message payload (serialized as JSON) |
+| `options.maxLen` | `number?` | Maximum stream length |
+| `options.approximate` | `boolean?` | Use approximate trimming (~) |
+
+Returns: `Promise<string>` — the message ID.
+
+### `store.streams.group(group, consumer)`
+
+Create a consumer in a group.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `group` | `string` | Consumer group name |
+| `consumer` | `string` | Consumer name (unique per instance) |
+
+Returns: `IgniterStoreStreamConsumerGroup`
+
+### Consumer Group Methods
+
+**`consumer.ensure(stream, options?)`** — Create consumer group (idempotent).
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `stream` | `string` | Stream name |
+| `options.startId` | `string?` | `"0"` for beginning, `"$"` for latest (default: `"0"`) |
+
+**`consumer.read(stream, options?)`** — Read pending messages.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `stream` | `string` | Stream name |
+| `options.count` | `number?` | Max messages (default: 100) |
+| `options.blockMs` | `number?` | Block timeout in ms (0 = non-blocking) |
+
+Returns: `Promise<Array<{ id: string; message: T }>>`
+
+**`consumer.ack(stream, ids)`** — Acknowledge processed messages.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `stream` | `string` | Stream name |
+| `ids` | `string[]` | Message IDs to acknowledge |
+
+### `store.streams.range(stream, options?)`
+
+Read a range of messages (non-consumer).
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `stream` | `string` | Stream name |
+| `options.startId` | `string?` | Start ID (default: `"-"`) |
+| `options.endId` | `string?` | End ID (default: `"+"`) |
+| `options.count` | `number?` | Max messages |
+| `options.reverse` | `boolean?` | Read in reverse order |
+
+---
+
+## Next Steps
+
+- Set up [multi-tenant scopes](/docs/store/advanced) for tenant-isolated streams
+- Browse the [API reference](/docs/store/api-reference)
+- See [troubleshooting](/docs/store/troubleshooting) for common stream issues

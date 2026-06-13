@@ -1,0 +1,189 @@
+---
+title: Event Validation
+description: Validate telemetry events against Zod schemas — choose between development-only, always-on, or no validation. Configure strict mode, per-registry options, and understand the validation pipeline.
+---
+
+## Event Validation
+
+Validation ensures that emitted events match their registered Zod schemas. It catches typos, missing fields, and wrong types — before events reach your transports.
+
+<Callout type="info">
+  Validation is **only applied when typed events are registered** via `.addEvents()`. Untyped events (plain string names) are never validated.
+</Callout>
+
+---
+
+## Validation Modes
+
+Three modes control when validation runs:
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `"development"` | Validate only when `NODE_ENV !== "production"` | Catch schema errors in dev, skip in prod for performance |
+| `"always"` | Validate on every emit, including production | Strict schemas must never be violated |
+| `"none"` | Never validate | Untyped events or legacy code |
+
+### Setting Validation Mode
+
+**Per-registry** (recommended for granular control):
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .addEvents(BillingEvents, { mode: "always", strict: true })
+  .addEvents(DebugEvents, { mode: "development" })
+  .addEvents(LegacyEvents, { mode: "none" })
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+**Global** (applies to all registries as default):
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withValidation({ mode: "always", strict: true })
+  .addEvents(BillingEvents)   // Inherits global: always + strict
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+Per-registry options override global options for that specific registry.
+
+---
+
+## Strict Mode
+
+When `strict: true`, emitting an event name that isn't in any registered namespace throws `TELEMETRY_UNKNOWN_EVENT`:
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .addEvents(BillingEvents, { mode: "always", strict: true })
+  .addTransport(loggerAdapter)
+  .build();
+
+// ❌ Throws TELEMETRY_UNKNOWN_EVENT — event not in BillingEvents
+telemetry.emit("unknown.event", { attributes: {} });
+```
+
+When `strict: false` (default), unknown events are logged as warnings but not thrown:
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .addEvents(BillingEvents, { mode: "development", strict: false })
+  .addTransport(loggerAdapter)
+  .build();
+
+// ⚠️ Logs a warning but does not throw
+telemetry.emit("unknown.event", { attributes: {} });
+```
+
+---
+
+## Schema Validation
+
+When an event name is recognized (belongs to a registered namespace), the event's attributes are validated against its Zod schema:
+
+```typescript
+import { z } from "zod";
+import { IgniterTelemetryEvents } from "@igniter-js/telemetry";
+
+const PaymentEvents = IgniterTelemetryEvents
+  .namespace("igniter.payments")
+  .event("succeeded", z.object({
+    "ctx.payment.id": z.string(),
+    "ctx.payment.amount": z.number(),
+  }))
+  .build();
+
+const telemetry = IgniterTelemetry.create()
+  .addEvents(PaymentEvents, { mode: "always" })
+  .addTransport(loggerAdapter)
+  .build();
+
+// ✅ Passes validation
+telemetry.emit("igniter.payments.succeeded", {
+  attributes: {
+    "ctx.payment.id": "pay_123",
+    "ctx.payment.amount": 2999,
+  },
+});
+
+// ❌ Fails validation — missing required field "ctx.payment.id"
+telemetry.emit("igniter.payments.succeeded", {
+  attributes: {
+    "ctx.payment.amount": 2999,
+  },
+});
+```
+
+<Callout type="warn">
+  Schema validation failures throw `TELEMETRY_SCHEMA_VALIDATION_FAILED` with details about which fields failed. In `"development"` mode, this only happens outside of production.
+</Callout>
+
+---
+
+## Recommended Configuration
+
+### Development
+
+Catch everything early — validate all events, log unknown events:
+
+```typescript
+withValidation({ mode: "always", strict: false })
+```
+
+### Production
+
+Skip validation for performance, but keep strict mode to catch truly unknown events:
+
+```typescript
+withValidation({ mode: "development", strict: true })
+```
+
+### CI/Testing
+
+Always validate, always be strict:
+
+```typescript
+withValidation({ mode: "always", strict: true })
+```
+
+---
+
+## Validation Pipeline
+
+The validation pipeline runs during `emit()`:
+
+```
+emit('event.name', input)
+  ↓
+1. Check if event name exists in any registry? (strict check)
+  ↓  (if strict && unknown) → throw TELEMETRY_UNKNOWN_EVENT
+  ↓
+2. Check validation mode (development | always | none)
+  ↓  (if 'none') → skip validation, emit
+  ↓  (if 'development' && NODE_ENV === 'production') → skip
+  ↓
+3. Look up schema for event name
+  ↓
+4. Validate input.attributes against schema
+  ↓  (if invalid) → throw TELEMETRY_SCHEMA_VALIDATION_FAILED
+  ↓
+5. Emit event
+```
+
+---
+
+## Performance Considerations
+
+- **Development mode** has zero runtime cost in production — validation is skipped entirely
+- **Always mode** adds Zod schema parsing overhead on every emit — use only for critical events
+- **Strict mode** adds a registry lookup on every emit — negligible cost
+- Untyped events (events without a registered namespace) **skip validation entirely** regardless of settings
+
+---
+
+## Next Steps
+
+- [Best Practices](/docs/telemetry/best-practices) — Do's and Don'ts for production telemetry
+- [Troubleshooting](/docs/telemetry/troubleshooting) — Common validation errors and solutions
+- [Defining Events](/docs/telemetry/defining-events) — Create typed event registries

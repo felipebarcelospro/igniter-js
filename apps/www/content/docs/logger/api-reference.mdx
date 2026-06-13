@@ -1,0 +1,635 @@
+---
+title: API Reference
+description: Complete API reference for @igniter-js/logger — builder, manager, types, enums, transport configurations, and error classes.
+---
+
+## API Reference
+
+This reference documents every public export of `@igniter-js/logger`. All examples are verified against the implementation in [`packages/logger/src/`](https://github.com/igniter-js/igniter-js/tree/main/packages/logger/src).
+
+---
+
+## Exports
+
+```typescript
+// Builder (primary entry point)
+import { IgniterLogger, IgniterLoggerBuilder } from '@igniter-js/logger';
+
+// Manager (produced by .build())
+import { IgniterLoggerManager } from '@igniter-js/logger';
+
+// Enums
+import { IgniterLogLevel } from '@igniter-js/logger';
+
+// Types
+import type {
+  IIgniterLoggerManager,
+  IgniterLoggerConfig,
+  IgniterLoggerBuilderState,
+  IgniterTransportConfig,
+  ConsoleTransportOptions,
+  FileTransportOptions,
+  HttpTransportOptions,
+  IgniterFileTransportRotationOptions,
+} from '@igniter-js/logger';
+
+// Errors
+import {
+  IgniterLoggerError,
+  IGNITER_LOGGER_ERROR_CODES,
+  type IgniterLoggerErrorCode,
+} from '@igniter-js/logger';
+```
+
+---
+
+## `IgniterLogger` / `IgniterLoggerBuilder`
+
+The primary entry point. `IgniterLogger` is an alias for `IgniterLoggerBuilder`. Both are the same class.
+
+### `IgniterLogger.create()`
+
+Creates a new builder instance.
+
+```typescript
+static create(): IgniterLoggerBuilder<{}>
+```
+
+**Returns:** A new `IgniterLoggerBuilder` with empty state.
+
+```typescript
+const builder = IgniterLogger.create();
+```
+
+---
+
+### `.withLevel(level)`
+
+Sets the minimum log level. Messages below this level are suppressed.
+
+```typescript
+withLevel(level: IgniterLogLevel): IgniterLoggerBuilder<TScopes>
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `level` | `IgniterLogLevel` | Minimum log level. Values: `Fatal`, `Error`, `Warn`, `Info`, `Debug`, `Trace`. |
+
+```typescript
+const logger = IgniterLogger.create()
+  .withLevel(IgniterLogLevel.Info)
+  .build();
+
+logger.debug('Not logged');  // below Info — dropped
+logger.info('Logged');        // Info — logged
+```
+
+---
+
+### `.withAppName(name)`
+
+Sets the application name included in every log entry.
+
+```typescript
+withAppName(appName: string): IgniterLoggerBuilder<TScopes>
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `appName` | `string` | Application name label. Pino sets this as `appName` in the base object. |
+
+```typescript
+const logger = IgniterLogger.create()
+  .withAppName('api')
+  .build();
+
+logger.info('Started');
+// Structured output: { appName: "api", msg: "Started", ... }
+```
+
+---
+
+### `.withComponent(component)`
+
+Sets the component name included in every log entry.
+
+```typescript
+withComponent(component: string): IgniterLoggerBuilder<TScopes>
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `component` | `string` | Component label for log entries. |
+
+```typescript
+const logger = IgniterLogger.create()
+  .withComponent('http')
+  .build();
+
+logger.info('Request');
+// Structured output: { component: "http", msg: "Request", ... }
+```
+
+---
+
+### `.withContext(context)`
+
+Merges default context into every log entry. Subsequent calls merge (not replace).
+
+```typescript
+withContext(context: Record<string, unknown>): IgniterLoggerBuilder<TScopes>
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `context` | `Record<string, unknown>` | Context data merged into the Pino base object. |
+
+```typescript
+const logger = IgniterLogger.create()
+  .withContext({ region: 'us-east-1' })
+  .withContext({ version: '2.0' })  // merges
+  .build();
+
+logger.info('Deploy');
+// Structured output: { region: "us-east-1", version: "2.0", msg: "Deploy", ... }
+```
+
+---
+
+### `.addTransport(transport)`
+
+Adds a transport configuration. Call multiple times for multi-transport logging.
+
+```typescript
+addTransport(transport: IgniterTransportConfig): IgniterLoggerBuilder<TScopes>
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `transport` | `IgniterTransportConfig` | Transport descriptor with `target` and `options`. |
+
+```typescript
+const logger = IgniterLogger.create()
+  .addTransport({ target: 'console', options: { pretty: true } })
+  .addTransport({ target: 'file', options: { path: './logs/app.log' } })
+  .build();
+```
+
+See [Transports](/docs/logger/transports) for all transport options and external transports.
+
+---
+
+### `.defineScopes<T>()`
+
+Defines the typed scope shape for child loggers. Changes the generic parameter on the builder.
+
+```typescript
+defineScopes<T extends Record<string, unknown>>(): IgniterLoggerBuilder<T>
+```
+
+```typescript
+const logger = IgniterLogger.create()
+  .defineScopes<{ tenantId: string }>()
+  .build();
+
+// TypeScript enforces tenantId on child context
+const child = logger.child('tenant', { tenantId: 't-1' });
+```
+
+---
+
+### `.build()`
+
+Builds the `IgniterLoggerManager` instance. If no transports were configured, a console transport with pretty formatting is added by default.
+
+```typescript
+build(): IgniterLoggerManager<TScopes>
+```
+
+**Returns:** A fully configured `IgniterLoggerManager` instance.
+
+```typescript
+const logger = IgniterLogger.create()
+  .withLevel(IgniterLogLevel.Info)
+  .withAppName('api')
+  .build();
+// Ready to use: logger.info(...), logger.error(...), etc.
+```
+
+---
+
+## `IgniterLoggerManager`
+
+The logger instance returned by `.build()`. Wraps a Pino instance and exposes all log methods.
+
+### Log Methods
+
+#### `.fatal(message, error?)`
+
+Log a fatal-level message. Use for unrecoverable errors.
+
+```typescript
+fatal(message: string, error?: Error | unknown): void
+```
+
+```typescript
+logger.fatal('Database unreachable', new Error('ECONNREFUSED'));
+```
+
+#### `.error(message, error?)`
+
+Log an error-level message.
+
+```typescript
+error(message: string, error?: Error | unknown): void
+```
+
+```typescript
+logger.error('Payment failed', new Error('Insufficient funds'));
+```
+
+#### `.warn(message, ...args)`
+
+Log a warning-level message.
+
+```typescript
+warn(message: string, ...args: any[]): void
+```
+
+```typescript
+logger.warn('Rate limit approaching', { remaining: 10 });
+```
+
+#### `.info(message, ...args)`
+
+Log an informational message.
+
+```typescript
+info(message: string, ...args: any[]): void
+```
+
+```typescript
+logger.info('Server started on port 3000');
+logger.info('User fetched', { userId: 'u-123', duration: 42 });
+```
+
+#### `.debug(message, ...args)`
+
+Log a debug-level message.
+
+```typescript
+debug(message: string, ...args: any[]): void
+```
+
+```typescript
+logger.debug('Query parameters', { page: 1, limit: 25 });
+```
+
+#### `.trace(message, ...args)`
+
+Log a trace-level message. Most granular.
+
+```typescript
+trace(message: string, ...args: any[]): void
+```
+
+```typescript
+logger.trace('Entering function', { fn: 'processOrder', args: [42] });
+```
+
+#### `.success(message, ...args)`
+
+Log a success message at `info` level with a `✓` prefix and `type: "success"`.
+
+```typescript
+success(message: string, ...args: any[]): void
+```
+
+```typescript
+logger.success('Deployment complete');
+// Console: [12:34:56] INFO: ✓ Deployment complete
+// Structured: { type: "success", msg: "✓ Deployment complete", ... }
+```
+
+#### `.log(level, message, context?, error?)`
+
+Generic log method — programmatic level selection.
+
+```typescript
+log(
+  level: IgniterLogLevel | string,
+  message: string,
+  context?: Record<string, unknown> | string,
+  error?: Error | unknown,
+): void
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `level` | `"fatal" \| "error" \| "warn" \| "info" \| "debug" \| "trace"` | Log level. |
+| `message` | `string` | The log message. |
+| `context` | `Record<string, unknown> \| string` | Context payload. Strings become `{ label: value }`. |
+| `error` | `Error \| unknown` | Error object — set as `err` in the payload. |
+
+---
+
+### Formatting Methods
+
+#### `.group(name?)`
+
+Start a log group. Increases indentation level for console output.
+
+```typescript
+group(name?: string): void
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | Optional group label. Printed as `┌ name`. |
+
+#### `.groupEnd()`
+
+End the current log group. Decreases indentation level.
+
+```typescript
+groupEnd(): void
+```
+
+#### `.separator()`
+
+Draw a visual separator line (50 `─` characters).
+
+```typescript
+separator(): void
+```
+
+---
+
+### Child Logger
+
+#### `.child(componentName, context?)`
+
+Creates a child logger with merged context.
+
+```typescript
+child(
+  componentName: string,
+  context?: Record<string, unknown> | string,
+): IIgniterLoggerManager
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `componentName` | `string` | Component name for the child logger. Overrides parent's component. |
+| `context` | `Record<string, unknown> \| string` | Context merged into child entries. |
+
+**Returns:** A new `IgniterLoggerManager` instance sharing the parent's Pino instance.
+
+---
+
+### Runtime Control
+
+#### `.setLevel(level)`
+
+Change the minimum log level at runtime.
+
+```typescript
+setLevel(level: IgniterLogLevel | string): void
+```
+
+```typescript
+logger.setLevel(IgniterLogLevel.Debug);
+```
+
+#### `.setAppName(appName)`
+
+Change the application name at runtime. Pass `undefined` to clear.
+
+```typescript
+setAppName(appName: string | undefined): void
+```
+
+#### `.setComponent(componentName)`
+
+Change the component name at runtime. Pass `undefined` to clear.
+
+```typescript
+setComponent(componentName: string | undefined): void
+```
+
+#### `.flush()`
+
+Flush any buffered log entries. Critical before process exit for file and HTTP transports.
+
+```typescript
+flush(): Promise<void>
+```
+
+**Returns:** A Promise that resolves when all buffered logs are written.
+
+---
+
+## `IgniterLogLevel`
+
+Enum of supported log levels.
+
+```typescript
+enum IgniterLogLevel {
+  Fatal = "fatal",
+  Error = "error",
+  Warn  = "warn",
+  Info  = "info",
+  Debug = "debug",
+  Trace = "trace",
+}
+```
+
+| Member | Value | Pino Level | Typical Use |
+|--------|-------|------------|-------------|
+| `Fatal` | `"fatal"` | 60 | System is unusable |
+| `Error` | `"error"` | 50 | Runtime errors |
+| `Warn` | `"warn"` | 40 | Warnings, degraded state |
+| `Info` | `"info"` | 30 | Normal operations |
+| `Debug` | `"debug"` | 20 | Development details |
+| `Trace` | `"trace"` | 10 | Extremely granular |
+
+---
+
+## Transport Types
+
+### `IgniterTransportConfig`
+
+Configuration descriptor for a transport.
+
+```typescript
+interface IgniterTransportConfig<TOptions = IgniterTransportOptions> {
+  target: IgniterTransportTarget;
+  options?: TOptions;
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `target` | `"console" \| "file" \| "http" \| string` | Transport target identifier. |
+| `options` | `ConsoleTransportOptions \| FileTransportOptions \| HttpTransportOptions \| Record<string, unknown>` | Transport-specific options. |
+
+### `ConsoleTransportOptions`
+
+```typescript
+interface ConsoleTransportOptions {
+  colorize?: boolean;       // default: true
+  pretty?: boolean;          // default: true
+  destination?: "stdout" | "stderr" | string;  // default: "stdout"
+  translateTime?: string | boolean;  // default: "SYS:standard"
+}
+```
+
+### `FileTransportOptions`
+
+```typescript
+interface FileTransportOptions {
+  path: string;              // required — destination file path
+  mkdir?: boolean;           // default: true — create parent dirs
+  rotation?: boolean | IgniterFileTransportRotationOptions;  // default: false
+}
+```
+
+### `IgniterFileTransportRotationOptions`
+
+```typescript
+interface IgniterFileTransportRotationOptions {
+  maxSizeBytes?: number;     // max file size before rotation
+  maxFiles?: number;         // max rotated files to keep
+  intervalMs?: number;       // rotation interval in ms
+}
+```
+
+### `HttpTransportOptions`
+
+```typescript
+interface HttpTransportOptions {
+  url: string;               // required — target URL for log ingestion
+  headers?: Record<string, string>;  // HTTP headers (auth, metadata)
+  batchSize?: number;        // default: 10 — entries per batch
+  timeoutMs?: number;        // default: 5000 — request timeout
+  flushInterval?: number;    // default: 5000 — periodic flush ms
+}
+```
+
+---
+
+## Configuration Types
+
+### `IgniterLoggerBuilderState`
+
+Internal builder state. Used by the builder to accumulate configuration.
+
+```typescript
+interface IgniterLoggerBuilderState {
+  level?: IgniterLogLevel;
+  appName?: string;
+  component?: string;
+  context?: Record<string, unknown>;
+  transports?: IgniterTransportConfig[];
+  scopes?: Record<string, unknown>;
+}
+```
+
+### `IgniterLoggerConfig`
+
+Final configuration passed to the manager.
+
+```typescript
+interface IgniterLoggerConfig {
+  level?: IgniterLogLevel;
+  appName?: string;
+  component?: string;
+  context?: Record<string, unknown>;
+  transports?: IgniterTransportConfig[];
+  scopes?: Record<string, unknown>;
+}
+```
+
+---
+
+## Error Classes
+
+### `IgniterLoggerError`
+
+Custom error class extending `IgniterError` from `@igniter-js/common`.
+
+```typescript
+class IgniterLoggerError extends IgniterError {
+  constructor(
+    code: IgniterLoggerErrorCode,
+    message: string,
+    details?: {
+      'ctx.package': string;
+      'ctx.operation': string;
+      'ctx.state'?: Record<string, unknown>;
+    }
+  );
+
+  static transportInvalid(transport: string, operation: string): IgniterLoggerError;
+  static levelInvalid(level: string, operation: string): IgniterLoggerError;
+  static configInvalid(reason: string, operation: string): IgniterLoggerError;
+  static flushFailed(cause: string, operation: string): IgniterLoggerError;
+}
+```
+
+### `IGNITER_LOGGER_ERROR_CODES`
+
+```typescript
+const IGNITER_LOGGER_ERROR_CODES = {
+  TRANSPORT_INVALID: 'TRANSPORT_INVALID',
+  LEVEL_INVALID: 'LEVEL_INVALID',
+  CONFIG_INVALID: 'CONFIG_INVALID',
+  FLUSH_FAILED: 'FLUSH_FAILED',
+} as const;
+```
+
+| Code | Meaning |
+|------|---------|
+| `TRANSPORT_INVALID` | Unknown or unsupported transport target. |
+| `LEVEL_INVALID` | Unknown log level string. |
+| `CONFIG_INVALID` | Invalid or missing configuration. |
+| `FLUSH_FAILED` | Flush operation failed (I/O error). |
+
+### `IgniterLoggerErrorCode`
+
+```typescript
+type IgniterLoggerErrorCode =
+  typeof IGNITER_LOGGER_ERROR_CODES[keyof typeof IGNITER_LOGGER_ERROR_CODES];
+```
+
+---
+
+## Manager Interface
+
+### `IIgniterLoggerManager`
+
+The public interface implemented by `IgniterLoggerManager`.
+
+```typescript
+interface IIgniterLoggerManager extends IIgniterLogger {
+  child(componentName: string, context?: Record<string, unknown> | string): IIgniterLoggerManager;
+  success(message: string, ...args: any[]): void;
+  group(name?: string): void;
+  groupEnd(): void;
+  separator(): void;
+  setLevel(level: IgniterLogLevel | string): void;
+  setAppName(appName: string | undefined): void;
+  setComponent(componentName: string | undefined): void;
+  flush(): Promise<void>;
+}
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Troubleshooting" description="Common errors, transport failures, and how to debug them." href="/docs/logger/troubleshooting" />
+  <Card title="Best Practices" description="Production logging patterns, structured context, and anti-patterns." href="/docs/logger/best-practices" />
+  <Card title="Framework Integration" description="Use logger with Next.js, Express, Fastify, and NestJS." href="/docs/logger/framework-integration" />
+</Cards>

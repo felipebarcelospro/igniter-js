@@ -1,83 +1,454 @@
 ---
 title: Schema Validation
-description: Achieve end-to-end type safety with Standard Schema.
+description: Achieve end-to-end type safety with Standard Schema. Define API contracts with Zod, get automatic TypeScript inference, and validate requests/responses at runtime.
 ---
 
-Schema validation is what makes Caller truly powerful. By defining your API contract using Zod (or any Standard Schema V1 compatible library), you get automatic runtime validation and perfect TypeScript inference.
+Schema validation is what makes Caller truly powerful. By defining your API contract using Zod (or any Standard Schema V1 compatible library), you get automatic runtime validation and perfect TypeScript inference — without writing a single interface by hand.
 
-## Manual Schema Definition
+---
 
-You can define your schemas using the `IgniterCallerSchema` builder. This approach is recommended when you want a single source of truth for your API paths.
+## Why Schema Validation?
 
-```ts title="lib/schemas.ts"
-import { IgniterCallerSchema } from '@igniter-js/caller'
-import { z } from 'zod'
+Without schema validation, this is what happens:
 
-const UserSchema = z.object({ id: z.string(), name: z.string() })
+```typescript
+// ❌ Traditional approach — no type safety
+const response = await fetch('/api/users/1');
+const user = await response.json();
+// user is any — no autocomplete, no validation
+console.log(user.naem); // Typo! Runtime error.
+```
 
-export const apiSchemas = IgniterCallerSchema.create()
-  .schema('User', UserSchema) // Register reusable schema
+With Caller schemas:
+
+```typescript
+// ✅ Caller approach — full type safety
+const result = await api.get('/users/:id')
+  .params({ id: '1' })
+  .execute();
+// result.data is fully typed — autocomplete works
+// Runtime validation catches mismatches
+```
+
+---
+
+## Quick Example
+
+Here's a complete schema validation setup in under 50 lines:
+
+```typescript
+import { IgniterCaller, IgniterCallerSchema } from '@igniter-js/caller';
+import { z } from 'zod';
+
+// 1. Define your schemas
+const UserSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email(),
+});
+
+// 2. Build the schema registry
+const schemas = IgniterCallerSchema.create()
+  .path('/users', (path) =>
+    path.get({
+      responses: { 200: z.array(UserSchema) },
+    })
+    .post({
+      request: z.object({
+        name: z.string(),
+        email: z.string().email(),
+      }),
+      responses: {
+        201: UserSchema,
+        400: z.object({ message: z.string() }),
+      },
+    })
+  )
   .path('/users/:id', (path) =>
     path.get({
       responses: {
-        200: path.ref('User').schema,
+        200: UserSchema,
+        404: z.object({ message: z.string() }),
+      },
+    })
+    .delete({
+      responses: {
+        204: undefined,
         404: z.object({ message: z.string() }),
       },
     })
   )
-  .build()
+  .build();
+
+// 3. Create the typed client
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withSchemas(schemas, { mode: 'strict' })
+  .build();
+
+// 4. Enjoy full type inference!
+const { data } = await api.get('/users/:id')
+  .params({ id: '1' })
+  .execute();
+// data: { id: number; name: string; email: string } | null
 ```
 
-## Using Schemas with Caller
+---
 
-Pass your built schemas to the caller builder during setup.
+## Schema Builder API
 
-```ts title="lib/api.ts"
-import { IgniterCaller } from '@igniter-js/caller'
-import { apiSchemas } from './schemas'
+### `IgniterCallerSchema`
 
-export const api = IgniterCaller.create()
+The root builder for defining your API contract.
+
+```typescript
+IgniterCallerSchema.create()
+  .schema(key, schema)     // Register reusable schemas
+  .path('/path', builder)  // Define path with HTTP methods
+  .build();                // Build the final schema map
+```
+
+### Registering Reusable Schemas
+
+Use `.schema()` to register schemas in a shared registry:
+
+```typescript
+const schemas = IgniterCallerSchema.create()
+  .schema('User', z.object({
+    id: z.number(),
+    name: z.string(),
+    email: z.string().email(),
+  }))
+  .schema('PaginationMeta', z.object({
+    page: z.number(),
+    total: z.number(),
+    hasMore: z.boolean(),
+  }))
+  .path('/users/:id', (path) =>
+    path.get({
+      responses: {
+        200: path.ref('User').schema,  // Reference by key
+        404: z.object({ message: z.string() }),
+      },
+    })
+  )
+  .build();
+```
+
+### Schema Wrappers
+
+`.ref(key)` returns a helper with Zod-based wrappers:
+
+| Method | Description | Example Output |
+|--------|-------------|----------------|
+| `.schema` | The schema as-is | `UserSchema` |
+| `.array()` | Array wrapper | `z.array(UserSchema)` |
+| `.nullable()` | Nullable wrapper | `UserSchema.nullable()` |
+| `.optional()` | Optional wrapper | `UserSchema.optional()` |
+| `.record(keyType?)` | Record wrapper | `z.record(z.string(), UserSchema)` |
+
+```typescript
+.path('/users', (path) =>
+  path.get({
+    responses: {
+      // Array of users
+      200: path.ref('User').array(),
+      // Nullable response
+      401: path.ref('Error').nullable().schema,
+    },
+  })
+)
+```
+
+### Defining Path Methods
+
+Each path can define multiple HTTP methods. Each method accepts a config object with:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `request` | `StandardSchemaV1` | Schema for validating the request body |
+| `responses` | `Record<number, StandardSchemaV1>` | Status-code-keyed response schemas |
+
+```typescript
+.path('/users/:id', (path) =>
+  path
+    .get({ responses: { 200: UserSchema } })
+    .put({
+      request: UpdateUserSchema,
+      responses: {
+        200: UserSchema,
+        404: z.object({ message: z.string() }),
+      },
+    })
+    .patch({
+      request: PartialUserSchema,
+      responses: { 200: UserSchema },
+    })
+    .delete({
+      responses: {
+        204: undefined, // No content
+        404: z.object({ message: z.string() }),
+      },
+    })
+)
+```
+
+---
+
+## Using Schemas
+
+### Basic Usage
+
+Pass your built schemas to the caller builder:
+
+```typescript
+const api = IgniterCaller.create()
   .withBaseUrl('https://api.example.com')
-  .withSchemas(apiSchemas, { mode: 'strict' })
-  .build()
+  .withSchemas(schemas, { mode: 'strict' })
+  .build();
+```
+
+### Inline Schemas
+
+You can also define schemas directly, without building a separate registry:
+
+```typescript
+const api = IgniterCaller.create()
+  .withSchemas({
+    '/users': {
+      GET: {
+        responses: { 200: z.array(UserSchema) },
+      },
+    },
+    '/users/:id': {
+      GET: {
+        responses: {
+          200: UserSchema,
+          404: ErrorSchema,
+        },
+      },
+    },
+  })
+  .build();
 ```
 
 ### Validation Modes
 
-| Mode | Description |
-|------|-------------|
-| `'strict'` | (Default) Fails the request if the response doesn't match the schema. |
-| `'loose'` | Logs a warning but returns the data if validation fails. |
-| `'none'` | Disables runtime validation while keeping type inference. |
+| Mode | Behavior |
+|------|----------|
+| `'strict'` | **(Default)** Rejects the request if the response doesn't match the schema. Returns a `IGNITER_CALLER_RESPONSE_VALIDATION_FAILED` error. |
+| `'loose'` | Logs a warning but still returns the data if validation fails. Useful during migration. |
+| `'none'` | Disables all runtime validation. TypeScript inference still works. |
 
-## Type Inference
+```typescript
+// Strict mode (default) — fails on schema mismatch
+const strict = IgniterCaller.create()
+  .withSchemas(schemas, { mode: 'strict' })
+  .build();
 
-The `$Infer` helper allows you to extract types from your schemas without manual interfaces.
-
-```ts
-import type { apiSchemas } from './schemas'
-
-// Extract a specific response type
-type User = ReturnType<
-  typeof apiSchemas.$Infer.Response<'/users/:id', 'GET', 200>
->
-
-// Usage in code
-const result = await api.get('/users/:id').params({ id: '1' }).execute()
-// result.data is automatically typed as User!
+// Loose mode — warns but continues
+const loose = IgniterCaller.create()
+  .withSchemas(schemas, { mode: 'loose' })
+  .build();
 ```
 
-## Validatable Content Types
+---
 
-Schema validation only runs for content types that support text parsing:
+## Type Inference with `$Infer`
+
+The `.build()` result includes non-enumerable `$Infer` and `get` helpers for extracting types:
+
+```typescript
+const schemas = IgniterCallerSchema.create()
+  .path('/users/:id', (path) =>
+    path.get({
+      responses: {
+        200: UserSchema,
+        404: ErrorSchema,
+      },
+    })
+  )
+  .build();
+
+// Extract types without requesting
+type GetUserResponse = ReturnType<
+  typeof schemas.$Infer.Response<'/users/:id', 'GET', 200>
+>;
+// Type: { id: number; name: string; email: string }
+
+type GetUserRequest = ReturnType<
+  typeof schemas.$Infer.Request<'/users/:id', 'GET'>
+>;
+
+// Runtime getters for schema objects
+const pathSchemas = schemas.get.path('/users/:id');
+const getEndpoint = schemas.get.endpoint('/users/:id', 'GET');
+const requestSchema = schemas.get.request('/users/:id', 'GET');
+const responseSchema = schemas.get.response('/users/:id', 'GET', 200);
+```
+
+### Available Inference Methods
+
+| Method | Description |
+|--------|-------------|
+| `$Infer.Path<'/path'>` | All methods for a path |
+| `$Infer.Endpoint<'/path', 'GET'>` | Single endpoint config |
+| `$Infer.Request<'/path', 'POST'>` | Request body type |
+| `$Infer.Response<'/path', 'GET', 200>` | Response body for a status code |
+| `$Infer.Responses<'/path', 'GET'>` | All response statuses |
+| `$Infer.Schema<'User'>` | Registered schema by key |
+
+---
+
+## Content Type Validation
+
+Schema validation only runs for **text-based content types**:
+
 - `application/json`
 - `text/xml` / `application/xml`
 - `text/csv`
 
-Binary responses (Blobs, Streams) are skipped and only typed via `.responseType<T>()`.
+Binary responses (Blobs, Streams, ArrayBuffers, FormData) are **skipped** for validation. Use `.responseType<T>()` for typing only:
+
+```typescript
+// Binary response — no validation, typing only
+const { data: file } = await api.get('/files/:id')
+  .responseType<Blob>()
+  .execute();
+```
 
 ---
 
-## Automatic Generation
+## Error Handling with Schemas
 
-If you have an OpenAPI specification, you don't need to write these manually. Use the [CLI Generation](/docs/caller/cli) to bootstrap everything for you.
+When validation fails in strict mode, you get a structured error:
+
+```typescript
+const result = await api.get('/users/:id')
+  .params({ id: '1' })
+  .execute();
+
+if (result.error && IgniterCallerError.is(result.error)) {
+  switch (result.error.code) {
+    case 'IGNITER_CALLER_RESPONSE_VALIDATION_FAILED':
+      // The server returned data that doesn't match the schema
+      console.error('API contract mismatch:', result.error.details);
+      break;
+    case 'IGNITER_CALLER_REQUEST_VALIDATION_FAILED':
+      // The request body failed validation
+      console.error('Invalid request:', result.error.details);
+      break;
+    case 'IGNITER_CALLER_SCHEMA_INVALID':
+      // Your schema definition has an error
+      console.error('Schema error:', result.error.message);
+      break;
+  }
+}
+```
+
+---
+
+## Schema Organization
+
+For large APIs, split schemas across files:
+
+```typescript title="lib/schemas/index.ts"
+import { IgniterCallerSchema } from '@igniter-js/caller';
+import { userPaths } from './users';
+import { productPaths } from './products';
+
+export const schemas = IgniterCallerSchema.create()
+  // Register shared schemas
+  .schema('User', userSchema)
+  .schema('Product', productSchema)
+
+  // Compose paths from modules
+  .path('/users/:id', userPaths.getById)
+  .path('/users', userPaths.list)
+  .path('/users', userPaths.create)
+  .path('/products/:id', productPaths.getById)
+
+  .build();
+```
+
+```typescript title="lib/schemas/users.ts"
+import { z } from 'zod';
+import type { IgniterCallerSchemaPathBuilder } from '@igniter-js/caller';
+
+export const userSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email(),
+});
+
+export const userPaths = {
+  getById: (path: ReturnType<IgniterCallerSchemaPathBuilder['ref']> extends infer R ? any : never) => { /* ... */ },
+  // This pattern works well when using the builder with explicit composition
+} as const;
+```
+
+<Callout type="info" title="Alternative pattern">
+  For simpler cases, just define your whole schema in one file. Split only when the file exceeds 200+ lines.
+</Callout>
+
+---
+
+## Best Practices
+
+<Callout type="success" title="Schema Design Guidelines">
+  - **Use strict mode in production** — catches API contract mismatches before they cause subtle bugs
+  - **Use loose mode during development** — helpful when iterating on APIs that aren't final
+  - **Register shared schemas** — avoid duplicating User, Error, and Pagination schemas across paths
+  - **Define error schemas** — always include error responses (400, 401, 404, 500) for comprehensive typing
+  - **Use path parameters** — `:id` in URL patterns provides typed params and automatic matching
+  - **Keep schemas near the API client** — co-locate in `lib/api/` or `lib/schemas/`
+</Callout>
+
+<Callout type="warn" title="Common Mistakes">
+  - **Don't** forget that path must start with `/` — `'users'` will throw `IGNITER_CALLER_SCHEMA_INVALID`
+  - **Don't** define the same path+method twice — throws `IGNITER_CALLER_SCHEMA_DUPLICATE`
+  - **Don't** expect validation on binary responses — Blobs, streams, and files skip validation
+  - **Don't** use `withSchemas()` without Zod installed — schema validation requires a StandardSchemaV1 library
+</Callout>
+
+---
+
+## Supported Schema Libraries
+
+Caller uses the [StandardSchemaV1](https://standardschema.dev) interface. Any library implementing this interface works:
+
+| Library | Version | Notes |
+|---------|---------|-------|
+| **Zod** | ≥ 4.2 | Fully supported. Used in all examples. |
+| **Valibot** | ≥ 1.0 | Exports `StandardSchemaV1` interface |
+
+<Callout type="info" title="Custom schemas">
+  You can implement your own schemas by conforming to the `StandardSchemaV1` interface (`~standard`, `~validate`). See the [Standard Schema spec](https://standardschema.dev) for details.
+</Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="API Reference"
+    description="Complete reference for all schema types and methods"
+    href="/docs/caller/api-reference"
+  />
+  <Card
+    title="CLI Generation"
+    description="Generate schemas automatically from OpenAPI specs"
+    href="/docs/caller/cli"
+  />
+  <Card
+    title="Real-World Examples"
+    description="See complete schema examples in production scenarios"
+    href="/docs/caller/real-world-examples"
+  />
+  <Card
+    title="Interceptors"
+    description="Add auth tokens and transform responses globally"
+    href="/docs/caller/interceptors"
+  />
+</Cards>

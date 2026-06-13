@@ -1,0 +1,489 @@
+---
+title: Framework Integration
+description: Integrate @igniter-js/logger with Next.js, Express, Fastify, and NestJS. Request-scoped logging, middleware patterns, and production-ready examples.
+---
+
+## Framework Integration
+
+Logger integrates with any Node.js framework. These patterns cover the most common use cases — request-scoped logging, middleware, and graceful shutdown.
+
+---
+
+## Express
+
+### Basic Setup
+
+```typescript
+import express from 'express';
+import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
+
+const logger = IgniterLogger.create()
+  .withAppName('express-api')
+  .withLevel(IgniterLogLevel.Info)
+  .build();
+
+const app = express();
+
+app.listen(3000, () => {
+  logger.success('Server listening on port 3000');
+});
+```
+
+### Request Logging Middleware
+
+Create a child logger per request with `requestId` and route info:
+
+```typescript
+import { randomUUID } from 'crypto';
+import type { Request, Response, NextFunction } from 'express';
+
+// Attach logger to request object
+declare global {
+  namespace Express {
+    interface Request {
+      logger: ReturnType<typeof IgniterLogger.create>;
+    }
+  }
+}
+
+function requestLogger(req: Request, res: Response, next: NextFunction) {
+  const requestId = randomUUID();
+
+  req.logger = logger.child('http', {
+    requestId,
+    method: req.method,
+    path: req.path,
+  });
+
+  req.logger.info('Request received');
+
+  const start = Date.now();
+  res.on('finish', () => {
+    req.logger.info('Response sent', {
+      statusCode: res.statusCode,
+      duration: Date.now() - start,
+    });
+  });
+
+  next();
+}
+
+app.use(requestLogger);
+
+// Use it in route handlers
+app.get('/users/:id', async (req, res) => {
+  req.logger.debug('Fetching user', { userId: req.params.id });
+  const user = await db.users.findById(req.params.id);
+  req.logger.info('User fetched', { userId: user.id });
+  res.json(user);
+});
+```
+
+### Error Handling
+
+```typescript
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  req.logger?.error('Unhandled error', {
+    error: err.message,
+    stack: err.stack,
+    path: req.path,
+  });
+  res.status(500).json({ error: 'Internal server error' });
+});
+```
+
+### Graceful Shutdown
+
+```typescript
+const server = app.listen(3000);
+
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received — shutting down');
+  server.close(async () => {
+    await logger.flush();
+    process.exit(0);
+  });
+});
+```
+
+---
+
+## Next.js
+
+### App Router (API Routes)
+
+Create a shared logger module and use it in route handlers:
+
+```typescript title="lib/logger.ts"
+import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
+
+const isDev = process.env.NODE_ENV === 'development';
+
+export const logger = IgniterLogger.create()
+  .withAppName('nextjs-app')
+  .withLevel(isDev ? IgniterLogLevel.Debug : IgniterLogLevel.Info)
+  .build();
+```
+
+```typescript title="app/api/users/route.ts"
+import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
+
+export async function GET(request: NextRequest) {
+  const requestId = crypto.randomUUID();
+  const reqLogger = logger.child('http', {
+    requestId,
+    method: 'GET',
+    path: '/api/users',
+  });
+
+  reqLogger.info('Fetching users');
+
+  const users = await fetchUsers();
+
+  reqLogger.info('Users fetched', { count: users.length });
+
+  return NextResponse.json(users);
+}
+```
+
+### Middleware
+
+```typescript title="middleware.ts"
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+export function middleware(request: NextRequest) {
+  // Logger is server-side only — use in API routes, not middleware directly
+  // Consider logging via HTTP transport for edge/middleware contexts
+  return NextResponse.next();
+}
+```
+
+<Callout type="info">
+  Logger works in **server-side contexts** — API routes, Server Actions, `getServerSideProps`. It does not work in Edge Runtime or browser components. For Edge logging, use the HTTP transport and call the endpoint from your edge function.
+</Callout>
+
+### Server Actions
+
+```typescript title="app/actions.ts"
+'use server';
+
+import { logger } from '@/lib/logger';
+
+export async function createUser(formData: FormData) {
+  const actionLogger = logger.child('action', { action: 'createUser' });
+
+  actionLogger.info('Creating user', { email: formData.get('email') });
+
+  const user = await db.user.create({
+    data: { email: formData.get('email') as string },
+  });
+
+  actionLogger.success('User created', { userId: user.id });
+}
+```
+
+### Graceful Shutdown (Next.js)
+
+Next.js doesn't expose a direct shutdown hook. Use a custom server or register process handlers:
+
+```typescript title="instrumentation.ts"
+import { logger } from '@/lib/logger';
+
+export async function register() {
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    process.on('SIGTERM', async () => {
+      await logger.flush();
+    });
+
+    process.on('SIGINT', async () => {
+      await logger.flush();
+    });
+  }
+}
+```
+
+---
+
+## Fastify
+
+### Plugin Pattern
+
+Fastify's plugin system works naturally with Logger:
+
+```typescript
+import Fastify from 'fastify';
+import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
+
+const logger = IgniterLogger.create()
+  .withAppName('fastify-api')
+  .withLevel(IgniterLogLevel.Info)
+  .build();
+
+const fastify = Fastify({
+  logger: false, // We use our own logger
+});
+
+// Decorate fastify instance with our logger
+fastify.decorate('appLogger', logger);
+
+// Request-scoped logger hook
+fastify.addHook('onRequest', async (request, reply) => {
+  const requestId = crypto.randomUUID();
+
+  (request as any).reqLogger = logger.child('http', {
+    requestId,
+    method: request.method,
+    url: request.url,
+  });
+});
+
+fastify.addHook('onResponse', async (request, reply) => {
+  const reqLogger = (request as any).reqLogger;
+  reqLogger?.info('Response sent', {
+    statusCode: reply.statusCode,
+    duration: reply.elapsedTime,
+  });
+});
+
+// Routes
+fastify.get('/users', async (request, reply) => {
+  const reqLogger = (request as any).reqLogger;
+  reqLogger?.info('Fetching users');
+  return [{ id: 1, name: 'Alice' }];
+});
+
+// Start
+fastify.listen({ port: 3000 }, (err, address) => {
+  if (err) {
+    logger.fatal('Failed to start', err);
+    process.exit(1);
+  }
+  logger.success(`Server listening at ${address}`);
+});
+```
+
+### Graceful Shutdown
+
+```typescript
+const signals = ['SIGTERM', 'SIGINT'] as const;
+
+for (const signal of signals) {
+  process.on(signal, async () => {
+    logger.info(`${signal} received — shutting down`);
+    await fastify.close();
+    await logger.flush();
+    process.exit(0);
+  });
+}
+```
+
+---
+
+## NestJS
+
+### Custom Logger Service
+
+Implement NestJS's `LoggerService` interface:
+
+```typescript title="logger.service.ts"
+import { Injectable, LoggerService } from '@nestjs/common';
+import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
+
+@Injectable()
+export class IgniterLoggerService implements LoggerService {
+  private logger = IgniterLogger.create()
+    .withAppName('nestjs-app')
+    .withLevel(IgniterLogLevel.Info)
+    .build();
+
+  log(message: string, context?: string) {
+    this.logger.info(message, { nestContext: context });
+  }
+
+  error(message: string, trace?: string, context?: string) {
+    this.logger.error(message, { nestContext: context, trace });
+  }
+
+  warn(message: string, context?: string) {
+    this.logger.warn(message, { nestContext: context });
+  }
+
+  debug(message: string, context?: string) {
+    this.logger.debug(message, { nestContext: context });
+  }
+
+  verbose(message: string, context?: string) {
+    this.logger.trace(message, { nestContext: context });
+  }
+
+  // Direct access for structured logging
+  getLogger() {
+    return this.logger;
+  }
+
+  async flush() {
+    await this.logger.flush();
+  }
+}
+```
+
+### Register in App Module
+
+```typescript title="app.module.ts"
+import { Module } from '@nestjs/common';
+import { IgniterLoggerService } from './logger.service';
+
+@Module({
+  providers: [IgniterLoggerService],
+  exports: [IgniterLoggerService],
+})
+export class AppModule {}
+```
+
+### Use in Main
+
+```typescript title="main.ts"
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { IgniterLoggerService } from './logger.service';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+  });
+
+  const logger = app.get(IgniterLoggerService);
+  app.useLogger(logger);
+
+  await app.listen(3000);
+  logger.getLogger().success('NestJS app listening on port 3000');
+}
+
+bootstrap();
+```
+
+### Request-Scoped Logging (Interceptor)
+
+```typescript title="logging.interceptor.ts"
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+} from '@nestjs/common';
+import { Observable } from 'rxjs';
+import { tap } from 'rxjs/operators';
+import { IgniterLoggerService } from './logger.service';
+
+@Injectable()
+export class LoggingInterceptor implements NestInterceptor {
+  constructor(private loggerService: IgniterLoggerService) {}
+
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    const request = context.switchToHttp().getRequest();
+    const logger = this.loggerService.getLogger();
+
+    const reqLogger = logger.child('http', {
+      requestId: crypto.randomUUID(),
+      method: request.method,
+      path: request.url,
+    });
+
+    reqLogger.info('Request received');
+
+    const start = Date.now();
+
+    return next.handle().pipe(
+      tap(() => {
+        reqLogger.info('Response sent', {
+          duration: Date.now() - start,
+        });
+      }),
+    );
+  }
+}
+```
+
+### Graceful Shutdown
+
+```typescript title="main.ts"
+import { IgniterLoggerService } from './logger.service';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  const logger = app.get(IgniterLoggerService);
+
+  // Graceful shutdown
+  process.on('SIGTERM', async () => {
+    logger.getLogger().info('SIGTERM received — shutting down');
+    await app.close();
+    await logger.flush();
+    process.exit(0);
+  });
+
+  await app.listen(3000);
+}
+```
+
+---
+
+## Common Patterns Across Frameworks
+
+### Environment-Based Configuration
+
+```typescript title="lib/logger.ts"
+import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
+
+const isDev = process.env.NODE_ENV === 'development';
+const isTest = process.env.NODE_ENV === 'test';
+
+export function createLogger(appName: string) {
+  const builder = IgniterLogger.create()
+    .withAppName(appName)
+    .withLevel(isTest ? IgniterLogLevel.Fatal : isDev ? IgniterLogLevel.Debug : IgniterLogLevel.Info)
+    .withContext({ env: process.env.NODE_ENV, version: process.env.APP_VERSION });
+
+  builder.addTransport({
+    target: 'console',
+    options: { pretty: isDev, colorize: isDev },
+  });
+
+  if (!isDev && !isTest) {
+    builder.addTransport({
+      target: 'http',
+      options: {
+        url: process.env.LOG_INGEST_URL!,
+        headers: { 'X-API-Key': process.env.LOG_API_KEY! },
+        batchSize: 50,
+      },
+    });
+  }
+
+  return builder.build();
+}
+```
+
+### Testing
+
+In tests, use a console-only logger with a high threshold:
+
+```typescript title="test/setup.ts"
+import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
+
+export const testLogger = IgniterLogger.create()
+  .withLevel(IgniterLogLevel.Fatal)  // suppress all but fatal in tests
+  .addTransport({ target: 'console', options: { pretty: false } })
+  .build();
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Best Practices" description="Production logging patterns and anti-patterns to avoid." href="/docs/logger/best-practices" />
+  <Card title="Troubleshooting" description="Common errors and how to debug them." href="/docs/logger/troubleshooting" />
+  <Card title="API Reference" description="Complete reference for every method and type." href="/docs/logger/api-reference" />
+</Cards>

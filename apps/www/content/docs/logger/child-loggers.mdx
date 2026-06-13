@@ -1,0 +1,224 @@
+---
+title: Child Loggers
+description: Create scoped loggers with merged context and typed generics. Organize logs by component, request, or tenant with full TypeScript safety.
+---
+
+## Child Loggers
+
+Child loggers let you create **scoped logger instances** that inherit configuration from a parent while adding their own context. Use them to tag log entries by component, track requests, or isolate tenant data — without repeating yourself.
+
+### Creating a Child Logger
+
+Call `.child()` on any logger instance to create a child:
+
+```typescript
+import { IgniterLogger } from '@igniter-js/logger';
+
+const logger = IgniterLogger.create()
+  .withAppName('api')
+  .withContext({ region: 'us-east-1' })
+  .build();
+
+// Child logger for HTTP request handling
+const httpLogger = logger.child('http', {
+  requestId: 'req-abc123',
+  method: 'GET',
+  path: '/users',
+});
+
+httpLogger.info('Request received');
+// Component=http, region=us-east-1, requestId=req-abc123, method=GET, path=/users
+```
+
+### Method Signature
+
+```typescript
+child(
+  componentName: string,
+  context?: Record<string, unknown> | string,
+): IIgniterLoggerManager
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `componentName` | `string` | Component name for the child logger. Sets the `component` field in log entries and overrides the parent's component if set. |
+| `context` | `Record<string, unknown> \| string` | Context merged into child log entries. If a string is passed, it's wrapped as `{ label: value }`. |
+
+### Context Merging
+
+Child loggers merge context from three sources:
+
+```
+Parent builder context (withContext)
+    └── Parent component
+        └── Child component (overrides parent component)
+            └── Child context (merged on top)
+```
+
+```typescript
+const logger = IgniterLogger.create()
+  .withAppName('api')
+  .withContext({ region: 'us-east', version: '1.0' })
+  .build();
+
+const dbLogger = logger.child('database', {
+  connection: 'main',
+  query: 'SELECT',
+});
+
+dbLogger.info('Query executed', { duration: 45 });
+// Final context: {
+//   appName: 'api',
+//   component: 'database',       ← child overrides
+//   region: 'us-east',           ← inherited from parent
+//   version: '1.0',              ← inherited from parent
+//   connection: 'main',          ← from child context
+//   query: 'SELECT',             ← from child context
+//   duration: 45                 ← from per-call context
+// }
+```
+
+---
+
+## Typed Scopes
+
+Use `.defineScopes<T>()` to enforce typed context on child loggers:
+
+```typescript
+import { IgniterLogger } from '@igniter-js/logger';
+
+// Define the expected shape for child logger context
+const logger = IgniterLogger.create()
+  .withAppName('api')
+  .defineScopes<{
+    tenantId: string;
+    userId?: string;
+  }>()
+  .build();
+
+// ✅ TypeScript enforces tenantId
+const tenantLogger = logger.child('tenant', {
+  tenantId: 't-456',
+  userId: 'u-789',
+});
+
+// ❌ TypeScript error: missing 'tenantId'
+// const badLogger = logger.child('tenant', { userId: 'u-789' });
+```
+
+<Callout type="info">
+  `defineScopes<T>()` changes the generic parameter on the builder, which flows into the manager's `child()` signature. Child logger context parameters become **required or optional** based on the scope type.
+</Callout>
+
+---
+
+## Real-World Patterns
+
+### Request-Scoped Loggers
+
+Create a child logger for each incoming HTTP request:
+
+```typescript
+import { IgniterLogger } from '@igniter-js/logger';
+
+const logger = IgniterLogger.create()
+  .withAppName('api')
+  .withContext({ region: 'us-east-1' })
+  .build();
+
+// In your request handler
+function handleRequest(req: Request) {
+  const requestLogger = logger.child('http', {
+    requestId: crypto.randomUUID(),
+    method: req.method,
+    path: new URL(req.url).pathname,
+  });
+
+  requestLogger.info('Handling request');
+
+  // Pass the child logger to downstream handlers
+  const user = await fetchUser(requestLogger, req.params.id);
+  requestLogger.info('User fetched', { userId: user.id });
+
+  requestLogger.success('Request completed');
+}
+```
+
+Every log entry from this handler carries `requestId`, `method`, and `path` — traceable end-to-end.
+
+### Multi-Tenant Logging
+
+Create a child logger per tenant with mandatory tenant context:
+
+```typescript
+const logger = IgniterLogger.create()
+  .withAppName('saas-api')
+  .defineScopes<{ tenantId: string }>()
+  .build();
+
+function getTenantLogger(tenantId: string) {
+  return logger.child(tenantId, { tenantId });
+}
+
+// Use in your service layer
+const acmeLogger = getTenantLogger('acme-corp');
+acmeLogger.info('Tenant operation', { action: 'create-user' });
+// Component=acme-corp, tenantId=acme-corp, action=create-user
+```
+
+### Hierarchical Service Logging
+
+Build a tree of loggers mirroring your service architecture:
+
+```typescript
+const rootLogger = IgniterLogger.create()
+  .withAppName('api')
+  .withContext({ version: '2.0' })
+  .build();
+
+const httpLogger = rootLogger.child('http');
+const authLogger = httpLogger.child('auth', { provider: 'oauth' });
+const dbLogger = rootLogger.child('database', { pool: 'main' });
+const cacheLogger = rootLogger.child('cache', { backend: 'redis' });
+
+// Each logger carries its own component and context,
+// all inheriting version=2.0 from rootLogger
+authLogger.info('User authenticated', { userId: 'u-123' });
+dbLogger.debug('Query executed', { query: 'SELECT', duration: 12 });
+cacheLogger.info('Cache hit', { key: 'users:u-123' });
+```
+
+---
+
+## Child vs New Instance
+
+| Approach | When to Use |
+|----------|-------------|
+| **Child logger** (`.child()`) | Same configuration, different component/context. Shares the Pino instance with the parent. |
+| **New builder** (`.create().build()`) | Completely different configuration — different transports, app name, or level. Creates an independent Pino instance. |
+
+```typescript
+// Child: inherits parent config, adds context
+const childLogger = parentLogger.child('worker', { jobId: 'j-42' });
+
+// New instance: independent configuration
+const workerLogger = IgniterLogger.create()
+  .withAppName('worker')
+  .withLevel(IgniterLogLevel.Debug)
+  .addTransport({ target: 'file', options: { path: './logs/worker.log' } })
+  .build();
+```
+
+<Callout type="warn">
+  Child loggers share the parent's **Pino instance and transport configuration**. You cannot change transports or the log level on a child. For independent configuration, create a new logger.
+</Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Advanced" description="Runtime level changes, groups, separators, flush, and error handling." href="/docs/logger/advanced" />
+  <Card title="API Reference" description="Complete reference for child(), defineScopes(), and the manager interface." href="/docs/logger/api-reference" />
+  <Card title="Framework Integration" description="Request-scoped loggers with Express middleware, Next.js, and Fastify." href="/docs/logger/framework-integration" />
+</Cards>

@@ -1,15 +1,19 @@
 ---
 title: API Reference
-description: Complete API reference for @igniter-js/caller.
+description: Complete API reference for @igniter-js/caller — all classes, methods, types, and configuration options.
 ---
 
 ## IgniterCaller
 
 The main entrypoint for creating API client instances.
 
+```typescript
+import { IgniterCaller } from '@igniter-js/caller';
+```
+
 ### `IgniterCaller.create()`
 
-Creates a new `IgniterCallerBuilder` instance.
+Creates a new `IgniterCallerBuilder` instance with an empty configuration.
 
 ```typescript
 const api = IgniterCaller.create()
@@ -21,16 +25,20 @@ const api = IgniterCaller.create()
 
 ## IgniterCallerBuilder
 
-Used to configure the API client instance.
+Immutable builder for configuring the API client. Every `with*` method returns a new builder instance.
 
 <TypeTable type={{
+  create: {
+    type: '() => IgniterCallerBuilder<{}>',
+    description: 'Static factory. Creates a new builder with empty state.',
+  },
   withBaseUrl: {
-    type: '(url: string) => this',
-    description: 'Sets the base URL for all requests.',
+    type: '(baseURL: string) => this',
+    description: 'Sets the base URL prefixed to all requests.',
   },
   withHeaders: {
     type: '(headers: Record<string, string>) => this',
-    description: 'Sets default headers sent with every request.',
+    description: 'Sets default headers merged into every request.',
   },
   withCookies: {
     type: '(cookies: Record<string, string>) => this',
@@ -38,147 +46,270 @@ Used to configure the API client instance.
   },
   withLogger: {
     type: '(logger: IgniterLogger) => this',
-    description: 'Attaches a logger for request lifecycle events.',
+    description: 'Attaches a logger instance for request lifecycle logging.',
   },
   withTelemetry: {
     type: '(telemetry: IgniterTelemetryManager) => this',
-    description: 'Attaches a telemetry manager for observability.',
+    description: 'Attaches a telemetry manager for observability events.',
   },
   withSchemas: {
-    type: '(schemas: any, options?: any) => this',
-    description: 'Configures schema-based type safety and validation.',
+    type: '(schemas: SchemaMap | SchemaBuildResult, validation?: SchemaValidationOptions) => this',
+    description: 'Configures schema-based type inference and optional runtime validation. Accepts a raw schema map or a build result from IgniterCallerSchema.',
   },
   withRequestInterceptor: {
-    type: '(fn: RequestInterceptor) => this',
-    description: 'Adds a function to modify requests before execution.',
+    type: '(interceptor: (config: RequestOptions) => RequestOptions | Promise<RequestOptions>) => this',
+    description: 'Adds a request interceptor that can modify request options before execution.',
   },
   withResponseInterceptor: {
-    type: '(fn: ResponseInterceptor) => this',
-    description: 'Adds a function to transform responses after execution.',
+    type: '(interceptor: (response: ApiResponse) => ApiResponse | Promise<ApiResponse>) => this',
+    description: 'Adds a response interceptor that can transform responses after execution.',
   },
   withStore: {
     type: '(store: StoreAdapter, options?: StoreOptions) => this',
-    description: 'Configures a persistent store for caching.',
+    description: 'Configures a persistent store adapter for caching (e.g., Redis).',
+  },
+  withMock: {
+    type: '(config: { enabled: boolean; delay?: number; mock: MockManager }) => this',
+    description: 'Enables mock mode. Requests matching mock handlers skip real network calls.',
   },
   build: {
-    type: '() => IgniterCallerManager',
-    description: 'Finalizes configuration and returns the manager instance.',
-  }
+    type: '() => IgniterCallerManager<TSchemas>',
+    description: 'Finalizes configuration. Logs initialization details and returns the manager instance.',
+  },
 }} />
 
 ---
 
 ## IgniterCallerManager
 
-The runtime instance used to make requests.
+The runtime engine returned by `.build()`. Used to create and execute HTTP requests.
 
-### Request Methods
+### Instance Methods
 
-All HTTP methods follow the same pattern: `.method(url?)`.
+All HTTP method helpers accept an optional URL. When schemas are configured, providing a URL enables full type inference.
 
 <TypeTable type={{
   get: {
-    type: '<T>(url?: string) => RequestBuilder<T>',
-    description: 'Starts a GET request.',
+    type: '(url?: string) => RequestBuilder<T>',
+    description: 'Creates a GET request builder. Supports path params via :param syntax.',
   },
   post: {
-    type: '<T>(url?: string) => RequestBuilder<T>',
-    description: 'Starts a POST request.',
+    type: '(url?: string) => RequestBuilder<T>',
+    description: 'Creates a POST request builder.',
   },
   put: {
-    type: '<T>(url?: string) => RequestBuilder<T>',
-    description: 'Starts a PUT request.',
+    type: '(url?: string) => RequestBuilder<T>',
+    description: 'Creates a PUT request builder (idempotent, replaces entire resource).',
   },
   patch: {
-    type: '<T>(url?: string) => RequestBuilder<T>',
-    description: 'Starts a PATCH request.',
+    type: '(url?: string) => RequestBuilder<T>',
+    description: 'Creates a PATCH request builder (partial update).',
   },
   delete: {
-    type: '<T>(url?: string) => RequestBuilder<T>',
-    description: 'Starts a DELETE request.',
+    type: '(url?: string) => RequestBuilder<T>',
+    description: 'Creates a DELETE request builder.',
   },
   head: {
-    type: '<T>(url?: string) => RequestBuilder<T>',
-    description: 'Starts a HEAD request.',
+    type: '(url?: string) => RequestBuilder<T>',
+    description: 'Creates a HEAD request builder (headers only, no body).',
   },
   request: {
-    type: '<T>(options: DirectRequestOptions) => Promise<ApiResponse<T>>',
-    description: 'Executes a request directly using an options object.',
-  }
+    type: '(options: DirectRequestOptions) => Promise<ApiResponse<T>>',
+    description: 'Executes a request directly using an options object. Convenience method for dynamic or programmatic requests.',
+  },
 }} />
 
 ### Static Methods
 
 <TypeTable type={{
   on: {
-    type: '(pattern: string | RegExp, callback: Function) => () => void',
-    description: 'Registers a global listener for all responses.',
-  },
-  invalidate: {
-    type: '(key: string) => Promise<void>',
-    description: 'Invalidates a specific cache entry.',
-  },
-  invalidatePattern: {
-    type: '(pattern: string) => Promise<void>',
-    description: 'Invalidates cache entries matching a glob pattern.',
+    type: '(pattern: string | RegExp, callback: (result: ApiResponse, context: { url, method, timestamp }) => void) => () => void',
+    description: 'Registers a global event listener for matching responses. Returns an unsubscribe function. Pattern can be a string or RegExp.',
   },
   batch: {
-    type: '(requests: Promise<any>[]) => Promise<any[]>',
-    description: 'Executes multiple requests in parallel.',
-  }
+    type: '(requests: Promise<ApiResponse>[]) => Promise<ApiResponse[]>',
+    description: 'Executes multiple requests in parallel using Promise.all semantics. Results preserve the input order.',
+  },
 }} />
 
 ---
 
 ## IgniterCallerRequestBuilder
 
-Fluent API for configuring individual requests.
+Fluent per-request API. Returned by `api.get()`, `api.post()`, etc. All methods return `this` for chaining.
+
+### Request Configuration
 
 <TypeTable type={{
   url: {
     type: '(url: string) => this',
-    description: 'Sets the request URL or path.',
+    description: 'Sets the request URL or path (relative to base URL).',
   },
   body: {
-    type: '(data: any) => this',
-    description: 'Sets the request body (auto-serialized to JSON for objects).',
+    type: '(data: unknown) => this',
+    description: 'Sets the request body. Objects/arrays are auto-serialized to JSON. For GET/HEAD, body is converted to query params.',
   },
   params: {
-    type: '(params: Record<string, any>) => this',
-    description: 'Sets URL path parameters and query string parameters.',
+    type: '(params: Record<string, string | number | boolean>) => this',
+    description: 'Sets URL path parameters (replacing :param segments) and query string parameters. Extra params become query string.',
   },
   headers: {
     type: '(headers: Record<string, string>) => this',
-    description: 'Adds custom headers for this request.',
+    description: 'Merges additional headers. Overrides defaults with the same name.',
   },
   timeout: {
     type: '(ms: number) => this',
-    description: 'Sets request timeout in milliseconds.',
+    description: 'Sets request timeout in milliseconds. Default: 30000 (30s). Triggers AbortError on expiry.',
   },
-  cache: {
-    type: '(strategy: RequestCache, key?: string) => this',
-    description: 'Sets the fetch cache strategy and optional key.',
-  },
-  stale: {
-    type: '(ms: number) => this',
-    description: 'Sets the stale time for caching results.',
-  },
+}} />
+
+### Resilience
+
+<TypeTable type={{
   retry: {
-    type: '(attempts: number, options?: RetryOptions) => this',
-    description: 'Configures automatic retry behavior.',
+    type: '(maxAttempts: number, options?: { backoff?: "linear" | "exponential"; baseDelay?: number; retryOnStatus?: number[] }) => this',
+    description: 'Configures automatic retry on failure. maxAttempts is the number of retry attempts (total attempts = 1 + maxAttempts). Default backoff: linear. Default retryOnStatus: [408, 429, 500, 502, 503, 504].',
   },
   fallback: {
     type: '(fn: () => T) => this',
-    description: 'Provides a value to return if the request fails.',
+    description: 'Provides a fallback factory function. Called if all retry attempts fail. The result is returned as data, with no error.',
   },
+  cache: {
+    type: '(strategy: RequestCache, key?: string) => this',
+    description: 'Sets the fetch RequestCache strategy (e.g., "default", "no-store", "reload", "force-cache"). Optional key for manual cache management.',
+  },
+  stale: {
+    type: '(milliseconds: number) => this',
+    description: 'Enables response caching for the specified duration. Subsequent requests within the stale time return cached data instead of making a network call.',
+  },
+}} />
+
+### Response Typing
+
+<TypeTable type={{
   responseType: {
-    type: '<T>(schema?: Schema) => RequestBuilder<T>',
-    description: 'Sets the expected response type and optional validation schema.',
+    type: '<T>(schema?: ZodSchema<T> | StandardSchemaV1) => RequestBuilder<T>',
+    description: 'Sets the expected response type for TypeScript inference. If a Zod/StandardSchema is passed, the response is validated at runtime (only for JSON/XML/CSV content types). If no schema is passed, it provides type inference only.',
   },
+}} />
+
+### Execution
+
+<TypeTable type={{
   execute: {
     type: '() => Promise<ApiResponse<T>>',
-    description: 'Executes the request and returns the response envelope.',
-  }
+    description: 'Executes the request. Runs through the full pipeline: cache check → interceptors → validation → fetch (with retry) → parsing → validation → interceptors → cache store → fallback.',
+  },
+}} />
+
+---
+
+## IgniterCallerSchema
+
+Path-first schema builder for defining type-safe API contracts with Zod (or any StandardSchemaV1 library).
+
+<TypeTable type={{
+  create: {
+    type: '() => IgniterCallerSchema<{}, {}>',
+    description: 'Creates a new empty schema builder.',
+  },
+  schema: {
+    type: '(key: string, schema: StandardSchemaV1, options?: { internal?: boolean }) => this',
+    description: 'Registers a reusable schema in the registry. Can be referenced by key in path definitions via path.ref(key).',
+  },
+  path: {
+    type: '(path: string, builder: (pathBuilder: SchemaPathBuilder) => SchemaPathBuilder) => this',
+    description: 'Defines a path with its HTTP methods. The builder callback receives a SchemaPathBuilder to define GET, POST, etc. Path must start with /.',
+  },
+  build: {
+    type: '() => SchemaBuildResult<TSchemas, TRegistry>',
+    description: 'Builds the schema map. Returns an object with $Infer and get helpers for type extraction.',
+  },
+}} />
+
+### SchemaPathBuilder
+
+Defines HTTP methods for a single path:
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `get(config)` | `(config: { request?, responses }) => this` | Defines GET endpoint |
+| `post(config)` | `(config: { request?, responses }) => this` | Defines POST endpoint |
+| `put(config)` | `(config: { request?, responses }) => this` | Defines PUT endpoint |
+| `patch(config)` | `(config: { request?, responses }) => this` | Defines PATCH endpoint |
+| `delete(config)` | `(config: { request?, responses }) => this` | Defines DELETE endpoint |
+| `head(config)` | `(config: { request?, responses }) => this` | Defines HEAD endpoint |
+| `ref(key)` | `(key: string) => { schema, array(), nullable(), optional(), record() }` | References a registered schema with Zod wrappers |
+| `build()` | `() => TMethods` | Returns the accumulated method map |
+
+---
+
+## IgniterCallerMock
+
+Builder for creating typed mock registries for testing.
+
+<TypeTable type={{
+  create: {
+    type: '() => IgniterCallerMockBuilder<{}>',
+    description: 'Creates a new mock builder.',
+  },
+  withSchemas: {
+    type: '(schemas: SchemaMap | SchemaBuildResult) => this',
+    description: 'Associates schemas for typed mock definitions. Mocks validate against schema types.',
+  },
+  mock: {
+    type: '(path: string, handlers: MockPathDefinition) => this',
+    description: 'Registers mock handlers for a path. Handlers can be static responses or dynamic functions receiving request context.',
+  },
+  build: {
+    type: '() => IgniterCallerMockManager<TSchemas>',
+    description: 'Builds the mock manager instance.',
+  },
+}} />
+
+### Mock Handler Shapes
+
+Static response:
+```typescript
+{ response: data; status?: number; headers?: Record<string, string>; delayMs?: number }
+```
+
+Dynamic handler:
+```typescript
+(request: { method; path; url; headers; query; params; body?; ... }) => MockResponse
+```
+
+---
+
+## MockCallerStoreAdapter
+
+In-memory store adapter for testing. Implements the `IgniterCallerStoreAdapter` interface.
+
+```typescript
+import { MockCallerStoreAdapter } from '@igniter-js/caller/adapters';
+```
+
+<TypeTable type={{
+  create: {
+    type: '() => MockCallerStoreAdapter',
+    description: 'Creates a new mock adapter with call tracking.',
+  },
+  client: {
+    type: 'Map<string, unknown>',
+    description: 'Underlying in-memory store.',
+  },
+  calls: {
+    type: '{ get: number; set: number; delete: number; has: number }',
+    description: 'Call counters for assertions.',
+  },
+  history: {
+    type: '{ get: string[]; set: Array<{ key, value, options? }>; delete: string[]; has: string[] }',
+    description: 'Operation history for detailed assertions.',
+  },
+  clear: {
+    type: '() => void',
+    description: 'Clears all tracked state (store, calls, history).',
+  },
 }} />
 
 ---
@@ -191,42 +322,139 @@ The standardized response envelope returned by all requests.
 
 <TypeTable type={{
   data: {
-    type: 'T | null',
-    description: 'The parsed response data. Null if the request failed.',
+    type: 'T | undefined',
+    description: 'The parsed response data. Undefined if the request failed.',
   },
   error: {
-    type: 'IgniterCallerError | null',
-    description: 'The error object if the request failed. Null on success.',
+    type: 'IgniterError | undefined',
+    description: 'The error object if the request failed. Undefined on success.',
   },
   status: {
-    type: 'number',
+    type: 'number | undefined',
     description: 'The HTTP status code of the response.',
   },
   headers: {
-    type: 'Headers',
+    type: 'Headers | undefined',
     description: 'The response headers object.',
-  }
+  },
 }} />
 
 ### `IgniterCallerError`
 
-Custom error class for all Caller failures.
+Custom error class extending `IgniterError` for all Caller failures.
 
 <TypeTable type={{
   code: {
-    type: 'string',
-    description: 'Stable error code (e.g., IGNITER_CALLER_TIMEOUT).',
+    type: 'IgniterCallerErrorCode',
+    description: 'Stable error code (e.g., IGNITER_CALLER_TIMEOUT, IGNITER_CALLER_HTTP_ERROR).',
   },
   message: {
     type: 'string',
     description: 'Human-readable error message.',
   },
-  statusCode: {
-    type: 'number',
-    description: 'The HTTP status code associated with the error.',
-  },
   operation: {
-    type: 'string',
-    description: 'The operation that failed (e.g., execute, validation).',
-  }
+    type: 'IgniterCallerOperation',
+    description: 'The operation that failed (execute, download, buildSchema, etc.).',
+  },
+  statusText: {
+    type: 'string | undefined',
+    description: 'HTTP status text from the response.',
+  },
+  cause: {
+    type: 'Error | undefined',
+    description: 'The original error that caused this failure.',
+  },
+  is: {
+    type: '(error: unknown) => boolean',
+    description: 'Static type guard. Returns true if the value is an IgniterCallerError.',
+  },
 }} />
+
+### Error Codes
+
+| Code | Description |
+|------|-------------|
+| `IGNITER_CALLER_HTTP_ERROR` | HTTP response status ≥ 400 |
+| `IGNITER_CALLER_MOCK_HTTP_ERROR` | Mock handler returned an error response |
+| `IGNITER_CALLER_TIMEOUT` | Request exceeded the configured timeout |
+| `IGNITER_CALLER_REQUEST_VALIDATION_FAILED` | Request body failed schema validation |
+| `IGNITER_CALLER_RESPONSE_VALIDATION_FAILED` | Response body failed schema validation |
+| `IGNITER_CALLER_SCHEMA_DUPLICATE` | Duplicate schema path or method |
+| `IGNITER_CALLER_SCHEMA_INVALID` | Invalid schema configuration |
+| `IGNITER_CALLER_UNKNOWN_ERROR` | Unexpected catch-all error |
+
+### `IgniterCallerStoreAdapter`
+
+Interface for implementing persistent cache stores.
+
+<TypeTable type={{
+  client: {
+    type: 'T',
+    description: 'The underlying client instance (e.g., Redis client).',
+  },
+  get: {
+    type: '(key: string) => Promise<T | null>',
+    description: 'Retrieves a cached value by key.',
+  },
+  set: {
+    type: '(key: string, value: any, options?: { ttl?: number }) => Promise<void>',
+    description: 'Stores a cached value with optional TTL.',
+  },
+  delete: {
+    type: '(key: string) => Promise<void>',
+    description: 'Removes a cached value.',
+  },
+  has: {
+    type: '(key: string) => Promise<boolean>',
+    description: 'Checks if a key exists in the store.',
+  },
+}} />
+
+### `IgniterCallerRetryOptions`
+
+<TypeTable type={{
+  maxAttempts: {
+    type: 'number',
+    description: 'Maximum number of retry attempts (default: 1 retry = 2 total attempts).',
+  },
+  backoff: {
+    type: '"linear" | "exponential"',
+    description: 'Delay strategy. Linear: baseDelay × attempt. Exponential: baseDelay × 2^attempt.',
+  },
+  baseDelay: {
+    type: 'number',
+    description: 'Initial delay in milliseconds (default: 1000).',
+  },
+  retryOnStatus: {
+    type: 'number[]',
+    description: 'HTTP status codes that trigger retry (default: [408, 429, 500, 502, 503, 504]).',
+  },
+}} />
+
+### `IgniterCallerStoreOptions`
+
+<TypeTable type={{
+  ttl: {
+    type: 'number',
+    description: 'Default TTL in seconds for cached entries (default: 3600).',
+  },
+  keyPrefix: {
+    type: 'string',
+    description: 'Prefix for all cache keys (default: igniter:caller:).',
+  },
+  fallbackToFetch: {
+    type: 'boolean',
+    description: 'Fall back to fetch cache when store is unavailable (default: true).',
+  },
+}} />
+
+---
+
+## Subpath Exports
+
+| Import Path | Purpose |
+|-------------|---------|
+| `@igniter-js/caller` | Core client: IgniterCaller, IgniterCallerSchema, IgniterCallerMock, types |
+| `@igniter-js/caller/client` | React integration: IgniterCallerProvider, useIgniterCaller, hooks |
+| `@igniter-js/caller/telemetry` | Telemetry events: IgniterCallerTelemetryEvents |
+| `@igniter-js/caller/adapters` | Store adapters: MockCallerStoreAdapter |

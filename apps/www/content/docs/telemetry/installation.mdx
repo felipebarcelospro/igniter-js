@@ -1,0 +1,139 @@
+---
+title: Installation
+description: Install @igniter-js/telemetry via npm, pnpm, yarn, or bun. Set up environment variables, TypeScript configuration, and understand peer dependencies.
+---
+
+## Installation
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/telemetry
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/telemetry
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/telemetry
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/telemetry
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Peer Dependencies
+
+Telemetry depends on `@igniter-js/common` for the error system and logger interface. This is installed automatically by most package managers.
+
+```json
+{
+  "peerDependencies": {
+    "@igniter-js/common": "*"
+  }
+}
+```
+
+### Optional Dependencies
+
+Some adapters have additional requirements:
+
+| Adapter | Peer Dependency | Install |
+|---------|----------------|---------|
+| Sentry | `@sentry/node` | `npm install @sentry/node` |
+| Store | `@igniter-js/store` | `npm install @igniter-js/store` |
+| Events (Zod schemas) | `zod` | `npm install zod` |
+
+---
+
+## Environment Variables
+
+Telemetry requires no environment variables by default. However, these are commonly configured:
+
+```bash
+# Service identification
+NODE_ENV=production
+APP_VERSION=1.4.2
+
+# Transport-specific
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+TELEGRAM_BOT_TOKEN=123456:ABC-DEF
+SENTRY_DSN=https://...@sentry.io/...
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+TELEMETRY_HTTP_URL=https://webhook.example.com/telemetry
+TELEMETRY_HTTP_TOKEN=secret-token
+```
+
+---
+
+## TypeScript Configuration
+
+Telemetry is written in TypeScript and ships with full type declarations. No additional configuration is needed.
+
+Your `tsconfig.json` should target at least:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true
+  }
+}
+```
+
+<Callout type="info">
+  Telemetry uses `AsyncLocalStorage` from `node:async_hooks`, which requires Node.js 16.4+. The package is tested on Node.js 22+.
+</Callout>
+
+---
+
+## Subpath Exports
+
+Telemetry supports subpath imports for tree-shakeable adapters:
+
+```typescript
+// Main entry — builder, manager, session, events, types, errors
+import { IgniterTelemetry } from "@igniter-js/telemetry";
+
+// Adapters subpath — all transport adapters
+import { LoggerTransportAdapter } from "@igniter-js/telemetry/adapters";
+```
+
+---
+
+## Minimal Setup
+
+The absolute minimum to get telemetry working:
+
+```typescript
+import { IgniterTelemetry } from "@igniter-js/telemetry";
+import { LoggerTransportAdapter } from "@igniter-js/telemetry/adapters";
+
+const telemetry = IgniterTelemetry.create()
+  .withService("my-app")
+  .addTransport(LoggerTransportAdapter.create({ logger: console }))
+  .build();
+
+telemetry.emit("app.started");
+```
+
+**✅ Ready.** You can now emit structured telemetry events from anywhere in your application.
+
+---
+
+## Next Steps
+
+- [Getting Started](/docs/telemetry/getting-started) — Build a complete telemetry setup with typed events
+- [Defining Events](/docs/telemetry/defining-events) — Create typed event registries with Zod schemas
+- [Builder Configuration](/docs/telemetry/builder-config) — Explore all builder options

@@ -106,11 +106,25 @@ telemetry.emit('service.booted', {
 - **Session**: `telemetry.session()` binds actor/scope/context across async calls.
 - **Transport Adapter**: Implement `IgniterTelemetryTransportAdapter` to route events.
 
+### Session Lifecycle
+
+```
+create → configure → run → emit → end → (re-create)
+  │         │        │       │       │
+  │    .actor()   enters   calls   marks
+  │    .scope()    ALS     .emit()  ended
+  │    .attrs()
+  │
+  └── telemetry.session()
+```
+
 ### Session Modes (3 DX flavors)
 
-1. **Direct emit** (no explicit session)
-2. **Manual session handle** (`telemetry.session()`)
-3. **Scoped execution** (`session.run()`)
+| Mode | When to Use | Example |
+|------|-------------|---------|
+| **Direct emit** | Simple fire-and-forget events | `telemetry.emit('app.started')` |
+| **Manual session** | Explicit context without async scoping | `const s = telemetry.session().actor(...)` |
+| **Scoped execution** (recommended) | Request handlers, middleware, async workflows | `session.run(async () => { ... })`
 
 ---
 
@@ -1383,9 +1397,9 @@ import { IgniterTelemetryBuilder } from '@igniter-js/telemetry'
 | `withSampling(policy)` | Configure sampling |
 | `withRedaction(policy)` | Configure redaction |
 | `withValidation(options)` | Configure validation options |
-| `withLogger(logger)` | Set internal logger |
-| `build()` | Build manager |
-| `buildConfig()` | Build config without runtime |
+| `withLogger(logger)` | Set internal logger | `IgniterLogger` |
+| `build()` | Build manager | `IIgniterTelemetryManager` |
+| `buildConfig()` | Build config without runtime | `IgniterTelemetryConfig` |
 
 #### Example
 
@@ -1593,15 +1607,17 @@ try {
 
 Common error codes:
 
-- `TELEMETRY_INVALID_TRANSPORT`
-- `TELEMETRY_DUPLICATE_NAMESPACE`
-- `TELEMETRY_DUPLICATE_SCOPE`
-- `TELEMETRY_DUPLICATE_ACTOR`
-- `TELEMETRY_INVALID_EVENT_NAME`
-- `TELEMETRY_INVALID_NAMESPACE`
-- `TELEMETRY_TRANSPORT_INIT_FAILED`
-- `TELEMETRY_TRANSPORT_FAILED`
-- `TELEMETRY_SESSION_ENDED`
+| Code | Context | Fix |
+|------|---------|-----|
+| `TELEMETRY_INVALID_TRANSPORT` | `addTransport()` with falsy adapter | Pass adapter instance |
+| `TELEMETRY_TRANSPORT_FAILED` | All adapters failed on `handle()` | Check downstream health |
+| `TELEMETRY_TRANSPORT_INIT_FAILED` | Adapter `init()` threw at `build()` | Validate env vars, credentials |
+| `TELEMETRY_DUPLICATE_NAMESPACE` | Two descriptors with same namespace | Use unique namespaces |
+| `TELEMETRY_DUPLICATE_SCOPE` | `addScope()` with duplicate key | Define each scope once |
+| `TELEMETRY_DUPLICATE_ACTOR` | `addActor()` with duplicate key | Define each actor once |
+| `TELEMETRY_INVALID_EVENT_NAME` | Invalid characters in event name | Use dot notation, no colons |
+| `TELEMETRY_INVALID_NAMESPACE` | Invalid namespace format | Use dot notation, lowercase |
+| `TELEMETRY_SESSION_ENDED` | Emit after `session.end()` | Create new session |
 
 ---
 

@@ -1,4 +1,7 @@
-import { Code2, Database, Lock, Mail, Upload, Zap, Bot, Puzzle } from "lucide-react";
+import { 
+  Code2, Database, Mail, Zap, Bot, Puzzle, Plug, Server, 
+  Layers, Lock, HardDrive, CreditCard, MessageCircle 
+} from "lucide-react";
 import { z } from "zod";
 
 export interface CodeExample {
@@ -18,422 +21,615 @@ export interface ComingSoonFeature {
 
 export const codeExamples: CodeExample[] = [
   {
-    id: "controller",
-    title: "Controllers",
-    description: "Type-safe API endpoints with automatic validation",
-    icon: Code2,
-    filePath: "src/features/users/controllers/users.controller.ts",
-    code: `export const userController = igniter.controller({
-  path: '/users',
-  actions: {
-    getUser: igniter.query({
-      path: '/:id' as const,
-      handler: async ({ request, response, context, query }) => {
-        const user = await context.db.user.findUnique({
-          where: { id: query.id }
-        });
-
-        if (!user) return response.notFound('User not found.');
-
-        return response.success(user);
-      },
-    }),
-    createUser: igniter.mutate({
-      path: '/' as const,
-      body: z.object({
-        name: z.string(),
-        email: z.string().email()
-      }),
-      handler: async ({ request, response, context, body }) => {
-        const user = await context.db.user.create({
-          data: body
-        });
-
-        return response.success(user);
-      },
-    }),
-  }
-})`
-  },
-  {
-    id: "procedure",
-    title: "Procedures (Middleware)",
-    description: "Reusable middleware for authentication, validation, and more",
+    id: "jobs",
+    title: "Background Jobs",
+    description: "Type-safe job queues with scheduling, CRON, retries, and concurrency control",
     icon: Zap,
-    filePath: "src/features/users/procedures/auth.procedure.ts",
-    code: `export const auth = igniter.procedure({
-  handler: async (options: AuthOptions, { response, context }) => {
-    const user = await getCurrentUser(context.env.SECRET);
+    filePath: "src/services/jobs.ts",
+    code: `import { IgniterJobs, IgniterQueue } from '@igniter-js/jobs'
+import { IgniterJobsBullMQAdapter } from '@igniter-js/jobs/adapters'
+import { z } from 'zod'
 
-    // If auth is required but there's no user, return an unauthorized error.
-    if (options.isAuthRequired && !user) {
-      return response.unauthorized('Authentication required.');
-    }
-
-    // The returned object is merged into the context.
-    // Now, context.auth.user will be available in our controller.
-    return {
-      auth: { user },
-    };
-  },
-});
-
-// Usage in controller
-export const userController = igniter.controller({
-  path: '/users',
-  actions: {
-    getCurrentUser: igniter.query({
-      path: '/me',
-      // Use the procedure - TypeScript knows context.auth.user is available!
-      use: [auth({ isAuthRequired: true })],
-      handler: async ({ response, context }) => {
-        // Fully type-safe user object from Auth Procedure
-        return response.success(context.auth.user);
-      },
+// 1. Define a queue with typed jobs
+const emailQueue = IgniterQueue.create('email')
+  .addJob('sendWelcome', {
+    input: z.object({
+      userId: z.string(),
+      email: z.string().email(),
     }),
-  }
+    handler: async (ctx) => {
+      await ctx.services.mail.send({
+        to: ctx.input.email,
+        template: 'welcome',
+      })
+    },
+  })
+  .addJob('sendReceipt', {
+    input: z.object({
+      userId: z.string(),
+      orderId: z.string(),
+    }),
+    handler: async (ctx) => {
+      const order = await ctx.db.order.findUnique({
+        where: { id: ctx.input.orderId }
+      })
+      await ctx.services.mail.send({
+        to: ctx.input.email,
+        template: 'receipt',
+        data: { order },
+      })
+    },
+  })
+  .build()
+
+// 2. Create the jobs runtime with adapter and context
+export const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsBullMQAdapter.create({
+    connection: { host: 'localhost', port: 6379 }
+  }))
+  .withService('my-api')
+  .withEnvironment('production')
+  .withContext(async () => ({
+    db: prisma,
+    services: { mail: mailService },
+  }))
+  .addQueue(emailQueue)
+  .withAutoStartWorker({ queues: ['email'], concurrency: 5 })
+  .build()
+
+// 3. Dispatch jobs — fully typed, with auto-complete!
+await jobs.email.sendWelcome.dispatch({
+  input: { userId: '123', email: 'alice@example.com' },
+  delay: 5000, // optional delay in ms
+})
+
+// 4. Multi-tenant scoping
+const orgJobs = jobs.scope('organization', 'org_456')
+await orgJobs.email.sendReceipt.dispatch({
+  input: { userId: '789', orderId: 'ord_001' },
 })`
   },
   {
-    id: "client",
-    title: "Type-Safe Client",
-    description: "Fully typed client with React hooks for seamless integration",
+    id: "store",
+    title: "Multi-Adapter Store",
+    description: "Distributed key-value store with Pub/Sub, counters, locks, and streams",
+    icon: Database,
+    filePath: "src/services/store.ts",
+    code: `import { IgniterStore, IgniterStoreEvents } from '@igniter-js/store'
+import { IgniterStoreRedisAdapter } from '@igniter-js/store/adapters'
+import { z } from 'zod'
+import Redis from 'ioredis'
+
+// 1. Define typed events per domain
+const UserEvents = IgniterStoreEvents
+  .create('user')
+  .event('created', z.object({
+    userId: z.string(),
+    email: z.string().email(),
+  }))
+  .event('deleted', z.object({
+    userId: z.string(),
+  }))
+  .group('notifications', (g) =>
+    g.event('email', z.object({ to: z.string(), subject: z.string() }))
+     .event('push', z.object({ token: z.string(), title: z.string() }))
+  )
+  .build()
+
+// 2. Build the store instance
+const redis = new Redis()
+export const store = IgniterStore.create()
+  .withAdapter(IgniterStoreRedisAdapter.create({ redis }))
+  .withService('my-api')
+  .addEvents(UserEvents)
+  .build()
+
+// 3. Key-value with TTL
+await store.kv.set('user:123', { name: 'Alice', plan: 'pro' }, { ttl: 3600 })
+const user = await store.kv.get<UserProfile>('user:123')
+
+// 4. Distributed counters
+const views = await store.counter.increment('page-views')
+await store.counter.decrement('available-slots')
+
+// 5. Distributed locks (claims)
+const claimed = await store.claim.once('process:order-001', 'worker-1', { ttl: 30 })
+if (claimed) {
+  // Safe to process — only one worker holds the lock
+  await processOrder('order-001')
+  await store.claim.release('process:order-001', 'worker-1')
+}
+
+// 6. Typed Pub/Sub
+await store.events.user.created.subscribe((msg) => {
+  console.log('New user:', msg.userId, msg.email)
+  // msg is fully typed from the Zod schema!
+})
+await store.events.user.created.publish({
+  userId: '123',
+  email: 'alice@example.com',
+})
+
+// 7. Multi-tenant scoping
+const orgStore = store.scope('organization', 'org_456')
+await orgStore.kv.set('settings', { theme: 'dark' })
+// Key: igniter:store:my-api:organization:org_456:kv:settings`
+  },
+  {
+    id: "caller",
+    title: "Type-Safe HTTP Client",
+    description: "Schema-typed HTTP client with Zod validation and interceptors",
     icon: Code2,
-    filePath: "src/features/user/presentation/components/user-profile.tsx",
-    code: `import { api } from './igniter.client';
+    filePath: "src/services/api.ts",
+    code: `import { IgniterCaller } from '@igniter-js/caller'
+import { z } from 'zod'
 
-function UserProfile({ userId }: { userId: string }) {
-  const currentUser = api.user.getCurrentUser.useQuery({
-    enabled: !!userId,
-    staleTime: 5000,
-    refetchOnWindowFocus: false,
-    onSuccess: (data) => {
-      console.log('Successfully fetched current user:', data);
+// 1. Shared schemas
+const UserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+})
+
+// 2. Build the typed API client
+export const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withHeaders({ 'X-Client': 'my-app' })
+  .withSchemas({
+    '/users': {
+      GET: {
+        responses: {
+          200: z.array(UserSchema),
+          401: z.object({ error: z.string() }),
+        },
+      },
+      POST: {
+        request: z.object({
+          name: z.string(),
+          email: z.string().email(),
+        }),
+        responses: {
+          201: UserSchema,
+          400: z.object({ error: z.string(), fields: z.record(z.string()) }),
+        },
+      },
     },
-    onError: (error) => {
-      console.error('Error fetching current user:', error);
+    '/users/:id': {
+      GET: {
+        responses: {
+          200: UserSchema,
+          404: z.object({ error: z.literal('not_found') }),
+        },
+      },
     },
-  });
+  })
+  .withResponseInterceptor(async (result) => {
+    if (result.error && result.response?.status === 401) {
+      await refreshToken()
+      return result.retry()
+    }
+    return result
+  })
+  .build()
 
-  if (currentUser.isLoading) return <div>Loading user...</div>;
-  if (currentUser.isError) {
-    return <div>Error: {currentUser.error.message}</div>;
-  }
+// 3. Use it — fully typed at every step!
+const { data: users } = await api.get('/users').execute()
+//     ^? User[]
 
-  return (
-    <div>
-      <h1>{currentUser.data.name}</h1>
-      <p>{currentUser.data.email}</p>
-    </div>
-  );
+const { data: newUser } = await api.post('/users')
+  .body({ name: 'Alice', email: 'alice@example.com' })
+  .execute()
+//     ^? User
+
+const { data: profile } = await api.get('/users/:id')
+  .params({ id: '123' })
+  .execute()
+//     ^? User
+
+// Runtime validation — catches API mismatches instantly
+try {
+  await api.get('/users').execute()
+} catch (err) {
+  // err.message = "Response validation failed for GET /users"
 }`
   },
   {
-    id: "jobs",
-    title: "Queues",
-    description: "Reliable job processing with BullMQ integration",
-    icon: Database,
-    filePath: "src/services/jobs.ts",
-    code: `export const registeredJobs = jobs.merge({
-  // Defines a group of jobs related to emails
-  emails: jobs.router({
-    jobs: {
-      // Registers the 'sendWelcome' job
-      sendWelcome: jobs.register({
-        name: 'sendWelcome',
-        input: z.object({
-          userId: z.string(),
-          email: z.string().email()
-        }),
-        handler: async ({ input, context }) => {
-          // Send welcome email
-          await context.emailService.send({
-            to: input.email,
-            template: 'welcome',
-            data: { userId: input.userId }
-          });
-          
-          console.log(\`Welcome email sent to \${input.email}\`);
-        }
-      })
-    }
+    id: "mail",
+    title: "Transactional Email",
+    description: "Type-safe email sending with templates, hooks, and pluggable providers",
+    icon: Mail,
+    filePath: "src/services/mail.ts",
+    code: `import { IgniterMail, IgniterMailTemplate } from '@igniter-js/mail'
+import { z } from 'zod'
+
+// 1. Define typed templates
+const WelcomeTemplate = IgniterMailTemplate.create('welcome')
+  .withSubject('Welcome to {{appName}}, {{name}}!')
+  .withHtml('<h1>Welcome {{name}}!</h1><p>Thanks for joining {{appName}}.</p>')
+  .withInput(z.object({
+    name: z.string(),
+    email: z.string().email(),
+  }))
+  .build()
+
+const ReceiptTemplate = IgniterMailTemplate.create('receipt')
+  .withSubject('Your receipt for order #{{orderId}}')
+  .withInput(z.object({
+    orderId: z.string(),
+    amount: z.number(),
+    items: z.array(z.object({ name: z.string(), price: z.number() })),
+  }))
+  .build()
+
+// 2. Build the mail service
+export const mail = IgniterMail.create()
+  .withFrom('noreply@myapp.com')
+  .withAdapter('sendgrid', process.env.SENDGRID_API_KEY!)
+  .addTemplate('welcome', WelcomeTemplate)
+  .addTemplate('receipt', ReceiptTemplate)
+  .onSendStarted(async (params) => {
+    console.log('Sending:', params.template, '→', params.to)
   })
-});
+  .onSendError(async (params, error) => {
+    console.error('Failed:', params.template, error.message)
+  })
+  .onSendSuccess(async (params) => {
+    console.log('Sent:', params.template, '→', params.to)
+  })
+  .build()
 
-// Enqueue the job with type safety
-await igniter.jobs.emails.enqueue({
-  task: 'sendWelcome',
+// 3. Send — fully typed templates!
+await mail.send({
+  template: 'welcome',
+  to: 'alice@example.com',
+  input: { name: 'Alice', email: 'alice@example.com' },
+  // ^? { name: string, email: string } — typed from the template!
+})
+
+await mail.send({
+  template: 'receipt',
+  to: 'alice@example.com',
   input: {
-    userId: '123',
-    email: 'user@example.com'
-  }
-});`
+    orderId: 'ORD-1234',
+    amount: 49.90,
+    items: [
+      { name: 'Premium Plan', price: 29.90 },
+      { name: 'Add-on Storage', price: 20.00 },
+    ],
   },
-  {
-    id: "events",
-    title: "Pub/Sub",
-    description: "Backend Pub/Sub messaging for distributed services using Redis",
-    icon: Zap,
-    filePath: "src/features/user/controllers/user.controller.ts",
-    code: `export const userController = igniter.controller({
-  path: '/users',
-  actions: {
-    createUser: igniter.mutate({
-      path: '/' as const,
-      body: z.object({
-        name: z.string(),
-        email: z.string().email(),
-      }),
-      handler: async ({ body, context, response }) => {
-        const user = await context.db.user.create({
-          data: body,
-        });
+})
 
-        // Publish event for other services
-        await igniter.store.publish('user.created', {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          timestamp: new Date().toISOString(),
-        });
-
-        return response.success(user);
-      },
-    }),
-  }
-});
-
-// Subscribe to events in other services
-igniter.store.subscribe('user.created', async (data) => {
-  console.log(\`New user: \${data.name} (\${data.email})\`);
-  // Send welcome email, update CRM, etc.
-});
-
-// Wildcard subscriptions
-igniter.store.subscribe('user.*', (data, channel) => {
-  console.log(\`Event on \${channel}:\`, data);
-});`
-  },
-  {
-    id: "caching",
-    title: "Caching",
-    description: "Redis-powered caching for optimal performance",
-    icon: Database,
-    filePath: "src/features/user/controllers/user.controller.ts",
-    code: `export const userController = igniter.controller({
-  path: '/users',
-  actions: {
-    getById: igniter.query({
-      path: '/:id' as const,
-      handler: async ({ query, response, context }) => {
-        const cacheKey = \`user:\${query.id}\`;
-
-        // Try cache first
-        const cached = await igniter.store.get(cacheKey);
-        if (cached) {
-          return response.success(JSON.parse(cached));
-        }
-
-        // Fetch from database
-        const user = await context.db.user.findUnique({
-          where: { id: query.id }
-        });
-
-        if (!user) return response.notFound('User not found');
-
-        // Cache for 1 hour
-        await igniter.store.set(
-          cacheKey,
-          JSON.stringify(user),
-          { ttl: 3600 }
-        );
-
-        return response.success(user);
-      },
-    }),
-    update: igniter.mutate({
-      path: '/:id' as const,
-      body: z.object({
-        name: z.string(),
-        email: z.string().email()
-      }),
-      handler: async ({ query, body, response, context }) => {
-        const user = await context.db.user.update({
-          where: { id: query.id },
-          data: body
-        });
-
-        // Invalidate cache
-        await igniter.store.del(\`user:\${query.id}\`);
-
-        return response.success(user);
-      },
-    }),
-  }
+// 4. Schedule for later (requires queue adapter)
+await mail.schedule({
+  template: 'welcome',
+  to: 'bob@example.com',
+  input: { name: 'Bob', email: 'bob@example.com' },
+  delay: 60000, // send in 1 minute
 })`
+  },
+  {
+    id: "collections",
+    title: "Schema-Driven Collections",
+    description: "Prisma-like ORM for Markdown files with Zod schemas and hooks",
+    icon: Layers,
+    filePath: "src/content/collections.ts",
+    code: `import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections'
+import { NodeFsAdapter } from '@igniter-js/collections/adapters'
+import { z } from 'zod'
+
+// 1. Define collection models with Zod schemas
+const Posts = IgniterCollectionModel.create('posts')
+  .withBasePath('content/blog')
+  .withSchema(z.object({
+    title: z.string(),
+    description: z.string().optional(),
+    published: z.boolean().default(false),
+    tags: z.array(z.string()),
+  }))
+  .onCreated(({ value }) => {
+    console.log('Post created:', value.id);
+    return value;
+  })
+  .build()
+
+const Authors = IgniterCollectionModel.create('authors')
+  .withBasePath('content/authors')
+  .withSchema(z.object({
+    name: z.string(),
+    bio: z.string(),
+    github: z.string().url().optional(),
+  }))
+  .build()
+
+// 2. Build the collections manager
+export const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .addCollection(Posts)
+  .addCollection(Authors)
+  .build()
+
+// 3. Full Prisma-like query API
+const published = await docs.posts.findMany({
+  where: { published: true },
+  orderBy: { createdAt: 'desc' },
+  take: 10,
+})
+
+const draft = await docs.posts.create({
+  data: {
+    title: 'My First Post',
+    published: false,
+    tags: ['typescript', 'igniter'],
+  },
+  content: '# Hello World\\n\\nThis is my first post.',
+})
+
+const updated = await docs.posts.update({
+  where: { id: draft.id },
+  data: { published: true, tags: ['typescript', 'igniter', 'tutorial'] },
+})
+
+// 4. Global event listeners
+docs.on('created', ({ collection, value }) => {
+  console.log(\`New \${collection}: \${value.id}\`);
+})
+
+// 5. File watcher — auto-reloads on file changes
+await docs.watcher.start()`
+  },
+  {
+    id: "agents",
+    title: "AI Agent Framework",
+    description: "Type-safe agent creation with toolsets, MCP, memory, and multi-agent orchestration",
+    icon: Bot,
+    filePath: "src/services/agent.ts",
+    code: `import { 
+  IgniterAgent, IgniterAgentToolset, IgniterAgentTool,
+  IgniterAgentMCPClient, IgniterAgentPrompt,
+  IgniterAgentManager 
+} from '@igniter-js/agents'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+// 1. Define tools with Zod schemas
+const dbTool = IgniterAgentTool.create('queryDatabase')
+  .withDescription('Execute a SQL query against the database')
+  .withInput(z.object({
+    query: z.string().describe('The SQL query to execute'),
+  }))
+  .withExecute(async ({ query }) => {
+    const result = await db.query(query)
+    return JSON.stringify(result)
+  })
+  .build()
+
+const emailTool = IgniterAgentTool.create('sendEmail')
+  .withDescription('Send an email to a user')
+  .withInput(z.object({
+    to: z.string().email(),
+    subject: z.string(),
+    body: z.string(),
+  }))
+  .withExecute(async ({ to, subject, body }) => {
+    await mail.send({ template: 'custom', to, input: { subject, body } })
+    return 'Email sent!'
+  })
+  .build()
+
+// 2. Group tools into toolsets
+const utilsToolset = IgniterAgentToolset.create('utils')
+  .addTool(dbTool)
+  .addTool(emailTool)
+  .build()
+
+// 3. MCP integration for agent-to-agent communication
+const mcp = IgniterAgentMCPClient.create('filesystem')
+  .withType('stdio')
+  .withCommand('npx')
+  .withArgs(['-y', '@modelcontextprotocol/server-filesystem', '/tmp'])
+  .build()
+
+// 4. Typed prompt template
+const prompt = IgniterAgentPrompt.create(
+  'You are {{agent}}, a helpful assistant. Today is {{date}}.'
+)
+
+// 5. Build the agent
+export const assistant = IgniterAgent.create('assistant')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(prompt)
+  .addToolset(utilsToolset)
+  .addMCP(mcp)
+  .build()
+
+// 6. Multi-agent orchestration
+export const agents = IgniterAgentManager.create()
+  .addAgent(assistant)
+  .addAgent(IgniterAgent.create('researcher')
+    .withModel(openai('gpt-4o'))
+    .withPrompt(prompt)
+    .addMCP(mcp)
+    .build()
+  )
+  .build()
+
+// 7. Execute
+const result = await assistant.generate({
+  chatId: 'chat_123',
+  userId: 'user_456',
+  message: { role: 'user', content: 'How many users signed up today?' },
+})
+// The agent can autonomously call queryDatabase and sendEmail!`
+  },
+  {
+    id: "connectors",
+    title: "Connector Management",
+    description: "Multi-tenant third-party integrations with OAuth 2.0 and webhook pipelines",
+    icon: Plug,
+    filePath: "src/services/connectors.ts",
+    code: `import { 
+  IgniterConnector, IgniterConnectorManager,
+  IgniterConnectorPrismaAdapter 
+} from '@igniter-js/connectors'
+import { z } from 'zod'
+import { prisma } from '@/lib/db'
+
+// 1. Define a connector with actions and OAuth
+const telegramConnector = IgniterConnector.create()
+  .withMetadata(
+    z.object({ name: z.string(), icon: z.string(), description: z.string().optional() }),
+    { name: 'Telegram', icon: 'telegram.svg', description: 'Telegram Bot API' },
+  )
+  .withConfig(
+    z.object({
+      botToken: z.string(),
+      chatId: z.string(),
+    })
+  )
+  .withOAuth({
+    authorizationUrl: 'https://oauth.telegram.org/auth',
+    tokenUrl: 'https://oauth.telegram.org/token',
+    scopes: ['bot', 'messages'],
+    clientId: process.env.TELEGRAM_CLIENT_ID!,
+    clientSecret: process.env.TELEGRAM_CLIENT_SECRET!,
+  })
+  .addAction('sendMessage', {
+    description: 'Send a message to a Telegram chat',
+    input: z.object({
+      text: z.string().max(4096),
+      parseMode: z.enum(['HTML', 'Markdown']).optional(),
+    }),
+    handler: async ({ input, config }) => {
+      const response = await fetch(
+        \`https://api.telegram.org/bot\${config.botToken}/sendMessage\`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            chat_id: config.chatId,
+            text: input.text,
+            parse_mode: input.parseMode,
+          }),
+        }
+      )
+      return response.json()
+    },
+  })
+  .build()
+
+// 2. Build the connector manager with encryption
+export const connectors = IgniterConnectorManager.create()
+  .withDatabase(IgniterConnectorPrismaAdapter.create(prisma))
+  .withEncrypt(['accessToken', 'refreshToken', 'apiKey'])
+  .addScope('organization', { required: true })
+  .addScope('user', { required: true })
+  .addConnector('telegram', telegramConnector)
+  .onConnect(async ({ connector, scope, identity }) => {
+    console.log(\`\${connector} connected for \${scope}:\${identity}\`)
+  })
+  .onError(async ({ connector, error }) => {
+    console.error(\`\${connector} error:\`, error.message)
+  })
+  .build()
+
+// 3. Create scoped instance for multi-tenancy
+const scoped = connectors.scope('organization', 'org_456')
+
+// 4. Connect a connector — encrypted credentials + OAuth handled automatically
+const connection = await scoped.connect('telegram', {
+  botToken: 'abc123',
+  chatId: '987654',
+})
+
+// 5. Execute actions — fully typed input and output!
+const { data, error } = await scoped
+  .action('telegram', 'sendMessage')
+  .call({
+    text: '🚀 Deployment successful!',
+    parseMode: 'HTML',
+  })
+
+if (error) {
+  console.error('Action failed:', error.message)
+}
+
+// 6. List, toggle, and disconnect
+const all = await scoped.list({ where: { enabled: true } })
+await scoped.toggle('telegram', false) // disable
+await scoped.disconnect('telegram')     // remove`
   },
   {
     id: "mcp-server",
     title: "MCP Server",
-    description: "Expose your API as AI-native tools for Code Agents via Model Context Protocol",
-    icon: Puzzle,
+    description: "Transform any Igniter.js API into AI-native tools for Code Agents",
+    icon: Server,
     filePath: "src/app/api/mcp/[...transport]/route.ts",
-    code: `import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server';
-import { AppRouter } from '@/igniter.router';
+    code: `import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server'
+import { IgniterRouter } from '@igniter-js/core'
+import { z } from 'zod'
 
-// Create MCP server - exposes your entire API as AI tools
+// 1. Your existing Igniter.js API router
+const appRouter = IgniterRouter.create()
+  .controller(userController)
+  .controller(postController)
+  .controller(paymentController)
+
+// 2. Expose the entire API as MCP tools — one line!
 const { handler } = IgniterMcpServer
   .create()
-  .router(AppRouter)
+  .router(appRouter)
   .withServerInfo({
     name: 'My App MCP Server',
     version: '1.0.0',
   })
   .withInstructions(
-    "Use these tools to manage users, posts, and comments."
+    'Use these tools to manage users, posts, and payments ' +
+    'in the production database. Always confirm destructive actions.'
   )
-  .addTool({
+  .addCustomTool({
     name: 'analyze-user-activity',
-    description: 'Analyze user activity patterns',
-    args: {
+    description: 'Analyze user activity patterns over a time period',
+    args: z.object({
       userId: z.string(),
-      days: z.number().default(30)
-    },
-    handler: async (args, context) => {
-      const activity = await analyzeActivity(args.userId, args.days);
+      days: z.number().default(30),
+    }),
+    handler: async (args) => {
+      const activity = await analytics.getUserActivity(args.userId, args.days)
       return {
         content: [{
           type: 'text',
-          text: JSON.stringify(activity, null, 2)
-        }]
-      };
-    }
-  })
-  .build();
-
-// AI agents can now call your API as native functions
-export const GET = handler;
-export const POST = handler;`
-  },
-  {
-    id: "bot",
-    title: "Bots",
-    description: "Build chatbots for Telegram, WhatsApp, and more with unified API",
-    icon: Bot,
-    filePath: "src/services/bot.ts",
-    code: `import { Bot, telegram, whatsapp } from '@igniter-js/bot';
-
-export const bot = Bot.create({
-  id: 'support-bot',
-  name: 'Support Bot',
-  adapters: {
-    telegram: telegram({
-      token: process.env.TELEGRAM_TOKEN!,
-      handle: '@support_bot',
-      webhook: {
-        url: process.env.TELEGRAM_WEBHOOK_URL!,
-      }
-    }),
-    whatsapp: whatsapp({
-      token: process.env.WHATSAPP_TOKEN!,
-      phone: process.env.WHATSAPP_PHONE_ID!,
-      handle: 'support'
-    })
-  },
-  commands: {
-    start: {
-      name: 'start',
-      description: 'Get started with the bot',
-      async handle(ctx) {
-        await ctx.bot.send({
-          provider: ctx.provider,
-          channel: ctx.channel.id,
-          content: { 
-            type: 'text', 
-            content: '👋 Welcome! How can I help you?' 
-          }
-        });
+          text: JSON.stringify(activity, null, 2),
+        }],
       }
     },
-    status: {
-      name: 'status',
-      aliases: ['health'],
-      description: 'Check system status',
-      async handle(ctx) {
-        const status = await checkSystemHealth();
-        await ctx.bot.send({
-          provider: ctx.provider,
-          channel: ctx.channel.id,
-          content: { 
-            type: 'text', 
-            content: \`✅ System Status: \${status}\`
-          }
-        });
-      }
-    }
+  })
+  .build()
+
+// 3. Plug into Next.js, Express, Hono — any framework
+export const GET = handler
+export const POST = handler
+
+// AI agents like Cursor, Claude, Copilot can now:
+// - List users: "Show me all admin users"
+// - Create posts: "Publish a draft titled 'New Feature'"
+// - Analyze data: "Check user activity for user_123" (custom tool)
+// — all with your actual API logic, not mock data!`
   },
-  on: {
-    message: async (ctx) => {
-      if (ctx.message.content?.type === 'text') {
-        console.log('[message]', ctx.message.content.raw);
-      }
-    }
-  }
-});
-
-// Use in Next.js API route
-export async function POST(req: Request) {
-  return bot.handle('telegram', req);
-}`
-  },
-  {
-    id: "context",
-    title: "Context System",
-    description: "Dependency injection and shared application state",
-    icon: Code2,
-    filePath: "src/igniter.context.ts",
-    code: `import { PrismaClient } from '@prisma/client';
-
-export const createContext = async () => {
-  const db = new PrismaClient();
-
-  return {
-    db,
-    
-    // Services
-    emailService: new EmailService(),
-    storageService: new StorageService(),
-    
-    // Environment variables
-    env: {
-      NODE_ENV: process.env.NODE_ENV,
-      DATABASE_URL: process.env.DATABASE_URL,
-      SECRET: process.env.SECRET
-    }
-  };
-};
-
-// Available in all controllers and procedures
-export const igniter = Igniter
-  .context<Awaited<ReturnType<typeof createContext>>>()
-  .create();`
-  }
 ];
 
 export const comingSoonFeatures: ComingSoonFeature[] = [
   {
-    title: "Authentication",
-    description: "Built-in auth with multiple providers",
-    icon: Lock
-  },
-  {
-    title: "Notifications & Mail",
-    description: "Email, SMS, and push notification system",
-    icon: Mail
-  },
-  {
     title: "File Storage",
-    description: "Cloud storage integration with type safety",
-    icon: Upload
-  }
+    description: "Upload, download and manage files with local and S3 adapters",
+    icon: HardDrive,
+  },
+  {
+    title: "Payments",
+    description: "Type-safe payment processing with Stripe integration",
+    icon: CreditCard,
+  },
+  {
+    title: "Multi-Platform Bots",
+    description: "Build chatbots for Telegram, WhatsApp, and Discord with unified API",
+    icon: MessageCircle,
+  },
 ];

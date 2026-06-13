@@ -1,0 +1,545 @@
+---
+title: Real-World Examples
+description: Production-ready agent patterns. Customer support triage, code review assistant, data analyst with database tools, e-commerce concierge, and multi-agent workflow orchestrator.
+---
+
+## Real-World Examples
+
+Five complete, production-ready agent patterns that demonstrate the full capabilities of `@igniter-js/agents`.
+
+---
+
+## 1. Customer Support Triage Agent
+
+An agent that classifies support tickets, searches the knowledge base, and escalates when needed.
+
+```typescript
+import {
+  IgniterAgent,
+  IgniterAgentTool,
+  IgniterAgentToolset,
+  IgniterAgentPrompt,
+  IgniterAgentInMemoryAdapter,
+} from '@igniter-js/agents'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+// Tool: Search knowledge base
+const searchKB = IgniterAgentTool
+  .create('search_kb')
+  .withDescription('Search the support knowledge base for relevant articles')
+  .withInput(
+    z.object({
+      query: z.string().describe('Search query'),
+      category: z.enum(['billing', 'technical', 'account']).optional(),
+    })
+  )
+  .withExecute(async ({ query, category }) => {
+    const articles = await knowledgeBase.search(query, { category })
+    return articles.map(a => ({
+      id: a.id,
+      title: a.title,
+      relevance: a.score,
+      summary: a.summary,
+    }))
+  })
+  .build()
+
+// Tool: Create escalation ticket
+const createEscalation = IgniterAgentTool
+  .create('escalate')
+  .withDescription('Create an escalation ticket when the issue cannot be resolved')
+  .withInput(
+    z.object({
+      priority: z.enum(['high', 'critical']),
+      summary: z.string(),
+      category: z.string(),
+      evidence: z.string().optional(),
+    })
+  )
+  .withExecute(async ({ priority, summary, category, evidence }) => {
+    const ticket = await ticketing.create({
+      priority,
+      summary,
+      category,
+      evidence,
+      source: 'ai-triage',
+    })
+    return { ticketId: ticket.id, status: 'escalated' }
+  })
+  .build()
+
+// Tool: Check order status
+const checkOrder = IgniterAgentTool
+  .create('check_order')
+  .withDescription('Look up an order by ID and return its status')
+  .withInput(z.object({ orderId: z.string() }))
+  .withExecute(async ({ orderId }) => {
+    const order = await orders.findById(orderId)
+    if (!order) return { found: false }
+    return {
+      found: true,
+      status: order.status,
+      items: order.items.length,
+      estimatedDelivery: order.estimatedDelivery,
+    }
+  })
+  .build()
+
+// Build the support toolset
+const supportToolset = IgniterAgentToolset
+  .create('support')
+  .addTool(searchKB)
+  .addTool(createEscalation)
+  .addTool(checkOrder)
+  .build()
+
+// Memory for tracking support history
+const memory = IgniterAgentInMemoryAdapter.create({
+  namespace: 'support',
+  maxChats: 1000,
+})
+
+// The triage agent
+const triageAgent = IgniterAgent
+  .create('support-triage')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(
+    IgniterAgentPrompt.create(`
+      You are a Tier 1 support triage agent for {{company}}.
+      
+      Your process:
+      1. Greet the customer warmly
+      2. Understand their issue
+      3. Search the knowledge base for solutions
+      4. If unresolved, escalate with clear evidence
+      5. For order issues, always check the order first
+      
+      Tone: {{tone}}
+    `)
+  )
+  .addToolset(supportToolset)
+  .withMemory({
+    provider: memory,
+    working: { enabled: true, scope: 'ticket' },
+    history: { enabled: true, limit: 200 },
+    chats: { enabled: true },
+  })
+  .onToolCallStart((agent, tool) => {
+    console.log(`[Support] Starting: ${tool}`)
+  })
+  .build()
+
+await triageAgent.start()
+
+// Handle a customer request
+const result = await triageAgent.generate({
+  chatId: 'ticket_0042',
+  userId: 'cust_789',
+  context: {
+    company: 'ShopFast',
+    tone: 'empathetic and solution-oriented',
+  },
+  message: {
+    role: 'user',
+    content: "Hi, I haven't received my order #ORD-5591. It was supposed to arrive yesterday.",
+  },
+})
+```
+
+---
+
+## 2. Code Review Assistant
+
+An agent with source code analysis tools for automated code review.
+
+```typescript
+// Tool: Run linter
+const runLinter = IgniterAgentTool
+  .create('lint')
+  .withDescription('Run ESLint on the provided code and return issues')
+  .withInput(
+    z.object({
+      code: z.string().describe('Source code to lint'),
+      filepath: z.string().describe('Virtual filepath for rule matching'),
+    })
+  )
+  .withExecute(async ({ code, filepath }) => {
+    const results = await eslint.lintText(code, { filePath: filepath })
+    return results.map(r => ({
+      file: filepath,
+      line: r.line,
+      column: r.column,
+      rule: r.ruleId,
+      message: r.message,
+      severity: r.severity === 2 ? 'error' : 'warning',
+      fix: r.fix ? 'available' : null,
+    }))
+  })
+  .build()
+
+// Tool: Run type check
+const typeCheck = IgniterAgentTool
+  .create('typecheck')
+  .withDescription('Run TypeScript type checking on code')
+  .withInput(
+    z.object({
+      code: z.string(),
+      filename: z.string().default('temp.ts'),
+    })
+  )
+  .withExecute(async ({ code, filename }) => {
+    const diagnostics = await ts.createProgram([filename], {
+      noEmit: true,
+      strict: true,
+    })
+    return diagnostics.map(d => ({
+      line: d.line,
+      message: d.messageText,
+      code: d.code,
+    }))
+  })
+  .build()
+
+// Tool: Suggest improvements
+const suggestRefactor = IgniterAgentTool
+  .create('suggest')
+  .withDescription('Suggest improvements based on code patterns')
+  .withInput(z.object({ code: z.string(), context: z.string().optional() }))
+  .withExecute(async ({ code, context }) => {
+    // Pattern matching for common anti-patterns
+    const patterns = [
+      { regex: /\.then\(.*\.catch\(/g, suggestion: 'Use async/await instead of .then chains' },
+      { regex: /var\s+/g, suggestion: 'Use const or let instead of var' },
+      { regex: /console\.log/g, suggestion: 'Consider using a proper logger' },
+    ]
+    return patterns
+      .filter(p => p.regex.test(code))
+      .map(p => ({ pattern: p.regex.source, suggestion: p.suggestion }))
+  })
+  .build()
+
+const reviewToolset = IgniterAgentToolset
+  .create('review')
+  .addTool(runLinter)
+  .addTool(typeCheck)
+  .addTool(suggestRefactor)
+  .build()
+
+const codeReviewer = IgniterAgent
+  .create('code-reviewer')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(
+    IgniterAgentPrompt.create(`
+      You are a senior TypeScript code reviewer.
+      
+      For each review:
+      1. Run the linter to check for style issues
+      2. Run the type checker for type safety
+      3. Identify improvement patterns
+      4. Provide actionable, specific feedback
+      
+      Always reference exact line numbers and suggest concrete fixes.
+    `)
+  )
+  .addToolset(reviewToolset)
+  .build()
+
+await codeReviewer.start()
+```
+
+---
+
+## 3. Data Analyst Agent
+
+An agent that can query databases and generate reports.
+
+```typescript
+// Tool: Execute SQL query
+const queryDB = IgniterAgentTool
+  .create('query')
+  .withDescription('Execute a read-only SQL query on the analytics database')
+  .withInput(
+    z.object({
+      sql: z.string().describe('SELECT query'),
+      params: z.array(z.unknown()).optional(),
+      maxRows: z.number().default(100).describe('Maximum rows to return'),
+    })
+  )
+  .withExecute(async ({ sql, params, maxRows }) => {
+    const result = await analyticsDB.query({
+      text: sql,
+      values: params,
+      rowMode: 'array',
+      maxRows,
+    })
+    return {
+      columns: result.fields.map(f => f.name),
+      rows: result.rows,
+      rowCount: result.rowCount,
+    }
+  })
+  .build()
+
+// Tool: Generate chart config
+const generateChart = IgniterAgentTool
+  .create('chart')
+  .withDescription('Generate a chart configuration for data visualization')
+  .withInput(
+    z.object({
+      chartType: z.enum(['bar', 'line', 'pie', 'scatter']),
+      title: z.string(),
+      xAxis: z.string(),
+      yAxis: z.string(),
+      data: z.array(z.record(z.unknown())),
+    })
+  )
+  .withExecute(async (config) => {
+    return { chartConfig: config, renderable: true }
+  })
+  .build()
+
+const analyticsToolset = IgniterAgentToolset
+  .create('analytics')
+  .addTool(queryDB)
+  .addTool(generateChart)
+  .build()
+
+const dataAnalyst = IgniterAgent
+  .create('data-analyst')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(
+    IgniterAgentPrompt.create(`
+      You are a data analyst. When given a question:
+      1. Formulate a SQL query to answer it
+      2. Execute the query
+      3. Interpret the results in plain language
+      4. Suggest a chart if the data warrants it
+    `)
+  )
+  .addToolset(analyticsToolset)
+  .build()
+
+await dataAnalyst.start()
+
+const report = await dataAnalyst.generate({
+  chatId: 'report_012',
+  userId: 'analyst_001',
+  context: {},
+  message: {
+    role: 'user',
+    content: 'Show me monthly revenue by product category for Q1 2026.',
+  },
+})
+```
+
+---
+
+## 4. E-Commerce Concierge
+
+A shopping assistant with product search, cart management, and recommendations.
+
+```typescript
+const searchProducts = IgniterAgentTool
+  .create('search_products')
+  .withDescription('Search the product catalog')
+  .withInput(
+    z.object({
+      query: z.string(),
+      category: z.string().optional(),
+      maxPrice: z.number().optional(),
+      inStock: z.boolean().default(true),
+      limit: z.number().default(5),
+    })
+  )
+  .withExecute(async (filters) => {
+    return catalog.search(filters)
+  })
+  .build()
+
+const addToCart = IgniterAgentTool
+  .create('add_to_cart')
+  .withDescription('Add a product to the shopping cart')
+  .withInput(
+    z.object({
+      productId: z.string(),
+      quantity: z.number().min(1).max(10).default(1),
+    })
+  )
+  .withExecute(async ({ productId, quantity }) => {
+    return cart.add(currentUserId, productId, quantity)
+  })
+  .build()
+
+const getRecommendations = IgniterAgentTool
+  .create('recommend')
+  .withDescription('Get personalized product recommendations')
+  .withInput(z.object({ basedOn: z.string().optional() }))
+  .withExecute(async ({ basedOn }) => {
+    return recommendations.forUser(currentUserId, { context: basedOn })
+  })
+  .build()
+
+const shopToolset = IgniterAgentToolset
+  .create('shop')
+  .addTool(searchProducts)
+  .addTool(addToCart)
+  .addTool(getRecommendations)
+  .build()
+
+const concierge = IgniterAgent
+  .create('shopping-concierge')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(
+    IgniterAgentPrompt.create(`
+      You are {{store}}'s personal shopping concierge.
+      
+      Guidelines:
+      - Be helpful but never pushy
+      - Always show prices clearly
+      - Offer alternatives when items are out of stock
+      - Suggest complementary products
+    `)
+  )
+  .addToolset(shopToolset)
+  .withMemory({
+    provider: IgniterAgentInMemoryAdapter.create({ namespace: 'shop' }),
+    working: { enabled: true, scope: 'session' },
+    history: { enabled: true, limit: 200 },
+    chats: { enabled: true },
+  })
+  .build()
+```
+
+---
+
+## 5. Multi-Agent Workflow Orchestrator
+
+A system that routes complex tasks through a chain of specialized agents.
+
+```typescript
+// Manager with 3 specialized agents
+const orchestrator = IgniterAgentManager
+  .create()
+  .addAgent('researcher', researchAgent)
+  .addAgent('writer', writerAgent)
+  .addAgent('reviewer', reviewerAgent)
+  .onAgentStart((name) => console.log(`✅ ${name} ready`))
+  .onToolCallStart((agent, tool) => console.log(`[${agent}] → ${tool}`))
+  .build()
+
+await orchestrator.startAll()
+
+// Orchestrate a research → write → review pipeline
+async function runPipeline(topic: string) {
+  // Phase 1: Research
+  const researcher = orchestrator.get('researcher')
+  const research = await researcher.generate({
+    chatId: `pipeline_${Date.now()}`,
+    userId: 'system',
+    context: { topic },
+    message: {
+      role: 'user',
+      content: `Research the topic: ${topic}. Gather key facts, data points, and perspectives.`,
+    },
+  })
+
+  // Phase 2: Write based on research
+  const writer = orchestrator.get('writer')
+  const draft = await writer.generate({
+    chatId: `pipeline_${Date.now()}`,
+    userId: 'system',
+    context: { research: research.content, topic },
+    message: {
+      role: 'user',
+      content: `Write a comprehensive article on "${topic}" using this research:\n${research.content}`,
+    },
+  })
+
+  // Phase 3: Review the draft
+  const reviewer = orchestrator.get('reviewer')
+  const review = await reviewer.generate({
+    chatId: `pipeline_${Date.now()}`,
+    userId: 'system',
+    context: { draft: draft.content },
+    message: {
+      role: 'user',
+      content: `Review this draft for accuracy, clarity, and completeness:\n${draft.content}`,
+    },
+  })
+
+  return { research, draft, review }
+}
+```
+
+---
+
+## 6. DevOps Incident Responder
+
+An agent that helps diagnose and resolve production incidents.
+
+```typescript
+const checkLogs = IgniterAgentTool
+  .create('check_logs')
+  .withDescription('Query application logs for error patterns')
+  .withInput(
+    z.object({
+      service: z.string(),
+      severity: z.enum(['error', 'warn']).default('error'),
+      timeframe: z.string().default('15m'),
+      limit: z.number().default(20),
+    })
+  )
+  .withExecute(async ({ service, severity, timeframe, limit }) => {
+    return logAggregator.query({ service, severity, timeframe, limit })
+  })
+  .build()
+
+const checkMetrics = IgniterAgentTool
+  .create('check_metrics')
+  .withDescription('Query service metrics (CPU, memory, latency, error rate)')
+  .withInput(z.object({ service: z.string(), metric: z.string().optional() }))
+  .withExecute(async ({ service, metric }) => {
+    return metricsService.query(service, metric)
+  })
+  .build()
+
+const runDiagnostic = IgniterAgentTool
+  .create('diagnose')
+  .withDescription('Run a diagnostic check on a service')
+  .withInput(z.object({ service: z.string(), check: z.string() }))
+  .withExecute(async ({ service, check }) => {
+    return diagnostics.run(service, check)
+  })
+  .build()
+
+const devopsToolset = IgniterAgentToolset
+  .create('devops')
+  .addTool(checkLogs)
+  .addTool(checkMetrics)
+  .addTool(runDiagnostic)
+  .build()
+
+const incidentResponder = IgniterAgent
+  .create('incident-responder')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(
+    IgniterAgentPrompt.create(`
+      You are an on-call DevOps engineer responding to a production incident.
+      
+      Protocol:
+      1. Check logs for error patterns
+      2. Check service metrics for anomalies
+      3. Run targeted diagnostics
+      4. Provide a root cause analysis and remediation steps
+      5. If you cannot determine the cause, recommend escalation
+      
+      Be concise and actionable. Every second matters during an incident.
+    `)
+  )
+  .addToolset(devopsToolset)
+  .onToolCallStart((agent, tool, input) => {
+    incidentLog.info(`Running ${tool} with:`, input)
+  })
+  .build()
+```

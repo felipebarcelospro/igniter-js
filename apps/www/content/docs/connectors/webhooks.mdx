@@ -1,0 +1,300 @@
+---
+title: Webhooks
+description: Handle incoming webhooks with schema validation, signature verification, and typed payloads. Define webhook pipelines inside connector definitions.
+---
+
+## Webhooks
+
+Connectors can receive and process **incoming webhooks** from external services. Define payload schemas, verification logic, and handler functions right inside your connector definitions — with full type safety.
+
+---
+
+## Defining a Webhook
+
+Add `.withWebhook()` to your connector definition:
+
+```typescript
+const stripe = IgniterConnector.create()
+  .withConfig(
+    z.object({
+      webhookSecret: z.string().describe("Stripe webhook signing secret"),
+    }),
+  )
+  .withWebhook({
+    description: "Receive Stripe events (payment, subscription, etc.)",
+    schema: z.object({
+      type: z.string(),
+      data: z.object({
+        object: z.object({
+          id: z.string(),
+        }),
+      }),
+    }),
+    handler: async ({ payload, config, scope, identity }) => {
+      console.log(`[${scope}:${identity}] Webhook: ${payload.type}`);
+
+      switch (payload.type) {
+        case "payment_intent.succeeded":
+          await handleSuccessfulPayment(payload.data.object.id, identity);
+          break;
+        case "customer.subscription.deleted":
+          await handleSubscriptionCancelled(payload.data.object.id, identity);
+          break;
+      }
+    },
+    verify: async (request, config) => {
+      // Verify Stripe signature
+      const sig = request.headers["stripe-signature"] as string;
+      // Use stripe library to verify
+      return verifyStripeWebhook(request.rawBody, sig, config.webhookSecret);
+    },
+  })
+  .addAction("createPayment", {
+    input: z.object({
+      amount: z.number(),
+      currency: z.string(),
+    }),
+    handler: async ({ input, config }) => {
+      // Create payment via Stripe API
+    },
+  })
+  .build();
+```
+
+---
+
+## Webhook Options
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `schema` | **Yes** | Zod schema for validating the webhook payload |
+| `handler` | **Yes** | Function called when a valid webhook is received |
+| `description` | No | Human-readable description |
+| `verify` | No | Signature verification function (return `true`/`false`) |
+
+---
+
+## Webhook Handler Context
+
+The handler receives a rich context object:
+
+```typescript
+handler: async ({
+  payload,   // Validated webhook payload (typed from schema)
+  config,    // Decrypted connector configuration
+  context,   // From onContext hook (if defined)
+  scope,     // Scope type recovered from webhook secret
+  identity,  // Scope identifier recovered from webhook secret
+  headers,   // Raw request headers
+}) => {
+  // payload.type — typed from schema
+  // config.webhookSecret — available for API calls
+  // scope, identity — the tenant that owns this webhook
+}
+```
+
+---
+
+## Webhook URL
+
+When a connector with webhook support is connected, the manager automatically generates:
+
+1. A **unique webhook secret** — used in the URL path to identify the tenant
+2. A **webhook URL** — `{IGNITER_BASE_URL}/api/webhooks/{provider}/{secret}`
+
+The secret is stored encrypted with the connector config.
+
+```typescript
+const result = await scoped.connect("stripe", { webhookSecret: "whsec_..." });
+
+// result includes the webhook URL
+console.log(result.webhookUrl);
+// https://myapp.com/api/webhooks/stripe/sec_abc123
+```
+
+---
+
+## Handling Webhooks
+
+Handle incoming webhooks at the manager level:
+
+```typescript
+// app/api/webhooks/[provider]/[secret]/route.ts
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { provider: string; secret: string } },
+) {
+  const response = await connectors.handle("webhook", req as any);
+  return response;
+}
+```
+
+The manager:
+1. Extracts the provider and secret from the URL
+2. Looks up the connector record by provider + secret (via adapter)
+3. Recovers the scope and identity from the record
+4. Runs the `verify` function (if provided)
+5. Validates the payload against the webhook schema
+6. Runs the handler
+7. Emits telemetry events
+
+---
+
+## Webhook Verification
+
+The `verify` function authenticates the webhook. The request object contains:
+
+```typescript
+interface IgniterConnectorWebhookRequest {
+  headers: unknown;   // Request headers (Headers object or plain object)
+  body: unknown;      // Parsed JSON body
+  rawBody?: string;   // Raw body string (for signature verification)
+  method?: string;    // HTTP method
+  url?: string;       // Request URL
+}
+```
+
+### GitHub Webhook Verification
+
+```typescript
+verify: async (request, config) => {
+  const crypto = await import("crypto");
+  const sig = (request.headers as any)["x-hub-signature-256"] as string;
+  const hmac = crypto.createHmac("sha256", config.webhookSecret);
+  const digest = `sha256=${hmac.update(request.rawBody!).digest("hex")}`;
+  return crypto.timingSafeEqual(
+    Buffer.from(sig),
+    Buffer.from(digest),
+  );
+},
+```
+
+### Stripe Webhook Verification
+
+```typescript
+verify: async (request, config) => {
+  const stripe = new Stripe(config.apiKey);
+  const sig = (request.headers as any)["stripe-signature"] as string;
+  try {
+    stripe.webhooks.constructEvent(
+      request.rawBody!,
+      sig,
+      config.webhookSecret,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+},
+```
+
+---
+
+## Webhook Events
+
+Webhooks emit telemetry events automatically:
+
+| Event | When |
+|-------|------|
+| `webhook.received` | Request received (before verification) |
+| `webhook.processed` | Handler completed successfully |
+| `webhook.failed` | Verification failed or handler threw |
+
+---
+
+## Webhook Metadata Tracking
+
+The adapter tracks webhook metadata for monitoring:
+
+```typescript
+// Adapter stores:
+{
+  lastEventAt: Date,
+  lastEventResult: "success" | "error",
+  error?: string
+}
+```
+
+Access this data via the connector instance:
+
+```typescript
+const instance = await scoped.get("stripe");
+console.log(instance?.webhook);
+// { secret: "sec_abc", url: "https://...", enabled: true }
+```
+
+---
+
+## Real-World Example: Complete Stripe Webhook (Next.js)
+
+### Connector Definition
+
+```typescript
+// connectors/stripe.ts
+const stripeConnector = IgniterConnector.create()
+  .withConfig(
+    z.object({
+      apiKey: z.string(),
+      webhookSecret: z.string(),
+    }),
+  )
+  .withWebhook({
+    schema: z.object({
+      type: z.string(),
+      data: z.object({
+        object: z.object({ id: z.string() }),
+      }),
+    }),
+    handler: async ({ payload, config, identity }) => {
+      switch (payload.type) {
+        case "checkout.session.completed":
+          await activateSubscription(identity, payload.data.object.id);
+          break;
+        case "customer.subscription.deleted":
+          await cancelSubscription(identity);
+          break;
+      }
+    },
+    verify: async (request, config) => {
+      const sig = (request.headers as any)["stripe-signature"];
+      try {
+        const stripe = require("stripe")(config.apiKey);
+        stripe.webhooks.constructEvent(
+          request.rawBody, sig, config.webhookSecret
+        );
+        return true;
+      } catch { return false; }
+    },
+  })
+  .addAction("createCheckout", {
+    input: z.object({ priceId: z.string() }),
+    handler: async ({ input, config }) => {
+      // Create Stripe checkout session
+    },
+  })
+  .build();
+```
+
+### Webhook Route
+
+```typescript
+// app/api/webhooks/[provider]/[secret]/route.ts
+import { connectors } from "@/connectors/manager";
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { provider: string; secret: string } },
+) {
+  return connectors.handle("webhook", req as any);
+}
+```
+
+**✅ That's it.** The manager handles everything: routing, verification, scope recovery, payload validation, and telemetry.
+
+---
+
+## Next Steps
+
+- [OAuth](/docs/connectors/oauth) — OAuth 2.0 authentication flow
+- [Telemetry](/docs/connectors/telemetry) — Webhook telemetry events
+- [Events](/docs/connectors/events) — Subscribe to webhook events

@@ -1,0 +1,217 @@
+---
+title: Scopes
+description: Isolate jobs by organization, workspace, or environment with typed scopes — built-in multi-tenancy for background job processing.
+---
+
+Scopes provide multi-tenant isolation for your background jobs. A scope is a typed label that's attached to every job dispatched from a scoped instance, enabling you to partition jobs by organization, workspace, environment, or any other dimension — all within the same jobs runtime.
+
+## Defining a Scope
+
+Define a scope on the main builder using `addScope()`:
+
+```typescript
+const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsBullMQAdapter.create({ redis }))
+  .withService('my-api')
+  .withEnvironment('production')
+  .withContext(async () => ({ db }))
+  .addScope('organization', {
+    required: true,                       // Scope is mandatory for dispatch
+    description: 'Customer organization', // Human-friendly description
+  })
+  .addQueue(emailQueue)
+  .addQueue(analyticsQueue)
+  .build()
+```
+
+### Scope Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `required` | `boolean` | `false` | If `true`, dispatching without a scope throws an error |
+| `description` | `string` | — | Human-friendly description for documentation |
+
+---
+
+## Creating a Scoped Instance
+
+Use `jobs.scope(type, id, tags?)` to create a scoped instance:
+
+```typescript
+// Create a scoped instance for organization "org_123"
+const orgJobs = jobs.scope('organization', 'org_123')
+
+// All jobs dispatched from orgJobs carry the scope metadata
+await orgJobs.email.sendWelcome.dispatch({
+  input: { email: 'user@example.com', name: 'Alice' },
+})
+
+// Scoped instances have the same typed queue accessors
+await orgJobs.analytics.trackEvent.dispatch({
+  input: { event: 'signup', userId: '456' },
+})
+```
+
+### Optional Tags
+
+Attach additional metadata to the scope:
+
+```typescript
+const proOrgJobs = jobs.scope('organization', 'org_456', {
+  plan: 'pro',
+  region: 'us-east',
+})
+
+// Tags are included in job metadata for search/filtering
+await proOrgJobs.email.sendWelcome.dispatch({
+  input: { email: 'vip@example.com', name: 'VIP' },
+})
+```
+
+---
+
+## Required Scopes
+
+When `required: true` is set on the scope definition, dispatching from the unscoped instance throws an error:
+
+```typescript
+const jobs = IgniterJobs.create()
+  .addScope('organization', { required: true })
+  // ...
+  .build()
+
+// ❌ Throws: JOBS_SCOPE_REQUIRED
+await jobs.email.sendWelcome.dispatch({
+  input: { email: 'user@example.com' },
+})
+
+// ✅ Works — dispatched from a scoped instance
+const orgJobs = jobs.scope('organization', 'org_123')
+await orgJobs.email.sendWelcome.dispatch({
+  input: { email: 'user@example.com' },
+})
+```
+
+---
+
+## Multi-Tenant Patterns
+
+### Per-Organization Isolation
+
+```typescript
+// Define the jobs runtime once
+const jobs = IgniterJobs.create()
+  .withAdapter(...)
+  .withService('saas-api')
+  .withEnvironment('production')
+  .withContext(async () => ({ db }))
+  .addScope('organization', { required: true })
+  .addQueue(emailQueue)
+  .addQueue(paymentQueue)
+  .build()
+
+// Create scoped instances on-demand per request
+async function handleRequest(orgId: string, userId: string) {
+  const orgJobs = jobs.scope('organization', orgId)
+
+  await orgJobs.email.sendWelcome.dispatch({
+    input: { email: 'user@example.com', name: 'New User' },
+  })
+}
+```
+
+### Environment-Based Partitioning
+
+```typescript
+const jobs = IgniterJobs.create()
+  .addScope('environment', { required: false })
+  // ...
+  .build()
+
+const devJobs = jobs.scope('environment', 'development')
+const prodJobs = jobs.scope('environment', 'production')
+
+// Jobs are tagged with their environment
+await devJobs.email.sendWelcome.dispatch({ ... })
+await prodJobs.email.sendWelcome.dispatch({ ... })
+```
+
+### Scoped Workers
+
+Workers process all jobs regardless of scope — scoping affects dispatch metadata, not worker processing:
+
+```typescript
+// A single worker processes jobs from all scopes
+const worker = await jobs.worker.create()
+  .addQueue('email')
+  .withConcurrency(5)
+  .onActive(({ job }) => {
+    // job.scope contains the scope info if the job was dispatched from a scoped instance
+    if (job.scope) {
+      console.log(`Processing scoped job: ${job.scope.type}=${job.scope.id}`)
+    }
+  })
+  .start()
+```
+
+### Context-Aware Scoping
+
+Dynamically resolve the scope from application context:
+
+```typescript
+// Express middleware pattern
+function withJobsScope(req, res, next) {
+  const orgId = req.headers['x-organization-id']
+  if (!orgId) {
+    return res.status(400).json({ error: 'Organization ID required' })
+  }
+  req.jobs = jobs.scope('organization', orgId)
+  next()
+}
+
+app.post('/users/signup', withJobsScope, async (req, res) => {
+  await req.jobs.email.sendWelcome.dispatch({
+    input: { email: req.body.email, name: req.body.name },
+  })
+  res.json({ ok: true })
+})
+```
+
+---
+
+## Scope in Job Metadata
+
+Jobs dispatched from scoped instances carry scope information in the `IgniterJobSearchResult`:
+
+```typescript
+const result = await jobs.email.sendWelcome.get('job_abc123').retrieve()
+console.log(result.scope)
+// { type: 'organization', id: 'org_123', tags: { plan: 'pro' } }
+```
+
+Use this for search and filtering:
+
+```typescript
+// Search for jobs from a specific scope
+const orgJobs = await jobs.search('jobs', {
+  scope: { type: 'organization', id: 'org_123' },
+})
+```
+
+---
+
+## Best Practices
+
+- **Use `required: true`** for production multi-tenant apps to prevent unscoped dispatches
+- **Keep scope types simple** — single-word identifiers like `organization`, `workspace`, `environment`
+- **Use tags for metadata** — `plan`, `region`, `tier` — rather than creating many scope types
+- **Validate scope IDs** — ensure IDs are valid before creating scoped instances
+- **Log scope on dispatch** — add scope logging in `onStart` hooks for debugging
+
+---
+
+## Next Steps
+
+- **[Search & Monitoring](/docs/jobs/search-and-monitoring)** — Find and filter jobs by scope
+- **[Advanced Features](/docs/jobs/advanced-features)** — Job streams and event subscriptions with scoped instances
+- **[Workers](/docs/jobs/workers)** — Workers process all scopes transparently

@@ -1,0 +1,309 @@
+---
+title: "Introducing Igniter.js v1: A Type-Safe TypeScript Framework, Built by AI Agents for AI Agents"
+description: "After 1.5 years of development, 4,000+ tests, and 13 production-ready packages — Igniter.js v1 is here. A fully type-safe TypeScript framework designed so AI coding agents produce consistent, scalable, and secure code from day one."
+tags: ["announcement", "v1", "typescript", "ai", "framework"]
+---
+
+## Two Years Ago, I Saw the Problem Coming
+
+It was late 2024. My developer community — 11,000+ subscribers of Vibe Dev — was hitting the same wall over and over. AI coding tools like Cursor and Copilot were getting shockingly good at generating code. But every agent built differently. One used Next.js with tRPC. Another spun up Express with handwritten routes. A third produced a NestJS monolith with half the types missing.
+
+The result? Projects that worked on day one fell apart by week three. No consistency. No guardrails. No shared DNA between what one agent built and another maintained.
+
+I asked myself: *what if, instead of forcing AI agents to learn yet another framework, I built a framework designed for them from the ground up?*
+
+Igniter.js was born as a human-AI collaboration experiment. For 1.5 years, I worked alongside AI agents — the same ones my community was struggling with — to build a production-grade TypeScript framework. Every line of code, every architectural decision, every adapter was shaped by both human judgment and agent feedback. The framework was built *by* agents, *for* agents.
+
+Today, I'm shipping v1.
+
+## The Philosophy: Four Principles That Drive Every Decision
+
+Igniter.js isn't just another framework. It's a bet on where software development is heading — a world where humans and AI build together, and the code needs to work for both.
+
+**100% Type Safety, Zero Compromises.** When an AI agent generates code, types aren't a nice-to-have — they're the difference between a function that compiles and one that crashes at runtime. Every Igniter.js package exports fully typed APIs. No `any`. No escape hatches. No "trust me, it works."
+
+**AGENTS.md in Every Package.** Documentation isn't an afterthought here. Every package ships an `AGENTS.md` file that AI coding tools can read directly from `node_modules`. An agent doesn't need to guess the API — it reads the file and knows exactly how to use `IgniterStore`, `IgniterJobs`, or `IgniterAgent` immediately. This is documentation as a first-class API for AI.
+
+**Adapter Architecture — No Vendor Lock-In.** Swap Redis for SQLite. Exchange Express for Bun. Trade Discord for Telegram. Every integration point uses an adapter pattern so you're never trapped by yesterday's decisions.
+
+**Built for Real-World Testing.** The framework ships with an MCP Server that AI agents can use to test endpoints, debug issues, and validate behavior directly inside the IDE — before marking any task complete.
+
+## The Ecosystem: 13 Packages, One Coherent Vision
+
+Each library solves a specific pain point in AI-assisted development. Here's the tour.
+
+### @igniter-js/core — The Declarative Builder
+
+Every AI agent builds API routes differently. Core gives you a single, type-safe builder that wires context, telemetry, store, plugins, and configuration into one coherent application shell.
+
+```ts
+import { Igniter } from "@igniter-js/core";
+
+const app = Igniter.create()
+  .withContext<{ db: Database }>()
+  .withConfig({ basePATH: "/api/v1" })
+  .withStore(storeManager)
+  .withTelemetry(telemetryManager)
+  .addPlugin("auth", authPlugin)
+  .build();
+```
+
+Controllers, queries, and mutations are defined via dedicated factories — `createIgniterController`, `createIgniterQuery`, `createIgniterMutation` — so every route is fully typed from input to response.
+
+### @igniter-js/store — Unified State, Any Backend
+
+AI agents struggle with state management across requests. Store provides a unified Pub/Sub and caching API regardless of storage backend, with type-safe event schemas enforced at compile time.
+
+```ts
+import { IgniterStore, IgniterStoreRedisAdapter, IgniterStoreEvents } from "@igniter-js/store";
+import { z } from "zod";
+
+const UserEvents = IgniterStoreEvents.create("user")
+  .event("created", z.object({ userId: z.string(), email: z.string().email() }))
+  .event("deleted", z.object({ userId: z.string() }))
+  .build();
+
+const store = IgniterStore.create()
+  .withAdapter(IgniterStoreRedisAdapter.create({ redis }))
+  .withService("my-api")
+  .addEvents(UserEvents)
+  .build();
+
+await store.events.publish("user.created", { userId: "abc", email: "dev@igniter.dev" });
+```
+
+### @igniter-js/jobs — Async Processing That Doesn't Break Silently
+
+Async processing is where AI-generated code often fails silently. Jobs gives you declarative, typed queue definitions with built-in telemetry, retry logic, and multi-tenant scope isolation.
+
+```ts
+import { IgniterJobs } from "@igniter-js/jobs";
+import { IgniterJobsBullMQAdapter } from "@igniter-js/jobs/adapters";
+
+const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsBullMQAdapter.create({ connection }))
+  .withContext<{ db: Database }>(async () => ({ db: await getDb() }))
+  .job("sendWelcomeEmail", {
+    input: z.object({ userId: z.string() }),
+    handler: async ({ input, context }) => {
+      const user = await context.db.user.findUnique({ where: { id: input.userId } });
+      await mailer.send({ to: user.email, template: "welcome" });
+    },
+  })
+  .build();
+
+await jobs.sendWelcomeEmail.dispatch({ userId: "abc" });
+```
+
+### @igniter-js/agents — Strongly-Typed AI Agent Framework
+
+Building AI agents requires messy tool definitions. Agents gives you typed tool registration with auto-generated schemas, multi-agent orchestration, MCP integration, and persistent memory — all validated at compile time.
+
+```ts
+import { IgniterAgent, IgniterAgentTool, IgniterAgentToolset } from "@igniter-js/agents";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
+
+const searchDocs = IgniterAgentTool.create("searchDocs")
+  .withDescription("Search the project documentation")
+  .withInput(z.object({ query: z.string() }))
+  .withExecute(async ({ query }) => {
+    return await docsIndex.search(query);
+  })
+  .build();
+
+const toolset = IgniterAgentToolset.create("utils")
+  .addTool(searchDocs)
+  .build();
+
+const agent = IgniterAgent.create("assistant")
+  .withModel(openai("gpt-4"))
+  .addToolset(toolset)
+  .build();
+
+const result = await agent.generate({ chatId: "chat_123", userId: "user_123", context: {} });
+```
+
+### @igniter-js/bot — One Command, Multiple Platforms
+
+Building a bot for one platform is easy. For three? It's a nightmare. Bots unifies the API across Telegram, WhatsApp, and Discord with a single builder.
+
+```ts
+import { IgniterBot, telegram, discord, memoryStore } from "@igniter-js/bot";
+
+const bot = IgniterBot.create()
+  .withHandle("@demo_bot")
+  .withSessionStore(memoryStore())
+  .addAdapters({
+    telegram: telegram({ token: process.env.TELEGRAM_TOKEN! }),
+    discord: discord({ token: process.env.DISCORD_TOKEN!, applicationId: process.env.DISCORD_APP_ID! }),
+  })
+  .addCommand("start", {
+    name: "start",
+    description: "Greets the user",
+    handle: async (ctx) => {
+      await ctx.reply("👋 Welcome to Igniter.js!");
+    },
+  })
+  .build();
+
+await bot.start();
+```
+
+### @igniter-js/caller — Type-Safe HTTP Client, Schema-Driven
+
+Frontend agents often craft malformed API calls. Caller generates fully-typed clients with built-in caching, retry logic, interceptors, and telemetry — all from schema definitions.
+
+```ts
+import { IgniterCaller } from "@igniter-js/caller";
+
+const client = IgniterCaller.create()
+  .withBaseUrl("/api")
+  .withHeaders({ "Content-Type": "application/json" })
+  .build();
+
+const user = await client.get("/users/abc").send(); // Fully typed response
+```
+
+### @igniter-js/cli — One Command to Start
+
+```bash
+npx create-igniter-app@latest my-app
+```
+
+The CLI scaffolds your project with starters for Next.js, Express, Bun, and TanStack Start — plus add-ons for auth, database, bots, jobs, store, telemetry, and more.
+
+### @igniter-js/collections — Declarative Data Access with a Prisma-like API
+
+AI agents write inconsistent data access patterns. Collections gives you a schema-first, typed query layer that treats files (Markdown, JSON) and key-value stores as structured databases.
+
+```ts
+import { IgniterCollections, IgniterCollectionModel } from "@igniter-js/collections";
+import { NodeFsAdapter } from "@igniter-js/collections/adapters";
+import { z } from "zod";
+
+const Posts = IgniterCollectionModel.create("posts")
+  .withBasePath("content/posts")
+  .withSchema(z.object({ title: z.string(), published: z.boolean(), tags: z.array(z.string()) }))
+  .build();
+
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .addCollection(Posts)
+  .build();
+
+const published = await docs.posts.findMany({ where: { published: true } });
+```
+
+### @igniter-js/connectors — OAuth, Webhooks, and Third-Party Integrations
+
+Every SaaS app needs external integrations. Connectors handles OAuth flows, webhook verification, and credential encryption with multi-tenant scope isolation — so agents don't have to reinvent the wheel.
+
+```ts
+import { IgniterConnector, IgniterConnectorManager } from "@igniter-js/connectors";
+
+const slack = IgniterConnector.create()
+  .withConfig(z.object({ webhookUrl: z.string().url() }))
+  .addAction("notify", {
+    input: z.object({ message: z.string() }),
+    handler: async ({ input, config }) => {
+      await fetch(config.webhookUrl, { method: "POST", body: JSON.stringify({ text: input.message }) });
+    },
+  })
+  .build();
+
+const manager = IgniterConnectorManager.create()
+  .withDatabase(adapter)
+  .addScope("organization", { required: true })
+  .addConnector("slack", slack)
+  .build();
+
+const scoped = manager.scope("organization", "org_123");
+await scoped.connect("slack", { webhookUrl: "https://hooks.slack.com/..." });
+await scoped.action("slack", "notify").call({ message: "Deploy complete!" });
+```
+
+### @igniter-js/logger — Structured Logging, Enforced
+
+AI agents produce terrible debug logs. Logger wraps Pino with a builder API, typed log levels, and built-in transports (console, file, HTTP) — making logs structured, searchable, and consistent across every Igniter.js package.
+
+```ts
+import { IgniterLogger, IgniterLogLevel } from "@igniter-js/logger";
+
+const logger = IgniterLogger.create()
+  .withLevel(IgniterLogLevel.INFO)
+  .withAppName("my-api")
+  .withComponent("auth")
+  .build();
+
+logger.info("User signed up", { userId: "abc", plan: "pro" });
+```
+
+### @igniter-js/mail — Typed Email Templates with React Email
+
+Email is deceptively complex. Mail gives you a clean, typed API with React-based templates, provider abstraction (Resend, Postmark, SendGrid, SMTP), optional queue delivery, and full telemetry on every send.
+
+```ts
+import { IgniterMail } from "@igniter-js/mail";
+
+const mail = IgniterMail.create()
+  .withFrom("hello@igniter.dev")
+  .withAdapter("resend", process.env.RESEND_API_KEY!)
+  .addTemplate("welcome", welcomeTemplate)
+  .build();
+
+await mail.send({ to: "dev@igniter.dev", template: "welcome", data: { name: "Felipe" } });
+```
+
+### @igniter-js/telemetry — Auto-Instrumented Observability
+
+AI agents rarely add proper observability. Telemetry gives you a typed event registry, session-based context propagation via AsyncLocalStorage, privacy-safe redaction, and 10 transport adapters (Logger, HTTP, OTLP, Sentry, Slack, Discord, Telegram, and more).
+
+```ts
+import { IgniterTelemetry, IgniterTelemetryEvents, LoggerTransportAdapter } from "@igniter-js/telemetry";
+import { z } from "zod";
+
+const JobsEvents = IgniterTelemetryEvents.namespace("igniter.jobs")
+  .event("job.completed", z.object({ "ctx.job.id": z.string(), "ctx.job.duration": z.number() }))
+  .build();
+
+const telemetry = IgniterTelemetry.create()
+  .withService("my-api")
+  .withEnvironment(process.env.NODE_ENV!)
+  .addEvents(JobsEvents)
+  .addTransport(LoggerTransportAdapter.create({ logger: console }))
+  .withRedaction({ denylistKeys: ["password", "secret"] })
+  .build();
+
+telemetry.emit("igniter.jobs.job.completed", {
+  attributes: { "ctx.job.id": "job_123", "ctx.job.duration": 142 },
+});
+```
+
+### @igniter-js/mcp-server — AI Agents as First-Class Citizens
+
+Agents need to read docs, test endpoints, and validate code. The MCP Server gives them a direct line to do this inside the IDE, turning Cursor or Claude Code into a framework expert. It exposes tools for CLI automation, API testing, documentation fetching, GitHub management, and more — all over STDIO.
+
+```bash
+npx @igniter-js/mcp-server
+```
+
+## What Comes Next
+
+v1 is the foundation. Here's what's on the horizon:
+
+- **Templates.** Production-ready starters for every stack — Next.js, Express, Bun, Deno.
+- **Deeper AI Integration.** Tighter agent workflows, auto-generated AGENTS.md improvements, and MCP-powered testing loops.
+- **Studio v2.** Interactive API playground built on Scalar, already in development.
+
+Igniter.js is open source, MIT licensed, and built in Brazil for developers everywhere. It's the result of 1.5 years of betting that humans and AI can build better software together — not by treating agents as tools, but by treating them as teammates.
+
+[Star the project on GitHub](https://github.com/felipebarcelospro/igniter-js) · [Read the docs](https://igniter.dev) · [Join the community](https://discord.gg/igniter)
+
+---
+
+**Ready to build?**
+
+```bash
+npx create-igniter-app@latest my-app
+```

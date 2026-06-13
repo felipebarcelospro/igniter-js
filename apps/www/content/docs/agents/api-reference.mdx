@@ -1,0 +1,485 @@
+---
+title: API Reference
+description: Complete API reference for @igniter-js/agents. All builders, types, error codes, adapters, and utility functions with parameter tables and examples.
+---
+
+## API Reference
+
+Complete reference for every public API in `@igniter-js/agents`.
+
+---
+
+## Imports
+
+```typescript
+import {
+  // Builders
+  IgniterAgent,
+  IgniterAgentManager,
+  IgniterAgentTool,
+  IgniterAgentToolset,
+  IgniterAgentMCPClient,
+  IgniterAgentPrompt,
+
+  // Adapters
+  IgniterAgentInMemoryAdapter,
+  IgniterAgentJSONFileAdapter,
+
+  // Errors
+  IgniterAgentError,
+  IgniterAgentConfigError,
+  IgniterAgentMCPError,
+  IgniterAgentToolError,
+  IgniterAgentMemoryError,
+  IgniterAgentAdapterError,
+  IgniterAgentErrorCode,
+  isIgniterAgentError,
+  isIgniterAgentMCPError,
+  isIgniterAgentToolError,
+
+  // Types
+  type IgniterAgentHooks,
+  type IgniterAgentMemoryConfig,
+  type IgniterAgentGenerateOptions,
+  type IgniterAgentStreamOptions,
+  type IgniterAgentBuiltAgent,
+  type IgniterAgentBuiltTool,
+  type IgniterAgentBuiltToolset,
+} from '@igniter-js/agents'
+```
+
+---
+
+## IgniterAgent
+
+Primary entry point for creating AI agents.
+
+### `IgniterAgent.create(name)`
+
+Creates a new agent builder.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | `string` | Yes | Unique agent name |
+
+### Builder Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `.withModel(model)` | `(model: LanguageModel) => Builder` | Sets the AI language model. Accepts any Vercel AI SDK model. |
+| `.withPrompt(prompt)` | `(prompt: IgniterAgentPromptTemplate) => Builder` | Sets the system prompt template. |
+| `.withContextSchema(schema)` | `(schema: ZodSchema) => Builder` | Sets Zod schema for type-safe context. |
+| `.addToolset(toolset)` | `(toolset: IgniterAgentToolset) => Builder` | Registers a custom toolset. |
+| `.addMCP(config)` | `(config: IgniterAgentMCPConfigUnion) => Builder` | Registers an MCP client configuration. |
+| `.withMemory(config)` | `(config: IgniterAgentMemoryConfig) => Builder` | Configures persistent memory. |
+| `.withLogger(logger)` | `(logger: IgniterLogger) => Builder` | Attaches a logger instance. |
+| `.withTelemetry(telemetry)` | `(telemetry: IgniterTelemetryManager) => Builder` | Attaches a telemetry manager. |
+| `.onAgentStart(cb)` | `(name: string) => void` | Fired when agent starts. |
+| `.onAgentError(cb)` | `(name: string, error: Error) => void` | Fired on agent error. |
+| `.onToolCallStart(cb)` | `(agentName: string, toolName: string, input: unknown) => void` | Fired before tool execution. |
+| `.onToolCallEnd(cb)` | `(agentName: string, toolName: string, output: unknown) => void` | Fired after successful tool execution. |
+| `.onToolCallError(cb)` | `(agentName: string, toolName: string, error: Error) => void` | Fired on tool execution failure. |
+| `.onMCPStart(cb)` | `(agentName: string, mcpName: string) => void` | Fired before MCP connection. |
+| `.onMCPError(cb)` | `(agentName: string, mcpName: string, error: Error) => void` | Fired on MCP connection failure. |
+| `.build()` | `() => IgniterAgentBuiltAgent` | Builds the agent. |
+
+### Built Agent Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `.start()` | `() => Promise<void>` | Initializes MCP connections. Must be called before generate/stream. |
+| `.stop()` | `() => Promise<void>` | Disconnects MCP connections gracefully. |
+| `.generate(options)` | `(options: IgniterAgentGenerateOptions) => Promise<IgniterAgentOutput>` | Generates a response. |
+| `.stream(options)` | `(options: IgniterAgentStreamOptions) => Promise<Stream>` | Streams a response. |
+| `.getName()` | `() => string` | Returns the agent name. |
+| `.getConfig()` | `() => Partial<IgniterAgentConfig>` | Returns current config. |
+| `.getToolsets()` | `() => Record<string, IgniterAgentToolset>` | Returns toolsets (including MCP). |
+| `.attachLogger(logger)` | `(logger?: IgniterLogger) => void` | Attaches logger at runtime. |
+| `.attachTelemetry(telemetry)` | `(telemetry?: IgniterTelemetryManager) => void` | Attaches telemetry at runtime. |
+| `.attachHooks(hooks)` | `(hooks?: IgniterAgentHooks) => void` | Attaches hooks at runtime. |
+| `.memory` | `IgniterAgentMemoryCore | undefined` | Memory runtime (if configured). |
+
+### `IgniterAgentGenerateOptions`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `chatId` | `string` | Yes | Unique conversation identifier |
+| `userId` | `string` | Yes | User identifier for memory scoping |
+| `context` | `Record<string, unknown>` | Yes | Context data (typed if schema set) |
+| `message` | `{ role, content }` | No | Single message (use `message` OR `messages`) |
+| `messages` | `ModelMessage[]` | No | Multiple messages (use `message` OR `messages`) |
+
+### `IgniterAgentOutput`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `content` | `string` | The generated text response |
+| `toolCalls` | `ToolCall[]` | Tools the AI called |
+| `toolResults` | `ToolResult[]` | Results from tool calls |
+| `finishReason` | `string` | Why generation stopped |
+| `usage` | `LanguageModelUsage` | Token usage statistics |
+| `messages` | `ModelMessage[]` | Full message history |
+
+---
+
+## IgniterAgentManager
+
+Orchestrates multiple agents with shared resources.
+
+### `IgniterAgentManager.create()`
+
+Creates a new manager builder.
+
+### Builder Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `.addAgent(name, agent)` | `(name: string, agent: BuiltAgent) => Builder` | Registers an agent. Type-safe — names tracked in type. |
+| `.withLogger(logger)` | `(logger: IgniterLogger) => Builder` | Shared logger for all agents. |
+| `.withTelemetry(telemetry)` | `(telemetry: IgniterTelemetryManager) => Builder` | Shared telemetry for all agents. |
+| `.withAutoStart(bool)` | `(bool: boolean) => Builder` | Auto-start on registration (default: false). |
+| `.withContinueOnError(bool)` | `(bool: boolean) => Builder` | Continue batch start on error (default: true). |
+| `.onAgentStart(cb)` | `(name: string) => void` | Applied to all registered agents. |
+| `.onAgentError(cb)` | `(name: string, error: Error) => void` | Applied to all registered agents. |
+| `.onToolCallStart(cb)` | `(agentName, toolName, input) => void` | Applied to all registered agents. |
+| `.onToolCallEnd(cb)` | `(agentName, toolName, output) => void` | Applied to all registered agents. |
+| `.onToolCallError(cb)` | `(agentName, toolName, error) => void` | Applied to all registered agents. |
+| `.onMCPStart(cb)` | `(agentName, mcpName) => void` | Applied to all registered agents. |
+| `.onMCPError(cb)` | `(agentName, mcpName, error) => void` | Applied to all registered agents. |
+| `.build()` | `() => IgniterAgentManagerCore` | Builds the manager. |
+
+### Built Manager Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `.register(name, agent)` | `(name: string, agent: BuiltAgent) => this` | Registers an agent (chainable). |
+| `.unregister(name)` | `(name: string) => boolean` | Unregisters an agent. |
+| `.has(name)` | `(name: string) => boolean` | Checks if an agent is registered. |
+| `.get(name)` | `(name: string) => BuiltAgent` | Gets an agent by name. Throws if not found. |
+| `.start(name)` | `(name: string) => Promise<BuiltAgent>` | Starts a single agent. |
+| `.startAll()` | `() => Promise<Map<string, Record>>` | Starts all agents in parallel. |
+| `.getNames()` | `() => string[]` | Returns registered agent names. |
+| `.getStatus()` | `() => IgniterAgentInfo[]` | Returns status for all agents. |
+| `.getFailedAgents()` | `() => IgniterAgentInfo[]` | Returns agents in error state. |
+
+---
+
+## IgniterAgentTool
+
+Creates individual tool definitions.
+
+### `IgniterAgentTool.create(name)`
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | `string` | Yes | Unique tool name within a toolset |
+
+### Builder Methods
+
+| Method | Required | Description |
+|--------|----------|-------------|
+| `.withDescription(text)` | Yes | Human-readable description shown to the AI |
+| `.withInput(zodSchema)` | Yes | Zod schema defining input parameters |
+| `.withOutput(zodSchema)` | No | Zod schema for output validation |
+| `.withExecute(handler)` | Yes | Async function performing the tool's logic |
+| `.build()` | Yes | Returns the built tool definition |
+
+### Execute Handler
+
+```typescript
+type ExecuteHandler<TInput, TOutput> = (
+  params: TInput,
+  options: IgniterAgentToolExecuteOptions
+) => Promise<TOutput>
+
+interface IgniterAgentToolExecuteOptions {
+  toolCallId: string
+  messages: ModelMessage[]
+  abortSignal?: AbortSignal
+}
+```
+
+### Built Tool Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | `string` | Tool name |
+| `description` | `string` | Tool description |
+| `inputSchema` | `ZodSchema` | Input validation schema |
+| `outputSchema` | `ZodSchema | undefined` | Output validation schema |
+| `execute` | `Function` | The execution handler |
+| `$Infer` | `{ Name, Input, Output }` | Type inference helper |
+
+---
+
+## IgniterAgentToolset
+
+Groups related tools into a named collection.
+
+### `IgniterAgentToolset.create(name)`
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | `string` | Yes | Unique toolset name (used as prefix for tool names) |
+
+### Builder Methods
+
+| Method | Description |
+|--------|-------------|
+| `.withName(name)` | Renames the toolset |
+| `.addTool(tool)` | Adds a built tool to the toolset |
+| `.build()` | Returns the built toolset |
+| `.getName()` | Returns the toolset name |
+| `.getTools()` | Returns the tools object |
+| `.getToolCount()` | Returns the number of tools |
+
+### Built Toolset Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | `string` | Toolset name |
+| `type` | `'custom'` | Always 'custom' for user-defined toolsets |
+| `status` | `'connected'` | Always 'connected' for custom toolsets |
+| `tools` | `ToolSet` | The tools collection |
+| `toolset` | `ToolSet` | Raw tools reference |
+| `$Infer` | `{ Name, Tools }` | Type inference helper |
+
+---
+
+## IgniterAgentMCPClient
+
+Configures connections to MCP servers.
+
+### `IgniterAgentMCPClient.create(name)`
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | `string` | Yes | Unique MCP configuration name |
+
+### Common Methods
+
+| Method | Description |
+|--------|-------------|
+| `.withType('stdio' | 'http')` | Sets transport type (required) |
+| `.withName(name)` | Renames the configuration |
+| `.build()` | Returns the built MCP config |
+
+### Stdio-Specific Methods (after `withType('stdio')`)
+
+| Method | Description |
+|--------|-------------|
+| `.withCommand(cmd)` | Command to execute (e.g., `npx`, `node`) |
+| `.withArgs(args)` | Command-line arguments array |
+| `.withEnv(env)` | Environment variables record |
+
+### HTTP-Specific Methods (after `withType('http')`)
+
+| Method | Description |
+|--------|-------------|
+| `.withURL(url)` | MCP server endpoint URL |
+| `.withHeaders(headers)` | HTTP headers record |
+
+### Built MCP Config Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | `string` | Configuration name |
+| `type` | `'stdio' | 'http'` | Transport type |
+| `command` | `string` (stdio only) | Executable command |
+| `args` | `string[]` (stdio only) | Command arguments |
+| `env` | `Record<string, string>` (stdio only) | Environment variables |
+| `url` | `string` (http only) | Server URL |
+| `headers` | `Record<string, string>` (http only) | HTTP headers |
+
+---
+
+## IgniterAgentPrompt
+
+Creates template-based system prompts.
+
+### `IgniterAgentPrompt.create(template)`
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `template` | `string` | Yes | Template string with `{{variable}}` placeholders |
+
+### Methods
+
+| Method | Description |
+|--------|-------------|
+| `.build(context)` | Renders template with context data |
+| `.addAppended(key, prompt)` | Appends another prompt or string |
+| `.removeAppended(key)` | Removes an appended prompt |
+| `.getAppended()` | Returns appended prompts object |
+| `.getTemplate()` | Returns raw template string |
+
+---
+
+## Adapters
+
+### IgniterAgentInMemoryAdapter
+
+```typescript
+import { IgniterAgentInMemoryAdapter } from '@igniter-js/agents'
+
+const adapter = IgniterAgentInMemoryAdapter.create({
+  namespace: 'myapp',    // Namespace prefix for keys
+  maxMessages: 1000,     // Max messages per chat
+  maxChats: 100,         // Max chat sessions
+})
+```
+
+| Method | Description |
+|--------|-------------|
+| `.create(options)` | Factory method |
+| `.connect()` | No-op (interface compatibility) |
+| `.disconnect()` | No-op (interface compatibility) |
+| `.isConnected()` | Always returns `true` |
+| `.clear()` | Clears all stored data |
+| `getWorkingMemory(params)` | Retrieves scoped working memory |
+| `updateWorkingMemory(params)` | Updates scoped working memory |
+| `saveMessage(message)` | Saves a conversation message |
+| `getMessages(params)` | Gets messages for a chat |
+| `saveChat(chat)` | Saves/updates a chat session |
+| `getChats(params)` | Lists chat sessions |
+| `getChat(chatId)` | Gets a single chat |
+| `updateChatTitle(chatId, title)` | Updates chat title |
+| `deleteChat(chatId)` | Deletes a chat and its messages |
+
+### IgniterAgentJSONFileAdapter
+
+```typescript
+import { IgniterAgentJSONFileAdapter } from '@igniter-js/agents'
+
+const adapter = IgniterAgentJSONFileAdapter.create({
+  filePath: './data/agent-memory.json',
+  namespace: 'prod',
+})
+```
+
+Same interface as InMemoryAdapter. Data persists to disk.
+
+---
+
+## Memory Configuration
+
+### `IgniterAgentMemoryConfig`
+
+```typescript
+interface IgniterAgentMemoryConfig {
+  provider: IgniterAgentMemoryProvider   // Adapter instance
+  working?: {
+    enabled: boolean                      // Enable working memory
+    scope: string                         // Scope key (e.g., 'chat')
+  }
+  history?: {
+    enabled: boolean                      // Enable chat history
+    limit: number                         // Max messages per chat
+  }
+  chats?: {
+    enabled: boolean                      // Enable chat sessions
+  }
+}
+```
+
+---
+
+## Error Codes
+
+### `IgniterAgentErrorCode`
+
+| Code | Value | Description |
+|------|-------|-------------|
+| `UNKNOWN` | `IGNITER_AGENT_UNKNOWN_ERROR` | Generic/unknown error |
+| `INVALID_CONFIG` | `IGNITER_AGENT_INVALID_CONFIG` | Invalid configuration |
+| `MISSING_REQUIRED` | `IGNITER_AGENT_MISSING_REQUIRED` | Required value missing |
+| `AGENT_NOT_INITIALIZED` | `IGNITER_AGENT_NOT_INITIALIZED` | Agent not initialized |
+| `AGENT_MODEL_MISSING` | `IGNITER_AGENT_MODEL_MISSING` | Model not configured |
+| `AGENT_BUILD_FAILED` | `IGNITER_AGENT_BUILD_FAILED` | Agent build failed |
+| `MCP_CONNECTION_FAILED` | `IGNITER_AGENT_MCP_CONNECTION_FAILED` | MCP connection failed |
+| `MCP_CLIENT_NOT_FOUND` | `IGNITER_AGENT_MCP_CLIENT_NOT_FOUND` | MCP client not found |
+| `MCP_TOOL_ERROR` | `IGNITER_AGENT_MCP_TOOL_ERROR` | MCP tool execution failed |
+| `MCP_INVALID_CONFIG` | `IGNITER_AGENT_MCP_INVALID_CONFIG` | Invalid MCP configuration |
+| `TOOL_EXECUTION_FAILED` | `IGNITER_AGENT_TOOL_EXECUTION_FAILED` | Tool execution failed |
+| `TOOL_NOT_FOUND` | `IGNITER_AGENT_TOOL_NOT_FOUND` | Tool not found |
+| `TOOL_VALIDATION_FAILED` | `IGNITER_AGENT_TOOL_VALIDATION_FAILED` | Tool validation failed |
+| `AGENT_CONTEXT_SCHEMA_INVALID` | `IGNITER_AGENT_CONTEXT_SCHEMA_INVALID` | Invalid context schema |
+| `MEMORY_PROVIDER_ERROR` | `IGNITER_AGENT_MEMORY_PROVIDER_ERROR` | Memory provider error |
+| `MEMORY_NOT_FOUND` | `IGNITER_AGENT_MEMORY_NOT_FOUND` | Memory not found |
+| `MEMORY_UPDATE_FAILED` | `IGNITER_AGENT_MEMORY_UPDATE_FAILED` | Memory update failed |
+| `ADAPTER_CONNECTION_FAILED` | `IGNITER_AGENT_ADAPTER_CONNECTION_FAILED` | Adapter connection failed |
+| `ADAPTER_OPERATION_FAILED` | `IGNITER_AGENT_ADAPTER_OPERATION_FAILED` | Adapter operation failed |
+| `ADAPTER_NOT_INITIALIZED` | `IGNITER_AGENT_ADAPTER_NOT_INITIALIZED` | Adapter not initialized |
+
+### Error Classes
+
+| Class | Extends | Description |
+|-------|---------|-------------|
+| `IgniterAgentError` | `IgniterError` | Base error class |
+| `IgniterAgentConfigError` | `IgniterAgentError` | Configuration errors |
+| `IgniterAgentMCPError` | `IgniterAgentError` | MCP operation errors |
+| `IgniterAgentToolError` | `IgniterAgentError` | Tool execution errors |
+| `IgniterAgentMemoryError` | `IgniterAgentError` | Memory operation errors |
+| `IgniterAgentAdapterError` | `IgniterAgentError` | Adapter operation errors |
+
+### Type Guards
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `isIgniterAgentError(error)` | `(error: unknown) => error is IgniterAgentError` | Checks if error is an IgniterAgentError |
+| `isIgniterAgentMCPError(error)` | `(error: unknown) => error is IgniterAgentMCPError` | Checks if error is an MCP error |
+| `isIgniterAgentToolError(error)` | `(error: unknown) => error is IgniterAgentToolError` | Checks if error is a tool error |
+
+---
+
+## Type Exports
+
+### `IgniterAgentHooks`
+
+```typescript
+interface IgniterAgentHooks {
+  onAgentStart?: (name: string) => void
+  onAgentError?: (name: string, error: Error) => void
+  onToolCallStart?: (agentName: string, toolName: string, input: unknown) => void
+  onToolCallEnd?: (agentName: string, toolName: string, output: unknown) => void
+  onToolCallError?: (agentName: string, toolName: string, error: Error) => void
+  onMCPStart?: (agentName: string, mcpName: string) => void
+  onMCPError?: (agentName: string, mcpName: string, error: Error) => void
+}
+```
+
+### `IgniterAgentBuiltAgent`
+
+The type returned by `agent.build()`:
+
+```typescript
+type IgniterAgentBuiltAgent<
+  TContextSchema = ZodSchema,
+  TToolsets = Record<string, IgniterAgentToolset>,
+  TModel = LanguageModel,
+  TInstructions = IgniterAgentPromptTemplate,
+>
+```
+
+### `IgniterAgentBuiltTool`
+
+The type returned by `tool.build()`:
+
+```typescript
+type IgniterAgentBuiltTool<
+  TName = string,
+  TInput = unknown,
+  TOutput = unknown,
+>
+```
+
+### `IgniterAgentBuiltToolset`
+
+The type returned by `toolset.build()`:
+
+```typescript
+type IgniterAgentBuiltToolset<
+  TName = string,
+  TTools = ToolSet,
+>
+```

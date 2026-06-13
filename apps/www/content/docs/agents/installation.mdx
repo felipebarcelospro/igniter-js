@@ -1,0 +1,158 @@
+---
+title: Installation
+description: Install @igniter-js/agents with any package manager. Peer dependencies, AI model provider setup, optional MCP support, and runtime requirements.
+---
+
+## Installation
+
+### Core Package
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/agents ai zod
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/agents ai zod
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/agents ai zod
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/agents ai zod
+    ```
+  </Tab>
+</Tabs>
+
+### AI Model Provider (Required)
+
+Choose and install at least one AI model provider. Agents works with any provider supported by the [Vercel AI SDK](https://sdk.vercel.ai/docs/models):
+
+<Tabs items={['OpenAI', 'Anthropic', 'Google', 'Mistral']}>
+  <Tab value="OpenAI">
+    ```bash
+    npm install @ai-sdk/openai
+    ```
+    Set your API key:
+    ```bash
+    export OPENAI_API_KEY="sk-..."
+    ```
+  </Tab>
+  <Tab value="Anthropic">
+    ```bash
+    npm install @ai-sdk/anthropic
+    ```
+    ```bash
+    export ANTHROPIC_API_KEY="sk-ant-..."
+    ```
+  </Tab>
+  <Tab value="Google">
+    ```bash
+    npm install @ai-sdk/google
+    ```
+    ```bash
+    export GOOGLE_GENERATIVE_AI_API_KEY="..."
+    ```
+  </Tab>
+  <Tab value="Mistral">
+    ```bash
+    npm install @ai-sdk/mistral
+    ```
+    ```bash
+    export MISTRAL_API_KEY="..."
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  You can also use **Ollama** for local models, **Groq**, **Cohere**, **DeepSeek**, or any other [AI SDK provider](https://sdk.vercel.ai/providers/ai-sdk-providers).
+</Callout>
+
+### Optional: MCP Support
+
+To connect agents to external Model Context Protocol servers:
+
+```bash
+npm install @ai-sdk/mcp @modelcontextprotocol/sdk
+```
+
+### Optional: Telemetry
+
+For production observability with structured events:
+
+```bash
+npm install @igniter-js/telemetry
+```
+
+---
+
+## Peer Dependencies
+
+| Package | Version | Required | Purpose |
+|---------|---------|----------|---------|
+| `ai` | `>=4.0` | ✅ Yes | Core AI SDK for model interaction |
+| `zod` | `>=3.0` | ✅ Yes | Runtime schema validation for tools and context |
+| `@ai-sdk/openai` (or similar) | `>=1.0` | ✅ Yes | AI model provider |
+| `@igniter-js/telemetry` | `*` | No | Structured telemetry events |
+| `@ai-sdk/mcp` | `*` | No | MCP server integration |
+| `@modelcontextprotocol/sdk` | `*` | No | MCP client transport layer |
+
+---
+
+## Runtime Requirements
+
+| Environment | Version | Notes |
+|-------------|---------|-------|
+| **Node.js** | `>= 22.0.0` | Full support |
+| **Bun** | `>= 1.0.0` | Full support |
+| **Deno** | `>= 1.30.0` | Full support |
+| **Browser** | ❌ Not supported | Server-only package |
+
+<Callout type="warn">
+  Agents is **server-only**. Importing it in a browser environment will trigger the shim protection. Use it in API routes, server actions, background workers, or CLI tools.
+</Callout>
+
+---
+
+## Verify Installation
+
+After installing, verify everything is wired correctly:
+
+```typescript
+import {
+  IgniterAgent,
+  IgniterAgentTool,
+  IgniterAgentToolset,
+  IgniterAgentPrompt,
+  IgniterAgentMCPClient,
+  IgniterAgentManager,
+  IgniterAgentInMemoryAdapter,
+} from '@igniter-js/agents'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+// Quick smoke test — should build without errors
+const agent = IgniterAgent
+  .create('test')
+  .withModel(openai('gpt-4o-mini'))
+  .withPrompt(IgniterAgentPrompt.create('You are a test agent.'))
+  .build()
+
+console.log('Agent name:', agent.getName())
+// → Agent name: test
+```
+
+**✅ Success!** If you see the agent name printed, your installation is ready.
+
+---
+
+## Next Steps
+
+- [Quick Start](/docs/agents/quick-start) — Build your first agent in under 5 minutes
+- [Building Agents](/docs/agents/building-agents) — Deep dive into the agent builder API

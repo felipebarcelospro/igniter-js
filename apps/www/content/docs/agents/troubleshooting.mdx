@@ -1,0 +1,337 @@
+---
+title: Troubleshooting
+description: Common errors, their causes, and solutions when working with @igniter-js/agents. Debugging tips for tools, MCP connections, memory, and multi-agent setups.
+---
+
+## Troubleshooting
+
+Common issues and their solutions when building agents with `@igniter-js/agents`.
+
+---
+
+## Agent Start Failures
+
+### Error: `AGENT_NOT_INITIALIZED`
+
+```
+IgniterAgentError: Agent 'support' is not registered
+  code: AGENT_NOT_INITIALIZED
+```
+
+**Cause:** You're trying to access or start an agent that wasn't registered with the manager.
+
+**Solution:** Register the agent with the manager before accessing it:
+
+```typescript
+const manager = IgniterAgentManager.create().build()
+
+// Register first
+manager.register('support', supportAgent)
+
+// Then start
+await manager.start('support')
+```
+
+### Error: `INVALID_CONFIG`
+
+```
+IgniterAgentConfigError: Tool name is required and must be a non-empty string
+  code: INVALID_CONFIG
+  field: name
+```
+
+**Cause:** A required configuration field is missing or invalid.
+
+**Solution:** Check the `field` in the error metadata to identify what's missing:
+
+```typescript
+// Missing name
+const tool = IgniterAgentTool.create('') // ❌ Empty string
+
+// Missing description
+const tool = IgniterAgentTool.create('myTool').build() // ❌ No description set
+
+// Missing input schema
+const tool = IgniterAgentTool
+  .create('myTool')
+  .withDescription('...')
+  .build() // ❌ No input schema
+```
+
+---
+
+## MCP Connection Issues
+
+### Error: MCP connection hangs or times out
+
+**Cause:** The MCP server process isn't starting or the remote server is unreachable.
+
+**Solutions:**
+
+1. **Test the MCP command manually:**
+
+```bash
+npx -y @modelcontextprotocol/server-filesystem /tmp
+# Should start and wait for input
+```
+
+2. **Add verbose debugging:**
+
+```typescript
+const mcpClient = IgniterAgentMCPClient
+  .create('filesystem')
+  .withType('stdio')
+  .withCommand('npx')
+  .withArgs(['-y', '@modelcontextprotocol/server-filesystem', '/tmp'])
+  .withEnv({ DEBUG: 'mcp:*' })
+  .build()
+```
+
+3. **Handle connection errors gracefully:**
+
+```typescript
+const agent = IgniterAgent.create('bot')
+  .addMCP(mcpClient)
+  .onMCPError((name, mcp, error) => {
+    console.error(`MCP '${mcp}' failed:`, error.message)
+  })
+  .build()
+
+try {
+  await agent.start()
+} catch (error) {
+  if (error.message.includes('ECONNREFUSED')) {
+    console.error('MCP server is not running. Start it first.')
+  }
+}
+```
+
+### Error: MCP tools not available
+
+**Cause:** MCP tools are only discovered at `start()` time.
+
+**Solution:** Always call `agent.start()` before `agent.generate()`:
+
+```typescript
+const agent = IgniterAgent.create('bot')
+  .addMCP(filesystemMCP)
+  .build()
+
+await agent.start() // ← Required: discovers MCP tools
+
+const result = await agent.generate({...}) // ← MCP tools now available
+```
+
+---
+
+## Memory Issues
+
+### Error: `MEMORY_PROVIDER_ERROR`
+
+```
+IgniterAgentMemoryError: saveMessage is not supported by the provider
+  code: MEMORY_PROVIDER_ERROR
+```
+
+**Cause:** You're using a memory operation that the provider doesn't support.
+
+**Solution:** Check the provider's supported methods. Not all providers implement every method. The in-memory adapter supports all methods; custom adapters may only implement a subset.
+
+```typescript
+// Check if method exists before calling
+if (agent.memory) {
+  try {
+    await agent.memory.saveMessage({...})
+  } catch (error) {
+    if (error.code === 'MEMORY_PROVIDER_ERROR') {
+      // Method not supported — log and continue
+      console.warn('saveMessage not supported by this adapter')
+    }
+  }
+}
+```
+
+### Issue: Memory lost on restart
+
+**Cause:** Using `IgniterAgentInMemoryAdapter` in production.
+
+**Solution:** Switch to `IgniterAgentJSONFileAdapter` for single-machine deployments or build a custom adapter for shared storage:
+
+```typescript
+// For single-machine production
+import { IgniterAgentJSONFileAdapter } from '@igniter-js/agents'
+
+const adapter = IgniterAgentJSONFileAdapter.create({
+  filePath: './data/agent-memory.json',
+})
+
+// For multi-server: build a Redis adapter (see Memory docs)
+```
+
+---
+
+## Tool Execution Issues
+
+### Error: Tool returns `{ success: false, error: "..." }`
+
+**Cause:** The tool threw an error during execution. This is normal — the framework wraps all tool calls with error handling.
+
+**Solution:** The error is automatically captured. The AI will see the error response and can handle it accordingly:
+
+```typescript
+const tool = IgniterAgentTool
+  .create('api_call')
+  .withDescription('...')
+  .withInput(z.object({ endpoint: z.string() }))
+  .withExecute(async ({ endpoint }) => {
+    const response = await fetch(endpoint)
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}: ${response.statusText}`)
+    }
+    return response.json()
+  })
+  .build()
+
+// The AI will see:
+// { success: false, error: "API returned 500: Internal Server Error" }
+// And can respond to the user appropriately
+```
+
+### Error: Tool input validation fails
+
+**Cause:** The Zod schema rejected the input values.
+
+**Solution:** Check that your tool's Zod schema matches the expected input:
+
+```typescript
+// Schema expects 'userId' but code passes 'user_id'
+.withInput(z.object({ userId: z.string() }))
+//                                ^^ camelCase
+
+// Calling with wrong key:
+.withExecute(async ({ user_id }) => { // ❌ Should be userId
+```
+
+---
+
+## TypeScript Issues
+
+### Error: Type inference lost on builder
+
+**Cause:** Breaking the type chain by assigning intermediate builders to loosely-typed variables.
+
+**Solution:** Keep the builder chain intact or use explicit type annotations:
+
+```typescript
+// ❌ Loses type inference
+let builder = IgniterAgent.create('bot')
+builder = builder.withModel(openai('gpt-4o')) // Type narrowed incorrectly
+
+// ✅ Chain directly
+const agent = IgniterAgent
+  .create('bot')
+  .withModel(openai('gpt-4o'))
+  .build()
+
+// ✅ Use explicit type if you must break the chain
+const builder: ReturnType<typeof IgniterAgent.create<'bot'>> = 
+  IgniterAgent.create('bot')
+```
+
+### Error: `Property 'x' does not exist` on context
+
+**Cause:** Context schema not set or mismatched.
+
+**Solution:** Define a context schema for type-safe context:
+
+```typescript
+const agent = IgniterAgent.create('bot')
+  .withContextSchema(z.object({ company: z.string() }))
+  .build()
+
+// Now context is typed:
+await agent.generate({
+  chatId: 'chat_001',
+  userId: 'user_001',
+  context: { company: 'Acme' }, // ✅ Typed
+  message: { role: 'user', content: '...' },
+})
+```
+
+---
+
+## Logger/Debugging
+
+### Enabling detailed logs
+
+```typescript
+import { IgniterLogger } from '@igniter-js/common'
+
+const logger = IgniterLogger.create({ level: 'debug' })
+
+const agent = IgniterAgent.create('bot')
+  .withLogger(logger)
+  .build()
+
+// Now see: debug → IgniterAgent.start started { agent: 'bot', ... }
+//          success → IgniterAgent.start success { durationMs: 342 }
+//          error → IgniterAgent.mcp.connect failed Error(...)
+```
+
+### Debugging tool calls
+
+```typescript
+const agent = IgniterAgent.create('bot')
+  .onToolCallStart((agent, tool, input) => {
+    console.log(`[DEBUG] ${agent} → ${tool}`, input)
+  })
+  .onToolCallEnd((agent, tool, output) => {
+    console.log(`[DEBUG] ${agent} ← ${tool}`, output)
+  })
+  .onToolCallError((agent, tool, error) => {
+    console.error(`[DEBUG] ${agent} ✕ ${tool}`, error)
+  })
+  .build()
+```
+
+---
+
+## Browser Import Protection
+
+### Error: `@igniter-js/agents is server-only`
+
+**Cause:** Importing agents in a browser/Vite/Next.js client component.
+
+**Solution:** Agents is server-only. Use it only in:
+
+- API routes (`app/api/**/route.ts` in Next.js)
+- Server actions
+- `getServerSideProps` / server components
+- CLI tools
+- Background workers
+- Express/Fastify route handlers
+
+```typescript
+// ✅ OK: API route
+// app/api/chat/route.ts
+import { IgniterAgent } from '@igniter-js/agents'
+
+// ❌ Wrong: Client component
+// components/Chat.tsx
+import { IgniterAgent } from '@igniter-js/agents' // Will throw!
+```
+
+---
+
+## Quick Diagnosis Checklist
+
+- [ ] Is `agent.start()` called before `agent.generate()`?
+- [ ] Are MCP servers reachable (test manually)?
+- [ ] Is the model provider API key set as an environment variable?
+- [ ] Are tool names unique within each toolset?
+- [ ] Are tool descriptions specific and actionable?
+- [ ] Is context schema set if using typed context?
+- [ ] Is the memory adapter appropriate for the deployment (in-memory vs persistent)?
+- [ ] Are Node.js >= 22 or Bun >= 1.0 in use?
+- [ ] Is `@ai-sdk/openai` (or your provider) installed?
+- [ ] Is `zod` installed (peer dependency)?

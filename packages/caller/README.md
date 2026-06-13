@@ -894,13 +894,9 @@ Configure persistent caching with Redis or other stores:
 
 ```typescript
 interface IgniterCallerStoreAdapter<TClient = any> {
-  client: TClient | null;
-  get(key: string): Promise<string | null>;
-  set(
-    key: string,
-    value: string,
-    options?: { ttl?: number; [key: string]: any },
-  ): Promise<void>;
+  readonly client: TClient;
+  get<T = any>(key: string): Promise<T | null>;
+  set(key: string, value: any, options?: { ttl?: number; [key: string]: any }): Promise<void>;
   delete(key: string): Promise<void>;
   has(key: string): Promise<boolean>;
 }
@@ -957,6 +953,51 @@ const api = IgniterCaller.create()
 - `strict`: Throw on validation failure (default)
 - `soft`: Log error and continue
 - `off`: Skip validation
+
+### Telemetry Integration
+
+Enable structured observability for every request in your application:
+
+```typescript
+import { IgniterCaller } from '@igniter-js/caller';
+import { IgniterTelemetry } from '@igniter-js/telemetry';
+import { IgniterCallerTelemetryEvents } from '@igniter-js/caller/telemetry';
+
+// 1. Create telemetry manager with caller events
+const telemetry = IgniterTelemetry.create()
+  .withService('my-api-gateway')
+  .addEvents(IgniterCallerTelemetryEvents)
+  .build();
+
+// 2. Wire telemetry into your caller instance
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withTelemetry(telemetry)
+  .build();
+
+// All requests now emit structured events automatically:
+// - igniter.caller.request.execute.started
+// - igniter.caller.request.execute.success
+// - igniter.caller.request.execute.error
+// - igniter.caller.request.timeout.error
+// - igniter.caller.cache.read.hit
+// - igniter.caller.retry.attempt.started
+// - igniter.caller.validation.request.error
+// - igniter.caller.validation.response.error
+```
+
+**Telemetry Events Reference:**
+
+| Event | Attributes | When Emitted |
+|-------|-----------|--------------|
+| `request.execute.started` | `method`, `url`, `baseUrl`, `timeoutMs` | Before each request |
+| `request.execute.success` | `method`, `url`, `durationMs`, `status`, `contentType`, `cache.hit`, `fallback` | Request succeeds |
+| `request.execute.error` | `method`, `url`, `durationMs`, `status`, `error.code`, `error.message` | Request fails |
+| `request.timeout.error` | `method`, `url`, `timeoutMs` | Request times out |
+| `cache.read.hit` | `method`, `url`, `cache.key`, `cache.staleTime` | Cache hit occurs |
+| `retry.attempt.started` | `method`, `url`, `retry.attempt`, `retry.maxAttempts`, `retry.delayMs` | Each retry attempt |
+| `validation.request.error` | `method`, `url`, `validation.type`, `validation.error` | Request validation fails |
+| `validation.response.error` | `method`, `url`, `validation.type`, `validation.error`, `status` | Response validation fails |
 
 ---
 
@@ -1208,6 +1249,81 @@ const result = await api.get('/users/list').execute(); // ✅ Typed
 
 ---
 
+### Error: Mock not resolving
+
+**Cause:** Mock path doesn't match the requested URL pattern.
+
+**Solution:**
+
+```typescript
+// ❌ Mock uses '/users/1' but request uses '/users/:id'
+const mock = IgniterCallerMock.create()
+  .mock('/users/1', { GET: { response: {...}, status: 200 } })
+  .build();
+
+// ✅ Use parameterized paths that match schema definitions
+const mock = IgniterCallerMock.create()
+  .withSchemas(schemas)
+  .mock('/users/:id', {
+    GET: (request) => ({
+      response: { id: request.params.id, name: 'Test' },
+      status: 200,
+    }),
+  })
+  .build();
+```
+
+---
+
+### Error: Interceptor not firing
+
+**Cause:** Interceptor threw an error and subsequent interceptors were skipped.
+
+**Solution:**
+
+```typescript
+// ✅ Always wrap interceptors in try-catch for resilience
+api.withRequestInterceptor(async (request) => {
+  try {
+    const token = await getAuthToken();
+    return {
+      ...request,
+      headers: { ...request.headers, Authorization: `Bearer ${token}` },
+    };
+  } catch (error) {
+    console.error('Failed to attach auth token:', error);
+    return request; // Continue without the header
+  }
+});
+```
+
+---
+
+### Error: `File` is not available in this runtime
+
+**Cause:** Using `.getFile()` or `.responseType<File>()` in environments without the `File` constructor (Node.js < 20, some serverless runtimes).
+
+**Solution:**
+
+```typescript
+// ✅ Use Blob instead of File
+const result = await api
+  .get('/download')
+  .responseType<Blob>()
+  .execute();
+
+if (result.data) {
+  const buffer = Buffer.from(await result.data.arrayBuffer());
+  await fs.writeFile('/tmp/output.pdf', buffer);
+}
+
+// Or check for File availability
+const response = await api.get('/download').execute();
+const blob = await fetch(response.request?.url).then(r => r.blob());
+```
+
+---
+
 ## 🔗 Framework Integration
 
 ### Next.js (App Router)
@@ -1239,6 +1355,137 @@ export default async function UsersPage() {
   );
 }
 ```
+
+### React Client Integration (`@igniter-js/caller/client`)
+
+The package ships a dedicated React layer with an `IgniterCallerProvider`, `useQuery`/`useMutate` hooks, cache management, and typed client wrappers — similar to TanStack Query but fully integrated with the caller's type system.
+
+```typescript
+// providers/api.tsx
+'use client';
+
+import { IgniterCallerProvider } from '@igniter-js/caller/client';
+import { api, authApi } from '@/lib/api';
+
+export function APIProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <IgniterCallerProvider
+      callers={{ api, authApi }}
+      configs={{
+        api: {
+          headers: { 'X-Client': 'web' },
+          query: { version: 'v1' },
+        },
+        authApi: {
+          headers: { 'X-Auth-Client': 'web' },
+          cookies: { session: document.cookie },
+        },
+      }}
+      onError={(error) => {
+        console.error('API Error:', error.message);
+      }}
+    >
+      {children}
+    </IgniterCallerProvider>
+  );
+}
+```
+
+```typescript
+// hooks/use-users.ts
+import { useIgniterCaller } from '@igniter-js/caller/client';
+
+export function useUsers() {
+  const caller = useIgniterCaller();
+
+  // useQuery on GET — auto-fetches on mount, supports staleTime, refetchInterval
+  const usersQuery = caller('api').get('/users').useQuery({
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
+
+  // useMutate on POST — manual trigger with typed variables
+  const createUser = caller('api').post('/users').useMutate({
+    onSuccess: () => usersQuery.invalidate(),
+  });
+
+  const createUserMutation = caller('api').post('/users').useMutate({
+    onSuccess: (data) => console.log('Created:', data),
+    onError: (error) => console.error('Failed:', error.message),
+    onSettled: () => console.log('Mutation settled'),
+  });
+
+  return {
+    data: usersQuery.data,
+    isLoading: usersQuery.isLoading,
+    isFetching: usersQuery.isFetching,
+    isError: usersQuery.isError,
+    error: usersQuery.error,
+    refetch: usersQuery.refetch,
+    invalidate: usersQuery.invalidate,
+    createUser: createUserMutation.mutate,
+    isCreating: createUserMutation.isLoading,
+  };
+}
+```
+
+```typescript
+// app/users/page.tsx
+'use client';
+
+import { APIProvider } from '@/providers/api';
+import { useUsers } from '@/hooks/use-users';
+
+function UsersContent() {
+  const { data, isLoading, createUser, isCreating, invalidate } = useUsers();
+
+  if (isLoading) return <div>Loading users...</div>;
+
+  return (
+    <div>
+      <button
+        onClick={() => createUser({ body: { name: 'New User', email: 'user@test.com' } })}
+        disabled={isCreating}
+      >
+        Add User
+      </button>
+      <button onClick={() => invalidate()}>Refresh</button>
+      <ul>
+        {data?.map((user) => (
+          <li key={user.id}>{user.name}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export default function UsersPage() {
+  return (
+    <APIProvider>
+      <UsersContent />
+    </APIProvider>
+  );
+}
+```
+
+**Client Hook API:**
+
+| Hook | Method | Description |
+|------|--------|-------------|
+| `.useQuery(options?)` | GET, HEAD | Auto-fetch on mount, supports `staleTime`, `refetchInterval`, `refetchOnWindowFocus`, `enabled`, `initialData` |
+| `.useMutate(options?)` | POST, PUT, PATCH, DELETE | Manual trigger via `.mutate(variables?)`, supports `onSuccess`/`onError`/`onSettled`/`onLoading` |
+
+**Client Config API (`caller('key').config`):**
+
+| Config Option | Type | Description |
+|--------------|------|-------------|
+| `headers` | `Record<string, string>` | Default headers for this caller |
+| `cookies` | `Record<string, string>` | Default cookies sent as `Cookie` header |
+| `query` | `Record<string, string \| number \| boolean>` | Default query params appended to every request |
+| `onQueryLoading` | `(loading: boolean) => void` | Global loading callback for queries |
+| `onQuerySuccess` | `(data: unknown) => void` | Global success callback for queries |
+| `onQueryError` | `(error: IgniterError) => void` | Global error callback for queries |
+| `onQuerySettled` | `(data: unknown, error: unknown) => void` | Global settled callback for queries |
 
 ### React with TanStack Query
 

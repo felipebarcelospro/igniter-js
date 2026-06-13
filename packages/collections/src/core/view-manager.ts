@@ -44,16 +44,30 @@ export class IgniterCollectionViewManager implements IIgniterCollectionViewManag
   private readonly hookCache: Map<string, IgniterCollectionViewDataHook>;
   private readonly handlerCache: Map<string, IgniterCollectionViewActionHandler>;
 
+  private readonly contextFactory?: () => unknown | Promise<unknown>;
+
   constructor(config: {
     views: IgniterCollectionViewDefinition[];
     manager: IIgniterCollectionsManagerFull;
     logger?: IgniterLogger;
+    contextFactory?: () => unknown | Promise<unknown>;
   }) {
     this.views = new Map(config.views.map(v => [v.name, v]));
     this.manager = config.manager;
     this.logger = config.logger;
+    this.contextFactory = config.contextFactory;
     this.hookCache = new Map();
     this.handlerCache = new Map();
+  }
+
+  /**
+   * Resolve context from the configured factory.
+   */
+  private async resolveContext(): Promise<unknown> {
+    if (!this.contextFactory) {
+      return undefined;
+    }
+    return await this.contextFactory();
   }
 
   /**
@@ -257,8 +271,10 @@ export class IgniterCollectionViewManager implements IIgniterCollectionViewManag
       const handler = await this.loadActionHandler(action.handler);
 
       // Execute action
+      const context = await this.resolveContext();
       const result = await handler({
         manager: this.manager,
+        context,
         view,
         actionId,
         params
@@ -348,8 +364,10 @@ export class IgniterCollectionViewManager implements IIgniterCollectionViewManag
     let hookResult: any;
 
     try {
+      const context = await this.resolveContext();
       hookResult = await hook({
         manager: this.manager,
+        context,
         options,
       });
 

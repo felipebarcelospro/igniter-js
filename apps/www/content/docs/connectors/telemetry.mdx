@@ -1,0 +1,233 @@
+---
+title: Telemetry
+description: Structured observability for connectors. Auto-emitted events with redaction rules for safe production monitoring of connections, actions, OAuth, and webhooks.
+---
+
+## Telemetry
+
+When telemetry is enabled, connectors **automatically emit structured events** for every operation — connections, actions, OAuth flows, webhooks, and errors. The events follow a consistent schema with safe defaults for production observability.
+
+---
+
+## Enabling Telemetry
+
+Wire the telemetry runtime into the manager:
+
+```typescript
+import { IgniterTelemetry } from "@igniter-js/telemetry";
+import { IgniterConnectorsTelemetryEvents } from "@igniter-js/connectors/telemetry";
+import { IgniterConnectorManager } from "@igniter-js/connectors";
+
+const telemetry = IgniterTelemetry.create()
+  .withService("my-api")
+  .withEnvironment("production")
+  .addEvents(IgniterConnectorsTelemetryEvents)
+  .withRedaction({
+    denylistKeys: [
+      "config",
+      "accessToken",
+      "refreshToken",
+      "clientSecret",
+      "apiKey",
+      "token",
+      "secret",
+      "password",
+      "payload",
+      "input",
+      "output",
+      "userInfo",
+    ],
+    hashKeys: ["ctx.connector.identity"],
+  })
+  .build();
+
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(adapter)
+  .withTelemetry(telemetry) // Events emitted automatically!
+  .addScope("organization", { required: true })
+  .addConnector("telegram", telegram)
+  .build();
+```
+
+---
+
+## Auto-Emitted Events
+
+Once telemetry is configured, events are emitted automatically — no manual instrumentation needed.
+
+### Connector Lifecycle
+
+| Event Name | Emitted When |
+|------------|-------------|
+| `igniter.connectors.connector.connected` | `.connect()` succeeds |
+| `igniter.connectors.connector.disconnected` | `.disconnect()` succeeds |
+| `igniter.connectors.connector.enabled` | `.toggle(key, true)` succeeds |
+| `igniter.connectors.connector.disabled` | `.toggle(key, false)` succeeds |
+| `igniter.connectors.connector.updated` | `.update()` succeeds |
+
+### OAuth Flows
+
+| Event Name | Emitted When |
+|------------|-------------|
+| `igniter.connectors.oauth.started` | Authorization URL generated |
+| `igniter.connectors.oauth.completed` | Token exchange successful |
+| `igniter.connectors.oauth.refreshed` | Token refresh successful |
+| `igniter.connectors.oauth.failed` | Any OAuth step fails |
+
+### Actions
+
+| Event Name | Emitted When |
+|------------|-------------|
+| `igniter.connectors.action.started` | Before handler execution |
+| `igniter.connectors.action.completed` | Handler returns successfully |
+| `igniter.connectors.action.failed` | Handler throws |
+
+### Webhooks
+
+| Event Name | Emitted When |
+|------------|-------------|
+| `igniter.connectors.webhook.received` | Request received |
+| `igniter.connectors.webhook.processed` | Handler completed |
+| `igniter.connectors.webhook.failed` | Verification or handler fails |
+
+### Errors
+
+| Event Name | Emitted When |
+|------------|-------------|
+| `igniter.connectors.error.occurred` | Any operation throws |
+
+### Adapter Operations
+
+| Event Name | Emitted When |
+|------------|-------------|
+| `igniter.connectors.adapter.get` | Adapter `get()` called |
+| `igniter.connectors.adapter.list` | Adapter `list()` called |
+| `igniter.connectors.adapter.upsert` | Adapter `save()` called |
+| `igniter.connectors.adapter.update` | Adapter `update()` called |
+| `igniter.connectors.adapter.delete` | Adapter `delete()` called |
+
+---
+
+## Safe Attributes
+
+These attributes are **safe to expose** in telemetry:
+
+| Attribute | Description |
+|-----------|-------------|
+| `ctx.connector.provider` | Connector key (e.g., `"telegram"`) |
+| `ctx.connector.scope` | Scope type (e.g., `"organization"`) |
+| `ctx.connector.identity` | Scope identifier — **hash this** |
+| `ctx.connector.encrypted` | Whether encryption is enabled |
+| `ctx.connector.encryptedFields` | Number of encrypted fields |
+| `ctx.action.name` | Action key being executed |
+| `ctx.action.durationMs` | Execution duration |
+| `ctx.action.success` | Success/failure flag |
+| `ctx.oauth.authorizationUrl` | OAuth provider domain |
+| `ctx.oauth.pkce` | Whether PKCE is enabled |
+| `ctx.webhook.method` | HTTP method |
+| `ctx.webhook.verified` | Whether signature was verified |
+| `ctx.error.code` | Error code (e.g., `"CONNECTOR_NOT_FOUND"`) |
+| `ctx.error.operation` | Which operation failed |
+
+---
+
+## Redaction Rules
+
+**Always redact** these fields — they may contain secrets, PII, or sensitive payloads:
+
+```
+config          — Connector configurations (API keys, tokens)
+accessToken     — OAuth access tokens
+refreshToken    — OAuth refresh tokens
+clientSecret    — OAuth client secrets
+apiKey          — API keys
+token           — Generic tokens
+secret          — Webhook secrets, encryption keys
+password        — User passwords
+payload         — Webhook payloads (may contain PII)
+input           — Action inputs (may contain PII)
+output          — Action outputs (may contain PII)
+userInfo        — User information from OAuth providers
+```
+
+```typescript
+.withRedaction({
+  denylistKeys: [
+    "config", "accessToken", "refreshToken", "clientSecret",
+    "apiKey", "token", "secret", "password",
+    "payload", "input", "output", "userInfo",
+  ],
+  hashKeys: ["ctx.connector.identity"], // Hash for privacy
+})
+```
+
+---
+
+## Telemetry Events Schema
+
+The `IgniterConnectorsTelemetryEvents` schema exports the full event definitions using the `IgniterTelemetryEvents` builder:
+
+```typescript
+import { IgniterConnectorsTelemetryEvents } from "@igniter-js/connectors/telemetry";
+
+// Namespace: igniter.connectors
+// Groups:
+//   connector.*  — Lifecycle events
+//   oauth.*      — OAuth flow events
+//   action.*     — Action execution events
+//   webhook.*    — Webhook handling events
+//   error.*      — Error events
+//   adapter.*    — Adapter operation events
+```
+
+---
+
+## Redaction in Practice
+
+### What Gets Redacted
+
+```typescript
+const scoped = connectors.scope("organization", "org_123");
+
+await scoped.connect("telegram", {
+  botToken: "abc123def456",    // Redacted: config
+  chatId: "-1001234567890",    // Redacted: config
+});
+
+await scoped.action("telegram", "sendMessage").call({
+  message: "Hello customer!",  // Redacted: input
+});
+```
+
+Telemetry events will contain:
+- ✅ `ctx.connector.provider`: `"telegram"`
+- ✅ `ctx.connector.scope`: `"organization"`
+- ✅ `ctx.connector.identity`: `"sha256:abc123..."` (hashed)
+- ✅ `ctx.action.name`: `"sendMessage"`
+- ✅ `ctx.action.durationMs`: `245`
+- ❌ `config` — redacted
+- ❌ `input` — redacted
+- ❌ `output` — redacted
+
+---
+
+## Without Telemetry
+
+If you don't configure telemetry, events are **still available** via the event system:
+
+```typescript
+connectors.on((event) => {
+  // Same events, but only in-memory — no persistence or export
+  console.log(`[${event.type}] ${event.connector}`);
+});
+```
+
+This is lighter weight and suitable for development, logging, or custom monitoring without the telemetry infrastructure.
+
+---
+
+## Next Steps
+
+- [Events](/docs/connectors/events) — All event types and subscriptions
+- [Manager Setup](/docs/connectors/manager-setup) — Full telemetry configuration
+- [Best Practices](/docs/connectors/best-practices) — Production security patterns

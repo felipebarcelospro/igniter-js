@@ -1,0 +1,306 @@
+---
+title: Sessions
+description: Master telemetry sessions — actor/scope binding, scoped execution with AsyncLocalStorage, session lifecycle, and real-world patterns for HTTP request handlers and background jobs.
+---
+
+## Sessions
+
+Sessions are the **context correlation engine** of telemetry. They bind actor, scope, and attributes to events — automatically propagating context across async boundaries using Node.js `AsyncLocalStorage`.
+
+---
+
+## Why Sessions?
+
+Without sessions, you must manually pass user, tenant, and request context to every `emit()` call. With sessions, you set context once and all subsequent events inherit it:
+
+```typescript
+// ❌ Without sessions — repetitive context passing
+telemetry.emit("step.one", {
+  actor: { type: "user", id: "usr_123" },
+  scope: { type: "organization", id: "org_456" },
+  attributes: { "ctx.request.id": "req_abc" },
+});
+telemetry.emit("step.two", {
+  actor: { type: "user", id: "usr_123" },  // Repeated!
+  scope: { type: "organization", id: "org_456" },  // Repeated!
+  attributes: { "ctx.request.id": "req_abc" },  // Repeated!
+});
+
+// ✅ With sessions — set once, inherited everywhere
+await telemetry.session()
+  .actor("user", "usr_123")
+  .scope("organization", "org_456")
+  .attributes({ "ctx.request.id": "req_abc" })
+  .run(async () => {
+    telemetry.emit("step.one", {});   // Context auto-inherited
+    telemetry.emit("step.two", {});   // Context auto-inherited
+  });
+```
+
+---
+
+## Session Methods
+
+| Method | Description |
+|--------|-------------|
+| `.actor(type, id?, tags?)` | Set the actor (who is acting) |
+| `.scope(type, id, tags?)` | Set the scope (what context) |
+| `.attributes(attrs)` | Merge session-level attributes |
+| `.id(sessionId)` | Set a custom session ID |
+| `.emit(name, input?)` | Emit an event with session context |
+| `.run(fn)` | Execute function with session as active context |
+| `.end()` | End the session (no more modifications) |
+| `.getState()` | Get a copy of current session state |
+
+---
+
+## Session Mode A: Manual Handle
+
+Create, configure, emit, and end manually. Best for short-lived, explicit sessions.
+
+```typescript
+async function handleWebhook(payload: { orgId: string; userId: string }) {
+  const session = telemetry.session()
+    .actor("system", "webhook", { source: "stripe" })
+    .scope("organization", payload.orgId)
+    .attributes({ "ctx.webhook.type": "payment_intent" });
+
+  session.emit("webhook.received", {
+    attributes: { "ctx.webhook.id": payload.userId },
+  });
+
+  try {
+    await processWebhook(payload);
+    session.emit("webhook.processed", {
+      attributes: { "ctx.webhook.status": "success" },
+    });
+  } catch (error) {
+    session.emit("webhook.failed", {
+      level: "error",
+      error: {
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    });
+  }
+
+  await session.end();
+}
+```
+
+---
+
+## Session Mode B: Scoped Execution
+
+Wrap logic in `session.run()` for automatic context propagation. All `telemetry.emit()` calls inside the callback inherit the session.
+
+```typescript
+async function handleRequest(req: Request, res: Response) {
+  await telemetry.session()
+    .actor("user", req.headers["x-user-id"] as string)
+    .scope("organization", req.headers["x-org-id"] as string)
+    .attributes({
+      "ctx.request.method": req.method,
+      "ctx.request.path": req.url,
+    })
+    .run(async () => {
+      // All emit calls here inherit user + org context
+      telemetry.emit("request.started");
+
+      const result = await processRequest(req);
+
+      telemetry.emit("request.completed", {
+        attributes: { "ctx.request.status": res.statusCode },
+      });
+
+      return result;
+    });
+}
+```
+
+<Callout type="info">
+  **How it works:** `session.run()` enters an `AsyncLocalStorage` context. The telemetry manager checks for an active session on every `emit()` call. If found, session fields (actor, scope, attributes) are merged into the event envelope.
+</Callout>
+
+---
+
+## Session Mode C: Nested Sessions
+
+Sessions can be nested — inner sessions override outer session fields:
+
+```typescript
+await telemetry.session()
+  .actor("system", "batch-job")
+  .scope("organization", "org_global")
+  .run(async () => {
+    // All events here have: actor=system, scope=org_global
+
+    telemetry.emit("batch.started");
+
+    for (const org of organizations) {
+      // Inner session overrides the scope
+      await telemetry.session()
+        .scope("organization", org.id)
+        .run(async () => {
+          // Events here: actor=system (inherited), scope=org_X (overridden)
+          telemetry.emit("batch.org_processed", {
+            attributes: { "ctx.org.id": org.id },
+          });
+        });
+    }
+
+    // Back to outer context: actor=system, scope=org_global
+    telemetry.emit("batch.completed");
+  });
+```
+
+---
+
+## Session State
+
+Get a copy of the current session state for inspection:
+
+```typescript
+const session = telemetry.session()
+  .actor("user", "usr_123")
+  .scope("organization", "org_456");
+
+const state = session.getState();
+console.log(state.sessionId);    // "sess_abc123..."
+console.log(state.actor);        // { type: "user", id: "usr_123" }
+console.log(state.scope);        // { type: "organization", id: "org_456" }
+console.log(state.startedAt);    // "2024-01-15T10:30:00.000Z"
+```
+
+---
+
+## Session Lifecycle
+
+```
+telemetry.session()   →  Create session
+    .actor(...)       →  Configure actor
+    .scope(...)       →  Configure scope
+    .attributes(...)  →  Add shared attributes
+    .run(async () => {   →  Enter scoped context
+      telemetry.emit(...) →  Events inherit session
+      telemetry.emit(...) →  Events inherit session
+    })                →  Exit scoped context
+session.end()         →  End session (or auto-ended after run())
+```
+
+### After End
+
+Once ended, the session rejects further modifications:
+
+```typescript
+const session = telemetry.session().actor("user", "usr_123");
+await session.end();
+
+// ❌ Throws TELEMETRY_SESSION_ENDED
+session.actor("user", "another_user");
+```
+
+---
+
+## Static Method: `getActive()`
+
+Check if there's an active session from anywhere in your code:
+
+```typescript
+import { IgniterTelemetrySession } from "@igniter-js/telemetry";
+
+const activeSession = IgniterTelemetrySession.getActive();
+
+if (activeSession) {
+  console.log("Active session:", activeSession.sessionId);
+  console.log("Actor:", activeSession.actor);
+  console.log("Scope:", activeSession.scope);
+}
+```
+
+---
+
+## Real-World Example: Next.js Middleware
+
+Wrap every API route in a telemetry session:
+
+```typescript
+// middleware.ts
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { telemetry } from "@/lib/telemetry";
+
+export async function middleware(request: NextRequest) {
+  const userId = request.headers.get("x-user-id") ?? "anonymous";
+  const orgId = request.headers.get("x-org-id") ?? "unknown";
+
+  return telemetry.session()
+    .actor("user", userId)
+    .scope("organization", orgId)
+    .attributes({
+      "ctx.request.method": request.method,
+      "ctx.request.path": request.nextUrl.pathname,
+      "ctx.request.ip": request.ip ?? "unknown",
+    })
+    .run(async () => {
+      telemetry.emit("request.started", {
+        attributes: { "ctx.request.path": request.nextUrl.pathname },
+      });
+
+      const response = NextResponse.next();
+
+      telemetry.emit("request.completed", {
+        attributes: { "ctx.request.status": response.status },
+      });
+
+      return response;
+    });
+}
+
+export const config = {
+  matcher: "/api/:path*",
+};
+```
+
+---
+
+## Real-World Example: Express Middleware
+
+```typescript
+import express from "express";
+import { telemetry } from "./telemetry";
+
+const app = express();
+
+app.use((req, res, next) => {
+  telemetry.session()
+    .actor("user", req.headers["x-user-id"] as string ?? "anonymous")
+    .scope("organization", req.headers["x-org-id"] as string ?? "unknown")
+    .attributes({
+      "ctx.request.method": req.method,
+      "ctx.request.path": req.path,
+      "ctx.request.ip": req.ip,
+    })
+    .run(async () => {
+      telemetry.emit("request.started", {
+        attributes: { "ctx.request.path": req.path },
+      });
+
+      res.on("finish", () => {
+        telemetry.emit("request.completed", {
+          attributes: { "ctx.request.status": res.statusCode },
+        });
+      });
+
+      next();
+    });
+});
+```
+
+---
+
+## Next Steps
+
+- [Emitting Events](/docs/telemetry/emitting-events) — Attributes, levels, errors, and source metadata
+- [Adapters](/docs/telemetry/adapters) — Route events to different destinations
+- [Framework Integration](/docs/telemetry/framework-integration) — Next.js, Express, and Fastify patterns

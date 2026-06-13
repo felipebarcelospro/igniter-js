@@ -34,9 +34,9 @@ applyTo: "**"
    - Graceful degradation for unsupported features
 
 3. **Session-Aware by Default**
-  - Every context has session access
-  - Pluggable storage backends (Memory + custom implementations)
-  - Automatic cleanup and expiration
+   - Every context has session access
+   - Pluggable storage backends (Memory + custom implementations)
+   - Automatic cleanup and expiration
 
 4. **Middleware Pipeline**
    - Express-like middleware chain
@@ -67,22 +67,25 @@ applyTo: "**"
 
 The package provides organized imports for better code organization:
 
-#### Via `@igniter-js/bot` (Main - Everything)
+#### Via `@igniter-js/bot` (Main — Everything)
 
 **Builder API:**
-- `IgniterBot` / `IgniterBotBuilder` - Main builder class
+- `IgniterBot` / `IgniterBotBuilder` — Main builder class
 
 **Core:**
-- `Bot` - Internal bot class (used by builder)
-- `BotError`, `BotErrorCodes`, `BotErrorCode` - Error handling
+- `Bot` — Internal bot class (used by builder)
+- `BotError`, `BotErrorCodes`, `BotErrorCode` — Error handling
 
 **Adapters:**
-- `telegram`, `whatsapp`, `discord`, `adapters` namespace
-- `nextRouteHandlerAdapter` (Next.js route helper)
-- `tanstackStartRouteHandlerAdapter` (TanStack Start helper)
+- `telegram`, `whatsapp`, `discord` — Adapter factories
+- `adapters` namespace — Convenience object `{ telegram, whatsapp, discord }`
+- `nextRouteHandlerAdapter` — Next.js route helper
+- `tanstackStartRouteHandlerAdapter` — TanStack Start route helper
 
 **Middlewares:**
-- All middleware functions and presets
+- `rateLimitMiddleware`, `rateLimitPresets`, `MemoryRateLimitStore`, `memoryRateLimitStore`
+- `authMiddleware`, `authPresets`, `roleMiddleware`
+- `loggingMiddleware`, `loggingPresets`, `commandLoggingMiddleware`
 
 **Stores:**
 - `memoryStore`, `MemorySessionStore`
@@ -90,8 +93,14 @@ The package provides organized imports for better code organization:
 **Plugins:**
 - `analyticsPlugin`
 
+**Utilities:**
+- `tryCatch`, `isTryCatchError` — Error handling helpers
+
 **Types:**
-- All type definitions
+- All type definitions (see Section 8)
+
+**Version:**
+- `VERSION` — Runtime package version string
 
 #### Via `@igniter-js/bot/adapters` (Organized)
 
@@ -99,11 +108,11 @@ The package provides organized imports for better code organization:
 import { telegram, whatsapp, discord, builtinAdapters } from '@igniter-js/bot/adapters'
 ```
 
-- `telegram` - Telegram adapter factory
-- `whatsapp` - WhatsApp adapter factory
-- `discord` - Discord adapter factory
-- `builtinAdapters` - Namespace with all adapters
-- `BuiltinAdapterName` - Type helper
+- `telegram` — Telegram adapter factory
+- `whatsapp` — WhatsApp adapter factory
+- `discord` — Discord adapter factory
+- `builtinAdapters` — Namespace with all adapters
+- `BuiltinAdapterName` — Type helper
 
 #### Via `@igniter-js/bot/adapters/nextjs` (Route Helper)
 
@@ -123,13 +132,14 @@ import { tanstackStartRouteHandlerAdapter } from '@igniter-js/bot/adapters/tanst
 import {
   rateLimitMiddleware,
   rateLimitPresets,
+  memoryRateLimitStore,
+  MemoryRateLimitStore,
   authMiddleware,
   authPresets,
   roleMiddleware,
   loggingMiddleware,
   loggingPresets,
-  commandLoggingMiddleware,
-  memoryRateLimitStore
+  commandLoggingMiddleware
 } from '@igniter-js/bot/middlewares'
 ```
 
@@ -151,10 +161,16 @@ import { memoryStore, MemorySessionStore } from '@igniter-js/bot/stores'
 import type {
   BotContext,
   BotCommand,
-  BotAdapter,
+  IBotAdapter,
   Middleware,
   BotPlugin,
   BotSession,
+  BotSessionStore,
+  BotSessionHelper,
+  BotAdapterCapabilities,
+  BotOutboundContent,
+  BotSendOptions,
+  AdapterClient,
   // ... all other types
 } from '@igniter-js/bot/types'
 ```
@@ -181,7 +197,7 @@ src/
   builder/
     bot-builder.ts       # IgniterBotBuilder class (fluent API)
     index.ts             # Builder exports
-  
+
   types/
     bot.types.ts         # Core types (BotContext, BotSendParams, etc)
     adapter.ts           # IBotAdapter interface and adapter parameter types
@@ -190,9 +206,9 @@ src/
     session.ts           # Session management types
     plugins.ts           # Plugin system types
     builder.ts           # Builder-specific types
-    utils.interface.ts   # Utility type helpers (Input, Prettify, Path, etc)
+    utils.interface.ts   # Utility type helpers (Input, Prettify, Path, FieldType, etc)
     index.ts             # Type barrel
-  
+
   adapters/
     telegram/
       telegram.adapter.ts   # Telegram Bot API adapter (implements IBotAdapter)
@@ -217,24 +233,24 @@ src/
     tanstack-start/
       index.ts              # TanStack Start route handler adapter
     index.ts             # Adapter barrel
-  
+
   middlewares/
     rate-limit.ts        # Rate limiting middleware + store
     auth.ts              # Authentication middleware + presets
     logging.ts           # Logging middleware + presets
     index.ts
-  
+
   stores/
     memory.ts            # In-memory session store
     index.ts
-  
+
   plugins/
     analytics.ts         # Analytics plugin example
     index.ts
-  
+
   utils/
     try-catch.ts         # Error handling utilities (tryCatch, isTryCatchError)
-  
+
   bot.provider.ts        # Bot class + adapter factory + errors + context helpers
   index.ts               # Main barrel export
 ```
@@ -242,44 +258,46 @@ src/
 ### File Responsibilities
 
 **Core Files:**
-- `bot.provider.ts`: Contains the `Bot` class, `Bot.adapter()` factory, error handling (`BotError`, `BotErrorCodes`), and context helper creation (`createContextHelpers()`)
-- `index.ts`: Main barrel export - re-exports everything from the package
+- `bot.provider.ts`: Contains the `Bot` class, `Bot.adapter()` factory, `Bot.command()` factory, `Bot.middleware()` factory, error handling (`BotError`, `BotErrorCodes`), and context helper creation (`createContextHelpers()`).
+- `index.ts`: Main barrel export — re-exports everything from the package.
 
 **Types (`types/`):**
-- `bot.types.ts`: Core runtime types (`BotContext`, `BotSendParams`, `BotHandleParams`, `BotCommand`, `Middleware`, `BotLogger`, etc.)
-- `adapter.ts`: **NEW** - Complete `IBotAdapter` interface definition, all adapter parameter types (`AdapterInitParams`, `AdapterSendTextParams`, etc.), and `AdapterClient` interface
-- `capabilities.ts`: `BotAdapterCapabilities` type and related capability declarations
-- `content.ts`: All content types (`BotTextContent`, `BotImageContent`, `BotOutboundContent`, `BotSendOptions`, etc.)
-- `session.ts`: Session-related types (`BotSession`, `BotSessionStore`, `BotSessionHelper`)
-- `plugins.ts`: Plugin system types (`BotPlugin`)
-- `builder.ts`: Builder-specific types (`BotBuilderConfig`, etc.)
-- `utils.interface.ts`: **NEW** - Utility type helpers for advanced TypeScript patterns (`Input`, `Prettify`, `Path`, `FieldType`, etc.)
+- `bot.types.ts`: Core runtime types (`BotContext`, `BotSendParams`, `BotHandleParams`, `BotCommand`, `Middleware`, `BotLogger`, `BotAttachmentContent`, etc.)
+- `adapter.ts`: Complete `IBotAdapter` interface definition, all adapter parameter types (`AdapterInitParams`, `AdapterSendTextParams`, etc.), and `AdapterClient` interface.
+- `capabilities.ts`: `BotAdapterCapabilities` type and related capability declarations (`BotContentCapabilities`, `BotActionCapabilities`, `BotFeatureCapabilities`, `BotLimits`).
+- `content.ts`: All content types (`BotTextContent`, `BotImageContent`, `BotOutboundContent`, `BotInboundContent`, `BotSendOptions`, `BotButton`, `BotInteractiveContent`, `BotCommandContent`, etc.)
+- `session.ts`: Session-related types (`BotSession`, `BotSessionStore`, `BotSessionHelper`).
+- `plugins.ts`: Plugin system types (`BotPlugin`, `BotPluginFactory`, `BotPluginRegistry`).
+- `builder.ts`: Builder-specific types (`BotBuilderConfig`, `BotOptions`, `BotEventHandler`, `BotErrorHandler`, `BotStartHandler`).
+- `utils.interface.ts`: Utility type helpers for advanced TypeScript patterns (`Input`, `Prettify`, `Path`, `FieldType`, `DeepPartial`, `WithContext`, etc.)
 
 **Adapters (`adapters/`):**
 - Each adapter directory contains:
-  - `*.adapter.ts`: Main adapter implementation implementing `IBotAdapter`
-  - `*.client.ts`: **NEW** - HTTP client factory (`createTelegramClient`, `createWhatsAppClient`) that returns pre-configured `AdapterClient` instances
-  - `*.helpers.ts`: Platform-specific parsing and utility functions
-  - `*.schemas.ts`: Zod schemas for adapter configuration (supports environment variable defaults)
-  - `index.ts`: Exports the adapter factory function
+  - `*.adapter.ts`: Main adapter implementation implementing `IBotAdapter`.
+  - `*.client.ts`: HTTP client factory (`createTelegramClient`, `createWhatsAppClient`, `createDiscordClient`) that returns pre-configured `AdapterClient` instances.
+  - `*.helpers.ts`: Platform-specific parsing and utility functions.
+  - `*.schemas.ts`: Zod schemas for adapter configuration (supports environment variable defaults).
+  - `index.ts`: Exports the adapter factory function.
 
 **Builder (`builder/`):**
-- `bot-builder.ts`: `IgniterBotBuilder` class implementing the fluent Builder Pattern API
-- `index.ts`: Exports builder API
+- `bot-builder.ts`: `IgniterBotBuilder` class implementing the fluent Builder Pattern API.
+- `index.ts`: Exports builder API.
 
 **Middlewares (`middlewares/`):**
-- Each middleware file exports factory functions that return `Middleware` functions
-- Middlewares now return `next()` directly instead of awaiting it separately (improved return value handling)
+- `rate-limit.ts`: Rate limiting middleware (`rateLimitMiddleware`), in-memory store (`MemoryRateLimitStore`), factory (`memoryRateLimitStore`), presets (`rateLimitPresets`), and `RateLimitOptions`/`RateLimitStore` interfaces.
+- `auth.ts`: Authentication middleware (`authMiddleware`), presets (`authPresets`), role-based middleware (`roleMiddleware`), and `AuthOptions`/`RoleOptions` interfaces.
+- `logging.ts`: Logging middleware (`loggingMiddleware`), presets (`loggingPresets`), command-specific logging (`commandLoggingMiddleware`), and `LoggingOptions` interface.
+- `index.ts`: Re-exports all middlewares.
 
 **Stores (`stores/`):**
-- `memory.ts`: In-memory session store implementation
-- Custom stores should implement `BotSessionStore`
+- `memory.ts`: In-memory session store implementation (`MemorySessionStore`, `memoryStore()`).
+- Custom stores should implement `BotSessionStore`.
 
 **Plugins (`plugins/`):**
-- Example plugins demonstrating the plugin system
+- `analytics.ts`: Example plugin demonstrating the plugin system (`analyticsPlugin()`).
 
 **Utils (`utils/`):**
-- `try-catch.ts`: Error handling utilities (`tryCatch`, `isTryCatchError`) for safe async operations
+- `try-catch.ts`: Error handling utilities (`tryCatch`, `isTryCatchError`) for safe async operations.
 
 ---
 
@@ -290,43 +308,47 @@ src/
 ```typescript
 const bot = IgniterBot
   .create()                                  // Create builder
-  .withId('bot-id')                          // Required
-  .withName('Bot Name')                      // Required
-  .withLogger(logger)                        // Optional
-  .withSessionStore(memoryStore())           // Optional
-  .withOptions({ timeout: 30000 })           // Optional
-  .addAdapter('telegram', telegram({ ... })) // At least one required
-  .addCommand('start', { ... })              // Optional
-  .addMiddleware(middleware)                 // Optional
-  .usePlugin(plugin)                         // Optional
-  .onMessage(handler)                        // Optional
-  .build()                                   // Required - creates Bot instance
+  .withHandle('@mybot')                      // Recommended: sets handle, auto-derives id/name
+  .withId('custom-id')                       // Optional: override auto-derived ID
+  .withName('Custom Name')                   // Optional: override auto-derived name
+  .withLogger(logger)                        // Optional: structured logger
+  .withSessionStore(memoryStore())           // Optional: session storage (defaults to memoryStore)
+  .withOptions({ timeout: 30000 })           // Optional: advanced options
+  .addAdapter('telegram', telegram({ ... })) // Required (≥1): platform adapter
+  .addCommand('start', { ... })              // Optional: command
+  .addMiddleware(middleware)                 // Optional: middleware
+  .usePlugin(plugin)                         // Optional: plugin
+  .onMessage(handler)                        // Optional: message listener
+  .build()                                   // Required: creates Bot instance
 ```
 
 ### 5.2 Builder Methods
 
 | Method | Purpose | Required |
 |--------|---------|----------|
-| `withId(id)` | Set bot unique ID (auto-derived if omitted) | No |
-| `withName(name)` | Set bot display name (auto-derived if omitted) | No |
-| `withLogger(logger)` | Inject logger | No |
-| `withSessionStore(store)` | Configure sessions | No |
-| `withOptions(options)` | Advanced config | No |
-| `addAdapter(key, adapter)` | Add platform adapter | Yes (≥1) |
-| `addAdapters(adapters)` | Add multiple adapters | Yes (≥1) |
-| `addCommand(name, cmd)` | Register command | No |
-| `addCommands(commands)` | Register multiple | No |
-| `addCommandGroup(prefix, cmds)` | Prefixed commands | No |
-| `addMiddleware(mw)` | Add to pipeline | No |
-| `addMiddlewares(mws)` | Add multiple | No |
-| `usePlugin(plugin)` | Load plugin | No |
-| `onMessage(handler)` | Message listener | No |
-| `onError(handler)` | Error listener | No |
-| `onCommand(handler)` | Command listener | No |
-| `onStart(handler)` | Start hook | No |
+| `withHandle(handle)` | Set handle (@ prefixed), auto-derives id and name | Recommended |
+| `withId(id)` | Override auto-derived bot ID | No |
+| `withName(name)` | Override auto-derived display name | No |
+| `withLogger(logger)` | Inject structured logger | No |
+| `withSessionStore(store)` | Configure session storage (default: memoryStore) | No |
+| `withOptions(options)` | Advanced config (timeout, retries, errorHandler) | No |
+| `addAdapter(key, adapter)` | Add single platform adapter | Yes (≥1) |
+| `addAdapters(adapters)` | Add multiple adapters at once | Yes (≥1) |
+| `addCommand(name, cmd)` | Register single command | No |
+| `addCommands(commands)` | Register multiple commands | No |
+| `addCommandGroup(prefix, cmds)` | Register commands with common prefix | No |
+| `addMiddleware(mw)` | Add to middleware pipeline | No |
+| `addMiddlewares(mws)` | Add multiple middlewares | No |
+| `usePlugin(plugin)` | Load plugin (registers commands, middlewares, adapters, hooks) | No |
+| `onMessage(handler)` | Message event listener | No |
+| `onError(handler)` | Error event listener | No |
+| `onCommand(handler)` | Command event listener (see note below) | No |
+| `onStart(handler)` | Start lifecycle hook | No |
 | `build()` | Create Bot instance | Yes |
 
-**Note:** `onCommand` is stored in the builder config, but `Bot.process()` does not emit a `command` event yet.
+**Note on `onCommand`:** The builder stores `onCommand` handlers in `config.listeners.command`, but the current `Bot.process()` implementation does not emit a `command` event. This handler is preserved for future use and can be manually emitted via `bot.emit('command', ctx)`.
+
+**Note on `withHandle`:** Calling `withHandle('@mybot')` sets `config.handle = '@mybot'`, auto-generates `config.id = 'mybot'` (strips `@`), and auto-generates `config.name = 'Mybot'` (capitalizes handle parts). Each adapter can override the global handle via its own config.
 
 ---
 
@@ -338,28 +360,31 @@ After calling `.build()`, you get a `Bot` instance that supports runtime extensi
 
 | Method | Purpose |
 |--------|---------|
-| `start()` | Initialize adapters (webhooks, command registration) |
-| `handle(provider)` | Returns a `(request) => Response` handler for GET/POST |
-| `send({ provider, channel, content, options? })` | Send message via adapter - routes to adapter-specific methods based on content type |
+| `start()` | Initialize all adapters (webhooks, command registration) |
+| `handle(provider)` | Returns a `(request: Request) => Promise<Response>` handler |
+| `send(params)` | Send message via adapter — routes to adapter-specific send methods based on content type |
 
 **Handle flow:**
-- `GET` → calls `adapter.verify()` if present, otherwise responds `200 OK`
-- `POST` → calls `adapter.handle()`; returns `204` if handler returns `null`
-- Unknown adapter → `404`
+- **GET** → calls `adapter.verify()` if present; otherwise responds `200 OK`
+- **POST** → calls `adapter.handle()`; returns `204` if handler returns `null`
+- Unknown adapter → `404 Not Found`
 
-**Bot.send() Routing:**
-The `Bot.send()` method automatically routes to the appropriate adapter method based on the content type:
-- `content.type === 'text'` → calls `adapter.sendText()`
-- `content.type === 'image'` → calls `adapter.sendImage()`
-- `content.type === 'video'` → calls `adapter.sendVideo()`
-- `content.type === 'audio'` → calls `adapter.sendAudio()`
-- `content.type === 'document'` → calls `adapter.sendDocument()`
-- `content.type === 'sticker'` → calls `adapter.sendSticker()`
-- `content.type === 'location'` → calls `adapter.sendLocation()`
-- `content.type === 'contact'` → calls `adapter.sendContact()`
-- `content.type === 'poll'` → calls `adapter.sendPoll()`
-- `content.type === 'interactive'` → calls `adapter.sendInteractive()`
-- `content.type === 'reply'` → recursively calls `send()` with nested content and reply options
+**Bot.send() Content-Type Routing:**
+The `Bot.send()` method automatically routes to the appropriate adapter method:
+
+| `content.type` | Adapter Method Called |
+|----------------|----------------------|
+| `'text'` | `adapter.sendText()` |
+| `'image'` | `adapter.sendImage()` |
+| `'video'` | `adapter.sendVideo()` |
+| `'audio'` | `adapter.sendAudio()` |
+| `'document'` | `adapter.sendDocument()` |
+| `'sticker'` | `adapter.sendSticker()` |
+| `'location'` | `adapter.sendLocation()` |
+| `'contact'` | `adapter.sendContact()` |
+| `'poll'` | `adapter.sendPoll()` |
+| `'interactive'` | `adapter.sendInteractive()` |
+| `'reply'` | Recursively calls `send()` with nested content + reply options |
 
 If an adapter doesn't implement the required method, a `BotError` with code `CONTENT_TYPE_NOT_SUPPORTED` is thrown.
 
@@ -370,10 +395,51 @@ If an adapter doesn't implement the required method, a `BotError` with code `CON
 | `registerAdapter(key, adapter)` | Add adapter after build |
 | `registerCommand(name, command)` | Add command after build |
 | `use(middleware)` | Add middleware after build |
-| `on(event, handler)` | Subscribe to event after build |
-| `emit(event, ctx)` | Manually emit event |
-| `onPreProcess(hook)` | Hook before pipeline |
-| `onPostProcess(hook)` | Hook after pipeline |
+| `on(event, callback)` | Subscribe to lifecycle event |
+| `emit(event, ctx)` | Manually emit event to listeners |
+| `onPreProcess(hook)` | Hook executed before middleware pipeline |
+| `onPostProcess(hook)` | Hook executed after successful processing |
+
+### 6.3 Static Factory Methods
+
+**`Bot.adapter(definition)`** — Creates a validated adapter factory function. Used internally by first-party adapters and available for custom adapters. Accepts:
+- `name`: Adapter identifier string
+- `parameters`: Zod schema for config validation
+- `capabilities`: `BotAdapterCapabilities` declaration
+- `verify?`: Webhook verification handler (GET requests)
+- `init`: Initialization handler (webhook setup, command registration)
+- `handle`: Inbound request handler (POST requests)
+- `client?`: HTTP client factory `(config, logger?) => AdapterClient`
+- `sendText?`, `sendImage?`, etc.: Type-specific send methods
+- `editMessage?`, `deleteMessage?`: Action methods
+
+**`Bot.command(command)`** — Validates a command definition (name, aliases, description, help, handle). Throws if any required field is missing or invalid.
+
+**`Bot.middleware(middleware)`** — Validates a middleware function (must accept exactly 2 parameters: ctx, next).
+
+**`Bot.create(config)`** — Deprecated internal factory. Prefer `IgniterBot.create().build()`.
+
+### 6.4 Error Handling
+
+```typescript
+export const BotErrorCodes = {
+  CLIENT_NOT_PROVIDED: 'CLIENT_NOT_PROVIDED',
+  PROVIDER_NOT_FOUND: 'PROVIDER_NOT_FOUND',
+  COMMAND_NOT_FOUND: 'COMMAND_NOT_FOUND',
+  INVALID_COMMAND_PARAMETERS: 'INVALID_COMMAND_PARAMETERS',
+  ADAPTER_HANDLE_RETURNED_NULL: 'ADAPTER_HANDLE_RETURNED_NULL',
+  CONTENT_TYPE_NOT_SUPPORTED: 'CONTENT_TYPE_NOT_SUPPORTED',
+  INVALID_CONTENT: 'INVALID_CONTENT',
+} as const
+
+export class BotError extends Error {
+  constructor(
+    public code: BotErrorCode,
+    message?: string,
+    public meta?: Record<string, unknown>
+  ) { ... }
+}
+```
 
 ---
 
@@ -381,38 +447,33 @@ If an adapter doesn't implement the required method, a `BotError` with code `CON
 
 ### 7.1 IBotAdapter Interface
 
-**BREAKING CHANGE:** Adapters no longer use a single `send()` method. Instead, they implement specific methods based on their declared capabilities.
+Adapters implement specific send methods based on their declared capabilities:
 
 ```typescript
 interface IBotAdapter<TConfig extends ZodObject<any>> {
-  name: string                        // Adapter identifier
-  parameters: TConfig                 // Zod schema for config
-  capabilities: BotAdapterCapabilities // What this adapter supports
-  _config?: TypeOf<TConfig>          // Internal: stored parsed config
-  
+  name: string                          // Adapter identifier
+  parameters: TConfig                   // Zod schema for config
+  capabilities: BotAdapterCapabilities  // What this adapter supports
+  _config?: TypeOf<TConfig>            // Internal: stored parsed config
+
   // ===== REQUIRED METHODS =====
-  
+
   init: (params: AdapterInitParams<TypeOf<TConfig>>) => Promise<void>
   handle: (params: AdapterHandleParams<TypeOf<TConfig>>) => Promise<
     Omit<BotContext, 'bot' | 'session' | 'reply' | 'replyWithButtons' | 'replyWithImage' | 'replyWithDocument' | 'sendTyping'> | null
   >
-  
+
   // ===== OPTIONAL METHODS =====
-  
+
   verify?: (params: AdapterVerifyParams<TypeOf<TConfig>>) => Promise<Response | null>
   sendTyping?: (params: AdapterSendTypingParams<TypeOf<TConfig>>) => Promise<void>
-  
+
   // ===== HTTP CLIENT =====
-  
-  /**
-   * Optional factory function that returns a pre-configured HTTP client.
-   * Similar to axios.create() - comes with token, base URL, headers pre-configured.
-   */
+
   client?: (config: TypeOf<TConfig>, logger?: BotLogger) => AdapterClient<TypeOf<TConfig>>
-  
-  // ===== SEND METHODS (based on capabilities) =====
-  // These methods are required if the corresponding capability is true
-  
+
+  // ===== SEND METHODS (based on capabilities.content.*) =====
+
   sendText?: (params: AdapterSendTextParams<TypeOf<TConfig>>) => Promise<void>
   sendImage?: (params: AdapterSendImageParams<TypeOf<TConfig>>) => Promise<void>
   sendVideo?: (params: AdapterSendVideoParams<TypeOf<TConfig>>) => Promise<void>
@@ -423,9 +484,9 @@ interface IBotAdapter<TConfig extends ZodObject<any>> {
   sendContact?: (params: AdapterSendContactParams<TypeOf<TConfig>>) => Promise<void>
   sendPoll?: (params: AdapterSendPollParams<TypeOf<TConfig>>) => Promise<void>
   sendInteractive?: (params: AdapterSendInteractiveParams<TypeOf<TConfig>>) => Promise<void>
-  
-  // ===== ACTION METHODS (based on capabilities.actions) =====
-  
+
+  // ===== ACTION METHODS (based on capabilities.actions.*) =====
+
   editMessage?: (params: AdapterEditMessageParams<TypeOf<TConfig>>) => Promise<void>
   deleteMessage?: (params: AdapterDeleteMessageParams<TypeOf<TConfig>>) => Promise<void>
 }
@@ -440,6 +501,7 @@ interface AdapterClient<TConfig extends Record<string, any>> {
   get<T = any>(endpoint: string, params?: Record<string, any>): Promise<T>
   post<T = any>(endpoint: string, body?: Record<string, any>): Promise<T>
   put<T = any>(endpoint: string, body?: Record<string, any>): Promise<T>
+  patch<T = any>(endpoint: string, body?: Record<string, any>): Promise<T>
   delete<T = any>(endpoint: string, params?: Record<string, any>): Promise<T>
   request<T = any>(options: {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
@@ -451,29 +513,20 @@ interface AdapterClient<TConfig extends Record<string, any>> {
 }
 ```
 
-**Usage Example:**
-```typescript
-const adapter = telegram({ token: '123' })
-const client = adapter.client
-
-// Make API requests
-const me = await client?.get('/getMe')
-await client?.post('/sendMessage', { chat_id: '123', text: 'Hello' })
-```
-
 ### 7.3 Adapter Parameter Types
 
 All adapter methods use typed parameter interfaces defined in `types/adapter.ts`:
 
-- `AdapterInitParams` - For `init()` method
-- `AdapterHandleParams` - For `handle()` method
-- `AdapterVerifyParams` - For `verify()` method
-- `AdapterSendTextParams`, `AdapterSendImageParams`, etc. - For each send method
-- `AdapterEditMessageParams`, `AdapterDeleteMessageParams` - For action methods
+- `AdapterInitParams` — For `init()` method
+- `AdapterHandleParams` — For `handle()` method
+- `AdapterVerifyParams` — For `verify()` method
+- `AdapterSendTypingParams` — For `sendTyping()` method
+- `AdapterSendTextParams`, `AdapterSendImageParams`, etc. — For each send method
+- `AdapterEditMessageParams`, `AdapterDeleteMessageParams` — For action methods
 
 All parameters include: `client?`, `config`, `logger?`, and method-specific fields.
 
-### 7.4 Adapter Creation
+### 7.4 Custom Adapter Creation
 
 ```typescript
 export const myAdapter = Bot.adapter({
@@ -518,419 +571,97 @@ export const myAdapter = Bot.adapter({
       maxButtonsPerMessage: 5
     }
   },
-  
+
   // Optional: HTTP client factory
   client: (config, logger) => {
     return createMyPlatformClient(config.token, logger)
   },
-  
-  async init({ client, config, commands, logger }) {
-    // Use client for API calls
+
+  async init({ client, config, commands, logger, botHandle }) {
     if (client) {
       await client.post('/registerWebhook', { url: config.webhookUrl })
       await client.post('/setCommands', { commands })
     }
   },
-  
-  // Send methods - implement based on capabilities declared above
+
+  async handle({ request, config, logger, botHandle, client }) {
+    const body = await request.json()
+    return {
+      event: 'message',
+      provider: 'my-platform',
+      channel: { id: body.channelId, name: body.channelId, isGroup: false },
+      message: {
+        id: body.messageId,
+        content: { type: 'text', content: body.text, raw: body.text },
+        author: { id: body.userId, name: body.userName, username: body.username },
+        isMentioned: true
+      }
+    }
+  },
+
   async sendText({ client, channel, text, options, config, logger }) {
-    if (!client) throw new Error('Client not provided')
-    await client.post('/sendMessage', {
-      chat_id: channel,
-      text,
-      ...options
-    })
+    if (!client) throw new BotError(BotErrorCodes.CLIENT_NOT_PROVIDED)
+    await client.post('/sendMessage', { chat_id: channel, text, ...options })
   },
-  
+
   async sendImage({ client, channel, image, caption, options, config, logger }) {
-    if (!client) throw new Error('Client not provided')
-    await client.post('/sendPhoto', {
-      chat_id: channel,
-      photo: image,
-      caption
-    })
+    if (!client) throw new BotError(BotErrorCodes.CLIENT_NOT_PROVIDED)
+    await client.post('/sendPhoto', { chat_id: channel, photo: image, caption })
   },
-  
-  async sendInteractive({ client, channel, text, inlineKeyboard, options, config, logger }) {
-    if (!client) throw new Error('Client not provided')
+
+  async sendInteractive({ client, channel, text, buttons, inlineKeyboard, options, config, logger }) {
+    if (!client) throw new BotError(BotErrorCodes.CLIENT_NOT_PROVIDED)
     await client.post('/sendMessage', {
       chat_id: channel,
       text,
       reply_markup: { inline_keyboard: inlineKeyboard }
     })
-  },
-  
-  async editMessage({ client, channel, messageId, content, options, config, logger }) {
-    if (!client) throw new Error('Client not provided')
-    await client.post('/editMessage', {
-      chat_id: channel,
-      message_id: messageId,
-      text: content.content
-    })
-  },
-  
-  async deleteMessage({ client, channel, messageId, config, logger }) {
-    if (!client) throw new Error('Client not provided')
-    await client.post('/deleteMessage', {
-      chat_id: channel,
-      message_id: messageId
-    })
-  },
-  
-  async handle({ client, request, config, logger }) {
-    const body = await request.json()
-    
-    // Parse and return context, or null to ignore
-    return {
-      event: 'message',
-      provider: 'my-platform',
-      channel: { id: '...', name: '...', isGroup: false },
-      message: {
-        content: { type: 'text', content: '...', raw: '...' },
-        author: { id: '...', name: '...', username: '...' },
-        isMentioned: true
-      }
-    }
   }
 })
 ```
 
-**Key Points:**
-- Adapters can optionally provide a `client()` factory function
-- All send methods receive `client` as a parameter (injected by the framework)
-- Configuration schema can use `.optional().default()` to support environment variables
-- Each send method is only required if the corresponding capability is `true`
-- The framework automatically wraps methods with config and client injection
+### 7.5 Built-in Adapter Capabilities Matrix
 
-### 7.5 Adapter Rules
-
-1. **No side effects** at module top-level
-2. **Validate** all inputs with Zod (schemas can use `.optional().default()` for env vars)
-3. **Return null** from `handle()` to ignore updates
-4. **Never return Response** from `handle()` - framework handles HTTP (except `verify()` which can return Response)
-5. **Use logger** instead of console
-6. **Declare capabilities** accurately - only implement methods for capabilities you declare as `true`
-7. **Handle errors** gracefully (throw or log) - use `BotError` with `BotErrorCodes` when appropriate
-8. **Implement client factory** - Adapters should provide a `client()` function that returns an `AdapterClient` instance
-9. **Use injected client** - All adapter methods receive `client` as a parameter - use it for API calls
-10. **Check client exists** - Always check if `client` is provided before using it (framework provides it, but type safety requires checks)
+| Feature | Telegram | WhatsApp | Discord |
+|---------|----------|----------|---------|
+| Text | ✅ | ✅ | ✅ |
+| Image | ✅ | ✅ | ✅ |
+| Video | ✅ | ✅ | ✅ |
+| Audio | ✅ | ✅ | ✅ |
+| Document | ✅ | ✅ | ✅ |
+| Sticker | ✅ | ❌ | ❌ |
+| Location | ✅ | ✅ | ❌ |
+| Contact | ✅ | ✅ | ❌ |
+| Poll | ✅ | ❌ | ❌ |
+| Interactive (buttons) | ✅ | ✅ | ✅ |
+| Edit messages | ✅ | ❌ | ✅ |
+| Delete messages | ✅ | ❌ | ✅ |
+| Reactions | ❌ | ✅ | ✅ |
+| Pin messages | ✅ | ❌ | ❌ |
+| Webhooks | ✅ | ✅ | ✅ |
+| Long polling | ✅ | ❌ | ❌ |
+| Slash commands | ✅ | ❌ | ✅ |
+| Max message length | 4,096 | 4,096 | 2,000 |
+| Max file size | 50 MB | 100 MB | 25 MB |
+| Max buttons/message | 8 | 3 | 5 per row |
 
 ---
 
-## 8. Command System
+## 8. Type System Reference
 
-### 8.1 Command Structure
+### 8.1 Core Types
 
-```typescript
-interface BotCommand<TArgs = any> {
-  name: string                          // Command name (no slash)
-  aliases: string[]                     // Alternative names
-  description: string                   // Short description
-  help: string                          // Help text
-  args?: ZodType<TArgs>                // Optional Zod schema
-  handle: (ctx, params: TArgs) => Promise<void>
-  subcommands?: Record<string, BotCommand> // Nested commands
-}
-```
-
-### 8.2 Command Registration
-
-```typescript
-// Single command
-.addCommand('ping', {
-  name: 'ping',
-  aliases: [],
-  description: 'Ping pong',
-  help: 'Use /ping',
-  async handle(ctx) {
-    await ctx.reply('Pong!')
-  }
-})
-
-// With validation
-.addCommand('ban', {
-  name: 'ban',
-  args: z.object({
-    userId: z.string(),
-    reason: z.string().optional()
-  }),
-  async handle(ctx, args) {
-    // args is typed!
-  }
-})
-
-// With subcommands
-.addCommand('config', {
-  name: 'config',
-  subcommands: {
-    set: { ... },
-    get: { ... }
-  }
-})
-```
-
-### 8.3 Command Resolution
-
-- Case-insensitive lookup
-- O(1) resolution via internal index
-- Aliases work exactly like primary name
-- Help text shown on validation error
-
----
-
-## 9. Middleware System
-
-### 9.1 Middleware Signature
-
-```typescript
-type Middleware<TContextIn = BotContext, TContextOut = TContextIn> = (
-  ctx: TContextIn,
-  next: () => Promise<void>
-) => Promise<void | Partial<TContextOut>>
-```
-
-**Important:** Middlewares should return `next()` directly instead of awaiting it separately. This improves control flow and type inference.
-
-**Example:**
-```typescript
-// ✅ Correct - return next() directly
-return next()
-
-// ❌ Incorrect - don't await next() separately
-await next()
-return
-```
-
-### 9.2 Execution Order
-
-1. `preProcessHooks` (if registered via `bot.onPreProcess()`)
-2. `middlewares` (in registration order)
-3. Event `listeners` (all listeners for event run in parallel)
-4. Command `handler` (if message is a command)
-5. `postProcessHooks` (if registered via `bot.onPostProcess()`)
-
-Errors in middleware/command trigger `error` event.
-
-### 9.3 Built-in Middlewares
-
-**Rate Limiting:**
-```typescript
-rateLimitMiddleware({
-  maxRequests: 10,
-  windowMs: 60000,
-  store: memoryRateLimitStore(),
-  message: 'Too many requests',
-  skip: (ctx) => isAdmin(ctx.message.author.id)
-})
-```
-
-**Authentication:**
-```typescript
-authMiddleware({
-  allowedUsers: ['user1'],
-  blockedUsers: ['spammer'],
-  checkFn: async (ctx) => await isAuthorized(ctx),
-  unauthorizedMessage: 'Access denied'
-})
-```
-
-**Logging:**
-```typescript
-loggingMiddleware({
-  logMessages: true,
-  logCommands: true,
-  logMetrics: true,
-  includeUserInfo: true,
-  includeContent: false // Privacy
-})
-```
-
----
-
-## 10. Session Management
-
-### 10.1 Session Store Interface
-
-```typescript
-interface BotSessionStore {
-  get(userId: string, channelId: string): Promise<BotSession | null>
-  set(userId: string, channelId: string, session: BotSession): Promise<void>
-  delete(userId: string, channelId: string): Promise<void>
-  clear(userId: string): Promise<void>
-}
-```
-
-### 10.2 Built-in Stores
-
-**Memory Store:**
-```typescript
-.withSessionStore(memoryStore({
-  cleanupIntervalMs: 60000 // Clean expired every minute
-}))
-```
-
-**Future Stores:**
-- Implement custom `BotSessionStore` adapters for Redis or databases as needed
-
-### 10.3 Session Usage
-
-```typescript
-.addCommand('survey', {
-  name: 'survey',
-  async handle(ctx) {
-    // Access session
-    const session = ctx.session
-    
-    // Read data
-    const step = session.data.step || 0
-    
-    // Write data
-    session.data.step = step + 1
-    session.data.answers = { ... }
-    
-    // Persist
-    await session.save()
-    
-    // Or delete
-    await session.delete()
-  }
-})
-```
-
----
-
-## 11. Plugin System
-
-### 11.1 Plugin Interface
-
-```typescript
-interface BotPlugin {
-  name: string
-  version: string
-  description?: string
-  commands?: Record<string, BotCommand>
-  middlewares?: Middleware[]
-  adapters?: Record<string, IBotAdapter<any>>
-  hooks?: {
-    onStart?: () => Promise<void>
-    onMessage?: (ctx: BotContext) => Promise<void>
-    onError?: (ctx: BotContext & { error: BotError }) => Promise<void>
-    onStop?: () => Promise<void>
-  }
-  config?: Record<string, any>
-}
-```
-
-### 11.2 Creating Plugins
-
-```typescript
-export const myPlugin: BotPlugin = {
-  name: 'my-plugin',
-  version: '1.0.0',
-  
-  commands: {
-    plugincmd: { ... }
-  },
-  
-  middlewares: [
-    async (ctx, next) => {
-      // Plugin middleware
-      await next()
-    }
-  ],
-  
-  hooks: {
-    onStart: async () => {
-      console.log('Plugin started')
-    }
-  }
-}
-
-// Usage
-.usePlugin(myPlugin)
-```
-
----
-
-## 12. Capabilities System
-
-### 12.1 Capability Declaration
-
-Every adapter must declare:
-
-```typescript
-capabilities: {
-  content: {
-    text: boolean
-    image: boolean
-    video: boolean
-    audio: boolean
-    document: boolean
-    sticker: boolean
-    location: boolean
-    contact: boolean
-    poll: boolean
-    interactive: boolean
-  },
-  actions: {
-    edit: boolean
-    delete: boolean
-    react: boolean
-    pin: boolean
-    thread: boolean
-  },
-  features: {
-    webhooks: boolean
-    longPolling: boolean
-    commands: boolean
-    mentions: boolean
-    groups: boolean
-    channels: boolean
-    users: boolean
-    files: boolean
-  },
-  limits: {
-    maxMessageLength: number
-    maxFileSize: number
-    maxButtonsPerMessage: number
-  }
-}
-```
-
-### 12.2 Checking Capabilities
-
-```typescript
-.addCommand('feature', {
-  name: 'feature',
-  async handle(ctx) {
-    const adapter = ctx.bot.getAdapter?.(ctx.provider)
-    
-    if (!adapter?.capabilities.actions.edit) {
-      await ctx.reply('Edit not supported on this platform')
-      return
-    }
-    
-    await ctx.editMessage?.('msg_id', { ... })
-      }
-})
-```
-
----
-
-## 13. Context Object
-
-### 13.1 Context Structure
-
+**`BotContext`** — The primary context object passed through the middleware pipeline and to command handlers:
 ```typescript
 interface BotContext {
-  event: 'message' | 'error' | 'start'
-  provider: string
+  event: BotEvent                              // 'start' | 'message' | 'error'
+  provider: string                              // e.g., 'telegram', 'whatsapp'
   bot: {
-    id: string
-    name: string
-    send: (params) => Promise<void>
-    getAdapter?: (provider) => IBotAdapter | undefined
-    getAdapters?: () => Record<string, IBotAdapter>
+    id: string                                  // Bot unique identifier
+    name: string                                // Bot display name
+    send: (params) => Promise<void>             // Send messages
+    getAdapter?: (provider: string) => IBotAdapter<any> | undefined
+    getAdapters?: () => Record<string, IBotAdapter<any>>
   }
   channel: {
     id: string
@@ -939,18 +670,14 @@ interface BotContext {
   }
   message: {
     id?: string
-    content?: BotContent
+    content?: BotContent                        // Parsed content
     attachments?: BotAttachmentContent[]
-    author: {
-      id: string
-      name: string
-      username: string
-    }
+    author: { id: string; name: string; username: string }
     isMentioned: boolean
   }
-  session: BotSessionHelper
-  
-  // Helper methods
+  session: BotSessionHelper                     // Session accessor
+
+  // Helper methods (injected by createContextHelpers)
   reply(content, options?): Promise<void>
   replyWithButtons(text, buttons, options?): Promise<void>
   replyWithImage(image, caption?, options?): Promise<void>
@@ -958,502 +685,515 @@ interface BotContext {
   editMessage?(messageId, content): Promise<void>
   deleteMessage?(messageId): Promise<void>
   react?(emoji, messageId?): Promise<void>
+  sendTyping?(): Promise<void>
 }
 ```
 
-### 13.2 Helper Methods
-
-Framework injects these into context automatically:
-
-- `reply()` - Simple text/content reply
-- `replyWithButtons()` - Interactive message
-- `replyWithImage()` - Image with caption
-- `replyWithDocument()` - File with caption
-- `editMessage()` - Edit existing message (if supported)
-- `deleteMessage()` - Delete message (if supported)
-- `react()` - React with emoji (if supported)
-
-Adapters should NOT implement these - they're added by the framework.
-
----
-
-## 14. Content Types
-
-### 14.1 Inbound Content
-
-Content received from users:
-
-- `BotTextContent` - Plain text
-- `BotCommandContent` - Commands (starting with `/`)
-- `BotImageContent` - Images
-- `BotVideoContent` - Videos
-- `BotAudioContent` - Audio/voice
-- `BotDocumentContent` - Files
-- `BotStickerContent` - Stickers
-- `BotLocationContent` - GPS locations
-- `BotContactContent` - Contact cards
-- `BotPollContent` - Polls
-- `BotCallbackContent` - Button presses
-
-### 14.2 Outbound Content
-
-Content sent by bot (extends inbound):
-
-- All inbound types, plus:
-- `BotInteractiveContent` - Buttons, keyboards, menus
-- `BotReplyContent` - Thread/reply to specific message
-
----
-
-## 15. Error Handling
-
-### 15.1 Error Codes
-
+**`BotCommand`** — Command definition:
 ```typescript
-export const BotErrorCodes = {
-  CLIENT_NOT_PROVIDED: 'CLIENT_NOT_PROVIDED',
-  PROVIDER_NOT_FOUND: 'PROVIDER_NOT_FOUND',
-  COMMAND_NOT_FOUND: 'COMMAND_NOT_FOUND',
-  INVALID_COMMAND_PARAMETERS: 'INVALID_COMMAND_PARAMETERS',
-  ADAPTER_HANDLE_RETURNED_NULL: 'ADAPTER_HANDLE_RETURNED_NULL',
-  CONTENT_TYPE_NOT_SUPPORTED: 'CONTENT_TYPE_NOT_SUPPORTED',
-  INVALID_CONTENT: 'INVALID_CONTENT',
+interface BotCommand<TContext = BotContext, TArgs = any> {
+  name: string                    // Command name (no slash)
+  aliases: string[]               // Alternative names
+  description: string             // Short description
+  help: string                    // Help text
+  args?: ZodType<TArgs>           // Zod schema for validation
+  handle: (ctx: TContext, params: TArgs) => Promise<void>
+  subcommands?: Record<string, Omit<BotCommand<TContext>, 'name' | 'aliases'>>
 }
 ```
 
-**New Error Codes:**
-- `CLIENT_NOT_PROVIDED`: Adapter method called but client was not provided
-- `CONTENT_TYPE_NOT_SUPPORTED`: Attempted to send content type that adapter doesn't support
-- `INVALID_CONTENT`: Content validation failed (e.g., document without File object)
+**`Middleware`** — Middleware function signature:
+```typescript
+type Middleware<TContextIn = BotContext, TContextOut = TContextIn> = (
+  ctx: TContextIn,
+  next: () => Promise<void>
+) => Promise<void | Partial<TContextOut>>
+```
 
-### 15.2 Error Handling
+### 8.2 Session Types
 
 ```typescript
-.onError(async (ctx) => {
-  const errorCtx = ctx as typeof ctx & { error?: BotError }
-  
-  if (errorCtx.error?.code === BotErrorCodes.COMMAND_NOT_FOUND) {
-    await ctx.reply('Unknown command. Use /help')
-  } else {
-    await ctx.reply('Something went wrong. Please try again.')
+interface BotSession {
+  userId: string
+  channelId: string
+  data: Record<string, any>
+  createdAt: Date
+  updatedAt: Date
+  expiresAt?: Date
+}
+
+interface BotSessionStore {
+  get(userId: string, channelId: string): Promise<BotSession | null>
+  set(userId: string, channelId: string, session: BotSession): Promise<void>
+  delete(userId: string, channelId: string): Promise<void>
+  clear(userId: string): Promise<void>
+}
+
+interface BotSessionHelper extends BotSession {
+  save(): Promise<void>
+  delete(): Promise<void>
+  update(data: Partial<Record<string, any>>): Promise<void>
+}
+```
+
+### 8.3 Plugin Types
+
+```typescript
+interface BotPlugin {
+  name: string
+  version: string
+  description?: string
+  commands?: Record<string, BotCommand>
+  middlewares?: Middleware<any, any>[]
+  adapters?: Record<string, IBotAdapter<any>>
+  hooks?: {
+    onStart?: () => Promise<void> | void
+    onMessage?: (ctx: BotContext) => Promise<void> | void
+    onError?: (ctx: BotContext & { error: BotError }) => Promise<void> | void
+    onStop?: () => Promise<void> | void
   }
-})
+  config?: Record<string, any>
+}
+```
+
+### 8.4 Builder Types
+
+```typescript
+interface BotOptions {
+  timeout?: number
+  retries?: number
+  autoRegisterCommands?: boolean
+  errorHandler?: (error: BotError, context?: BotContext) => void | Promise<void>
+}
+
+interface BotBuilderConfig {
+  handle?: string
+  id?: string
+  name?: string
+  logger?: BotLogger
+  adapters: Record<string, IBotAdapter<any>>
+  commands: Record<string, BotCommand>
+  middlewares: Middleware<any, any>[]
+  sessionStore?: BotSessionStore
+  plugins: BotPlugin[]
+  options?: BotOptions
+  listeners: {
+    message: BotEventHandler[]
+    error: BotErrorHandler[]
+    command: BotEventHandler[]
+    start: BotStartHandler[]
+  }
+}
+```
+
+### 8.5 Utility Types (utils.interface.ts)
+
+- `Input<T>` — Marks optional/undefined properties correctly
+- `Prettify<T>` — Flattens intersection types for better IDE hints
+- `Path<T>` — All dot-notation paths through an object type
+- `FieldType<T, K>` — Type at a specific dot-notation path
+- `DeepPartial<T>` — Recursively partial
+- `WithContext<Payload, Context>` — Adds context property to payload
+- `NonUnknownObject<T>` — Filters out unknown-typed keys
+- `IsEmptyObject<T>` — Checks if object has no properties
+
+---
+
+## 9. Middleware Reference
+
+### 9.1 Rate Limiting (`rate-limit.ts`)
+
+**Exports:**
+- `rateLimitMiddleware(options: RateLimitOptions)` — Creates rate-limiting middleware
+- `rateLimitPresets` — `{ strict, moderate, lenient, perCommand }` (all functions)
+- `MemoryRateLimitStore` — In-memory rate limit store class
+- `memoryRateLimitStore()` — Factory for in-memory store
+- `RateLimitOptions` — Configuration interface
+- `RateLimitStore` — Store interface (for custom backends)
+
+**RateLimitOptions:**
+- `maxRequests: number` — Max requests in window
+- `windowMs: number` — Time window in ms
+- `store?: RateLimitStore` — Storage backend (default: `MemoryRateLimitStore`)
+- `keyGenerator?: (ctx) => string` — Custom key (default: `provider:userId`)
+- `message?: string | ((ctx, retryAfter) => string)` — Rate limit message
+- `skip?: (ctx) => boolean | Promise<boolean>` — Skip condition
+- `onLimitReached?: (ctx, retryAfter) => void | Promise<void>` — Handler
+
+### 9.2 Authentication (`auth.ts`)
+
+**Exports:**
+- `authMiddleware(options: AuthOptions)` — Creates authentication middleware
+- `authPresets` — `{ adminsOnly, privateOnly, groupsOnly, whitelist, blacklist }` (all functions)
+- `roleMiddleware(options: RoleOptions)` — Creates role-based auth middleware
+- `AuthOptions` — Configuration interface
+- `RoleOptions` — Role configuration interface
+
+**AuthOptions:**
+- `allowedUsers?: string[]` — Whitelist user IDs
+- `allowedChannels?: string[]` — Whitelist channel IDs
+- `blockedUsers?: string[]` — Blacklist user IDs
+- `blockedChannels?: string[]` — Blacklist channel IDs
+- `checkFn?: (ctx) => boolean | Promise<boolean>` — Custom auth function
+- `unauthorizedMessage?: string | ((ctx) => string)`
+- `skip?: (ctx) => boolean | Promise<boolean>`
+- `onUnauthorized?: (ctx) => void | Promise<void>`
+
+**RoleOptions:**
+- `getRoles: (userId, ctx) => string[] | Promise<string[]>` — Role resolver
+- `requiredRoles: string[]` — Required roles (user must have at least one)
+- `unauthorizedMessage?: string`
+
+### 9.3 Logging (`logging.ts`)
+
+**Exports:**
+- `loggingMiddleware(options?: LoggingOptions)` — Creates logging middleware
+- `loggingPresets` — `{ minimal, standard, verbose, debug, production }` (all functions)
+- `commandLoggingMiddleware(options)` — Command-specific logging middleware
+- `LoggingOptions` — Configuration interface
+
+**LoggingOptions:**
+- `logger?: BotLogger` — Logger instance (default: `console`)
+- `logMessages?: boolean` — Log incoming messages
+- `logCommands?: boolean` — Log command executions
+- `logErrors?: boolean` — Log errors
+- `logMetrics?: boolean` — Log execution time
+- `includeUserInfo?: boolean` — Include user data
+- `includeContent?: boolean` — Include message content (may contain PII)
+- `formatter?: (ctx, event, data) => string` — Custom log formatter
+- `skip?: (ctx) => boolean` — Skip condition
+
+---
+
+## 10. Execution Pipeline
+
+### 10.1 Request Processing Flow
+
+```
+Inbound Request (POST)
+  ↓
+bot.handle(provider)(request)
+  ↓
+adapter.handle(request, config, logger, botHandle)
+  ↓ (returns BotContext or null)
+  ↓
+bot.process(context)  [internal]
+  ↓
+  1. Pre-process hooks (ctx → enriched ctx)
+  2. Middleware pipeline (ordered, each calls next())
+  3. Command resolution (if content.type === 'command')
+  4. Command handler execution
+  5. Post-process hooks
+  6. Event emission (message, error)
+  ↓
+Response (204 No Content, or adapter-specific)
+```
+
+### 10.2 Middleware Execution Order
+
+```
+Middleware 1 → Middleware 2 → Middleware 3 → Command Handler
+     ↑              ↑              ↑
+     └──────────────┴──────────────┘  (each calls next())
+```
+
+If a middleware does NOT call `next()`, the chain stops and no subsequent middlewares or command handlers execute.
+
+### 10.3 Session Lifecycle
+
+```
+1. Pre-process hook loads session from store (or creates new)
+2. Middleware pipeline executes (session available via ctx.session)
+3. Command handler reads/writes session data
+4. Post-process hook saves session to store
+5. Session expires after expiresAt (configurable per store)
 ```
 
 ---
 
-## 16. Testing Guidelines
+## 11. TSDoc Quality Standards
 
-### 16.1 Unit Tests
+All public-facing symbols must have JSDoc comments following these rules:
 
-Test individual components:
+### 11.1 Required for All Public Exports
+
+- **Classes**: `@description` with purpose and usage example
+- **Functions/Methods**: `@param` for each parameter, `@returns` for return type, `@example` for usage
+- **Interfaces**: `@description` per interface, `@description` per property
+- **Types**: `@description` with `@example` showing usage
+- **Constants**: `@description` explaining purpose
+
+### 11.2 Convention
 
 ```typescript
-import { describe, it, expect } from 'vitest'
-import { IgniterBot, telegram } from '@igniter-js/bot'
-
-describe('Bot Builder', () => {
-  it('should build valid bot', () => {
-    const bot = IgniterBot
-      .create()
-      .withId('test')
-      .withName('Test')
-      .addAdapter('telegram', telegram({ token: 'test', handle: '@test' }))
-      .build()
-    
-    expect(bot).toBeDefined()
-  })
-  
-  it('should throw without ID', () => {
-    expect(() => {
-      IgniterBot.create().withName('Test').build()
-    }).toThrow('Bot ID is required')
-  })
-})
+/**
+ * Brief one-line summary.
+ *
+ * Detailed description with context and behavior notes.
+ *
+ * @param name - Parameter description with type info
+ * @returns Description of return value
+ *
+ * @example
+ * ```typescript
+ * // Minimal working example
+ * ```
+ */
 ```
 
-### 16.2 Adapter Tests
+### 11.3 Current Coverage
 
-Mock HTTP calls:
+Current TSDoc coverage is strong in:
+- `bot.provider.ts` — All public classes, methods, and errors documented
+- `bot-builder.ts` — Every builder method documented with @param and @example
+- `types/bot.types.ts` — All interfaces and types documented
+- `types/adapter.ts` — All parameter interfaces documented
+- `types/capabilities.ts` — All capability interfaces documented
+- `types/session.ts` — All session types documented
+- `types/plugins.ts` — All plugin types documented
+- `types/utils.interface.ts` — All utility types documented with @example
+- `middlewares/` — All middleware functions documented with @param and @example
+- `stores/memory.ts` — Session store documented with @example
+- `plugins/analytics.ts` — Plugin documented with @param and @example
+
+**Note for contributors:** When adding new public exports, follow the existing JSDoc patterns. Adapter implementations (`*.adapter.ts`, `*.client.ts`, `*.helpers.ts`, `*.schemas.ts`) may have lighter documentation if their API is encapsulated by the adapter factory.
+
+---
+
+## 12. Context Helper Methods
+
+The `BotContext` object is enriched with helper methods via `createContextHelpers()` in `bot.provider.ts`. These helpers delegate to adapter-specific methods:
+
+| Method | Adapter Method Required | Fallback if Missing |
+|--------|------------------------|---------------------|
+| `ctx.reply(content, options?)` | Routes to appropriate `send*` based on content type | Throws `CONTENT_TYPE_NOT_SUPPORTED` |
+| `ctx.replyWithButtons(text, buttons, options?)` | `sendInteractive` | Throws `CONTENT_TYPE_NOT_SUPPORTED` |
+| `ctx.replyWithImage(image, caption?, options?)` | `sendImage` | Throws `CONTENT_TYPE_NOT_SUPPORTED` |
+| `ctx.replyWithDocument(file, caption?, options?)` | `sendDocument` | Throws `CONTENT_TYPE_NOT_SUPPORTED` |
+| `ctx.editMessage?(messageId, content)` | `editMessage` | Method is `undefined` (optional) |
+| `ctx.deleteMessage?(messageId)` | `deleteMessage` | Method is `undefined` (optional) |
+| `ctx.react?(emoji, messageId?)` | N/A (not implemented in adapters) | Method is `undefined` (optional) |
+| `ctx.sendTyping?()` | `sendTyping` | Method is `undefined` (optional) |
+
+---
+
+## 13. Frameworks Integration
+
+### 13.1 Next.js (App Router)
+
+The `nextRouteHandlerAdapter` creates GET/POST handlers for Next.js App Router dynamic routes:
 
 ```typescript
-describe('Telegram Adapter', () => {
-  it('should parse text message', async () => {
-    const adapter = telegram({ token: 'test', handle: '@test' })
-    const request = new Request('https://example.com', {
-      method: 'POST',
-      body: JSON.stringify({ message: { text: 'Hello' } })
+// app/api/bots/[botId]/[adapter]/route.ts
+import { nextRouteHandlerAdapter } from '@igniter-js/bot/adapters/nextjs'
+
+const handlers = nextRouteHandlerAdapter({
+  'my-bot': bot,
+})
+
+export const GET = handlers.GET
+export const POST = handlers.POST
+```
+
+**Route Pattern:** `/api/bots/[botId]/[adapter]`
+
+### 13.2 TanStack Start
+
+```typescript
+// app/routes/api/bots/$botId/$adapter.ts
+import { tanstackStartRouteHandlerAdapter } from '@igniter-js/bot/adapters/tanstack-start'
+
+const handlers = tanstackStartRouteHandlerAdapter({
+  'my-bot': bot,
+})
+
+export const handler = handlers
+```
+
+**Route Pattern:** `/api/bots/$botId/$adapter`
+
+---
+
+## 14. Package Configuration
+
+```json
+{
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./adapters": "./dist/adapters/index.mjs",
+    "./adapters/telegram": "./dist/adapters/telegram/index.mjs",
+    "./adapters/whatsapp": "./dist/adapters/whatsapp/index.mjs",
+    "./adapters/discord": "./dist/adapters/discord/index.mjs",
+    "./adapters/nextjs": "./dist/adapters/nextjs/index.mjs",
+    "./adapters/tanstack-start": "./dist/adapters/tanstack-start/index.mjs",
+    "./middlewares": "./dist/middlewares/index.mjs",
+    "./plugins": "./dist/plugins/index.mjs",
+    "./stores": "./dist/stores/index.mjs",
+    "./types": "./dist/types/index.mjs"
+  },
+  "sideEffects": false
+}
+```
+
+**Key constraints:**
+- `sideEffects: false` — All imports are pure; tree-shaking works by default
+- No circular dependencies between modules
+- Only `zod` is a runtime dependency; everything else is bundled
+- TypeScript >= 5.0 required as peer dependency
+
+---
+
+## 15. Testing
+
+### 15.1 Unit Testing Middlewares
+
+```typescript
+import { describe, it, expect, vi } from 'vitest'
+import { rateLimitMiddleware, MemoryRateLimitStore } from '@igniter-js/bot/middlewares'
+
+describe('rateLimitMiddleware', () => {
+  it('should allow requests within limit', async () => {
+    const middleware = rateLimitMiddleware({
+      maxRequests: 3,
+      windowMs: 60000,
+      store: new MemoryRateLimitStore(),
     })
-    
-    const context = await adapter.handle({ request, config: { ... } })
-    expect(context?.message.content?.type).toBe('text')
+
+    const ctx = createMockContext()
+    const next = vi.fn()
+
+    await middleware(ctx, next)
+    expect(next).toHaveBeenCalled()
+  })
+
+  it('should block requests exceeding limit', async () => {
+    const middleware = rateLimitMiddleware({
+      maxRequests: 1,
+      windowMs: 60000,
+      store: new MemoryRateLimitStore(),
+    })
+
+    const ctx = createMockContext()
+    ctx.reply = vi.fn()
+
+    await middleware(ctx, vi.fn()) // First request
+    await middleware(ctx, vi.fn()) // Second request (blocked)
+
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining('Rate limit'))
   })
 })
 ```
 
----
-
-## 17. Best Practices for AI Agents
-
-### 17.1 Before Creating New Adapters
-
-1. Study existing adapters (`telegram.adapter.ts`, `whatsapp.adapter.ts`)
-2. Understand the platform's webhook/API structure
-3. Review the `IBotAdapter` contract
-4. Check capabilities you can support
-5. Plan error handling strategy
-
-### 17.2 Before Adding Features
-
-1. Check if it should be a middleware, plugin, or core feature
-2. Consider type safety implications
-3. Add Zod schemas for validation
-4. Update relevant type definitions
-5. Add JSDoc comments
-
-### 17.3 When Modifying Types
-
-1. Check impact on adapters (they must return valid context)
-2. Update `BotContext` carefully (it's widely used)
-3. Maintain backward compatibility when possible
-4. Update examples and documentation
-5. Run `npm run build` to verify types
-
-### 17.4 Code Quality
-
-- **No `any` types** in public API
-- **Always use logger** (never `console.*` directly)
-- **Add JSDoc** to all public methods
-- **Use Zod** for runtime validation (with `.optional().default()` for env vars)
-- **Write examples** for new features
-- **Update AGENTS.md** when architecture changes
-- **Use tryCatch utility** for safe async operations (`tryCatch`, `isTryCatchError`)
-- **Implement client factories** for adapters that need HTTP clients
-- **Check client existence** before using it in adapter methods
-- **Return next() directly** in middlewares (don't await separately)
-
-### 17.5 Documentation Maintenance
-
-**CRITICAL:** After every code change, you MUST:
-
-1. **Review README.md**
-   - Verify all examples still work with current API
-   - Check that new features are documented
-   - Ensure import paths are correct
-   - Update version numbers if changed
-   - Verify links and references are valid
-
-2. **Review AGENTS.md**
-   - Update architecture sections if APIs changed
-   - Add new patterns to "Common Patterns" section
-   - Update troubleshooting if new issues arise
-   - Document breaking changes in "Key Architecture Changes"
-   - Ensure all code examples match current implementation
-
-3. **Double-Check Before Updating**
-   - **NEVER overwrite** documentation without verifying current state
-   - **ALWAYS read** the current README.md and AGENTS.md files first
-   - **VERIFY** the actual package state matches what you're documenting
-   - **CHECK** package.json for current version and dependencies
-   - **REVIEW** all exported APIs from `src/index.ts`
-   - **TEST** examples in documentation actually work
-
-4. **Verification Checklist**
-   - [ ] Read current README.md fully
-   - [ ] Read current AGENTS.md fully
-   - [ ] Check package.json version and dependencies
-   - [ ] Verify all imports in examples are correct
-   - [ ] Test at least one example manually
-   - [ ] Ensure new features are documented
-   - [ ] Update related sections, not just one section
-   - [ ] Check for broken links or references
-
-### 17.6 Version Management and Publishing
-
-**Version Updates:**
-- **NEVER** update version in package.json without explicit user approval
-- **ALWAYS** suggest version options before changing
-- **USE** semantic versioning (MAJOR.MINOR.PATCH)
-- **CONSIDER** pre-release versions (alpha, beta, rc) for breaking changes
-
-**Before Suggesting Version Update:**
-1. Review current version in package.json
-2. Analyze changes made:
-   - Breaking changes → suggest MAJOR bump
-   - New features → suggest MINOR bump
-   - Bug fixes → suggest PATCH bump
-   - Pre-release → suggest alpha/beta/rc suffix
-3. Present options to user with reasoning
-4. Wait for explicit approval before changing
-
-**Example Version Update Flow:**
-```
-You: "I've added a new feature. Current version is 0.2.0-alpha.5. 
-     Should I update to:
-     - 0.2.0-alpha.6 (patch in alpha)
-     - 0.2.0-beta.0 (promote to beta)
-     - 0.3.0-alpha.0 (new minor version)"
-     
-User: "0.2.0-alpha.6"
-
-You: [Updates version, runs build, prepares for publish]
-```
-
-**Publishing Process:**
-1. Update version in package.json (after approval)
-2. Run `npm run build` to ensure everything compiles
-3. Run `npm run test` to ensure tests pass
-4. Run `npm run lint` to ensure code quality
-5. Ask user if they want to publish now or later
-6. If approved, run `npm publish` (or appropriate publish command)
-
-### 17.7 Git Commit Management
-
-**Commit Responsibilities:**
-- **MUST** create commits following Conventional Commits specification
-- **SHOULD** group related changes into logical commits
-- **MUST** write clear, descriptive commit messages
-- **SHOULD** reference issues/PRs when applicable
-
-**Conventional Commits Format:**
-```
-<type>[optional scope]: <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
-**Common Types:**
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Code style changes (formatting, etc.)
-- `refactor`: Code refactoring
-- `perf`: Performance improvements
-- `test`: Adding or updating tests
-- `chore`: Maintenance tasks (deps, build, etc.)
-- `build`: Build system changes
-- `ci`: CI/CD changes
-
-**Examples:**
-```
-feat(bot): add PATCH method to AdapterClient interface
-
-fix(telegram): handle missing client in sendTyping
-
-docs: update README with new adapter examples
-
-refactor(builder): improve type inference for middleware chain
-
-chore: update dependencies to latest versions
-```
-
-**Commit Best Practices:**
-- One logical change per commit
-- Write commit message in present tense ("add feature" not "added feature")
-- Keep first line under 72 characters
-- Use body for detailed explanations
-- Reference related issues/PRs in footer
-
----
-
-## 18. Common Patterns
-
-### 18.1 Admin-Only Commands
+### 15.2 Testing Commands
 
 ```typescript
-.addMiddleware(async (ctx, next) => {
-  const isCommand = ctx.message.content?.type === 'command'
-  const command = ctx.message.content?.type === 'command' 
-    ? ctx.message.content.command 
-    : null
-  
-  if (isCommand && ['admin', 'ban'].includes(command!)) {
-    if (!ADMIN_IDS.includes(ctx.message.author.id)) {
-      await ctx.reply('Admin only')
-      return
+it('should handle start command', async () => {
+  const command = {
+    name: 'start',
+    aliases: [],
+    description: 'Start',
+    help: 'Use /start',
+    async handle(ctx) {
+      await ctx.reply('Hello!')
     }
   }
-  
-  await next()
+
+  const ctx = createMockContext()
+  await command.handle(ctx)
+  expect(ctx.reply).toHaveBeenCalledWith('Hello!')
 })
 ```
 
-### 18.2 Conversation Flow
+### 15.3 Testing Adapters
 
 ```typescript
-.onMessage(async (ctx) => {
-  const session = ctx.session
-  
-  if (session.data.waitingForInput) {
-    const input = ctx.message.content?.content
-    session.data.lastInput = input
-    session.data.waitingForInput = false
-    await session.save()
-    
-    await ctx.reply(`Got it: ${input}`)
-  }
-})
-```
-
-### 18.3 Platform-Specific Behavior
-
-```typescript
-.addCommand('media', {
-  name: 'media',
-  async handle(ctx) {
-    const adapter = ctx.bot.getAdapter?.(ctx.provider)
-    
-    if (adapter?.capabilities.content.video) {
-      // Send video
-    } else {
-      await ctx.reply('Video not supported, sending image instead')
-      // Send image
-    }
-  }
+it('should create telegram adapter with config', () => {
+  const adapter = telegram({ token: 'test-token' })
+  expect(adapter.name).toBe('telegram')
+  expect(adapter.capabilities.content.text).toBe(true)
 })
 ```
 
 ---
 
-## 19. Troubleshooting
+## 16. Code Generation Targets
 
-### 19.1 Common Issues
+All builds target `ES2022` with both ESM (`.mjs`) and CJS (`.cjs`) outputs via tsup:
 
-**Build fails:**
-- Run `npm run build` to see TypeScript errors
-- Check that all imports are from correct paths
-- Verify Zod schemas are properly defined
-
-**Bot doesn't respond:**
-- Check webhook is configured correctly
-- Verify token is valid
-- Check logs with `.withLogger(console)`
-- Use `.addMiddleware(loggingPresets.debug())`
-
-**Type errors:**
-- Ensure `zod` is installed
-- Check TypeScript version (>= 5.0 required)
-- Verify imports are correct
-
-**Session not persisting:**
-- Call `await session.save()` after modifying data
-- Check session store is configured
-- Verify expiration settings
-
----
-
-## 20. Roadmap
-
-Roadmap items are tracked in the GitHub issues and discussions to ensure they match the current codebase and priorities.
-
----
-
-## 21. Contributing
-
-We welcome contributions! Please follow these guidelines:
-
-1. **Read** [AGENTS.md](./AGENTS.md) for architecture details
-2. **Follow** existing patterns and conventions
-3. **Test** locally with `npm run build` and `npm run typecheck`
-4. **Document** new features with JSDoc and examples
-5. **Update** README.md and AGENTS.md if needed
-6. **Review** documentation after every change (see Section 17.5)
-7. **Follow** Conventional Commits for commit messages (see Section 17.7)
-8. **Ask** before updating version numbers (see Section 17.6)
-
-### Contribution Checklist
-
-- [ ] Adapter has no top-level side effects
-- [ ] Zod schemas created for configs
-- [ ] `handle` returns context or null (never Response)
-- [ ] Capabilities declared accurately
-- [ ] Errors wrapped in BotError when appropriate
-- [ ] Help text provided for commands
-- [ ] JSDoc added to public APIs
-- [ ] Examples updated if API changed
-- [ ] Build passes (`npm run build`)
-- [ ] No lint errors (`npm run lint`)
-- [ ] Tests pass (`npm test`)
-- [ ] Client factory implemented if adapter needs HTTP client
-- [ ] All send methods implemented for declared capabilities
-- [ ] README.md reviewed and updated if needed
-- [ ] AGENTS.md reviewed and updated if needed
-- [ ] Commit messages follow Conventional Commits format
+```
+dist/
+  index.mjs          # ESM main entry
+  index.js           # CJS main entry
+  index.d.ts         # Type declarations
+  adapters/
+    index.mjs
+    index.js
+    index.d.ts
+    telegram/
+      index.mjs
+      index.js
+      index.d.ts
+    whatsapp/...
+    discord/...
+    nextjs/...
+    tanstack-start/...
+  middlewares/
+    index.mjs, index.js, index.d.ts
+  plugins/
+    index.mjs, index.js, index.d.ts
+  stores/
+    index.mjs, index.js, index.d.ts
+  types/
+    index.mjs, index.js, index.d.ts
+```
 
 ---
 
-## 22. Resources
+## 17. Maintenance Notes
 
-- 📖 **Full Documentation:** https://igniterjs.com/docs/bots
-- 🧪 **Tests:** [tests/](./tests/) - Comprehensive test suite using Vitest
-- 🐛 **Report Issues:** https://github.com/felipebarcelospro/igniter-js/issues
-- 💬 **Discussions:** https://github.com/felipebarcelospro/igniter-js/discussions
+### 17.1 When Adding a New Adapter
+
+1. Create directory under `src/adapters/<platform>/`
+2. Implement files: `*.adapter.ts`, `*.client.ts`, `*.helpers.ts`, `*.schemas.ts`, `index.ts`
+3. Add export to `src/adapters/index.ts`
+4. Add export to `src/index.ts`
+5. Add tsup entry in `package.json`
+6. Add exports map in `package.json`
+7. Update this AGENTS.md (Sections 3, 4, 7.5)
+8. Update README.md with adapter details
+
+### 17.2 When Adding a New Middleware
+
+1. Create file under `src/middlewares/<name>.ts`
+2. Export from `src/middlewares/index.ts`
+3. Follow existing patterns (factory function, presets object)
+4. Add full JSDoc with @param, @returns, @example
+5. Update this AGENTS.md (Sections 3, 9)
+6. Update README.md with middleware docs
+
+### 17.3 When Adding a New Export to index.ts
+
+1. Add explicit re-export in `src/index.ts`
+2. Add organized import path in `package.json` exports if needed
+3. Update AGENTS.md import reference table
+4. Update README.md if user-facing
+
+### 17.4 Package Health Checks
+
+```bash
+cd packages/bot
+pnpm typecheck        # Verify no type errors
+pnpm lint             # ESLint checks
+pnpm test             # Run test suite
+pnpm build            # Verify build succeeds
+```
 
 ---
 
-## 23. License
+## 18. Related Resources
 
-MIT © Felipe Barcelos & Igniter.js Contributors
-
----
-
-## 24. Acknowledgments
-
-Built with ❤️ by the Igniter.js team.
-
-Special thanks to all contributors and early adopters!
-
-This package is part of the [Igniter.js](https://igniterjs.com) ecosystem - a modern, type-safe framework for building scalable TypeScript applications.
-
----
-
-**Ready to build your bot? Check out the [tests](./tests/) for examples or read the [Quick Start guide](https://igniterjs.com/docs/bots/quick-start)!**
-
----
-
-## 25. Key Architecture Changes (v0.2.0-alpha.5)
-
-### Adapter Architecture Overhaul
-
-**Before:** Adapters had a single `send()` method that handled all content types.
-
-**After:** Adapters implement specific methods based on capabilities:
-- `sendText()`, `sendImage()`, `sendVideo()`, etc.
-- `editMessage()`, `deleteMessage()` for actions
-- `sendTyping()` for typing indicators
-- Optional `client()` factory for HTTP client access
-
-### HTTP Client Integration
-
-- Adapters can provide a `client()` factory function
-- Clients are pre-configured with tokens, base URLs, and headers
-- All adapter methods receive `client` as an injected parameter
-- Framework handles client creation and injection automatically
-
-### Content Type Routing
-
-- `Bot.send()` automatically routes to appropriate adapter method
-- Content type is determined from `content.type` field
-- Framework validates adapter supports the content type before routing
-- Errors thrown if adapter doesn't implement required method
-
-### Environment Variable Support
-
-- Adapter schemas can use `.optional().default(process.env.VAR || '')`
-- Configuration merging happens automatically in adapter factory
-- Supports: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_URL`, `WHATSAPP_TOKEN`, etc.
-
-### Middleware Improvements
-
-- Middlewares return `next()` directly for better control flow
-- Improved type inference with `TContextOut` parameter
-- Context enrichment handled more reliably
-
-### Type System Enhancements
-
-- New `types/adapter.ts` with complete adapter type definitions
-- New `types/utils.interface.ts` with utility type helpers
-- Better separation of concerns in type definitions
-- Improved type inference throughout the framework
+- [Igniter.js Documentation](https://igniterjs.com)
+- [Telegram Bot API Docs](https://core.telegram.org/bots/api)
+- [WhatsApp Cloud API Docs](https://developers.facebook.com/docs/whatsapp/cloud-api)
+- [Discord Developer Docs](https://discord.com/developers/docs)
+- [Zod Documentation](https://zod.dev)

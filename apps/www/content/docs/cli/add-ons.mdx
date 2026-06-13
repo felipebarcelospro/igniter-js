@@ -1,0 +1,320 @@
+---
+title: Add-ons
+description: All 9 Igniter.js add-ons — database, auth, jobs, store, MCP, logging, telemetry, bots, and shadcn/ui. Options, inline notation, dependencies, and env vars.
+---
+
+## Add-ons
+
+Add-ons are modular features you can layer onto any starter. They configure dependencies, environment variables, Docker services, and source code templates — all from a single `--add-ons` flag.
+
+<Callout type="info">
+  Add-ons are applied in **registration order** during `igniter init`, and their effects are cumulative. Adding `database,auth` configures both with shared wiring — the auth module references the database connection automatically.
+</Callout>
+
+---
+
+## Add-on Catalog
+
+| Add-on | Value | Has Options | Docker | Description |
+|--------|-------|-------------|--------|-------------|
+| **Database** | `database` | Yes | Yes | Prisma or Drizzle ORM + PostgreSQL, MySQL, or SQLite |
+| **Auth** | `auth` | Yes | No | Better Auth with 21 plugin options |
+| **Jobs** | `jobs` | No | Yes | Background job processing with BullMQ + Redis |
+| **Store** | `store` | No | Yes | Redis-backed key-value caching and pub/sub |
+| **MCP** | `mcp` | No | No | Model Context Protocol server for AI agents |
+| **Logging** | `logging` | No | No | Structured logging with Pino |
+| **Telemetry** | `telemetry` | No | No | OpenTelemetry tracing, metrics, and events |
+| **Bots** | `bots` | No | No | Multi-platform bot setup (Telegram, WhatsApp, Discord) |
+| **shadcn/ui** | `shadcn-ui` | No | No | Run shadcn/ui initialization |
+
+---
+
+## Inline Option Notation
+
+Add-ons with configurable options use a colon-separated, positional notation:
+
+```
+--add-ons "addon-id:option1:option2+value2"
+```
+
+- `:` separates positional options (order matters)
+- `+` separates multiple values for multi-select options
+- `,` separates different add-ons
+
+---
+
+## `database`
+
+Database integration with choice of ORM and provider.
+
+### Options
+
+| Position | Key | Type | Values |
+|----------|-----|------|--------|
+| 1 | `orm` | single | `prisma`, `drizzle` |
+| 2 | `provider` | single | `postgresql`, `mysql`, `sqlite` |
+
+### Prisma Templates
+
+| Template | Output |
+|----------|--------|
+| `add-ons/database/prisma/lib.hbs` | `src/lib/database.ts` |
+| `add-ons/database/prisma/prisma.config.hbs` | `prisma.config.ts` |
+| `add-ons/database/prisma/schema.hbs` | `prisma/schema.prisma` |
+
+### Drizzle Templates
+
+| Template | Output |
+|----------|--------|
+| `add-ons/database/drizzle/lib.hbs` | `src/lib/database.ts` |
+
+### Prisma Dependencies
+
+- `dotenv` (latest)
+- `prisma` (^6.19.0)
+- `@prisma/client` (^6.19.0)
+
+### Docker (Provider)
+
+| Provider | Image | Port |
+|----------|-------|------|
+| PostgreSQL | `postgres:16-alpine` | `5432:5432` |
+| MySQL | `mysql:8.0` | `3306:3306` |
+
+### Environment Variables
+
+| Variable | PostgreSQL Default | MySQL Default | SQLite Default |
+|----------|--------------------|---------------|----------------|
+| `DATABASE_URL` | `postgresql://igniter:${DATABASE_PASSWORD}@localhost:5432/igniter_db` | `mysql://igniter:${DATABASE_PASSWORD}@localhost:3306/igniter_db` | `file:./dev.db` |
+| `DATABASE_PASSWORD` | `igniter` | `docker` | — |
+| `DATABASE_USER` | `igniter` | `docker` | — |
+| `DATABASE_NAME` | — | `docker` | — |
+
+### Post-install Hook
+
+- **Prisma:** Runs `prisma generate` after dependency installation
+- **Drizzle:** Runs `drizzle init` after dependency installation
+
+### Examples
+
+```bash
+# Prisma + PostgreSQL
+igniter init app --add-ons "database:prisma:postgresql"
+
+# Drizzle + MySQL
+igniter init app --add-ons "database:drizzle:mysql"
+
+# Drizzle + SQLite (no Docker needed)
+igniter init app --add-ons "database:drizzle:sqlite"
+```
+
+---
+
+## `auth`
+
+Better Auth integration with comprehensive plugin support.
+
+### Options
+
+| Position | Key | Type | Values |
+|----------|-----|------|--------|
+| 1 | `provider` | single | `better-auth` |
+| 2 | `plugins` | multi | 21 plugin options (see below) |
+
+### Provider: Better Auth
+
+**Dependencies:** `better-auth` (1.3.0)
+
+**Template:** `add-ons/auth/better-auth/auth.hbs` → `src/lib/auth.ts`
+
+**Post-install:** Runs `@better-auth/cli generate --config src/lib/auth.ts --yes`
+
+### Available Plugins
+
+`email`, `two-factor`, `username`, `anonymous`, `phone-number`, `magic-link`, `email-otp`, `passkey`, `generic-oauth`, `one-tap`, `api-key`, `admin`, `organization`, `oidc`, `sso`, `bearer`, `multi-session`, `oauth-proxy`, `open-api`, `jwt`, `next-cookies`
+
+### Examples
+
+```bash
+# Basic auth with email + magic link
+igniter init app --add-ons "auth:better-auth:email+magic-link"
+
+# Advanced auth with passkey + 2FA + JWT
+igniter init app --add-ons "auth:better-auth:email+passkey+two-factor+jwt"
+
+# Auth + Database combined
+igniter init app --add-ons "database:prisma:postgresql,auth:better-auth:email+magic-link"
+```
+
+---
+
+## `jobs`
+
+Background job processing with BullMQ and Redis.
+
+**Dependencies:**
+- `@igniter-js/adapter-redis` (latest)
+- `@igniter-js/adapter-bullmq` (latest)
+- `bullmq` (5.58.7)
+- `ioredis` (5.6.1)
+
+**Templates:**
+- `add-ons/jobs/jobs.ts.hbs` → `src/services/jobs.ts`
+- `add-ons/jobs/redis.ts.hbs` → `src/services/redis.ts`
+- `add-ons/jobs/store.ts.hbs` → `src/services/store.ts`
+
+**Docker:** `redis:7-alpine` on port `6379`
+
+**Environment Variables:** `REDIS_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `IGNITER_JOBS_QUEUE_PREFIX`
+
+```bash
+igniter init app --add-ons jobs
+```
+
+---
+
+## `store`
+
+Redis-backed key-value caching, sessions, and pub/sub messaging.
+
+**Dependencies:**
+- `@igniter-js/adapter-redis` (latest)
+- `ioredis` (5.6.1)
+
+**Templates:**
+- `add-ons/store/redis.ts.hbs` → `src/services/redis.ts`
+- `add-ons/store/store.ts.hbs` → `src/services/store.ts`
+
+**Docker:** `redis:7-alpine` on port `6379`
+
+**Environment Variables:** `REDIS_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
+
+```bash
+igniter init app --add-ons store
+```
+
+---
+
+## `mcp`
+
+Model Context Protocol server setup for AI agent integration.
+
+**Templates:**
+- `add-ons/mcp/mcp.ts.hbs` → `src/services/mcp.ts`
+- `add-ons/mcp/nextjs/route-handler.hbs` (Next.js)
+- `add-ons/mcp/tanstack-start/route-handler.hbs` (TanStack Start)
+
+```bash
+igniter init app --add-ons mcp
+```
+
+---
+
+## `logging`
+
+Structured logging with Pino.
+
+**Template:** `add-ons/logging/logger.ts.hbs` → `src/services/logger.ts`
+
+**Dependencies:** `@igniter-js/core` (latest)
+
+```bash
+igniter init app --add-ons logging
+```
+
+---
+
+## `telemetry`
+
+OpenTelemetry tracing, metrics, and events.
+
+**Template:** `add-ons/telemetry/telemetry.ts.hbs`
+
+**Dependencies:** `@igniter-js/core` (latest)
+
+**Environment Variables:**
+- `IGNITER_TELEMETRY_ENABLE_TRACING`
+- `IGNITER_TELEMETRY_ENABLE_METRICS`
+- `IGNITER_TELEMETRY_ENABLE_EVENTS`
+- `IGNITER_TELEMETRY_ENABLE_CLI_INTEGRATION`
+
+```bash
+igniter init app --add-ons telemetry
+```
+
+---
+
+## `bots`
+
+Multi-platform bot setup for Telegram, WhatsApp, Discord, and more.
+
+**Templates:**
+- `add-ons/bots/sample-bot.hbs`
+- `add-ons/bots/nextjs/route-handler.hbs` (Next.js)
+- `add-ons/bots/tanstack-start/route-handler.hbs` (TanStack Start)
+
+**Dependencies:** `@igniter-js/bot` (alpha)
+
+**Environment Variables:** `TELEGRAM_TOKEN`, `TELEGRAM_WEBHOOK_URL`, `TELEGRAM_WEBHOOK_SECRET`
+
+```bash
+igniter init app --add-ons bots
+```
+
+---
+
+## `shadcn-ui`
+
+Initializes shadcn/ui components in your project.
+
+**Post-install:** Runs `shadcn@latest init --base-color zinc --src-dir --silent --yes`
+
+```bash
+igniter init app --add-ons shadcn-ui
+```
+
+---
+
+## Add-on Architecture
+
+All add-ons extend `BaseAddOn` and implement a common interface:
+
+```typescript
+interface AddOn {
+  name: string;           // Display name
+  value: string;          // CLI identifier
+  description: string;    // Short description
+  hint: string;           // Prompt hint
+  options?: AddOnOption[]; // Configurable options
+  templates: Template[];  // Handlebars templates
+  dependencies: Dep[];    // Package dependencies
+  dockerServices: Service[]; // Docker services
+  envVars: EnvVar[];      // Environment variables
+  runSetup(dir, config): Promise<void>;      // Template + config setup
+  runPostInstall(dir, config): Promise<void>; // Post-install hooks
+}
+```
+
+### Setup Order
+
+During `igniter init`, each add-on is applied in this order:
+
+1. **Dependencies** → merged into `package.json`
+2. **Docker services** → merged into `docker-compose.yml`
+3. **Environment variables** → merged into `.env`
+4. **Templates** → rendered and written to output paths
+5. **Post-install** → CLI setup hooks (run AFTER dependencies are installed)
+
+<Callout type="warn">
+  Post-install hooks (like `prisma generate` and `better-auth generate`) run **only if dependencies are installed**. If `--no-install` is passed, these steps are skipped with a warning.
+</Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Starters" description="Compare all 6 starters and understand which add-ons work with each." href="/docs/cli/starters" />
+  <Card title="init Command" description="Full reference for the init command — modes, flags, and all options." href="/docs/cli/commands/init" />
+  <Card title="Real-World Scenarios" description="Production-ready add-on combinations for common use cases." href="/docs/cli/real-world" />
+</Cards>

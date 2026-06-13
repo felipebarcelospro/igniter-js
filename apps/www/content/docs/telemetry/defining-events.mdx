@@ -1,0 +1,262 @@
+---
+title: Defining Events
+description: Create typed event registries with IgniterTelemetryEvents — namespaces, groups, Zod schemas, and registry descriptors for full TypeScript inference.
+---
+
+## Defining Events
+
+`IgniterTelemetryEvents` is the **typed event registry builder**. It creates namespaced, schema-validated event definitions that feed into the telemetry builder — giving you autocompletion on `emit()` calls and optional runtime validation.
+
+<Callout type="info">
+  Typed events are **optional**. You can emit any string event name without a registry. Registries give you autocompletion, documentation, and validation when you need it.
+</Callout>
+
+---
+
+## Basic Structure
+
+Every event registry starts with a namespace and contains events or groups:
+
+```typescript
+import { IgniterTelemetryEvents } from "@igniter-js/telemetry";
+import { z } from "zod";
+
+const MyEvents = IgniterTelemetryEvents
+  .namespace("myapp.feature")     // 1. Define namespace
+  .event("action.done", schema)   // 2. Add flat events
+  .group("subfeature", (g) =>     // 3. Add nested groups
+    g.event("start", schema)
+     .event("complete", schema)
+  )
+  .build();                       // 4. Build the descriptor
+```
+
+---
+
+## Flat Events
+
+Define individual, non-grouped events under a namespace:
+
+```typescript
+import { z } from "zod";
+import { IgniterTelemetryEvents } from "@igniter-js/telemetry";
+
+const AuthEvents = IgniterTelemetryEvents
+  .namespace("igniter.auth")
+  .event("login.succeeded", z.object({
+    "ctx.user.id": z.string(),
+    "ctx.login.method": z.enum(["password", "oauth", "magic_link"]),
+    "ctx.login.ip": z.string(),
+  }))
+  .event("login.failed", z.object({
+    "ctx.user.id": z.string().optional(),
+    "ctx.login.method": z.string(),
+    "ctx.login.reason": z.string(),
+  }))
+  .event("logout", z.object({
+    "ctx.user.id": z.string(),
+    "ctx.session.duration_seconds": z.number(),
+  }))
+  .build();
+```
+
+Emitting these events gives autocompletion:
+
+```typescript
+telemetry.emit("igniter.auth.login.succeeded", {
+  attributes: {
+    "ctx.user.id": "usr_123",
+    "ctx.login.method": "oauth",
+    "ctx.login.ip": "192.168.1.1",
+  },
+});
+```
+
+---
+
+## Grouped Events
+
+Organize related events into groups for logical hierarchy and better autocompletion:
+
+```typescript
+const OrderEvents = IgniterTelemetryEvents
+  .namespace("igniter.orders")
+  .group("checkout", (g) =>
+    g
+      .event("started", z.object({
+        "ctx.cart.id": z.string(),
+        "ctx.cart.item_count": z.number(),
+      }))
+      .event("completed", z.object({
+        "ctx.order.id": z.string(),
+        "ctx.order.total": z.number(),
+      }))
+      .event("abandoned", z.object({
+        "ctx.cart.id": z.string(),
+        "ctx.cart.elapsed_seconds": z.number(),
+      }))
+  )
+  .group("fulfillment", (g) =>
+    g
+      .event("picked", z.object({
+        "ctx.order.id": z.string(),
+        "ctx.warehouse.id": z.string(),
+      }))
+      .event("shipped", z.object({
+        "ctx.order.id": z.string(),
+        "ctx.shipment.tracking": z.string(),
+      }))
+      .event("delivered", z.object({
+        "ctx.order.id": z.string(),
+        "ctx.delivery.timestamp": z.string(),
+      }))
+  )
+  .build();
+```
+
+Grouped events use dot-separated names:
+
+```typescript
+telemetry.emit("igniter.orders.checkout.completed", {
+  attributes: {
+    "ctx.order.id": "ord_456",
+    "ctx.order.total": 8999,
+  },
+});
+```
+
+---
+
+## Schema Libraries
+
+The event builder accepts Zod schemas, StandardSchemaV1 schemas, or any schema object with `parse`/`safeParse` methods.
+
+<Callout type="info">
+  Zod is used in all examples but is **not bundled**. You control which schema library to use — just make sure it implements `parse()` or `safeParse()`.
+</Callout>
+
+```typescript
+// Zod (recommended)
+import { z } from "zod";
+
+const schema = z.object({
+  "ctx.user.id": z.string(),
+});
+```
+
+---
+
+## Adding Events to the Builder
+
+Use `.addEvents()` to register event descriptors with the telemetry builder:
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withService("api")
+  .addEvents(AuthEvents)            // First registry
+  .addEvents(OrderEvents)           // Second registry
+  .addEvents(BillingEvents, {       // With validation options
+    mode: "always",
+    strict: true,
+  })
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+### Validation Options
+
+`addEvents()` accepts optional validation options per registry:
+
+```typescript
+interface IgniterTelemetryEventsValidationOptions {
+  mode?: "development" | "always" | "none";  // default: "development"
+  strict?: boolean;                            // default: false
+}
+```
+
+| Option | Description |
+|--------|-------------|
+| `mode: "development"` | Validate only when `NODE_ENV !== "production"` |
+| `mode: "always"` | Always validate — throw on schema mismatch even in production |
+| `mode: "none"` | Never validate — events pass through regardless |
+| `strict: true` | Throw on unknown event names (events not in any registry) |
+
+---
+
+## Using the Descriptor Helpers
+
+The built descriptor exposes helpers for getting typed keys and schemas:
+
+```typescript
+const BillingEvents = IgniterTelemetryEvents
+  .namespace("igniter.billing")
+  .event("cycle.started", z.object({ "ctx.cycle.id": z.string() }))
+  .build();
+
+// Get the full event key with namespace
+const key = BillingEvents.get.key("cycle.started");
+// => "igniter.billing.cycle.started"
+
+// Get the schema for a specific event
+const schema = BillingEvents.get.schema("cycle.started");
+// => z.ZodObject<{ "ctx.cycle.id": z.ZodString }>
+
+// Type inference
+type BillingRegistry = typeof BillingEvents.$Infer.registry;
+type BillingKeys = typeof BillingEvents.$Infer.keys;
+// => "cycle.started"
+```
+
+---
+
+## Multiple Namespaces
+
+You can register multiple namespaces on the same telemetry instance:
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withService("platform")
+  .addEvents(AuthEvents)       // namespace: "igniter.auth"
+  .addEvents(OrderEvents)      // namespace: "igniter.orders"
+  .addEvents(BillingEvents)    // namespace: "igniter.billing"
+  .addTransport(loggerAdapter)
+  .build();
+
+// All namespaces are available on emit()
+telemetry.emit("igniter.auth.login.succeeded", { ... });
+telemetry.emit("igniter.orders.checkout.completed", { ... });
+telemetry.emit("igniter.billing.invoice.paid", { ... });
+```
+
+<Callout type="warn">
+  **Duplicate namespaces throw an error.** If you try to register two descriptors with the same namespace, `TELEMETRY_DUPLICATE_NAMESPACE` is thrown. Use multiple events/groups within a single namespace instead.
+</Callout>
+
+---
+
+## Naming Conventions
+
+Recommended event naming patterns:
+
+| Pattern | Example | Use Case |
+|---------|---------|----------|
+| `namespace.group.action` | `igniter.jobs.job.completed` | Grouped domain events |
+| `namespace.verb.past_tense` | `igniter.auth.login.succeeded` | Lifecycle events |
+| `namespace.verb.present` | `igniter.billing.cycle.started` | Process start events |
+| `namespace.noun.action` | `igniter.mail.recipient.added` | Entity events |
+
+### Key Guidelines
+
+- Use **dot-separated names** for hierarchy (`igniter.jobs.worker.started`)
+- Use **past tense** for completed actions (`succeeded`, `failed`, `completed`)
+- Use **`ctx.*` prefix** for attribute keys (`ctx.user.id`, `ctx.order.total`)
+- Use **lowercase** for all event names and attribute keys
+- Keep event names **descriptive** — prefer `payment.intent.created` over `pay_created`
+
+---
+
+## Next Steps
+
+- [Builder Configuration](/docs/telemetry/builder-config) — All builder methods and options
+- [Emitting Events](/docs/telemetry/emitting-events) — Attributes, levels, errors, and source metadata
+- [Validation](/docs/telemetry/validation) — Event validation modes and strict mode

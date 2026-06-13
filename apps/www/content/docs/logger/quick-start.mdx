@@ -1,0 +1,232 @@
+---
+title: Quick Start
+description: Create a fully configured logger in 2 minutes. Build with context, transports, and typed scopes — copy-paste ready.
+---
+
+## Quick Start
+
+This guide walks you from zero to a production-ready logger in under two minutes. You'll configure log levels, structured context, multiple transports, and child loggers — all with full TypeScript inference.
+
+<Steps>
+  <Step>
+    ### Install
+
+    <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+      <Tab value="npm">
+        ```bash
+        npm install @igniter-js/logger
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm add @igniter-js/logger
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn add @igniter-js/logger
+        ```
+      </Tab>
+      <Tab value="bun">
+        ```bash
+        bun add @igniter-js/logger
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step>
+    ### Create a Basic Logger
+
+    The simplest possible logger — one import, one line, and you're logging:
+
+    ```typescript
+    import { IgniterLogger } from '@igniter-js/logger';
+
+    const logger = IgniterLogger.create().build();
+
+    logger.info('Server started');
+    // Output (pretty): [12:34:56] INFO: Server started
+    ```
+
+    <Callout type="info">
+      When no transports are configured, a **console transport with pretty formatting** is added automatically. You get colored output and timestamps out of the box.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Configure Level and Context
+
+    Set a minimum log level and merge default context into every entry:
+
+    ```typescript
+    import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
+
+    const logger = IgniterLogger.create()
+      .withLevel(IgniterLogLevel.Info)       // ignore debug/trace
+      .withAppName('api')                     // appear in every log
+      .withComponent('http')                  // identify this component
+      .withContext({                          // merged into all entries
+        region: 'us-east-1',
+        version: '2.4.0',
+      })
+      .build();
+
+    logger.info('Request received', { method: 'GET', path: '/users' });
+    // Output includes: appName=api, component=http, region=us-east-1, method=GET, path=/users
+    ```
+
+    Messages below `Info` are silently dropped. Context from `withContext()` is merged as base keys; per-call context (`{ method, path }`) is merged on top.
+  </Step>
+
+  <Step>
+    ### Add Transports
+
+    Send logs to console, a file, and a remote HTTP endpoint — all at once:
+
+    ```typescript
+    import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
+
+    const logger = IgniterLogger.create()
+      .withLevel(IgniterLogLevel.Debug)
+      .withAppName('api')
+      .addTransport({
+        target: 'console',
+        options: { pretty: true, colorize: true },
+      })
+      .addTransport({
+        target: 'file',
+        options: {
+          path: './logs/app.log',
+          mkdir: true,
+          rotation: { maxSizeBytes: 10 * 1024 * 1024 }, // 10 MB
+        },
+      })
+      .addTransport({
+        target: 'http',
+        options: {
+          url: 'https://logs.example.com/ingest',
+          headers: { 'X-API-Key': process.env.LOG_API_KEY! },
+          batchSize: 50,
+        },
+      })
+      .build();
+
+    logger.info('Multi-transport log');
+    // → console (pretty), file (app.log), and HTTP (batched) — simultaneously
+    ```
+
+    Each log call writes to **all configured transports** in parallel.
+  </Step>
+
+  <Step>
+    ### Create Child Loggers
+
+    Create scoped loggers for different parts of your application:
+
+    ```typescript
+    // Parent logger with base context
+    const logger = IgniterLogger.create()
+      .withAppName('api')
+      .withContext({ service: 'users' })
+      .build();
+
+    // Child for HTTP request handling
+    const requestLogger = logger.child('http', {
+      requestId: crypto.randomUUID(),
+      method: 'POST',
+    });
+
+    requestLogger.info('Processing request');
+    // Component=http, service=users, requestId=..., method=POST
+
+    // Child for database operations
+    const dbLogger = logger.child('database', { query: 'SELECT' });
+
+    dbLogger.debug('Query executed', { duration: 45 });
+    // Component=database, service=users, query=SELECT, duration=45
+    ```
+
+    Child loggers inherit the parent's configuration and pino instance. Context is merged — children add keys on top of the parent's defaults.
+  </Step>
+
+  <Step>
+    ### Add Visual Structure
+
+    Use groups and separators to make log output scannable:
+
+    ```typescript
+    logger.separator();
+    // ──────────────────────────────────────────────────
+
+    logger.group('User Import');
+    logger.info('Reading CSV file...');
+    logger.info('Parsing 1,423 records...');
+    logger.success('Import complete');
+    logger.groupEnd();
+    //   Reading CSV file...
+    //   Parsing 1,423 records...
+    //   ✓ Import complete
+
+    logger.group('Email Dispatch');
+    logger.info('Sending welcome emails...');
+    logger.warn('3 emails bounced');
+    logger.groupEnd();
+    //   Sending welcome emails...
+    //   3 emails bounced
+    ```
+
+    <Callout type="info">
+      Groups and separators only affect **console output**. File and HTTP transports receive the raw log lines without indentation.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Flush Before Exit
+
+    For file and HTTP transports, flush buffered logs before the process exits:
+
+    ```typescript
+    import { IgniterLogger } from '@igniter-js/logger';
+
+    const logger = IgniterLogger.create()
+      .addTransport({ target: 'file', options: { path: './logs/app.log' } })
+      .addTransport({ target: 'http', options: { url: 'https://logs.example.com/ingest' } })
+      .build();
+
+    // Graceful shutdown
+    process.on('SIGTERM', async () => {
+      logger.info('Shutting down...');
+      await logger.flush();
+      process.exit(0);
+    });
+
+    process.on('beforeExit', async () => {
+      await logger.flush();
+    });
+    ```
+  </Step>
+</Steps>
+
+---
+
+## ✅ Success Checkpoint
+
+You now have a logger that:
+
+- Respects the configured **log level** (drops messages below the threshold)
+- Merges **default context** (app name, component, region) into every entry
+- Writes to **console, file, and HTTP** simultaneously
+- Supports **child loggers** with scoped context
+- Uses **visual formatting** (groups, separators) for readable console output
+- **Flushes** buffered logs on graceful shutdown
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Transports" description="Deep dive into every transport target, options, and multi-transport patterns." href="/docs/logger/transports" />
+  <Card title="Child Loggers" description="Typed scopes, context merging, and hierarchical logger patterns." href="/docs/logger/child-loggers" />
+  <Card title="Advanced" description="Runtime level changes, groups, separators, flush, and error handling." href="/docs/logger/advanced" />
+</Cards>

@@ -1,0 +1,382 @@
+---
+title: Framework Integration
+description: Integrate @igniter-js/bot with Next.js, TanStack Start, Express, Fastify, Hono, and any Node.js web framework. Handle webhooks with minimal boilerplate.
+---
+
+## Framework Integration
+
+`@igniter-js/bot` is framework-agnostic at its core — adapters work with the standard `Request`/`Response` API. This page covers integration patterns for popular frameworks.
+
+---
+
+## Next.js App Router
+
+The `nextRouteHandlerAdapter` provides a ready-to-use route handler.
+
+### Route Setup
+
+```typescript
+// app/api/bot/[adapter]/[botId]/route.ts
+import { nextRouteHandlerAdapter } from '@igniter-js/bot';
+import { bot } from '@/lib/bot';
+
+export const { GET, POST } = nextRouteHandlerAdapter({
+  assistant_bot: bot,
+});
+```
+
+**Dynamic segments:**
+- `[adapter]` — Platform: `telegram`, `whatsapp`, `discord`
+- `[botId]` — Bot ID (derived from handle: `assistant_bot`)
+
+### Webhook URL
+
+Set your webhook URL to:
+
+```
+https://your-domain.com/api/bot/telegram/assistant_bot
+```
+
+The `GET` handler handles webhook verification (Telegram setup, Discord signature checks). The `POST` handler processes incoming messages.
+
+### Multiple Bots
+
+```typescript
+import { nextRouteHandlerAdapter } from '@igniter-js/bot';
+import { supportBot, salesBot, internalBot } from '@/lib/bots';
+
+export const { GET, POST } = nextRouteHandlerAdapter({
+  support_bot: supportBot,
+  sales_bot: salesBot,
+  internal_bot: internalBot,
+});
+```
+
+### Local Development
+
+Use a tunneling service to expose your local server:
+
+```bash
+# ngrok
+ngrok http 3000
+
+# localtunnel
+npx localtunnel --port 3000 --subdomain my-bot-dev
+```
+
+Then set your Telegram webhook to: `https://my-bot-dev.loca.lt/api/bot/telegram/assistant_bot`
+
+---
+
+## TanStack Start
+
+The `tanstackStartRouteHandlerAdapter` follows the same pattern:
+
+```typescript
+// app/routes/api/bot/$adapter/$botId.ts
+import { tanstackStartRouteHandlerAdapter } from '@igniter-js/bot';
+import { bot } from '@/lib/bot';
+
+export const { GET, POST } = tanstackStartRouteHandlerAdapter({
+  assistant_bot: bot,
+});
+```
+
+---
+
+## Express
+
+Bot works with Express through the standard `Request`/`Response` pattern:
+
+```typescript
+import express from 'express';
+import { bot } from './lib/bot';
+
+const app = express();
+
+// Convert Express req to Web Request
+function toWebRequest(req: express.Request): Request {
+  const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+  return new Request(url, {
+    method: req.method,
+    headers: new Headers(req.headers as Record<string, string>),
+    body: req.method === 'POST' ? JSON.stringify(req.body) : undefined,
+  });
+}
+
+// Bot webhook handler
+app.all('/api/bot/:adapter', async (req, res) => {
+  try {
+    const webRequest = toWebRequest(req);
+    const webResponse = await bot.handle(req.params.adapter, webRequest);
+
+    // Forward status and headers
+    res.status(webResponse.status);
+    webResponse.headers.forEach((value, key) => {
+      res.setHeader(key, value);
+    });
+
+    // Forward body
+    const body = await webResponse.text();
+    res.send(body);
+  } catch (error) {
+    console.error('Bot handler error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.listen(3000, () => {
+  console.log('Bot server running on http://localhost:3000');
+});
+```
+
+### Express with Multiple Bots
+
+```typescript
+import { supportBot, salesBot } from './lib/bots';
+
+const bots = { support: supportBot, sales: salesBot };
+
+app.all('/api/bot/:botId/:adapter', async (req, res) => {
+  const bot = bots[req.params.botId];
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  const webRequest = toWebRequest(req);
+  const webResponse = await bot.handle(req.params.adapter, webRequest);
+
+  res.status(webResponse.status);
+  webResponse.headers.forEach((value, key) => res.setHeader(key, value));
+  const body = await webResponse.text();
+  res.send(body);
+});
+```
+
+---
+
+## Fastify
+
+```typescript
+import Fastify from 'fastify';
+import { bot } from './lib/bot';
+
+const fastify = Fastify({ logger: true });
+
+// Bot webhook handler
+fastify.all('/api/bot/:adapter', async (request, reply) => {
+  const url = `${request.protocol}://${request.hostname}${request.url}`;
+  const webRequest = new Request(url, {
+    method: request.method,
+    headers: request.headers as HeadersInit,
+    body: request.method === 'POST' ? JSON.stringify(request.body) : undefined,
+  });
+
+  const webResponse = await bot.handle(
+    (request.params as any).adapter,
+    webRequest,
+  );
+
+  reply.status(webResponse.status);
+
+  webResponse.headers.forEach((value, key) => {
+    reply.header(key, value);
+  });
+
+  const body = await webResponse.text();
+  reply.send(body);
+});
+
+await fastify.listen({ port: 3000 });
+```
+
+---
+
+## Hono
+
+Hono's native `Request`/`Response` API makes integration trivial:
+
+```typescript
+import { Hono } from 'hono';
+import { bot } from './lib/bot';
+
+const app = new Hono();
+
+app.all('/api/bot/:adapter', async (c) => {
+  const webResponse = await bot.handle(c.req.param('adapter'), c.req.raw);
+  return webResponse;
+});
+
+export default app;
+```
+
+---
+
+## Bun.serve / Node.js HTTP
+
+For minimal Node.js or Bun servers:
+
+```typescript
+// Bun
+import { bot } from './lib/bot';
+
+Bun.serve({
+  port: 3000,
+  async fetch(request) {
+    const url = new URL(request.url);
+    const adapter = url.pathname.split('/')[3]; // /api/bot/{adapter}
+    if (!adapter) return new Response('Not Found', { status: 404 });
+
+    return bot.handle(adapter, request);
+  },
+});
+```
+
+```typescript
+// Node.js http module
+import { createServer } from 'http';
+import { bot } from './lib/bot';
+
+const server = createServer(async (req, res) => {
+  const url = new URL(req.url!, `http://${req.headers.host}`);
+  const adapter = url.pathname.split('/')[3];
+
+  if (!adapter) {
+    res.writeHead(404);
+    res.end('Not Found');
+    return;
+  }
+
+  const webRequest = new Request(url.toString(), {
+    method: req.method,
+    headers: req.headers as HeadersInit,
+    body: req.method === 'POST' ? await readBody(req) : undefined,
+  });
+
+  const webResponse = await bot.handle(adapter, webRequest);
+
+  res.writeHead(webResponse.status, Object.fromEntries(webResponse.headers));
+  const body = await webResponse.text();
+  res.end(body);
+});
+
+server.listen(3000);
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve) => {
+    let body = '';
+    req.on('data', (chunk) => (body += chunk));
+    req.on('end', () => resolve(body));
+  });
+}
+```
+
+---
+
+## Proactive Messaging (Push Notifications)
+
+To send messages proactively (not in response to a user message), use `bot.send()`:
+
+```typescript
+// Send a notification to a user on WhatsApp
+await bot.send({
+  provider: 'whatsapp',
+  channel: '5511999999999', // User's phone number
+  content: {
+    type: 'interactive',
+    text: '📦 Your order #12345 has shipped!',
+    buttons: [
+      { id: 'track', label: '📍 Track Order', action: 'callback', data: 'track_12345' },
+      { id: 'support', label: '🆘 Support', action: 'callback', data: 'support_12345' },
+    ],
+  },
+});
+
+// Send to Telegram
+await bot.send({
+  provider: 'telegram',
+  channel: '123456789', // Telegram chat ID
+  content: { type: 'text', content: '🔔 Reminder: Your appointment is tomorrow at 2 PM.' },
+});
+
+// Send an image on Discord
+await bot.send({
+  provider: 'discord',
+  channel: '789012345', // Discord channel ID
+  content: {
+    type: 'image',
+    content: 'https://cdn.example.com/chart.png',
+    caption: '📊 Weekly Analytics Report',
+  },
+});
+```
+
+<Callout type="info">
+  For proactive messaging, you need to store the user's platform-specific channel ID (Telegram `chat_id`, WhatsApp phone number, Discord `channel_id`). This is available in `ctx.channel.id` during normal interactions.
+</Callout>
+
+---
+
+## Serverless / Edge
+
+For serverless environments (Vercel, Cloudflare Workers, AWS Lambda):
+
+### Vercel Edge Functions
+
+```typescript
+// app/api/bot/[adapter]/route.ts
+import { bot } from '@/lib/bot';
+
+export async function GET(request: Request, { params }: { params: { adapter: string } }) {
+  return bot.handle(params.adapter, request);
+}
+
+export async function POST(request: Request, { params }: { params: { adapter: string } }) {
+  return bot.handle(params.adapter, request);
+}
+```
+
+### Cloudflare Workers
+
+```typescript
+import { bot } from './lib/bot';
+
+export default {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const adapter = url.pathname.split('/')[3];
+
+    if (!adapter) {
+      return new Response('Not Found', { status: 404 });
+    }
+
+    return bot.handle(adapter, request);
+  },
+};
+```
+
+<Callout type="warn">
+  Serverless environments have cold starts. Initialize your bot **outside** the handler function (at module level) to reuse the instance across invocations.
+</Callout>
+
+---
+
+## Environment Variables in Production
+
+In production, configure your webhook URLs through the platform dashboards:
+
+| Platform | Where to Set |
+|----------|-------------|
+| Telegram | `setWebhook` API (called automatically by `bot.start()`) |
+| WhatsApp | Meta Developer Dashboard → Webhook Configuration |
+| Discord | Discord Developer Portal → Interactions Endpoint URL |
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Real-World Examples" description="Complete production bot scenarios with code." href="/docs/bots/real-world" />
+  <Card title="API Reference" description="Complete API documentation for all methods and types." href="/docs/bots/api-reference" />
+  <Card title="Best Practices" description="Security, performance, and architecture patterns." href="/docs/bots/best-practices" />
+</Cards>

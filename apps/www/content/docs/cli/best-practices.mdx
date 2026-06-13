@@ -1,0 +1,257 @@
+---
+title: Best Practices
+description: Production-ready patterns and anti-patterns for the Igniter.js CLI. Learn when to use flags vs interactive mode, how to structure teams, and how to optimize CI/CD.
+---
+
+## Best Practices
+
+This page covers recommended patterns for using `@igniter-js/cli` in production. Each recommendation is grounded in the actual implementation behavior.
+
+---
+
+## Init Best Practices
+
+### ✅ Use Flags for Automation
+
+For scripts, CI/CD, and onboarding docs, always use explicit flags instead of interactive prompts:
+
+```bash
+# ✅ Good: Deterministic, scriptable
+igniter init my-saas \
+  --template nextjs \
+  --add-ons "database:prisma:postgresql,auth:better-auth:email+magic-link" \
+  --pm pnpm \
+  --no-git
+
+# ❌ Bad: Requires human interaction
+igniter init my-saas
+```
+
+### ✅ Pin the CLI Version in CI/CD
+
+The `@latest` tag can introduce breaking changes. Pin to a specific version in automation:
+
+```bash
+# ✅ Good: Deterministic
+npx @igniter-js/cli@0.0.1 init my-app --template nextjs
+
+# ❌ Risky: May change behavior unexpectedly
+npx @igniter-js/cli@latest init my-app --template nextjs
+```
+
+### ✅ Use Install Mode for Brownfield Projects
+
+When adding Igniter.js to an existing project, always use `--mode install`:
+
+```bash
+# ✅ Good: Layers Igniter.js on top, doesn't overwrite
+igniter init . --mode install --add-ons "database:prisma:postgresql"
+
+# ❌ Bad: May overwrite existing files with a starter
+igniter init . --template nextjs
+```
+
+### ❌ Don't Mix Interactive and Flag Mode
+
+The CLI merges flags with interactive prompts. If you pass partial flags, you may still get prompted for missing values:
+
+```bash
+# ⚠️ Still prompts for add-on options
+igniter init my-app --add-ons database
+
+# ✅ Use full inline notation to avoid prompts
+igniter init my-app --add-ons "database:prisma:postgresql"
+```
+
+---
+
+## Generate Best Practices
+
+### ✅ Generate Features from Schema
+
+Schema-aware generation produces type-safe code that matches your database exactly:
+
+```bash
+# ✅ Good: Type-safe, schema-derived
+igniter generate feature users --schema prisma:User
+
+# ❌ Needs manual typing afterward
+igniter generate feature users
+```
+
+### ✅ Keep Router Updated After Generation
+
+New controllers and procedures need to be registered in the router:
+
+```typescript
+// After generating a feature or controller:
+import { UsersController } from './features/users/controllers/users.controller';
+
+export const igniterRouter = IgniterRouter.create()
+  .addController(UsersController)  // ← Add this line
+  .build();
+```
+
+### ✅ Run Schema and Docs Together
+
+The `igniter dev` command handles both automatically, but for one-off generation, run both:
+
+```bash
+# ✅ Good: Both schema and docs updated
+igniter generate schema && igniter generate docs
+
+# ⚠️ Incomplete: Only schema, no docs
+igniter generate schema
+```
+
+### ✅ Use Caller Generation for External APIs
+
+Instead of manually typing API clients, generate them:
+
+```bash
+# ✅ Good: Type-safe, auto-updated
+igniter generate caller --name stripe --url https://api.stripe.com/openapi.json
+
+# ❌ Manual: Error-prone, needs maintenance
+// Manually typed fetch calls...
+```
+
+---
+
+## Dev Best Practices
+
+### ✅ Always Use --cmd for Clarity
+
+Even though the CLI auto-detects the dev command, explicit is better:
+
+```bash
+# ✅ Good: Clear intention
+igniter dev --cmd "pnpm dev"
+
+# ⚠️ Works but less explicit
+igniter dev
+```
+
+### ✅ Keep Router File Version Controlled
+
+The `igniter.schema.ts` is auto-generated from your router. Always commit both:
+
+```bash
+# ✅ Good: Both synced in version control
+git add src/igniter.router.ts src/igniter.schema.ts
+
+# ❌ Bad: Schema out of sync
+git add src/igniter.router.ts
+# forgets to add src/igniter.schema.ts
+```
+
+### ✅ Add .gitignore for Generated Docs
+
+If you prefer not to commit generated docs:
+
+```text
+# .gitignore
+src/docs/
+src/callers/
+```
+
+### ❌ Don't Ignore File Change Warnings
+
+When dev mode shows an error, investigate immediately — it usually means a controller or procedure has a type mismatch:
+
+```
+❌ Failed to regenerate: Type 'string' is not assignable to type 'number'
+```
+
+---
+
+## Team Practices
+
+### ✅ Standardize Init Commands
+
+Create a project README or script with the exact init command:
+
+```markdown
+## Getting Started
+
+```bash
+igniter init my-app \
+  --template nextjs \
+  --add-ons "database:prisma:postgresql,auth:better-auth:email+magic-link,jobs" \
+  --pm pnpm
+```
+```
+
+### ✅ Use Package Manager Consistency
+
+All team members should use the same package manager. The CLI auto-detects, but explicit `--pm` prevents surprises:
+
+```bash
+igniter init my-app --template nextjs --pm pnpm
+```
+
+### ✅ Commit the Generated Schema
+
+The `igniter.schema.ts` file is the source of truth for client-side types. It should be committed and reviewed:
+
+- **Commit it:** Ensures CI and new team members have consistent types
+- **Review it:** Schema changes indicate API surface changes
+- **Regenerate it:** Run `igniter generate schema` after router changes
+
+---
+
+## CI/CD Practices
+
+### ✅ Validate Schema in CI
+
+Add a CI step that verifies the schema is up to date:
+
+```yaml
+- name: Check schema is up to date
+  run: |
+    igniter generate schema
+    if [ -n "$(git diff src/igniter.schema.ts)" ]; then
+      echo "Schema is out of date. Run 'igniter generate schema' locally."
+      exit 1
+    fi
+```
+
+### ✅ Generate Callers in CI
+
+For projects with external API dependencies, generate callers in CI:
+
+```yaml
+- name: Generate API callers
+  run: |
+    igniter generate caller --name stripe --url https://api.stripe.com/openapi.json
+    igniter generate caller --name github --url https://api.github.com/openapi.json
+```
+
+---
+
+## Security Practices
+
+### ✅ Review Generated Code
+
+Generated code (schema, callers, features) should be reviewed like any other code. The CLI generates safe defaults, but production specifics need human review.
+
+### ❌ Don't Commit Secrets
+
+The CLI adds environment variable placeholders to `.env`. Never commit the actual `.env` file with real secrets:
+
+```text
+# Always add
+.env
+.env.local
+.env.production
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Troubleshooting" description="Common errors and their solutions — init failures, watcher issues, port conflicts." href="/docs/cli/troubleshooting" />
+  <Card title="API Reference" description="Complete reference for every command, flag, and option." href="/docs/cli/api-reference" />
+  <Card title="Real-World Scenarios" description="See all these practices applied in production scenarios." href="/docs/cli/real-world" />
+</Cards>

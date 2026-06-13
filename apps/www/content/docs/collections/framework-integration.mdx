@@ -1,0 +1,433 @@
+---
+title: Framework Integration
+description: Integrate collections with Next.js, Express, Astro, and Remix. Complete examples with routing, caching, and deployment patterns.
+---
+
+## Framework Integration
+
+Collections is framework-agnostic — it works with any JavaScript runtime. Here are integration patterns for popular frameworks.
+
+---
+
+## Next.js
+
+Collections integrates naturally with Next.js App Router, Server Components, and Route Handlers.
+
+### Singleton Manager
+
+Create a singleton manager for reuse across requests:
+
+```typescript title="lib/collections.ts"
+import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { z } from 'zod';
+
+const Posts = IgniterCollectionModel.create('posts')
+  .withPatterns(['content/posts/{id}.mdx'])
+  .withSchema(z.object({
+    title: z.string(),
+    slug: z.string(),
+    excerpt: z.string().max(300),
+    published: z.boolean().default(false),
+    tags: z.array(z.string()).default([]),
+    author: z.string(),
+  }))
+  .build();
+
+// Singleton — initialized once at module level
+export const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withBasePath(process.cwd())
+  .addCollection(Posts)
+  .build();
+```
+
+### Server Component (App Router)
+
+```typescript title="app/blog/page.tsx"
+import { docs } from '@/lib/collections';
+
+export default async function BlogPage() {
+  const posts = await docs.posts.findMany({
+    where: { published: true },
+    orderBy: { createdAt: 'desc' as const },
+    take: 20,
+    select: { id: true, title: true, slug: true, excerpt: true, tags: true },
+  });
+
+  return (
+    <main>
+      <h1>Blog</h1>
+      {posts.map(post => (
+        <article key={post.id}>
+          <h2><a href={`/blog/${post.slug}`}>{post.title}</a></h2>
+          <p>{post.excerpt}</p>
+          <div>{post.tags.map(t => <span key={t}>{t}</span>)}</div>
+        </article>
+      ))}
+    </main>
+  );
+}
+```
+
+### Dynamic Route (generateStaticParams)
+
+```typescript title="app/blog/[slug]/page.tsx"
+import { docs } from '@/lib/collections';
+import { notFound } from 'next/navigation';
+
+export async function generateStaticParams() {
+  const posts = await docs.posts.findMany({
+    where: { published: true },
+    select: { slug: true },
+  });
+
+  return posts.map(post => ({ slug: post.slug }));
+}
+
+export default async function BlogPost({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+
+  const post = await docs.posts.findUnique({
+    where: { slug },
+  });
+
+  if (!post) notFound();
+
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      <div dangerouslySetInnerHTML={{ __html: post.content }} />
+    </article>
+  );
+}
+```
+
+### API Route Handler
+
+```typescript title="app/api/posts/route.ts"
+import { docs } from '@/lib/collections';
+import { NextResponse } from 'next/server';
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const page = parseInt(searchParams.get('page') || '1');
+  const tag = searchParams.get('tag');
+
+  const where: any = { published: true };
+  if (tag) where.tags = { has: tag };
+
+  const [posts, total] = await Promise.all([
+    docs.posts.findMany({
+      where,
+      orderBy: { createdAt: 'desc' as const },
+      take: 20,
+      skip: (page - 1) * 20,
+    }),
+    docs.posts.count({ where }),
+  ]);
+
+  return NextResponse.json({
+    posts,
+    total,
+    page,
+    totalPages: Math.ceil(total / 20),
+  });
+}
+```
+
+---
+
+## Express
+
+Collections as middleware in an Express application.
+
+```typescript title="src/server.ts"
+import express from 'express';
+import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { z } from 'zod';
+
+const Posts = IgniterCollectionModel.create('posts')
+  .withPatterns(['content/posts/{id}.mdx'])
+  .withSchema(z.object({
+    title: z.string(),
+    published: z.boolean().default(false),
+    author: z.string(),
+  }))
+  .build();
+
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withBasePath(process.cwd())
+  .addCollection(Posts)
+  .build();
+
+const app = express();
+app.use(express.json());
+
+// List posts
+app.get('/api/posts', async (req, res) => {
+  const page = parseInt(req.query.page as string) || 1;
+  const posts = await docs.posts.findMany({
+    where: { published: true },
+    orderBy: { createdAt: 'desc' as const },
+    take: 20,
+    skip: (page - 1) * 20,
+    select: { id: true, title: true, author: true, createdAt: true },
+  });
+  res.json({ posts });
+});
+
+// Get single post
+app.get('/api/posts/:id', async (req, res) => {
+  const post = await docs.posts.findUnique({
+    where: { id: req.params.id },
+  });
+  if (!post) return res.status(404).json({ error: 'Not found' });
+  res.json(post);
+});
+
+// Create post
+app.post('/api/posts', async (req, res) => {
+  try {
+    const post = await docs.posts.create({
+      data: {
+        title: req.body.title,
+        author: req.body.author,
+        published: req.body.published ?? false,
+        content: req.body.content,
+      },
+    });
+    res.status(201).json(post);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.listen(3000, () => console.log('Server running on :3000'));
+```
+
+---
+
+## Astro
+
+Collections in Astro with content collections and SSR.
+
+```typescript title="src/lib/collections.ts"
+import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { z } from 'zod';
+
+const Posts = IgniterCollectionModel.create('posts')
+  .withPatterns(['src/content/posts/{id}.mdx'])
+  .withSchema(z.object({
+    title: z.string(),
+    description: z.string(),
+    published: z.boolean().default(false),
+    tags: z.array(z.string()).default([]),
+  }))
+  .build();
+
+export const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withBasePath(process.cwd())
+  .addCollection(Posts)
+  .build();
+```
+
+```astro title="src/pages/blog/index.astro"
+---
+import { docs } from '../../lib/collections';
+
+const posts = await docs.posts.findMany({
+  where: { published: true },
+  orderBy: { createdAt: 'desc' as const },
+  take: 20,
+});
+---
+
+<Layout>
+  <h1>Blog</h1>
+  {posts.map(post => (
+    <article>
+      <h2><a href={`/blog/${post.id}`}>{post.title}</a></h2>
+      <p>{post.description}</p>
+    </article>
+  ))}
+</Layout>
+```
+
+```astro title="src/pages/blog/[id].astro"
+---
+import { docs } from '../../lib/collections';
+
+export async function getStaticPaths() {
+  const posts = await docs.posts.findMany({
+    select: { id: true },
+  });
+  return posts.map(post => ({ params: { id: post.id } }));
+}
+
+const { id } = Astro.params;
+const post = await docs.posts.findUnique({ where: { id } });
+---
+
+<Layout>
+  <h1>{post.title}</h1>
+  <article set:html={post.content} />
+</Layout>
+```
+
+---
+
+## Remix
+
+Collections as a loader data source in Remix.
+
+```typescript title="app/lib/collections.server.ts"
+import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { z } from 'zod';
+
+const Posts = IgniterCollectionModel.create('posts')
+  .withPatterns(['content/posts/{id}.mdx'])
+  .withSchema(z.object({
+    title: z.string(),
+    slug: z.string(),
+    published: z.boolean().default(false),
+    author: z.string(),
+  }))
+  .build();
+
+// Server-only singleton
+export const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withBasePath(process.cwd())
+  .addCollection(Posts)
+  .build();
+```
+
+```typescript title="app/routes/blog._index.tsx"
+import { json, useLoaderData } from '@remix-run/react';
+import { docs } from '~/lib/collections.server';
+
+export async function loader() {
+  const posts = await docs.posts.findMany({
+    where: { published: true },
+    orderBy: { createdAt: 'desc' as const },
+    take: 20,
+  });
+  return json({ posts });
+}
+
+export default function BlogIndex() {
+  const { posts } = useLoaderData<typeof loader>();
+
+  return (
+    <main>
+      <h1>Blog</h1>
+      {posts.map(post => (
+        <article key={post.id}>
+          <h2><a href={`/blog/${post.slug}`}>{post.title}</a></h2>
+        </article>
+      ))}
+    </main>
+  );
+}
+```
+
+```typescript title="app/routes/blog.$slug.tsx"
+import { json, useLoaderData } from '@remix-run/react';
+import { docs } from '~/lib/collections.server';
+import { notFound } from 'remix-utils';
+
+export async function loader({ params }: LoaderFunctionArgs) {
+  const post = await docs.posts.findUnique({
+    where: { slug: params.slug! },
+  });
+
+  if (!post || !post.published) throw notFound({ slug: params.slug });
+
+  return json({ post });
+}
+
+export default function BlogPost() {
+  const { post } = useLoaderData<typeof loader>();
+
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      <p>By {post.author}</p>
+      <div dangerouslySetInnerHTML={{ __html: post.content }} />
+    </article>
+  );
+}
+```
+
+---
+
+## Deployment Patterns
+
+### Vercel / Netlify (Serverless)
+
+```typescript title="lib/collections.ts"
+// Use a lazy singleton for cold starts
+let _docs: ReturnType<typeof createDocs> | null = null;
+
+function createDocs() {
+  return IgniterCollections.create()
+    .withAdapter(new NodeFsAdapter())
+    .withBasePath(process.cwd())
+    .addCollection(Posts)
+    .build();
+}
+
+export function getDocs() {
+  if (!_docs) _docs = createDocs();
+  return _docs;
+}
+```
+
+### Docker / Long-Running Server
+
+```typescript title="lib/collections.ts"
+// Eager initialization for persistent servers
+export const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withBasePath(process.cwd())
+  .addCollection(Posts)
+  .build();
+```
+
+### Edge Runtime (S3 Adapter)
+
+```typescript title="lib/collections.ts"
+import { BunS3Adapter } from '@igniter-js/collections/adapters';
+
+export const docs = IgniterCollections.create()
+  .withAdapter(new BunS3Adapter({
+    bucket: process.env.CONTENT_BUCKET!,
+    region: process.env.AWS_REGION!,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+  }))
+  .addCollection(Posts)
+  .build();
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Best Practices" description="Patterns, anti-patterns, and performance tips." href="/docs/collections/best-practices" />
+  <Card title="Troubleshooting" description="Common errors and how to fix them." href="/docs/collections/troubleshooting" />
+  <Card title="API Reference" description="Complete reference for all builders and managers." href="/docs/collections/api-reference" />
+</Cards>

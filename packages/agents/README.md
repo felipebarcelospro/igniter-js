@@ -373,6 +373,67 @@ A **Manager** orchestrates multiple agents:
 
 ---
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    IgniterAgentManager                      │
+│  Orchestrates multiple agents, shared logger/telemetry      │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │
+│  │  IgniterAgent   │  │  IgniterAgent   │  │ IgniterAgent│ │
+│  │  (support)      │  │  (code-review)  │  │ (analytics) │ │
+│  ├─────────────────┤  ├─────────────────┤  ├─────────────┤ │
+│  │ • Model         │  │ • Model         │  │ • Model     │ │
+│  │ • Prompt        │  │ • Prompt        │  │ • Prompt    │ │
+│  │ • Memory        │  │ • Memory        │  │ • Memory    │ │
+│  │ • Toolsets ──┐  │  │ • Toolsets ──┐  │  │ • Toolsets  │ │
+│  │ • MCP ───────┤  │  │ • MCP ───────┤  │  │ • MCP       │ │
+│  └──────────────┼──┘  └──────────────┼──┘  └─────────────┘ │
+│                 │                    │                       │
+│  ┌──────────────▼────────────────────▼───────────────────┐  │
+│  │                   Tool Execution Layer                 │  │
+│  │  ┌──────────┐  ┌──────────┐  ┌────────────────────┐   │  │
+│  │  │ Custom   │  │ MCP Stdio│  │ MCP HTTP           │   │  │
+│  │  │ Toolsets │  │ (local)  │  │ (remote servers)   │   │  │
+│  │  └──────────┘  └──────────┘  └────────────────────┘   │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │                   Infrastructure                      │   │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │   │
+│  │  │ Memory   │  │Telemetry │  │ Logger / Hooks   │   │   │
+│  │  │ Adapters │  │ Events   │  │                  │   │   │
+│  │  └──────────┘  └──────────┘  └──────────────────┘   │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Layer Responsibilities
+
+| Layer | Component | Responsibility |
+|-------|-----------|----------------|
+| **Orchestration** | `IgniterAgentManager` | Multi-agent coordination, shared resources, lifecycle management |
+| **Agent Runtime** | `IgniterAgentCore` | Message processing, tool selection, generation/streaming, memory integration |
+| **Tool Execution** | Toolsets, MCP Clients | Tool discovery, validation, execution with error wrapping |
+| **Infrastructure** | Memory, Telemetry, Hooks | Persistence, observability, lifecycle callbacks |
+
+### Data Flow
+
+```
+User Message → Agent.generate()
+  ├─ Load Memory (chat history + working memory)
+  ├─ Build Prompt (template interpolation with context)
+  ├─ AI Generation (model decides to use tools or respond)
+  │   ├─ Tool Call → Validate Input → Execute → Wrap Result
+  │   └─ Text Response → Format Output
+  ├─ Save Memory (persist conversation state)
+  └─ Emit Telemetry (operation metrics)
+      └─ Return Response
+```
+
+---
+
 ## Building Agents
 
 ### Complete Agent Setup
@@ -1095,6 +1156,142 @@ const salesResponse = await manager.get('sales').generate({
 
 ---
 
+## Framework Integration
+
+### Next.js (App Router)
+
+```typescript
+// app/api/chat/route.ts
+import { IgniterAgent, IgniterAgentInMemoryAdapter } from '@igniter-js/agents'
+import { openai } from '@ai-sdk/openai'
+import { NextResponse } from 'next/server'
+
+const memory = IgniterAgentInMemoryAdapter.create({ namespace: 'next-app' })
+
+const agent = IgniterAgent
+  .create('chat-agent')
+  .withModel(openai('gpt-4'))
+  .withMemory({
+    provider: memory,
+    working: { enabled: true, scope: 'chat' },
+    history: { enabled: true, limit: 50 },
+    chats: { enabled: true },
+  })
+  .build()
+
+await agent.start()
+
+export async function POST(request: Request) {
+  const { chatId, userId, message } = await request.json()
+  const result = await agent.generate({ chatId, userId, context: {}, message })
+  return NextResponse.json({ content: result.text })
+}
+```
+
+### Express.js
+
+```typescript
+import express from 'express'
+import { IgniterAgent, IgniterAgentJSONFileAdapter } from '@igniter-js/agents'
+import { openai } from '@ai-sdk/openai'
+
+const app = express()
+app.use(express.json())
+
+const memory = IgniterAgentJSONFileAdapter.create({ dataDir: './agent-data' })
+await memory.connect()
+
+const agent = IgniterAgent
+  .create('api-agent')
+  .withModel(openai('gpt-4'))
+  .withMemory({
+    provider: memory,
+    working: { enabled: true, scope: 'chat' },
+    history: { enabled: true, limit: 100 },
+    chats: { enabled: true },
+  })
+  .build()
+
+await agent.start()
+
+app.post('/api/chat', async (req, res) => {
+  try {
+    const result = await agent.generate({
+      chatId: req.body.chatId,
+      userId: req.body.userId,
+      context: {},
+      message: req.body.message,
+    })
+    res.json({ content: result.text })
+  } catch (error) {
+    res.status(500).json({ error: 'Agent generation failed' })
+  }
+})
+
+app.listen(3000, () => console.log('Agent API running on :3000'))
+```
+
+### Fastify
+
+```typescript
+import Fastify from 'fastify'
+import { IgniterAgent, IgniterAgentInMemoryAdapter } from '@igniter-js/agents'
+import { openai } from '@ai-sdk/openai'
+
+const fastify = Fastify({ logger: true })
+
+const memory = IgniterAgentInMemoryAdapter.create({ namespace: 'fastify-app' })
+const agent = IgniterAgent
+  .create('fastify-agent')
+  .withModel(openai('gpt-4'))
+  .withMemory({
+    provider: memory,
+    working: { enabled: true, scope: 'chat' },
+    history: { enabled: true, limit: 50 },
+    chats: { enabled: true },
+  })
+  .build()
+
+await agent.start()
+
+fastify.post('/api/chat', async (request, reply) => {
+  const { chatId, userId, message } = request.body as any
+  const result = await agent.generate({ chatId, userId, context: {}, message })
+  return { content: result.text }
+})
+
+fastify.listen({ port: 3000 }, (err) => {
+  if (err) throw err
+})
+```
+
+### Hono (Edge Runtime)
+
+```typescript
+import { Hono } from 'hono'
+import { IgniterAgent } from '@igniter-js/agents'
+import { openai } from '@ai-sdk/openai'
+
+const app = new Hono()
+
+const agent = IgniterAgent
+  .create('edge-agent')
+  .withModel(openai('gpt-4o-mini'))
+  .build()
+
+await agent.start()
+
+app.post('/api/chat', async (c) => {
+  const { chatId, userId, message } = await c.req.json()
+  const result = await agent.generate({ chatId, userId, context: {}, message })
+  return c.json({ content: result.text })
+})
+
+export default app
+```
+
+---
+
 ## Real-World Examples
 
 ### Example 1: Customer Support Chatbot
@@ -1709,6 +1906,160 @@ const analysisToolForSalesAgent = IgniterAgentTool
     return { analysis: result.content }
   })
   .build()
+```
+
+---
+
+## Testing
+
+### Unit Testing Tools
+
+```typescript
+import { IgniterAgentTool } from '@igniter-js/agents'
+import { z } from 'zod'
+import { describe, it, expect } from 'vitest'
+
+describe('getWeather tool', () => {
+  // Build tool in isolation
+  const getWeather = IgniterAgentTool
+    .create('get_weather')
+    .withDescription('Get current weather for a location')
+    .withInput(z.object({
+      location: z.string(),
+      unit: z.enum(['C', 'F']).default('C'),
+    }))
+    .withExecute(async ({ location, unit }) => ({
+      location,
+      temperature: 22,
+      unit,
+    }))
+    .build()
+
+  it('should validate input schema', () => {
+    const result = getWeather.inputSchema.safeParse({
+      location: 'London',
+      unit: 'C',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('should reject invalid input', () => {
+    const result = getWeather.inputSchema.safeParse({
+      location: 123, // should be string
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('should execute and return result', async () => {
+    const result = await getWeather.execute(
+      { location: 'London', unit: 'C' },
+      {}
+    )
+    expect(result).toEqual({
+      location: 'London',
+      temperature: 22,
+      unit: 'C',
+    })
+  })
+})
+```
+
+### Testing Agent Generation
+
+```typescript
+import { IgniterAgent } from '@igniter-js/agents'
+import { describe, it, expect, vi } from 'vitest'
+
+// Mock the AI model for deterministic testing
+const mockModel = {
+  specificationVersion: 'v1',
+  provider: 'mock',
+  modelId: 'mock-model',
+  doGenerate: vi.fn().mockResolvedValue({
+    text: 'Mocked response',
+    finishReason: 'stop',
+    usage: { promptTokens: 10, completionTokens: 20 },
+  }),
+}
+
+describe('support agent', () => {
+  const agent = IgniterAgent
+    .create('test-agent')
+    .withModel(mockModel as any)
+    .build()
+
+  it('should generate a response', async () => {
+    const result = await agent.generate({
+      chatId: 'test-chat',
+      userId: 'test-user',
+      context: {},
+      message: { role: 'user', content: 'Hello' },
+    })
+    expect(result.text).toBeDefined()
+  })
+})
+```
+
+### Testing Memory Adapters
+
+```typescript
+import { IgniterAgentInMemoryAdapter } from '@igniter-js/agents'
+import { describe, it, expect, beforeEach } from 'vitest'
+
+describe('InMemoryAdapter', () => {
+  let adapter: ReturnType<typeof IgniterAgentInMemoryAdapter.create>
+
+  beforeEach(() => {
+    adapter = IgniterAgentInMemoryAdapter.create({
+      namespace: 'test',
+      maxChats: 10,
+      maxMessages: 100,
+    })
+  })
+
+  it('should store and retrieve working memory', async () => {
+    await adapter.updateWorkingMemory({
+      scope: 'chat',
+      identifier: 'test-chat',
+      content: 'User prefers dark mode',
+    })
+
+    const memory = await adapter.getWorkingMemory({
+      scope: 'chat',
+      identifier: 'test-chat',
+    })
+
+    expect(memory?.content).toBe('User prefers dark mode')
+  })
+
+  it('should save and retrieve chat sessions', async () => {
+    await adapter.saveChat({
+      chatId: 'chat-1',
+      userId: 'user-1',
+      title: 'Test Chat',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      messageCount: 0,
+    })
+
+    const chat = await adapter.getChat('chat-1')
+    expect(chat?.title).toBe('Test Chat')
+  })
+
+  it('should respect maxMessages limit', async () => {
+    for (let i = 0; i < 150; i++) {
+      await adapter.saveMessage({
+        chatId: 'chat-1',
+        role: 'user',
+        content: `Message ${i}`,
+        timestamp: new Date(),
+      })
+    }
+
+    const messages = await adapter.getMessages({ chatId: 'chat-1' })
+    expect(messages.length).toBeLessThanOrEqual(100)
+  })
+})
 ```
 
 ---

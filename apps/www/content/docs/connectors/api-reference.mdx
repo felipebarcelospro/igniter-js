@@ -1,0 +1,584 @@
+---
+title: API Reference
+description: Complete API reference for @igniter-js/connectors. All exports, builder methods, manager operations, scoped instance API, type helpers, and error codes.
+---
+
+## API Reference
+
+Complete reference for all public exports in `@igniter-js/connectors`.
+
+---
+
+## Main Exports
+
+```typescript
+import {
+  // Core builders
+  IgniterConnector,
+  IgniterConnectorManager,
+  IgniterConnectorManagerBuilder,
+
+  // Error handling
+  IgniterConnectorError,
+  IGNITER_CONNECTOR_ERROR_CODES,
+
+  // Utilities
+  IgniterConnectorCrypto,
+  IgniterConnectorFields,
+  IgniterConnectorSchema,
+  IgniterConnectorOAuthUtils,
+  IgniterConnectorUrl,
+
+  // Type helpers
+  $Infer,
+  $InferScoped,
+  $InferConnectorKey,
+  $InferScopeKey,
+  $InferConfig,
+  $InferActionKeys,
+} from "@igniter-js/connectors";
+```
+
+### Subpath: `/adapters`
+
+```typescript
+import {
+  IgniterConnectorBaseAdapter,
+  IgniterConnectorPrismaAdapter,
+  IgniterConnectorMockAdapter,
+} from "@igniter-js/connectors/adapters";
+```
+
+### Subpath: `/telemetry`
+
+```typescript
+import {
+  IgniterConnectorsTelemetryEvents,
+} from "@igniter-js/connectors/telemetry";
+```
+
+---
+
+## IgniterConnector
+
+Static `create()` factory for building connector definitions.
+
+### `IgniterConnector.create()`
+
+Creates a new `IgniterConnectorBuilder` instance.
+
+```typescript
+const builder = IgniterConnector.create();
+```
+
+### Builder Methods
+
+#### `.withConfig(schema)`
+
+Defines the configuration schema. **Required.**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `schema` | `StandardSchemaV1` | Zod/Valibot/ArkType schema for config validation |
+
+```typescript
+.withConfig(z.object({
+  apiKey: z.string().describe("API key"),
+  webhookUrl: z.string().url().optional(),
+}))
+```
+
+#### `.withMetadata(schema, value)`
+
+Sets static metadata for UI rendering.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `schema` | `StandardSchemaV1` | Schema for validation |
+| `value` | inferred from schema | Metadata value |
+
+```typescript
+.withMetadata(
+  z.object({ name: z.string(), icon: z.string() }),
+  { name: "Discord", icon: "discord.svg" },
+)
+```
+
+#### `.withDefaultConfig(config)`
+
+Sets default config for system connectors. Users cannot override.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `config` | inferred from config schema | Default values |
+
+#### `.onContext(hook)`
+
+Creates shared context injected into every action handler.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `hook` | `({ config, scope, identity }) => TContext` | Sync or async context factory |
+
+#### `.onValidate(hook)`
+
+Validates config before connecting. Throw to reject.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `hook` | `({ config, scope, identity }) => void \| Promise<void>` | Validation function |
+
+#### `.withOAuth(options)`
+
+Enables OAuth 2.0 authentication.
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `authorizationUrl` | `string` | Yes | Provider's authorize endpoint |
+| `tokenUrl` | `string` | Yes | Provider's token endpoint |
+| `clientId` | `string` | Yes | App client ID |
+| `clientSecret` | `string` | Yes | App client secret |
+| `scopes` | `string[]` | No | OAuth scopes |
+| `pkce` | `boolean` | No | Enable PKCE (S256) |
+| `extraParams` | `Record<string, string>` | No | Extra auth URL params |
+| `userInfoUrl` | `string` | No | User profile endpoint |
+| `parseTokenResponse` | `(response) => IgniterConnectorOAuthTokens` | No | Custom token parser |
+| `parseUserInfoResponse` | `(response) => IgniterConnectorOAuthUserInfo` | No | Custom user info parser |
+
+#### `.withWebhook(options)`
+
+Enables incoming webhook handling.
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `schema` | `StandardSchemaV1` | Yes | Payload validation schema |
+| `handler` | `({ payload, config, context, scope, identity, headers }) => TResult` | Yes | Webhook handler |
+| `description` | `string` | No | Human-readable description |
+| `verify` | `(request, config) => boolean \| Promise<boolean>` | No | Signature verification |
+
+#### `.addAction(key, options)`
+
+Adds an executable action to the connector.
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `input` | `StandardSchemaV1` | Yes | Action input schema |
+| `output` | `StandardSchemaV1` | No | Action output schema |
+| `description` | `string` | No | Human-readable description |
+| `handler` | `(context) => TOutput \| Promise<TOutput>` | Yes | Action implementation |
+
+#### `.build()`
+
+Finalizes the definition. Returns `IgniterConnectorDefinition`.
+
+---
+
+## IgniterConnectorManager
+
+Static `create()` factory for building the connector manager.
+
+### `IgniterConnectorManager.create()`
+
+Creates a new `IgniterConnectorManagerBuilder`.
+
+```typescript
+const builder = IgniterConnectorManager.create();
+```
+
+### Builder Methods
+
+#### `.withDatabase(adapter)`
+
+Sets the persistence adapter. **Required.**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `adapter` | `IgniterConnectorAdapter` | Database adapter instance |
+
+#### `.withLogger(logger)`
+
+Sets a logger for debug visibility.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `logger` | `IgniterLogger` | Object with `debug`, `info`, `warn`, `error` methods |
+
+#### `.withTelemetry(telemetry)`
+
+Enables automatic telemetry event emission.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `telemetry` | `IgniterTelemetryManager` | Telemetry runtime from `@igniter-js/telemetry` |
+
+#### `.withEncrypt(fields, callbacks?)`
+
+Configures field encryption.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `fields` | `string[]` | Yes | Field names to encrypt |
+| `callbacks.encrypt` | `(value) => string \| Promise<string>` | No | Custom encrypt function |
+| `callbacks.decrypt` | `(value) => string \| Promise<string>` | No | Custom decrypt function |
+
+#### `.addScope(key, options?)`
+
+Registers a scope.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `key` | `string` | Yes | Unique scope identifier |
+| `options.required` | `boolean` | No | Whether identity is required (default: `true`) |
+
+#### `.addConnector(key, definition)`
+
+Registers a connector definition.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `key` | `string` | Yes | Unique connector identifier |
+| `definition` | `IgniterConnectorDefinition` | Yes | Built connector definition |
+
+#### `.onConnect(hook)`
+
+Hook called after connection succeeds.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `hook` | `({ connector, config, scope, identity }) => void \| Promise<void>` | Connect callback |
+
+#### `.onDisconnect(hook)`
+
+Hook called after disconnection.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `hook` | `({ connector, scope, identity }) => void \| Promise<void>` | Disconnect callback |
+
+#### `.onError(hook)`
+
+Hook called when errors occur.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `hook` | `({ error, connector?, operation, scope?, identity?, action? }) => void \| Promise<void>` | Error callback |
+
+#### `.build()`
+
+Finalizes the manager. Returns `IgniterConnectorManagerCore`.
+
+---
+
+## Manager Instance
+
+After `.build()`, the manager provides these operations:
+
+### `connectors.scope(scopeKey, identity?)`
+
+Creates a scoped instance for a specific scope + identity.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `scopeKey` | `string` | Yes | Registered scope key |
+| `identity` | `string` | For `required: true` scopes | Scope identifier |
+
+Returns `IgniterConnectorScoped`.
+
+### `connectors.on(handler)`
+
+Subscribes to events globally.
+
+Returns `IgniterConnectorEventSubscription` with `.unsubscribe()`.
+
+### `connectors.emit(event)`
+
+Emits a custom event to all handlers and telemetry.
+
+### `connectors.handle(operation, request)`
+
+Handles OAuth callbacks and webhooks.
+
+| Operation | Description |
+|-----------|-------------|
+| `"oauth.callback"` | Process an OAuth callback request |
+| `"webhook"` | Process a webhook request |
+
+Returns `Response`.
+
+### `connectors.handleOAuthConnect(connectorKey, params)`
+
+Handles OAuth connect flow.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `connectorKey` | `string` | Connector to connect |
+| `params.scope` | `string` | Scope type |
+| `params.identity` | `string` | Scope identifier |
+| `params.redirectUrl` | `string` | Post-OAuth redirect |
+| `params.redirectUri` | `string` | OAuth callback URI |
+
+### `connectors.list(options?)`
+
+Lists available connectors with metadata. Non-scoped.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `where.name` | `string` | Filter by metadata name |
+| `count.connections` | `boolean` | Include connection count |
+
+### `connectors.get(connectorKey, options?)`
+
+Gets a connector's metadata. Non-scoped.
+
+### `connectors.getAdapter()`, `getLogger()`, `getTelemetry()`, `getScopes()`, `getConnectors()`, `getConnector(key)`, `getOAuthHandler(key)`, `getEncryption()`, `getHooks()`
+
+Accessors for manager internals.
+
+---
+
+## Scoped Instance
+
+Returned by `connectors.scope()`. Provides per-tenant operations.
+
+### `scoped.connect(connectorKey, config)`
+
+Connects a connector for this scope.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `connectorKey` | `string` | Connector to connect |
+| `config` | inferred from config schema | Configuration (or empty for OAuth) |
+
+For OAuth connectors: returns a redirect `Response`.
+For non-OAuth connectors: returns `void`.
+
+### `scoped.disconnect(connectorKey)`
+
+Removes a connection.
+
+### `scoped.toggle(connectorKey, enabled?)`
+
+Toggles or sets enabled state.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `connectorKey` | `string` | Yes | Connector to toggle |
+| `enabled` | `boolean` | No | Explicit state (toggles if omitted) |
+
+### `scoped.update(connectorKey, config)`
+
+Updates connector configuration without disconnecting.
+
+### `scoped.list(options?)`
+
+Lists connected connectors for this scope.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `where.enabled` | `boolean` | Filter by enabled state |
+| `where.name` | `string` | Filter by metadata name |
+| `limit` | `number` | Max results |
+| `offset` | `number` | Pagination offset |
+| `count.connections` | `boolean` | Include connection counts |
+
+Returns `IgniterConnectorInstance[]`.
+
+### `scoped.get(connectorKey, options?)`
+
+Gets a specific connector instance.
+
+Returns `IgniterConnectorInstance | null`.
+
+### `scoped.count(options?)`
+
+Counts connected connectors.
+
+### `scoped.action(connectorKey, actionKey).call(input)`
+
+Executes a connector action.
+
+Returns `Promise<{ data: TOutput | null; error: Error | null }>`.
+
+### `scoped.on(handler)`
+
+Subscribes to events for this scope only.
+
+Returns `IgniterConnectorEventSubscription`.
+
+---
+
+## Event Types
+
+### IgniterConnectorEvent (Union)
+
+| Discriminated by `type` | Additional Properties |
+|--------------------------|----------------------|
+| `connector.connected` | — |
+| `connector.disconnected` | — |
+| `connector.enabled` | — |
+| `connector.disabled` | — |
+| `connector.updated` | — |
+| `oauth.started` | — |
+| `oauth.completed` | `userInfo?: Record<string, unknown>` |
+| `oauth.refreshed` | — |
+| `oauth.failed` | `errorCode: string`, `errorMessage?: string` |
+| `action.started` | `action: string` |
+| `action.completed` | `action: string`, `durationMs?: number` |
+| `action.failed` | `action: string`, `durationMs?: number`, `errorCode: string`, `errorMessage?: string` |
+| `webhook.received` | `method?: string`, `path?: string`, `verified?: boolean` |
+| `webhook.processed` | `method?: string`, `path?: string`, `durationMs?: number` |
+| `webhook.failed` | `method?: string`, `path?: string`, `durationMs?: number`, `errorCode: string`, `errorMessage?: string` |
+| `error.occurred` | `error: Error`, `operation?: string`, `errorCode: string`, `errorMessage?: string` |
+
+All events include `connector: string`, `scope: string`, `identity: string`, `timestamp: Date`.
+
+---
+
+## Error Codes
+
+```typescript
+import { IGNITER_CONNECTOR_ERROR_CODES } from "@igniter-js/connectors";
+```
+
+### Connector
+- `CONNECTOR_NOT_FOUND` (404)
+- `CONNECTOR_NOT_CONNECTED` (400)
+- `CONNECTOR_ALREADY_CONNECTED` (409)
+- `CONNECTOR_CONFIG_INVALID` (400)
+- `CONNECTOR_DEFAULT_CONFIG_REQUIRED` (400)
+
+### Action
+- `CONNECTOR_ACTION_NOT_FOUND` (404)
+- `CONNECTOR_ACTION_INPUT_INVALID` (400)
+- `CONNECTOR_ACTION_OUTPUT_INVALID` (400)
+- `CONNECTOR_ACTION_FAILED` (500)
+
+### Scope
+- `CONNECTOR_SCOPE_INVALID` (400)
+- `CONNECTOR_SCOPE_IDENTIFIER_REQUIRED` (400)
+
+### Database
+- `CONNECTOR_DATABASE_REQUIRED` (500)
+- `CONNECTOR_DATABASE_FAILED` (500)
+
+### OAuth
+- `CONNECTOR_OAUTH_NOT_CONFIGURED` (400)
+- `CONNECTOR_OAUTH_STATE_INVALID` (400)
+- `CONNECTOR_OAUTH_TOKEN_FAILED` (400)
+- `CONNECTOR_OAUTH_PARSE_TOKEN_FAILED` (500)
+- `CONNECTOR_OAUTH_PARSE_USERINFO_FAILED` (500)
+- `CONNECTOR_OAUTH_REFRESH_FAILED` (400)
+
+### Webhook
+- `CONNECTOR_WEBHOOK_NOT_CONFIGURED` (400)
+- `CONNECTOR_WEBHOOK_VALIDATION_FAILED` (400)
+- `CONNECTOR_WEBHOOK_VERIFICATION_FAILED` (403)
+
+### Encryption
+- `CONNECTOR_ENCRYPT_FAILED` (500)
+- `CONNECTOR_DECRYPT_FAILED` (500)
+- `CONNECTOR_ENCRYPTION_SECRET_REQUIRED` (500)
+
+### Builder
+- `CONNECTOR_BUILD_CONFIG_REQUIRED` (500)
+- `CONNECTOR_BUILD_SCOPES_REQUIRED` (500)
+- `CONNECTOR_BUILD_CONNECTORS_REQUIRED` (500)
+
+---
+
+## Type Helpers
+
+### `$Infer<T>`
+
+Extracts comprehensive type information from a manager instance:
+
+```typescript
+import { $Infer } from "@igniter-js/connectors";
+type Types = $Infer<typeof connectors>;
+
+type ScopeKey = Types["ScopeKey"];         // "organization" | "user"
+type ConnectorKey = Types["ConnectorKey"];  // "telegram" | "discord"
+type Config = Types["Config"];              // { telegram: {...}, discord: {...} }
+type ActionKey = Types["ActionKey"];        // { telegram: "...", discord: "..." }
+type ActionInput = Types["ActionInput"];    // Fully typed action inputs
+type ActionOutput = Types["ActionOutput"];  // Fully typed action outputs
+type Scoped = Types["Scoped"];             // IgniterConnectorScoped<...>
+```
+
+### Other Type Helpers
+
+| Helper | Description |
+|--------|-------------|
+| `$InferScoped<T>` | Extracts scoped instance type |
+| `$InferConnectorKey<T>` | Extracts connector key union |
+| `$InferScopeKey<T>` | Extracts scope key union |
+| `$InferConfig<T, K>` | Extracts config for a specific connector |
+| `$InferActionKeys<T, K>` | Extracts action keys for a connector |
+
+---
+
+## Adapter Interface
+
+```typescript
+interface IgniterConnectorAdapter {
+  get(scope, identity, provider): Promise<IgniterConnectorRecord | null>;
+  list(scope, identity): Promise<IgniterConnectorRecord[]>;
+  save(scope, identity, provider, value, enabled): Promise<IgniterConnectorRecord>;
+  update(scope, identity, provider, data): Promise<IgniterConnectorRecord>;
+  delete(scope, identity, provider): Promise<void>;
+  exists(scope, identity, provider): Promise<boolean>;
+  countConnections(provider): Promise<number>;
+  findByWebhookSecret(provider, secret): Promise<IgniterConnectorRecord | null>;
+  updateWebhookMetadata(provider, secret, metadata): Promise<void>;
+}
+
+interface IgniterConnectorRecord {
+  id: string;
+  scope: string;
+  identity: string;
+  provider: string;
+  value: Record<string, unknown>;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+---
+
+## Utilities
+
+### IgniterConnectorCrypto
+
+AES-256-GCM encryption/decryption utilities.
+
+### IgniterConnectorFields
+
+Extract field definitions from Zod schemas for UI rendering.
+
+### IgniterConnectorSchema
+
+Schema validation utilities (StandardSchemaV1).
+
+### IgniterConnectorOAuthUtils
+
+- `generateState()` — CSRF state token
+- `generateCodeVerifier()` — PKCE code verifier
+- `generateCodeChallenge(verifier)` — PKCE S256 challenge
+- `buildAuthUrl(url, params)` — Build authorization URL
+- `parseTokenResponse(response)` — Auto-detect token format
+- `isExpired(tokens)` — Check token expiration
+
+### IgniterConnectorUrl
+
+- `generateSecret()` — Webhook secret generation
+- `buildOAuthCallbackUrl(key)` — OAuth callback URL builder
+- `buildWebhookUrl(key, secret)` — Webhook URL builder
+
+---
+
+## Next Steps
+
+- [Getting Started](/docs/connectors/getting-started) — Build your first integration
+- [Best Practices](/docs/connectors/best-practices) — Production patterns
+- [Troubleshooting](/docs/connectors/troubleshooting) — Error solutions

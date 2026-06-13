@@ -1,0 +1,269 @@
+---
+title: Actions
+description: Execute typed connector actions with input validation, error handling, and full TypeScript inference. Learn the action builder pattern, error codes, and patterns.
+---
+
+## Actions
+
+Actions are the **execution layer** of connectors. They validate input, run the handler, validate output, and emit telemetry events — all with full TypeScript inference.
+
+---
+
+## The Action Builder
+
+Every action call follows a fluent builder pattern through `scoped.action()`:
+
+```typescript
+const { data, error } = await scoped
+  .action("telegram", "sendMessage")
+  .call({ message: "Hello!" });
+
+// data: { messageId: string; timestamp: Date } | null
+// error: Error | null
+```
+
+<Callout type="info">
+  Actions **never throw** on handler errors. Instead, they return `{ data: null, error }`. Validation errors (bad input) and structural errors (connector not connected) **do throw** — catch them explicitly.
+</Callout>
+
+---
+
+## Error Handling
+
+There are two categories of errors when executing actions:
+
+### 1. Structural Errors (throw)
+
+These are thrown and should be caught:
+
+```typescript
+try {
+  const { data, error } = await scoped
+    .action("telegram", "sendMessage")
+    .call({ message: "Hi!" });
+} catch (err) {
+  if (IgniterConnectorError.isConnectorError(err)) {
+    // CONNECTOR_NOT_FOUND      — connector key not registered
+    // CONNECTOR_NOT_CONNECTED  — not connected for this scope
+    // CONNECTOR_ACTION_NOT_FOUND — action key not found
+    // CONNECTOR_ACTION_INPUT_INVALID — input validation failed
+    // CONNECTOR_DISABLED       — connector is disabled
+  }
+}
+```
+
+### 2. Handler Errors (returned)
+
+Handler errors are returned in the `error` field:
+
+```typescript
+const { data, error } = await scoped
+  .action("telegram", "sendMessage")
+  .call({ message: "Hi!" });
+
+if (error) {
+  // Handler threw an error — your handler's exception
+  console.error("Action failed:", error.message);
+  return { status: 500, error: error.message };
+}
+
+// Safe to use data
+console.log("Message ID:", data?.messageId);
+```
+
+### Full Error Handling Pattern
+
+```typescript
+import { IgniterConnectorError } from "@igniter-js/connectors";
+
+async function safeAction(scoped, connector, action, input) {
+  try {
+    const { data, error } = await scoped
+      .action(connector, action)
+      .call(input);
+
+    if (error) {
+      return { success: false, error: error.message, code: "HANDLER_ERROR" };
+    }
+
+    return { success: true, data };
+  } catch (err) {
+    if (IgniterConnectorError.isConnectorError(err)) {
+      return {
+        success: false,
+        error: err.message,
+        code: err.code,
+        statusCode: err.statusCode,
+      };
+    }
+    throw err; // Re-throw unexpected errors
+  }
+}
+```
+
+---
+
+## Type Inference
+
+The action builder preserves all types from your connector definition:
+
+```typescript
+const telegram = IgniterConnector.create()
+  .withConfig(z.object({ botToken: z.string(), chatId: z.string() }))
+  .addAction("sendMessage", {
+    input: z.object({ message: z.string() }),
+    output: z.object({ messageId: z.string() }),
+    handler: async ({ input, config }) => {
+      // input.message — string (inferred from schema)
+      // config.botToken — string (inferred from config schema)
+      return { messageId: "123" };
+    },
+  })
+  .build();
+
+// Fully typed call
+const { data } = await scoped
+  .action("telegram", "sendMessage")
+  .call({ message: "Hi" });
+//       ^ input is typed: { message: string }
+// data is typed: { messageId: string } | null
+```
+
+### Without Output Schema
+
+If you omit the output schema, the return type is **inferred from your handler**:
+
+```typescript
+.addAction("getCount", {
+  input: z.object({}),
+  handler: async () => 42,
+})
+
+const { data } = await scoped.action("telegram", "getCount").call({});
+// data: number | null
+```
+
+---
+
+## Action Handler Context
+
+The handler receives a rich context object:
+
+```typescript
+handler: async ({
+  input,    // Validated action input
+  config,   // Decrypted connector configuration
+  context,  // From onContext hook (if defined)
+  oauth,    // OAuth tokens (if OAuth connector)
+  scope,    // Scope type (e.g., "organization")
+  identity, // Scope identifier (e.g., "org_123")
+}) => {
+  // input.message — typed from input schema
+  // config.botToken — typed from config schema
+  // oauth?.accessToken — available for OAuth connectors
+}
+```
+
+---
+
+## Action Timing & Telemetry
+
+When telemetry is enabled, actions automatically emit events:
+
+| Event | When |
+|-------|------|
+| `action.started` | Before handler execution |
+| `action.completed` | After successful handler return |
+| `action.failed` | After handler throws |
+
+Each event includes: connector key, action name, scope, identity, duration.
+
+```typescript
+// Telemetry events emitted automatically
+const { data, error } = await scoped
+  .action("telegram", "sendMessage")
+  .call({ message: "Hi!" });
+// → igniter.connectors.action.started
+// → igniter.connectors.action.completed (duration: 245ms)
+```
+
+---
+
+## Non-Scoped Actions
+
+You can also execute actions directly from the manager (useful for system-level connectors):
+
+```typescript
+const { data, error } = await connectors
+  .action("telegram", "sendMessage")
+  .call({ message: "System notification" });
+```
+
+<Callout type="warn">
+  Non-scoped actions bypass scope isolation. Only use for system connectors with `.withDefaultConfig()`.
+</Callout>
+
+---
+
+## Framework Integration
+
+### Next.js API Route
+
+```typescript
+// app/api/actions/[connector]/[action]/route.ts
+export async function POST(req, { params }) {
+  const scoped = connectors.scope("organization", getOrgId(req));
+  const input = await req.json();
+
+  try {
+    const { data, error } = await scoped
+      .action(params.connector, params.action)
+      .call(input);
+
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    return Response.json(data);
+  } catch (err) {
+    if (IgniterConnectorError.isConnectorError(err)) {
+      return Response.json(
+        { error: err.message, code: err.code },
+        { status: err.statusCode },
+      );
+    }
+    return Response.json({ error: "Internal error" }, { status: 500 });
+  }
+}
+```
+
+### Express Route
+
+```typescript
+app.post("/api/:connector/:action", async (req, res) => {
+  const { connector, action } = req.params;
+  const scoped = connectors.scope("organization", req.orgId);
+
+  try {
+    const { data, error } = await scoped
+      .action(connector, action)
+      .call(req.body);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err) {
+    if (IgniterConnectorError.isConnectorError(err)) {
+      return res.status(err.statusCode).json({
+        error: err.message,
+        code: err.code,
+      });
+    }
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+```
+
+---
+
+## Next Steps
+
+- [Lifecycle Hooks](/docs/connectors/hooks) — Connect, disconnect, and error hooks
+- [Events](/docs/connectors/events) — Subscribe to connector events
+- [Troubleshooting](/docs/connectors/troubleshooting) — Common error codes and solutions

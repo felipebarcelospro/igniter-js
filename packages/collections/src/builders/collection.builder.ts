@@ -29,7 +29,6 @@ interface CollectionBuilderState<
 > {
   name: string;
   patterns: string[];
-  template?: string;
   defaultIdGenerator?: () => string;
   schema?: StandardSchemaV1;
   hooks: IgniterCollectionModelHooks<TSchema>;
@@ -111,19 +110,6 @@ export class IgniterCollectionModelBuilder<
     return new IgniterCollectionModelBuilder({
       ...this.state,
       patterns,
-    });
-  }
-
-  /**
-   * Set a template file for document generation.
-   *
-   * @param path - Path to template file
-   * @returns New builder instance
-   */
-  withTemplate(path: string): IgniterCollectionModelBuilder<TSchema, TName> {
-    return new IgniterCollectionModelBuilder({
-      ...this.state,
-      template: path,
     });
   }
 
@@ -281,7 +267,6 @@ export class IgniterCollectionModelBuilder<
     return {
       name: this.state.name as TName,
       patterns: this.state.patterns,
-      template: this.state.template,
       defaultIdGenerator: this.state.defaultIdGenerator ?? IgniterCollectionId.uuid,
       schema: this.state.schema,
       hooks: this.state.hooks,

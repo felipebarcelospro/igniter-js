@@ -1,0 +1,198 @@
+---
+title: Installation
+description: Install and configure @igniter-js/bot for your runtime. Choose the right adapters and set up your first bot in minutes.
+---
+
+## Installation
+
+`@igniter-js/bot` works on **Node.js 18+** and **Bun 1.0+**. It requires `zod` as a peer dependency for adapter parameter validation.
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/bot zod
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/bot zod
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/bot zod
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/bot zod
+    ```
+  </Tab>
+</Tabs>
+
+### Runtime Requirements
+
+| Runtime | Version | Notes |
+|---------|---------|-------|
+| Node.js | 18+ | Full support for all adapters |
+| Bun | 1.0+ | Native `File` API support for media uploads |
+| Edge Runtime | Limited | Only adapters that don't use Node-specific APIs |
+
+---
+
+## Choosing Adapters
+
+Bot comes with three first-party adapters. Install only the platforms you need — the package is tree-shakeable.
+
+### Telegram
+
+**Best for:** General-purpose bots, group management, channel automation
+
+```typescript
+import { telegram } from '@igniter-js/bot';
+
+const tgAdapter = telegram({
+  token: process.env.TELEGRAM_TOKEN!,
+  handle: '@your_bot', // Optional: overrides global handle
+  webhook: {
+    url: 'https://your-domain.com/api/bot/telegram',
+    secret: process.env.TELEGRAM_WEBHOOK_SECRET!, // Optional: validates webhook authenticity
+    dropPendingUpdates: true, // Clear pending updates on restart (default: true)
+  },
+});
+```
+
+**Environment variables supported:**
+- `TELEGRAM_TOKEN` — Bot API token (from @BotFather)
+- `TELEGRAM_WEBHOOK_URL` — Public HTTPS endpoint for webhook
+- `TELEGRAM_WEBHOOK_SECRET` — Secret token for webhook verification
+
+### WhatsApp (Cloud API)
+
+**Best for:** Customer support, e-commerce, notification bots
+
+```typescript
+import { whatsapp } from '@igniter-js/bot';
+
+const waAdapter = whatsapp({
+  token: process.env.WHATSAPP_TOKEN!,
+  phone: process.env.WHATSAPP_PHONE!, // Phone number ID from Meta Business
+});
+```
+
+<Callout type="warn">
+  WhatsApp Cloud API requires a Meta Business account and a verified phone number. The `init` method is a no-op — webhook setup is managed through the Meta Developer dashboard.
+</Callout>
+
+### Discord
+
+**Best for:** Community servers, gaming, developer communities
+
+```typescript
+import { discord } from '@igniter-js/bot';
+
+const dcAdapter = discord({
+  token: process.env.DISCORD_TOKEN!,
+  applicationId: process.env.DISCORD_APP_ID!,
+  publicKey: process.env.DISCORD_PUBLIC_KEY!, // Required for interaction verification
+});
+```
+
+<Callout type="info">
+  Discord requires interaction signature verification. Always provide `publicKey` in production, or the adapter will log a warning on every request.
+</Callout>
+
+### Adapter Capability Comparison
+
+| Feature | Telegram | WhatsApp | Discord |
+|---------|----------|----------|---------|
+| Text messages | ✅ | ✅ | ✅ |
+| Images | ✅ | ✅ | ✅ |
+| Video | ✅ | ✅ | ✅ |
+| Audio | ✅ | ✅ | ✅ |
+| Documents | ✅ | ✅ | ✅ |
+| Stickers | ✅ | ✅ | ❌ |
+| Location | ✅ | ✅ | ❌ |
+| Contacts | ✅ | ✅ | ❌ |
+| Polls | ✅ | ❌ | ❌ |
+| Interactive buttons | ✅ | ✅ (max 3) | ✅ (max 5/row) |
+| Edit messages | ✅ | ❌ | ✅ |
+| Delete messages | ✅ | ❌ | ✅ |
+| Reactions | ❌ | ✅ | ✅ |
+| Threads | ❌ | ❌ | ✅ |
+| Webhooks | ✅ | ✅ | ✅ |
+| Long polling | ✅ | ❌ | ❌ |
+| Slash commands | ❌ (bot commands) | ❌ | ✅ |
+| Groups | ✅ | ✅ | ✅ (servers) |
+| Max message length | 4,096 chars | 4,096 chars | 2,000 chars |
+| Max file size | 50 MB | 100 MB | 25 MB |
+
+---
+
+## Framework Integration Packages
+
+### Next.js App Router
+
+The `nextRouteHandlerAdapter` creates a ready-to-use route handler:
+
+```typescript
+// app/api/bot/[adapter]/[botId]/route.ts
+import { nextRouteHandlerAdapter } from '@igniter-js/bot';
+
+export const { GET, POST } = nextRouteHandlerAdapter(bots);
+```
+
+The adapter expects dynamic route segments `[adapter]` and `[botId]`. It automatically handles webhook verification (GET) and message processing (POST).
+
+### TanStack Start
+
+The `tanstackStartRouteHandlerAdapter` follows the same pattern:
+
+```typescript
+// app/routes/api/bot/$adapter/$botId.ts
+import { tanstackStartRouteHandlerAdapter } from '@igniter-js/bot';
+
+export const { GET, POST } = tanstackStartRouteHandlerAdapter(bots);
+```
+
+### Express / Fastify / Hono / Any HTTP Framework
+
+Bot adapters work with any framework through the standard `Request`/`Response` API:
+
+```typescript
+// Express example
+app.post('/api/bot/:adapter', async (req, res) => {
+  const webResponse = await bot.handle(req.params.adapter, toWebRequest(req));
+  res.status(webResponse.status);
+  // Forward headers and body...
+});
+```
+
+See the [Framework Integration](/docs/bots/framework-integration) guide for complete examples with Express, Fastify, Hono, and more.
+
+---
+
+## Environment Variables Reference
+
+Bot adapters read from environment variables as defaults. You only need to pass config values explicitly when the env vars differ.
+
+| Variable | Used By | Description |
+|----------|---------|-------------|
+| `TELEGRAM_TOKEN` | Telegram | Bot API token |
+| `TELEGRAM_WEBHOOK_URL` | Telegram | Webhook endpoint URL |
+| `TELEGRAM_WEBHOOK_SECRET` | Telegram | Webhook secret token |
+| `WHATSAPP_TOKEN` | WhatsApp | Cloud API access token |
+| `WHATSAPP_PHONE` | WhatsApp | Phone number ID |
+| `DISCORD_TOKEN` | Discord | Bot token |
+| `DISCORD_APP_ID` | Discord | Application ID |
+| `DISCORD_PUBLIC_KEY` | Discord | Public key for signature verification |
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Quick Start" description="Build your first multi-platform bot in under 3 minutes." href="/docs/bots/quick-start" />
+  <Card title="Core Concepts" description="Understand the builder, adapters, commands, and middleware pipeline." href="/docs/bots/core-concepts" />
+  <Card title="Adapters" description="Deep dive into each platform adapter with full configuration reference." href="/docs/bots/adapters" />
+</Cards>

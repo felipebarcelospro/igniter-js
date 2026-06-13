@@ -1,76 +1,275 @@
 ---
 title: Retries
-description: Handle transient failures with automatic retry logic and backoff strategies.
+description: Handle transient failures with automatic retry logic and backoff strategies. Make your application resilient to network issues and server errors.
 ---
 
-Transient network issues or server overloads can cause temporary failures. Caller's built-in retry system helps make your application more resilient by automatically retrying failed requests.
+Transient network issues or server overloads can cause temporary failures. Caller's built-in retry system helps make your application more resilient by automatically retrying failed requests with configurable backoff strategies.
+
+---
 
 ## Basic Usage
 
-Enable retries for a specific request using the `.retry()` method.
+Enable retries on any request using `.retry(maxAttempts, options?)`:
 
 ```typescript
+// Retry up to 3 times (4 total attempts including the initial one)
 const result = await api.get('/health')
-  .retry(3) // Retry up to 3 times (4 attempts total)
+  .retry(3)
   .execute();
 ```
 
-By default, Caller retries on common transient status codes: `408`, `429`, `500`, `502`, `503`, and `504`.
+The first parameter `maxAttempts` is the **number of retry attempts** — the initial request is always made, so total attempts = 1 + maxAttempts.
 
 ---
 
-## Configuration Options
+## Configuration
 
-You can customize the retry behavior, including delay and backoff strategy.
+Customize retry behavior with the second parameter:
 
 ```typescript
 await api.get('/external-service')
   .retry(5, {
-    baseDelay: 500,        // Initial delay in ms
-    backoff: 'exponential', // 'linear' or 'exponential'
-    retryOnStatus: [503],   // Only retry on Service Unavailable
+    baseDelay: 500,           // Initial delay in ms (default: 1000)
+    backoff: 'exponential',   // 'linear' or 'exponential' (default: 'linear')
+    retryOnStatus: [502, 503], // Only retry on these status codes
   })
   .execute();
 ```
 
-### Backoff Strategies
+### Options
 
-- **Linear:** The delay increases linearly with each attempt (`baseDelay * attempt`).
-- **Exponential:** The delay doubles with each attempt (`baseDelay * 2^(attempt-1)`).
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxAttempts` | number | (required) | Number of retry attempts. 3 = up to 4 total calls. |
+| `backoff` | `'linear'` \| `'exponential'` | `'linear'` | Delay strategy between retries |
+| `baseDelay` | number | `1000` | Initial delay in milliseconds |
+| `retryOnStatus` | number[] | `[408, 429, 500, 502, 503, 504]` | HTTP status codes that trigger retry |
 
 ---
 
-## Global Configuration
+## Backoff Strategies
 
-If you want the same retry behavior for all requests, configure it on the client instance.
+### Linear Backoff
+
+Delay increases linearly: `baseDelay × attempt`
+
+```
+Attempt 1 (retry): 1000ms
+Attempt 2 (retry): 2000ms
+Attempt 3 (retry): 3000ms
+```
 
 ```typescript
-const api = IgniterCaller.create()
-  .withRetry({
-    attempts: 3,
+await api.get('/api')
+  .retry(3, { backoff: 'linear', baseDelay: 1000 })
+  .execute();
+```
+
+### Exponential Backoff
+
+Delay doubles each attempt: `baseDelay × 2^(attempt - 1)`
+
+```
+Attempt 1 (retry): 1000ms  (1000 × 1)
+Attempt 2 (retry): 2000ms  (1000 × 2)
+Attempt 3 (retry): 4000ms  (1000 × 4)
+```
+
+```typescript
+await api.get('/api')
+  .retry(3, { backoff: 'exponential', baseDelay: 1000 })
+  .execute();
+```
+
+<Callout type="info" title="When to use exponential">
+  Use exponential backoff for upstream services that may be overwhelmed. It gives them time to recover without adding more load.
+</Callout>
+
+---
+
+## Default Retry Status Codes
+
+Caller retries on these status codes by default:
+
+| Status | Meaning | Why retry? |
+|--------|---------|-----------|
+| `408` | Request Timeout | Server timed out waiting |
+| `429` | Too Many Requests | Rate limit — retry after delay |
+| `500` | Internal Server Error | Transient server error |
+| `502` | Bad Gateway | Upstream server error |
+| `503` | Service Unavailable | Server overloaded |
+| `504` | Gateway Timeout | Upstream timeout |
+
+---
+
+## Patterns
+
+### Critical Operations with Retry + Fallback
+
+```typescript
+const { data } = await api.post('/payments')
+  .body(paymentData)
+  .headers({ 'X-Idempotency-Key': idempotencyKey })
+  .retry(3, {
+    backoff: 'exponential',
+    baseDelay: 500,
+    retryOnStatus: [408, 429, 502, 503, 504],
+  })
+  .fallback(() => ({ status: 'pending', retryLater: true }))
+  .execute();
+```
+
+### Health Checks with Short Retry
+
+```typescript
+const { data } = await api.get('/health')
+  .retry(2, {
+    baseDelay: 200,
+    backoff: 'linear',
+    retryOnStatus: [502, 503],
+  })
+  .timeout(3000)
+  .execute();
+```
+
+### External API with Aggressive Retry
+
+```typescript
+const { data } = await api.get('/third-party/data')
+  .retry(5, {
     backoff: 'exponential',
     baseDelay: 1000,
   })
-  .build();
+  .timeout(30_000)
+  .execute();
 ```
 
 ---
 
 ## Idempotency Considerations
 
-<Callout type="warn" title="Safety First">
-  Caller defaults to retrying on all common server errors, but you should be careful with `POST` and `PATCH` requests that aren't idempotent. For critical operations, use idempotency keys in your headers.
+<Callout type="warn" title="Safety First — Non-Idempotent Requests">
+  Be very careful when retrying **POST**, **PATCH**, and **PUT** requests that aren't idempotent. If a request succeeds but the response fails, a retry could create duplicate resources.
+
+  Always use **idempotency keys** for critical operations:
 </Callout>
 
 ```typescript
-await api.post('/payments')
-  .headers({ 'X-Idempotency-Key': 'payment_123' })
+// ✅ Safe — with idempotency key
+await api.post('/orders')
+  .headers({ 'X-Idempotency-Key': `order-${userId}-${Date.now()}` })
+  .body(orderData)
   .retry(3)
   .execute();
+
+// ⚠️ Risky — without idempotency key
+await api.post('/orders')
+  .body(orderData)
+  .retry(3) // Could create duplicate orders!
+  .execute();
 ```
+
+**Safe to retry without extra precautions:**
+- `GET` — reads are idempotent by definition
+- `HEAD` — no body, safe to retry
+- `DELETE` — idempotent (deleting something twice has the same effect)
+- `PUT` — idempotent by definition (replaces entire resource)
+
+**Use idempotency keys for:**
+- `POST` — creating resources
+- `PATCH` — partial updates (may not be idempotent)
 
 ---
 
 ## Observability
 
-Every retry attempt emits a telemetry event: `igniter.caller.retry.attempt.started`. This allows you to track how often your requests are failing and retrying in production.
+Every retry attempt emits a telemetry event:
+
+```typescript
+// Event: igniter.caller.retry.attempt.started
+// Attributes:
+//   ctx.retry.attempt: number     — which attempt (1-based)
+//   ctx.retry.maxAttempts: number — total allowed retries
+//   ctx.retry.delayMs: number     — delay before this attempt
+//   ctx.request.method: string    — HTTP method
+//   ctx.request.url: string       — request URL
+```
+
+```typescript
+import { IgniterCallerTelemetryEvents } from '@igniter-js/caller/telemetry';
+
+// Monitor retry frequency in production
+telemetry.on('igniter.caller.retry.attempt.started', (event) => {
+  metrics.increment('api.retries', {
+    method: event.attributes['ctx.request.method'],
+    attempt: event.attributes['ctx.retry.attempt'],
+  });
+});
+```
+
+---
+
+## Retry + Telemetry Example
+
+```typescript
+import { IgniterTelemetry } from '@igniter-js/telemetry';
+import { IgniterCallerTelemetryEvents } from '@igniter-js/caller/telemetry';
+import { IgniterCaller } from '@igniter-js/caller';
+
+const telemetry = IgniterTelemetry.create()
+  .withService('my-service')
+  .addEvents(IgniterCallerTelemetryEvents)
+  .build();
+
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withTelemetry(telemetry)
+  .build();
+
+// Retries will emit: igniter.caller.retry.attempt.started
+const { data } = await api.get('/critical-data')
+  .retry(3, { backoff: 'exponential' })
+  .execute();
+```
+
+---
+
+## Best Practices
+
+<Callout type="success" title="Retry Guidelines">
+  - **Use idempotency keys** for POST/PATCH requests
+  - **Start with linear backoff** — switch to exponential if the service is frequently overloaded
+  - **Set reasonable timeouts** — combine `.retry()` with `.timeout()` to avoid hanging
+  - **Use fallback values** — `.fallback()` for non-critical data when all retries fail
+  - **Monitor retry rates** — high retry frequency indicates a systemic issue
+  - **Keep maxAttempts low** — 3-5 retries is usually enough; beyond that, the service is likely down
+</Callout>
+
+<Callout type="warn" title="Common Mistakes">
+  - **Don't** retry indefinitely — set a reasonable `maxAttempts`
+  - **Don't** retry `400 Bad Request` — client errors won't fix themselves
+  - **Don't** use exponential backoff with very short `baseDelay` — it defeats the purpose
+  - **Don't** retry without a timeout — the total wait could be very long
+</Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Caching"
+    description="Cache responses for better performance"
+    href="/docs/caller/caching"
+  />
+  <Card
+    title="Interceptors"
+    description="Transform requests and responses globally"
+    href="/docs/caller/interceptors"
+  />
+  <Card
+    title="Telemetry"
+    description="Monitor retry events and request performance"
+    href="/docs/caller/telemetry"
+  />
+</Cards>

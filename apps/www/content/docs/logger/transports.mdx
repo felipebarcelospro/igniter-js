@@ -1,0 +1,370 @@
+---
+title: Transports
+description: Configure where logs go — console, file, HTTP, and external pino transports. Multi-transport patterns and all options documented.
+---
+
+## Transports
+
+Transports determine **where your log entries are written**. Logger ships with three built-in transports and supports any external pino-compatible transport. You can configure multiple transports — each log call writes to all of them simultaneously.
+
+### Transport Architecture
+
+Every transport is resolved at `.build()` time. The builder stores transport configurations; the manager passes them to Pino, which handles the actual output.
+
+```
+.addTransport({ target: 'console', options: {...} })
+.addTransport({ target: 'file',    options: {...} })
+.addTransport({ target: 'http',    options: {...} })
+.addTransport({ target: '@logtail/pino', options: {...} })
+                    │
+                    ▼
+              .build()
+                    │
+    ┌───────────────┼───────────────┐
+    ▼               ▼               ▼
+┌───────┐     ┌────────┐     ┌────────┐
+│console│     │  file  │     │  http  │   ...
+└───────┘     └────────┘     └────────┘
+```
+
+<Callout type="info">
+  If **no transports** are configured, a console transport with pretty formatting is added automatically. You always get output somewhere.
+</Callout>
+
+---
+
+## Console Transport
+
+The console transport uses `pino-pretty` under the hood. It's the default when no transports are specified.
+
+```typescript
+import { IgniterLogger } from '@igniter-js/logger';
+
+const logger = IgniterLogger.create()
+  .addTransport({
+    target: 'console',
+    options: {
+      pretty: true,
+      colorize: true,
+      translateTime: 'SYS:HH:MM:ss',
+    },
+  })
+  .build();
+
+logger.info('Pretty output with colors and timestamps');
+```
+
+### Console Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `pretty` | `boolean` | `true` | Enable pretty-printing. Set to `false` for raw JSON output (useful for log aggregators). |
+| `colorize` | `boolean` | `true` | Enable ANSI color output. Turn off in CI environments or when piping output. |
+| `translateTime` | `string \| boolean` | `"SYS:standard"` | Time format. Use `"SYS:HH:MM:ss"` for 24h, `false` to disable timestamps. |
+| `destination` | `"stdout" \| "stderr" \| string` | `"stdout"` | Output stream. Use `"stderr"` for errors-only output. |
+
+### Examples
+
+<Tabs items={['Pretty (default)', 'Raw JSON', 'No color']}>
+  <Tab value="Pretty (default)">
+    ```typescript
+    const logger = IgniterLogger.create()
+      .addTransport({ target: 'console' })
+      .build();
+
+    // [12:34:56] INFO: Server started on port 3000
+    ```
+  </Tab>
+  <Tab value="Raw JSON">
+    ```typescript
+    const logger = IgniterLogger.create()
+      .addTransport({
+        target: 'console',
+        options: { pretty: false },
+      })
+      .build();
+
+    // {"level":30,"time":"2026-06-02T12:34:56.789Z","msg":"Server started"}
+    ```
+  </Tab>
+  <Tab value="No color">
+    ```typescript
+    const logger = IgniterLogger.create()
+      .addTransport({
+        target: 'console',
+        options: { colorize: false },
+      })
+      .build();
+
+    // Plain text output — ideal for CI logs
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## File Transport
+
+The file transport writes logs to disk using Pino's built-in `pino/file` target. It supports automatic directory creation and log rotation.
+
+```typescript
+import { IgniterLogger } from '@igniter-js/logger';
+
+const logger = IgniterLogger.create()
+  .addTransport({
+    target: 'file',
+    options: {
+      path: './logs/app.log',
+      mkdir: true,
+      rotation: {
+        maxSizeBytes: 10 * 1024 * 1024, // 10 MB
+        maxFiles: 5,
+      },
+    },
+  })
+  .build();
+
+logger.info('Written to file');
+```
+
+### File Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `path` | `string` | **required** | Destination file path. Absolute or relative to `cwd`. |
+| `mkdir` | `boolean` | `true` | Create parent directories if they don't exist. |
+| `rotation` | `boolean \| IgniterFileTransportRotationOptions` | `false` | Enable log rotation. Pass `true` for defaults, or an object for custom settings. |
+
+### Rotation Options
+
+When `rotation` is enabled (object form):
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxSizeBytes` | `number` | — | Maximum file size before rotation. |
+| `maxFiles` | `number` | — | Maximum number of rotated files to retain. |
+| `intervalMs` | `number` | — | Rotation interval in milliseconds. |
+
+<Callout type="warn">
+  Rotation behavior depends on Pino's transport worker. For advanced rotation (compression, custom naming), consider using `pino-roll` as an **external transport**.
+</Callout>
+
+### Example: Production File Logging
+
+```typescript
+import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
+
+const logger = IgniterLogger.create()
+  .withLevel(IgniterLogLevel.Info)
+  .withAppName('api')
+  .addTransport({
+    target: 'file',
+    options: {
+      path: '/var/log/myapp/app.log',
+      mkdir: true,
+      rotation: {
+        maxSizeBytes: 50 * 1024 * 1024, // 50 MB
+        maxFiles: 10,
+      },
+    },
+  })
+  .build();
+
+// Flush before graceful shutdown
+process.on('SIGTERM', async () => {
+  logger.info('Shutting down');
+  await logger.flush();
+  process.exit(0);
+});
+```
+
+---
+
+## HTTP Transport
+
+The HTTP transport sends logs to a remote endpoint asynchronously. It **buffers and batches** log entries to avoid blocking your application.
+
+```typescript
+import { IgniterLogger } from '@igniter-js/logger';
+
+const logger = IgniterLogger.create()
+  .addTransport({
+    target: 'http',
+    options: {
+      url: 'https://logs.example.com/ingest',
+      headers: {
+        'X-API-Key': process.env.LOG_API_KEY!,
+        'X-Service': 'api',
+      },
+      batchSize: 100,
+      timeoutMs: 5000,
+      flushInterval: 5000,
+    },
+  })
+  .build();
+
+logger.info('Sent to remote log aggregator');
+```
+
+### How It Works
+
+1. Each log call pushes an entry into an **in-memory buffer** (async, non-blocking).
+2. When the buffer reaches `batchSize`, or every `flushInterval` ms, entries are sent as a single HTTP POST.
+3. If the request fails (network error or non-2xx), entries are **put back in the buffer** — logs are never lost due to transient failures.
+4. On transport close (process exit), remaining logs are flushed.
+
+<Callout type="info">
+  The HTTP transport uses a **custom Pino transport worker** (`http-pino-transport.ts`) that runs in a separate thread. Your application's event loop is never blocked by log delivery.
+</Callout>
+
+### HTTP Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `url` | `string` | **required** | Target URL for log ingestion. Must accept POST with JSON body. |
+| `headers` | `Record<string, string>` | `{}` | HTTP headers for authentication or metadata (API keys, service name). |
+| `batchSize` | `number` | `10` | Number of entries per batch. Flush triggers when this threshold is reached. |
+| `timeoutMs` | `number` | `5000` | Request timeout in milliseconds. Uses `AbortSignal.timeout()`. |
+| `flushInterval` | `number` | `5000` | Periodic flush interval in milliseconds. |
+
+### Request Format
+
+The HTTP transport sends a JSON POST with this structure:
+
+```json
+{
+  "logs": [
+    { "level": 30, "time": "2026-06-02T12:34:56.789Z", "msg": "Server started" },
+    { "level": 50, "time": "2026-06-02T12:34:57.123Z", "msg": "Connection failed", "err": {...} }
+  ],
+  "timestamp": "2026-06-02T12:34:57.456Z"
+}
+```
+
+---
+
+## External Transports
+
+Any **pino-compatible transport** can be used by passing its package name as the `target`:
+
+```typescript
+import { IgniterLogger } from '@igniter-js/logger';
+
+// pino-pretty (must be installed separately)
+const prettyLogger = IgniterLogger.create()
+  .addTransport({
+    target: 'pino-pretty',
+    options: {
+      colorize: true,
+      translateTime: 'SYS:standard',
+      ignore: 'pid,hostname',
+    },
+  })
+  .build();
+
+// SaaS log aggregator (e.g., Logtail)
+const remoteLogger = IgniterLogger.create()
+  .addTransport({
+    target: '@logtail/pino',
+    options: {
+      sourceToken: process.env.LOGTAIL_TOKEN!,
+    },
+  })
+  .build();
+```
+
+### Popular External Transports
+
+| Transport | Install | Use Case |
+|-----------|---------|----------|
+| `pino-pretty` | `npm install pino-pretty` | Advanced pretty-printing with custom color schemes |
+| `@logtail/pino` | `npm install @logtail/pino` | Logtail / Better Stack log management |
+| `pino-datadog-transport` | `npm install pino-datadog-transport` | Datadog log ingestion |
+| `pino-loki` | `npm install pino-loki` | Grafana Loki log aggregation |
+| `pino-elasticsearch` | `npm install pino-elasticsearch` | Elasticsearch indexing |
+| `pino-roll` | `npm install pino-roll` | Advanced file rotation with compression |
+| `pino-sentry-transport` | `npm install pino-sentry-transport` | Sentry error tracking |
+
+<Callout type="info">
+  External transports receive the same log entries as built-in ones. Logger does not modify the payload — Pino passes entries directly to the transport.
+</Callout>
+
+---
+
+## Multi-Transport Patterns
+
+### Development vs Production
+
+Use different transport configurations based on the environment:
+
+```typescript
+import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
+
+const isDev = process.env.NODE_ENV !== 'production';
+
+const logger = IgniterLogger.create()
+  .withLevel(isDev ? IgniterLogLevel.Debug : IgniterLogLevel.Info)
+  .withAppName('api');
+
+// Console always — pretty in dev, JSON in prod
+logger.addTransport({
+  target: 'console',
+  options: { pretty: isDev, colorize: isDev },
+});
+
+// File only in production
+if (!isDev) {
+  logger.addTransport({
+    target: 'file',
+    options: { path: '/var/log/api/app.log', mkdir: true },
+  });
+}
+
+// HTTP only in production
+if (!isDev) {
+  logger.addTransport({
+    target: 'http',
+    options: {
+      url: process.env.LOG_INGEST_URL!,
+      headers: { 'X-API-Key': process.env.LOG_API_KEY! },
+    },
+  });
+}
+
+const log = logger.build();
+
+log.info(`Logger started in ${isDev ? 'development' : 'production'} mode`);
+```
+
+### Split Log Levels Across Transports
+
+Send errors to one destination and all logs to another:
+
+```typescript
+// All logs to file, errors to Sentry
+const logger = IgniterLogger.create()
+  .withLevel(IgniterLogLevel.Debug)
+  .withAppName('api')
+  .addTransport({
+    target: 'file',
+    options: { path: './logs/all.log' },
+  })
+  .addTransport({
+    target: 'pino-sentry-transport',
+    options: {
+      dsn: process.env.SENTRY_DSN!,
+      level: 'error', // only errors and above
+    },
+  })
+  .build();
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Child Loggers" description="Create scoped loggers with merged context and typed generics." href="/docs/logger/child-loggers" />
+  <Card title="Advanced" description="Runtime level changes, groups, flush, and error handling patterns." href="/docs/logger/advanced" />
+  <Card title="Framework Integration" description="Use logger with Next.js, Express, Fastify, and NestJS." href="/docs/logger/framework-integration" />
+</Cards>

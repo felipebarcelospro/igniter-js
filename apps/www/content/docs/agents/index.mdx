@@ -1,0 +1,179 @@
+---
+title: Introduction
+description: Production-ready, type-safe AI agent framework for Igniter.js. Build intelligent agents with custom tools, persistent memory, telemetry, and multi-agent orchestration.
+---
+
+## Overview
+
+`@igniter-js/agents` is a **production-grade, type-safe** AI agent framework built on the [Vercel AI SDK](https://sdk.vercel.ai). It provides a fluent builder API for creating AI agents with custom tools, persistent memory, MCP integration, telemetry, and multi-agent orchestration — all with full TypeScript type inference.
+
+Whether you're building a simple chatbot, a multi-agent customer support system, or an autonomous coding assistant, agents gives you the foundation with compile-time safety and production observability.
+
+<Callout type="info">
+  Agents is a **fully independent package** — use it in any Node.js or Bun application. No framework lock-in. Works with Express, Next.js, Fastify, Hono, or background workers.
+</Callout>
+
+### Key Features
+
+- **Type-safe tooling** — Define tools with Zod schemas and get full type inference on inputs, outputs, and execution handlers
+- **Fluent builder API** — Immutable, chainable configuration for agents, tools, toolsets, MCP clients, and prompts
+- **Persistent memory** — Adapter-based storage for working memory, chat history, and chat sessions
+- **MCP integration** — Native support for Model Context Protocol servers via stdio and HTTP transports
+- **Multi-agent orchestration** — Manage multiple specialized agents with a single manager, shared telemetry, and hooks
+- **Comprehensive telemetry** — Structured observability events for every lifecycle phase, tool call, MCP connection, and memory operation
+- **Lifecycle hooks** — Subscribe to agent start/error, tool call start/end/error, and MCP connection events
+- **Prompt templates** — Context-aware prompt building with `{{variable}}` interpolation and appended prompt support
+- **Pluggable adapters** — In-memory and JSON file adapters included; build custom adapters for any storage backend
+- **Predictable errors** — Stable error codes (`AGENT_NOT_INITIALIZED`, `MEMORY_PROVIDER_ERROR`, `INVALID_CONFIG`) for programmatic handling
+
+---
+
+## Architecture
+
+Agents follows the **builder pattern** — every component is built through a fluent, chainable API. The agent core handles model interaction, tool execution, MCP lifecycle, memory persistence, telemetry, and hooks.
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  IgniterAgentManager                │
+│  (multi-agent orchestration, shared telemetry)      │
+├─────────────────────────────────────────────────────┤
+│                  IgniterAgentCore                   │
+│  (model interaction, tool exec, MCP lifecycle)      │
+├──────────┬──────────┬──────────┬───────────────────┤
+│  Tools   │ Toolsets │   MCP    │      Memory       │
+│  (typed  │ (grouped │ (stdio,  │  (working, chat,  │
+│   funcs) │  tools)  │  http)   │   history)        │
+├──────────┴──────────┴──────────┴───────────────────┤
+│          Prompt Templates (interpolation)           │
+├─────────────────────────────────────────────────────┤
+│     Telemetry + Logger + Hooks (observability)      │
+└─────────────────────────────────────────────────────┘
+```
+
+Every operation flows through the same pipeline: **validate input → execute → capture telemetry → fire hooks → return result**.
+
+### Mental Model
+
+| Concept | What it is | Example |
+|---------|-----------|---------|
+| **Agent** | AI-powered runtime with tools and memory | `IgniterAgent.create('assistant').withModel(...).build()` |
+| **Tool** | Typed, executable function the AI can call | `IgniterAgentTool.create('getWeather').withInput(z.object({...}))` |
+| **Toolset** | Collection of related tools by domain | `IgniterAgentToolset.create('github').addTool(...).addTool(...).build()` |
+| **MCP Client** | Connection to external MCP servers | `IgniterAgentMCPClient.create('filesystem').withType('stdio').build()` |
+| **Memory** | Persistent storage for context and history | `{ provider: adapter, working: {...}, history: {...} }` |
+| **Manager** | Orchestrates multiple agents | `IgniterAgentManager.create().addAgent('support', agent).build()` |
+| **Prompt** | Template-based system instructions | `IgniterAgentPrompt.create('You are {{role}}.')` |
+| **Hooks** | Lifecycle and tool execution callbacks | `{ onAgentStart: ..., onToolCallStart: ... }` |
+
+---
+
+## Quick Look
+
+Here's a complete agent with a custom tool, ready to run:
+
+```typescript
+import {
+  IgniterAgent,
+  IgniterAgentTool,
+  IgniterAgentToolset,
+  IgniterAgentPrompt,
+} from '@igniter-js/agents'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+// 1. Define a typed tool
+const weatherTool = IgniterAgentTool
+  .create('get_weather')
+  .withDescription('Get current weather for a location')
+  .withInput(
+    z.object({
+      location: z.string().describe('City name'),
+      unit: z.enum(['C', 'F']).default('C'),
+    })
+  )
+  .withExecute(async ({ location, unit }) => {
+    // Call your weather API here
+    return { location, temperature: 22, unit, condition: 'Sunny' }
+  })
+  .build()
+
+// 2. Group tools into a toolset
+const weatherToolset = IgniterAgentToolset
+  .create('weather')
+  .addTool(weatherTool)
+  .build()
+
+// 3. Create the agent
+const agent = IgniterAgent
+  .create('weather-bot')
+  .withModel(openai('gpt-4'))
+  .withPrompt(
+    IgniterAgentPrompt.create(
+      'You are a helpful weather assistant. Use tools to answer weather questions.'
+    )
+  )
+  .addToolset(weatherToolset)
+  .build()
+
+// 4. Start and use
+await agent.start()
+
+const result = await agent.generate({
+  chatId: 'chat_123',
+  userId: 'user_456',
+  context: {},
+  message: {
+    role: 'user',
+    content: "What's the weather in London?",
+  },
+})
+
+console.log(result.content)
+```
+
+**✅ That's it!** A fully type-safe agent with custom tools, ready for production.
+
+---
+
+## Package Tour
+
+<Files>
+  <Folder name="packages/agents/src" defaultOpen>
+    <Folder name="builders">
+      <File name="agent.builder.ts">Fluent API for building agents (model, tools, MCP, memory, hooks)</File>
+      <File name="main.builder.ts">Manager builder for multi-agent orchestration</File>
+      <File name="tool.builder.ts">Fluent API for single tool definitions</File>
+      <File name="toolset.builder.ts">Fluent API for tool collections</File>
+      <File name="mcp.builder.ts">Fluent API for MCP client configuration</File>
+      <File name="prompt.builder.ts">Template interpolation with {"{{variable}}"} support</File>
+    </Folder>
+    <Folder name="core">
+      <File name="agent.ts">Agent runtime: generate, stream, MCP lifecycle, tool execution</File>
+      <File name="manager.ts">Multi-agent orchestration: register, startAll, routing</File>
+      <File name="memory.ts">Memory runtime wrapper with telemetry and error handling</File>
+    </Folder>
+    <Folder name="adapters">
+      <File name="memory.adapter.ts">In-memory storage for development/testing</File>
+      <File name="json-file.adapter.ts">JSON file persistence for single-machine deployments</File>
+    </Folder>
+    <Folder name="types">
+      <File name="agent.ts">Core agent type definitions</File>
+      <File name="builder.ts">Builder output types</File>
+      <File name="memory.ts">Memory provider interface</File>
+      <File name="hooks.ts">Lifecycle hook signatures</File>
+      <File name="adapter.ts">Adapter configuration types</File>
+    </Folder>
+    <Folder name="errors">
+      <File name="agent.error.ts">Stable error codes and error classes</File>
+    </Folder>
+  </Folder>
+</Files>
+
+---
+
+## Next Steps
+
+- [Installation](/docs/agents/installation) — All package managers, peer dependencies, and runtime requirements
+- [Quick Start](/docs/agents/quick-start) — Three complete scenarios in under 5 minutes each
+- [Building Agents](/docs/agents/building-agents) — Deep dive into the agent builder API
+- [Tools & Toolsets](/docs/agents/tools-toolsets) — Type-safe tool creation and organization

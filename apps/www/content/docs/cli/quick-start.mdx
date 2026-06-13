@@ -1,0 +1,225 @@
+---
+title: Quick Start
+description: Create a full-stack Igniter.js project in 2 minutes. Next.js starter, PostgreSQL database with Prisma, Better Auth, and your first generated feature — copy-paste ready.
+---
+
+## Quick Start
+
+This guide walks you from zero to a running Igniter.js project in under two minutes. You'll create a Next.js project with a PostgreSQL database, authentication, and a schema-generated feature — all from the terminal.
+
+<Steps>
+  <Step>
+    ### Install the CLI
+
+    <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+      <Tab value="npm">
+        ```bash
+        npm install -g @igniter-js/cli
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm add -g @igniter-js/cli
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn global add @igniter-js/cli
+        ```
+      </Tab>
+      <Tab value="bun">
+        ```bash
+        bun add -g @igniter-js/cli
+        ```
+      </Tab>
+    </Tabs>
+
+    Verify it works:
+
+    ```bash
+    igniter --help
+    # Usage: igniter [options] [command]
+    # Commands:
+    #   init        Create a new Igniter.js project with interactive setup
+    #   generate    Scaffold new features or generate client schema
+    #   dev         Start development mode with automatic schema and docs regeneration
+    ```
+  </Step>
+
+  <Step>
+    ### Create a Project
+
+    The `init` command creates a new project. You can answer interactive prompts or pass flags directly:
+
+    ```bash
+    igniter init my-saas \
+      --template nextjs \
+      --add-ons database,auth \
+      --database postgresql
+    ```
+
+    This command:
+    - Creates `my-saas/` with a Next.js starter
+    - Configures Prisma with a PostgreSQL provider
+    - Wires Better Auth with default plugins
+    - Sets up Docker Compose (PostgreSQL container)
+    - Installs dependencies automatically
+    - Initializes a Git repository
+
+    <Callout type="info">
+      **What happens under the hood:** The CLI clones the Next.js starter template, applies add-on templates (database configuration, auth setup), merges environment variables into `.env`, adds Docker services to `docker-compose.yml`, updates `package.json` dependencies, and runs post-install hooks.
+    </Callout>
+
+    ```bash
+    cd my-saas
+    ```
+  </Step>
+
+  <Step>
+    ### Explore the Project Structure
+
+    Your project now has a complete Igniter.js structure:
+
+    <Files>
+      <Folder name="my-saas" defaultOpen>
+        <Folder name="src">
+          <Folder name="features">
+            <Folder name="example">
+              <File name="controllers/example.controller.ts" />
+              <File name="procedures/example.procedure.ts" />
+              <File name="example.interfaces.ts" />
+            </Folder>
+          </Folder>
+          <File name="igniter.router.ts" />
+          <File name="igniter.client.ts" />
+          <File name="igniter.context.ts" />
+          <File name="igniter.schema.ts" />
+          <File name="igniter.config.ts" />
+        </Folder>
+        <File name="prisma/schema.prisma" />
+        <File name="docker-compose.yml" />
+        <File name=".env" />
+        <File name="package.json" />
+      </Folder>
+    </Files>
+
+    The `example` feature was scaffolded automatically. Every feature follows the same pattern: controllers (HTTP routes), procedures (business logic), and interfaces (TypeScript types).
+  </Step>
+
+  <Step>
+    ### Generate a Feature from Your Database Schema
+
+    Define a model in `prisma/schema.prisma`:
+
+    ```prisma
+    model User {
+      id        String   @id @default(cuid())
+      name      String
+      email     String   @unique
+      createdAt DateTime @default(now())
+      updatedAt DateTime @updatedAt
+    }
+    ```
+
+    Then generate the feature:
+
+    ```bash
+    igniter generate feature users --schema prisma:User
+    ```
+
+    This produces a complete feature with:
+    - **Controller** — CRUD routes (`GET /users`, `POST /users`, etc.)
+    - **Procedure** — type-safe business logic with Prisma queries
+    - **Interfaces** — Zod-validated input/output types derived from the schema
+
+    <Callout type="info">
+      The `--schema` flag uses the **Prisma schema provider**. It reads your `schema.prisma`, extracts the model definition, and generates controllers with typed Zod schemas matching your column types.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Start Development Mode
+
+    Run `igniter dev` to start your development server with automatic schema regeneration:
+
+    ```bash
+    igniter dev --cmd "pnpm dev"
+    ```
+
+    The dev command:
+    - Starts your app's dev server via the `--cmd` flag
+    - Watches `src/igniter.router.ts` and `src/features/` for changes
+    - Regenerates `src/igniter.schema.ts` (client schema) on every change
+    - Regenerates `src/docs/` (OpenAPI spec) on every change
+    - Displays a split-pane TUI with Igniter logs and app logs
+
+    <Callout type="info">
+      The file watcher uses a **300ms debounce** to avoid rapid regeneration. It ignores `node_modules`, `.git`, `dist`, `.next`, `.turbo`, `.cache`, and test files.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Register Your Feature in the Router
+
+    Open `src/igniter.router.ts` and register the generated controller:
+
+    ```typescript
+    import { IgniterRouter } from '@igniter-js/core';
+    import { UsersController } from './features/users/controllers/users.controller';
+
+    export const igniterRouter = IgniterRouter.create()
+      .addController(UsersController)
+      .build();
+    ```
+
+    The dev watcher detects the change and regenerates the schema automatically. Your new routes are now typed and available in the client.
+  </Step>
+</Steps>
+
+---
+
+## ✅ Success Checkpoint
+
+You now have a project that:
+
+- Runs on **Next.js** with the Igniter.js framework
+- Has a **PostgreSQL database** configured via Prisma
+- Includes **Better Auth** for authentication
+- Has a **schema-generated feature** (users) with CRUD routes
+- Uses **dev mode** to auto-regenerate the client schema and OpenAPI docs
+- Can be started with a single command
+
+---
+
+## What You Can Do Next
+
+```bash
+# Add more add-ons to an existing project
+igniter init . --mode install --add-ons jobs,logging,telemetry
+
+# Generate a caller from an external OpenAPI spec
+igniter generate caller --name stripe --url https://api.stripe.com/openapi.json
+
+# Generate only the OpenAPI docs
+igniter generate docs
+
+# Generate only the client schema
+igniter generate schema
+
+# Scaffold a new controller inside a feature
+igniter generate controller profile --feature users
+
+# Scaffold a new procedure
+igniter generate procedure send-welcome-email --feature users
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Commands Reference" description="Deep dive into every command — init, generate, dev — with all flags and options." href="/docs/cli/commands/init" />
+  <Card title="Starters" description="Compare all 6 starters and pick the right one for your stack." href="/docs/cli/starters" />
+  <Card title="Add-ons" description="Learn inline option notation and explore all 9 add-ons in detail." href="/docs/cli/add-ons" />
+  <Card title="Real-World Scenarios" description="Production-ready patterns: SaaS, microservices, existing projects, and more." href="/docs/cli/real-world" />
+</Cards>

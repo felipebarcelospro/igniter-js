@@ -1,0 +1,303 @@
+---
+title: Troubleshooting
+description: Common errors, connection issues, and debugging tips for @igniter-js/store. Solutions for Redis connectivity, schema validation, and performance problems.
+---
+
+## Overview
+
+This guide covers common issues you may encounter when using `@igniter-js/store` and how to resolve them.
+
+---
+
+## Connection Errors
+
+### `ECONNREFUSED` — Redis not reachable
+
+**Symptom:** Operations fail with `ECONNREFUSED`.
+
+**Causes & Fixes:**
+
+1. **Redis isn't running:**
+   ```bash
+   redis-cli ping
+   # Should return: PONG
+   ```
+   If not, start Redis:
+   ```bash
+   docker run -d -p 6379:6379 redis:7-alpine
+   # or: brew services start redis (macOS)
+   ```
+
+2. **Wrong host/port:**
+   ```typescript
+   // Check your configuration
+   const redis = new Redis({
+     host: "localhost",  // Not "127.0.0.1" if using Docker
+     port: 6379,
+   });
+   ```
+
+3. **Firewall blocking port 6379:**
+   Check your firewall rules allow connections to Redis.
+
+### `NOAUTH` — Authentication required
+
+**Symptom:** `NOAUTH Authentication required.`
+
+**Fix:** Provide the password:
+```typescript
+const redis = new Redis({
+  host: "localhost",
+  port: 6379,
+  password: process.env.REDIS_PASSWORD,
+});
+```
+
+---
+
+## Schema Validation Errors
+
+### `STORE_SCHEMA_VALIDATION_FAILED`
+
+**Symptom:** Publishing or subscribing to events throws validation errors.
+
+**Causes:**
+
+1. **Payload doesn't match schema:**
+   ```typescript
+   // Schema expects { userId: string, email: string }
+   const UserEvents = IgniterStoreEvents
+     .create("user")
+     .event("created", z.object({
+       userId: z.string(),
+       email: z.string().email(),
+     }))
+     .build();
+
+   // ❌ Wrong — userId is number, email is malformed
+   await store.events.publish("user:created", {
+     userId: 123,
+     email: "not-an-email",
+   });
+
+   // ✅ Correct
+   await store.events.publish("user:created", {
+     userId: "123",
+     email: "avery@example.com",
+   });
+   ```
+
+2. **To disable validation for debugging:**
+   ```typescript
+   .addEvents(UserEvents, {
+     throwOnValidationError: false,
+   })
+   ```
+
+### `STORE_DUPLICATE_NAMESPACE`
+
+**Symptom:** `Namespace "user" is already registered.`
+
+**Fix:** Each namespace can only be added once. Combine events from the same feature into a single `IgniterStoreEvents` definition:
+```typescript
+// ✅ Good — single definition per namespace
+const UserEvents = IgniterStoreEvents
+  .create("user")
+  .event("created", createdSchema)
+  .event("deleted", deletedSchema)
+  .build();
+
+// ❌ Bad — trying to add the same namespace twice
+store.addEvents(UserEventsCreated);
+store.addEvents(UserEventsDeleted); // Error: duplicate namespace
+```
+
+---
+
+## Scope Errors
+
+### `STORE_INVALID_SCOPE_KEY`
+
+**Symptom:** `Scope key "workspace" is not defined.`
+
+**Fix:** Define the scope with `addScope()` before using it:
+```typescript
+// This store only allows "organization" scope
+const store = IgniterStore.create()
+  .withAdapter(adapter)
+  .withService("api")
+  .addScope("organization")
+  .build();
+
+// ❌ "workspace" is not defined
+store.scope("workspace", "ws_1");
+
+// ✅ Use "organization" or add "workspace" to the builder
+store.scope("organization", "org_1");
+```
+
+### `STORE_SCOPE_KEY_REQUIRED` / `STORE_SCOPE_IDENTIFIER_REQUIRED`
+
+**Symptom:** `Scope key is required` or `Scope identifier is required`.
+
+**Fix:** Always provide both key and identifier:
+```typescript
+// ❌ Missing identifier
+store.scope("organization", "");
+
+// ✅ Non-empty identifier
+store.scope("organization", "org_123");
+```
+
+---
+
+## Builder Errors
+
+### `STORE_ADAPTER_REQUIRED`
+
+**Symptom:** `Adapter is required.`
+
+**Fix:** You must call `.withAdapter()` before `.build()`:
+```typescript
+// ❌ Missing adapter
+const store = IgniterStore.create()
+  .withService("api")
+  .build();
+
+// ✅ With adapter
+const store = IgniterStore.create()
+  .withAdapter(IgniterStoreRedisAdapter.create({ redis }))
+  .withService("api")
+  .build();
+```
+
+### `STORE_SERVICE_REQUIRED`
+
+**Symptom:** `Service name is required.`
+
+**Fix:** Always provide a service name:
+```typescript
+const store = IgniterStore.create()
+  .withAdapter(adapter)
+  .withService("my-service") // Required
+  .build();
+```
+
+---
+
+## Performance Issues
+
+### Slow Operations
+
+1. **Use batch operations for multiple keys:**
+   ```typescript
+   // ❌ Slow — N round trips
+   for (const id of ids) {
+     await store.kv.get(`user:${id}`);
+   }
+
+   // ✅ Fast — single round trip
+   const users = await store.batch.get(ids.map(id => `user:${id}`));
+   ```
+
+2. **Use `exists` instead of `get` for presence checks:**
+   ```typescript
+   // ❌ Deserializes value unnecessarily
+   const val = await store.kv.get("key");
+   if (val !== null) { /* ... */ }
+
+   // ✅ Only checks existence
+   if (await store.kv.exists("key")) { /* ... */ }
+   ```
+
+3. **Set appropriate TTLs to prevent unbounded growth:**
+   ```typescript
+   // ✅ Always set TTL on cache entries
+   await store.kv.set("key", value, { ttl: 3600 });
+
+   // ❌ Never expires — memory leak
+   await store.kv.set("key", value);
+   ```
+
+### Redis Memory Pressure
+
+Monitor and configure Redis memory:
+```bash
+redis-cli CONFIG SET maxmemory 256mb
+redis-cli CONFIG SET maxmemory-policy allkeys-lru
+```
+
+---
+
+## Stream Issues
+
+### `BUSYGROUP` — Consumer group already exists
+
+This is **normal** and handled automatically. The adapter catches this and treats it as success. No action needed.
+
+### Messages not being delivered
+
+**Check:** Are you acknowledging messages? Unacknowledged messages stay in the pending list and won't be re-delivered until claimed.
+
+```typescript
+const messages = await consumer.read("events", { count: 10 });
+
+// ✅ Always ack after processing
+for (const msg of messages) {
+  await processMessage(msg.message);
+}
+await consumer.ack("events", messages.map((m) => m.id));
+```
+
+### Stream grows unbounded
+
+Always set `maxLen` when appending:
+```typescript
+await store.streams.append("events", payload, {
+  maxLen: 10000,
+  approximate: true,
+});
+```
+
+---
+
+## TypeScript Issues
+
+### Type inference not working for events
+
+Make sure you're using the builder correctly:
+```typescript
+// ✅ Events are typed because they're registered
+const store = IgniterStore.create()
+  .withAdapter(adapter)
+  .withService("api")
+  .addEvents(UserEvents) // Registers types
+  .build();
+
+// Now fully typed
+store.events.user.created.publish({ userId: "...", email: "...", createdAt: "..." });
+
+// ❌ Without addEvents(), no type inference
+store.events.publish("user:created", {}); // any
+```
+
+---
+
+## Best Practices Checklist
+
+- [ ] Always set TTL on cache entries
+- [ ] Use `store.batch` for multi-key operations
+- [ ] Define scopes with `addScope()` for type safety
+- [ ] Organize events by feature module
+- [ ] Always acknowledge stream messages after processing
+- [ ] Use the memory adapter for tests
+- [ ] Configure telemetry redaction in production
+- [ ] Handle errors gracefully — don't let one failure cascade
+
+---
+
+## Getting Help
+
+- Browse the complete [API reference](/docs/store/api-reference)
+- Check the [package README](https://github.com/igniter-js/igniter-js/blob/main/packages/store/README.md)
+- See [advanced patterns](/docs/store/advanced) for production guidance

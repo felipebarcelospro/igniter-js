@@ -1,0 +1,206 @@
+---
+title: Overview
+description: Type-safe, session-aware telemetry for Node.js applications. Typed event registries, automatic context correlation, PII redaction, sampling, and pluggable transport adapters.
+---
+
+## Overview
+
+`@igniter-js/telemetry` is a **type-safe, privacy-first telemetry backbone** for TypeScript applications. It unifies logs, events, and error reporting under a structured, correlated model — with typed event registries, automatic session context, PII redaction, sampling, and pluggable transports.
+
+Whether you need to instrument a REST API, a background worker, or a Next.js app, telemetry gives you a single, governed pipeline for all observability data.
+
+<Callout type="info">
+  Telemetry is a **fully independent package**. Use it in any Node.js or Bun application — Express, Next.js, Fastify, Hono, or a background worker. No framework lock-in.
+</Callout>
+
+### Key Features
+
+- **Type-safe events** — Define event schemas with Zod, get autocompletion on `emit()` calls, catch invalid events at compile time
+- **Session correlation** — AsyncLocalStorage-based sessions automatically correlate events across async boundaries without manual context passing
+- **PII protection** — Redact sensitive keys, hash PII fields, and truncate values before events leave the application
+- **Volume control** — Per-level sampling rates, always/never patterns, and event filtering to control costs
+- **Pluggable transports** — 10 built-in adapters (Logger, HTTP, OTLP, Sentry, Slack, Discord, Telegram, Memory, Mock, Store) — or build your own
+- **Three emit modes** — Direct emit, manual session handles, and scoped execution (`session.run()`) — choose the right DX for each scenario
+- **Event groups** — Nest events into namespaced groups for logical organization and discoverable autocompletion
+- **Validation modes** — Validate events in development, production, or never — configurable per registry or globally
+- **Predictable errors** — 22 stable error codes (`TELEMETRY_TRANSPORT_FAILED`, `TELEMETRY_SESSION_ENDED`) for programmatic handling
+
+---
+
+## Architecture
+
+Telemetry follows a **builder → manager → transport fan-out** pipeline. Events flow through sampling, envelope construction, redaction, and then fan out to all registered transports.
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                       Your App                           │
+├──────────────────────────────────────────────────────────┤
+│ telemetry.emit('payment.succeeded', { attributes: ... }) │
+└───────────────┬──────────────────────────────────────────┘
+                │
+                ▼
+┌──────────────────────────────────────────────────────────┐
+│          IgniterTelemetryManager (runtime)               │
+│  Session check → Sampling → Envelope → Redaction          │
+└───────────────┬──────────────────────────────────────────┘
+                │
+                ▼
+┌──────────────────────────────────────────────────────────┐
+│                     Transport Fan-out                    │
+│  Logger | HTTP | OTLP | Sentry | Slack | Discord | Store  │
+└──────────────────────────────────────────────────────────┘
+```
+
+Every event passes through: **resolve session → apply sampling → build envelope → apply redaction → fan-out to transports**.
+
+### Mental Model
+
+| Concept | What it is | Example |
+|---------|-----------|---------|
+| **Builder** | Fluent config chain (immutable) | `IgniterTelemetry.create().withService('api').addTransport(...).build()` |
+| **Manager** | Runtime emitter with session support | `telemetry.emit('user.login', { ... })` |
+| **Events Registry** | Typed event definitions with Zod schemas | `IgniterTelemetryEvents.namespace('igniter.jobs').event(...).build()` |
+| **Session** | AsyncLocalStorage context for correlation | `telemetry.session().actor('user', 'usr_123').run(...)` |
+| **Transport Adapter** | Pluggable destination for events | `LoggerTransportAdapter.create({ logger: console })` |
+| **Envelope** | Normalized event payload with context | `{ name, time, level, service, actor, scope, attributes }` |
+
+---
+
+## Quick Start
+
+Get telemetry running with a console transport in under 60 seconds.
+
+<Steps>
+  <Step>
+    ### Install
+
+    <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+      <Tab value="npm">
+        ```bash
+        npm install @igniter-js/telemetry
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm add @igniter-js/telemetry
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn add @igniter-js/telemetry
+        ```
+      </Tab>
+      <Tab value="bun">
+        ```bash
+        bun add @igniter-js/telemetry
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step>
+    ### Create Telemetry Instance
+
+    ```typescript
+    import { IgniterTelemetry } from "@igniter-js/telemetry";
+    import { LoggerTransportAdapter } from "@igniter-js/telemetry/adapters";
+
+    const telemetry = IgniterTelemetry.create()
+      .withService("billing-api")
+      .withEnvironment(process.env.NODE_ENV ?? "development")
+      .addTransport(LoggerTransportAdapter.create({ logger: console }))
+      .build();
+    ```
+
+  </Step>
+
+  <Step>
+    ### Emit Events
+
+    ```typescript
+    // Direct emit — no session required
+    telemetry.emit("service.booted", {
+      attributes: { "ctx.service.uptime_ms": 42 },
+    });
+
+    telemetry.emit("payment.succeeded", {
+      level: "info",
+      attributes: {
+        "ctx.payment.id": "pay_789",
+        "ctx.payment.amount": 2999,
+        "ctx.payment.currency": "usd",
+      },
+    });
+    ```
+
+  </Step>
+</Steps>
+
+**✅ Success!** You now have structured telemetry with a console transport.
+
+---
+
+## Three Emit Modes
+
+Telemetry supports three distinct patterns for emitting events — choose the right one for your context.
+
+### Mode A: Direct Emit
+
+Simplest form. No session required. Each event stands alone.
+
+```typescript
+telemetry.emit("user.login", {
+  attributes: { "ctx.user.id": "usr_123" },
+});
+```
+
+### Mode B: Manual Session Handle
+
+Create a session, bind actor/scope, emit events, then end it.
+
+```typescript
+const session = telemetry.session()
+  .actor("user", "usr_123", { role: "admin" })
+  .scope("organization", "org_456", { plan: "enterprise" });
+
+session.emit("user.action", {
+  attributes: { "ctx.action.type": "export" },
+});
+
+await session.end();
+```
+
+### Mode C: Scoped Execution (Recommended)
+
+All events inside `run()` automatically inherit the session context — no manual context passing.
+
+```typescript
+await telemetry.session()
+  .actor("user", "usr_123")
+  .scope("organization", "org_456")
+  .run(async () => {
+    telemetry.emit("request.started", {
+      attributes: { "ctx.request.path": "/api/orders" },
+    });
+
+    // ... your business logic ...
+
+    telemetry.emit("request.completed", {
+      attributes: { "ctx.request.status": 200 },
+    });
+  });
+```
+
+<Callout type="info">
+  **Mode C is the recommended approach** for HTTP request handlers. It uses Node.js `AsyncLocalStorage` to automatically attach session context to all `emit()` calls within the callback — even across `await` boundaries.
+</Callout>
+
+---
+
+## Next Steps
+
+- [Installation](/docs/telemetry/installation) — All package managers and peer dependencies
+- [Getting Started](/docs/telemetry/getting-started) — Complete walkthrough with typed events
+- [Defining Events](/docs/telemetry/defining-events) — Typed event registries with Zod schemas
+- [Builder Configuration](/docs/telemetry/builder-config) — All builder methods and options
+- [Emitting Events](/docs/telemetry/emitting-events) — Attributes, levels, errors, and source metadata

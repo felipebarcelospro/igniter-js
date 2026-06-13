@@ -1,0 +1,323 @@
+---
+title: Multi-Agent Orchestration
+description: Manage multiple specialized agents with a single manager. Agent registration, batch start/stop, shared telemetry, lifecycle hooks, and routing.
+---
+
+## Multi-Agent Orchestration
+
+`IgniterAgentManager` provides centralized orchestration for multiple agents. It shares common resources (logger, telemetry, hooks), manages lifecycle in batch, and enables request routing between agents.
+
+---
+
+## The Manager Builder
+
+Like the agent builder, the manager uses a fluent API:
+
+```typescript
+import {
+  IgniterAgentManager,
+  IgniterAgent,
+} from '@igniter-js/agents'
+import { openai } from '@ai-sdk/openai'
+
+// Create specialized agents
+const supportAgent = IgniterAgent
+  .create('support')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(IgniterAgentPrompt.create('You are customer support.'))
+  .build()
+
+const salesAgent = IgniterAgent
+  .create('sales')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(IgniterAgentPrompt.create('You are a sales representative.'))
+  .build()
+
+const codeAgent = IgniterAgent
+  .create('code')
+  .withModel(openai('gpt-4o'))
+  .addToolset(codeToolset)
+  .build()
+
+// Create the manager
+const manager = IgniterAgentManager
+  .create()
+  .addAgent('support', supportAgent)
+  .addAgent('sales', salesAgent)
+  .addAgent('code', codeAgent)
+  .withAutoStart(true)          // Start agents immediately
+  .withContinueOnError(true)    // Don't fail all if one errors
+  .build()
+```
+
+---
+
+## Manager Builder API
+
+| Method | Description |
+|--------|-------------|
+| `.create()` | Creates a new manager builder |
+| `.addAgent(name, agent)` | Registers an agent (type-safe — names are tracked in the type) |
+| `.withLogger(logger)` | Shared logger for all agents |
+| `.withTelemetry(telemetry)` | Shared telemetry for all agents |
+| `.withAutoStart(bool)` | Auto-start agents on registration (default: `false`) |
+| `.withContinueOnError(bool)` | Continue if an agent fails during batch start (default: `true`) |
+| `.onAgentStart(callback)` | Fired when any agent starts |
+| `.onAgentError(callback)` | Fired when any agent errors |
+| `.onToolCallStart(callback)` | Fired when any tool call starts |
+| `.onToolCallEnd(callback)` | Fired when any tool call completes |
+| `.onToolCallError(callback)` | Fired when any tool call fails |
+| `.onMCPStart(callback)` | Fired when any MCP connection starts |
+| `.onMCPError(callback)` | Fired when any MCP connection fails |
+| `.build()` | Returns the built manager |
+
+---
+
+## Agent Registration & Lifecycle
+
+### Programmatic Registration
+
+Agents can also be registered after the manager is built:
+
+```typescript
+const manager = IgniterAgentManager.create().build()
+
+manager.register('support', supportAgent)
+manager.register('sales', salesAgent)
+
+// Check registration
+console.log(manager.has('support'))   // true
+console.log(manager.has('unknown'))   // false
+
+// Unregister an agent
+manager.unregister('old-agent')
+```
+
+<Callout type="warn">
+  Registering an agent with a name that already exists throws `IgniterAgentError` with code `INVALID_CONFIG`.
+</Callout>
+
+### Starting and Managing Agents
+
+```typescript
+// Start a single agent
+await manager.start('support')
+
+// Start all agents in parallel
+const results = await manager.startAll()
+
+for (const [name, result] of results) {
+  if (result instanceof Error) {
+    console.error(`❌ ${name} failed:`, result.message)
+  } else {
+    console.log(`✅ ${name} started with ${Object.keys(result).length} toolsets`)
+  }
+}
+
+// Get agent names
+console.log(manager.getNames())       // ['support', 'sales', 'code']
+
+// Get agent status
+console.log(manager.getStatus())
+// → [{ name: 'support', status: 'running', ... }, ...]
+
+// Get failed agents
+console.log(manager.getFailedAgents())
+// → [{ name: 'code', error: Error(...), ... }]
+```
+
+---
+
+## Using Agents via the Manager
+
+### Direct Access
+
+```typescript
+// Get an agent by name
+const support = manager.get('support')
+
+const result = await support.generate({
+  chatId: 'chat_001',
+  userId: 'user_001',
+  context: {},
+  message: { role: 'user', content: 'I need help with my order' },
+})
+
+console.log(result.content)
+```
+
+### Agent Routing Pattern
+
+Build a router that selects the right agent based on the request:
+
+```typescript
+type AgentName = 'support' | 'sales' | 'code'
+
+function routeRequest(intent: string): AgentName {
+  switch (intent) {
+    case 'help':
+    case 'refund':
+      return 'support'
+    case 'pricing':
+    case 'demo':
+      return 'sales'
+    case 'debug':
+    case 'code':
+      return 'code'
+    default:
+      return 'support'
+  }
+}
+
+async function handleRequest(intent: string, message: string) {
+  const agentName = routeRequest(intent)
+  const agent = manager.get(agentName)
+
+  return agent.generate({
+    chatId: `chat_${Date.now()}`,
+    userId: 'user_001',
+    context: { intent },
+    message: { role: 'user', content: message },
+  })
+}
+```
+
+---
+
+## Shared Hooks & Observability
+
+Manager-level hooks apply to all registered agents:
+
+```typescript
+const manager = IgniterAgentManager
+  .create()
+  .addAgent('support', supportAgent)
+  .addAgent('sales', salesAgent)
+  .onAgentStart((name) => {
+    console.log(`🚀 Agent '${name}' started`)
+  })
+  .onAgentError((name, error) => {
+    console.error(`💥 Agent '${name}' failed:`, error.message)
+  })
+  .onToolCallStart((agentName, toolName, input) => {
+    console.log(`🔧 [${agentName}] → ${toolName}`)
+  })
+  .onToolCallEnd((agentName, toolName, output) => {
+    console.log(`✅ [${agentName}] ← ${toolName}`)
+  })
+  .build()
+```
+
+### Shared Telemetry
+
+When telemetry is configured on the manager, it's automatically propagated to all agents:
+
+```typescript
+import { IgniterTelemetry } from '@igniter-js/telemetry'
+
+const telemetry = IgniterTelemetry.create().build()
+
+const manager = IgniterAgentManager
+  .create()
+  .withTelemetry(telemetry)
+  .withLogger(myLogger)
+  .addAgent('support', supportAgent)
+  .addAgent('sales', salesAgent)
+  .build()
+
+// All agents now share the same telemetry and logger
+```
+
+---
+
+## Agent Status Lifecycle
+
+Each agent tracked by the manager goes through these states:
+
+| Status | Description |
+|--------|-------------|
+| `idle` | Registered but not yet started |
+| `starting` | Currently initializing MCP connections |
+| `running` | Successfully started and ready for requests |
+| `error` | Failed to start or encountered an error |
+
+```typescript
+const status = manager.getStatus()
+status.forEach(s => {
+  console.log(`${s.name}: ${s.status}`)
+  console.log(`  Registered: ${s.registeredAt}`)
+  console.log(`  Started: ${s.startedAt ?? 'N/A'}`)
+  console.log(`  Toolsets: ${s.toolsetCount}`)
+  if (s.error) {
+    console.log(`  Error: ${s.error.message}`)
+  }
+})
+```
+
+---
+
+## Complete Multi-Agent System
+
+```typescript
+import {
+  IgniterAgent,
+  IgniterAgentManager,
+  IgniterAgentTool,
+  IgniterAgentToolset,
+  IgniterAgentPrompt,
+} from '@igniter-js/agents'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+// Support agent with a knowledge base tool
+const searchKB = IgniterAgentTool
+  .create('search_kb')
+  .withDescription('Search the support knowledge base')
+  .withInput(z.object({ query: z.string() }))
+  .withExecute(async ({ query }) => {
+    return kb.search(query)
+  })
+  .build()
+
+const supportAgent = IgniterAgent
+  .create('support')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(IgniterAgentPrompt.create('You are Tier 1 support.'))
+  .addToolset(
+    IgniterAgentToolset.create('kb').addTool(searchKB).build()
+  )
+  .build()
+
+// Code agent with an execution tool
+const runCode = IgniterAgentTool
+  .create('run')
+  .withDescription('Execute code in a sandbox')
+  .withInput(z.object({ code: z.string(), language: z.string() }))
+  .withExecute(async ({ code, language }) => {
+    return sandbox.execute(code, language)
+  })
+  .build()
+
+const codeAgent = IgniterAgent
+  .create('code')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(IgniterAgentPrompt.create('You are a senior developer.'))
+  .addToolset(
+    IgniterAgentToolset.create('sandbox').addTool(runCode).build()
+  )
+  .build()
+
+// Manager orchestrates both
+const manager = IgniterAgentManager
+  .create()
+  .addAgent('support', supportAgent)
+  .addAgent('code', codeAgent)
+  .withContinueOnError(true)
+  .onAgentStart((name) => console.log(`✅ ${name} is live`))
+  .onAgentError((name, err) => console.error(`❌ ${name}:`, err.message))
+  .build()
+
+// Start all agents
+const results = await manager.startAll()
+console.log('Running agents:', manager.getNames())
+```

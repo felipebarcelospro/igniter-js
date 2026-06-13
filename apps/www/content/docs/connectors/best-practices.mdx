@@ -1,0 +1,353 @@
+---
+title: Best Practices
+description: Production patterns for connectors — error handling, encryption, scope design, OAuth security, testing, and performance. Do's and don'ts with code examples.
+---
+
+## Best Practices
+
+This guide covers **production-ready patterns** for building, securing, and scaling connector integrations with `@igniter-js/connectors`.
+
+---
+
+## ✅ Do: Encrypt Sensitive Fields
+
+Always encrypt API keys, tokens, and secrets at rest:
+
+```typescript
+// ✅ Good: Encrypt sensitive fields
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(adapter)
+  .withEncrypt(["botToken", "apiKey", "accessToken", "refreshToken"])
+  .addScope("organization", { required: true })
+  .addConnector("telegram", telegram)
+  .build();
+```
+
+```typescript
+// ❌ Bad: No encryption — tokens stored in plain text
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(adapter)
+  // No withEncrypt() — all fields stored in plain text!
+  .addScope("organization", { required: true })
+  .addConnector("telegram", telegram)
+  .build();
+```
+
+---
+
+## ✅ Do: Handle Errors with Error Codes
+
+Use structured error handling instead of catching everything:
+
+```typescript
+// ✅ Good: Switch on error codes
+try {
+  await scoped.action("telegram", "sendMessage").call({ message: "Hi!" });
+} catch (error) {
+  if (IgniterConnectorError.isConnectorError(error)) {
+    switch (error.code) {
+      case "CONNECTOR_NOT_CONNECTED":
+        return Response.json(
+          { error: "Please connect Telegram first" },
+          { status: 400 },
+        );
+      case "CONNECTOR_ACTION_INPUT_INVALID":
+        return Response.json(
+          { error: "Invalid input", details: error.message },
+          { status: 400 },
+        );
+    }
+  }
+  throw error;
+}
+```
+
+```typescript
+// ❌ Bad: Generic catch-all
+try {
+  await scoped.action("telegram", "sendMessage").call({ message: "Hi!" });
+} catch (error) {
+  console.error("Something went wrong"); // What went wrong?
+  return Response.json({ error: "Internal error" }, { status: 500 });
+}
+```
+
+---
+
+## ✅ Do: Design Scopes for Your Domain
+
+Model scopes after your authorization model:
+
+```typescript
+// ✅ Good: Semantic scopes matching your auth model
+const connectors = IgniterConnectorManager.create()
+  .addScope("organization", { required: true })  // Per-tenant
+  .addScope("user", { required: true })           // Per-user
+  .addScope("environment", { required: false })   // Optional env
+  .build();
+```
+
+```typescript
+// ❌ Bad: Vague or meaningless scopes
+.addScope("scope1", { required: true })
+.addScope("scope2", { required: true })
+```
+
+---
+
+## ✅ Do: Use onContext for Shared Dependencies
+
+Avoid creating new SDK instances in every action handler:
+
+```typescript
+// ✅ Good: Create SDK once via onContext
+const connector = IgniterConnector.create()
+  .withConfig(z.object({ apiKey: z.string(), baseUrl: z.string() }))
+  .onContext(async ({ config }) => ({
+    client: createApiClient(config.baseUrl, config.apiKey),
+  }))
+  .addAction("getUser", {
+    input: z.object({ id: z.string() }),
+    handler: async ({ input, context }) => {
+      return context.client.get(`/users/${input.id}`);
+    },
+  })
+  .build();
+```
+
+```typescript
+// ❌ Bad: Creating SDK in every action
+.addAction("getUser", {
+  input: z.object({ id: z.string() }),
+  handler: async ({ input, config }) => {
+    const client = createApiClient(config.baseUrl, config.apiKey); // Every call
+    return client.get(`/users/${input.id}`);
+  },
+})
+```
+
+---
+
+## ✅ Do: Validate Config Before Saving
+
+Use `onValidate` to check credentials before persisting:
+
+```typescript
+// ✅ Good: Validate before saving
+.onValidate(async ({ config }) => {
+  const response = await fetch("https://api.service.com/health", {
+    headers: { Authorization: `Bearer ${config.apiKey}` },
+  });
+  if (!response.ok) {
+    throw new Error("Invalid API key");
+  }
+})
+```
+
+```typescript
+// ❌ Bad: Save first, fail later — user left with broken connection
+// No onValidate — bad credentials stored, action calls fail mysteriously
+```
+
+---
+
+## ✅ Do: Use the Mock Adapter for Tests
+
+Test your connectors without a database:
+
+```typescript
+// ✅ Good: Mock adapter for tests
+import { IgniterConnectorMockAdapter } from "@igniter-js/connectors/adapters";
+
+beforeEach(() => {
+  connectors = IgniterConnectorManager.create()
+    .withDatabase(IgniterConnectorMockAdapter.create())
+    .addScope("organization", { required: true })
+    .addConnector("telegram", telegramConnector)
+    .build();
+});
+```
+
+```typescript
+// ❌ Bad: Requiring a real database for tests
+// Tests need database setup, seeding, cleanup — slow and fragile
+```
+
+---
+
+## ✅ Do: Use Type Inference
+
+Let TypeScript infer types from your connector definitions:
+
+```typescript
+// ✅ Good: Type inference from the manager instance
+const connectors = IgniterConnectorManager.create()
+  .addScope("organization", { required: true })
+  .addConnector("telegram", telegramConnector)
+  .build();
+
+// Types are inferred:
+const scoped = connectors.scope("organization", "org_123");
+const { data } = await scoped
+  .action("telegram", "sendMessage")
+  .call({ message: "Hi!" });
+// data: { messageId: string; timestamp: Date } | null
+```
+
+```typescript
+// ❌ Bad: Manual type annotations
+type TelegramConnector = { ... }; // Maintained manually, gets out of sync
+const result: { messageId: string } = await callAction(...); // Wrong type?
+```
+
+---
+
+## ✅ Do: Enable PKCE for OAuth
+
+Always enable PKCE for better OAuth security:
+
+```typescript
+// ✅ Good: PKCE enabled
+.withOAuth({
+  authorizationUrl: "https://provider.com/oauth/authorize",
+  tokenUrl: "https://provider.com/oauth/token",
+  clientId: process.env.CLIENT_ID!,
+  clientSecret: process.env.CLIENT_SECRET!,
+  pkce: true,
+  scopes: ["read", "write"],
+})
+```
+
+```typescript
+// ❌ Bad: No PKCE — vulnerable to authorization code interception
+.withOAuth({
+  authorizationUrl: "...",
+  tokenUrl: "...",
+  clientId: "...",
+  clientSecret: "...",
+  // pkce: false (default) — less secure
+})
+```
+
+---
+
+## ✅ Do: Centralize Manager Creation
+
+Create the manager once and export it — don't create new instances per request:
+
+```typescript
+// ✅ Good: Singleton manager
+// lib/connectors.ts
+export const connectors = IgniterConnectorManager.create()
+  .withDatabase(IgniterConnectorPrismaAdapter.create(prisma))
+  .addScope("organization", { required: true })
+  .addConnector("telegram", telegramConnector)
+  .build();
+
+// api/routes.ts
+import { connectors } from "@/lib/connectors"; // Same instance everywhere
+```
+
+```typescript
+// ❌ Bad: New manager per request — adapter re-created, memory leak
+export function getConnectors() {
+  return IgniterConnectorManager.create()
+    .withDatabase(IgniterConnectorPrismaAdapter.create(prisma)) // New adapter each call!
+    .build();
+}
+```
+
+---
+
+## ❌ Don't: Store Secrets in Metadata
+
+Metadata is stored in plain text — never put secrets there:
+
+```typescript
+// ❌ Bad: Secrets in metadata
+.withMetadata(z.object({ apiKey: z.string() }), { apiKey: "sk_live_..." })
+```
+
+```typescript
+// ✅ Good: Metadata for display only
+.withMetadata(
+  z.object({ name: z.string(), icon: z.string() }),
+  { name: "Mailchimp", icon: "mailchimp.svg" },
+)
+```
+
+---
+
+## ❌ Don't: Hardcode OAuth Secrets
+
+Always use environment variables for OAuth credentials:
+
+```typescript
+// ❌ Bad: Hardcoded secrets
+.withOAuth({
+  clientId: "abc123",
+  clientSecret: "xyz789",
+})
+```
+
+```typescript
+// ✅ Good: Environment variables
+.withOAuth({
+  clientId: process.env.MAILCHIMP_CLIENT_ID!,
+  clientSecret: process.env.MAILCHIMP_CLIENT_SECRET!,
+})
+```
+
+---
+
+## ❌ Don't: Mix Connector Concerns
+
+Keep connectors focused on one service:
+
+```typescript
+// ✅ Good: One connector per service
+const telegram = IgniterConnector.create()
+  .addAction("sendMessage", { /* ... */ })
+  .addAction("sendPhoto", { /* ... */ })
+  .build();
+
+const discord = IgniterConnector.create()
+  .addAction("sendEvent", { /* ... */ })
+  .build();
+```
+
+```typescript
+// ❌ Bad: Trying to put multiple services in one connector
+const messaging = IgniterConnector.create()
+  .addAction("telegramSend", { /* ... */ })
+  .addAction("discordSend", { /* ... */ })
+  .addAction("slackSend", { /* ... */ })
+  .build(); // Config schema doesn't fit all services
+```
+
+---
+
+## Performance Tips
+
+1. **Singleton manager** — Create once, reuse everywhere
+2. **Batch connections** — Connect multiple connectors in parallel
+3. **Cache connector instances** — `scoped.get()` results when reading configs frequently
+4. **Use mock adapter** — For CI environments to avoid database overhead
+5. **Monitor telemetry** — Track `action.completed` durations for slow integrations
+
+```typescript
+// ✅ Parallel connections
+await Promise.all([
+  scoped.connect("telegram", telegramConfig),
+  scoped.connect("discord", discordConfig),
+  scoped.connect("slack", slackConfig),
+]);
+```
+
+---
+
+## Next Steps
+
+- [Troubleshooting](/docs/connectors/troubleshooting) — Common errors and solutions
+- [API Reference](/docs/connectors/api-reference) — Complete type reference
+- [Scopes & Multi-Tenancy](/docs/connectors/scopes) — Advanced scoping patterns

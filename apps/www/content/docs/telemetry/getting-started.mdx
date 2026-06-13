@@ -1,0 +1,302 @@
+---
+title: Getting Started
+description: Build a complete typed telemetry setup from zero to production-ready. Define events with Zod, configure transports, emit with sessions, and shut down gracefully.
+---
+
+## Getting Started
+
+This guide walks through building a **production-ready telemetry setup** for a billing API — from defining typed events to emitting with sessions and shutting down gracefully.
+
+By the end, you'll have a telemetry instance with typed events, two transports (Logger + Sentry), sampling, redaction, and session correlation.
+
+---
+
+## Step 1 — Define Typed Events
+
+Use `IgniterTelemetryEvents` to create namespaced, schema-validated event registries. Groups help organize related events.
+
+```typescript
+// telemetry/events.ts
+import { IgniterTelemetryEvents } from "@igniter-js/telemetry";
+import { z } from "zod";
+
+export const BillingEvents = IgniterTelemetryEvents
+  .namespace("igniter.billing")
+  .group("invoice", (g) =>
+    g
+      .event("created", z.object({
+        "ctx.invoice.id": z.string(),
+        "ctx.invoice.amount": z.number(),
+        "ctx.invoice.currency": z.string().length(3),
+      }))
+      .event("paid", z.object({
+        "ctx.invoice.id": z.string(),
+        "ctx.invoice.amount": z.number(),
+        "ctx.invoice.paid_at": z.string(),
+      }))
+      .event("voided", z.object({
+        "ctx.invoice.id": z.string(),
+        "ctx.invoice.reason": z.string(),
+      }))
+  )
+  .group("payment", (g) =>
+    g
+      .event("succeeded", z.object({
+        "ctx.payment.id": z.string(),
+        "ctx.payment.provider": z.string(),
+        "ctx.payment.amount": z.number(),
+      }))
+      .event("failed", z.object({
+        "ctx.payment.id": z.string(),
+        "ctx.payment.provider": z.string(),
+        "ctx.payment.error_code": z.string(),
+      }))
+  )
+  .build();
+```
+
+<Callout type="info">
+  Zod is optional — you can emit untyped events too. But typed registries give you autocompletion on event names and runtime validation if enabled.
+</Callout>
+
+---
+
+## Step 2 — Create the Telemetry Instance
+
+The builder chains are immutable — each method returns a new builder instance. Configure everything before calling `.build()`.
+
+```typescript
+// telemetry/instance.ts
+import { IgniterTelemetry } from "@igniter-js/telemetry";
+import {
+  LoggerTransportAdapter,
+  SentryTransportAdapter,
+} from "@igniter-js/telemetry/adapters";
+import * as Sentry from "@sentry/node";
+import { BillingEvents } from "./events";
+
+Sentry.init({ dsn: process.env.SENTRY_DSN });
+
+export const telemetry = IgniterTelemetry.create()
+  .withService("billing-api")
+  .withEnvironment(process.env.NODE_ENV ?? "development")
+  .withVersion(process.env.APP_VERSION ?? "0.0.0")
+  .addActor("user", { description: "Authenticated user" })
+  .addActor("system", { description: "Automated system action" })
+  .addScope("organization", { required: true, description: "Tenant organization" })
+  .addScope("workspace", { description: "Team workspace" })
+  .addEvents(BillingEvents, { mode: "development" })
+  .addTransport(LoggerTransportAdapter.create({
+    logger: console,
+    format: "json",
+    minLevel: "info",
+  }))
+  .addTransport(SentryTransportAdapter.create({ sentry: Sentry }))
+  .withSampling({
+    debugRate: 0.01,
+    infoRate: 0.1,
+    warnRate: 1.0,
+    errorRate: 1.0,
+    always: ["*.failed", "*.error"],
+    never: ["health.check"],
+  })
+  .withRedaction({
+    denylistKeys: ["password", "secret", "authorization"],
+    hashKeys: ["email", "ip", "userAgent"],
+    maxStringLength: 5000,
+  })
+  .build();
+```
+
+---
+
+## Step 3 — Emit Events (Three Modes)
+
+### Mode A: Direct Emit
+
+Simplest. Use for one-off events without session context.
+
+```typescript
+// Emit typed events with autocompletion
+telemetry.emit("igniter.billing.invoice.created", {
+  attributes: {
+    "ctx.invoice.id": "inv_789",
+    "ctx.invoice.amount": 2999,
+    "ctx.invoice.currency": "usd",
+  },
+});
+
+// Emit with error details
+telemetry.emit("igniter.billing.payment.failed", {
+  level: "error",
+  error: {
+    name: "PaymentError",
+    message: "Card declined",
+    code: "CARD_DECLINED",
+  },
+  attributes: {
+    "ctx.payment.id": "pay_456",
+    "ctx.payment.provider": "stripe",
+    "ctx.payment.error_code": "card_declined",
+  },
+});
+```
+
+### Mode B: Manual Session Handle
+
+Create a session, bind context, emit multiple events, and end it.
+
+```typescript
+const session = telemetry.session()
+  .actor("user", "usr_123", { role: "admin" })
+  .scope("organization", "org_456", { plan: "enterprise" })
+  .attributes({ "ctx.request.id": "req_abc" });
+
+session.emit("igniter.billing.invoice.created", {
+  attributes: {
+    "ctx.invoice.id": "inv_001",
+    "ctx.invoice.amount": 5000,
+    "ctx.invoice.currency": "usd",
+  },
+});
+
+session.emit("igniter.billing.payment.succeeded", {
+  attributes: {
+    "ctx.payment.id": "pay_001",
+    "ctx.payment.provider": "stripe",
+    "ctx.payment.amount": 5000,
+  },
+});
+
+await session.end();
+```
+
+### Mode C: Scoped Execution (Recommended)
+
+All events inside `run()` automatically inherit session context via AsyncLocalStorage.
+
+```typescript
+// api/invoice/create.ts
+export async function createInvoice(orgId: string, userId: string) {
+  return telemetry.session()
+    .actor("user", userId)
+    .scope("organization", orgId)
+    .run(async () => {
+      // All emit() calls here automatically carry the session context
+      telemetry.emit("igniter.billing.invoice.created", {
+        attributes: {
+          "ctx.invoice.id": "inv_101",
+          "ctx.invoice.amount": 7500,
+          "ctx.invoice.currency": "usd",
+        },
+      });
+
+      // ... business logic ...
+
+      telemetry.emit("igniter.billing.payment.succeeded", {
+        attributes: {
+          "ctx.payment.id": "pay_101",
+          "ctx.payment.provider": "stripe",
+          "ctx.payment.amount": 7500,
+        },
+      });
+    });
+}
+```
+
+---
+
+## Step 4 — Graceful Shutdown
+
+Call `shutdown()` before your process exits to flush pending events and clean up transports.
+
+```typescript
+// server.ts
+import { telemetry } from "./telemetry/instance";
+
+process.on("SIGTERM", async () => {
+  console.log("Shutting down...");
+  await telemetry.shutdown();
+  process.exit(0);
+});
+
+process.on("SIGINT", async () => {
+  console.log("Interrupted...");
+  await telemetry.shutdown();
+  process.exit(0);
+});
+```
+
+<Callout type="warn">
+  **Always call `shutdown()`** before the process exits. Transports like HTTP may have pending requests, and the Store adapter needs to close Redis connections. Without shutdown, you risk losing buffered events.
+</Callout>
+
+---
+
+## Complete Example: Express Middleware
+
+Putting it all together — an Express app with session correlation per request:
+
+```typescript
+// app.ts
+import express from "express";
+import { telemetry } from "./telemetry/instance";
+
+const app = express();
+
+// Middleware: wrap every request in a telemetry session
+app.use((req, res, next) => {
+  telemetry.session()
+    .actor("user", req.headers["x-user-id"] as string ?? "anonymous")
+    .scope("organization", req.headers["x-org-id"] as string ?? "unknown")
+    .attributes({
+      "ctx.request.method": req.method,
+      "ctx.request.path": req.path,
+      "ctx.request.ip": req.ip,
+    })
+    .run(async () => {
+      telemetry.emit("request.started", {
+        attributes: { "ctx.request.path": req.path },
+      });
+
+      res.on("finish", () => {
+        telemetry.emit("request.completed", {
+          attributes: { "ctx.request.status": res.statusCode },
+        });
+      });
+
+      next();
+    });
+});
+
+app.get("/api/invoices/:id", async (req, res) => {
+  // Events here automatically have user + org context
+  telemetry.emit("igniter.billing.invoice.created", {
+    attributes: {
+      "ctx.invoice.id": req.params.id,
+      "ctx.invoice.amount": 2500,
+      "ctx.invoice.currency": "usd",
+    },
+  });
+
+  res.json({ status: "ok" });
+});
+
+app.listen(3000, () => {
+  telemetry.emit("service.booted", {
+    attributes: { "ctx.service.port": 3000 },
+  });
+});
+```
+
+**✅ Success!** You now have a production-ready telemetry setup with typed events, two transports, sampling, redaction, session correlation, and graceful shutdown.
+
+---
+
+## Next Steps
+
+- [Defining Events](/docs/telemetry/defining-events) — Deep dive into event registries, namespaces, and groups
+- [Builder Configuration](/docs/telemetry/builder-config) — All builder methods with parameter tables
+- [Emitting Events](/docs/telemetry/emitting-events) — Attributes, levels, errors, and source metadata
+- [Sessions](/docs/telemetry/sessions) — Session lifecycle and scoped execution patterns
+- [Adapters](/docs/telemetry/adapters) — All 10 transport adapters

@@ -1,0 +1,355 @@
+---
+title: Quick Start
+description: Build a production-ready multi-platform bot in 3 minutes. Covers Telegram, WhatsApp, and Discord with a complete example.
+---
+
+## Quick Start
+
+This guide walks you through building a **multi-platform bot** that responds to commands on Telegram, WhatsApp, and Discord — all from the same codebase. By the end, you'll have a bot with commands, middleware, and session management running in production.
+
+<Callout type="info">
+  This guide assumes you have a Next.js project. The same patterns work with Express, Fastify, Hono, or any Node.js framework — see [Framework Integration](/docs/bots/framework-integration).
+</Callout>
+
+---
+
+## Step 1: Install Dependencies
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/bot zod
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/bot zod
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/bot zod
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/bot zod
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Step 2: Set Up Environment Variables
+
+Create a `.env.local` file:
+
+```bash
+# Telegram
+TELEGRAM_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+
+# WhatsApp (Cloud API)
+WHATSAPP_TOKEN=EAAx...
+WHATSAPP_PHONE=1234567890
+
+# Discord
+DISCORD_TOKEN=MTIz...
+DISCORD_APP_ID=123456789012345678
+DISCORD_PUBLIC_KEY=abc123...
+```
+
+<Callout type="warn">
+  Never commit `.env.local` to version control. Add it to `.gitignore`.
+</Callout>
+
+---
+
+## Step 3: Create Your Bot
+
+Create `lib/bot.ts`:
+
+```typescript
+import {
+  IgniterBot,
+  telegram,
+  whatsapp,
+  discord,
+  memoryStore,
+  loggingMiddleware,
+  rateLimitMiddleware,
+  analyticsPlugin,
+} from '@igniter-js/bot';
+
+export const bot = IgniterBot
+  .create()
+  // Identity — auto-generates id and name from handle
+  .withHandle('@assistant_bot')
+
+  // Session storage for conversational state
+  .withSessionStore(memoryStore())
+
+  // Structured logging (Pino, Winston, or console)
+  .withLogger({
+    info: (...args) => console.log('[bot]', ...args),
+    error: (...args) => console.error('[bot]', ...args),
+    debug: (...args) => console.debug('[bot]', ...args),
+    warn: (...args) => console.warn('[bot]', ...args),
+  })
+
+  // All platforms at once
+  .addAdapters({
+    telegram: telegram({ token: process.env.TELEGRAM_TOKEN! }),
+    whatsapp: whatsapp({
+      token: process.env.WHATSAPP_TOKEN!,
+      phone: process.env.WHATSAPP_PHONE!,
+    }),
+    discord: discord({
+      token: process.env.DISCORD_TOKEN!,
+      applicationId: process.env.DISCORD_APP_ID!,
+      publicKey: process.env.DISCORD_PUBLIC_KEY!,
+    }),
+  })
+
+  // Middleware — runs for every message
+  .addMiddlewares([
+    loggingMiddleware({
+      logMessages: true,
+      logCommands: true,
+      logMetrics: true,
+      includeUserInfo: true,
+    }),
+    rateLimitMiddleware({
+      maxRequests: 10,
+      windowMs: 60_000, // 1 minute
+      message: '⚠️ Please slow down. Try again in a minute.',
+    }),
+  ])
+
+  // Commands
+  .addCommand('start', {
+    name: 'start',
+    aliases: ['hello', 'hi'],
+    description: 'Start the bot',
+    help: 'Use /start to begin interacting with the bot',
+    async handle(ctx) {
+      await ctx.reply(
+        `👋 Welcome, ${ctx.message.author.name}!\n\n` +
+        `I'm running on **${ctx.provider}**.\n\n` +
+        `Type /help to see what I can do.`,
+      );
+    },
+  })
+  .addCommand('help', {
+    name: 'help',
+    aliases: ['commands', '?'],
+    description: 'Show available commands',
+    help: 'Use /help to see the list of commands',
+    async handle(ctx) {
+      await ctx.reply(
+        `📋 **Available Commands**\n\n` +
+        `/start — Start the bot\n` +
+        `/help — Show this message\n` +
+        `/echo &lt;text&gt; — Repeat your message\n` +
+        `/ping — Check bot responsiveness\n` +
+        `/image — Send a sample image\n` +
+        `/buttons — Show interactive buttons\n` +
+        `/session — Test session persistence`,
+      );
+    },
+  })
+  .addCommand('echo', {
+    name: 'echo',
+    aliases: ['say', 'repeat'],
+    description: 'Echo back your message',
+    help: 'Use /echo &lt;text&gt; to repeat your message',
+    async handle(ctx) {
+      const message = ctx.message.content;
+      const text = message?.type === 'command'
+        ? message.params.join(' ')
+        : 'Nothing to echo!';
+
+      if (!text.trim()) {
+        await ctx.reply('Please provide some text. Example: `/echo Hello World`');
+        return;
+      }
+
+      await ctx.reply(`🔊 ${text}`);
+    },
+  })
+  .addCommand('ping', {
+    name: 'ping',
+    aliases: [],
+    description: 'Check bot latency',
+    help: 'Use /ping to check if the bot is responsive',
+    async handle(ctx) {
+      const start = Date.now();
+      await ctx.reply(`🏓 Pong! \`${Date.now() - start}ms\``);
+    },
+  })
+  .addCommand('image', {
+    name: 'image',
+    aliases: ['pic', 'photo'],
+    description: 'Send a sample image',
+    help: 'Use /image to receive a sample image',
+    async handle(ctx) {
+      await ctx.replyWithImage(
+        'https://placekitten.com/400/300',
+        'Here is a random kitten! 🐱',
+      );
+    },
+  })
+  .addCommand('buttons', {
+    name: 'buttons',
+    aliases: [],
+    description: 'Show interactive buttons',
+    help: 'Use /buttons to see interactive elements',
+    async handle(ctx) {
+      await ctx.replyWithButtons('Choose an option:', [
+        { id: 'btn_1', label: 'Option A', action: 'callback', data: 'selected_a' },
+        { id: 'btn_2', label: 'Option B', action: 'callback', data: 'selected_b' },
+        { id: 'btn_3', label: 'Visit Website', action: 'url', data: { url: 'https://example.com' } },
+      ]);
+    },
+  })
+  .addCommand('session', {
+    name: 'session',
+    aliases: [],
+    description: 'Test session persistence',
+    help: 'Use /session to see your conversation state',
+    async handle(ctx) {
+      const count = (ctx.session.data.visitCount || 0) + 1;
+      await ctx.session.update({ visitCount: count });
+      await ctx.reply(
+        `📊 You've used the /session command **${count}** time(s) in this chat.`,
+      );
+    },
+  })
+
+  // Event handlers
+  .onMessage(async (ctx) => {
+    // Called for every non-command message
+    console.log(`[message] ${ctx.provider} | ${ctx.message.author.name}`);
+  })
+  .onError(async (ctx) => {
+    // Called when an error occurs in any handler
+    console.error(`[error]`, ctx.error);
+    await ctx.reply('⚠️ Something went wrong. Please try again.');
+  })
+  .onStart(async () => {
+    console.log('✅ Bot started successfully!');
+  })
+
+  // Analytics plugin — tracks usage metrics
+  .usePlugin(analyticsPlugin({
+    trackMessages: true,
+    trackCommands: true,
+    trackErrors: true,
+  }))
+
+  // Build it!
+  .build();
+
+// Start adapters (registers webhooks, commands, etc.)
+await bot.start();
+```
+
+✅ **Your bot is now initialized.** The `.start()` call registers webhooks (Telegram), syncs commands (Discord), and runs startup hooks.
+
+---
+
+## Step 4: Create the API Route
+
+Create a route that bridges incoming webhook requests to your bot:
+
+### Next.js App Router
+
+```typescript
+// app/api/bot/[adapter]/[botId]/route.ts
+import { nextRouteHandlerAdapter } from '@igniter-js/bot';
+import { bot } from '@/lib/bot';
+
+export const { GET, POST } = nextRouteHandlerAdapter({
+  assistant_bot: bot,
+});
+```
+
+The adapter expects these dynamic segments:
+- `[adapter]` — `telegram`, `whatsapp`, or `discord`
+- `[botId]` — matches the bot's `id` (derived from handle: `assistant_bot`)
+
+### Test Locally
+
+For local development with Telegram, use a tunneling service:
+
+```bash
+# Install ngrok or localtunnel
+npx localtunnel --port 3000 --subdomain my-bot-dev
+
+# Then set your Telegram webhook URL to:
+# https://my-bot-dev.loca.lt/api/bot/telegram/assistant_bot
+```
+
+---
+
+## Step 5: Verify Everything Works
+
+<Steps>
+  <Step>
+    ### Test on Telegram
+
+    Open your bot on Telegram and type:
+
+    ```
+    /start
+    /help
+    /ping
+    /echo Hello from Igniter!
+    /image
+    /buttons
+    ```
+
+    Each command should respond immediately with the appropriate reply.
+  </Step>
+
+  <Step>
+    ### Test Session Persistence
+
+    Type `/session` multiple times — the counter should increment:
+
+    ```
+    /session  →  "You've used the /session command 1 time(s)"
+    /session  →  "You've used the /session command 2 time(s)"
+    ```
+  </Step>
+
+  <Step>
+    ### Test Rate Limiting
+
+    Send more than 10 messages in one minute — you should see:
+
+    ```
+    ⚠️ Please slow down. Try again in a minute.
+    ```
+  </Step>
+</Steps>
+
+---
+
+## What's Next?
+
+Your bot is running with:
+
+- ✅ **3 platforms** (Telegram, WhatsApp, Discord)
+- ✅ **6 commands** with help text and aliases
+- ✅ **Logging middleware** with structured output
+- ✅ **Rate limiting** with configurable limits
+- ✅ **Session persistence** with in-memory store
+- ✅ **Analytics tracking** for usage metrics
+- ✅ **Error handling** with graceful recovery
+
+<Cards>
+  <Card title="Commands" description="Master aliases, subcommands, Zod validation, and command groups." href="/docs/bots/commands" />
+  <Card title="Adapters" description="Deep dive into each platform's capabilities, config, and best practices." href="/docs/bots/adapters" />
+  <Card title="Middlewares" description="Learn auth, rate-limiting, logging patterns, and custom middleware." href="/docs/bots/middlewares" />
+  <Card title="Sessions" description="Persistent state management with memory, Redis, or custom stores." href="/docs/bots/sessions" />
+</Cards>

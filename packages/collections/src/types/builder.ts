@@ -105,4 +105,6 @@ export interface IgniterCollectionsBuilderState<
   globalHooks?: IgniterCollectionModelHooks<any>;
   /** Registered views */
   views?: IgniterCollectionViewDefinition[];
+  /** Context factory for dependency injection */
+  contextFactory?: () => unknown | Promise<unknown>;
 }

@@ -1,0 +1,269 @@
+---
+title: init
+description: Create a new Igniter.js project or install into an existing one. Starters, add-ons, inline option notation, and CLI flags — the complete reference.
+---
+
+## `igniter init`
+
+The `init` command is the entry point for every Igniter.js project. It handles project creation, starter selection, add-on configuration, dependency installation, Docker setup, and Git initialization — all in a single command.
+
+```bash
+igniter init [project-name] [options]
+```
+
+---
+
+## Modes
+
+The CLI supports two modes of operation:
+
+| Mode | Trigger | Behavior |
+|------|---------|----------|
+| **new-project** (default) | `igniter init my-app` | Creates a new directory with a selected starter, then applies add-ons |
+| **install** | `igniter init . --mode install` | Adds Igniter.js to an existing project without overwriting files |
+
+<Callout type="info">
+  In **install** mode, the CLI auto-detects your framework by checking for `next.config.js`/`next.config.ts` (Next.js) or `@tanstack/react-start` in your `package.json` (TanStack Start). If neither is found, it defaults to `generic`.
+</Callout>
+
+---
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `[project-name]` | `string` | — | Name of the project directory (positional argument) |
+| `--mode` | `"install" \| "new-project"` | `new-project` | Whether to create a new project or install into existing |
+| `--pm, --package-manager` | `"npm" \| "yarn" \| "pnpm" \| "bun"` | auto-detected | Package manager override |
+| `--template` | `string` | interactive prompt | Starter template to use |
+| `--add-ons` | `string` | — | Comma-separated list of add-ons with optional inline options |
+| `--database` | `"none" \| "postgresql" \| "mysql" \| "sqlite"` | — | Database provider (shorthand for database add-on) |
+| `--no-git` | flag | `false` | Skip Git initialization |
+| `--no-install` | flag | `false` | Skip automatic dependency installation |
+| `--no-docker` | flag | `false` | Skip Docker Compose setup |
+
+### Available Starters (--template)
+
+| Value | Name | Runtime | Type |
+|-------|------|---------|------|
+| `nextjs` | Next.js | Node.js | Full-stack (React + API) |
+| `tanstack-start` | TanStack Start | Node.js | Full-stack (React + API) |
+| `express-rest-api` | Express REST API | Node.js | Backend API |
+| `bun-rest-api` | Bun REST API | Bun | Backend API |
+| `bun-react-app` | Bun React App | Bun | Full-stack (React + API) |
+| `deno-rest-api` | Deno REST API | Deno | Backend API |
+
+### Available Add-ons (--add-ons)
+
+| Value | Name | Description |
+|-------|------|-------------|
+| `database` | Database | Prisma or Drizzle ORM with PostgreSQL, MySQL, or SQLite |
+| `auth` | Authentication | Better Auth with 20+ plugin options |
+| `jobs` | Jobs | Background job processing |
+| `store` | Store | Redis-backed key-value store |
+| `mcp` | MCP Server | Model Context Protocol server for AI agents |
+| `logging` | Logging | Structured logging with Pino |
+| `telemetry` | Telemetry | OpenTelemetry tracing, metrics, and events |
+| `bots` | Bots | Multi-platform bot setup (Telegram, WhatsApp, Discord) |
+| `shadcn-ui` | shadcn/ui | UI component library initialization |
+
+---
+
+## Interactive Mode
+
+When you run `igniter init` without flags, the CLI guides you through an interactive setup:
+
+```bash
+igniter init
+# ? What will your project be called? my-saas
+# ? Which starter would you like to use? Next.js
+# ? What add-ons would you like for your project? database, auth
+# ? Which ORM? Prisma
+# ? Which database provider? PostgreSQL
+# ? Which package manager? pnpm
+# ? Setup Docker services for development? Yes
+# ? Initialize Git repository? Yes
+# ? Install dependencies automatically? Yes
+```
+
+The CLI auto-detects your current package manager from `npm_config_user_agent` and pre-selects it.
+
+---
+
+## Inline Add-on Options
+
+Add-ons with configurable options support an **inline notation** for non-interactive use:
+
+```
+--add-ons "addon-name:option1:option2+value2+value3"
+```
+
+### Database Add-on
+
+| Option | Position | Values |
+|--------|----------|--------|
+| `orm` | 1 | `prisma`, `drizzle` |
+| `provider` | 2 | `postgresql`, `mysql`, `sqlite` |
+
+```bash
+# Prisma + PostgreSQL
+igniter init app --add-ons "database:prisma:postgresql"
+
+# Drizzle + MySQL
+igniter init app --add-ons "database:drizzle:mysql"
+
+# Drizzle + SQLite
+igniter init app --add-ons "database:drizzle:sqlite"
+```
+
+### Auth Add-on
+
+| Option | Position | Values |
+|--------|----------|--------|
+| `provider` | 1 | `better-auth` |
+| `plugins` | 2 | multi-select: `email`, `two-factor`, `username`, `magic-link`, `passkey`, `jwt`, etc. |
+
+```bash
+# Better Auth with email + magic link + passkey
+igniter init app --add-ons "auth:better-auth:email+magic-link+passkey"
+
+# Better Auth with username + two-factor
+igniter init app --add-ons "auth:better-auth:username+two-factor"
+```
+
+### Multiple Add-ons Combined
+
+```bash
+# SaaS starter: database + auth + jobs + logging
+igniter init my-saas \
+  --template nextjs \
+  --add-ons "database:prisma:postgresql,auth:better-auth:email+passkey,jobs,logging"
+```
+
+<Callout type="info">
+  Add-ons without options (like `jobs`, `logging`, `store`) just use their ID. Add-ons with options use the `:` separator for positional values and `+` for multi-value selections.
+</Callout>
+
+---
+
+## Init Flow (Internal)
+
+When you run `igniter init`, the CLI executes these steps in order:
+
+```
+1. Collect prompts
+   ├── Project name, starter, add-ons
+   ├── Add-on options (ORM, provider, plugins)
+   └── Package manager, Docker, Git preferences
+
+2. Create project structure
+   └── Clone/apply starter template
+
+3. Apply add-ons (in registration order)
+   ├── Dependencies → package.json
+   ├── Docker services → docker-compose.yml
+   ├── Environment variables → .env
+   └── Templates → source files
+
+4. Install dependencies (optional)
+   └── npm/pnpm/yarn/bun install
+
+5. Docker setup (optional)
+   ├── Stop conflicting containers
+   ├── Free occupied ports
+   └── docker-compose up -d
+
+6. Git initialization (optional)
+   ├── git init
+   ├── git add .
+   └── git commit -m "Initial commit from Igniter.js CLI"
+
+7. Post-install hooks (add-ons)
+   └── Run add-on postInstall scripts (requires deps installed)
+```
+
+---
+
+## Examples
+
+### Create a Full-Stack SaaS Project
+
+```bash
+igniter init my-saas \
+  --template nextjs \
+  --add-ons "database:prisma:postgresql,auth:better-auth:email+magic-link+passkey,jobs,logging,telemetry" \
+  --pm pnpm
+```
+
+### Create a Minimal Backend API
+
+```bash
+igniter init my-api \
+  --template express-rest-api \
+  --add-ons logging \
+  --no-docker \
+  --no-git
+```
+
+### Install into an Existing Next.js Project
+
+```bash
+cd my-existing-nextjs-app
+igniter init . --mode install --add-ons "database:prisma:postgresql"
+```
+
+### Create a Bun Project
+
+```bash
+igniter init my-bun-api \
+  --template bun-rest-api \
+  --add-ons "database:drizzle:sqlite,logging"
+```
+
+### Create a Deno Project
+
+```bash
+igniter init my-deno-api \
+  --template deno-rest-api \
+  --add-ons logging,telemetry
+```
+
+---
+
+## Package Manager Detection
+
+The CLI detects your package manager from the `npm_config_user_agent` environment variable:
+
+| User Agent Prefix | Detected PM | Executor |
+|-------------------|-------------|----------|
+| `yarn/` | `yarn` | `yarn dlx` |
+| `pnpm/` | `pnpm` | `pnpx` |
+| `bun/` | `bun` | `bunx` |
+| (anything else) | `npm` | `npx` |
+
+If `--pm` is passed explicitly, it overrides auto-detection.
+
+---
+
+## Framework Detection (Install Mode)
+
+In `--mode install`, the CLI auto-detects your framework:
+
+| Detection Rule | Framework |
+|---------------|-----------|
+| `next.config.js` or `next.config.ts` exists | `nextjs` |
+| `@tanstack/react-start` in `package.json` dependencies | `tanstack-start` |
+| Neither | `generic` |
+
+This determines which templates and add-on adapters are used.
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="generate" description="Scaffold features, controllers, procedures, and generate docs/schema/callers." href="/docs/cli/commands/generate" />
+  <Card title="dev" description="Watch mode with automatic schema and OpenAPI regeneration." href="/docs/cli/commands/dev" />
+  <Card title="Starters" description="Compare all 6 starters in detail — frameworks, env vars, and templates." href="/docs/cli/starters" />
+  <Card title="Add-ons" description="Every add-on documented — options, templates, dependencies, and env vars." href="/docs/cli/add-ons" />
+</Cards>

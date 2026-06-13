@@ -1,0 +1,198 @@
+---
+title: Installation
+description: Install and configure @igniter-js/collections for your runtime. Choose the right adapter and set up your first collection in minutes.
+---
+
+## Installation
+
+`@igniter-js/collections` works on **Node.js 18+** and **Bun 1.0+**. It requires `zod` (or any StandardSchemaV1-compatible validator) as a peer dependency.
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/collections zod
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/collections zod
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/collections zod
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/collections zod
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  **Zod is the recommended schema library.** Collections uses the [StandardSchemaV1](https://github.com/standard-schema/standard-schema) interface, so any compatible validator (Valibot, ArkType) works, but Zod has first-class testing and the best inference story.
+</Callout>
+
+---
+
+## Choosing an Adapter
+
+The adapter determines where your files are stored. Collections ships with five adapters, each optimized for a specific use case:
+
+| Adapter | Import Path | Best For |
+|---------|-------------|----------|
+| **NodeFsAdapter** | `@igniter-js/collections/adapters` | Node.js server-side apps, local development |
+| **BunFsAdapter** | `@igniter-js/collections/adapters` | Bun-native apps (uses `Bun.file`, `Bun.write`) |
+| **BunRedisAdapter** | `@igniter-js/collections/adapters` | Distributed systems, multi-process apps |
+| **BunS3Adapter** | `@igniter-js/collections/adapters` | Production deployments, object storage |
+| **MockAdapter** | `@igniter-js/collections/adapters` | Testing and CI environments |
+
+### Quick Adapter Setup
+
+<Tabs items={['Node.js', 'Bun FS', 'Redis', 'S3', 'Mock']}>
+  <Tab value="Node.js">
+    ```typescript
+    import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+
+    const adapter = new NodeFsAdapter();
+    ```
+  </Tab>
+  <Tab value="Bun FS">
+    ```typescript
+    import { BunFsAdapter } from '@igniter-js/collections/adapters';
+
+    const adapter = new BunFsAdapter();
+    ```
+  </Tab>
+  <Tab value="Redis">
+    ```typescript
+    import { BunRedisAdapter } from '@igniter-js/collections/adapters';
+
+    const adapter = new BunRedisAdapter({
+      url: process.env.REDIS_URL,
+      // Optional: key prefix for namespacing
+      prefix: 'collections:',
+    });
+    ```
+  </Tab>
+  <Tab value="S3">
+    ```typescript
+    import { BunS3Adapter } from '@igniter-js/collections/adapters';
+
+    const adapter = new BunS3Adapter({
+      bucket: 'my-content-bucket',
+      region: 'us-east-1',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+      },
+    });
+    ```
+  </Tab>
+  <Tab value="Mock">
+    ```typescript
+    import { IgniterCollectionMockAdapter } from '@igniter-js/collections/adapters';
+
+    const adapter = new IgniterCollectionMockAdapter();
+    // All data stored in memory — perfect for tests
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Runtime Requirements
+
+### Node.js
+
+```json title="package.json"
+{
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+```
+
+The `NodeFsAdapter` uses `node:fs/promises`, `node:path`, and `fast-glob`. No native addons required.
+
+### Bun
+
+```json title="package.json"
+{
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
+```
+
+The `BunFsAdapter` uses `Bun.file`, `Bun.write`, and `Bun.Glob` for maximum performance. **No Node.js APIs** — pure Bun runtime.
+
+<Callout type="warn">
+  **Bun adapter exclusivity:** `BunFsAdapter`, `BunRedisAdapter`, and `BunS3Adapter` rely on Bun-native APIs and will not work in Node.js. Use `NodeFsAdapter` for Node.js environments.
+</Callout>
+
+---
+
+## TypeScript Configuration
+
+Collections requires TypeScript 5.6+ for full type inference. Ensure your `tsconfig.json` includes:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "strict": true,
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "target": "ES2022"
+  }
+}
+```
+
+The `"bundler"` module resolution is required for the `@igniter-js/collections/adapters` sub-path imports to resolve correctly.
+
+---
+
+## Verifying Installation
+
+Create a minimal script to verify everything works:
+
+```typescript title="verify.ts"
+import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { z } from 'zod';
+
+const Test = IgniterCollectionModel.create('test')
+  .withPatterns(['.content/test/{id}.mdx'])
+  .withSchema(z.object({ message: z.string() }))
+  .build();
+
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .withBasePath(process.cwd())
+  .addCollection(Test)
+  .build();
+
+const result = await docs.test.create({
+  data: { message: 'Installation verified!' }
+});
+
+console.log('✅ Collections is working:', result.id);
+```
+
+Run it:
+
+```bash
+npx tsx verify.ts
+# ✅ Collections is working: a1b2c3d4-...
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Defining Collections" description="Learn schema definition, file patterns, sub-collections, and templates." href="/docs/collections/defining-collections" />
+  <Card title="CRUD Operations" description="Master create, read, update, delete, and count with type safety." href="/docs/collections/crud-operations" />
+  <Card title="Adapters" description="Deep dive into each adapter and how to build your own." href="/docs/collections/adapters" />
+</Cards>

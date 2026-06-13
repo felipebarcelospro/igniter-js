@@ -1,0 +1,352 @@
+---
+title: Troubleshooting
+description: Diagnose and fix common issues with @igniter-js/bot. Error codes, debugging techniques, webhook problems, and platform-specific troubleshooting.
+---
+
+## Troubleshooting
+
+Common issues and solutions when building bots with `@igniter-js/bot`.
+
+---
+
+## Build Errors
+
+### "At least one adapter is required"
+
+**Symptom:** `.build()` throws: `At least one adapter is required.`
+
+**Cause:** No adapters were added before calling `.build()`.
+
+**Fix:**
+```typescript
+// Before
+const bot = IgniterBot.create().build(); // ❌
+
+// After
+const bot = IgniterBot.create()
+  .addAdapter('telegram', telegram({ token: '...' }))
+  .build(); // ✅
+```
+
+---
+
+### "Bot handle is required"
+
+**Symptom:** `.build()` throws: `Bot handle is required.`
+
+**Cause:** Neither a global handle (`withHandle()`) nor a per-adapter handle was configured.
+
+**Fix:**
+```typescript
+// Option 1: Global handle
+IgniterBot.create().withHandle('@mybot')
+
+// Option 2: Per-adapter handles
+IgniterBot.create().addAdapter('telegram', telegram({
+  token: '...',
+  handle: '@mybot',
+}))
+```
+
+---
+
+## Runtime Errors
+
+### PROVIDER_NOT_FOUND
+
+**Symptom:** `BotError: Provider 'xxx' not found`
+
+**Cause:** An incoming request targets an adapter that wasn't registered, or the route's dynamic segment doesn't match.
+
+**Fix:**
+1. Check that the adapter key in your route matches the key used in `addAdapter()`:
+   ```typescript
+   // bot setup
+   .addAdapter('telegram', tg)
+
+   // route — must match
+   app.all('/api/bot/telegram', ...) // 'telegram' must match
+   ```
+2. If using `nextRouteHandlerAdapter`, ensure the `[adapter]` segment matches:
+   ```
+   /api/bot/telegram/assistant_bot → adapter = 'telegram'
+   ```
+
+---
+
+### CLIENT_NOT_PROVIDED
+
+**Symptom:** `BotError: Telegram/WhatsApp/Discord client not provided`
+
+**Cause:** The adapter's internal HTTP client initialization failed. This usually happens when configuration values are empty or invalid.
+
+**Fix:**
+1. Check that environment variables are set and accessible at runtime
+2. Verify adapter configuration values are not empty strings:
+   ```typescript
+   // Debug: log config (never log tokens in production!)
+   const tg = telegram({ token: process.env.TELEGRAM_TOKEN! });
+   console.log('Token exists:', !!process.env.TELEGRAM_TOKEN);
+   ```
+
+---
+
+### CONTENT_TYPE_NOT_SUPPORTED
+
+**Symptom:** `BotError: Poll content not supported by adapter 'whatsapp'`
+
+**Cause:** Attempting to send a content type that the adapter's capabilities don't include.
+
+**Fix:**
+1. Check the [adapter capability table](/docs/bots/adapters#adapter-capability-comparison)
+2. Use conditional logic:
+   ```typescript
+   async handle(ctx) {
+     if (ctx.provider === 'whatsapp') {
+       await ctx.reply('Polls are not available on WhatsApp. Reply with your choice: A, B, or C.');
+     } else {
+       await ctx.bot.send({
+         provider: ctx.provider,
+         channel: ctx.channel.id,
+         content: { type: 'poll', question: '...', options: ['A', 'B', 'C'] },
+       });
+     }
+   }
+   ```
+
+---
+
+### INVALID_COMMAND_PARAMETERS
+
+**Symptom:** Command handler receives unexpected arguments or resolves with an error.
+
+**Cause:** The `args` Zod schema failed validation against user input.
+
+**Fix:**
+1. Check the Zod schema is correct:
+   ```typescript
+   args: z.object({
+     query: z.string(), // Remember: strings without .optional() are required
+   })
+   ```
+2. Test your schema manually:
+   ```typescript
+   import { z } from 'zod';
+   const schema = z.object({ query: z.string().min(2) });
+   schema.parse({ query: 'hi' }); // ✅ passes
+   schema.parse({}); // ❌ throws ZodError
+   ```
+3. Provide clear error messages in `help`:
+   ```typescript
+   help: 'Use /search &lt;query&gt; [category: books|movies|music]',
+   ```
+
+---
+
+## Webhook Issues
+
+### Telegram: Webhook Not Receiving Updates
+
+**Symptoms:** Bot is running but doesn't respond to messages.
+
+**Checklist:**
+1. **Verify webhook URL is publicly accessible:**
+   ```bash
+   curl https://your-domain.com/api/bot/telegram/assistant_bot
+   ```
+2. **Check webhook status via Telegram API:**
+   ```bash
+   curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"
+   ```
+   Look for `"ok": true` and `"url": "https://..."` and no `last_error_message`.
+3. **Ensure HTTPS certificate is valid** — Telegram requires HTTPS.
+4. **Delete and re-set the webhook manually:**
+   ```bash
+   curl "https://api.telegram.org/bot<TOKEN>/deleteWebhook"
+   curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://..."
+   ```
+5. **Check the `dropPendingUpdates` setting** — if `false`, old updates may be processed first, making it seem like new messages don't work.
+
+---
+
+### Discord: 401 Unauthorized on Interactions
+
+**Symptoms:** Discord returns "401 Unauthorized" for bot interactions.
+
+**Checklist:**
+1. **Verify `publicKey` is correct** — copy it from the Discord Developer Portal (General Information).
+2. **Enable `X-Signature-Ed25519` header forwarding** in your proxy/reverse proxy configuration.
+3. **Check that the raw request body is being forwarded** — some middleware (body parsers) may modify the body before the adapter reads it.
+
+---
+
+### WhatsApp: Messages Not Being Delivered
+
+**Symptoms:** Bot receives webhooks but outbound messages don't arrive.
+
+**Checklist:**
+1. **Verify the phone number ID format:**
+   ```typescript
+   whatsapp({ phone: '1234567890' }) // Just the number, no + or spaces
+   ```
+2. **Check the message template status** — some message types require pre-approved templates.
+3. **Verify the recipient has opted in** — WhatsApp requires users to message first.
+4. **Check rate limits** — WhatsApp Cloud API has strict rate limits (80 messages/second for business accounts).
+
+---
+
+## Session Issues
+
+### Sessions Not Persisting
+
+**Symptoms:** `ctx.session.data` is always empty or reset to defaults.
+
+**Checklist:**
+1. **Use `ctx.session.update()` not direct mutation:**
+   ```typescript
+   // ✅ Works
+   await ctx.session.update({ step: 'checkout' });
+
+   // ❌ May not persist
+   ctx.session.data.step = 'checkout';
+   ```
+2. **Check that the session store is configured:**
+   ```typescript
+   // Must be set before .build()
+   builder.withSessionStore(memoryStore())
+   ```
+3. **If using memory store in production:** It doesn't persist across restarts. Use Redis or Prisma.
+
+---
+
+### Redis Sessions Timeout
+
+**Symptoms:** Sessions expire too quickly in Redis.
+
+**Checklist:**
+1. **Check the TTL in your Redis store implementation** — the default is 24 hours if `expiresAt` is not set.
+2. **Verify Redis connection is stable** — check for connection drops or timeouts.
+3. **Check for Redis maxmemory eviction** — if `maxmemory-policy` is set to `allkeys-lru`, sessions may be evicted.
+
+---
+
+## Rate Limiting Issues
+
+### Users Being Rate Limited Too Quickly
+
+**Symptoms:** Legitimate users hit rate limits within seconds.
+
+**Checklist:**
+1. **Check your `windowMs` and `maxRequests`:**
+   ```typescript
+   rateLimitMiddleware({
+     maxRequests: 10,
+     windowMs: 60_000, // 1 minute — not 1 second!
+   })
+   ```
+2. **Use the correct key generator:**
+   ```typescript
+   // Per-user (default)
+   keyGenerator: (ctx) => `${ctx.provider}:${ctx.message.author.id}`
+
+   // Per-user-per-command (more granular)
+   keyGenerator: (ctx) => {
+     const cmd = ctx.message.content?.type === 'command' ? ctx.message.content.command : 'message';
+     return `${ctx.provider}:${ctx.message.author.id}:${cmd}`;
+   }
+   ```
+3. **Memory store is per-process** — if you have multiple instances, each has its own counter. Use Redis for shared state.
+
+---
+
+## TypeScript Issues
+
+### "Property does not exist on type BotContext"
+
+**Symptom:** TypeScript error when accessing enriched context properties.
+
+**Fix:** Middleware enrichment flows through the builder's generic types:
+
+```typescript
+// The builder tracks middleware return types
+const bot = IgniterBot.create()
+  .addMiddleware(async (ctx, next) => {
+    await next();
+    return { user: { id: '123' } }; // returned
+  })
+  .addCommand('profile', {
+    async handle(ctx) {
+      ctx.user.id; // ✅ TypeScript knows about this
+    },
+  })
+  .build();
+```
+
+If you're accessing enriched context in a separate file, cast as needed:
+
+```typescript
+type EnrichedContext = BotContext & { user: { id: string } };
+
+async handle(ctx) {
+  const enriched = ctx as EnrichedContext;
+  console.log(enriched.user.id);
+}
+```
+
+---
+
+## Debugging Tips
+
+### Enable Verbose Logging
+
+```typescript
+import { loggingPresets } from '@igniter-js/bot';
+
+builder.addMiddleware(loggingPresets.debug());
+```
+
+This logs every message, command, error, and metric with full detail.
+
+### Check Adapter Status
+
+```typescript
+console.log('Registered adapters:', Object.keys(bot.getAdapters()));
+console.log('Telegram adapter:', bot.getAdapter('telegram'));
+```
+
+### Test Webhook Manually
+
+```bash
+# Simulate a Telegram message (use actual token and chat ID)
+curl -X POST "https://your-domain.com/api/bot/telegram/assistant_bot" \
+  -H "Content-Type: application/json" \
+  -d '{"update_id": 1, "message": {"message_id": 1, "from": {"id": 123, "is_bot": false, "first_name": "Test"}, "chat": {"id": 123, "type": "private"}, "date": 1234567890, "text": "/start"}}'
+```
+
+### Inspect Session Data
+
+```typescript
+builder.addMiddleware(async (ctx, next) => {
+  console.log('Session data:', ctx.session.data);
+  await next();
+});
+```
+
+---
+
+## Still Stuck?
+
+1. **Check the [API Reference](/docs/bots/api-reference)** for exact method signatures
+2. **Review [Best Practices](/docs/bots/best-practices)** for common patterns
+3. **Read the adapter source code** at `packages/bot/src/adapters/` — it's well-documented
+4. **Enable debug logging** with `loggingPresets.debug()` for full request tracing
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Real-World Examples" description="Complete production bot scenarios with code." href="/docs/bots/real-world" />
+  <Card title="API Reference" description="Complete API documentation for all methods and types." href="/docs/bots/api-reference" />
+  <Card title="Best Practices" description="Production patterns, security, and architecture guides." href="/docs/bots/best-practices" />
+</Cards>

@@ -1,0 +1,226 @@
+---
+title: Prompts
+description: Create dynamic system prompts with {{variable}} interpolation, appended prompts for modular instruction composition, and context-aware templates.
+---
+
+## Prompts
+
+`IgniterAgentPrompt` provides a lightweight template system for building agent system instructions with `{{variable}}` interpolation and support for composing prompts from multiple sources.
+
+---
+
+## Basic Templates
+
+Use `{{variable}}` syntax to inject context data into your prompts:
+
+```typescript
+import { IgniterAgentPrompt, IgniterAgent } from '@igniter-js/agents'
+
+const prompt = IgniterAgentPrompt
+  .create('You are {{role}}. Your tone is {{tone}}. User: {{user.name}}')
+
+const agent = IgniterAgent
+  .create('bot')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(prompt)
+  .build()
+
+const result = await agent.generate({
+  chatId: 'chat_001',
+  userId: 'user_001',
+  context: {
+    role: 'customer support',
+    tone: 'friendly and professional',
+    user: { name: 'Alice' },
+  },
+  message: { role: 'user', content: 'Hello!' },
+})
+
+// System prompt resolves to:
+// "You are customer support. Your tone is friendly and professional. User: Alice"
+```
+
+### How Interpolation Works
+
+- Variables are resolved by dot-path from the `context` object
+- `{{role}}` → `context.role`
+- `{{user.name}}` → `context.user.name`
+- `{{company.address.city}}` → `context.company.address.city`
+- Missing variables resolve to an empty string `""`
+- `null` values resolve to an empty string
+
+<Callout type="warn">
+  Variable names are case-sensitive and must match the context keys exactly. `{{role}}` and `{{Role}}` are different variables.
+</Callout>
+
+---
+
+## Dynamic Prompt Examples
+
+### Multi-Language Support
+
+```typescript
+const multilingualPrompt = IgniterAgentPrompt.create(`
+  You are a {{role}}.
+  Always respond in {{language}}.
+  {{#preferences.formal}}
+  Use formal language.
+  {{/preferences.formal}}
+`)
+
+const result = await agent.generate({
+  chatId: 'chat_001',
+  userId: 'user_001',
+  context: {
+    role: 'travel agent',
+    language: 'Portuguese',
+  },
+  message: { role: 'user', content: 'Find me a flight' },
+})
+```
+
+### Role-Based Prompts
+
+```typescript
+const roleAwarePrompt = IgniterAgentPrompt.create(`
+  You are {{agent.name}}, a {{agent.role}}.
+  
+  Capabilities:
+  {{agent.capabilities}}
+  
+  Current user: {{user.email}}
+  Role: {{user.role}}
+`)
+
+// Different contexts produce different prompts
+await agent.generate({
+  chatId: 'chat_001',
+  userId: 'user_admin',
+  context: {
+    agent: {
+      name: 'Atlas',
+      role: 'system administrator',
+      capabilities: '- Manage users\n- Configure database\n- Monitor logs',
+    },
+    user: { email: 'admin@corp.com', role: 'admin' },
+  },
+  message: { role: 'user', content: 'Check system status' },
+})
+```
+
+---
+
+## Appended Prompts
+
+Compose prompts from multiple sources using `.addAppended()`:
+
+```typescript
+import { IgniterAgentPrompt } from '@igniter-js/agents'
+
+// Base prompt
+const basePrompt = IgniterAgentPrompt.create(`
+  You are {{agent.role}}.
+`)
+
+// Add capability-specific prompts
+const prompt = basePrompt
+  .addAppended('tools', `
+    Available tools: {{agent.tools}}
+  `)
+  .addAppended('rules', `
+    Rules:
+    - Never share sensitive data
+    - Always ask for confirmation before destructive actions
+  `)
+  .addAppended('context', `
+    Current date: {{system.date}}
+    Environment: {{system.env}}
+  `)
+
+// Full prompt when built:
+// You are developer assistant.
+//
+// Available tools: github, docker, database
+//
+// Rules:
+// - Never share sensitive data
+// - Always ask for confirmation before destructive actions
+//
+// Current date: 2026-06-02
+// Environment: production
+```
+
+### Managing Appended Prompts
+
+```typescript
+// Remove an appended prompt
+const withoutContext = prompt.removeAppended('context')
+
+// Check what's appended
+console.log(prompt.getAppended()) // { tools: ..., rules: ..., context: ... }
+
+// Get the base template
+console.log(prompt.getTemplate()) // "You are {{agent.role}}."
+```
+
+<Callout type="info">
+  Appended prompts are joined with `\n\n` and interpolated with the same context. Each appended prompt can be a string or another `IgniterAgentPrompt` instance.
+</Callout>
+
+---
+
+## Pattern: Composable Prompt Library
+
+Build a library of reusable prompt snippets:
+
+```typescript
+// lib/prompts/base.ts
+export const basePrompt = (role: string) =>
+  IgniterAgentPrompt.create(`You are ${role}.`)
+
+// lib/prompts/security.ts
+export const securityRules = IgniterAgentPrompt.create(`
+  Security Rules:
+  - Never expose API keys or secrets
+  - Validate all user input
+  - Log all data access
+`)
+
+// lib/prompts/tool-usage.ts
+export const toolUsageGuide = IgniterAgentPrompt.create(`
+  Tool Usage:
+  - Call tools when you need external data
+  - Handle tool errors gracefully
+  - Cite tool sources in responses
+`)
+```
+
+```typescript
+// Compose for a specific agent
+import { basePrompt, securityRules, toolUsageGuide } from './lib/prompts'
+
+const prompt = basePrompt('security analyst')
+  .addAppended('security', securityRules)
+  .addAppended('tools', toolUsageGuide)
+
+const agent = IgniterAgent
+  .create('security-bot')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(prompt)
+  .build()
+```
+
+---
+
+## API Reference
+
+### `IgniterAgentPromptBuilder`
+
+| Method | Description |
+|--------|-------------|
+| `.create(template)` | Creates a new prompt builder with a template string |
+| `.build(context)` | Renders the template with the provided context data |
+| `.addAppended(key, prompt)` | Appends another prompt (string or IgniterAgentPrompt) |
+| `.removeAppended(key)` | Removes an appended prompt by key |
+| `.getAppended()` | Returns the appended prompts object |
+| `.getTemplate()` | Returns the raw template string |

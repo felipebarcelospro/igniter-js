@@ -1,77 +1,102 @@
 ---
 title: Getting Started
-description: Set up the BullMQ adapter and create your first background job in minutes.
+description: Set up @igniter-js/jobs and create your first background job in minutes — with BullMQ, Bun SQLite, or in-memory adapters.
 ---
 
-This guide will walk you through setting up the BullMQ adapter and creating your first background job. By the end, you'll have a working job system integrated with your Igniter.js application.
+This guide walks you through installing `@igniter-js/jobs`, defining a queue with jobs and cron tasks, creating the jobs runtime, dispatching your first job, and starting a worker. By the end, you'll have a fully working background job system.
 
 ## Prerequisites
 
-Before you begin, ensure you have:
+- **Node.js 18+** or **Bun 1.0+**
+- **Redis** (if using the BullMQ adapter) — running locally or via a cloud provider
+- Basic familiarity with TypeScript and Zod schemas
 
-- **Redis** installed and running (required for BullMQ)
-- **Node.js** 18.0+ installed
-- An existing Igniter.js application (see [Installation](/docs/installation) guides)
-- Basic understanding of TypeScript and Zod schemas
-
-<Callout type="info" title="Redis Required">
-  BullMQ requires Redis to operate. Make sure Redis is running before proceeding. You can install Redis locally or use a cloud service like Upstash, Redis Cloud, or AWS ElastiCache.
+<Callout type="info" title="Quick Start Without Redis">
+  Use the **in-memory adapter** for development and testing — no external dependencies required.
+  Import it from `@igniter-js/jobs/adapters/mock`.
 </Callout>
 
 ---
 
 ## Step 1: Install Dependencies
 
-Install the jobs package and the BullMQ adapter:
-
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
   <Tab value="npm">
     ```bash
-    npm install @igniter-js/jobs @igniter-js/core @igniter-js/adapter-bullmq bullmq ioredis
+    npm install @igniter-js/jobs zod
     ```
   </Tab>
   <Tab value="pnpm">
     ```bash
-    pnpm add @igniter-js/jobs @igniter-js/core @igniter-js/adapter-bullmq bullmq ioredis
+    pnpm add @igniter-js/jobs zod
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn add @igniter-js/jobs @igniter-js/core @igniter-js/adapter-bullmq bullmq ioredis
+    yarn add @igniter-js/jobs zod
     ```
   </Tab>
   <Tab value="bun">
     ```bash
-    bun add @igniter-js/jobs @igniter-js/core @igniter-js/adapter-bullmq bullmq ioredis
+    bun add @igniter-js/jobs zod
+    ```
+  </Tab>
+</Tabs>
+
+For the BullMQ adapter (production), also install:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/adapter-bullmq bullmq ioredis
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/adapter-bullmq bullmq ioredis
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/adapter-bullmq bullmq ioredis
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/adapter-bullmq bullmq ioredis
     ```
   </Tab>
 </Tabs>
 
 ---
 
-## Step 2: Set Up Redis Connection
+## Step 2: Set Up Redis (BullMQ)
 
-Create a Redis client for the BullMQ adapter:
+If you're using the BullMQ adapter, create a Redis client:
 
 ```typescript
 // src/lib/redis.ts
-import { Redis } from 'ioredis';
+import { Redis } from 'ioredis'
 
 export const redis = new Redis(
   process.env.REDIS_URL || 'redis://localhost:6379'
-);
+)
 ```
+
+<Callout type="info" title="Skip This For Development">
+  For local development, use the in-memory adapter: `IgniterJobsMemoryAdapter.create()` — no Redis needed.
+</Callout>
 
 ---
 
-## Step 3: Define Your Queues
+## Step 3: Define Your First Queue
 
-Define your queues and jobs using `IgniterQueue`:
+Create a queue with jobs and an optional cron task using `IgniterQueue`:
 
 ```typescript
 // src/jobs/email.queue.ts
-import { IgniterQueue } from '@igniter-js/jobs';
-import { z } from 'zod';
+import { IgniterQueue } from '@igniter-js/jobs'
+import { z } from 'zod'
 
 export const emailQueue = IgniterQueue.create('email')
   .addJob('sendWelcome', {
@@ -80,25 +105,44 @@ export const emailQueue = IgniterQueue.create('email')
       name: z.string(),
     }),
     handler: async ({ input, context }) => {
-      console.log(`Sending welcome email to ${input.email}`);
-      await context.emailService.sendWelcome(input.email, input.name);
+      console.log(`Sending welcome email to ${input.email}`)
+      await context.emailService.sendWelcome(input.email, input.name)
     },
   })
-  .build();
+  .addJob('sendPasswordReset', {
+    input: z.object({
+      email: z.string().email(),
+      token: z.string(),
+    }),
+    handler: async ({ input, context }) => {
+      await context.emailService.sendPasswordReset(input.email, input.token)
+    },
+  })
+  .addCron('dailyCleanup', {
+    cron: '0 2 * * *', // Every day at 2 AM
+    handler: async ({ context }) => {
+      await context.emailService.cleanupOldRecords()
+    },
+  })
+  .build()
 ```
+
+<Callout type="info" title="Type Inference">
+  TypeScript infers the input type from your Zod schema. Inside the handler, `input.email` and `input.name` are fully typed — no manual type annotations needed.
+</Callout>
 
 ---
 
-## Step 4: Initialize IgniterJobs
+## Step 4: Create the Jobs Runtime
 
-Create the main jobs instance and register your queues:
+Use `IgniterJobs.create()` with the fluent builder to configure and build your jobs runtime:
 
 ```typescript
 // src/services/jobs.ts
-import { IgniterJobs } from '@igniter-js/jobs';
-import { IgniterJobsBullMQAdapter } from '@igniter-js/adapter-bullmq';
-import { redis } from '@/lib/redis';
-import { emailQueue } from '@/jobs/email.queue';
+import { IgniterJobs } from '@igniter-js/jobs'
+import { IgniterJobsBullMQAdapter } from '@igniter-js/jobs/adapters/node'
+import { redis } from '@/lib/redis'
+import { emailQueue } from '@/jobs/email.queue'
 
 export const jobs = IgniterJobs.create()
   .withAdapter(IgniterJobsBullMQAdapter.create({ redis }))
@@ -108,81 +152,171 @@ export const jobs = IgniterJobs.create()
     emailService: new EmailService(),
   }))
   .addQueue(emailQueue)
-  .build();
+  .build()
+```
+
+<Callout type="warn" title="Required Builder Methods">
+  All four methods — `withAdapter()`, `withService()`, `withEnvironment()`, and `withContext()` — are **required** before calling `build()`. The builder will throw a descriptive error if any are missing.
+</Callout>
+
+### Using the In-Memory Adapter
+
+For development and testing, swap the adapter:
+
+```typescript
+import { IgniterJobsMemoryAdapter } from '@igniter-js/jobs/adapters/mock'
+
+const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsMemoryAdapter.create())
+  .withService('my-api')
+  .withEnvironment('development')
+  .withContext(async () => ({ emailService: new EmailService() }))
+  .addQueue(emailQueue)
+  .build()
+```
+
+### Adding Multiple Queues
+
+Register all your queues during the build phase:
+
+```typescript
+import { emailQueue } from '@/jobs/email.queue'
+import { analyticsQueue } from '@/jobs/analytics.queue'
+import { paymentQueue } from '@/jobs/payment.queue'
+
+const jobs = IgniterJobs.create()
+  .withAdapter(...)
+  .withService('my-api')
+  .withEnvironment('production')
+  .withContext(async () => ({ db, emailService, paymentService }))
+  .addQueue(emailQueue)
+  .addQueue(analyticsQueue)
+  .addQueue(paymentQueue)
+  .build()
 ```
 
 ---
 
-## Step 5: Dispatch Your First Job
+## Step 5: Dispatch a Job
 
-Now you can dispatch jobs from anywhere in your application:
+Dispatch jobs from anywhere in your application — API routes, server actions, event handlers:
 
 ```typescript
-// src/features/users/actions/signup.ts
-import { jobs } from '@/services/jobs';
+// src/features/users/actions/register.ts
+import { jobs } from '@/services/jobs'
 
-export async function signup(userData: any) {
-  // ... create user ...
+export async function registerUser(userData: { email: string; name: string }) {
+  // Create the user in your database...
+  const user = await db.user.create({ data: userData })
 
   // Dispatch the welcome email job
-  await jobs.email.sendWelcome.dispatch({
+  const jobId = await jobs.email.sendWelcome.dispatch({
     input: {
-      email: userData.email,
-      name: userData.name,
+      email: user.email,
+      name: user.name,
     },
-  });
+  })
+
+  console.log(`Welcome email job dispatched: ${jobId}`)
+  return user
 }
 ```
 
-### Scheduling Jobs for Later
+### Dispatch with Options
 
-Schedule a job to run after a delay:
+Control priority, delay, attempts, and more:
 
 ```typescript
 await jobs.email.sendWelcome.dispatch({
-  input: { email: 'user@example.com', name: 'John' },
-  delay: 5000, // Run after 5 seconds
-});
-```
-
-### Scheduled Jobs (Cron)
-
-Schedule a job to run periodically:
-
-```typescript
-// In your queue definition
-.addCron('dailyCleanup', {
-  cron: '0 0 * * *',
-  handler: async ({ context }) => {
-    await context.db.cleanup();
+  input: { email: 'user@example.com', name: 'Alice' },
+  priority: 10,           // Higher priority jobs processed first
+  delay: 5000,            // Delay execution by 5 seconds
+  attempts: 5,            // Retry up to 5 times on failure
+  jobId: 'custom-job-id', // Custom job identifier
+  metadata: {             // Custom metadata for search/filtering
+    source: 'signup-flow',
   },
 })
 ```
 
 ---
 
+## Step 6: Start a Worker
+
+Workers process jobs from queues. Create one with the fluent worker builder:
+
+```typescript
+// src/workers/start.ts
+import { jobs } from '@/services/jobs'
+
+const emailWorker = await jobs.worker.create()
+  .addQueue('email')
+  .withConcurrency(5)
+  .onActive(({ job }) => {
+    console.log(`Processing ${job.name} (${job.id})`)
+  })
+  .onSuccess(({ job, result }) => {
+    console.log(`Completed ${job.name}:`, result)
+  })
+  .onFailure(({ job, error }) => {
+    console.error(`Failed ${job.name}:`, error.message)
+  })
+  .start()
+
+console.log('Worker started:', emailWorker.id)
+```
+
+### Auto-Start Workers
+
+Alternatively, configure workers to start automatically when `build()` is called:
+
+```typescript
+const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsBullMQAdapter.create({ redis }))
+  .withService('my-api')
+  .withEnvironment('production')
+  .withContext(async () => ({ emailService }))
+  .addQueue(emailQueue)
+  .withAutoStartWorker({
+    queues: ['email'],
+    concurrency: 5,
+  })
+  .build()
+// Worker starts automatically — no manual start() call needed
+```
+
+---
+
 ## Step 7: Verify It Works
 
-1. **Start your application**:
-   ```bash
-   npm run dev
-   ```
-
-2. **Trigger the signup endpoint** (or wherever you're invoking the job):
-   ```bash
-   curl -X POST http://localhost:3000/api/v1/users/signup \
-     -H "Content-Type: application/json" \
-     -d '{"email": "test@example.com", "name": "Test User"}'
-   ```
-
-3. **Check the logs**: You should see:
-   - `Creating queue: default`
-   - `Registered X jobs from Y routers`
-   - `Auto-starting workers for queues: default`
-   - `Processing job: emails.sendWelcome`
+<Steps>
+  <Step>
+    **Start your application**
+    ```bash
+    npm run dev
+    ```
+  </Step>
+  <Step>
+    **Dispatch a test job** — trigger the endpoint or call it programmatically:
+    ```typescript
+    const jobId = await jobs.email.sendWelcome.dispatch({
+      input: { email: 'test@example.com', name: 'Test User' },
+    })
+    console.log('Dispatched:', jobId)
+    ```
+  </Step>
+  <Step>
+    **Check the logs** — with a worker running, you should see:
+    ```
+    Processing sendWelcome (job_abc123)
+    Sending welcome email to test@example.com
+    Completed sendWelcome: { sent: true }
+    ```
+  </Step>
+</Steps>
 
 <Callout type="success" title="Success!">
-  If you see the job processing logs, your jobs system is working correctly! 🎉
+  Your jobs system is working. You can now dispatch background jobs from anywhere in your application.
 </Callout>
 
 ---
@@ -191,39 +325,46 @@ Schedule a job to run periodically:
 
 Now that you have a working job setup, explore:
 
-- **[Job Definitions](/docs/jobs/job-definitions)**: Learn how to structure jobs with advanced options
-- **[Routers](/docs/jobs/routers)**: Organize jobs into multiple namespaces
-- **[Scheduling](/docs/jobs/scheduling)**: Schedule jobs with advanced timing options
-- **[Workers](/docs/jobs/workers)**: Configure and manage job workers
+- **[Job Definitions](/docs/jobs/job-definitions)** — Configure hooks, retry options, and output schemas
+- **[Scheduling](/docs/jobs/scheduling)** — Dispatch with delays, at specific times, or on cron schedules
+- **[Workers](/docs/jobs/workers)** — Fine-tune concurrency, rate limiters, and lifecycle handlers
+- **[Scopes](/docs/jobs/scopes)** — Multi-tenant isolation with scoped instances
+- **[Advanced Features](/docs/jobs/advanced-features)** — Job streams, events, and telemetry
 
 ---
 
 ## Troubleshooting
 
-### Redis Connection Errors
-
-**Problem**: `ECONNREFUSED` or connection errors
-
-**Solution**: 
-- Ensure Redis is running: `redis-cli ping` should return `PONG`
-- Check your `REDIS_URL` environment variable
-- Verify firewall/network settings if using a remote Redis instance
-
 ### Jobs Not Processing
 
-**Problem**: Jobs are scheduled but not executing
+**Problem**: Jobs are dispatched but never execute.
 
-**Solution**:
-- Verify `autoStartWorker` is enabled in adapter configuration
-- Check that workers are starting: Look for `Starting worker for queue: default` in logs
-- Ensure your handler function doesn't throw unhandled errors
+**Solutions**:
+- Verify a worker is running for the queue — check logs for `"Worker started"`
+- Ensure the worker's `addQueue('email')` matches the queue name exactly
+- Check Redis connectivity with `redis-cli ping`
 
-### Type Errors
+### Redis Connection Errors
 
-**Problem**: TypeScript errors when invoking jobs
+**Problem**: `ECONNREFUSED` when using the BullMQ adapter.
 
-**Solution**:
-- Ensure `REGISTERED_JOBS` is correctly typed
-- Check that your job definitions match the router structure
-- Verify you're using `task` (not `id`) when invoking jobs through namespaces
+**Solutions**:
+- Ensure Redis is running: `redis-cli ping` should return `PONG`
+- Verify your `REDIS_URL` environment variable
+- For local development, switch to the in-memory adapter
 
+### TypeScript Errors
+
+**Problem**: TypeScript can't find adapter imports.
+
+**Solutions**:
+- BullMQ adapter: use `@igniter-js/jobs/adapters/node`
+- Memory adapter: use `@igniter-js/jobs/adapters/mock`
+- Bun SQLite adapter: use `@igniter-js/jobs/adapters/bun`
+
+### Builder Validation Errors
+
+**Problem**: `build()` throws `JOBS_ADAPTER_REQUIRED` or similar.
+
+**Solution**: Ensure all four required methods are called:
+`withAdapter()` → `withService()` → `withEnvironment()` → `withContext()` → `build()`

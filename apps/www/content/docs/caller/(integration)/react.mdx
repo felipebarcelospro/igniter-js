@@ -1,0 +1,466 @@
+---
+title: React Integration
+description: Using Caller in your React and Next.js applications. Covers queries, mutations, cache invalidation, global config, and SSR patterns.
+---
+
+Caller provides a dedicated React client via the `@igniter-js/caller/client` subpath. This keeps the core library server-safe and avoids bundling React where it isn't needed.
+
+---
+
+## Setup
+
+Wrap your application with `IgniterCallerProvider`:
+
+```tsx title="app/providers.tsx"
+import { IgniterCallerProvider } from '@igniter-js/caller/client';
+import { api } from '@/lib/api';
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <IgniterCallerProvider callers={{ main: api }}>
+      {children}
+    </IgniterCallerProvider>
+  );
+}
+```
+
+### Multiple API Clients
+
+You can provide multiple named callers:
+
+```tsx
+<IgniterCallerProvider callers={{
+  main: publicApi,
+  admin: adminApi,
+  payments: stripeApi,
+}}>
+  {children}
+</IgniterCallerProvider>
+```
+
+---
+
+## Creating a Typed Hook
+
+Create a reusable typed hook for your app:
+
+```typescript title="hooks/use-caller.ts"
+import { useIgniterCaller } from '@igniter-js/caller/client';
+import type { api, adminApi } from '@/lib/api';
+
+// Define your callers
+type Callers = {
+  main: typeof api;
+  admin: typeof adminApi;
+};
+
+// Export a typed hook
+export const useCaller = useIgniterCaller<Callers>();
+```
+
+Now every consumer gets full type safety:
+
+```tsx
+function Dashboard() {
+  const main = useCaller('main');
+  //    ^? IgniterCallerClient<typeof api> — fully typed
+
+  const { data } = main.get('/users').useQuery();
+  //     ^? T | null — inferred from schema (if configured)
+}
+```
+
+---
+
+## Queries (GET/HEAD)
+
+Use `.useQuery()` for data fetching:
+
+```tsx
+function UserProfile({ id }: { id: string }) {
+  const main = useCaller('main');
+
+  const {
+    data,          // T | null — the fetched data
+    error,         // IgniterError | null
+    isLoading,     // true on initial load
+    isFetching,    // true while fetching (including refetches)
+    isSuccess,     // true when data was fetched successfully
+    isError,       // true when the request failed
+    status,        // 'loading' | 'success' | 'error'
+    refetch,       // () => void — re-execute the query
+    invalidate,    // (data?: T) => void — clear cache and refetch
+    execute,       // (variables?) => Promise<ApiResponse<T>> — manual execution
+  } = main.get('/users/:id')
+    .params({ id })
+    .useQuery({
+      staleTime: 30_000,         // Cache for 30 seconds
+      enabled: Boolean(id),       // Don't run if id is empty
+      refetchOnMount: true,       // Refetch when component mounts (default: true)
+      refetchOnWindowFocus: true, // Refetch on window focus (default: true)
+      refetchInterval: 60_000,    // Auto-refetch every 60s
+      refetchIntervalInBackground: false, // Don't refetch when tab is hidden
+      initialData: null,          // Initial data before first fetch
+    });
+```
+
+### Query Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `staleTime` | number | — | Cache duration in ms |
+| `enabled` | boolean | `true` | Set to `false` to disable automatic fetching |
+| `params` | object | — | URL path/query params |
+| `headers` | object | — | Per-request headers |
+| `query` | object | — | Query string parameters |
+| `refetchOnMount` | boolean | `true` | Refetch when component mounts |
+| `refetchOnWindowFocus` | boolean | `true` | Refetch on window focus |
+| `refetchInterval` | number | — | Auto-refetch interval in ms |
+| `refetchIntervalInBackground` | boolean | `true` | Refetch when tab is hidden |
+| `initialData` | T | — | Initial data before fetch |
+| `onSuccess` | `(data: T) => void` | — | Called on successful fetch |
+| `onError` | `(error: IgniterError) => void` | — | Called on failed fetch |
+| `onSettled` | `(data, error) => void` | — | Called after every fetch |
+| `onRequest` | `(response) => void` | — | Called before processing |
+| `onLoading` | `(loading: boolean) => void` | — | Called when loading state changes |
+
+### Query Lifecycle Callbacks
+
+```tsx
+const { data } = main.get('/me').useQuery({
+  staleTime: 60_000,
+
+  onSuccess(data) {
+    console.log('Profile loaded:', data?.name);
+  },
+
+  onError(error) {
+    if (error.code === 'IGNITER_CALLER_HTTP_ERROR') {
+      console.error('Failed to load profile');
+    }
+  },
+
+  onSettled(data, error) {
+    // Always called — success or failure
+    analytics.track('profile_loaded', { success: !error });
+  },
+
+  onLoading(loading) {
+    // Called when loading state changes
+    setGlobalLoading(loading);
+  },
+});
+```
+
+---
+
+## Mutations (POST/PUT/PATCH/DELETE)
+
+Mutations don't use `.useMutate()` directly on the builder — instead, use `.execute()` in event handlers, or use the `.useMutate()` helper provided by the client:
+
+```tsx
+function CreateUserForm() {
+  const main = useCaller('main');
+
+  const { mutate, isLoading, error, data } = main.post('/users')
+    .useMutate({
+      onSuccess(data) {
+        // Invalidate queries that depend on this data
+        main.invalidate('/users');
+        toast.success('User created!');
+      },
+      onError(error) {
+        toast.error(`Failed: ${error.message}`);
+      },
+    });
+
+  const handleSubmit = (values: CreateUserInput) => {
+    mutate({ body: values });
+  };
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); /* ... */ }}>
+      {isLoading && <Spinner />}
+      <button type="submit" disabled={isLoading}>Create User</button>
+    </form>
+  );
+}
+```
+
+### useMutate Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `onSuccess` | `(data: T) => void` | Called on successful mutation |
+| `onError` | `(error: IgniterError) => void` | Called on failed mutation |
+| `onSettled` | `(data, error) => void` | Called after every mutation |
+| `onRequest` | `(response) => void` | Called before processing |
+| `onLoading` | `(loading: boolean) => void` | Called when loading state changes |
+
+### Manual Mutation Pattern
+
+For cases where you need more control:
+
+```tsx
+function DeleteUserButton({ userId }: { userId: string }) {
+  const main = useCaller('main');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    const { error } = await main.delete('/users/:id')
+      .params({ id: userId })
+      .execute();
+
+    if (error) {
+      toast.error('Failed to delete user');
+    } else {
+      main.invalidate('/users');
+      toast.success('User deleted');
+    }
+    setIsDeleting(false);
+  };
+
+  return (
+    <button onClick={handleDelete} disabled={isDeleting}>
+      {isDeleting ? 'Deleting...' : 'Delete'}
+    </button>
+  );
+}
+```
+
+---
+
+## Cache Invalidation
+
+The client exposes an `.invalidate()` method for clearing cached queries:
+
+```tsx
+function UpdateUserForm({ user }: { user: User }) {
+  const main = useCaller('main');
+
+  const handleSubmit = async (data: UpdateUserInput) => {
+    const { error } = await main.patch('/users/:id')
+      .params({ id: user.id })
+      .body(data)
+      .execute();
+
+    if (!error) {
+      // Invalidate specific queries
+      main.invalidate(`/users/${user.id}`);    // Single user
+      main.invalidate('/users');                // User list
+
+      // Invalidate with data pre-population
+      main.invalidate('/users', [{ ...user, ...data }]);
+
+      // Invalidate multiple paths
+      main.invalidate(['/users', '/dashboard']);
+    }
+  };
+}
+```
+
+---
+
+## Per-Caller Configuration
+
+Dynamically configure headers, cookies, and query parameters per caller:
+
+```tsx
+function AuthenticatedApp() {
+  const main = useCaller('main');
+
+  useEffect(() => {
+    // Set auth token on mount
+    main.config.set('headers', {
+      'Authorization': `Bearer ${token}`,
+    });
+
+    // Set default query params
+    main.config.set('query', { version: '2' });
+
+    return () => main.config.reset();
+  }, [token]);
+}
+```
+
+### Config API
+
+| Method | Description |
+|--------|-------------|
+| `config.set(key, value)` | Set a config value (`headers`, `cookies`, `query`) |
+| `config.get(key)` | Get a merged config value |
+| `config.reset()` | Reset all per-caller config |
+
+---
+
+## Global Configuration
+
+Pass global defaults to all callers via the provider:
+
+```tsx
+<IgniterCallerProvider
+  callers={{ main: api, admin: adminApi }}
+  hooks={{
+    headers: { 'X-Client-Version': '2.0' },
+    cookies: { theme: 'dark' },
+    query: { lang: 'en' },
+    onQuerySuccess(data) {
+      console.log('Query succeeded:', data);
+    },
+    onQueryError(error) {
+      console.error('Query failed:', error.message);
+    },
+    onMutationLoading(loading) {
+      setGlobalLoading(loading);
+    },
+  }}
+  onError={(error) => {
+    // Global error handler for all callers
+    if ((error as any).statusCode === 401) {
+      redirectToLogin();
+    }
+  }}
+>
+  {children}
+</IgniterCallerProvider>
+```
+
+### Global Config Merging
+
+Per-caller config **merges with** global config. Per-caller values take precedence:
+
+```
+Global headers:   { 'X-Version': '2.0', 'Accept': 'application/json' }
+Caller headers:   { 'Authorization': 'Bearer ...' }
+─────────────────────────────────────────────────────────
+Merged headers:   { 'X-Version': '2.0', 'Accept': 'application/json', 'Authorization': 'Bearer ...' }
+```
+
+---
+
+## Raw Access
+
+Need to escape the hook abstraction? Access the raw manager directly:
+
+```tsx
+function handleBulkOperation() {
+  const main = useCaller('main');
+
+  // Direct manager access — bypasses hooks
+  const { data } = await main.raw.post('/bulk')
+    .body(massivePayload)
+    .timeout(60_000)
+    .execute();
+}
+```
+
+---
+
+## Server Components (Next.js App Router)
+
+In Server Components, use the standard Caller directly — no provider needed:
+
+```typescript title="app/users/page.tsx"
+import { api } from '@/lib/api-server';
+
+export default async function UsersPage() {
+  const { data: users } = await api.get('/users')
+    .params({ limit: 20 })
+    .stale(60_000)
+    .execute();
+
+  return (
+    <ul>
+      {users?.map(user => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+<Callout type="info" title="Client vs Server">
+  - **Server Components**: Use the standard `api.get().execute()` directly
+  - **Client Components**: Use `useCaller()` with `.useQuery()` and `.useMutate()`
+  - Import from `@igniter-js/caller/client` only in Client Components
+</Callout>
+
+---
+
+## Testing React Components
+
+```tsx
+import { render, screen, waitFor } from '@testing-library/react';
+import { IgniterCallerProvider } from '@igniter-js/caller/client';
+import { IgniterCaller, IgniterCallerMock } from '@igniter-js/caller';
+
+function renderWithCaller(ui: React.ReactElement) {
+  const mock = IgniterCallerMock.create()
+    .mock('/users', {
+      GET: {
+        response: [{ id: '1', name: 'Test User' }],
+        status: 200,
+      },
+    })
+    .build();
+
+  const testApi = IgniterCaller.create()
+    .withBaseUrl('https://test.api')
+    .withMock({ enabled: true, mock })
+    .build();
+
+  return render(
+    <IgniterCallerProvider callers={{ main: testApi }}>
+      {ui}
+    </IgniterCallerProvider>
+  );
+}
+
+it('renders user list', async () => {
+  renderWithCaller(<UserList />);
+  await waitFor(() => {
+    expect(screen.getByText('Test User')).toBeInTheDocument();
+  });
+});
+```
+
+---
+
+## Best Practices
+
+<Callout type="success" title="React Integration Guidelines">
+  - **Create a typed hook** — `useIgniterCaller<Callers>()` for app-wide type safety
+  - **Set stale times** — prevent unnecessary refetches on every render
+  - **Use `enabled: false`** for conditional queries (e.g., waiting for a search term)
+  - **Invalidate related queries** — after mutations, clear affected caches
+  - **Handle errors globally** — use `onError` on the provider for common error handling
+  - **Use Server Components** for data that can be fetched at request time
+</Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Mocking & Testing"
+    description="Test your React components with type-safe mock APIs"
+    href="/docs/caller/testing"
+  />
+  <Card
+    title="Real-World Examples"
+    description="React patterns for authentication, pagination, and optimistic updates"
+    href="/docs/caller/real-world-examples"
+  />
+  <Card
+    title="Schema Validation"
+    description="Add type-safe schemas to your React queries"
+    href="/docs/caller/schemas"
+  />
+  <Card
+    title="API Reference"
+    description="Complete reference for the React client API"
+    href="/docs/caller/api-reference"
+  />
+</Cards>

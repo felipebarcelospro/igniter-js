@@ -1,0 +1,286 @@
+---
+title: Plugins
+description: Extend your bot with modular plugins. Package commands, middlewares, adapters, and lifecycle hooks into reusable, shareable modules.
+---
+
+## Plugins
+
+Plugins are the **modular extension system** for `@igniter-js/bot`. A plugin packages commands, middlewares, adapters, and lifecycle hooks into a single, reusable module that can be shared across bots and projects.
+
+---
+
+## Plugin Contract
+
+```typescript
+interface BotPlugin {
+  name: string                      // Unique plugin name
+  version: string                   // Semver version
+  description?: string              // What the plugin does
+  commands?: Record<string, BotCommand>       // Commands to register
+  middlewares?: Middleware<any, any>[]         // Middlewares to add
+  adapters?: Record<string, IBotAdapter<any>> // Adapters to register
+  hooks?: {
+    onStart?: () => Promise<void> | void
+    onMessage?: (ctx: BotContext) => Promise<void> | void
+    onError?: (ctx: BotContext & { error: BotError }) => Promise<void> | void
+    onStop?: () => Promise<void> | void
+  }
+  config?: Record<string, any>      // Plugin-specific configuration
+}
+```
+
+When a plugin is loaded via `.usePlugin()`, the builder automatically:
+1. Registers all plugin commands
+2. Appends all plugin middlewares to the pipeline
+3. Registers all plugin adapters
+4. Attaches all lifecycle hooks to the bot
+
+---
+
+## Built-in Plugin: Analytics
+
+The `analyticsPlugin` tracks bot usage metrics and provides a `/stats` command.
+
+### Installation
+
+```typescript
+import { analyticsPlugin } from '@igniter-js/bot';
+```
+
+### Basic Usage
+
+```typescript
+const bot = IgniterBot.create()
+  .usePlugin(analyticsPlugin())
+  .build();
+```
+
+This enables basic console-logged analytics and the `/stats` command:
+
+```
+/stats
+
+📊 Bot Statistics
+
+Messages: 1,247
+Commands: 342
+Errors: 3
+Unique Users: 89
+```
+
+### With External Analytics Service
+
+```typescript
+import { analyticsPlugin } from '@igniter-js/bot';
+import { PostHog } from 'posthog-node';
+
+const posthog = new PostHog(process.env.POSTHOG_API_KEY!);
+
+const bot = IgniterBot.create()
+  .usePlugin(analyticsPlugin({
+    trackEvent: async (event, properties) => {
+      await posthog.capture({
+        distinctId: properties.userId || 'anonymous',
+        event,
+        properties,
+      });
+    },
+    trackMessages: true,
+    trackCommands: true,
+    trackErrors: true,
+    includeUserInfo: true,
+  }))
+  .build();
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `trackEvent` | `(event, props) => void \| Promise<void>` | `console.log` | Where to send events |
+| `trackMessages` | `boolean` | `true` | Track message events |
+| `trackCommands` | `boolean` | `true` | Track command events |
+| `trackErrors` | `boolean` | `true` | Track error events |
+| `includeUserInfo` | `boolean` | `true` | Include user ID and username |
+
+### Events Tracked
+
+| Event | Properties | When |
+|-------|-----------|------|
+| `bot.started` | `timestamp` | Bot initialization |
+| `bot.message` | `provider, contentType, isGroup, isMentioned, userId, username` | Every incoming message |
+| `bot.command` | Same as message + `command, params` | Every command execution |
+| `bot.error` | `provider, errorMessage, errorCode, userId` | Every error caught |
+| `bot.request` | `provider, event, duration, isGroup` | After every request (timing) |
+
+---
+
+## Creating Custom Plugins
+
+### Example: Welcome Plugin
+
+A plugin that sends a welcome message to new users:
+
+```typescript
+// plugins/welcome.ts
+import type { BotPlugin } from '@igniter-js/bot';
+
+export function welcomePlugin(options?: {
+  message?: string;
+  trackNewUsers?: boolean;
+}): BotPlugin {
+  const { message = 'Welcome to the bot! 👋', trackNewUsers = true } = options || {};
+
+  const seenUsers = new Set<string>();
+
+  return {
+    name: 'welcome',
+    version: '1.0.0',
+    description: 'Sends a welcome message to new users',
+
+    middlewares: [
+      async (ctx, next) => {
+        const userId = ctx.message.author.id;
+
+        if (!seenUsers.has(userId)) {
+          seenUsers.add(userId);
+          await ctx.reply(message);
+
+          if (trackNewUsers) {
+            console.log(`New user: ${ctx.message.author.username} on ${ctx.provider}`);
+          }
+        }
+
+        await next();
+      },
+    ],
+  };
+}
+```
+
+Use it:
+
+```typescript
+import { welcomePlugin } from './plugins/welcome';
+
+const bot = IgniterBot.create()
+  .usePlugin(welcomePlugin({
+    message: '🎉 Welcome to our community! Type /help to get started.',
+    trackNewUsers: true,
+  }))
+  .build();
+```
+
+### Example: Scheduled Tasks Plugin
+
+A plugin that runs periodic tasks:
+
+```typescript
+// plugins/scheduler.ts
+import type { BotPlugin } from '@igniter-js/bot';
+
+export function schedulerPlugin(options: {
+  intervalMs: number;
+  task: () => Promise<void>;
+}): BotPlugin {
+  return {
+    name: 'scheduler',
+    version: '1.0.0',
+    description: 'Runs periodic background tasks',
+
+    hooks: {
+      onStart: () => {
+        setInterval(async () => {
+          try {
+            await options.task();
+          } catch (error) {
+            console.error('[scheduler] Task failed:', error);
+          }
+        }, options.intervalMs);
+      },
+    },
+  };
+}
+```
+
+### Example: Multi-Tenant Plugin
+
+A plugin that adds tenant-aware middleware and a tenant command:
+
+```typescript
+// plugins/multi-tenant.ts
+import type { BotPlugin, BotContext } from '@igniter-js/bot';
+
+export function multiTenantPlugin(options: {
+  getTenant: (userId: string) => Promise<string>;
+}): BotPlugin {
+  return {
+    name: 'multi-tenant',
+    version: '1.0.0',
+    description: 'Adds multi-tenant context to bot interactions',
+
+    middlewares: [
+      async (ctx, next) => {
+        const tenantId = await options.getTenant(ctx.message.author.id);
+        await next();
+        return { tenantId }; // Available in downstream handlers
+      },
+    ],
+
+    commands: {
+      tenant: {
+        name: 'tenant',
+        aliases: ['workspace'],
+        description: 'Show current tenant',
+        help: 'Use /tenant to see your current workspace',
+        async handle(ctx) {
+          const tenantId = (ctx as any).tenantId || 'unknown';
+          await ctx.reply(`🏢 Current workspace: **${tenantId}**`);
+        },
+      },
+    },
+  };
+}
+```
+
+---
+
+## Plugin Factories
+
+Plugins can be factories that accept configuration:
+
+```typescript
+type BotPluginFactory<TConfig = any> = (config?: TConfig) => BotPlugin;
+
+// Usage
+const plugin = myPlugin({ apiKey: '...', environment: 'production' });
+builder.usePlugin(plugin);
+```
+
+---
+
+## Composing Multiple Plugins
+
+Plugins are loaded in order and their middlewares are appended to the pipeline:
+
+```typescript
+const bot = IgniterBot.create()
+  .usePlugin(welcomePlugin({ message: 'Hello!' }))    // 1st
+  .usePlugin(analyticsPlugin({ trackMessages: true })) // 2nd
+  .usePlugin(multiTenantPlugin({ getTenant }))         // 3rd
+  .build();
+
+// Middleware order: welcome → analytics → multi-tenant → your custom middlewares → commands
+```
+
+<Callout type="info">
+  Plugin middlewares are appended **before** `.build()` returns, but **after** any middlewares already added via `.addMiddleware()`. If order matters, add your middlewares after loading plugins.
+</Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Sessions" description="Persist conversational state with memory, Redis, or custom stores." href="/docs/bots/sessions" />
+  <Card title="Framework Integration" description="Wire up your bot with Next.js, Express, and Fastify." href="/docs/bots/framework-integration" />
+  <Card title="Real-World Examples" description="Complete production bot scenarios with code." href="/docs/bots/real-world" />
+</Cards>

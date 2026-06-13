@@ -1,66 +1,359 @@
 ---
 title: Quick Start
-description: Make your first request with Caller.
+description: Make your first type-safe HTTP request with Caller in under 2 minutes. Step-by-step guide covering installation, client creation, and common patterns.
 ---
 
-Setting up a Caller instance and making your first request is straightforward. This guide will walk you through the basic setup.
+This guide walks you through creating your first Caller client and making requests. By the end, you'll have a working API client with type-safe responses.
 
-## 1. Create your Caller instance
+<Steps>
+  <Step>
+    ### Install Caller
 
-The recommended approach is to create a shared instance for each API you interact with.
+    <Tabs groupId="package-manager" items={['npm', 'pnpm', 'yarn', 'bun']}>
+      <Tab value="npm">
+        ```bash
+        npm install @igniter-js/caller
+        ```
+      </Tab>
+      <Tab value="pnpm">
+        ```bash
+        pnpm add @igniter-js/caller
+        ```
+      </Tab>
+      <Tab value="yarn">
+        ```bash
+        yarn add @igniter-js/caller
+        ```
+      </Tab>
+      <Tab value="bun">
+        ```bash
+        bun add @igniter-js/caller
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
 
-```ts title="lib/api.ts"
-import { IgniterCaller } from '@igniter-js/caller'
+  <Step>
+    ### Create Your Client
 
-export const api = IgniterCaller.create()
-  .withBaseUrl('https://api.example.com')
-  .withHeaders({ 
-    'Authorization': `Bearer ${process.env.API_TOKEN}` 
+    Create a shared API client instance. This is typically done once at application startup:
+
+    ```typescript title="lib/api.ts"
+    import { IgniterCaller } from '@igniter-js/caller';
+
+    export const api = IgniterCaller.create()
+      .withBaseUrl('https://jsonplaceholder.typicode.com')
+      .withHeaders({
+        'Content-Type': 'application/json',
+      })
+      .build();
+    ```
+
+    <Callout type="success" title="Minimal setup">
+      For the simplest case, you can skip all configuration:
+      ```typescript
+      const api = IgniterCaller.create().build();
+      ```
+      This works anywhere `fetch` is available.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Make Your First GET Request
+
+    ```typescript
+    import { api } from './lib/api';
+
+    async function fetchUsers() {
+      const result = await api.get('/users').execute();
+
+      if (result.error) {
+        console.error('Failed to fetch users:', result.error.message);
+        return [];
+      }
+
+      // result.data is the parsed response body
+      console.log(`Fetched ${result.data.length} users`);
+      return result.data;
+    }
+    ```
+
+    <Callout type="warn" title="Never-throw by default">
+      Caller **never throws** on HTTP error statuses (like 404 or 500). Instead, it returns an `error` object in the result envelope. It only throws on network failures or configuration errors.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Add Query Parameters
+
+    Use `.params()` to add both path parameters and query string parameters:
+
+    ```typescript
+    // Path parameters — :id is replaced
+    const user = await api.get('/users/:id')
+      .params({ id: '1' })
+      .execute();
+    // Requests: GET /users/1
+
+    // Query parameters — added to the URL
+    const filtered = await api.get('/users')
+      .params({ page: 1, limit: 10, status: 'active' })
+      .execute();
+    // Requests: GET /users?page=1&limit=10&status=active
+    ```
+
+    Any params not matching path segments are automatically appended as query string parameters.
+  </Step>
+
+  <Step>
+    ### Send Data with POST
+
+    ```typescript
+    async function createUser(name: string, email: string) {
+      const result = await api.post('/users')
+        .body({ name, email })
+        .execute();
+
+      if (result.error) {
+        // Handle validation errors, conflicts, etc.
+        if (result.status === 409) {
+          throw new Error('User already exists');
+        }
+        throw result.error;
+      }
+
+      // result.status is 201 for successful creation
+      console.log('Created user:', result.data.id);
+      return result.data;
+    }
+    ```
+  </Step>
+
+  <Step>
+    ### Update and Delete Resources
+
+    ```typescript
+    // PUT — replace entire resource (idempotent)
+    const updated = await api.put('/users/:id')
+      .params({ id: '1' })
+      .body({ name: 'Jane Doe', email: 'jane@example.com' })
+      .execute();
+
+    // PATCH — partial update
+    const patched = await api.patch('/users/:id')
+      .params({ id: '1' })
+      .body({ name: 'Jane Updated' })
+      .execute();
+
+    // DELETE — remove resource
+    const deleted = await api.delete('/users/:id')
+      .params({ id: '1' })
+      .execute();
+
+    if (!deleted.error) {
+      console.log('User deleted successfully');
+    }
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Adding Resilience
+
+Production applications need to handle transient failures. Caller provides retries, timeouts, and fallbacks out of the box:
+
+```typescript
+// Retry up to 3 times with exponential backoff
+const result = await api.get('/external-service')
+  .retry(3, {
+    backoff: 'exponential',
+    baseDelay: 500,
+    retryOnStatus: [502, 503, 504],
   })
-  .build()
+  .timeout(10000)        // 10 second timeout
+  .fallback(() => [])    // Return empty array if all retries fail
+  .execute();
 ```
 
-## 2. Execute a request
-
-You can now use this instance to perform requests. Caller uses the `data`/`error` pattern for predictable result handling.
-
-```ts
-const result = await api.get('/users').execute()
-
-if (result.error) {
-  console.error('Failed to fetch users:', result.error.code)
-  return
-}
-
-console.log('Users:', result.data)
-```
-
-## 3. Adding Parameters & Body
-
-Caller provides a fluent API to build complex requests easily.
-
-```ts
-// GET with query params
-const users = await api.get('/users')
-  .params({ page: 1, limit: 10 })
-  .execute()
-
-// POST with JSON body
-const newUser = await api.post('/users')
-  .body({ name: 'Lia GPT', role: 'Maintainer' })
-  .execute()
-```
-
-<Callout type="warn" title="Result Handling">
-  Caller **never throws** on HTTP error statuses (like 404 or 500). Instead, it returns an `error` object in the result envelope. It only throws on network failures or configuration errors.
+<Callout type="info" title="Retry defaults">
+  By default, Caller retries on status codes `408`, `429`, `500`, `502`, `503`, and `504`. You can customize this with `retryOnStatus`.
 </Callout>
+
+---
+
+## Adding Type Safety
+
+The real power of Caller comes from schema-based type inference. Define your API contract once and get automatic TypeScript types everywhere:
+
+```typescript
+import { IgniterCaller, IgniterCallerSchema } from '@igniter-js/caller';
+import { z } from 'zod';
+
+// 1. Define your API schemas
+const UserSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email(),
+});
+
+const schemas = IgniterCallerSchema.create()
+  .path('/users/:id', (path) =>
+    path.get({
+      responses: {
+        200: UserSchema,
+        404: z.object({ message: z.string() }),
+      },
+    })
+  )
+  .path('/users', (path) =>
+    path.get({
+      responses: { 200: z.array(UserSchema) },
+    })
+    .post({
+      request: z.object({
+        name: z.string(),
+        email: z.string().email(),
+      }),
+      responses: {
+        201: UserSchema,
+        400: z.object({ message: z.string() }),
+      },
+    })
+  )
+  .build();
+
+// 2. Create your typed client
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withSchemas(schemas, { mode: 'strict' })
+  .build();
+
+// 3. Full type inference — no manual interfaces needed!
+const user = await api.get('/users/:id')
+  .params({ id: '1' })       // ✅ params are typed
+  .execute();
+// user.data is typed as { id: number; name: string; email: string } | null
+
+const created = await api.post('/users')
+  .body({ name: 'John', email: 'john@example.com' })  // ✅ body is typed
+  .execute();
+// created.data is typed as { id: number; name: string; email: string } | null
+```
+
+---
+
+## Error Handling Patterns
+
+Caller returns a `{ data, error }` envelope. Here are the most common patterns:
+
+```typescript
+// Pattern 1: Guard clause
+const { data, error } = await api.get('/users').execute();
+if (error) {
+  console.error(`${error.code}: ${error.message}`);
+  return;
+}
+// TypeScript knows data is defined here
+console.log(data.length);
+
+// Pattern 2: Inline with fallback
+const { data } = await api.get('/users')
+  .fallback(() => [])
+  .execute();
+// data is always defined
+console.log(data.length);
+
+// Pattern 3: Match on status
+const result = await api.post('/users').body(payload).execute();
+switch (result.status) {
+  case 201: return result.data;
+  case 400: throw new ValidationError(result.error);
+  case 409: throw new ConflictError(result.error);
+  default: throw result.error;
+}
+```
+
+---
+
+## Using with React
+
+Caller provides first-class React hooks through the `/client` subpath:
+
+```tsx title="app/providers.tsx"
+import { IgniterCallerProvider } from '@igniter-js/caller/client';
+import { api } from '@/lib/api';
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <IgniterCallerProvider callers={{ main: api }}>
+      {children}
+    </IgniterCallerProvider>
+  );
+}
+```
+
+```tsx title="components/user-profile.tsx"
+import { useIgniterCaller } from '@igniter-js/caller/client';
+
+const useCaller = useIgniterCaller<{ main: typeof api }>();
+
+function UserProfile({ id }: { id: string }) {
+  const main = useCaller('main');
+
+  const { data, isLoading, error, refetch } = main
+    .get('/users/:id')
+    .params({ id })
+    .useQuery({ staleTime: 30_000 });
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return (
+    <div>
+      <h1>{data?.name}</h1>
+      <p>{data?.email}</p>
+      <button onClick={() => refetch()}>Refresh</button>
+    </div>
+  );
+}
+```
 
 ---
 
 ## Next Steps
 
-Now that you've made your first request, explore more advanced topics:
+Now that you've made your first requests, explore the full capabilities:
 
-- [**Schema Validation**](/docs/caller/schemas) - Add end-to-end type safety to your requests.
-- [**Interceptors**](/docs/caller/interceptors) - Transform requests and responses.
-- [**Caching**](/docs/caller/caching) - Improve performance with built-in caching.
+<Cards>
+  <Card
+    title="Installation"
+    description="Complete setup guide with all configuration options and troubleshooting"
+    href="/docs/caller/installation"
+  />
+  <Card
+    title="Request Builder"
+    description="Master the fluent API — headers, timeouts, retries, caching, and more"
+    href="/docs/caller/builder"
+  />
+  <Card
+    title="Schema Validation"
+    description="Define type-safe API contracts with Zod and automatic inference"
+    href="/docs/caller/schemas"
+  />
+  <Card
+    title="React Integration"
+    description="React hooks for data fetching with automatic caching and invalidation"
+    href="/docs/caller/react"
+  />
+  <Card
+    title="Real-World Examples"
+    description="Production-ready patterns for common API workflows"
+    href="/docs/caller/real-world-examples"
+  />
+  <Card
+    title="Comparison"
+    description="See how Caller compares to Axios, ky, and ofetch"
+    href="/docs/caller/comparison"
+  />
+</Cards>

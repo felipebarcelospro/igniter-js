@@ -1,0 +1,386 @@
+---
+title: Building Agents
+description: Complete guide to the IgniterAgent builder API. Model selection, prompt configuration, context schemas, lifecycle hooks, memory, and MCP integration.
+---
+
+## Building Agents
+
+The `IgniterAgent` builder is the primary entry point for creating AI agents. It provides a type-safe, immutable fluent API that infers the full agent configuration at compile time.
+
+---
+
+## The Builder Pattern
+
+Every agent starts with `IgniterAgent.create()` and ends with `.build()`. In between, you chain configuration methods — each returning a **new builder instance** with updated type parameters.
+
+```typescript
+import { IgniterAgent } from '@igniter-js/agents'
+import { openai } from '@ai-sdk/openai'
+
+const agent = IgniterAgent
+  .create('my-agent')          // IgniterAgentBuilder<'my-agent', ...>
+  .withModel(openai('gpt-4'))  // ...<..., LanguageModel, ...>
+  .build()                     // IgniterAgentBuiltAgent
+```
+
+<Callout type="info">
+  The builder is **immutable** — every method call creates a new builder instance. This means you can fork configurations from a base builder safely.
+</Callout>
+
+---
+
+## Agent Configuration
+
+### Model Selection
+
+Choose any model provider compatible with the Vercel AI SDK:
+
+```typescript
+import { openai } from '@ai-sdk/openai'
+import { anthropic } from '@ai-sdk/anthropic'
+import { google } from '@ai-sdk/google'
+
+// OpenAI
+const gptAgent = IgniterAgent.create('gpt').withModel(openai('gpt-4o')).build()
+
+// Anthropic
+const claudeAgent = IgniterAgent.create('claude').withModel(anthropic('claude-3-5-sonnet-latest')).build()
+
+// Google
+const geminiAgent = IgniterAgent.create('gemini').withModel(google('gemini-2.0-flash')).build()
+```
+
+### Prompt Instructions
+
+Set the agent's system prompt using `IgniterAgentPrompt`:
+
+```typescript
+import { IgniterAgent, IgniterAgentPrompt } from '@igniter-js/agents'
+
+const agent = IgniterAgent
+  .create('assistant')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(
+    IgniterAgentPrompt.create(`
+      You are a helpful coding assistant.
+      - Always provide type-safe TypeScript
+      - Include JSDoc comments
+      - Follow the project's ESLint rules
+    `)
+  )
+  .build()
+```
+
+Prompts support `{{variable}}` interpolation using context data passed at generation time. See [Prompts](/docs/agents/prompts) for full details.
+
+### Context Schema
+
+Define a Zod schema for type-safe context passed to each `.generate()` call:
+
+```typescript
+import { z } from 'zod'
+
+const contextSchema = z.object({
+  userId: z.string(),
+  userRole: z.enum(['admin', 'user', 'guest']),
+  preferences: z.object({
+    language: z.string().default('en'),
+    theme: z.string().optional(),
+  }),
+})
+
+const agent = IgniterAgent
+  .create('typed-bot')
+  .withModel(openai('gpt-4o'))
+  .withContextSchema(contextSchema)
+  .build()
+
+// Context is fully type-checked
+await agent.generate({
+  chatId: 'chat_001',
+  userId: 'user_001',
+  context: {
+    userRole: 'admin',          // ✅ Must be 'admin' | 'user' | 'guest'
+    preferences: { language: 'pt' },
+  },
+  message: { role: 'user', content: 'Hello!' },
+})
+```
+
+<Callout type="warn">
+  If you set a context schema, the `context` field in `.generate()` and `.stream()` becomes required and type-checked against the schema. Context data is also available in prompt templates via `{{variable}}`.
+</Callout>
+
+---
+
+## Adding Tools
+
+### Custom Toolsets
+
+Tools defined with `IgniterAgentTool` and grouped with `IgniterAgentToolset`:
+
+```typescript
+import { IgniterAgentTool, IgniterAgentToolset } from '@igniter-js/agents'
+import { z } from 'zod'
+
+const searchTool = IgniterAgentTool
+  .create('search_docs')
+  .withDescription('Search the documentation')
+  .withInput(z.object({ query: z.string() }))
+  .withExecute(async ({ query }) => {
+    // Search your docs here
+    return { results: ['Result 1', 'Result 2'] }
+  })
+  .build()
+
+const docsToolset = IgniterAgentToolset
+  .create('docs')
+  .addTool(searchTool)
+  .build()
+
+const agent = IgniterAgent
+  .create('docs-bot')
+  .withModel(openai('gpt-4o'))
+  .addToolset(docsToolset)
+  .build()
+```
+
+See [Tools & Toolsets](/docs/agents/tools-toolsets) for the complete tool builder API.
+
+### MCP Clients
+
+Connect to external MCP servers for tools discovered at runtime:
+
+```typescript
+import { IgniterAgentMCPClient } from '@igniter-js/agents'
+
+const filesystemMCP = IgniterAgentMCPClient
+  .create('filesystem')
+  .withType('stdio')
+  .withCommand('npx')
+  .withArgs(['-y', '@modelcontextprotocol/server-filesystem', '/tmp'])
+  .build()
+
+const agent = IgniterAgent
+  .create('mcp-agent')
+  .withModel(openai('gpt-4o'))
+  .addMCP(filesystemMCP)
+  .build()
+```
+
+See [MCP Integration](/docs/agents/mcp-integration) for full transport configuration.
+
+---
+
+## Memory Configuration
+
+Persistent memory enables agents to remember conversations across turns:
+
+```typescript
+import { IgniterAgentInMemoryAdapter } from '@igniter-js/agents'
+
+const adapter = IgniterAgentInMemoryAdapter.create({ namespace: 'app' })
+
+const memoryConfig = {
+  provider: adapter,
+  working: { enabled: true, scope: 'chat' },
+  history: { enabled: true, limit: 100 },
+  chats: { enabled: true },
+}
+
+const agent = IgniterAgent
+  .create('memory-bot')
+  .withModel(openai('gpt-4o'))
+  .withMemory(memoryConfig)
+  .build()
+```
+
+See [Memory System](/docs/agents/memory) for adapter options and custom implementations.
+
+---
+
+## Observability
+
+### Logger
+
+Attach an `IgniterLogger` instance for structured logs:
+
+```typescript
+import { IgniterLogger } from '@igniter-js/common'
+
+const agent = IgniterAgent
+  .create('logged-bot')
+  .withModel(openai('gpt-4o'))
+  .withLogger(myLogger)
+  .build()
+```
+
+### Telemetry
+
+Attach an `IgniterTelemetryManager` for structured observability events:
+
+```typescript
+import { IgniterTelemetry } from '@igniter-js/telemetry'
+
+const telemetry = IgniterTelemetry.create().build()
+
+const agent = IgniterAgent
+  .create('observed-bot')
+  .withModel(openai('gpt-4o'))
+  .withTelemetry(telemetry)
+  .build()
+```
+
+### Lifecycle Hooks
+
+Subscribe to agent and tool events directly on the builder:
+
+```typescript
+const agent = IgniterAgent
+  .create('hooked-bot')
+  .withModel(openai('gpt-4o'))
+  .onAgentStart((name) => console.log(`${name} started`))
+  .onAgentError((name, error) => console.error(`${name} failed:`, error))
+  .onToolCallStart((agentName, tool, input) => console.log(`[${agentName}] → ${tool}`))
+  .onToolCallEnd((agentName, tool, output) => console.log(`[${agentName}] ← ${tool}`))
+  .onToolCallError((agentName, tool, error) => console.error(`[${agentName}] ✕ ${tool}`, error))
+  .onMCPStart((agentName, mcp) => console.log(`${agentName}: connecting MCP ${mcp}`))
+  .onMCPError((agentName, mcp, error) => console.error(`${agentName}: MCP ${mcp} failed`, error))
+  .build()
+```
+
+See [Hooks & Telemetry](/docs/agents/hooks-telemetry) for the complete event model.
+
+---
+
+## Agent Lifecycle
+
+### The Agent Runtime
+
+Once built, the agent exposes these methods:
+
+| Method | Description |
+|--------|-------------|
+| `agent.start()` | Initializes MCP connections. Must be called before `generate()` or `stream()` |
+| `agent.stop()` | Disconnects MCP connections gracefully |
+| `agent.generate(options)` | Generates a single response (non-streaming) |
+| `agent.stream(options)` | Streams a response token-by-token |
+| `agent.getName()` | Returns the agent's configured name |
+| `agent.getConfig()` | Returns the full configuration object |
+| `agent.getToolsets()` | Returns the configured toolsets (including MCP) |
+
+### Generate vs Stream
+
+```typescript
+// Single response
+const result = await agent.generate({
+  chatId: 'chat_001',
+  userId: 'user_001',
+  context: {},
+  message: { role: 'user', content: 'Hello!' },
+})
+
+console.log(result.content)        // Full response text
+console.log(result.toolCalls)      // Tools the agent called
+console.log(result.toolResults)    // Results from tool calls
+console.log(result.finishReason)   // Why generation stopped
+
+// Streaming response
+const stream = await agent.stream({
+  chatId: 'chat_001',
+  userId: 'user_001',
+  context: {},
+  message: { role: 'user', content: 'Tell me a story' },
+})
+
+for await (const chunk of stream.textStream) {
+  process.stdout.write(chunk)
+}
+```
+
+### Generate Options
+
+```typescript
+interface IgniterAgentGenerateOptions {
+  chatId: string              // Unique conversation identifier
+  userId: string              // User identifier for memory scoping
+  context: Record<string, unknown> // Context data (typed if schema set)
+  message: {                  // Single message or...
+    role: 'user' | 'assistant'
+    content: string
+  }
+  messages?: ModelMessage[]   // ...OR multiple messages
+}
+```
+
+---
+
+## Complete Example
+
+A fully-configured agent with tools, memory, hooks, and telemetry:
+
+```typescript
+import {
+  IgniterAgent,
+  IgniterAgentTool,
+  IgniterAgentToolset,
+  IgniterAgentPrompt,
+  IgniterAgentInMemoryAdapter,
+} from '@igniter-js/agents'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+import { IgniterTelemetry } from '@igniter-js/telemetry'
+
+// Tools
+const getTasks = IgniterAgentTool
+  .create('get_tasks')
+  .withDescription('Get tasks for today')
+  .withInput(z.object({ priority: z.enum(['high', 'medium', 'low']).optional() }))
+  .withExecute(async ({ priority }) => {
+    return [
+      { id: 1, title: 'Review PR', priority: 'high' },
+      { id: 2, title: 'Update docs', priority: 'medium' },
+    ]
+  })
+  .build()
+
+const taskToolset = IgniterAgentToolset
+  .create('tasks')
+  .addTool(getTasks)
+  .build()
+
+// Memory
+const memoryAdapter = IgniterAgentInMemoryAdapter.create({ namespace: 'prod' })
+
+// Telemetry
+const telemetry = IgniterTelemetry.create().build()
+
+// Agent
+const agent = IgniterAgent
+  .create('productivity-bot')
+  .withModel(openai('gpt-4o'))
+  .withPrompt(IgniterAgentPrompt.create('You are a productivity assistant.'))
+  .withContextSchema(z.object({ userId: z.string() }))
+  .addToolset(taskToolset)
+  .withMemory({
+    provider: memoryAdapter,
+    working: { enabled: true, scope: 'chat' },
+    history: { enabled: true, limit: 100 },
+    chats: { enabled: true },
+  })
+  .withTelemetry(telemetry)
+  .onAgentStart((name) => console.log(`${name} is live`))
+  .onToolCallStart((agent, tool, input) => console.log(`🔧 ${tool} called`))
+  .build()
+
+await agent.start()
+
+const result = await agent.generate({
+  chatId: 'chat_001',
+  userId: 'user_001',
+  context: { userId: 'user_001' },
+  message: { role: 'user', content: 'What do I need to do today?' },
+})
+
+console.log(result.content)
+```

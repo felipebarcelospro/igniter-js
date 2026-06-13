@@ -1,0 +1,267 @@
+---
+title: Manager Setup
+description: Configure the IgniterConnectorManager with database adapters, encryption, telemetry, scopes, and lifecycle hooks. The central hub for all connector operations.
+---
+
+## Manager Setup
+
+The **manager** is the central hub that wires everything together — adapters, encryption, telemetry, scopes, connectors, and lifecycle hooks.
+
+Every connector operation flows through the manager: it validates, encrypts, persists, and emits events.
+
+---
+
+## The Builder Pipeline
+
+```typescript
+import { IgniterConnectorManager } from "@igniter-js/connectors";
+import { IgniterConnectorPrismaAdapter } from "@igniter-js/connectors/adapters";
+
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(adapter)            // Required: persistence layer
+  .withLogger(logger)               // Optional: debug logging
+  .withTelemetry(telemetry)         // Optional: observability
+  .withEncrypt(fields, callbacks)   // Recommended: field encryption
+  .addScope(key, options)           // Required: at least one scope
+  .addConnector(key, definition)    // Required: at least one connector
+  .onConnect(hook)                  // Optional: lifecycle hooks
+  .onDisconnect(hook)               // Optional
+  .onError(hook)                    // Optional
+  .build();                         // Finalize the manager
+```
+
+---
+
+## Database Adapter
+
+The adapter is the **only required** option. Choose based on your stack:
+
+```typescript
+import { IgniterConnectorPrismaAdapter } from "@igniter-js/connectors/adapters";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(IgniterConnectorPrismaAdapter.create(prisma))
+  // ...
+  .build();
+```
+
+### Custom Model Name
+
+By default, the Prisma adapter uses a model called `Connector`. Override it:
+
+```typescript
+.withDatabase(
+  IgniterConnectorPrismaAdapter.create(prisma, { model: "Integration" })
+)
+```
+
+See [Adapters](/docs/connectors/adapters) for the mock adapter and custom adapters.
+
+---
+
+## Encryption
+
+Encrypt sensitive fields at rest using AES-256-GCM or custom encryption:
+
+```typescript
+// Built-in AES-256-GCM (requires IGNITER_SECRET env)
+.withEncrypt(["botToken", "apiKey", "accessToken", "refreshToken"])
+
+// Custom encryption
+.withEncrypt(["apiKey"], {
+  encrypt: async (value) => myEncrypt(value),
+  decrypt: async (value) => myDecrypt(value),
+})
+```
+
+**Fields in the encrypt list** are automatically encrypted before storage and decrypted when read. Other fields remain in plain text.
+
+<Callout type="warn">
+  **If you use encryption, `IGNITER_SECRET` must be set.** Without it, the default AES-256-GCM encryption will throw. The secret must be at least 32 characters. Generate one with `openssl rand -hex 32`.
+</Callout>
+
+---
+
+## Logger
+
+Pass any object implementing the `IgniterLogger` interface for debug visibility:
+
+```typescript
+.withLogger({
+  debug: (msg, ...args) => console.debug(`[Connector] ${msg}`, ...args),
+  info: (msg, ...args) => console.info(`[Connector] ${msg}`, ...args),
+  warn: (msg, ...args) => console.warn(`[Connector] ${msg}`, ...args),
+  error: (msg, ...args) => console.error(`[Connector] ${msg}`, ...args),
+})
+```
+
+---
+
+## Telemetry
+
+Enable structured observability with the telemetry integration:
+
+```typescript
+import { IgniterTelemetry } from "@igniter-js/telemetry";
+import { IgniterConnectorsTelemetryEvents } from "@igniter-js/connectors/telemetry";
+
+const telemetry = IgniterTelemetry.create()
+  .withService("my-api")
+  .addEvents(IgniterConnectorsTelemetryEvents)
+  .withRedaction({
+    denylistKeys: ["config", "accessToken", "refreshToken", "payload"],
+    hashKeys: ["ctx.connector.identity"],
+  })
+  .build();
+
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(adapter)
+  .withTelemetry(telemetry) // Events auto-emitted!
+  .addScope("organization", { required: true })
+  .addConnector("telegram", telegram)
+  .build();
+```
+
+See [Telemetry](/docs/connectors/telemetry) for a full guide on events, redaction, and observability.
+
+---
+
+## Scopes
+
+Scopes model **multi-tenancy**. Each scope represents a dimension of isolation:
+
+```typescript
+.addScope("organization", { required: true })  // Must always provide identity
+.addScope("user", { required: true })           // Per-user connectors
+.addScope("system", { required: false })        // Optional system-wide connectors
+```
+
+At least one scope is required. See [Scopes & Multi-Tenancy](/docs/connectors/scopes) for deep patterns.
+
+---
+
+## Adding Connectors
+
+Register connector definitions with unique keys:
+
+```typescript
+.addConnector("telegram", telegramConnector)
+.addConnector("mailchimp", mailchimpConnector)
+.addConnector("stripe", stripeConnector)
+```
+
+The key becomes the **provider identifier** and is used in all operations:
+- `scoped.connect("telegram", config)`
+- `scoped.action("telegram", "sendMessage").call(input)`
+- `scoped.get("telegram")`
+
+---
+
+## Lifecycle Hooks
+
+Hooks run at specific points in the connector lifecycle:
+
+```typescript
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(adapter)
+  .addScope("organization", { required: true })
+  .addConnector("telegram", telegram)
+  .onConnect(async ({ connector, scope, identity, config }) => {
+    await auditLog.create({
+      action: "connector.connected",
+      connector,
+      scope,
+      identity,
+    });
+  })
+  .onDisconnect(async ({ connector, scope, identity }) => {
+    await auditLog.create({
+      action: "connector.disconnected",
+      connector,
+      scope,
+      identity,
+    });
+  })
+  .onError(async ({ error, connector, operation }) => {
+    await errorReporter.captureException(error, {
+      tags: { connector, operation },
+    });
+  })
+  .build();
+```
+
+See [Lifecycle Hooks](/docs/connectors/hooks) for the full hooks API.
+
+---
+
+## Non-Scoped Operations
+
+The manager also provides operations that work **across scopes**:
+
+```typescript
+// List all registered connectors with metadata
+const available = await connectors.list();
+// [{ key: "telegram", type: "custom", metadata: {...} }, ...]
+
+// Get a connector's metadata
+const info = await connectors.get("telegram");
+
+// Subscribe to events globally
+const sub = connectors.on((event) => {
+  console.log(`[${event.type}] ${event.connector}`);
+});
+
+// Handle OAuth callbacks and webhooks at the manager level
+const response = await connectors.handle("oauth.callback", request);
+const response = await connectors.handle("webhook", request);
+```
+
+---
+
+## Full Example
+
+```typescript
+import { IgniterConnectorManager } from "@igniter-js/connectors";
+import { IgniterConnectorPrismaAdapter } from "@igniter-js/connectors/adapters";
+import { IgniterTelemetry } from "@igniter-js/telemetry";
+import { IgniterConnectorsTelemetryEvents } from "@igniter-js/connectors/telemetry";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+const telemetry = IgniterTelemetry.create()
+  .withService("integrations-service")
+  .addEvents(IgniterConnectorsTelemetryEvents)
+  .withRedaction({
+    denylistKeys: ["config", "accessToken", "refreshToken", "payload"],
+  })
+  .build();
+
+export const connectors = IgniterConnectorManager.create()
+  .withDatabase(IgniterConnectorPrismaAdapter.create(prisma))
+  .withLogger(console)
+  .withTelemetry(telemetry)
+  .withEncrypt(["botToken", "apiKey", "accessToken", "refreshToken"])
+  .addScope("organization", { required: true })
+  .addScope("user", { required: true })
+  .addConnector("telegram", telegramConnector)
+  .addConnector("mailchimp", mailchimpConnector)
+  .onConnect(async ({ connector, scope, identity }) => {
+    console.log(`[+] ${connector} connected for ${scope}:${identity}`);
+  })
+  .onError(async ({ error, connector, operation }) => {
+    console.error(`[!] ${operation} failed for ${connector}:`, error.message);
+  })
+  .build();
+```
+
+---
+
+## Next Steps
+
+- [Scopes & Multi-Tenancy](/docs/connectors/scopes) — Advanced scoping patterns
+- [Actions](/docs/connectors/actions) — Execute connector actions
+- [Lifecycle Hooks](/docs/connectors/hooks) — All hook types

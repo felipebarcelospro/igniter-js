@@ -1,0 +1,282 @@
+---
+title: Quick Start
+description: Build your first Igniter.js agent in under 5 minutes. Three complete scenarios basic agent with tools, agent with persistent memory, and agent with MCP integration.
+---
+
+## Quick Start
+
+Choose your scenario below. Each takes under 5 minutes from zero to a working agent.
+
+<Callout type="info">
+  Make sure you've completed the [installation](/docs/agents/installation) step first.
+</Callout>
+
+---
+
+## Scenario 1: Basic Agent with a Custom Tool
+
+The most common pattern — define a tool, group it in a toolset, and wire it into an agent.
+
+<Steps>
+  <Step>
+    ### Import Dependencies
+
+    ```typescript
+    import {
+      IgniterAgent,
+      IgniterAgentTool,
+      IgniterAgentToolset,
+    } from '@igniter-js/agents'
+    import { openai } from '@ai-sdk/openai'
+    import { z } from 'zod'
+    ```
+  </Step>
+
+  <Step>
+    ### Define a Tool
+
+    Every tool needs a **name**, **description** (the AI uses this to decide when to call it), **input schema** (Zod), and an **execute handler**.
+
+    ```typescript
+    const weatherTool = IgniterAgentTool
+      .create('get_weather')
+      .withDescription('Get current weather for a location')
+      .withInput(
+        z.object({
+          location: z.string().describe('City name or coordinates'),
+          unit: z.enum(['C', 'F']).default('C'),
+        })
+      )
+      .withExecute(async ({ location, unit }) => {
+        // Replace with your real weather API call
+        const response = await fetch(
+          `https://api.weather.example/current?q=${location}&units=${unit}`
+        )
+        return response.json()
+      })
+      .build()
+    ```
+  </Step>
+
+  <Step>
+    ### Create a Toolset
+
+    Toolsets group related tools by domain. The toolset name becomes a prefix for each tool when the AI sees them.
+
+    ```typescript
+    const weatherToolset = IgniterAgentToolset
+      .create('weather')
+      .addTool(weatherTool)
+      .build()
+    ```
+  </Step>
+
+  <Step>
+    ### Build and Run the Agent
+
+    ```typescript
+    const agent = IgniterAgent
+      .create('weather-assistant')
+      .withModel(openai('gpt-4o-mini'))
+      .addToolset(weatherToolset)
+      .build()
+
+    // Start initializes MCP connections (none here, but always call it)
+    await agent.start()
+
+    // Generate a response — the AI decides whether to use the tool
+    const result = await agent.generate({
+      chatId: 'chat_001',
+      userId: 'user_001',
+      context: {},
+      message: {
+        role: 'user',
+        content: "What's the weather like in Tokyo?",
+      },
+    })
+
+    console.log(result.content)
+    ```
+  </Step>
+</Steps>
+
+**✅ Success!** You've built an agent that can decide when to call your tool and use the result in its response.
+
+---
+
+## Scenario 2: Agent with Persistent Memory
+
+For multi-turn conversations where the agent needs to remember past interactions.
+
+<Steps>
+  <Step>
+    ### Create a Memory Adapter
+
+    ```typescript
+    import {
+      IgniterAgent,
+      IgniterAgentInMemoryAdapter,
+      IgniterAgentPrompt,
+    } from '@igniter-js/agents'
+    import { openai } from '@ai-sdk/openai'
+
+    const memoryAdapter = IgniterAgentInMemoryAdapter.create({
+      namespace: 'my-app',
+      maxChats: 50,
+    })
+    ```
+
+    <Callout type="info">
+      `IgniterAgentInMemoryAdapter` is great for development. For production, use `IgniterAgentJSONFileAdapter` or build a custom adapter (Redis, PostgreSQL, etc.).
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Configure Memory and Build Agent
+
+    ```typescript
+    const memoryConfig = {
+      provider: memoryAdapter,
+      working: { enabled: true, scope: 'chat' },
+      history: { enabled: true, limit: 100 },
+      chats: { enabled: true },
+    }
+
+    const agent = IgniterAgent
+      .create('memory-bot')
+      .withModel(openai('gpt-4o-mini'))
+      .withMemory(memoryConfig)
+      .withPrompt(
+        IgniterAgentPrompt.create(
+          'You are a helpful assistant. Remember details about the user across messages.'
+        )
+      )
+      .build()
+
+    await agent.start()
+    ```
+  </Step>
+
+  <Step>
+    ### Run a Multi-Turn Conversation
+
+    ```typescript
+    // First turn
+    let response = await agent.generate({
+      chatId: 'chat_memory_001',
+      userId: 'user_001',
+      context: {},
+      message: {
+        role: 'user',
+        content: 'My name is Alice and my favorite color is blue.',
+      },
+    })
+    console.log('Turn 1:', response.content)
+
+    // Second turn — agent remembers from the first
+    response = await agent.generate({
+      chatId: 'chat_memory_001',
+      userId: 'user_001',
+      context: {},
+      message: {
+        role: 'user',
+        content: "What's my name and favorite color?",
+      },
+    })
+    console.log('Turn 2:', response.content)
+    // → "Your name is Alice and your favorite color is blue."
+    ```
+  </Step>
+</Steps>
+
+**✅ Success!** The agent maintains context across turns using the memory adapter.
+
+---
+
+## Scenario 3: Agent with MCP Integration
+
+Connect to external tools via the Model Context Protocol.
+
+<Steps>
+  <Step>
+    ### Install MCP Dependencies
+
+    ```bash
+    npm install @ai-sdk/mcp @modelcontextprotocol/sdk
+    ```
+  </Step>
+
+  <Step>
+    ### Configure an MCP Client
+
+    ```typescript
+    import {
+      IgniterAgent,
+      IgniterAgentMCPClient,
+    } from '@igniter-js/agents'
+    import { openai } from '@ai-sdk/openai'
+
+    // Stdio transport — spawns a local process
+    const filesystemMCP = IgniterAgentMCPClient
+      .create('filesystem')
+      .withType('stdio')
+      .withCommand('npx')
+      .withArgs([
+        '-y',
+        '@modelcontextprotocol/server-filesystem',
+        '/tmp/agent-workspace',
+      ])
+      .withEnv({ DEBUG: 'mcp:*' })
+      .build()
+
+    // HTTP transport — connects to a remote server
+    const remoteMCP = IgniterAgentMCPClient
+      .create('opencode')
+      .withType('http')
+      .withURL('https://sandbox.example.com/mcp')
+      .withHeaders({
+        'X-API-Key': process.env.MCP_API_KEY!,
+      })
+      .build()
+    ```
+  </Step>
+
+  <Step>
+    ### Build and Use the Agent
+
+    ```typescript
+    const agent = IgniterAgent
+      .create('mcp-agent')
+      .withModel(openai('gpt-4o-mini'))
+      .addMCP(filesystemMCP)
+      .addMCP(remoteMCP)
+      .build()
+
+    // MCP connections are established here
+    await agent.start()
+
+    const result = await agent.generate({
+      chatId: 'chat_mcp_001',
+      userId: 'user_001',
+      context: {},
+      message: {
+        role: 'user',
+        content: 'List all files in my workspace directory.',
+      },
+    })
+
+    console.log(result.content)
+    ```
+  </Step>
+</Steps>
+
+**✅ Success!** Your agent can now use tools from remote MCP servers, discovered at runtime.
+
+---
+
+## Next Steps
+
+- [Building Agents](/docs/agents/building-agents) — Full agent builder API reference
+- [Tools & Toolsets](/docs/agents/tools-toolsets) — Creating type-safe tools in depth
+- [Memory System](/docs/agents/memory) — Working memory, chat history, and custom adapters
+- [MCP Integration](/docs/agents/mcp-integration) — Stdio, HTTP transports, and server discovery

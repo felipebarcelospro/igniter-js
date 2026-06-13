@@ -1,0 +1,435 @@
+---
+title: API Reference
+description: Complete API reference for @igniter-js/telemetry — IgniterTelemetry, IgniterTelemetryEvents, IgniterTelemetrySession, all transport adapters, types, and error codes.
+---
+
+## API Reference
+
+Complete reference for all public APIs in `@igniter-js/telemetry`. Every method and type is verified against the implementation in `packages/telemetry/src/`.
+
+---
+
+## IgniterTelemetry (Builder)
+
+**Import:** `import { IgniterTelemetry } from "@igniter-js/telemetry"`
+
+Alias for `IgniterTelemetryBuilder`. Creates and configures telemetry instances.
+
+### Static Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `IgniterTelemetry.create()` | `IgniterTelemetryBuilder` | Create a new builder instance |
+
+### Builder Methods
+
+All builder methods are immutable — each returns a new builder instance.
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `.withService(name)` | `(service: string) => Builder` | Set service name (default: `"igniter-app"`) |
+| `.withEnvironment(env)` | `(environment: string) => Builder` | Set environment (default: `"development"`) |
+| `.withVersion(v)` | `(version: string) => Builder` | Set service version |
+| `.addActor(key, opts?)` | `(key: string, opts?: ActorOptions) => Builder` | Register actor type |
+| `.addScope(key, opts?)` | `(key: string, opts?: ScopeOptions) => Builder` | Register scope type |
+| `.addEvents(desc, opts?)` | `(desc: EventsDescriptor, opts?: ValidationOptions) => Builder` | Register typed events |
+| `.addTransport(adapter)` | `(adapter: TransportAdapter) => Builder` | Add transport adapter |
+| `.withSampling(policy)` | `(policy: SamplingPolicy) => Builder` | Configure sampling |
+| `.withRedaction(policy)` | `(policy: RedactionPolicy) => Builder` | Configure redaction |
+| `.withValidation(opts)` | `(opts: ValidationOptions) => Builder` | Set global validation options |
+| `.withLogger(logger)` | `(logger: IgniterLogger) => Builder` | Set internal logger |
+| `.build()` | `IgniterTelemetryManager` | Create runtime manager |
+| `.buildConfig()` | `IgniterTelemetryConfig` | Build config only |
+
+### ActorOptions
+
+```typescript
+interface IgniterTelemetryActorOptions {
+  description?: string;
+  required?: boolean;
+}
+```
+
+### ScopeOptions
+
+```typescript
+interface IgniterTelemetryScopeOptions {
+  description?: string;
+  required?: boolean;
+}
+```
+
+### ValidationOptions
+
+```typescript
+interface IgniterTelemetryEventsValidationOptions {
+  mode?: "development" | "always" | "none";
+  strict?: boolean;
+}
+```
+
+---
+
+## IgniterTelemetryManager (Runtime)
+
+Returned by `.build()`. The runtime instance for emitting events.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `service` | `string` | Service name |
+| `environment` | `string` | Environment name |
+| `version` | `string \| undefined` | Service version |
+
+### Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `.emit(name, input?)` | `(name: string, input?: EmitInput) => void` | Emit an event |
+| `.session()` | `() => IgniterTelemetrySession` | Create a new session |
+| `.flush()` | `() => Promise<void>` | Flush all transport buffers |
+| `.shutdown()` | `() => Promise<void>` | Graceful shutdown |
+
+### EmitInput
+
+```typescript
+interface IgniterTelemetryEmitInput {
+  level?: "debug" | "info" | "warn" | "error" | "fatal";
+  time?: string;
+  sessionId?: string;
+  actor?: { type: string; id?: string; tags?: Record<string, unknown> };
+  scope?: { type: string; id: string; tags?: Record<string, unknown> };
+  attributes?: Record<string, unknown>;
+  error?: {
+    name: string;
+    message: string;
+    code?: string;
+    stack?: string;
+  };
+  source?: {
+    causer?: string;
+    file?: string;
+    line?: number;
+  };
+}
+```
+
+---
+
+## IgniterTelemetrySession
+
+Created via `telemetry.session()`. Provides context binding and scoped execution.
+
+### Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `.actor(type, id?, tags?)` | `(type: string, id?: string, tags?: Tags) => this` | Set actor |
+| `.scope(type, id, tags?)` | `(type: string, id: string, tags?: Tags) => this` | Set scope |
+| `.attributes(attrs)` | `(attrs: Record<string, unknown>) => this` | Merge attributes |
+| `.id(sessionId)` | `(sessionId: string) => this` | Set custom session ID |
+| `.emit(name, input?)` | `(name: string, input?: EmitInput) => void` | Emit with session context |
+| `.run(fn)` | `(fn: () => Promise<T> \| T) => Promise<T>` | Scoped execution |
+| `.end()` | `() => Promise<void>` | End session |
+| `.getState()` | `() => SessionState` | Get session state copy |
+
+### Static Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `IgniterTelemetrySession.getActive()` | `SessionState \| undefined` | Get active session from AsyncLocalStorage |
+
+---
+
+## IgniterTelemetryEvents
+
+**Import:** `import { IgniterTelemetryEvents } from "@igniter-js/telemetry"`
+
+Creates typed event registries with Zod schema validation.
+
+### Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `.namespace(name)` | `(name: string) => EventRegistryBuilder` | Start a namespace |
+| `.event(name, schema)` | `(name: string, schema: Schema) => EventRegistryBuilder` | Add flat event |
+| `.group(name, builder)` | `(name: string, builder: (g: GroupBuilder) => GroupBuilder) => EventRegistryBuilder` | Add nested group |
+| `.build()` | `EventsDescriptor` | Build the descriptor |
+
+### EventsDescriptor Helpers
+
+| Helper | Type | Description |
+|--------|------|-------------|
+| `.get.key(name)` | `(key: string) => string` | Get full event key with namespace |
+| `.get.schema(name)` | `(key: string) => Schema` | Get schema for event |
+| `.$Infer.namespace` | `string` | Namespace type |
+| `.$Infer.events` | `EventsMap` | Events map type |
+| `.$Infer.keys` | `string union` | All event key types |
+| `.$Infer.registry` | `Registry` | Full registry type |
+
+---
+
+## Transport Adapters
+
+**Import:** `import { ... } from "@igniter-js/telemetry/adapters"`
+
+### LoggerTransportAdapter
+
+```typescript
+LoggerTransportAdapter.create(options: {
+  logger: { info, warn, error, debug };  // Required
+  format?: "json" | "pretty";            // Default: "pretty"
+  minLevel?: string;                       // Default: "debug"
+  includeTimestamp?: boolean;              // Default: true
+})
+```
+
+### HttpTransportAdapter
+
+```typescript
+HttpTransportAdapter.create(options: {
+  url: string;                             // Required
+  headers?: Record<string, string>;        // Default: {}
+  timeout?: number;                        // Default: 5000
+  retries?: number;                        // Default: 0
+})
+```
+
+### OtlpTransportAdapter
+
+```typescript
+OtltpTransportAdapter.create(options: {
+  url: string;                             // Required
+  headers?: Record<string, string>;        // Default: {}
+})
+```
+
+### SentryTransportAdapter
+
+```typescript
+SentryTransportAdapter.create(options: {
+  sentry: typeof Sentry;                   // Required
+})
+```
+
+### SlackTransportAdapter
+
+```typescript
+SlackTransportAdapter.create(options: {
+  webhookUrl: string;                      // Required
+  minLevel?: string;                       // Default: "warn"
+  username?: string;                       // Default: "Igniter Telemetry"
+  iconEmoji?: string;                      // Default: ":bar_chart:"
+})
+```
+
+### DiscordTransportAdapter
+
+```typescript
+DiscordTransportAdapter.create(options: {
+  webhookUrl: string;                      // Required
+  minLevel?: string;                       // Default: "warn"
+  username?: string;                       // Default: "Igniter Telemetry"
+  avatarUrl?: string;
+})
+```
+
+### TelegramTransportAdapter
+
+```typescript
+TelegramTransportAdapter.create(options: {
+  botToken: string;                        // Required
+  chatId: string;                          // Required
+  minLevel?: string;                       // Default: "error"
+})
+```
+
+### InMemoryTransportAdapter
+
+```typescript
+InMemoryTransportAdapter.create()
+
+// Methods:
+.getEvents() => Envelope[]   // Get all captured events
+.clear()                      // Clear captured events
+```
+
+### MockTelemetryAdapter
+
+```typescript
+MockTelemetryAdapter.create()
+
+// Methods:
+.getLastEvent() => Envelope | undefined  // Most recent event
+.getEvents() => Envelope[]               // All captured events
+.clear()                                  // Clear captured events
+```
+
+### StoreStreamTransportAdapter
+
+```typescript
+StoreStreamTransportAdapter.create(options: {
+  store: IgniterStore;                     // Required
+  stream?: string;                         // Default: "telemetry:events"
+  maxLen?: number;                         // Default: 10000
+})
+```
+
+---
+
+## Transport Adapter Interface
+
+```typescript
+interface IgniterTelemetryTransportAdapter {
+  readonly type: string;
+  init?(meta: TransportMeta): Promise<void>;
+  handle(envelope: Envelope): Promise<void>;
+  flush?(): Promise<void>;
+  shutdown?(): Promise<void>;
+}
+
+interface IgniterTelemetryTransportMeta {
+  service: string;
+  environment: string;
+  version?: string;
+}
+```
+
+---
+
+## Sampling Policy
+
+```typescript
+interface IgniterTelemetrySamplingPolicy {
+  debugRate?: number;       // Default: 0.01
+  infoRate?: number;        // Default: 0.1
+  warnRate?: number;        // Default: 1.0
+  errorRate?: number;       // Default: 1.0
+  always?: string[];        // Glob patterns always sampled
+  never?: string[];         // Glob patterns never sampled
+}
+```
+
+---
+
+## Redaction Policy
+
+```typescript
+interface IgniterTelemetryRedactionPolicy {
+  denylistKeys?: string[];    // Keys to remove (case-insensitive)
+  hashKeys?: string[];        // Keys to SHA-256 hash (case-insensitive)
+  maxStringLength?: number;   // Default: 5000
+}
+```
+
+---
+
+## Event Envelope
+
+```typescript
+interface IgniterTelemetryEnvelope {
+  name: string;
+  time: string;
+  level: "debug" | "info" | "warn" | "error" | "fatal";
+  service: string;
+  environment: string;
+  version?: string;
+  sessionId: string;
+  actor?: { type: string; id?: string; tags?: Record<string, unknown> };
+  scope?: { type: string; id: string; tags?: Record<string, unknown> };
+  attributes?: Record<string, unknown>;
+  error?: { name: string; message: string; code?: string; stack?: string };
+  source?: { causer?: string; file?: string; line?: number };
+}
+```
+
+---
+
+## Error Codes
+
+```typescript
+import { IgniterTelemetryError, IGNITER_TELEMETRY_ERROR_CODES } from "@igniter-js/telemetry";
+
+// Configuration
+TELEMETRY_SERVICE_REQUIRED
+TELEMETRY_ENVIRONMENT_REQUIRED
+TELEMETRY_CONFIGURATION_INVALID
+
+// Transport
+TELEMETRY_INVALID_TRANSPORT
+TELEMETRY_TRANSPORT_FAILED
+TELEMETRY_TRANSPORT_INIT_FAILED
+
+// Events
+TELEMETRY_INVALID_EVENT_NAME
+TELEMETRY_UNKNOWN_EVENT
+TELEMETRY_DUPLICATE_EVENT
+
+// Schema & Validation
+TELEMETRY_SCHEMA_VALIDATION_FAILED
+TELEMETRY_INVALID_NAMESPACE
+TELEMETRY_RESERVED_NAMESPACE
+TELEMETRY_DUPLICATE_NAMESPACE
+
+// Sessions
+TELEMETRY_SESSION_ENDED
+TELEMETRY_SESSION_INVALID
+
+// Scope & Actor
+TELEMETRY_DUPLICATE_SCOPE
+TELEMETRY_INVALID_SCOPE
+TELEMETRY_DUPLICATE_ACTOR
+TELEMETRY_INVALID_ACTOR
+
+// Emit & Runtime
+TELEMETRY_EMIT_FAILED
+TELEMETRY_RUNTIME_NOT_INITIALIZED
+```
+
+### Error Class
+
+```typescript
+class IgniterTelemetryError extends IgniterError {
+  readonly code: IgniterTelemetryErrorCode;
+  static is(error: unknown): error is IgniterTelemetryError;
+  hasCode(code: IgniterTelemetryErrorCode): boolean;
+}
+```
+
+---
+
+## Event Levels
+
+```typescript
+type IgniterTelemetryLevel = "debug" | "info" | "warn" | "error" | "fatal";
+
+// Level priority values (used internally for minLevel filtering)
+IGNITER_TELEMETRY_LEVEL_PRIORITY = { debug: 10, info: 20, warn: 30, error: 40, fatal: 50 }
+```
+
+---
+
+## Utility Types
+
+```typescript
+// Event registry types
+type IgniterTelemetryFlattenRegistryKeys<TRegistry>;
+type IgniterTelemetryGetEventSchema<TRegistry, TKey>;
+type IgniterTelemetryInferEventSchema<TSchema>;
+
+// Session types
+type IgniterTelemetrySessionState;
+type IIgniterTelemetrySession<TActor, TScope>;
+
+// Manager type
+type IIgniterTelemetryManager<TRegistry, TScopes, TActors>;
+```
+
+---
+
+## Next Steps
+
+- [Getting Started](/docs/telemetry/getting-started) — Complete walkthrough
+- [Best Practices](/docs/telemetry/best-practices) — Production patterns
+- [Troubleshooting](/docs/telemetry/troubleshooting) — Common errors and solutions

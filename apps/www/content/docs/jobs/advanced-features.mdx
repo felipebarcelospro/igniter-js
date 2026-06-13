@@ -1,548 +1,439 @@
 ---
 title: Advanced Features
-description: Explore advanced job features including lifecycle hooks, retry strategies, webhooks, and conditional execution.
+description: Typed job streams, event subscriptions, telemetry integration, adapter configuration, and production best practices for @igniter-js/jobs.
 ---
 
-Beyond basic job execution, Igniter.js Jobs provides powerful advanced features for building resilient, observable, and flexible job processing systems.
+Beyond basic job execution, Igniter.js Jobs provides typed job streams, event subscriptions, telemetry integration, and multiple adapter backends. This page covers the advanced features that make the jobs system production-ready.
 
-## Lifecycle Hooks
+## Typed Job Streams
 
-Hooks allow you to react to job lifecycle events without modifying the job handler itself. They're perfect for logging, metrics, notifications, and cleanup.
+Job streams enable per-job, real-time event streaming — emit typed events during job execution, subscribe to live updates, and read persisted event history.
 
-### Available Hooks
+### Defining Stream Events
 
-Jobs support four lifecycle hooks:
-
-- **`onStart`**: Called when job execution begins
-- **`onSuccess`**: Called when job completes successfully
-- **`onFailure`**: Called when job fails
-- **`onComplete`**: Called always (success or failure)
-
-### Using Hooks
-
-Define hooks when registering a job:
+Define typed stream events on a job definition:
 
 ```typescript
-const trackedJob = jobs.register({
-  name: 'Tracked Task',
-  input: z.object({ data: z.string() }),
-  handler: async ({ payload }) => {
-    // Main job logic
-    return { processed: true };
-  },
-  
-  onStart: async ({ input, context, job }) => {
-    console.log(`Job ${job.id} started`);
-    await context.analytics.track('job.started', {
-      jobId: job.id,
-      jobName: job.name,
-    });
-  },
-  
-  onSuccess: async ({ input, context, job, result, executionTime }) => {
-    console.log(`Job ${job.id} completed in ${executionTime}ms`);
-    await context.analytics.track('job.completed', {
-      jobId: job.id,
-      executionTime,
-    });
-  },
-  
-  onFailure: async ({ input, context, job, error, isFinalAttempt }) => {
-    console.error(`Job ${job.id} failed:`, error);
-    
-    if (isFinalAttempt) {
-      await context.alerts.send({
-        type: 'critical',
-        message: `Job ${job.name} failed after all retries`,
-      });
-    }
-  },
-  
-  onComplete: async ({ input, context, job, success, result, error }) => {
-    await context.audit.log({
-      jobId: job.id,
-      status: success ? 'success' : 'failure',
-      timestamp: new Date(),
-    });
-  },
-});
+import { z } from 'zod'
+
+const aiQueue = IgniterQueue.create('ai')
+  .addJob('generate', {
+    input: z.object({ prompt: z.string() }),
+    stream: {
+      persistence: { enabled: true, maxEvents: 100 },
+      events: {
+        'text-delta': z.string(),
+        'status': z.object({ phase: z.string() }),
+        'done': z.object({ chunks: z.number() }),
+      },
+    },
+    handler: async ({ input, job }) => {
+      // Emit typed stream events during execution
+      await job.stream.emit('status', { phase: 'thinking' })
+      await job.stream.emit('text-delta', 'Hello, ')
+      await job.stream.emit('text-delta', 'world!')
+      await job.stream.emit('done', { chunks: 2 })
+
+      return { ok: true }
+    },
+  })
+  .build()
 ```
 
-### Hook Context
+### Stream Configuration
 
-Each hook receives a context object with relevant information:
+| Option | Type | Description |
+|--------|------|-------------|
+| `persistence.enabled` | `boolean` | Enable persisted event history |
+| `persistence.maxEvents` | `number` | Maximum events to retain |
+| `events` | `Record<string, Schema>` | Typed event schema map |
 
-**onStart Context:**
+### Emitting Events
+
+Inside the handler, use `job.stream.emit(type, data)`:
+
 ```typescript
-{
-  input: any; // Job input payload
-  context: AppContext; // Application context
-  job: {
-    id: string;
-    name: string;
-    attemptsMade: number;
-    createdAt: Date;
-    metadata?: any;
-  };
-  startedAt: Date;
+handler: async ({ job }) => {
+  await job.stream.emit('status', { phase: 'processing' })
+  // TypeScript validates: type must be 'text-delta' | 'status' | 'done'
+  // data must match the schema for that event type
 }
 ```
 
-**onSuccess Context:**
+With untyped streams (no `events` schema), you can emit any string type with any data:
+
 ```typescript
-{
-  input: any;
-  context: AppContext;
-  job: JobHookInfo;
-  result: any; // Job handler return value
-  completedAt: Date;
-  executionTime: number; // Milliseconds
+stream: { persistence: { enabled: false } },
+handler: async ({ job }) => {
+  await job.stream.emit('custom-event', { any: 'data' })
+  // type: string, data: unknown
 }
 ```
 
-**onFailure Context:**
-```typescript
-{
-  input: any;
-  context: AppContext;
-  job: JobHookInfo;
-  error: Error;
-  failedAt: Date;
-  executionTime: number;
-  isFinalAttempt: boolean; // True if no more retries
-}
-```
-
-**onComplete Context:**
-```typescript
-{
-  input: any;
-  context: AppContext;
-  job: JobHookInfo;
-  success: boolean;
-  result?: any; // Only if successful
-  error?: Error; // Only if failed
-  completedAt: Date;
-  executionTime: number;
-}
-```
-
----
-
-## Retry Strategies
-
-Configure how jobs retry when they fail using different strategies:
-
-### Exponential Backoff
-
-Exponential backoff doubles the delay between retries:
+### Subscribing to Live Events
 
 ```typescript
-const resilientJob = jobs.register({
-  name: 'Resilient Task',
-  input: z.object({ url: z.string().url() }),
-  handler: async ({ payload }) => {
-    const response = await fetch(payload.url);
-    return response.json();
-  },
-  retryStrategy: 'exponential',
-  backoffMultiplier: 2, // Double delay each retry
-  maxRetryDelay: 60000, // Max 60 seconds
-  attempts: 5, // Retry up to 5 times
-});
+const job = jobs.ai.generate.get('job_abc123')
+
+const unsubscribe = await job.stream().subscribe((event) => {
+  // Fully typed discriminated union:
+  if (event.type === 'text-delta') {
+    console.log(event.data) // string
+  } else if (event.type === 'status') {
+    console.log(event.data.phase) // string
+  } else if (event.type === 'done') {
+    console.log(event.data.chunks) // number
+  }
+})
+
+// Later: await unsubscribe()
 ```
 
-Retry timeline:
-- Attempt 1: Immediate
-- Attempt 2: After 2 seconds
-- Attempt 3: After 4 seconds
-- Attempt 4: After 8 seconds
-- Attempt 5: After 16 seconds (capped at 60s)
-
-### Linear Backoff
-
-Fixed delay between retries:
+### Reading Persisted History
 
 ```typescript
-const linearRetryJob = jobs.register({
-  name: 'Linear Retry Task',
-  handler: async () => {
-    // Job logic
-  },
-  retryStrategy: 'linear',
-  delay: 5000, // 5 seconds between retries
-  attempts: 3,
-});
+const history = await jobs.ai.generate.get('job_abc123').stream().read({
+  after: 'event_cursor_123', // Pagination cursor (optional)
+  limit: 50,                  // Max events (optional)
+})
+
+console.log(history.items)     // Typed event array
+console.log(history.hasMore)   // boolean
+console.log(history.nextCursor) // string | undefined
 ```
 
-### Fixed Delay
+If `persistence.enabled` is `false`, `read()` returns an empty array.
 
-Constant delay specified manually:
-
-```typescript
-const fixedRetryJob = jobs.register({
-  name: 'Fixed Retry Task',
-  handler: async () => {
-    // Job logic
-  },
-  retryStrategy: 'fixed',
-  delay: 10000, // Always wait 10 seconds
-  attempts: 3,
-});
-```
-
-### Custom Retry Delays
-
-Specify exact delays for each retry:
-
-```typescript
-const customRetryJob = jobs.register({
-  name: 'Custom Retry Task',
-  handler: async () => {
-    // Job logic
-  },
-  retryStrategy: {
-    type: 'custom',
-    delays: [1000, 5000, 15000, 60000], // Exact delays in milliseconds
-  },
-  attempts: 4,
-});
-```
-
-### Jitter Factor
-
-Add randomness to retry delays to prevent thundering herd:
-
-```typescript
-const jitteredJob = jobs.register({
-  name: 'Jittered Retry Task',
-  handler: async () => {
-    // Job logic
-  },
-  retryStrategy: 'exponential',
-  jitterFactor: 0.2, // Add ±20% randomness
-  backoffMultiplier: 2,
-});
-```
-
----
-
-## Webhooks
-
-Receive notifications when jobs complete or fail:
-
-```typescript
-const webhookJob = jobs.register({
-  name: 'Webhook Task',
-  input: z.object({ data: z.string() }),
-  handler: async ({ payload }) => {
-    // Job logic
-    return { processed: true };
-  },
-});
-
-// Schedule with webhook
-await igniter.jobs.tasks.schedule({
-  task: 'webhookTask',
-  input: { data: 'test' },
-  webhookUrl: 'https://api.example.com/webhooks/job-complete',
-});
-```
-
-### Webhook Payload
-
-Webhooks receive POST requests with:
-
-```json
-{
-  "jobId": "12345",
-  "jobName": "tasks.webhookTask",
-  "status": "completed",
-  "result": { "processed": true },
-  "executionTime": 1234,
-  "completedAt": "2024-01-01T12:00:00Z",
-  "tags": ["important"],
-  "timestamp": "2024-01-01T12:00:00Z",
-  "source": "igniter-jobs",
-  "version": "1.0.0"
-}
-```
-
-### Handling Webhook Failures
-
-Webhook failures don't fail the job. They're fire-and-forget notifications:
-
-```typescript
-// Webhook is sent asynchronously
-// If webhook fails, job still succeeds
-await igniter.jobs.tasks.schedule({
-  task: 'webhookTask',
-  input: { data: 'test' },
-  webhookUrl: 'https://api.example.com/webhooks/job-complete',
-});
-```
-
----
-
-## Conditional Execution
-
-Skip job execution based on conditions:
-
-```typescript
-const conditionalJob = jobs.register({
-  name: 'Conditional Task',
-  input: z.object({ userId: z.string() }),
-  handler: async ({ payload }) => {
-    // Job logic
-  },
-});
-
-// Schedule with condition
-await igniter.jobs.tasks.schedule({
-  task: 'conditionalTask',
-  input: { userId: '123' },
-  condition: async () => {
-    // Only run if user is active
-    const user = await context.db.users.findUnique({
-      where: { id: '123' },
-    });
-    return user?.active === true;
-  },
-});
-```
-
-<Callout type="info" title="Condition Limitations">
-  Conditions are evaluated before job execution. In distributed systems, conditions can't access serialized functions. Use metadata-based conditions instead.
+<Callout type="info" title="Stream Use Cases">
+  Job streams are perfect for:
+  - **AI/LLM pipelines** — stream token deltas, status updates, and completion events
+  - **File processing** — emit progress, chunk info, and final results
+  - **Data pipelines** — stream ETL stages, row counts, and validation results
+  - **User notifications** — push real-time updates to clients via WebSocket/SSE
 </Callout>
 
 ---
 
-## Skip If Running
+## Event Subscriptions
 
-Prevent duplicate job executions:
+Subscribe to job lifecycle events at multiple levels:
+
+### Global Subscription
 
 ```typescript
-// Skip if job with same ID is already running
-await igniter.jobs.tasks.schedule({
-  task: 'sendNotification',
-  input: { userId: '123' },
-  skipIfRunning: true,
-});
+const unsubscribe = await jobs.subscribe((event) => {
+  console.log(`[${event.type}]`, event.data)
+  // Events include: enqueued, started, completed, failed, etc.
+})
 
-// Use custom job ID for deduplication
-await igniter.jobs.tasks.schedule({
-  task: 'sendNotification',
-  input: { userId: '123' },
-  skipIfRunning: 'user-123-notification', // Custom ID
-});
+// Later
+await unsubscribe()
+```
+
+### Per-Job Subscription
+
+```typescript
+const unsubscribe = await jobs.email.sendWelcome.subscribe((event) => {
+  console.log(`sendWelcome: ${event.type}`)
+})
+```
+
+### Per-Queue Subscription
+
+```typescript
+const unsubscribe = await jobs.email.subscribe((event) => {
+  console.log(`Email queue event: ${event.type}`)
+})
+```
+
+### Event Shape
+
+```typescript
+interface IgniterJobsEvent {
+  type: string           // Event type (e.g., 'igniter.jobs.job.completed')
+  data: unknown          // Event payload
+  timestamp: Date        // When the event occurred
+  scope?: {              // Scope info (if scoped)
+    type: string
+    id: string | number
+    tags?: Record<string, unknown>
+  }
+}
 ```
 
 ---
 
-## Priority Boost
+## Telemetry Integration
 
-Increase job priority dynamically:
+Integrate with `@igniter-js/telemetry` for structured observability:
 
 ```typescript
-await igniter.jobs.tasks.schedule({
-  task: 'processOrder',
-  input: { orderId: '123' },
-  priority: 5, // Base priority
-  priorityBoost: 10, // Add 10 to priority (becomes 15)
-});
+import { IgniterTelemetry } from '@igniter-js/telemetry'
+import { IgniterJobsTelemetryEvents } from '@igniter-js/jobs/telemetry'
+
+const telemetry = IgniterTelemetry.create()
+  .withService('my-api')
+  .withEnvironment('production')
+  .addEvents(IgniterJobsTelemetryEvents)
+  .build()
+
+const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsBullMQAdapter.create({ redis }))
+  .withService('my-api')
+  .withEnvironment('production')
+  .withContext(async () => ({ db }))
+  .withTelemetry(telemetry)
+  .addQueue(emailQueue)
+  .build()
+```
+
+The jobs runtime automatically emits telemetry events for:
+- Job enqueued, started, completed, and failed
+- Worker lifecycle changes
+
+---
+
+## Adapters
+
+Igniter.js Jobs ships with three adapters, importable from specific subpaths:
+
+### BullMQ Adapter (Production)
+
+For Redis-backed production deployments:
+
+```typescript
+import { IgniterJobsBullMQAdapter } from '@igniter-js/jobs/adapters/node'
+import { Redis } from 'ioredis'
+
+const redis = new Redis(process.env.REDIS_URL)
+
+const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsBullMQAdapter.create({ redis }))
+  // ...
+  .build()
+```
+
+**Requirements:** `@igniter-js/adapter-bullmq`, `bullmq`, `ioredis` (all peer dependencies)
+
+### Bun SQLite Adapter
+
+For standalone deployments without Redis — ideal for single-server apps:
+
+```typescript
+import { IgniterJobsBunSQLiteAdapter } from '@igniter-js/jobs/adapters/bun'
+
+const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsBunSQLiteAdapter.create({
+    path: './data/jobs.db',
+    durable: true,              // Immediate persistence
+    heartbeatInterval: 10_000,  // Worker heartbeat (default: 10000)
+    pollTimeout: 0,             // Long-poll timeout (default: 0)
+    batchSize: 10,              // Jobs per worker batch (default: 10)
+    lockDuration: 30_000,       // Active job lock (default: 30000)
+    maxStalledCount: 1,         // Max stalled before fail (default: 1)
+  }))
+  // ...
+  .build()
+```
+
+**Requirements:** Bun runtime only
+
+### In-Memory Adapter (Dev/Test)
+
+For development and testing — no external dependencies:
+
+```typescript
+import { IgniterJobsMemoryAdapter } from '@igniter-js/jobs/adapters/mock'
+
+const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsMemoryAdapter.create())
+  // ...
+  .build()
+```
+
+**Requirements:** None — fully self-contained
+
+### Adapter Comparison
+
+| Feature | BullMQ | Bun SQLite | Memory |
+|---------|--------|------------|--------|
+| Persistence | Redis | SQLite file | In-memory only |
+| Distributed workers | Yes | No (single process) | No (single process) |
+| Dashboard/monitoring | Bull Board | Custom | Custom |
+| Production-ready | Yes | Yes (single server) | No (dev/test only) |
+| Setup complexity | Medium (Redis) | Low (file) | None |
+| Import path | `adapters/node` | `adapters/bun` | `adapters/mock` |
+
+---
+
+## Logger Integration
+
+Attach a custom logger to capture internal events:
+
+```typescript
+import type { IgniterLogger } from '@igniter-js/jobs'
+
+const logger: IgniterLogger = {
+  info: (message, meta) => console.log(`[INFO] ${message}`, meta),
+  warn: (message, meta) => console.warn(`[WARN] ${message}`, meta),
+  error: (message, meta) => console.error(`[ERROR] ${message}`, meta),
+}
+
+const jobs = IgniterJobs.create()
+  .withLogger(logger)
+  // ...
+  .build()
 ```
 
 ---
 
-## Timeout Configuration
+## Real-World Patterns
 
-Set job timeouts to prevent jobs from running indefinitely:
+### AI Pipeline with Streams
 
 ```typescript
-const timeoutJob = jobs.register({
-  name: 'Timeout Task',
-  handler: async () => {
-    // Long-running task
-  },
-  timeout: 30000, // Fail if takes longer than 30 seconds
-});
+const aiQueue = IgniterQueue.create('ai')
+  .addJob('generate', {
+    input: z.object({ prompt: z.string() }),
+    stream: {
+      persistence: { enabled: true, maxEvents: 200 },
+      events: {
+        'token': z.string(),
+        'tool-call': z.object({ name: z.string(), args: z.record(z.unknown()) }),
+        'done': z.object({ text: z.string(), tokens: z.number() }),
+      },
+    },
+    handler: async ({ input, job, context }) => {
+      const stream = await context.llm.stream(input.prompt)
+
+      let text = ''
+      let tokens = 0
+
+      for await (const chunk of stream) {
+        if (chunk.type === 'token') {
+          await job.stream.emit('token', chunk.text)
+          text += chunk.text
+          tokens++
+        } else if (chunk.type === 'tool-call') {
+          await job.stream.emit('tool-call', chunk.tool)
+        }
+      }
+
+      await job.stream.emit('done', { text, tokens })
+      return { text, tokens }
+    },
+  })
+  .build()
 ```
 
-### Dynamic Timeout
-
-Set timeout when scheduling:
+### WebSocket Streaming to Client
 
 ```typescript
-await igniter.jobs.tasks.schedule({
-  task: 'timeoutTask',
-  input: {},
-  timeout: 60000, // 60 second timeout for this execution
-});
+// Server-side: subscribe to job stream, forward to WebSocket
+async function streamJobToClient(ws: WebSocket, jobId: string) {
+  const unsubscribe = await jobs.ai.generate
+    .get(jobId)
+    .stream()
+    .subscribe((event) => {
+      ws.send(JSON.stringify(event))
+    })
+
+  ws.on('close', async () => {
+    await unsubscribe()
+  })
+}
 ```
 
----
-
-## Tags and Metadata
-
-Add tags and metadata for tracking and filtering:
+### Custom Retry Logic with Hooks
 
 ```typescript
-await igniter.jobs.tasks.schedule({
-  task: 'processData',
-  input: { data: 'test' },
-  tags: ['analytics', 'batch-processing', 'important'],
-  metadata: {
-    source: 'scheduled-job',
-    userId: '123',
-    campaignId: 'summer-sale',
-  },
-});
-```
-
-### Using Tags in Search
-
-Filter jobs by tags:
-
-```typescript
-// Note: Tag filtering is implemented via metadata
-// Search for jobs with specific metadata values
-const importantJobs = await igniter.jobs.search({
-  filter: {
-    // Filtering by metadata requires custom search logic
-  },
-});
-```
-
----
-
-## Combining Advanced Features
-
-Combine multiple advanced features:
-
-```typescript
-const advancedJob = jobs.register({
-  name: 'Advanced Task',
-  input: z.object({ data: z.string() }),
-  handler: async ({ payload }) => {
-    // Job logic
-    return { processed: true };
-  },
-  
-  // Hooks
-  onStart: async ({ job }) => {
-    console.log(`Starting: ${job.id}`);
-  },
-  onSuccess: async ({ job, result }) => {
-    console.log(`Completed: ${job.id}`);
-  },
-  onFailure: async ({ job, error, isFinalAttempt }) => {
-    if (isFinalAttempt) {
-      await sendAlert(`Job failed: ${job.name}`);
-    }
-  },
-  
-  // Retry configuration
-  retryStrategy: 'exponential',
-  backoffMultiplier: 2,
-  maxRetryDelay: 60000,
-  attempts: 5,
-  
-  // Timeout
-  timeout: 30000,
-});
-
-// Schedule with additional options
-await igniter.jobs.tasks.schedule({
-  task: 'advancedTask',
-  input: { data: 'test' },
-  webhookUrl: 'https://api.example.com/webhooks/job-complete',
-  tags: ['important', 'monitored'],
-  skipIfRunning: true,
-  priorityBoost: 5,
-});
+const resilientQueue = IgniterQueue.create('api')
+  .addJob('sync', {
+    input: z.object({ endpoint: z.string().url() }),
+    attempts: 5,
+    handler: async ({ input }) => {
+      const response = await fetch(input.endpoint)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      return response.json()
+    },
+    onFailure: async ({ input, job, error, isFinalAttempt }) => {
+      if (isFinalAttempt) {
+        await alerts.send({
+          message: `Sync job failed after ${job.attemptsMade} attempts: ${error.message}`,
+        })
+      }
+    },
+  })
+  .build()
 ```
 
 ---
 
 ## Best Practices
 
-1. **Use Hooks for Observability**: Don't mix business logic with hooks
-2. **Choose Appropriate Retry Strategy**: Match retry strategy to failure patterns
-3. **Set Reasonable Timeouts**: Prevent jobs from hanging indefinitely
-4. **Use Tags for Organization**: Tag jobs for better tracking
-5. **Implement Webhook Fallbacks**: Don't rely solely on webhooks for critical notifications
-6. **Monitor Hook Performance**: Hooks shouldn't slow down job execution
-7. **Test Retry Logic**: Verify retry behavior in staging
+### General
+- **Use typed streams** — define event schemas for compile-time safety in AI/streaming pipelines
+- **Enable stream persistence** only when you need history — it adds storage overhead
+- **Set appropriate adapter** — BullMQ for distributed, Bun SQLite for single-server, Memory for tests
+- **Integrate telemetry** — production observability from day one
+- **Use scopes** — isolate tenants with `addScope({ required: true })` in multi-tenant apps
+
+### Error Handling
+- **Use lifecycle hooks** for logging and alerts, not business logic
+- **Set `attempts`** on job definitions — don't rely on infinite retries
+- **Monitor failure rates** — use `jobs.search('jobs', { status: 'failed' })` periodically
+- **Handle shutdown** — always call `jobs.shutdown()` before process exit
+
+### Performance
+- **Match concurrency to workload** — CPU: 2–5, I/O: 10–50, Database: 5–10
+- **Use rate limiters** for downstream API calls — prevent 429 errors
+- **Clean completed jobs** — prevent Redis memory bloat with `queue.get().clean()`
+- **Separate queues by domain** — independent scaling and monitoring
 
 ---
 
-## Common Patterns
+## Troubleshooting
 
-### Auditing All Jobs
+### Stream Events Not Persisting
 
-```typescript
-const auditedJob = jobs.register({
-  name: 'Audited Task',
-  handler: async () => {
-    // Job logic
-  },
-  onComplete: async ({ job, success, result, error }) => {
-    await context.audit.log({
-      jobId: job.id,
-      jobName: job.name,
-      status: success ? 'success' : 'failure',
-      result,
-      error: error?.message,
-      timestamp: new Date(),
-    });
-  },
-});
-```
+**Problem**: `stream().read()` returns empty when `persistence.enabled` is `true`.
 
-### Alerting on Failures
+**Solutions**:
+- Verify `persistence.enabled: true` is set in the stream config
+- Ensure the adapter supports stream persistence (Memory adapter supports it)
+- Check `maxEvents` — if exceeded, old events may be evicted
 
-```typescript
-const criticalJob = jobs.register({
-  name: 'Critical Task',
-  handler: async () => {
-    // Critical business logic
-  },
-  onFailure: async ({ job, error, isFinalAttempt }) => {
-    if (isFinalAttempt) {
-      await context.alerts.send({
-        level: 'critical',
-        title: `Critical job failed: ${job.name}`,
-        message: error.message,
-        jobId: job.id,
-      });
-    }
-  },
-});
-```
+### Telemetry Events Not Emitting
 
-### Metrics Collection
+**Problem**: No telemetry events despite calling `withTelemetry()`.
 
-```typescript
-const meteredJob = jobs.register({
-  name: 'Metered Task',
-  handler: async () => {
-    // Job logic
-  },
-  onSuccess: async ({ job, executionTime }) => {
-    await context.metrics.record({
-      name: 'job.execution_time',
-      value: executionTime,
-      tags: { jobName: job.name },
-    });
-  },
-});
-```
+**Solutions**:
+- Verify the telemetry instance was built with `IgniterJobsTelemetryEvents`
+- Check `service` and `environment` match between telemetry and jobs config
+- Ensure the telemetry instance is correctly configured
+
+### Adapter Import Errors
+
+**Problem**: TypeScript can't resolve adapter imports.
+
+**Solutions**:
+- BullMQ: `import { IgniterJobsBullMQAdapter } from '@igniter-js/jobs/adapters/node'`
+- Bun SQLite: `import { IgniterJobsBunSQLiteAdapter } from '@igniter-js/jobs/adapters/bun'`
+- Memory: `import { IgniterJobsMemoryAdapter } from '@igniter-js/jobs/adapters/mock'`
+
+### Scope Required Errors
+
+**Problem**: `JOBS_SCOPE_REQUIRED` error on dispatch.
+
+**Solution**: Use `jobs.scope('type', 'id')` before dispatching, or set `required: false` on the scope definition.
 
 ---
 
 ## Next Steps
 
-- **[Multi-Tenancy](/docs/jobs/multi-tenancy)**: Build multi-tenant applications with queue prefixes
-- **[Workers](/docs/jobs/workers)**: Configure workers to process jobs efficiently
-- **[Search & Monitoring](/docs/jobs/search-and-monitoring)**: Monitor jobs and track performance
-
+- **[Search & Monitoring](/docs/jobs/search-and-monitoring)** — Find and manage jobs programmatically
+- **[Workers](/docs/jobs/workers)** — Configure and scale workers
+- **[Scopes](/docs/jobs/scopes)** — Multi-tenant isolation patterns
+- **[Telemetry Documentation](/docs/telemetry)** — Full telemetry setup guide

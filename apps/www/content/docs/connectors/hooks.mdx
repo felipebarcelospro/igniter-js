@@ -1,0 +1,232 @@
+---
+title: Lifecycle Hooks
+description: Hook into connector and manager lifecycle events. Run code on connect, disconnect, errors, config validation, and context injection.
+---
+
+## Lifecycle Hooks
+
+Hooks let you run custom logic at specific points in the connector lifecycle — validation, context injection, connection events, and error handling.
+
+There are two levels of hooks:
+
+| Level | Scope | When to use |
+|-------|-------|-------------|
+| **Connector Hooks** | Per connector definition | Validate config, inject shared context |
+| **Manager Hooks** | Across all connectors | Audit logging, error reporting, notifications |
+
+---
+
+## Connector Hooks
+
+Defined inside `IgniterConnector.create()`, these hooks run for a specific connector.
+
+### onContext — Inject Dependencies
+
+Create shared context (HTTP clients, SDK instances, caches) available in every action handler:
+
+```typescript
+const connector = IgniterConnector.create()
+  .withConfig(z.object({ baseUrl: z.string().url() }))
+  .onContext(async ({ config, scope, identity }) => ({
+    httpClient: createAuthenticatedClient(config.baseUrl, identity),
+    cache: new Map(),
+  }))
+  .addAction("getUser", {
+    input: z.object({ id: z.string() }),
+    handler: async ({ input, context }) => {
+      // context.httpClient — shared across all actions
+      return context.httpClient.get(`/users/${input.id}`);
+    },
+  })
+  .addAction("listUsers", {
+    input: z.object({}),
+    handler: async ({ context }) => {
+      // context.cache — also available here
+      return context.httpClient.get("/users");
+    },
+  })
+  .build();
+```
+
+<Callout type="info">
+  `onContext` runs **once per action execution**, not once per connect. It's called before every action, so you get fresh context each time. Use it for clients, not heavy initialization.
+</Callout>
+
+### onValidate — Validate Before Connect
+
+Validate configuration before saving a connection. Throw to reject:
+
+```typescript
+const connector = IgniterConnector.create()
+  .withConfig(z.object({ apiKey: z.string() }))
+  .onValidate(async ({ config, scope, identity }) => {
+    const response = await fetch("https://api.service.com/ping", {
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Invalid API key for scope ${scope}:${identity}. ` +
+        `Please check your credentials.`
+      );
+    }
+  })
+  .addAction("data", {
+    input: z.object({}),
+    handler: async () => ({ ok: true }),
+  })
+  .build();
+```
+
+<Callout type="warn">
+  If `onValidate` throws, the connection is **rejected entirely** — no record is saved to the database.
+</Callout>
+
+---
+
+## Manager Hooks
+
+Defined in `IgniterConnectorManager.create()`, these hooks run for all connectors.
+
+### onConnect — Connection Created
+
+Runs after a connector is successfully connected and saved:
+
+```typescript
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(adapter)
+  .addScope("organization", { required: true })
+  .addConnector("telegram", telegram)
+  .onConnect(async ({ connector, config, scope, identity }) => {
+    // Log to audit trail
+    await db.auditLog.create({
+      data: {
+        action: "connector.connected",
+        target: connector,
+        scope,
+        identity,
+      },
+    });
+
+    // Send notification
+    await slack.notify(
+      `🔌 ${connector} connected for ${scope}:${identity}`
+    );
+  })
+  .build();
+```
+
+### onDisconnect — Connection Removed
+
+Runs after a connector is disconnected (record deleted):
+
+```typescript
+.onDisconnect(async ({ connector, scope, identity }) => {
+  await db.auditLog.create({
+    data: {
+      action: "connector.disconnected",
+      target: connector,
+      scope,
+      identity,
+    },
+  });
+
+  // Clean up related resources
+  await cleanupWebhookSubscriptions(connector, scope, identity);
+})
+```
+
+### onError — Error Occurred
+
+Runs when any connector operation throws:
+
+```typescript
+.onError(async ({ error, connector, operation, scope, identity, action }) => {
+  // Report to error monitoring
+  await Sentry.captureException(error, {
+    tags: {
+      connector: connector ?? "unknown",
+      operation,
+      scope: scope ?? "unknown",
+    },
+    extra: {
+      identity,
+      action,
+    },
+  });
+
+  // Log for debugging
+  console.error(
+    `[Connector Error] ${operation} failed for ${connector}:`,
+    error.message,
+  );
+})
+```
+
+### Hook Parameters
+
+| Hook | Parameters | When Called |
+|------|-----------|-------------|
+| `onConnect` | `{ connector, config, scope, identity }` | After `.connect()` succeeds |
+| `onDisconnect` | `{ connector, scope, identity }` | After `.disconnect()` succeeds |
+| `onError` | `{ error, connector?, operation, scope?, identity?, action? }` | When any operation throws |
+
+---
+
+## Real-World Example: Audit Logging
+
+Combine all hooks for a complete audit trail:
+
+```typescript
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(IgniterConnectorPrismaAdapter.create(prisma))
+  .addScope("organization", { required: true })
+  .addConnector("telegram", telegramConnector)
+  .addConnector("mailchimp", mailchimpConnector)
+
+  // Connection audit
+  .onConnect(async (params) => {
+    await createAuditEntry("connector.connected", params);
+  })
+
+  // Disconnection audit
+  .onDisconnect(async (params) => {
+    await createAuditEntry("connector.disconnected", params);
+  })
+
+  // Error tracking
+  .onError(async (params) => {
+    await createAuditEntry("connector.error", params, "error");
+
+    if (params.operation === "oauth.callback") {
+      await notifyAdmin("OAuth callback failed", params);
+    }
+  })
+
+  .build();
+
+async function createAuditEntry(
+  action: string,
+  params: Record<string, unknown>,
+  level: "info" | "error" = "info",
+) {
+  await prisma.auditLog.create({
+    data: {
+      action,
+      level,
+      connector: String(params.connector ?? ""),
+      scope: String(params.scope ?? ""),
+      identity: String(params.identity ?? ""),
+      metadata: params,
+    },
+  });
+}
+```
+
+---
+
+## Next Steps
+
+- [Events](/docs/connectors/events) — Subscribe to connector lifecycle events
+- [Defining Connectors](/docs/connectors/defining-connectors) — Connector hooks in depth
+- [Manager Setup](/docs/connectors/manager-setup) — Full manager configuration

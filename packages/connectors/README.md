@@ -1226,6 +1226,97 @@ app.post("/api/v1/connectors/:key/webhook/:secret", async (req, res) => {
 });
 ```
 
+### Fastify
+
+```typescript
+// OAuth callback route
+fastify.get("/api/v1/connectors/:key/oauth/callback", async (request, reply) => {
+  const req = new Request(
+    `${request.protocol}://${request.hostname}${request.url}`,
+    { method: "GET", headers: request.headers as Record<string, string> },
+  );
+  const response = await connectors.handle("oauth.callback", req);
+  reply.status(response.status);
+  response.headers.forEach((value, key) => reply.header(key, value));
+  return response.text();
+});
+
+// Webhook route
+fastify.post("/api/v1/connectors/:key/webhook/:secret", async (request, reply) => {
+  const req = new Request(
+    `${request.protocol}://${request.hostname}${request.url}`,
+    {
+      method: "POST",
+      headers: request.headers as Record<string, string>,
+      body: JSON.stringify(request.body),
+    },
+  );
+  const response = await connectors.handle("webhook", req);
+  reply.status(response.status);
+  return response.text();
+});
+```
+
+### Astro
+
+```astro
+---
+// src/pages/api/connectors/[key]/oauth/callback.ts
+import type { APIRoute } from "astro";
+
+export const GET: APIRoute = async ({ request }) => {
+  return connectors.handle("oauth.callback", request);
+};
+
+export const POST: APIRoute = async ({ request }) => {
+  return connectors.handle("webhook", request);
+};
+```
+
+```typescript
+// src/pages/api/connectors/[key]/webhook/[secret].ts
+import type { APIRoute } from "astro";
+
+export const POST: APIRoute = async ({ request }) => {
+  return connectors.handle("webhook", request);
+};
+```
+
+---
+
+## 🧩 Manager-Level Actions (System Connectors)
+
+When a connector has `withDefaultConfig()`, you can execute actions directly through the manager without a scoped instance. This is ideal for internal/system connectors that don't need per-tenant configuration.
+
+```typescript
+// 1) Define a system connector with default config
+const systemConnector = IgniterConnector.create()
+  .withConfig(z.object({ apiKey: z.string() }))
+  .withDefaultConfig({ apiKey: process.env.INTERNAL_KEY! })
+  .addAction("status", {
+    input: z.object({}),
+    handler: async ({ config }) => getStatus(config.apiKey),
+  })
+  .build();
+
+// 2) Register it in the manager
+const manager = IgniterConnectorManager.create()
+  .withDatabase(adapter)
+  .addScope("system", { required: false })
+  .addConnector("internal", systemConnector)
+  .build();
+
+// 3) Execute the action directly from the manager
+const { data, error } = await manager
+  .action("internal", "status")
+  .call({});
+
+if (error) throw error;
+console.log("Status:", data);
+```
+
+> **Important:** Manager-level actions require `withDefaultConfig()`. Without it, the action will throw `CONNECTOR_DEFAULT_CONFIG_REQUIRED`. For scoped (per-tenant) actions, use `scoped.action()` instead.
+
 ---
 
 ## 🧩 Troubleshooting
@@ -3142,6 +3233,16 @@ try {
   }
 }
 ```
+
+## 🔗 Related Packages
+
+| Package | Description |
+| --- | --- |
+| [@igniter-js/common](https://www.npmjs.com/package/@igniter-js/common) | Shared types, errors, and logger utilities |
+| [@igniter-js/telemetry](https://www.npmjs.com/package/@igniter-js/telemetry) | Observability with structured event emission and redaction |
+| [@igniter-js/collections](https://www.npmjs.com/package/@igniter-js/collections) | Type-safe ORM for content collections |
+| [@igniter-js/mail](https://www.npmjs.com/package/@igniter-js/mail) | Type-safe email template system |
+| [@igniter-js/storage](https://www.npmjs.com/package/@igniter-js/storage) | Multi-provider file storage with adapters |
 
 ## Environment Variables
 

@@ -1,0 +1,233 @@
+---
+title: Events
+description: Subscribe to document lifecycle events globally or per-collection. Build reactive systems with typed event handlers and subscription management.
+---
+
+## Events
+
+Collections emits typed events for every document operation. Subscribe globally (across all collections) or scoped to a single collection. Every subscription returns a handle with an `off()` method for cleanup.
+
+---
+
+## Event Types
+
+### Global Events
+
+Global events fire for **any collection**. The payload includes the collection name:
+
+| Event | Payload | When |
+|-------|---------|------|
+| `created` | `{ collection, value, context }` | Any document created |
+| `updated` | `{ collection, newValue, previousValue, context }` | Any document updated |
+| `deleted` | `{ collection, value, context }` | Any document deleted |
+| `read` | `{ collection, value, context }` | Any document read |
+
+### Scoped Events
+
+Scoped events fire for a **specific collection**. Use the format `{collectionName}:{event}`:
+
+| Event Pattern | Payload |
+|---------------|---------|
+| `posts:created` | `{ value, context }` |
+| `posts:updated` | `{ newValue, previousValue, context }` |
+| `posts:deleted` | `{ value, context }` |
+| `posts:read` | `{ value, context }` |
+
+---
+
+## Subscribing to Events
+
+### Global Subscriptions
+
+```typescript
+import { IgniterCollections } from '@igniter-js/collections';
+
+// Subscribe with cleanup handle
+const { off } = docs.on('created', ({ collection, value }) => {
+  console.log(`Document created in ${collection}: ${value.id}`);
+});
+
+// Later: unsubscribe
+off();
+```
+
+### Scoped Subscriptions
+
+```typescript
+// Listen to a specific collection
+docs.on('posts:updated', ({ newValue, previousValue }) => {
+  console.log(`Post updated: ${newValue.id}`);
+  console.log('Previous title:', previousValue.title);
+  console.log('New title:', newValue.title);
+});
+```
+
+### Model-Level Subscriptions
+
+You can also subscribe directly on a collection manager:
+
+```typescript
+// Access the collection manager
+const postsManager = docs.collections.get('posts');
+
+// Subscribe to collection-specific events (no name prefix needed)
+const { off } = postsManager.on('created', ({ value }) => {
+  console.log(`Post created: ${value.title}`);
+});
+
+off(); // Cleanup
+```
+
+---
+
+## Subscription Handle
+
+Every `on()` call returns an `IgniterCollectionSubscription`:
+
+```typescript
+interface IgniterCollectionSubscription {
+  off(): void; // Unsubscribe the handler
+}
+```
+
+```typescript
+// Store handles for cleanup
+const handles = [];
+
+handles.push(
+  docs.on('created', ({ collection, value }) => {
+    log.info(`[${collection}] Created: ${value.id}`);
+  }).off
+);
+
+handles.push(
+  docs.on('posts:updated', ({ newValue }) => {
+    cache.invalidate(`post:${newValue.id}`);
+  }).off
+);
+
+// Cleanup all at once
+function cleanup() {
+  handles.forEach(off => off());
+}
+```
+
+---
+
+## Real-World Patterns
+
+### Activity Feed
+
+```typescript
+const activities: Activity[] = [];
+
+docs.on('created', ({ collection, value }) => {
+  activities.push({
+    type: 'created',
+    collection,
+    documentId: value.id,
+    title: value.title,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+docs.on('updated', ({ collection, newValue }) => {
+  activities.push({
+    type: 'updated',
+    collection,
+    documentId: newValue.id,
+    title: newValue.title,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+docs.on('deleted', ({ collection, value }) => {
+  activities.push({
+    type: 'deleted',
+    collection,
+    documentId: value.id,
+    title: value.title,
+    timestamp: new Date().toISOString(),
+  });
+});
+```
+
+### Cache Invalidation
+
+```typescript
+docs.on('posts:updated', ({ newValue }) => {
+  cache.delete(`post:${newValue.id}`);
+  cache.delete(`post:${newValue.slug}`);
+  cache.delete('posts:list');
+});
+
+docs.on('posts:deleted', ({ value }) => {
+  cache.delete(`post:${value.id}`);
+  cache.delete(`post:${value.slug}`);
+  cache.delete('posts:list');
+});
+```
+
+### Rebuild Search Index
+
+```typescript
+docs.on('posts:created', async ({ value }) => {
+  await searchIndex.add(value);
+});
+
+docs.on('posts:updated', async ({ newValue }) => {
+  await searchIndex.update(newValue);
+});
+
+docs.on('posts:deleted', async ({ value }) => {
+  await searchIndex.remove(value.id);
+});
+```
+
+### Webhook Notifications
+
+```typescript
+docs.on('posts:created', async ({ value }) => {
+  if (value.published) {
+    await fetch('https://api.example.com/webhooks/content', {
+      method: 'POST',
+      body: JSON.stringify({
+        event: 'post.published',
+        post: { id: value.id, title: value.title, slug: value.slug },
+      }),
+    });
+  }
+});
+```
+
+---
+
+## Error Handling in Handlers
+
+Handlers execute concurrently and errors in one handler do not stop others:
+
+```typescript
+docs.on('created', async ({ value }) => {
+  // This will log an error but won't affect other handlers
+  throw new Error('Something went wrong');
+});
+
+docs.on('created', ({ value }) => {
+  // This handler still runs
+  console.log('Second handler still executed');
+});
+```
+
+<Callout type="info">
+  Event handlers run **after** the operation completes successfully. If a hook cancels the operation (`return false`), no event is emitted.
+</Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Views" description="Define data-driven views with component trees and actions." href="/docs/collections/views" />
+  <Card title="Hooks" description="Control operations with lifecycle hooks." href="/docs/collections/hooks" />
+  <Card title="Advanced" description="Context injection, telemetry, and advanced patterns." href="/docs/collections/advanced" />
+</Cards>

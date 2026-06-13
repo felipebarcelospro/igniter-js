@@ -1,0 +1,333 @@
+---
+title: Builder Configuration
+description: Complete reference for the IgniterTelemetry.create() builder — all methods with parameter tables, return types, and verified code examples.
+---
+
+## Builder Configuration
+
+The `IgniterTelemetry.create()` builder is a **fluent, immutable configuration chain**. Each method returns a new builder instance — no state is mutated in place. Call `.build()` to create the runtime manager.
+
+---
+
+## Builder Methods Overview
+
+| Method | Purpose | Required |
+|--------|---------|----------|
+| `.withService(name)` | Set service name | Recommended |
+| `.withEnvironment(env)` | Set environment | Recommended |
+| `.withVersion(version)` | Set service version | Optional |
+| `.addActor(key, options?)` | Register actor type | Optional |
+| `.addScope(key, options?)` | Register scope type | Optional |
+| `.addEvents(descriptor, options?)` | Register typed events | Optional |
+| `.addTransport(adapter)` | Add transport adapter | At least one |
+| `.withSampling(policy)` | Configure sampling | Optional |
+| `.withRedaction(policy)` | Configure redaction | Optional |
+| `.withValidation(options)` | Global validation options | Optional |
+| `.withLogger(logger)` | Set internal logger | Optional |
+| `.build()` | Create the manager | Final step |
+| `.buildConfig()` | Build config only (no manager) | For inspection |
+
+---
+
+## `withService(name)`
+
+Sets the service name that appears in every envelope.
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withService("billing-api")
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `service` | `string` | Service identifier (e.g., `"my-api"`, `"worker"`) |
+
+<Callout type="info">
+  Defaults to `"igniter-app"` if not set. Always set a meaningful service name for production.
+</Callout>
+
+---
+
+## `withEnvironment(env)`
+
+Sets the environment name.
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withEnvironment(process.env.NODE_ENV ?? "development")
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `environment` | `string` | Environment name (`"development"`, `"staging"`, `"production"`) |
+
+<Callout type="info">
+  Defaults to `"development"` if not set.
+</Callout>
+
+---
+
+## `withVersion(version)`
+
+Sets the service version. Useful for correlating telemetry with deployments.
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withVersion(process.env.APP_VERSION ?? "unknown")
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `version` | `string` | Version string (e.g., `"1.4.2"`) |
+
+---
+
+## `addActor(key, options?)`
+
+Registers an actor type definition. Actors represent who or what initiated an event.
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .addActor("user", { description: "Authenticated user" })
+  .addActor("system", { description: "Automated system action" })
+  .addActor("agent", { description: "AI agent" })
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `string` | Actor type identifier (e.g., `"user"`, `"system"`) |
+| `options.description` | `string?` | Human-readable description |
+| `options.required` | `boolean?` | Whether this actor is required for all events |
+
+<Callout type="warn">
+  **Duplicate actors throw `TELEMETRY_DUPLICATE_ACTOR`.** Each actor key must be unique across the builder.
+</Callout>
+
+---
+
+## `addScope(key, options?)`
+
+Registers a scope type definition. Scopes represent the context or tenant dimension (organization, workspace, project).
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .addScope("organization", { required: true, description: "Tenant organization" })
+  .addScope("workspace", { description: "Team workspace" })
+  .addScope("project", { description: "Specific project" })
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `string` | Scope type identifier (e.g., `"organization"`) |
+| `options.description` | `string?` | Human-readable description |
+| `options.required` | `boolean?` | Whether this scope is required for all events |
+
+<Callout type="warn">
+  **Duplicate scopes throw `TELEMETRY_DUPLICATE_SCOPE`.** Each scope key must be unique across the builder.
+</Callout>
+
+---
+
+## `addEvents(descriptor, options?)`
+
+Registers typed event definitions. Accepts the output of `IgniterTelemetryEvents.build()`.
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .addEvents(BillingEvents)
+  .addEvents(AuthEvents, { mode: "always", strict: true })
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `descriptor` | `IgniterTelemetryEventsDescriptor` | Built event registry |
+| `options.mode` | `"development" \| "always" \| "none"` | Validation mode (default: `"development"`) |
+| `options.strict` | `boolean` | Throw on unknown events (default: `false`) |
+
+---
+
+## `addTransport(adapter)`
+
+Adds a transport adapter. You must add **at least one** transport before calling `.build()`.
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .addTransport(LoggerTransportAdapter.create({ logger: console }))
+  .addTransport(HttpTransportAdapter.create({ url: "https://..." }))
+  .addTransport(SentryTransportAdapter.create({ sentry: Sentry }))
+  .build();
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `adapter` | `IgniterTelemetryTransportAdapter` | A transport adapter instance |
+
+<Callout type="warn">
+  **Falsy adapters throw `TELEMETRY_INVALID_TRANSPORT`.** Always pass a valid adapter instance.
+</Callout>
+
+---
+
+## `withSampling(policy)`
+
+Configures event sampling to control telemetry volume.
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withSampling({
+    debugRate: 0.01,      // 1% of debug events
+    infoRate: 0.1,        // 10% of info events
+    warnRate: 1.0,        // 100% of warn events
+    errorRate: 1.0,       // 100% of error events
+    always: ["*.failed", "security.*"],   // Always sample
+    never: ["health.check", "metrics.*"], // Never sample
+  })
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `debugRate` | `number` | `0.01` | Sampling rate for debug events (0–1) |
+| `infoRate` | `number` | `0.1` | Sampling rate for info events (0–1) |
+| `warnRate` | `number` | `1.0` | Sampling rate for warn events (0–1) |
+| `errorRate` | `number` | `1.0` | Sampling rate for error events (0–1) |
+| `always` | `string[]` | `[]` | Glob patterns always sampled |
+| `never` | `string[]` | `[]` | Glob patterns never sampled |
+
+---
+
+## `withRedaction(policy)`
+
+Configures PII redaction applied before events reach transports.
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withRedaction({
+    denylistKeys: ["password", "token", "authorization"],
+    hashKeys: ["email", "ip", "userId"],
+    maxStringLength: 5000,
+  })
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `denylistKeys` | `string[]` | `[]` | Keys to completely remove (case-insensitive) |
+| `hashKeys` | `string[]` | `[]` | Keys to SHA-256 hash (for correlation) |
+| `maxStringLength` | `number` | `5000` | Maximum string length before truncation |
+
+---
+
+## `withValidation(options)`
+
+Sets global event validation options. Overrides per-registry defaults.
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withValidation({ mode: "always", strict: true })
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mode` | `"development" \| "always" \| "none"` | `"development"` | When to validate |
+| `strict` | `boolean` | `false` | Throw on unknown events |
+
+---
+
+## `withLogger(logger)`
+
+Sets an internal logger for the telemetry manager to report its own operational events (init, transport errors, etc.).
+
+```typescript
+import { IgniterLogger } from "@igniter-js/common";
+
+const telemetry = IgniterTelemetry.create()
+  .withLogger(IgniterLogger.create({ name: "telemetry" }))
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `logger` | `IgniterLogger` | Logger instance from `@igniter-js/common` |
+
+---
+
+## `build()`
+
+Creates the runtime `IgniterTelemetryManager` instance. This is the **final method** in the chain.
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withService("api")
+  .addTransport(loggerAdapter)
+  .build();  // => IgniterTelemetryManager
+```
+
+During `.build()`:
+1. Merges config with defaults
+2. Logs initialization info (if logger is set)
+3. Creates the manager instance
+4. Initializes all transports (`adapter.init()`)
+
+---
+
+## `buildConfig()`
+
+Builds the configuration object without creating the runtime manager. Useful for inspection or testing.
+
+```typescript
+const config = IgniterTelemetry.create()
+  .withService("api")
+  .addEvents(BillingEvents)
+  .withSampling({ errorRate: 1.0 })
+  .buildConfig();
+
+console.log(config.service);     // "api"
+console.log(config.sampling);    // { debugRate: 0.01, infoRate: 0.1, ... }
+```
+
+| Returns | Type | Description |
+|---------|------|-------------|
+| `config` | `IgniterTelemetryConfig` | Resolved configuration object with defaults |
+
+---
+
+## Global Validation
+
+You can set validation globally via `.withValidation()`, which applies to all events:
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withValidation({ mode: "always", strict: true })   // Global
+  .addEvents(BillingEvents, { mode: "development" })   // Per-registry override
+  .addEvents(AuthEvents)                                // Inherits global
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+Per-registry options override global options for that specific registry.
+
+---
+
+## Next Steps
+
+- [Emitting Events](/docs/telemetry/emitting-events) — Three emit modes, attributes, levels, and errors
+- [Sessions](/docs/telemetry/sessions) — Session lifecycle and scoped execution
+- [Validation](/docs/telemetry/validation) — Deep dive into event validation

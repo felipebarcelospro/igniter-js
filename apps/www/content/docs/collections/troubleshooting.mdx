@@ -1,0 +1,284 @@
+---
+title: Troubleshooting
+description: Common errors, error codes, debugging strategies, and solutions for @igniter-js/collections.
+---
+
+## Troubleshooting
+
+Solutions for common issues when working with collections.
+
+---
+
+## Common Errors
+
+### `ADAPTER_REQUIRED`
+
+**Error:** `Adapter is required. Use .withAdapter() to configure.`
+
+**Cause:** `build()` was called without an adapter.
+
+**Fix:**
+```typescript
+// ❌ Missing adapter
+const docs = IgniterCollections.create()
+  .addCollection(Posts)
+  .build();
+
+// ✅ Add an adapter
+const docs = IgniterCollections.create()
+  .withAdapter(new NodeFsAdapter())
+  .addCollection(Posts)
+  .build();
+```
+
+---
+
+### `VALIDATION_ERROR`
+
+**Error:** `Validation failed: Title is required`
+
+**Cause:** Data doesn't match the Zod schema.
+
+**Fix:** Check your schema and data:
+
+```typescript
+// ❌ Missing required field
+await docs.posts.create({
+  data: { description: 'No title here' }
+  // Missing: title
+});
+
+// ✅ Include all required fields
+await docs.posts.create({
+  data: {
+    title: 'My Post',
+    description: 'With a title',
+    author: 'Felipe',
+  }
+});
+```
+
+**Debugging:** The error `details` property includes the full Zod issue array:
+```typescript
+} catch (error) {
+  if (error instanceof IgniterCollectionError) {
+    console.log(error.details.issues);
+    // [{ path: ['title'], message: 'Title is required' }]
+  }
+}
+```
+
+---
+
+### `DOCUMENT_NOT_FOUND`
+
+**Error:** `Document not found: {id}`
+
+**Cause:** The document ID doesn't exist.
+
+**Fix:**
+```typescript
+// ❌ Using a non-existent ID
+const post = await docs.posts.findUnique({
+  where: { id: 'non-existent-id' }
+});
+// post is null — not an error
+
+// ❌ Using update/delete with non-existent ID
+await docs.posts.update({
+  where: { id: 'non-existent-id' },
+  data: { title: 'New' }
+});
+// Throws DOCUMENT_NOT_FOUND
+
+// ✅ Check existence first
+const exists = await docs.posts.findUnique({
+  where: { id: 'my-id' }
+});
+if (exists) {
+  await docs.posts.update({
+    where: { id: 'my-id' },
+    data: { title: 'New' },
+  });
+}
+```
+
+---
+
+### `HOOK_CANCELLED`
+
+**Error:** `Document creation cancelled by hook`
+
+**Cause:** A hook returned `false`, cancelling the operation.
+
+**Fix:** Check your hook logic:
+```typescript
+// ❌ Hook always cancels
+.onCreated(({ value }) => {
+  return false; // Never creates anything
+})
+
+// ✅ Conditional cancellation
+.onCreated(({ value }) => {
+  if (value.data.title.length < 3) {
+    return false; // Cancel short titles
+  }
+  return value;
+})
+```
+
+---
+
+### `PARSE_ERROR`
+
+**Error:** `Failed to parse document: {id}`
+
+**Cause:** The markdown file has malformed frontmatter or invalid YAML.
+
+**Fix:**
+```yaml
+# ❌ Malformed frontmatter
+---
+title: "Unclosed quote
+published: true
+---
+
+# ❌ Invalid YAML
+---
+title: Hello
+  indented: wrong
+---
+```
+
+```yaml
+# ✅ Correct frontmatter
+---
+title: My Post
+published: true
+tags:
+  - typescript
+  - tutorial
+---
+```
+
+---
+
+### `VIEW_NOT_FOUND` / `ACTION_NOT_FOUND`
+
+**Error:** `View "{name}" not found` or `Action "{name}" not found`
+
+**Cause:** View or action was not registered.
+
+**Fix:**
+```typescript
+// ❌ Rendering unregistered view
+await docs.views.render('nonexistent');
+
+// ✅ Register views before use
+const view = IgniterCollectionView.create('dashboard')
+  .withData(async ({ manager }) => ({ items: [] }))
+  .build();
+
+const docs = IgniterCollections.create()
+  .withAdapter(adapter)
+  .addView(view)
+  .build();
+
+await docs.views.render('dashboard'); // ✅ Works
+```
+
+---
+
+## TypeScript Issues
+
+### Missing Type Inference
+
+**Problem:** Collection methods return `any` or generic types.
+
+**Solutions:**
+1. Ensure `strict: true` in `tsconfig.json`
+2. Make sure you use `z.object()` (not `z.any()` or `z.unknown()`)
+3. Use `as const` for `orderBy` values:
+   ```typescript
+   // ❌ 'string' not assignable to 'asc' | 'desc'
+   orderBy: { createdAt: 'desc' }
+
+   // ✅ Use as const
+   orderBy: { createdAt: 'desc' as const }
+   ```
+
+### Module Resolution Errors
+
+**Problem:** `Cannot find module '@igniter-js/collections/adapters'`
+
+**Fix:** Set `moduleResolution: "bundler"` in `tsconfig.json`:
+```json
+{
+  "compilerOptions": {
+    "moduleResolution": "bundler"
+  }
+}
+```
+
+---
+
+## Adapter Issues
+
+### File Not Found After Creation
+
+**Problem:** Document created but file doesn't appear on disk.
+
+**Debug:**
+```typescript
+const post = await docs.posts.create({ data: { title: 'Test' } });
+console.log(post.path); // Check the resolved path
+```
+
+**Common causes:**
+- `basePath` not set to the expected root
+- Pattern doesn't resolve to expected directory
+- File was written but to a different location
+
+### S3 Access Denied
+
+**Problem:** `AccessDenied` when using `BunS3Adapter`.
+
+**Fix:** Verify:
+1. IAM policy includes `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, `s3:ListBucket`
+2. Bucket exists in the specified region
+3. Credentials have not expired
+
+---
+
+## Performance
+
+### Slow `findMany` with Large Collections
+
+**Solutions:**
+- Always use `take` for pagination: `findMany({ take: 20, skip: 0 })`
+- Use `select` to return only needed fields
+- Add `where` filters to narrow the result set
+- For full-text search, lower the `threshold` or narrow `fields`
+
+### Memory Usage with `findMany`
+
+**Problem:** Loading thousands of documents into memory.
+
+**Solution:** Always paginate:
+```typescript
+// ❌ Loads everything
+const allPosts = await docs.posts.findMany();
+
+// ✅ Paginate
+const page = await docs.posts.findMany({ take: 50, skip: 0 });
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Best Practices" description="Patterns, anti-patterns, and production tips." href="/docs/collections/best-practices" />
+  <Card title="Framework Integration" description="Next.js, Express, Astro, and Remix examples." href="/docs/collections/framework-integration" />
+  <Card title="API Reference" description="Complete reference for all builders and managers." href="/docs/collections/api-reference" />
+</Cards>

@@ -279,10 +279,11 @@ export async function handleAction(arg: string, options: OptionsType) {
 - `--pm, --package-manager <manager>` - npm, yarn, pnpm, bun
 - `--template <template>` - Specific starter template
 - `--add-ons <add-ons>` - Comma-separated add-on list
-- `--database <database>` - Database provider
 - `--no-git` - Skip git initialization
 - `--no-install` - Skip dependency installation
 - `--no-docker` - Skip Docker Compose setup
+
+> **Note:** The `--database` option is registered in Commander but not wired to the action handler. Database selection happens through the `--add-ons "database:orm:provider"` inline syntax or via prompts.
 
 #### Initialization Flow
 

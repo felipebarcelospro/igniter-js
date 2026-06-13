@@ -1,0 +1,214 @@
+---
+title: Hooks & Telemetry
+description: Monitor agent operations with lifecycle hooks and structured telemetry events. Agent start/error, tool execution, MCP connections, and memory operations.
+---
+
+## Hooks & Telemetry
+
+Agents provide two complementary observability mechanisms: **lifecycle hooks** for inline callbacks and **telemetry events** for structured, production-grade monitoring.
+
+---
+
+## Lifecycle Hooks
+
+Hooks give you direct callbacks on key agent events. Configure them on the agent or manager builder.
+
+### Available Hooks
+
+| Hook | Signature | When it fires |
+|------|-----------|---------------|
+| `onAgentStart` | `(name: string) => void` | Agent starts successfully |
+| `onAgentError` | `(name: string, error: Error) => void` | Agent fails to start or encounters a fatal error |
+| `onToolCallStart` | `(agentName: string, toolName: string, input: unknown) => void` | Before a tool executes |
+| `onToolCallEnd` | `(agentName: string, toolName: string, output: unknown) => void` | After a tool completes successfully |
+| `onToolCallError` | `(agentName: string, toolName: string, error: Error) => void` | When a tool execution fails |
+| `onMCPStart` | `(agentName: string, mcpName: string) => void` | Before connecting to an MCP server |
+| `onMCPError` | `(agentName: string, mcpName: string, error: Error) => void` | When an MCP connection fails |
+
+### Configuring Hooks
+
+On a single agent:
+
+```typescript
+const agent = IgniterAgent
+  .create('bot')
+  .withModel(openai('gpt-4o'))
+  .onAgentStart((name) => console.log(`${name} is live`))
+  .onAgentError((name, err) => console.error(`${name} crashed:`, err))
+  .onToolCallStart((agent, tool, input) => {
+    console.log(`[${agent}] Calling ${tool} with:`, input)
+  })
+  .onToolCallEnd((agent, tool, output) => {
+    console.log(`[${agent}] ${tool} returned:`, output)
+  })
+  .onToolCallError((agent, tool, err) => {
+    console.error(`[${agent}] ${tool} failed:`, err.message)
+  })
+  .onMCPStart((agent, mcp) => console.log(`${agent}: connecting MCP '${mcp}'`))
+  .onMCPError((agent, mcp, err) => {
+    console.error(`${agent}: MCP '${mcp}' failed:`, err.message)
+  })
+  .build()
+```
+
+On a manager (applied to all registered agents):
+
+```typescript
+const manager = IgniterAgentManager
+  .create()
+  .onToolCallStart((agentName, tool, input) => {
+    // Track tool usage across all agents
+    metrics.increment('tool_calls', { agent: agentName, tool })
+  })
+  .onToolCallEnd((agentName, tool, output) => {
+    metrics.timing('tool_duration', { agent: agentName, tool })
+  })
+  .build()
+```
+
+### Runtime Hook Attachment
+
+Hooks can also be attached after building via `attachHooks()`:
+
+```typescript
+const agent = IgniterAgent.create('bot').withModel(openai('gpt-4o')).build()
+
+agent.attachHooks({
+  onAgentStart: (name) => console.log(`Started: ${name}`),
+  onToolCallStart: (agentName, tool) => console.log(`Tool: ${tool}`),
+})
+```
+
+<Callout type="info">
+  When using a manager, hooks set on the manager are **merged** with any hooks already set on individual agents. Both will fire.
+</Callout>
+
+---
+
+## Telemetry Integration
+
+For production-grade observability, use `@igniter-js/telemetry` to emit structured events:
+
+```typescript
+import { IgniterTelemetry } from '@igniter-js/telemetry'
+
+const telemetry = IgniterTelemetry.create().build()
+
+const agent = IgniterAgent
+  .create('bot')
+  .withModel(openai('gpt-4o'))
+  .withTelemetry(telemetry)
+  .build()
+```
+
+### Telemetry Events
+
+All events use the `igniter.agent.*` namespace:
+
+#### Lifecycle Events
+
+| Event | Level | Key Attributes |
+|-------|-------|----------------|
+| `igniter.agent.lifecycle.start.started` | debug | `ctx.agent.name`, `ctx.lifecycle.toolsetCount`, `ctx.lifecycle.mcpCount` |
+| `igniter.agent.lifecycle.start.success` | debug | + `ctx.lifecycle.durationMs` |
+| `igniter.agent.lifecycle.start.error` | error | + `ctx.error.code`, `ctx.error.message` |
+| `igniter.agent.lifecycle.stop.started` | debug | Same as start |
+| `igniter.agent.lifecycle.stop.success` | debug | + duration |
+| `igniter.agent.lifecycle.stop.error` | error | + error details |
+
+#### MCP Events
+
+| Event | Key Attributes |
+|-------|---------------|
+| `igniter.agent.mcp.connect.started` | `ctx.mcp.name`, `ctx.mcp.type` |
+| `igniter.agent.mcp.connect.success` | + `ctx.mcp.toolCount`, `ctx.mcp.durationMs` |
+| `igniter.agent.mcp.connect.error` | + `ctx.error.*` |
+| `igniter.agent.mcp.disconnect.started` | `ctx.mcp.name`, `ctx.mcp.type` |
+| `igniter.agent.mcp.disconnect.success` | + `ctx.mcp.durationMs` |
+| `igniter.agent.mcp.disconnect.error` | + `ctx.error.*` |
+
+#### Memory Events
+
+| Event | Key Attributes |
+|-------|---------------|
+| `igniter.agent.memory.operation.started` | `ctx.memory.operation`, `ctx.memory.scope` |
+| `igniter.agent.memory.operation.success` | + `ctx.memory.durationMs`, `ctx.memory.count` |
+| `igniter.agent.memory.operation.error` | + `ctx.error.code`, `ctx.error.message` |
+
+### Processing Telemetry Events
+
+```typescript
+import { IgniterTelemetry } from '@igniter-js/telemetry'
+
+const telemetry = IgniterTelemetry
+  .create()
+  .onEvent('igniter.agent.lifecycle.start.error', (event) => {
+    // Send to your alerting system
+    alerting.send({
+      severity: 'critical',
+      message: `Agent ${event.attributes['ctx.agent.name']} failed to start`,
+    })
+  })
+  .onEvent('igniter.agent.mcp.connect.error', (event) => {
+    alerting.send({
+      severity: 'warning',
+      message: `MCP '${event.attributes['ctx.mcp.name']}' failed`,
+    })
+  })
+  .onEvent('igniter.agent.memory.operation.error', (event) => {
+    console.error(
+      `Memory operation '${event.attributes['ctx.memory.operation']}' failed:`,
+      event.attributes['ctx.error.message']
+    )
+  })
+  .build()
+```
+
+---
+
+## Logger Integration
+
+Attach an `IgniterLogger` for structured debug/info/error logging:
+
+```typescript
+import { IgniterLogger } from '@igniter-js/common'
+
+const agent = IgniterAgent
+  .create('bot')
+  .withModel(openai('gpt-4o'))
+  .withLogger(myLogger)
+  .build()
+
+// The logger receives structured messages:
+// debug: "IgniterAgent.start started" { agent: 'bot', toolsetCount: 2, mcpCount: 1 }
+// success: "IgniterAgent.start success" { agent: 'bot', durationMs: 342 }
+// error: "IgniterAgent.mcp.connect failed" Error(...)
+```
+
+When using a manager, loggers are automatically scoped with `logger.child('IgniterAgent', { agent: name })`:
+
+```typescript
+const manager = IgniterAgentManager
+  .create()
+  .withLogger(myLogger)     // Automatically scoped per agent
+  .addAgent('support', supportAgent)
+  .build()
+```
+
+---
+
+## Choosing Hooks vs Telemetry
+
+| Use Case | Hooks | Telemetry |
+|----------|-------|-----------|
+| **Inline logging** | ✅ Best | Overkill |
+| **Custom side effects** | ✅ Best | Not designed for |
+| **Production monitoring** | No | ✅ Best |
+| **Aggregated metrics** | Manual | ✅ Built-in |
+| **Alerting** | Manual | ✅ Structured events |
+| **Debugging** | ✅ Immediate | ✅ Searchable |
+| **Performance** | Minimal overhead | Optimized pipeline |
+
+<Callout type="info">
+  You can use **both** — hooks for immediate reactions (logging, side effects) and telemetry for production monitoring (metrics, alerting, dashboards).
+</Callout>

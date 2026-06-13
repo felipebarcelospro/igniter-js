@@ -1,0 +1,19 @@
+{
+  "title": "CLI",
+  "root": true,
+  "pages": [
+    "---Getting Started---",
+    "index",
+    "installation",
+    "quick-start",
+    "---Commands---",
+    "[commands]",
+    "---Reference---",
+    "starters",
+    "add-ons",
+    "real-world",
+    "api-reference",
+    "best-practices",
+    "troubleshooting"
+  ]
+}

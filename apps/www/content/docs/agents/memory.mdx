@@ -1,0 +1,276 @@
+---
+title: Memory System
+description: Persistent memory for agent conversations. Working memory, chat history, chat sessions, in-memory adapter, JSON file adapter, and building custom adapters.
+---
+
+## Memory System
+
+The memory system enables agents to maintain context across multiple conversation turns. It provides three layers of persistence: **working memory** (key-value state), **chat history** (message logs), and **chat sessions** (conversation metadata). All layers are backed by pluggable adapters.
+
+---
+
+## Memory Architecture
+
+```
+┌──────────────────────────────────────────────┐
+│              IgniterAgentMemoryCore           │
+│  (telemetry wrapping, error handling, logging) │
+├──────────────────────────────────────────────┤
+│              Memory Provider Interface         │
+├──────────────┬──────────────┬────────────────┤
+│  Working     │   Chat       │   Chat         │
+│  Memory      │   History    │   Sessions     │
+│  (key-value) │  (messages)  │  (metadata)    │
+├──────────────┴──────────────┴────────────────┤
+│              Adapter Implementations           │
+├──────────────┬──────────────┬────────────────┤
+│  In-Memory   │  JSON File   │   Custom       │
+│  Adapter     │  Adapter     │   (Redis, PG)  │
+└──────────────┴──────────────┴────────────────┘
+```
+
+---
+
+## Enabling Memory
+
+Memory is configured on the agent builder via `.withMemory()`:
+
+```typescript
+import { IgniterAgentInMemoryAdapter } from '@igniter-js/agents'
+
+const adapter = IgniterAgentInMemoryAdapter.create({
+  namespace: 'my-app',
+  maxChats: 50,
+})
+
+const memoryConfig = {
+  provider: adapter,
+  working: { enabled: true, scope: 'chat' },
+  history: { enabled: true, limit: 100 },
+  chats: { enabled: true },
+}
+
+const agent = IgniterAgent
+  .create('memory-bot')
+  .withModel(openai('gpt-4o'))
+  .withMemory(memoryConfig)
+  .build()
+```
+
+### Memory Config Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `provider` | `IgniterAgentMemoryProvider` | The adapter instance |
+| `working.enabled` | `boolean` | Enable working memory (key-value state) |
+| `working.scope` | `string` | Scope key for working memory (e.g., `'chat'`, `'session'`) |
+| `history.enabled` | `boolean` | Enable chat message history |
+| `history.limit` | `number` | Maximum messages to keep per chat |
+| `chats.enabled` | `boolean` | Enable chat session management |
+
+---
+
+## Working Memory
+
+Working memory provides a key-value store scoped to an identifier (typically the chat ID). It's ideal for storing preferences, state, and transient context.
+
+```typescript
+// Inside the agent's memory runtime:
+await agent.memory.updateWorkingMemory({
+  scope: 'chat',
+  identifier: 'chat_123',
+  content: 'User prefers TypeScript. Uses VS Code. Project: igniter-js.',
+})
+
+const memory = await agent.memory.getWorkingMemory({
+  scope: 'chat',
+  identifier: 'chat_123',
+})
+
+console.log(memory?.content)
+// → "User prefers TypeScript. Uses VS Code. Project: igniter-js."
+console.log(memory?.updatedAt)
+// → 2026-06-02T17:00:00.000Z
+```
+
+<Callout type="info">
+  Working memory is automatically injected into the agent's context before each generation call, so the AI can reference it in its responses.
+</Callout>
+
+---
+
+## Chat History & Sessions
+
+The memory system manages full conversation persistence:
+
+```typescript
+// Messages are automatically saved during generation
+// You can also query them:
+const messages = await agent.memory.getMessages({
+  chatId: 'chat_123',
+  limit: 50,
+})
+
+// Manage chat sessions
+await agent.memory.saveChat({
+  chatId: 'chat_123',
+  userId: 'user_001',
+  title: 'TypeScript Help',
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  messageCount: 12,
+})
+
+const chats = await agent.memory.getChats({
+  userId: 'user_001',
+})
+
+await agent.memory.updateChatTitle('chat_123', 'Updated Title')
+await agent.memory.deleteChat('chat_123')
+```
+
+---
+
+## Built-in Adapters
+
+### In-Memory Adapter
+
+For development, testing, and short-lived applications. Data is lost on restart.
+
+```typescript
+import { IgniterAgentInMemoryAdapter } from '@igniter-js/agents'
+
+const adapter = IgniterAgentInMemoryAdapter.create({
+  namespace: 'dev',       // Namespace for multi-app isolation
+  maxMessages: 1000,      // Max messages per chat (default: 1000)
+  maxChats: 100,          // Max chat sessions (default: 100)
+})
+
+// Utility methods
+await adapter.clear()                  // Clear all data
+console.log(adapter.isConnected())    // Always true
+```
+
+### JSON File Adapter
+
+For single-machine production deployments. Data persists to a JSON file.
+
+```typescript
+import { IgniterAgentJSONFileAdapter } from '@igniter-js/agents'
+
+const adapter = IgniterAgentJSONFileAdapter.create({
+  filePath: './data/agent-memory.json',
+  namespace: 'prod',
+})
+
+// Data is automatically persisted to disk
+// Survives process restarts
+```
+
+<Callout type="warn">
+  JSON File adapter is suitable for single-machine deployments. For multi-server architectures, use a shared backend like Redis or PostgreSQL via a custom adapter.
+</Callout>
+
+---
+
+## Building a Custom Adapter
+
+Implement the `IgniterAgentMemoryProvider` interface to create a custom adapter:
+
+```typescript
+import type {
+  IgniterAgentMemoryProvider,
+  IgniterAgentWorkingMemory,
+  IgniterAgentConversationMessage,
+  IgniterAgentChatSession,
+  IgniterAgentWorkingMemoryParams,
+  IgniterAgentUpdateWorkingMemoryParams,
+  IgniterAgentGetMessagesParams,
+  IgniterAgentGetChatsParams,
+} from '@igniter-js/agents'
+
+class RedisMemoryAdapter implements IgniterAgentMemoryProvider {
+  constructor(private redis: Redis) {}
+
+  // Working memory
+  async getWorkingMemory(params: IgniterAgentWorkingMemoryParams) {
+    const key = `wm:${params.scope}:${params.identifier}`
+    return this.redis.get(key).then(JSON.parse)
+  }
+
+  async updateWorkingMemory(params: IgniterAgentUpdateWorkingMemoryParams) {
+    const key = `wm:${params.scope}:${params.identifier}`
+    await this.redis.set(key, JSON.stringify({
+      content: params.content,
+      updatedAt: new Date().toISOString(),
+    }))
+  }
+
+  // Messages
+  async saveMessage(message: IgniterAgentConversationMessage) {
+    const key = `msgs:${message.chatId}`
+    await this.redis.lpush(key, JSON.stringify(message))
+    await this.redis.ltrim(key, 0, 999) // Keep last 1000
+  }
+
+  async getMessages<T>(params: IgniterAgentGetMessagesParams) {
+    const key = `msgs:${params.chatId}`
+    const raw = await this.redis.lrange(key, 0, params.limit ?? 50)
+    return raw.map(m => JSON.parse(m)) as T[]
+  }
+
+  // Chat sessions
+  async saveChat(chat: IgniterAgentChatSession) {
+    await this.redis.hset('chats', chat.chatId, JSON.stringify(chat))
+  }
+
+  async getChats(params: IgniterAgentGetChatsParams) {
+    const raw = await this.redis.hvals('chats')
+    return raw.map(c => JSON.parse(c))
+  }
+
+  async getChat(chatId: string) {
+    const raw = await this.redis.hget('chats', chatId)
+    return raw ? JSON.parse(raw) : null
+  }
+
+  async updateChatTitle(chatId: string, title: string) {
+    const chat = await this.getChat(chatId)
+    if (chat) {
+      chat.title = title
+      await this.saveChat(chat)
+    }
+  }
+
+  async deleteChat(chatId: string) {
+    await this.redis.hdel('chats', chatId)
+    await this.redis.del(`msgs:${chatId}`)
+  }
+}
+```
+
+### Memory Provider Interface
+
+| Method | Required | Description |
+|--------|----------|-------------|
+| `getWorkingMemory(params)` | No | Retrieve scoped working memory |
+| `updateWorkingMemory(params)` | No | Update/create scoped working memory |
+| `saveMessage(message)` | No | Save a conversation message |
+| `getMessages(params)` | No | Get messages for a chat |
+| `saveChat(chat)` | No | Save/update a chat session |
+| `getChats(params)` | No | List chat sessions |
+| `getChat(chatId)` | No | Get a single chat session |
+| `updateChatTitle(chatId, title)` | No | Update chat title |
+| `deleteChat(chatId)` | No | Delete a chat and its messages |
+
+---
+
+## Telemetry & Memory
+
+When telemetry is enabled, every memory operation emits structured events:
+
+| Event | Attributes |
+|-------|-----------|
+| `igniter.agent.memory.operation.started` | `ctx.agent.name`, `ctx.memory.operation`, `ctx.memory.scope` |
+| `igniter.agent.memory.operation.success` | + `ctx.memory.durationMs`, `ctx.memory.count` |
+| `igniter.agent.memory.operation.error` | + `ctx.error.code`, `ctx.error.message` |

@@ -1,4 +1,4 @@
-import { Bot, Cloud, Wifi, Wrench, Puzzle, Terminal, Layers, Zap } from "lucide-react";
+import { Activity, Bot, Clock, Database, FileText, Globe, Grid3x3, HardDrive, Mail, MessageCircle, Plug, Server, Terminal, Wrench } from "lucide-react";
 import { type Config } from "./types";
 
 export const config: Config = {
@@ -26,52 +26,88 @@ export const config: Config = {
   // Features
   features: [
     {
-      title: "End-to-End Type Safety",
+      title: "Type-Safe RPC",
       description:
-        "Write your API once, get fully-typed clients automatically. Pure TypeScript magic with zero config.",
+        "End-to-end type safety from server to client. Define your API once, get fully-typed clients automatically. Built-in Dependency Injection and multi-runtime support for Next.js, Express, Bun, Hono and Deno.",
       icon: <Wrench className="size-4" />,
     },
     {
-      title: "Framework Agnostic",
+      title: "CLI & Scaffolding",
       description:
-        "Works with Next.js, Express, Hono, and Bun. Built on Web Standards for maximum compatibility.",
-      icon: <Cloud className="size-4" />,
-    },
-    {
-      title: "Real-Time & Jobs",
-      description:
-        "Server-Sent Events and job queues built-in. Add live updates and async processing.",
-      icon: <Wifi className="size-4" />,
-    },
-    {
-      title: "Code Agents Ready",
-      description:
-        "Native training for Cursor, Claude Code, Copilot, and 15+ AI assistants. Zero configuration required.",
-      icon: <Bot className="size-4" />,
-    },
-    {
-      title: "Powerful Plugin System",
-      description:
-        "Self-contained modules that add routes, middleware, and type-safe actions across projects.",
-      icon: <Puzzle className="size-4" />,
-    },
-    {
-      title: "CLI & Developer Tools",
-      description:
-        "Interactive CLI with scaffolding and live dashboard. Start instantly with 'igniter init'.",
+        "Start any project with `igniter init`. Interactive scaffolding, project generators, and a live development dashboard — everything you need to go from zero to deployed.",
       icon: <Terminal className="size-4" />,
     },
     {
-      title: "Feature-Based",
+      title: "Multi-Adapter Data Store",
       description:
-        "Organize by business features, not layers. High cohesion, low coupling for better scalability.",
-      icon: <Layers className="size-4" />,
+        "Agnostic data layer with Redis, SQLite and in-memory adapters. Caching, Pub/Sub and atomic operations — switch adapters without changing your application code.",
+      icon: <Database className="size-4" />,
     },
     {
-      title: "Dependency Injection",
+      title: "Background Jobs",
       description:
-        "Type-safe DI through the Context system. Inject databases and services in a testable way.",
-      icon: <Zap className="size-4" />,
+        "Persistent job queues with scheduling, CRON, retries and concurrency control. Supports in-memory, SQLite or BullMQ storage — production-ready out of the box.",
+      icon: <Clock className="size-4" />,
+    },
+    {
+      title: "File Storage",
+      description:
+        "Upload, download and manage files with a unified API. Local filesystem and S3-compatible adapters — move between providers with a single config line.",
+      icon: <HardDrive className="size-4" />,
+    },
+    {
+      title: "Email Sending",
+      description:
+        "Send transactional emails with templates, queues and pluggable providers (SMTP, SendGrid, Resend). Adapter-agnostic — swap providers without touching your logic.",
+      icon: <Mail className="size-4" />,
+    },
+    {
+      title: "Type-Safe HTTP Client",
+      description:
+        "A fully-typed HTTP client for consuming external APIs. Automatic Zod validation on every response — catch integration errors at compile time, not runtime.",
+      icon: <Globe className="size-4" />,
+    },
+    {
+      title: "Structured Logger",
+      description:
+        "Structured logging with levels, contexts and multiple destinations (console, file, OpenTelemetry). Debug faster with request-scoped traces.",
+      icon: <FileText className="size-4" />,
+    },
+    {
+      title: "OpenTelemetry Tracing",
+      description:
+        "Distributed tracing, metrics and observability via OpenTelemetry. See every request across services — identify bottlenecks and debug production issues.",
+      icon: <Activity className="size-4" />,
+    },
+    {
+      title: "AI Agent Framework",
+      description:
+        "Production-grade, type-safe AI agent framework built on Vercel AI SDK. Fluent builder API for creating agents with custom tools (Zod), persistent memory, MCP integration, and multi-agent orchestration. Telemetry, lifecycle hooks, and prompt templates included.",
+      icon: <Bot className="size-4" />,
+    },
+    {
+      title: "Multi-Platform Bots",
+      description:
+        "Build bots for Telegram, WhatsApp and Discord with a single unified API. One codebase, multiple platforms — with built-in middleware and state management.",
+      icon: <MessageCircle className="size-4" />,
+    },
+    {
+      title: "Schema-Driven Collections",
+      description:
+        "Type-safe data collections with queries, views, watchers and real-time events. Like a lightweight embedded database with full TypeScript inference.",
+      icon: <Grid3x3 className="size-4" />,
+    },
+    {
+      title: "Connector Management",
+      description:
+        "Type-safe, multi-tenant connector management for third-party integrations. Define connectors with Zod schemas, actions, and OAuth 2.0 with PKCE. Multi-tenant scopes, AES-256-GCM encryption, webhook pipelines, and pluggable adapters (Prisma, mock).",
+      icon: <Plug className="size-4" />,
+    },
+    {
+      title: "MCP Server",
+      description:
+        "Transform any Igniter.js API into an MCP (Model Context Protocol) server instantly. Your AI agents can consume your APIs natively — zero boilerplate.",
+      icon: <Server className="size-4" />,
     },
   ],
 

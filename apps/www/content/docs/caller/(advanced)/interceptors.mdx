@@ -1,93 +1,356 @@
 ---
 title: Interceptors
-description: Transform requests and responses globally with interceptors.
+description: Transform requests and responses globally with interceptors. Perfect for authentication, logging, error normalization, and request modification.
 ---
 
-Interceptors allow you to run custom logic before a request is sent or after a response is received. They are perfect for cross-cutting concerns like authentication, logging, and error normalization.
+Interceptors allow you to run custom logic before a request is sent or after a response is received. They are the primary mechanism for cross-cutting concerns like authentication, logging, error normalization, and request enrichment.
+
+---
 
 ## Request Interceptors
 
-Request interceptors receive the current request options and should return the modified options. They run in the order they were registered.
+Request interceptors receive the current request configuration and return the modified configuration. They execute **in order** before every request.
 
 ```typescript
 const api = IgniterCaller.create()
-  .withRequestInterceptor(async (request) => {
-    // Add an authentication header
-    return {
-      ...request,
-      headers: {
-        ...request.headers,
-        'Authorization': `Bearer ${process.env.API_TOKEN}`,
-      },
-    };
-  })
-  .withRequestInterceptor(async (request) => {
-    // Add a unique request ID
-    return {
-      ...request,
-      headers: {
-        ...request.headers,
-        'X-Request-ID': crypto.randomUUID(),
-      },
-    };
-  })
+  .withBaseUrl('https://api.example.com')
+
+  // Add auth token
+  .withRequestInterceptor(async (config) => ({
+    ...config,
+    headers: {
+      ...config.headers,
+      'Authorization': `Bearer ${getAuthToken()}`,
+    },
+  }))
+
+  // Add request tracing
+  .withRequestInterceptor(async (config) => ({
+    ...config,
+    headers: {
+      ...config.headers,
+      'X-Request-ID': crypto.randomUUID(),
+      'X-Timestamp': new Date().toISOString(),
+    },
+  }))
+
   .build();
+```
+
+### Signature
+
+```typescript
+type RequestInterceptor = (
+  config: IgniterCallerRequestOptions,
+) => IgniterCallerRequestOptions | Promise<IgniterCallerRequestOptions>;
 ```
 
 ---
 
 ## Response Interceptors
 
-Response interceptors receive the `IgniterCallerApiResponse` envelope and can transform the data, handle specific errors, or perform side effects.
+Response interceptors receive the response envelope and return a (possibly transformed) envelope. They execute **in order** after every response.
 
 ```typescript
 const api = IgniterCaller.create()
   .withResponseInterceptor(async (response) => {
-    // Check for maintenance mode
-    if (response.status === 503) {
-      console.warn('API is in maintenance mode');
-    }
-    
-    // Normalize data structure if needed
-    if (response.data && 'deprecated_field' in response.data) {
-      // transform data...
-    }
-    
+    // Log all responses
+    console.log(`[${response.status}] ${response.headers?.get('x-request-id')}`);
     return response;
   })
+
+  .withResponseInterceptor(async (response) => {
+    // Normalize empty data
+    if (response.data === '' || response.data === undefined) {
+      return { ...response, data: null as any };
+    }
+    return response;
+  })
+
   .build();
 ```
 
----
-
-## Shared State
-
-Interceptors can be used to manage shared state, like refreshing tokens:
+### Signature
 
 ```typescript
-let isRefreshing = false;
-
-const api = IgniterCaller.create()
-  .withResponseInterceptor(async (response) => {
-    if (response.status === 401 && !isRefreshing) {
-      isRefreshing = true;
-      await refreshToken();
-      isRefreshing = false;
-      
-      // Note: You would typically retry the request here
-      // but simple interceptors return the original response.
-    }
-    return response;
-  })
-  .build();
+type ResponseInterceptor = <T>(
+  response: IgniterCallerApiResponse<T>,
+) => IgniterCallerApiResponse<T> | Promise<IgniterCallerApiResponse<T>>;
 ```
 
 ---
 
-## Comparison with Middleware
+## Common Patterns
 
-Unlike traditional middleware patterns that use `next()`, Caller interceptors follow a functional transformation pattern (`options -> options` and `response -> response`). This makes them easier to test and compose.
+### Authentication Token Refresh
 
-<Callout type="warn" title="Async Handling">
-  Always remember to `await` any asynchronous operations inside your interceptors. If you don't return a Promise (or the modified object), the request chain may break.
+A complete auth interceptor that handles token refresh on 401 responses:
+
+```typescript
+let accessToken: string | null = null;
+let refreshPromise: Promise<string> | null = null;
+
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+
+  // Inject token
+  .withRequestInterceptor(async (config) => {
+    if (!accessToken) {
+      accessToken = await refreshAccessToken();
+    }
+    return {
+      ...config,
+      headers: {
+        ...config.headers,
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    };
+  })
+
+  // Handle 401 — clear token so next request refreshes
+  .withResponseInterceptor(async (response) => {
+    if (response.status === 401) {
+      accessToken = null;
+      // Optionally redirect to login
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
+    return response;
+  })
+
+  .build();
+
+async function refreshAccessToken(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = fetch('/api/auth/refresh', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => data.accessToken)
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+}
+```
+
+### Request Logging Middleware
+
+```typescript
+const api = IgniterCaller.create()
+  .withRequestInterceptor(async (config) => {
+    const startTime = Date.now();
+
+    // Store start time on the config for use in response interceptor
+    (config as any)._startTime = startTime;
+
+    console.log(`→ ${config.method} ${config.url}`);
+    return config;
+  })
+
+  .withResponseInterceptor(async (response) => {
+    const startTime = (response as any)._startTime as number;
+    const duration = startTime ? Date.now() - startTime : undefined;
+
+    const emoji = (response.status ?? 0) < 400 ? '✅' : '❌';
+    const timing = duration ? ` (${duration}ms)` : '';
+    console.log(`${emoji} ${response.status}${timing}`);
+
+    return response;
+  })
+
+  .build();
+```
+
+### Error Normalization
+
+```typescript
+const api = IgniterCaller.create()
+  .withResponseInterceptor(async (response) => {
+    // Some APIs wrap errors differently — normalize them
+    if (response.error && (response.error as any).details?.errors) {
+      return {
+        ...response,
+        error: {
+          ...response.error,
+          message: formatValidationErrors((response.error as any).details.errors),
+        },
+      } as any;
+    }
+
+    // Convert 5xx errors to user-friendly messages in production
+    if ((response.status ?? 0) >= 500 && process.env.NODE_ENV === 'production') {
+      return {
+        ...response,
+        error: {
+          ...response.error,
+          message: 'An unexpected error occurred. Please try again.',
+        },
+      } as any;
+    }
+
+    return response;
+  })
+
+  .build();
+```
+
+### Conditional Headers
+
+Add headers based on request characteristics:
+
+```typescript
+const api = IgniterCaller.create()
+  .withRequestInterceptor(async (config) => {
+    const headers: Record<string, string> = {};
+
+    // Add idempotency key for mutating requests
+    if (['POST', 'PUT', 'PATCH'].includes(config.method)) {
+      headers['X-Idempotency-Key'] = crypto.randomUUID();
+    }
+
+    // Add version header for specific endpoints
+    if (config.url?.startsWith('/v2/')) {
+      headers['Accept-Version'] = '2.0';
+    }
+
+    return {
+      ...config,
+      headers: { ...config.headers, ...headers },
+    };
+  })
+
+  .build();
+```
+
+### Request Deduplication
+
+Prevent duplicate in-flight requests for the same URL:
+
+```typescript
+const inflightRequests = new Map<string, Promise<any>>();
+
+const api = IgniterCaller.create()
+  .withRequestInterceptor(async (config) => {
+    const key = `${config.method}:${config.url}`;
+
+    if (config.method === 'GET') {
+      const existing = inflightRequests.get(key);
+      if (existing) {
+        // Return a marker — this doesn't actually deduplicate at the execute level
+        // For true deduplication, use .stale() caching instead
+      }
+    }
+
+    return config;
+  })
+
+  .build();
+```
+
+<Callout type="info" title="For request deduplication">
+  Interceptors alone can't fully deduplicate requests. Use `.stale()` caching for automatic deduplication of identical GET requests within the stale window.
 </Callout>
+
+---
+
+## Interceptor Execution Order
+
+Interceptors execute in the order they're registered:
+
+```
+Request Interceptors (first → last)
+     ↓
+   Fetch
+     ↓
+Response Interceptors (first → last)
+```
+
+```typescript
+const api = IgniterCaller.create()
+  // Runs first: adds auth
+  .withRequestInterceptor(authInterceptor)
+  // Runs second: adds tracing
+  .withRequestInterceptor(tracingInterceptor)
+  .build();
+
+// On response:
+// tracingInterceptor response runs first
+// authInterceptor response runs second
+```
+
+---
+
+## Testing Interceptors
+
+```typescript
+import { describe, it, expect, vi } from 'vitest';
+
+describe('Auth Interceptor', () => {
+  it('adds authorization header to every request', async () => {
+    const interceptor = vi.fn(async (config) => ({
+      ...config,
+      headers: { ...config.headers, 'Authorization': 'Bearer test-token' },
+    }));
+
+    const api = IgniterCaller.create()
+      .withRequestInterceptor(interceptor)
+      .build();
+
+    // Interceptor runs on execute
+    await api.get('/test').execute();
+    expect(interceptor).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes empty responses', async () => {
+    const interceptor = async (response: any) => {
+      if (response.data === '') {
+        return { ...response, data: null };
+      }
+      return response;
+    };
+
+    const result = await interceptor({ data: '', status: 200, headers: new Headers() });
+    expect(result.data).toBeNull();
+  });
+});
+```
+
+---
+
+## Best Practices
+
+<Callout type="success" title="Interceptor Guidelines">
+  - **Keep interceptors focused** — each interceptor should do one thing well
+  - **Register in order** — auth first, then tracing, then domain-specific logic
+  - **Always return the config/response** — don't accidentally drop the object
+  - **Handle errors gracefully** — a failing interceptor shouldn't break all requests
+  - **Test interceptors in isolation** — they're pure functions, easy to unit test
+</Callout>
+
+<Callout type="warn" title="Common Pitfalls">
+  - **Don't** forget to `await` async operations — hanging promises break the request chain
+  - **Don't** mutate the config object — always spread and return a new object
+  - **Don't** use interceptors for data fetching — use the request builder's `.execute()` for that
+  - **Don't** register 20 interceptors — group related logic into fewer, well-named interceptors
+</Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Caching"
+    description="Improve performance with built-in response caching"
+    href="/docs/caller/caching"
+  />
+  <Card
+    title="Retries"
+    description="Handle transient failures with automatic retry logic"
+    href="/docs/caller/retries"
+  />
+  <Card
+    title="Real-World Examples"
+    description="See interceptors in production scenarios"
+    href="/docs/caller/real-world-examples"
+  />
+</Cards>

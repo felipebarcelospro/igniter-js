@@ -1,0 +1,132 @@
+---
+title: Installation
+description: Install the Igniter.js CLI globally or per-project. Node.js 18.17+ required. Supports npm, pnpm, yarn, and bun.
+---
+
+## Installation
+
+The CLI can be installed **globally** (recommended) or run **on-demand** with your package manager's executor. It requires **Node.js 18.17 or later**.
+
+<Callout type="warn">
+  The CLI uses `commander` for argument parsing, `@clack/prompts` for interactive prompts, and `chokidar` for file watching. These are bundled — no external system dependencies.
+</Callout>
+
+---
+
+## Global Installation
+
+Install once, use everywhere:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install -g @igniter-js/cli
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add -g @igniter-js/cli
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn global add @igniter-js/cli
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add -g @igniter-js/cli
+    ```
+  </Tab>
+</Tabs>
+
+Verify the installation:
+
+```bash
+igniter --help
+```
+
+You should see the top-level help output listing `init`, `generate`, and `dev` commands.
+
+---
+
+## Run Without Installing
+
+You can run the CLI on-demand without global installation:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npx @igniter-js/cli@latest --help
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/cli@latest --help
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/cli@latest --help
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/cli@latest --help
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  Adding `@latest` ensures you always get the most recent version. For CI/CD pipelines, pin to a specific version: `@igniter-js/cli@0.0.1`.
+</Callout>
+
+---
+
+## Per-Project Installation
+
+If you prefer to install the CLI as a dev dependency in a specific project:
+
+```bash
+npm install -D @igniter-js/cli
+```
+
+Then use it via `npx`:
+
+```bash
+npx igniter init my-app
+```
+
+Or add it to your `package.json` scripts:
+
+```json
+{
+  "scripts": {
+    "igniter:init": "igniter init",
+    "igniter:generate": "igniter generate",
+    "igniter:dev": "igniter dev"
+  }
+}
+```
+
+---
+
+## Requirements
+
+| Requirement | Minimum Version | Notes |
+|------------|----------------|-------|
+| **Node.js** | 18.17+ | Required for `fetch`, native `fs/promises`, and ESM support |
+| **TypeScript** | 5.3+ | For generated code type inference (optional but recommended) |
+
+<Callout type="info">
+  The CLI itself is built with TypeScript and compiled with `tsup`. Generated code uses TypeScript features available in 5.3+ — if your project uses an older version, update your `tsconfig.json`.
+</Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Quick Start" description="Create your first project in 2 minutes — starter, add-ons, and first feature." href="/docs/cli/quick-start" />
+  <Card title="Commands" description="Deep dive into init, generate, and dev — every flag, option, and workflow." href="/docs/cli/commands/init" />
+</Cards>

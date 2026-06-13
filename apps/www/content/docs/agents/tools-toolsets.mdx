@@ -1,0 +1,233 @@
+---
+title: Tools & Toolsets
+description: Create type-safe AI tools with Zod validation, group them into toolsets, and understand automatic error handling and result normalization.
+---
+
+## Tools & Toolsets
+
+Tools are the bridge between your AI agent and your application logic. Every tool has a name, description, typed input schema, and an execution handler. Toolsets group related tools by domain.
+
+---
+
+## Creating a Tool
+
+### Tool Builder API
+
+The `IgniterAgentTool` builder requires four things: a **name**, **description**, **input schema** (Zod), and **execute handler**.
+
+```typescript
+import { IgniterAgentTool } from '@igniter-js/agents'
+import { z } from 'zod'
+
+const greetTool = IgniterAgentTool
+  .create('greet')
+  .withDescription('Greet a user by name')
+  .withInput(
+    z.object({
+      name: z.string().describe('The user name'),
+      language: z.enum(['en', 'pt', 'es']).default('en'),
+    })
+  )
+  .withExecute(async ({ name, language }) => {
+    const greetings = { en: 'Hello', pt: 'Olá', es: 'Hola' }
+    return `${greetings[language]}, ${name}!`
+  })
+  .build()
+```
+
+<Callout type="info">
+  The **description** is critical — it's what the AI model uses to decide when to invoke your tool. Be specific about what the tool does and when to use it.
+</Callout>
+
+### Tool Builder Methods
+
+| Method | Required | Description |
+|--------|----------|-------------|
+| `.create(name)` | ✅ | Unique tool name within a toolset |
+| `.withDescription(text)` | ✅ | Human-readable description shown to the AI |
+| `.withInput(zodSchema)` | ✅ | Zod schema defining input parameters |
+| `.withOutput(zodSchema)` | No | Zod schema for output validation |
+| `.withExecute(handler)` | ✅ | Async function that performs the tool's logic |
+| `.build()` | ✅ | Returns the built tool definition |
+
+### Execute Handler Signature
+
+```typescript
+type ExecuteHandler<TInput, TOutput> = (
+  params: TInput,
+  options: IgniterAgentToolExecuteOptions
+) => Promise<TOutput>
+```
+
+The `params` object is **fully typed** — inferred from your Zod schema. The `options` object provides runtime context:
+
+```typescript
+interface IgniterAgentToolExecuteOptions {
+  toolCallId: string
+  messages: ModelMessage[]
+  abortSignal?: AbortSignal
+}
+```
+
+### Type Inference in Action
+
+Every tool builder change updates the TypeScript types:
+
+```typescript
+const tool = IgniterAgentTool
+  .create('search')             // IgniterAgentToolBuilder<'search', unknown, unknown>
+  .withInput(z.object({         // ...<'search', { query: string, limit: number }, unknown>
+    query: z.string(),
+    limit: z.number().default(10),
+  }))
+  .withExecute(async (params) => {
+    // params is typed: { query: string; limit: number }
+    return { results: await search(params.query, params.limit) }
+  })
+  //                               ...<'search', ..., { results: string[] }>
+  .build()
+```
+
+---
+
+## Creating a Toolset
+
+Toolsets group related tools under a namespace. When registered with an agent, each tool is prefixed with the toolset name: `{toolset}_{tool}`.
+
+```typescript
+import { IgniterAgentToolset } from '@igniter-js/agents'
+
+const utilsToolset = IgniterAgentToolset
+  .create('utils')
+  .addTool(greetTool)
+  .addTool(formatDateTool)
+  .addTool(validateEmailTool)
+  .build()
+
+console.log(utilsToolset.name)   // 'utils'
+console.log(utilsToolset.type)   // 'custom'
+console.log(utilsToolset.status) // 'connected'
+```
+
+### Toolset Builder Methods
+
+| Method | Description |
+|--------|-------------|
+| `.create(name)` | Creates a new toolset builder with a unique name |
+| `.withName(name)` | Renames the toolset during building |
+| `.addTool(tool)` | Adds a built tool to the toolset |
+| `.build()` | Returns the built toolset |
+| `.getName()` | Returns the current toolset name |
+| `.getTools()` | Returns the current tools object |
+| `.getToolCount()` | Returns the number of tools |
+
+---
+
+## Automatic Error Handling
+
+Tools added to a toolset are **automatically wrapped** with error handling. The result is normalized into a consistent format:
+
+```typescript
+// Success result
+{ success: true, data: <your return value> }
+
+// Error result
+{ success: false, error: "<error message>" }
+```
+
+This means you don't need try/catch in every tool — the framework handles it:
+
+```typescript
+const riskyTool = IgniterAgentTool
+  .create('risky')
+  .withDescription('A tool that might fail')
+  .withInput(z.object({}))
+  .withExecute(async () => {
+    throw new Error('Something went wrong') // Caught automatically
+  })
+  .build()
+
+// Will return { success: false, error: "Something went wrong" }
+// The error is also logged via console.error
+```
+
+---
+
+## Multiple Toolsets
+
+Register multiple toolsets on a single agent — each creates a separate namespace:
+
+```typescript
+const githubToolset = IgniterAgentToolset
+  .create('github')
+  .addTool(createIssueTool)
+  .addTool(listReposTool)
+  .build()
+
+const dockerToolset = IgniterAgentToolset
+  .create('docker')
+  .addTool(buildImageTool)
+  .addTool(deployContainerTool)
+  .build()
+
+const agent = IgniterAgent
+  .create('devops-bot')
+  .withModel(openai('gpt-4o'))
+  .addToolset(githubToolset)   // Tools: github_createIssue, github_listRepos
+  .addToolset(dockerToolset)   // Tools: docker_buildImage, docker_deployContainer
+  .build()
+```
+
+<Callout type="warn">
+  Tool names must be unique **within** a toolset but can overlap **across** toolsets. The toolset prefix prevents collisions.
+</Callout>
+
+---
+
+## Pattern: Reusable Tool Libraries
+
+Extract common tools into shared modules for reuse across agents:
+
+```typescript
+// lib/tools/database.ts
+import { IgniterAgentTool } from '@igniter-js/agents'
+import { z } from 'zod'
+
+export const queryDatabase = IgniterAgentTool
+  .create('query')
+  .withDescription('Execute a read-only SQL query')
+  .withInput(
+    z.object({
+      sql: z.string().describe('SQL SELECT statement'),
+      params: z.array(z.unknown()).optional(),
+    })
+  )
+  .withExecute(async ({ sql, params }) => {
+    return db.query(sql, params)
+  })
+  .build()
+
+export const databaseToolset = IgniterAgentToolset
+  .create('db')
+  .addTool(queryDatabase)
+  .build()
+```
+
+```typescript
+// In any agent:
+import { databaseToolset } from './lib/tools/database'
+
+const agent = IgniterAgent
+  .create('analyst')
+  .withModel(openai('gpt-4o'))
+  .addToolset(databaseToolset)
+  .build()
+```
+
+---
+
+## Next Steps
+
+- [Prompts](/docs/agents/prompts) — Template-based system instructions
+- [MCP Integration](/docs/agents/mcp-integration) — External tool providers via MCP
+- [Best Practices](/docs/agents/best-practices) — Do's and Don'ts for tool design

@@ -2,6 +2,9 @@
   "pages": [
     "core",
     "caller",
+    "collections",
+    "connectors",
+    "logger",
     "cli",
     "store",
     "jobs",

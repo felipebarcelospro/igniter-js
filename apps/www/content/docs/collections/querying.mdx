@@ -1,0 +1,413 @@
+---
+title: Querying
+description: Filter with operators, sort, paginate, select fields, include sub-collections, and full-text search your content collections.
+---
+
+## Querying
+
+Collections provides a Prisma-like query API for filtering, sorting, paginating, and searching documents. All queries are fully typed — your Zod schema drives the filter shape.
+
+---
+
+## Where Clause
+
+The `where` clause accepts direct field values, filter operators, and dot-notation for nested access.
+
+### Direct Equality
+
+The simplest filter: match fields exactly.
+
+```typescript
+// Find posts by a specific author
+await docs.posts.findMany({
+  where: { author: 'Felipe Barcelos' }
+});
+
+// Multiple conditions (AND logic)
+await docs.posts.findMany({
+  where: {
+    published: true,
+    author: 'Felipe Barcelos',
+  }
+});
+```
+
+### Filter by ID
+
+```typescript
+await docs.posts.findMany({
+  where: { id: 'a1b2c3d4-...' }
+});
+```
+
+---
+
+## Scalar Filter Operators
+
+For fields that are strings, numbers, or booleans, you can use operator objects instead of direct values.
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `equals` | Exact match | `{ equals: 'hello' }` |
+| `not` | Not equal | `{ not: 'draft' }` |
+| `in` | In array of values | `{ in: ['tech', 'tutorial'] }` |
+| `notIn` | Not in array | `{ notIn: ['draft', 'archived'] }` |
+| `lt` | Less than | `{ lt: 100 }` |
+| `lte` | Less than or equal | `{ lte: 100 }` |
+| `gt` | Greater than | `{ gt: 0 }` |
+| `gte` | Greater than or equal | `{ gte: 100 }` |
+| `contains` | Substring match (strings) | `{ contains: 'TypeScript' }` |
+| `startsWith` | Starts with (strings) | `{ startsWith: 'Getting' }` |
+| `endsWith` | Ends with (strings) | `{ endsWith: 'Guide' }` |
+
+### Examples
+
+```typescript
+// Popular posts
+await docs.posts.findMany({
+  where: { views: { gte: 1000 } }
+});
+
+// Posts in specific categories
+await docs.posts.findMany({
+  where: { status: { in: ['published', 'featured'] } }
+});
+
+// Exclude drafts
+await docs.posts.findMany({
+  where: { status: { not: 'draft' } }
+});
+
+// Title search
+await docs.posts.findMany({
+  where: { title: { contains: 'TypeScript' } }
+});
+
+// Combined operators
+await docs.posts.findMany({
+  where: {
+    views: { gte: 100, lt: 10000 },
+    status: { not: 'draft' },
+    title: { contains: 'caching' },
+  }
+});
+```
+
+---
+
+## Array Filter Operators
+
+For array fields (like `tags: string[]`), you can use array-specific operators.
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `has` | Array contains value | `{ has: 'featured' }` |
+| `hasEvery` | Array contains all values | `{ hasEvery: ['featured', 'tutorial'] }` |
+| `hasSome` | Array contains at least one | `{ hasSome: ['tech', 'programming'] }` |
+| `isEmpty` | Array is empty or not | `{ isEmpty: false }` |
+| `length` | Array length equals | `{ length: 3 }` |
+
+### Examples
+
+```typescript
+// Posts tagged 'featured'
+await docs.posts.findMany({
+  where: { tags: { has: 'featured' } }
+});
+
+// Posts with both 'featured' AND 'tutorial'
+await docs.posts.findMany({
+  where: { tags: { hasEvery: ['featured', 'tutorial'] } }
+});
+
+// Posts with any of these categories
+await docs.posts.findMany({
+  where: { categories: { hasSome: ['tech', 'programming', 'devops'] } }
+});
+
+// Posts that have comments (non-empty array)
+await docs.posts.findMany({
+  where: { comments: { isEmpty: false } }
+});
+```
+
+---
+
+## Nested Field Access (Dot Notation)
+
+Access nested object fields using dot notation — no need for nested where objects.
+
+```typescript
+// Schema with nested objects
+const Posts = IgniterCollectionModel.create('posts')
+  .withSchema(z.object({
+    title: z.string(),
+    author: z.object({
+      name: z.string(),
+      email: z.string(),
+      social: z.object({
+        twitter: z.string().optional(),
+        github: z.string().optional(),
+      }).optional(),
+    }),
+  }))
+  .build();
+```
+
+```typescript
+// Access nested fields directly
+await docs.posts.findMany({
+  where: {
+    'author.name': 'Felipe Barcelos',
+    'author.social.twitter': { contains: '@' },
+  }
+});
+```
+
+---
+
+## Ordering
+
+Sort results by any schema field, `id`, `createdAt`, or `updatedAt`.
+
+```typescript
+// Newest first
+await docs.posts.findMany({
+  orderBy: { createdAt: 'desc' as const },
+});
+
+// Alphabetical
+await docs.posts.findMany({
+  orderBy: { title: 'asc' as const },
+});
+
+// Most viewed
+await docs.posts.findMany({
+  orderBy: { views: 'desc' as const },
+});
+```
+
+---
+
+## Pagination
+
+Use `take` and `skip` for cursor-free pagination:
+
+```typescript
+// Page 1: first 10 posts
+const page1 = await docs.posts.findMany({
+  take: 10,
+  skip: 0,
+  orderBy: { createdAt: 'desc' as const },
+});
+
+// Page 2: next 10
+const page2 = await docs.posts.findMany({
+  take: 10,
+  skip: 10,
+  orderBy: { createdAt: 'desc' as const },
+});
+
+// Page 3
+const page3 = await docs.posts.findMany({
+  take: 10,
+  skip: 20,
+  orderBy: { createdAt: 'desc' as const },
+});
+```
+
+---
+
+## Field Selection
+
+Control exactly which fields are returned.
+
+### `select` — Whitelist
+
+```typescript
+// Return only specific fields
+const titles = await docs.posts.findMany({
+  select: { id: true, title: true, slug: true },
+});
+```
+
+### `exclude` — Blacklist
+
+```typescript
+// Return everything except content
+const summaries = await docs.posts.findMany({
+  exclude: { content: true },
+});
+```
+
+### Deep Selection
+
+```typescript
+const posts = await docs.posts.findMany({
+  select: {
+    id: true,
+    title: true,
+    author: {
+      name: true,
+      // email excluded
+      social: { twitter: true },
+    },
+  },
+});
+```
+
+<Callout type="warn">
+  `select` and `exclude` are **mutually exclusive**. Use one or the other, never both in the same query.
+</Callout>
+
+---
+
+## Full-Text Search
+
+Collections includes a built-in full-text search engine powered by MiniSearch. Searches index title, description, tags, and content by default.
+
+```typescript
+const results = await docs.posts.findMany({
+  where: {
+    search: {
+      term: 'TypeScript patterns',
+    }
+  }
+});
+```
+
+### Search Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `term` | `string \| string[]` | required | Search terms |
+| `fields` | `SearchFields` | Common fields | Which fields to index |
+| `threshold` | `number` (0-1) | `0.2` | Minimum relevance score |
+| `fuzzy` | `boolean` | `false` | Enable fuzzy matching |
+| `includeSubCollections` | `boolean` | `false` | Search in sub-collections |
+
+### Targeted Field Search
+
+```typescript
+const results = await docs.posts.findMany({
+  where: {
+    search: {
+      term: 'TypeScript',
+      fields: {
+        title: { weight: 2 }, // Title matches count 2x
+        description: { weight: 1 },
+        tags: { weight: 1.5 },
+      },
+      threshold: 0.3,
+      fuzzy: true, // Handle typos
+    }
+  }
+});
+```
+
+### Combined Search + Filters
+
+```typescript
+const results = await docs.posts.findMany({
+  where: {
+    published: true,
+    search: { term: 'caching strategies' },
+  },
+  orderBy: { createdAt: 'desc' as const },
+  take: 20,
+});
+```
+
+---
+
+## Including Sub-Collections
+
+When a collection has sub-collections, you can include them in the query results:
+
+```typescript
+// Include comments with each post
+const postsWithComments = await docs.posts.findMany({
+  include: {
+    comments: true,
+  },
+  take: 10,
+});
+
+// Include with filtering
+const postsWithApproved = await docs.posts.findMany({
+  include: {
+    comments: {
+      where: { approved: true },
+      orderBy: { createdAt: 'desc' as const },
+      take: 5,
+    },
+  },
+});
+```
+
+---
+
+## Real-World Example: Search Page
+
+A complete blog search page with full-text search, tag filtering, and pagination:
+
+```typescript
+async function searchPosts(query: string, page = 1, pageSize = 20) {
+  const filters: any = { published: true };
+
+  // Full-text search when query is provided
+  if (query) {
+    filters.search = {
+      term: query,
+      fields: {
+        title: { weight: 2 },
+        description: { weight: 1 },
+        tags: { weight: 1.5 },
+      },
+      fuzzy: true,
+      threshold: 0.2,
+    };
+  }
+
+  const [posts, total] = await Promise.all([
+    docs.posts.findMany({
+      where: filters,
+      orderBy: { createdAt: 'desc' as const },
+      take: pageSize,
+      skip: (page - 1) * pageSize,
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        excerpt: true,
+        tags: true,
+        author: true,
+        createdAt: true,
+      },
+    }),
+    docs.posts.count({ where: filters }),
+  ]);
+
+  return {
+    posts,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
+  };
+}
+
+// Usage
+const result = await searchPosts('TypeScript patterns', 1, 20);
+console.log(`Found ${result.total} posts, showing page ${result.page}`);
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Hooks" description="Add lifecycle hooks for validation, enrichment, and cancellation." href="/docs/collections/hooks" />
+  <Card title="Events" description="Subscribe to document lifecycle events globally or per-collection." href="/docs/collections/events" />
+  <Card title="Views" description="Define data-driven views with component trees and actions." href="/docs/collections/views" />
+</Cards>

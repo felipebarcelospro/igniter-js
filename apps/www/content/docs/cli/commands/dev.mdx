@@ -1,0 +1,211 @@
+---
+title: dev
+description: Development mode with automatic schema and OpenAPI regeneration. File watching, Ink TUI, and integrated dev server — code and your types stay in sync.
+---
+
+## `igniter dev`
+
+The `dev` command starts a development environment that watches your router and features for changes, then automatically regenerates the client schema and OpenAPI specification. It also starts your development server and displays a split-pane terminal UI.
+
+```bash
+igniter dev [options]
+```
+
+---
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--router` | `string` | `src/igniter.router.ts` | Path to the router file to watch |
+| `--output` | `string` | `src/igniter.schema.ts` | Output path for the client schema file |
+| `--docs-output` | `string` | `./src/docs` | Output directory for the OpenAPI spec |
+| `--cmd` | `string` | auto-detected | Custom command to start the development server |
+
+---
+
+## How It Works
+
+<Steps>
+  <Step>
+    ### Startup
+
+    On launch, the CLI:
+
+    1. **Detects the package manager** from `npm_config_user_agent`
+    2. **Resolves paths** — router, schema output, docs output — relative to the project root
+    3. **Validates** that the router file exists (exits with error if not found)
+    4. **Generates initial output** — runs schema generation, then docs generation
+    5. **Starts the dev server** using the `--cmd` flag or auto-detected default
+  </Step>
+
+  <Step>
+    ### File Watching
+
+    The CLI watches for changes using **chokidar** with a **300ms debounce**:
+
+    - `src/igniter.router.ts` — the main router file
+    - `src/features/` — all feature directories (recursive)
+
+    **Ignored patterns:**
+
+    - `node_modules/`
+    - `.git/`
+    - `dist/`
+    - `.next/`
+    - `.turbo/`
+    - `.cache/`
+    - `*.test.ts` / `*.spec.ts`
+  </Step>
+
+  <Step>
+    ### Auto-Regeneration
+
+    When a watched file changes:
+
+    1. The debounce timer resets (300ms)
+    2. After the debounce period, the CLI regenerates:
+       - **Client schema** (`igniter.schema.ts`) — extracted from the router
+       - **OpenAPI docs** (`src/docs/`) — generated from the router
+    3. Results are logged to the TUI with timing and metadata
+
+    ```bash
+    # Example TUI output after regeneration:
+    # ✅ Schema regenerated in 0.86s (12 controllers, 47 actions)
+    # ✅ OpenAPI docs regenerated in 0.42s (23.4 KB)
+    ```
+  </Step>
+
+  <Step>
+    ### Dev Server Integration
+
+    If `--cmd` is provided (or auto-detected), the CLI spawns the dev server as a child process:
+
+    ```bash
+    # Explicit command
+    igniter dev --cmd "pnpm dev"
+
+    # Auto-detected defaults:
+    # npm  → "npm run dev"
+    # pnpm → "pnpm dev"
+    # yarn → "yarn dev"
+    # bun  → "bun dev"
+    ```
+
+    The dev server's stdout and stderr are captured and displayed in the **App Logs** panel of the TUI.
+
+    <Callout type="info">
+      The dev server is started with `NODE_ENV=development` and runs in the project's working directory. If it exits with a non-zero code, a warning is logged to the TUI.
+    </Callout>
+  </Step>
+</Steps>
+
+---
+
+## Terminal UI (TUI)
+
+The dev command renders a **split-pane terminal UI** using [Ink](https://github.com/vadimdemedes/ink) (React for the terminal):
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Igniter Dev Mode                        [q] to quit  │
+├──────────────────────┬───────────────────────────────┤
+│   Igniter Logs       │       App Logs                 │
+│                      │                                │
+│  ✅ Schema regenera… │  > next dev                    │
+│  ✅ OpenAPI docs re… │  ▲ Ready in 2.1s               │
+│  ℹ File changed: …   │  ▲ Local: http://localhost:3000│
+│  ✅ Schema regenera… │  GET /api/users 200 (45ms)     │
+│                      │  POST /api/auth 201 (12ms)     │
+│                      │                                │
+└──────────────────────┴───────────────────────────────┘
+```
+
+- **Igniter Logs** (left panel): Schema regeneration, doc generation, file change events, errors
+- **App Logs** (right panel): Your dev server output — Next.js, Express, etc.
+- **Exit**: Press `q` or send `SIGINT` (Ctrl+C)
+
+Logs are capped at **1,000 entries** per panel to prevent memory growth.
+
+---
+
+## Graceful Shutdown
+
+The CLI registers cleanup handlers for `SIGINT` and `SIGTERM`:
+
+1. Clears any pending debounce timeout
+2. Closes the chokidar file watcher
+3. Sends `SIGTERM` to the dev server process
+4. Unmounts the Ink TUI
+5. Exits with code 0
+
+---
+
+## Examples
+
+### Standard Next.js Dev Mode
+
+```bash
+cd my-nextjs-app
+igniter dev --cmd "pnpm dev"
+```
+
+### Express API Dev Mode
+
+```bash
+cd my-express-api
+igniter dev --cmd "pnpm dev"
+```
+
+### Custom Router and Output Paths
+
+```bash
+igniter dev \
+  --router ./src/custom/igniter.router.ts \
+  --output ./src/generated/igniter.schema.ts \
+  --docs-output ./public/openapi \
+  --cmd "pnpm dev"
+```
+
+### Without a Dev Server (Watch Only)
+
+```bash
+# If --cmd is omitted and there's no dev script, the CLI
+# runs in watch-only mode — regenerating on file changes
+# without a dev server.
+igniter dev
+```
+
+---
+
+## `generate schema` (Watch Mode)
+
+The `generate schema` command has a programmatic **watch mode** variant used internally by `igniter dev`. It bundles the router using **esbuild** in-memory and extracts the schema without writing files to disk:
+
+```
+Router file → esbuild bundle → Router introspection → Schema type extraction → Write output
+```
+
+Returns: `{ controllers: number, actions: number, durationMs: number }`
+
+---
+
+## `generate docs` (Watch Mode)
+
+Similarly, `generate docs` has a watch-mode variant that produces OpenAPI output and returns metadata:
+
+```
+Router file → esbuild bundle → Router introspection → OpenAPI conversion → Write spec
+```
+
+Returns: `{ sizeKb: number, durationMs: number }`
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Real-World Scenarios" description="Dev mode in CI/CD, team workflows, and multi-service monorepos." href="/docs/cli/real-world" />
+  <Card title="Best Practices" description="Optimize your dev workflow — when to use flags vs. interactive mode." href="/docs/cli/best-practices" />
+  <Card title="Troubleshooting" description="Fix common dev mode issues — watcher errors, port conflicts, router errors." href="/docs/cli/troubleshooting" />
+</Cards>

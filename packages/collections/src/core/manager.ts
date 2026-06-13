@@ -50,6 +50,7 @@ interface ManagerConfig<TCollections> {
   telemetry?: IgniterTelemetryManager<IgniterCollectionTelemetryEventsType>;
   logger?: IgniterLogger;
   globalHooks?: IgniterCollectionModelHooks<any>;
+  contextFactory?: () => unknown | Promise<unknown>;
 }
 
 /**
@@ -159,6 +160,7 @@ export class IgniterCollectionManager<
       views: config.views || [],
       manager: this.proxyInstance as any,
       logger: config.logger,
+      contextFactory: config.contextFactory,
     });
 
     // Initialize watcher
@@ -200,6 +202,7 @@ export class IgniterCollectionManager<
         telemetry: this.config.telemetry,
         logger: this.config.logger,
         globalHooks: this.config.globalHooks,
+        contextFactory: this.config.contextFactory,
       });
       this.collectionManagers.set(name, manager);
     }
@@ -254,6 +257,7 @@ export class IgniterCollectionManager<
         telemetry: this.config.telemetry,
         logger: this.config.logger,
         globalHooks: this.config.globalHooks,
+        contextFactory: this.config.contextFactory,
       });
       this.collectionManagers.set(name, manager);
       this.config.logger?.debug(`Registered collection from schema: ${name}`);
@@ -322,6 +326,7 @@ export class IgniterCollectionManager<
         views: mergedViews,
         manager: this.proxyInstance as any,
         logger: this.config.logger,
+        contextFactory: this.config.contextFactory,
       });
     }
   }
@@ -450,6 +455,31 @@ export class IgniterCollectionManager<
    */
   get telemetry(): IgniterTelemetryManager | undefined {
     return this.config.telemetry;
+  }
+
+  /**
+   * Resolve the context from the configured factory.
+   * Called automatically before every operation to ensure fresh context.
+   */
+  async resolveContext(): Promise<unknown> {
+    if (!this.config.contextFactory) {
+      return undefined;
+    }
+    try {
+      return await this.config.contextFactory();
+    } catch (error) {
+      this.config.logger?.error("Failed to resolve context", { error });
+      throw new IgniterCollectionError({
+        message: "Context factory failed",
+        code: IGNITER_COLLECTION_ERROR_CODES.CONTEXT_FACTORY_ERROR,
+        statusCode: 500,
+        cause: error instanceof Error ? error : undefined,
+        details: {
+          "ctx.package": "@igniter-js/collections",
+          "ctx.operation": "resolveContext",
+        },
+      });
+    }
   }
 
   /**

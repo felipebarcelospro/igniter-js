@@ -1,0 +1,277 @@
+---
+title: Defining Connectors
+description: Learn the IgniterConnector.create() builder pattern. Define config schemas, metadata, actions with input/output validation, default configs, and type-safe OAuth hooks.
+---
+
+## Defining Connectors
+
+A **connector definition** is a blueprint for an integration. It describes the configuration users need to provide, the actions they can perform, and optionally OAuth flows or webhook handlers.
+
+Everything starts with `IgniterConnector.create()`, a fluent builder that guides you through defining a complete connector with full type inference.
+
+---
+
+## The Builder Pipeline
+
+```typescript
+import { IgniterConnector } from "@igniter-js/connectors";
+import { z } from "zod";
+
+const connector = IgniterConnector.create()
+  .withConfig(configSchema)          // Required: define the config shape
+  .withMetadata(metadataSchema, val) // Optional: static info for UI rendering
+  .withDefaultConfig(defaults)       // Optional: system connectors
+  .onContext(contextHook)            // Optional: inject dependencies
+  .onValidate(validateHook)          // Optional: validate config before connect
+  .withOAuth(oauthOptions)           // Optional: OAuth 2.0 flow
+  .withWebhook(webhookOptions)       // Optional: incoming webhook handling
+  .addAction(key, actionOptions)     // Required: at least one action
+  .addAction("anotherAction", ...)   // More actions
+  .build();                          // Finalize the definition
+```
+
+<Callout type="info">
+  The builder is **type-safe at every step**. Each method call narrows the generic types, so `.addAction()` knows your config shape and `.build()` returns the fully inferred definition.
+</Callout>
+
+---
+
+## Configuration Schema
+
+The `.withConfig()` method defines what configuration users need to provide when connecting. Use any `StandardSchemaV1`-compatible schema (Zod, Valibot, ArkType).
+
+```typescript
+const telegram = IgniterConnector.create()
+  .withConfig(
+    z.object({
+      botToken: z.string().describe("Bot token from @BotFather"),
+      chatId: z.string().describe("Target chat ID"),
+    }),
+  )
+  .addAction("ping", {
+    input: z.object({}),
+    handler: async () => ({ ok: true }),
+  })
+  .build();
+```
+
+### Descriptions
+
+Use `.describe()` on Zod fields to provide helpful hints. These are extracted for UI form rendering:
+
+```typescript
+z.object({
+  apiKey: z.string().describe("Your API key from the dashboard"),
+  webhookSecret: z.string().describe("Secret for verifying webhook signatures"),
+  region: z.enum(["us", "eu", "apac"]).describe("API region to connect to"),
+})
+```
+
+---
+
+## Metadata
+
+Metadata provides **static information** about the connector — useful for rendering connector cards in a UI.
+
+```typescript
+const connector = IgniterConnector.create()
+  .withConfig(z.object({ apiKey: z.string() }))
+  .withMetadata(
+    z.object({
+      name: z.string(),
+      icon: z.string(),
+      description: z.string().optional(),
+      docsUrl: z.string().url().optional(),
+    }),
+    {
+      name: "Discord",
+      icon: "discord.svg",
+      description: "Send events to Discord channels via webhooks",
+      docsUrl: "https://discord.com/developers",
+    },
+  )
+  .addAction("health", {
+    input: z.object({}),
+    handler: async () => ({ ok: true }),
+  })
+  .build();
+```
+
+<Callout type="info">
+  Metadata is **not encrypted** and is always available even before a connector is connected. Use it for display-only information. Never store secrets in metadata.
+</Callout>
+
+---
+
+## Default Configuration
+
+Use `.withDefaultConfig()` for **system connectors** — integrations where the config comes from environment variables, not user input.
+
+```typescript
+const openai = IgniterConnector.create()
+  .withConfig(
+    z.object({
+      apiKey: z.string(),
+      model: z.string().default("gpt-4o"),
+    }),
+  )
+  .withDefaultConfig({
+    apiKey: process.env.OPENAI_API_KEY!,
+    model: "gpt-4o-mini",
+  })
+  .addAction("chat", {
+    input: z.object({
+      messages: z.array(z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string(),
+      })),
+    }),
+    handler: async ({ input, config }) => {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${config.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ model: config.model, messages: input.messages }),
+      });
+      return res.json();
+    },
+  })
+  .build();
+```
+
+<Callout type="warn">
+  Default config **cannot be overridden** by users. Only use for system connectors where all tenants share the same API key. For user-provided credentials, use regular `.withConfig()` without `.withDefaultConfig()`.
+</Callout>
+
+---
+
+## Adding Actions
+
+Actions are the operations users can perform on a connector. Each action has:
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `input` | **Yes** | Schema for validating action input |
+| `output` | No | Schema for validating action output (enables type inference) |
+| `description` | No | Human-readable description |
+| `handler` | **Yes** | Async function that executes the action |
+
+```typescript
+.addAction("sendMessage", {
+  description: "Send a text message to the configured chat",
+  input: z.object({
+    message: z.string().min(1).max(4096),
+    parseMode: z.enum(["HTML", "Markdown"]).optional(),
+  }),
+  output: z.object({
+    messageId: z.string(),
+    timestamp: z.date(),
+  }),
+  handler: async ({ input, config }) => {
+    // input.message — fully typed from input schema
+    // config.botToken — fully typed from config schema
+    return {
+      messageId: "123",
+      timestamp: new Date(),
+    };
+  },
+})
+```
+
+### Handler Context
+
+The handler receives a context object with everything you need:
+
+```typescript
+handler: async ({ input, config, context, oauth, scope, identity }) => {
+  // input    — validated action input
+  // config   — decrypted connector config
+  // context  — custom context from onContext hook
+  // oauth    — OAuth tokens (if OAuth connector)
+  // scope    — scope type (e.g., 'organization')
+  // identity — scope identifier (e.g., 'org_123')
+}
+```
+
+### Action Without Output Schema
+
+If you omit the `output` schema, the return type is inferred from the handler:
+
+```typescript
+.addAction("getStatus", {
+  input: z.object({}),
+  // No output schema — inferred from handler return
+  handler: async () => ({
+    ok: true as const,
+    uptime: process.uptime(),
+  }),
+})
+// `data` will be typed as { ok: true; uptime: number }
+```
+
+---
+
+## Context Hook (onContext)
+
+Create reusable dependencies that are injected into every action handler:
+
+```typescript
+const connector = IgniterConnector.create()
+  .withConfig(z.object({ baseUrl: z.string().url() }))
+  .onContext(async ({ config }) => ({
+    httpClient: createHttpClient(config.baseUrl),
+    cache: createCache(),
+  }))
+  .addAction("getUser", {
+    input: z.object({ id: z.string() }),
+    handler: async ({ input, context }) => {
+      // context.httpClient — available in every action
+      return context.httpClient.get(`/users/${input.id}`);
+    },
+  })
+  .addAction("listUsers", {
+    input: z.object({}),
+    handler: async ({ context }) => {
+      return context.httpClient.get("/users");
+    },
+  })
+  .build();
+```
+
+---
+
+## Validation Hook (onValidate)
+
+Validate configuration **before** a connector is connected. Throw an error to reject:
+
+```typescript
+const connector = IgniterConnector.create()
+  .withConfig(z.object({ apiKey: z.string() }))
+  .onValidate(async ({ config }) => {
+    const response = await fetch("https://api.service.com/validate", {
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+    });
+    if (!response.ok) {
+      throw new Error("Invalid API key — please check your credentials");
+    }
+  })
+  .addAction("data", {
+    input: z.object({}),
+    handler: async () => ({ ok: true }),
+  })
+  .build();
+```
+
+<Callout type="warn">
+  The `onValidate` hook runs **synchronously** during `.connect()`. If it throws, the connection is rejected and no record is saved.
+</Callout>
+
+---
+
+## Next Steps
+
+- [Manager Setup](/docs/connectors/manager-setup) — Wire adapters, encryption, and telemetry
+- [Actions](/docs/connectors/actions) — Execute actions with error handling
+- [OAuth](/docs/connectors/oauth) — Add OAuth authentication

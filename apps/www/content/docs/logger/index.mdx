@@ -1,0 +1,140 @@
+---
+title: Introduction
+description: Pino-powered structured logging for Igniter.js. Builder-pattern configuration, multi-transport support, child loggers, and full TypeScript inference — zero boilerplate.
+---
+
+## Overview
+
+`@igniter-js/logger` is a **Pino-backed structured logger** with a builder-pattern API. It wraps Pino's raw performance in a clean, TypeScript-first interface that feels at home in the Igniter.js ecosystem.
+
+You configure a logger once with the builder — log level, app name, component, context, and transports — and get a fully typed manager. No Pino configuration files. No JSON. Just a fluent chain that TypeScript understands.
+
+<Callout type="info">
+  Logger delegates internally to **Pino v9** — the fastest Node.js logger. You get Pino's performance and ecosystem (pino-pretty, pino/file, external transports) behind a clean Igniter.js API.
+</Callout>
+
+### Key Features
+
+- **Builder Pattern** — `.create().withLevel().addTransport().build()` — chained configuration with full TypeScript inference
+- **Six Log Levels** — `fatal`, `error`, `warn`, `info`, `debug`, `trace` — plus `success` for positive outcomes
+- **Three Built-in Transports** — console (pino-pretty), file (with rotation), HTTP (async batch delivery)
+- **External Transports** — use any pino-compatible transport (Logtail, Datadog, Loki, etc.)
+- **Child Loggers** — create scoped loggers with merged context for services, requests, or tenants
+- **Typed Scopes** — `defineScopes<T>()` gives child loggers typed context parameters
+- **Structured Context** — merge default context into every log entry; add per-call context inline
+- **Visual Hierarchy** — `group()`/`groupEnd()` indent log output; `separator()` draws dividers
+- **Runtime Control** — change log level, app name, or component at runtime without recreating the logger
+- **Non-blocking HTTP** — async batching transport with periodic flush and automatic retry
+
+---
+
+## Architecture
+
+Logger follows the **Igniter.js builder pattern**: a chainable builder produces an immutable manager. The manager wraps a Pino instance, which handles transport resolution and output.
+
+```
+┌─────────────────────────┐
+│  IgniterLoggerBuilder   │  ← Chainable configuration
+│  .withLevel()           │
+│  .withAppName()         │
+│  .withComponent()       │
+│  .withContext()         │
+│  .addTransport() × N    │
+│  .defineScopes<T>()     │
+│  .build()               │
+└───────────┬─────────────┘
+            │ produces
+┌───────────▼─────────────┐
+│ IgniterLoggerManager    │  ← Immutable, fully typed
+│  .info(msg)             │
+│  .error(msg, err)       │
+│  .child(name, ctx)      │
+│  .group() / .groupEnd() │
+│  .separator()           │
+│  .setLevel()            │
+│  .flush()               │
+└───────────┬─────────────┘
+            │ delegates to
+┌───────────▼─────────────┐
+│       Pino v9           │  ← Raw logging engine
+│  ┌──────┐ ┌──────┐      │
+│  │console│ │ file │ ...  │  ← Transport targets
+│  └──────┘ └──────┘      │
+└─────────────────────────┘
+```
+
+### Transport Resolution
+
+When you call `.addTransport()`, the builder stores a transport configuration. At `.build()` time, each transport is resolved:
+
+| Target | Resolver | Pino Target |
+|--------|----------|-------------|
+| `"console"` | `resolveConsoleTransport` | `pino-pretty` |
+| `"file"` | `resolveFileTransport` | `pino/file` |
+| `"http"` | `resolveHttpTransport` | Custom async HTTP worker |
+| `(any string)` | Passed through as-is | External pino transport |
+
+If no transports are configured, a **console transport with pretty formatting** is added automatically.
+
+---
+
+## Quick Start
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/logger
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/logger
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/logger
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/logger
+    ```
+  </Tab>
+</Tabs>
+
+```typescript
+import { IgniterLogger } from '@igniter-js/logger';
+
+const logger = IgniterLogger.create().build();
+
+logger.info('Server started on port 3000');
+logger.error('Connection failed', new Error('timeout'));
+logger.success('Deployment complete');
+```
+
+That's it. One import, one builder call, and you're logging. The default setup gives you pretty console output with timestamps.
+
+---
+
+## Real-World Use Cases
+
+| Scenario | What Logger Provides |
+|----------|---------------------|
+| **API Server** | Console transport for development, file transport for audit logs, HTTP transport for centralized log ingestion |
+| **Microservices** | App name and component labels track which service produced each log; typed scopes enforce tenant context |
+| **CLI Tools** | `success()` for positive outcomes, `group()` for indented progress, `separator()` for section breaks |
+| **Background Jobs** | File transport with rotation for persistent job logs; `flush()` ensures logs are written before process exit |
+| **Multi-tenant SaaS** | Parent logger with tenant-agnostic config; `.child(tenantId, { tenantId })` creates isolated log streams |
+| **Serverless Functions** | Minimal cold-start overhead; HTTP transport ships logs to external aggregator before function terminates |
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Installation" description="Set up logger in your project — runtime requirements and TypeScript config." href="/docs/logger/installation" />
+  <Card title="Quick Start" description="Create your first logger with custom level, app name, and transports in 2 minutes." href="/docs/logger/quick-start" />
+  <Card title="Transports" description="Console, file, HTTP, and external transports — with multi-transport examples." href="/docs/logger/transports" />
+  <Card title="API Reference" description="Complete reference for the builder, manager, types, and error classes." href="/docs/logger/api-reference" />
+</Cards>

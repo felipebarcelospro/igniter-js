@@ -1,0 +1,409 @@
+---
+title: Middlewares
+description: Secure, rate-limit, and monitor your bot with built-in middlewares. Create custom middleware for authentication, logging, and request enrichment.
+---
+
+## Middlewares
+
+Middlewares execute in sequence for every incoming message. They can **enrich the context**, **block requests**, or **perform side effects** like logging and analytics. The framework ships with three production-ready middlewares and a flexible API for custom ones.
+
+---
+
+## Middleware Contract
+
+```typescript
+type Middleware<TContextIn, TContextOut> = (
+  ctx: TContextIn,
+  next: () => Promise<void>,
+) => Promise<void | Partial<TContextOut>>;
+```
+
+| Action | How |
+|--------|-----|
+| **Pass control** | Call `await next()` |
+| **Block request** | Don't call `next()` — pipeline stops here |
+| **Enrich context** | Return an object — merged into context for downstream handlers |
+| **Side effects** | Do work before and/or after `next()` |
+| **Error handling** | Wrap `next()` in try/catch |
+
+---
+
+## Built-in Middlewares
+
+### Auth Middleware
+
+Controls access based on user IDs, channel IDs, custom logic, or roles.
+
+```typescript
+import { authMiddleware, authPresets, roleMiddleware } from '@igniter-js/bot';
+```
+
+#### Basic Usage
+
+```typescript
+// Allow only specific users
+builder.addMiddleware(authMiddleware({
+  allowedUsers: ['user_123', 'user_456'],
+  unauthorizedMessage: '⛔ You are not authorized.',
+}));
+
+// Block specific users
+builder.addMiddleware(authMiddleware({
+  blockedUsers: ['spammer_789'],
+}));
+
+// Allow only in specific channels
+builder.addMiddleware(authMiddleware({
+  allowedChannels: ['channel_support', 'channel_vip'],
+}));
+```
+
+#### Custom Authorization
+
+```typescript
+builder.addMiddleware(authMiddleware({
+  checkFn: async (ctx) => {
+    const user = await database.getUser(ctx.message.author.id);
+    return user?.plan === 'premium'; // Only premium users
+  },
+  unauthorizedMessage: (ctx) => `Upgrade to premium, ${ctx.message.author.name}!`,
+  skip: (ctx) => ctx.message.content?.type === 'command' && ctx.message.content.command === 'help',
+  onUnauthorized: async (ctx) => {
+    await analytics.track('unauthorized_access', { userId: ctx.message.author.id });
+  },
+}));
+```
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `allowedUsers` | `string[]` | Only these user IDs can access |
+| `allowedChannels` | `string[]` | Only these channel IDs are active |
+| `blockedUsers` | `string[]` | These user IDs are blocked |
+| `blockedChannels` | `string[]` | These channel IDs are blocked |
+| `checkFn` | `(ctx) => boolean \| Promise<boolean>` | Custom authorization logic |
+| `unauthorizedMessage` | `string \| (ctx) => string` | Message sent on denial |
+| `skip` | `(ctx) => boolean \| Promise<boolean>` | Skip auth under certain conditions |
+| `onUnauthorized` | `(ctx) => void \| Promise<void>` | Custom handler for denied access |
+
+#### Role-Based Auth
+
+```typescript
+builder.addMiddleware(roleMiddleware({
+  getRoles: async (userId) => {
+    const user = await db.users.findById(userId);
+    return user?.roles ?? [];
+  },
+  requiredRoles: ['admin', 'moderator'],
+  unauthorizedMessage: '🔒 Admins and moderators only.',
+}));
+```
+
+#### Pre-built Presets
+
+```typescript
+// Admin-only bot
+builder.addMiddleware(authPresets.adminsOnly(['admin_001', 'admin_002']));
+
+// Private chat only
+builder.addMiddleware(authPresets.privateOnly());
+
+// Group chat only
+builder.addMiddleware(authPresets.groupsOnly());
+
+// Whitelist
+builder.addMiddleware(authPresets.whitelist(['user_a', 'user_b']));
+
+// Blacklist
+builder.addMiddleware(authPresets.blacklist(['spammer_x']));
+```
+
+---
+
+### Rate Limit Middleware
+
+Prevents abuse by limiting the number of requests per user within a time window.
+
+```typescript
+import { rateLimitMiddleware, rateLimitPresets, memoryRateLimitStore } from '@igniter-js/bot';
+```
+
+#### Basic Usage
+
+```typescript
+builder.addMiddleware(rateLimitMiddleware({
+  maxRequests: 10,
+  windowMs: 60_000, // 1 minute
+  message: '⚠️ Too many requests. Please wait a minute.',
+}));
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxRequests` | `number` | Required | Max requests in the window |
+| `windowMs` | `number` | Required | Time window in milliseconds |
+| `store` | `RateLimitStore` | `MemoryRateLimitStore` | Storage backend |
+| `keyGenerator` | `(ctx) => string` | `provider:userId` | Custom key for rate limiting |
+| `message` | `string \| (ctx, retryAfter) => string` | Default message | Response on limit exceeded |
+| `skip` | `(ctx) => boolean \| Promise<boolean>` | — | Skip rate limiting |
+| `onLimitReached` | `(ctx, retryAfter) => void \| Promise<void>` | — | Custom handler |
+
+#### Custom Key Generator
+
+Rate limit by a combination of provider, user, and command:
+
+```typescript
+builder.addMiddleware(rateLimitMiddleware({
+  maxRequests: 3,
+  windowMs: 10_000, // 10 seconds
+  keyGenerator: (ctx) => {
+    const cmd = ctx.message.content?.type === 'command'
+      ? ctx.message.content.command
+      : 'message';
+    return `${ctx.provider}:${ctx.message.author.id}:${cmd}`;
+  },
+  message: (ctx, retryAfter) =>
+    `Command rate limit reached. Try again in ${retryAfter}s.`,
+}));
+```
+
+#### Redis Store
+
+For production, use a shared store like Redis:
+
+```typescript
+import { RateLimitStore } from '@igniter-js/bot';
+
+class RedisRateLimitStore implements RateLimitStore {
+  constructor(private redis: Redis) {}
+
+  async get(key: string): Promise<number> {
+    return parseInt(await this.redis.get(key) || '0');
+  }
+
+  async increment(key: string, windowMs: number): Promise<number> {
+    const count = await this.redis.incr(key);
+    await this.redis.pexpire(key, windowMs);
+    return count;
+  }
+
+  async reset(key: string): Promise<void> {
+    await this.redis.del(key);
+  }
+}
+
+builder.addMiddleware(rateLimitMiddleware({
+  maxRequests: 20,
+  windowMs: 60_000,
+  store: new RedisRateLimitStore(redisClient),
+}));
+```
+
+#### Pre-built Presets
+
+```typescript
+// Strict: 5 req/min
+builder.addMiddleware(rateLimitPresets.strict());
+
+// Moderate: 10 req/min
+builder.addMiddleware(rateLimitPresets.moderate());
+
+// Lenient: 20 req/min
+builder.addMiddleware(rateLimitPresets.lenient());
+
+// Per-command: 3 req/10s per command
+builder.addMiddleware(rateLimitPresets.perCommand());
+```
+
+---
+
+### Logging Middleware
+
+Structured logging for messages, commands, errors, and performance metrics.
+
+```typescript
+import { loggingMiddleware, loggingPresets, commandLoggingMiddleware } from '@igniter-js/bot';
+```
+
+#### Basic Usage
+
+```typescript
+builder.addMiddleware(loggingMiddleware({
+  logMessages: true,
+  logCommands: true,
+  logErrors: true,
+  logMetrics: true,
+  includeUserInfo: true,
+  includeContent: false, // Security: don't log message content
+}));
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `logger` | `BotLogger` | `console` | Logger instance (Pino, Winston, etc.) |
+| `logMessages` | `boolean` | `true` | Log incoming messages |
+| `logCommands` | `boolean` | `true` | Log command executions |
+| `logErrors` | `boolean` | `true` | Log errors |
+| `logMetrics` | `boolean` | `true` | Log execution time |
+| `includeUserInfo` | `boolean` | `true` | Include user id/username |
+| `includeContent` | `boolean` | `false` | Include message content (security risk) |
+| `formatter` | `(ctx, event, data) => string` | Default format | Custom log format |
+| `skip` | `(ctx) => boolean` | — | Skip logging conditions |
+
+#### With Structured Logger
+
+```typescript
+import pino from 'pino';
+
+const logger = pino({ level: 'info' });
+
+builder.addMiddleware(loggingMiddleware({
+  logger,
+  logMessages: true,
+  logMetrics: true,
+  includeUserInfo: true,
+  includeContent: false,
+}));
+```
+
+The middleware calls `logger.info()`, `logger.debug()`, `logger.warn()`, and `logger.error()` — compatible with any logger implementing the `BotLogger` interface.
+
+#### Pre-built Presets
+
+```typescript
+// Minimal: only errors
+builder.addMiddleware(loggingPresets.minimal());
+
+// Standard: messages, commands, errors
+builder.addMiddleware(loggingPresets.standard());
+
+// Verbose: everything including metrics and content
+builder.addMiddleware(loggingPresets.verbose());
+
+// Production: standard logging without PII
+builder.addMiddleware(loggingPresets.production());
+
+// Debug: full JSON output for troubleshooting
+builder.addMiddleware(loggingPresets.debug());
+```
+
+#### Command-Specific Logging
+
+For detailed per-command logs with parameters:
+
+```typescript
+builder.addMiddleware(commandLoggingMiddleware({
+  logger: pino(),
+  includeParams: true,
+}));
+
+// Output:
+// [COMMAND] /search by @username
+// [PARAMS] ["typescript books"]
+// [SUCCESS] /search completed in 45ms
+```
+
+---
+
+## Custom Middleware
+
+### Context Enrichment
+
+Add properties to the context for downstream handlers:
+
+```typescript
+builder.addMiddleware(async (ctx, next) => {
+  const user = await db.users.findById(ctx.message.author.id);
+  await next();
+  return { user }; // ctx.user now available in all subsequent handlers
+});
+```
+
+### Timing & Performance
+
+```typescript
+builder.addMiddleware(async (ctx, next) => {
+  const start = performance.now();
+  try {
+    await next();
+  } finally {
+    const ms = performance.now() - start;
+    metrics.histogram('bot.request.duration', ms, {
+      provider: ctx.provider,
+      command: ctx.message.content?.type === 'command' ? ctx.message.content.command : 'message',
+    });
+  }
+});
+```
+
+### Feature Flags
+
+```typescript
+builder.addMiddleware(async (ctx, next) => {
+  const flags = await featureFlags.getForUser(ctx.message.author.id);
+
+  if (!flags.newSearchEnabled && ctx.message.content?.type === 'command' && ctx.message.content.command === 'search') {
+    await ctx.reply('The new search feature is not available for your account yet.');
+    return; // Block pipeline
+  }
+
+  await next();
+});
+```
+
+### Error Boundary
+
+```typescript
+builder.addMiddleware(async (ctx, next) => {
+  try {
+    await next();
+  } catch (error) {
+    await errorTracking.captureException(error, {
+      userId: ctx.message.author.id,
+      provider: ctx.provider,
+      command: ctx.message.content?.type === 'command' ? ctx.message.content.command : undefined,
+    });
+    await ctx.reply('⚠️ An unexpected error occurred. Our team has been notified.');
+    // Don't re-throw — gracefully handled
+  }
+});
+```
+
+---
+
+## Middleware Ordering Matters
+
+The order you add middlewares determines the execution order:
+
+```
+1. Logging middleware      → Logs before/after everything
+2. Rate limit middleware   → Check limits early
+3. Auth middleware         → Block unauthorized users
+4. Custom enrichment       → Load user/profile data
+5. Command handler         → Execute the command
+```
+
+```typescript
+builder
+  .addMiddleware(loggingPresets.production())     // 1st: log everything
+  .addMiddleware(rateLimitPresets.moderate())      // 2nd: check rate limits
+  .addMiddleware(authPresets.whitelist(['...']))   // 3rd: auth check
+  .addMiddleware(async (ctx, next) => {            // 4th: enrich context
+    const user = await loadUser(ctx.message.author.id);
+    await next();
+    return { user };
+  });
+```
+
+<Callout type="warn">
+  Place **rate limiting before auth** so that rate limits apply to unauthorized users too — otherwise attackers can bypass rate limits by triggering auth failures.
+</Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Plugins" description="Package commands, middlewares, and hooks into reusable modules." href="/docs/bots/plugins" />
+  <Card title="Sessions" description="Persist conversational state across messages." href="/docs/bots/sessions" />
+  <Card title="Best Practices" description="Production patterns, security, and performance tips." href="/docs/bots/best-practices" />
+</Cards>

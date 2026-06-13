@@ -1,0 +1,274 @@
+---
+title: Events
+description: Subscribe to connector lifecycle, action execution, OAuth flow, and webhook events. Global and scoped subscriptions with typed event objects.
+---
+
+## Events
+
+Connectors emits structured events for every significant operation — connections, actions, OAuth flows, webhooks, and errors. Subscribe globally or per scope.
+
+---
+
+## Event Types
+
+All events share a base structure:
+
+```typescript
+interface IgniterConnectorEventBase {
+  connector: string;   // Connector key (e.g., "telegram")
+  scope: string;       // Scope type (e.g., "organization")
+  identity: string;    // Scope identifier (e.g., "org_123")
+  timestamp: Date;     // When the event occurred
+}
+```
+
+### Connector Lifecycle
+
+| Event Type | When |
+|------------|------|
+| `connector.connected` | After `.connect()` succeeds |
+| `connector.disconnected` | After `.disconnect()` succeeds |
+| `connector.enabled` | After `.toggle(key, true)` |
+| `connector.disabled` | After `.toggle(key, false)` |
+| `connector.updated` | After `.update()` succeeds |
+
+### OAuth
+
+| Event Type | When |
+|------------|------|
+| `oauth.started` | OAuth authorization URL generated |
+| `oauth.completed` | Token exchange successful |
+| `oauth.refreshed` | Token refresh successful |
+| `oauth.failed` | Any OAuth step fails |
+
+### Actions
+
+| Event Type | When |
+|------------|------|
+| `action.started` | Before handler execution |
+| `action.completed` | After handler returns successfully |
+| `action.failed` | After handler throws |
+
+### Webhooks
+
+| Event Type | When |
+|------------|------|
+| `webhook.received` | Webhook request received |
+| `webhook.processed` | Webhook handler completed |
+| `webhook.failed` | Webhook handler failed |
+
+### Errors
+
+| Event Type | When |
+|------------|------|
+| `error.occurred` | Any connector operation throws |
+
+---
+
+## Global Subscriptions
+
+Subscribe to events across all scopes from the manager:
+
+```typescript
+const subscription = connectors.on((event) => {
+  switch (event.type) {
+    case "connector.connected":
+      console.log(`🔌 ${event.connector} connected for ${event.scope}:${event.identity}`);
+      break;
+
+    case "connector.disconnected":
+      console.log(`🔌 ${event.connector} disconnected from ${event.scope}:${event.identity}`);
+      break;
+
+    case "action.completed":
+      console.log(
+        `✅ ${event.connector}.${event.action} completed in ${event.durationMs}ms`
+      );
+      break;
+
+    case "action.failed":
+      console.error(
+        `❌ ${event.connector}.${event.action} failed: ${event.errorMessage}`
+      );
+      break;
+
+    case "oauth.failed":
+      console.error(`🔐 OAuth failed for ${event.connector}: ${event.errorMessage}`);
+      break;
+
+    case "error.occurred":
+      console.error(`💥 ${event.operation} error in ${event.connector}:`, event.error);
+      break;
+  }
+});
+
+// Unsubscribe when done
+subscription.unsubscribe();
+```
+
+---
+
+## Scoped Subscriptions
+
+Subscribe to events for a specific scope:
+
+```typescript
+const scoped = connectors.scope("organization", "org_123");
+
+const sub = scoped.on((event) => {
+  // Only receives events for organization:org_123
+  console.log(`[${event.scope}:${event.identity}] ${event.type}`);
+});
+
+sub.unsubscribe();
+```
+
+---
+
+## Typed Event Handling
+
+All events are fully typed. Use `IgniterConnectorEvent` to pattern-match:
+
+```typescript
+import type { IgniterConnectorEvent } from "@igniter-js/connectors";
+
+connectors.on((event: IgniterConnectorEvent) => {
+  switch (event.type) {
+    case "connector.connected":
+      // event is IgniterConnectorConnectedEvent
+      break;
+    case "action.completed":
+      // event is IgniterConnectorActionCompletedEvent
+      // event.action is typed as string
+      // event.durationMs is typed as number | undefined
+      break;
+    case "oauth.failed":
+      // event is IgniterConnectorOAuthFailedEvent
+      // event.errorCode is typed as string
+      // event.errorMessage is typed as string | undefined
+      break;
+    case "webhook.processed":
+      // event is IgniterConnectorWebhookProcessedEvent
+      // event.method is typed as string | undefined
+      // event.durationMs is typed as number | undefined
+      break;
+  }
+});
+```
+
+---
+
+## Emitting Custom Events
+
+You can also emit events programmatically:
+
+```typescript
+await connectors.emit({
+  type: "connector.connected",
+  connector: "telegram",
+  scope: "organization",
+  identity: "org_123",
+  timestamp: new Date(),
+});
+```
+
+---
+
+## Events + Telemetry
+
+When telemetry is enabled, events are **automatically forwarded** to the telemetry system:
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withService("my-api")
+  .addEvents(IgniterConnectorsTelemetryEvents)
+  .build();
+
+const connectors = IgniterConnectorManager.create()
+  .withDatabase(adapter)
+  .withTelemetry(telemetry)
+  .build();
+
+// Both event handlers AND telemetry receive events
+connectors.on((event) => {
+  // Custom handling (e.g., Slack notifications)
+});
+
+// Telemetry automatically receives:
+// igniter.connectors.connector.connected
+// igniter.connectors.action.started
+// igniter.connectors.action.completed
+// ... etc
+```
+
+See [Telemetry](/docs/connectors/telemetry) for redaction rules and configuration.
+
+---
+
+## Real-World Example: Metrics Dashboard
+
+Track connector usage with events:
+
+```typescript
+const metrics = {
+  connections: 0,
+  actions: 0,
+  errors: 0,
+  oauthFlows: 0,
+};
+
+connectors.on((event) => {
+  switch (event.type) {
+    case "connector.connected":
+      metrics.connections++;
+      break;
+    case "action.completed":
+    case "action.failed":
+      metrics.actions++;
+      break;
+    case "error.occurred":
+      metrics.errors++;
+      break;
+    case "oauth.started":
+      metrics.oauthFlows++;
+      break;
+  }
+});
+
+// Expose metrics
+app.get("/metrics", (req, res) => {
+  res.json(metrics);
+});
+```
+
+## Real-World Example: Slack Notifications
+
+```typescript
+connectors.on(async (event) => {
+  if (event.type === "error.occurred") {
+    await fetch(process.env.SLACK_WEBHOOK_URL!, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: `🚨 Connector error: ${event.connector} — ${event.operation}`,
+        attachments: [{
+          color: "danger",
+          fields: [
+            { title: "Error", value: event.error.message, short: false },
+            { title: "Code", value: event.errorCode, short: true },
+            { title: "Scope", value: `${event.scope}:${event.identity}`, short: true },
+          ],
+        }],
+      }),
+    });
+  }
+});
+```
+
+---
+
+## Next Steps
+
+- [Telemetry](/docs/connectors/telemetry) — Structured observability with redaction
+- [Lifecycle Hooks](/docs/connectors/hooks) — Connect and disconnect hooks
+- [API Reference](/docs/connectors/api-reference) — Full event type reference

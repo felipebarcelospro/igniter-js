@@ -1,0 +1,241 @@
+---
+title: Adapters
+description: Choose the right storage adapter for your environment. Covers Node FS, Bun FS, Redis, S3, Mock, and building custom adapters.
+---
+
+## Adapters
+
+Adapters abstract storage operations behind a unified interface. Switch from local filesystem to Redis or S3 without changing a single line of collection code.
+
+---
+
+## Available Adapters
+
+| Adapter | Runtime | Storage | Use Case |
+|---------|---------|---------|----------|
+| **NodeFsAdapter** | Node.js 18+ | Local filesystem | Server-side apps, local dev |
+| **BunFsAdapter** | Bun 1.0+ | Local filesystem | Bun-native apps, maximum perf |
+| **BunRedisAdapter** | Bun 1.0+ | Redis | Distributed systems, multi-process |
+| **BunS3Adapter** | Bun 1.0+ | AWS S3 | Production deployment, object storage |
+| **IgniterCollectionMockAdapter** | Any | In-memory Map | Testing and CI |
+
+---
+
+## NodeFsAdapter
+
+The default adapter for Node.js environments. Uses `node:fs/promises` and `fast-glob`.
+
+```typescript
+import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+
+const adapter = new NodeFsAdapter();
+
+const docs = IgniterCollections.create()
+  .withAdapter(adapter)
+  .withBasePath(process.cwd())
+  .addCollection(Posts)
+  .build();
+```
+
+**Features:**
+- File watching via `node:fs.watch`
+- Recursive directory creation
+- Glob-based file listing via `fast-glob`
+- Standard POSIX file operations
+
+---
+
+## BunFsAdapter
+
+Optimized for Bun runtime. Uses `Bun.file`, `Bun.write`, and `Bun.Glob` for maximum performance.
+
+```typescript
+import { BunFsAdapter } from '@igniter-js/collections/adapters';
+
+const adapter = new BunFsAdapter();
+
+const docs = IgniterCollections.create()
+  .withAdapter(adapter)
+  .withBasePath(process.cwd())
+  .addCollection(Posts)
+  .build();
+```
+
+<Callout type="warn">
+  **Bun-only.** This adapter uses Bun-native APIs and will throw if used in Node.js.
+</Callout>
+
+---
+
+## BunRedisAdapter
+
+Stores documents in Redis for distributed access. Supports key prefixes for namespacing.
+
+```typescript
+import { BunRedisAdapter } from '@igniter-js/collections/adapters';
+
+const adapter = new BunRedisAdapter({
+  url: process.env.REDIS_URL!,
+  prefix: 'collections:',   // Keys: collections:posts:a1b2c3d4
+});
+
+const docs = IgniterCollections.create()
+  .withAdapter(adapter)
+  .addCollection(Posts)
+  .build();
+```
+
+**Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `url` | `string` | required | Redis connection URL |
+| `prefix` | `string` | `''` | Key prefix for namespacing |
+
+---
+
+## BunS3Adapter
+
+Stores documents in AWS S3 or any S3-compatible object storage.
+
+```typescript
+import { BunS3Adapter } from '@igniter-js/collections/adapters';
+
+const adapter = new BunS3Adapter({
+  bucket: 'my-content-bucket',
+  region: 'us-east-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+  // Optional: endpoint for S3-compatible services (MinIO, Cloudflare R2)
+  endpoint: 'https://s3.amazonaws.com',
+});
+
+const docs = IgniterCollections.create()
+  .withAdapter(adapter)
+  .addCollection(Posts)
+  .build();
+```
+
+**Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `bucket` | `string` | required | S3 bucket name |
+| `region` | `string` | required | AWS region |
+| `credentials` | `{ accessKeyId, secretAccessKey }` | required | AWS credentials |
+| `endpoint` | `string` | AWS default | Custom S3 endpoint (MinIO, R2) |
+
+<Callout type="info">
+  **S3-Compatible Storage:** Use the `endpoint` option to connect to MinIO, Cloudflare R2, DigitalOcean Spaces, or any S3-compatible service.
+</Callout>
+
+---
+
+## MockAdapter
+
+In-memory adapter for testing. Tracks all operations via `files` and `calls` properties.
+
+```typescript
+import { IgniterCollectionMockAdapter } from '@igniter-js/collections/adapters';
+
+const mock = new IgniterCollectionMockAdapter();
+
+const docs = IgniterCollections.create()
+  .withAdapter(mock)
+  .addCollection(Posts)
+  .build();
+
+// Run operations
+await docs.posts.create({ data: { title: 'Test', author: 'Test' } });
+
+// Inspect state
+console.log(mock.files); // Map<string, string> — path → content
+console.log(mock.calls); // Array of method call records
+```
+
+---
+
+## Adapter Interface
+
+The `IgniterCollectionAdapter` interface defines six required methods and one optional:
+
+```typescript
+interface IgniterCollectionAdapter {
+  read(path: string): Promise<string | null>;
+  write(path: string, content: string, options?: { ttl?: number }): Promise<void>;
+  delete(path: string): Promise<void>;
+  list(directory: string, pattern?: string, options?: {
+    type?: 'file' | 'directory' | 'both';
+  }): Promise<string[]>;
+  exists(path: string): Promise<boolean>;
+  mkdir(path: string): Promise<void>;
+  watch?(path: string, callback: (event, filePath) => void): () => void;
+}
+```
+
+---
+
+## Building a Custom Adapter
+
+Implement the interface to add any storage backend:
+
+```typescript
+import type { IgniterCollectionAdapter } from '@igniter-js/collections';
+
+class PostgresAdapter implements IgniterCollectionAdapter {
+  constructor(private db: Database) {}
+
+  async read(path: string): Promise<string | null> {
+    const row = await this.db.query(
+      'SELECT content FROM documents WHERE path = $1',
+      [path]
+    );
+    return row?.content ?? null;
+  }
+
+  async write(path: string, content: string): Promise<void> {
+    await this.db.query(
+      `INSERT INTO documents (path, content, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (path) DO UPDATE SET content = $2, updated_at = NOW()`,
+      [path, content]
+    );
+  }
+
+  async delete(path: string): Promise<void> {
+    await this.db.query('DELETE FROM documents WHERE path = $1', [path]);
+  }
+
+  async list(directory: string, pattern?: string): Promise<string[]> {
+    const rows = await this.db.query(
+      'SELECT path FROM documents WHERE path LIKE $1',
+      [`${directory}%`]
+    );
+    return rows.map(r => r.path);
+  }
+
+  async exists(path: string): Promise<boolean> {
+    const row = await this.db.query(
+      'SELECT 1 FROM documents WHERE path = $1',
+      [path]
+    );
+    return !!row;
+  }
+
+  async mkdir(_path: string): Promise<void> {
+    // No-op — PostgreSQL doesn't need directories
+  }
+}
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Watcher" description="Auto-discover schemas and views with file watching and hot reload." href="/docs/collections/watcher" />
+  <Card title="Advanced" description="Context injection, telemetry, global hooks, and multi-pattern." href="/docs/collections/advanced" />
+  <Card title="Troubleshooting" description="Common errors and how to fix them." href="/docs/collections/troubleshooting" />
+</Cards>

@@ -1,0 +1,272 @@
+---
+title: Sampling & Redaction
+description: Control telemetry volume with per-level sampling rates and glob patterns. Protect PII with key denylists, SHA-256 hashing, and string truncation — all applied before events leave the application.
+---
+
+## Sampling & Redaction
+
+Two critical policies that govern what data reaches your transports:
+
+- **Sampling** — Controls *volume*. Which events are sent, and at what rate.
+- **Redaction** — Controls *privacy*. Which data is removed or hashed before leaving your application.
+
+Both are configured via the builder and applied during the emit pipeline: **Sampling → Envelope → Redaction → Transport fan-out**.
+
+---
+
+## Sampling
+
+Sampling determines whether an event is forwarded to transports based on its level and name. It's the primary lever for controlling telemetry costs.
+
+### Default Sampling Policy
+
+```typescript
+const DEFAULTS = {
+  debugRate: 0.01,   // 1% of debug events
+  infoRate: 0.1,     // 10% of info events
+  warnRate: 1.0,     // 100% of warn events
+  errorRate: 1.0,    // 100% of error events
+  always: [],        // No forced sampling
+  never: [],         // No forced drops
+};
+```
+
+### Configuration
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withSampling({
+    debugRate: 0.01,        // 1% of debug events sampled
+    infoRate: 0.1,          // 10% of info events sampled
+    warnRate: 1.0,          // 100% of warn events
+    errorRate: 1.0,         // 100% of error events
+    always: [               // Always sampled (ignores rates)
+      "*.failed",
+      "*.error",
+      "security.*",
+      "audit.*",
+    ],
+    never: [                // Never sampled (always dropped)
+      "health.check",
+      "metrics.heartbeat",
+      "debug.poll",
+    ],
+  })
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+### How It Works
+
+1. On every `emit()`, the sampler checks the event's **level** and **name**
+2. If the name matches a `never` pattern → dropped immediately
+3. If the name matches an `always` pattern → sent immediately
+4. Otherwise → random sampling based on the level's rate
+
+```typescript
+// Example flow:
+telemetry.emit("health.check", { ... });          // ❌ Dropped (never)
+telemetry.emit("payment.failed", { level: "error" }); // ✅ Sent (always)
+telemetry.emit("user.login", { level: "info" });  // 🎲 10% chance (infoRate)
+telemetry.emit("cache.miss", { level: "debug" }); // 🎲 1% chance (debugRate)
+```
+
+### Glob Patterns
+
+The `always` and `never` arrays support simple glob patterns with the `*` wildcard:
+
+| Pattern | Matches |
+|---------|---------|
+| `*.failed` | `payment.failed`, `order.failed`, `auth.failed` |
+| `*.error` | `db.error`, `api.error` |
+| `security.*` | `security.breach`, `security.login.brute_force`, `security.token.revoked` |
+| `audit.*` | `audit.user.deleted`, `audit.config.changed` |
+| `health.check` | Only exact match `health.check` |
+
+### Recommended Policies
+
+**Development** (log everything):
+
+```typescript
+sampling: {
+  debugRate: 1.0,
+  infoRate: 1.0,
+  warnRate: 1.0,
+  errorRate: 1.0,
+}
+```
+
+**Production** (cost-conscious, all errors):
+
+```typescript
+sampling: {
+  debugRate: 0.0,        // Never sample debug
+  infoRate: 0.05,        // 5% of info
+  warnRate: 1.0,         // All warnings
+  errorRate: 1.0,        // All errors
+  always: ["security.*", "audit.*"],
+  never: ["health.check"],
+}
+```
+
+**High-Volume Service** (aggressive sampling):
+
+```typescript
+sampling: {
+  debugRate: 0.0,
+  infoRate: 0.01,         // 1% of info
+  warnRate: 0.5,          // 50% of warnings
+  errorRate: 1.0,         // All errors
+  always: ["*.error", "security.*"],
+  never: ["health.check", "metrics.*", "debug.*"],
+}
+```
+
+---
+
+## Redaction
+
+Redaction is applied **after sampling, before transport fan-out**. It modifies the event envelope's attributes in-memory — original data is never restored.
+
+### Default Redaction Policy
+
+```typescript
+const DEFAULTS = {
+  denylistKeys: [],    // Nothing removed by default
+  hashKeys: [],         // Nothing hashed by default
+  maxStringLength: 5000, // Strings longer than 5K truncated
+};
+```
+
+### Configuration
+
+```typescript
+const telemetry = IgniterTelemetry.create()
+  .withRedaction({
+    denylistKeys: ["password", "token", "secret", "authorization", "cookie"],
+    hashKeys: ["email", "ip", "userAgent", "phone", "ssn"],
+    maxStringLength: 5000,
+  })
+  .addTransport(loggerAdapter)
+  .build();
+```
+
+### How It Works
+
+1. **Denylist**: Keys matching any denylist entry are **removed** from attributes
+2. **Hash**: Keys matching any hash entry are **SHA-256 hashed** (preserving uniqueness for correlation)
+3. **Truncation**: String values exceeding `maxStringLength` are truncated with `...[truncated]`
+
+```typescript
+// Before redaction:
+telemetry.emit("user.login", {
+  attributes: {
+    "ctx.user.id": "usr_123",
+    "ctx.user.email": "alice@example.com",   // Will be hashed
+    "ctx.user.ip": "192.168.1.100",          // Will be hashed
+    "ctx.auth.token": "sk_live_abc123...",   // Will be removed
+    "ctx.auth.password": "s3cret!",           // Will be removed
+    "ctx.request.body": "a".repeat(6000),     // Will be truncated
+  },
+});
+
+// After redaction (what reaches transports):
+{
+  "ctx.user.id": "usr_123",                  // Untouched
+  "ctx.user.email": "sha256:abc123def456...", // Hashed
+  "ctx.user.ip": "sha256:789ghi012jkl...",   // Hashed
+  // "ctx.auth.token" — REMOVED
+  // "ctx.auth.password" — REMOVED
+  "ctx.request.body": "aaaa...aaaa[truncated]", // Truncated at 5000 chars
+}
+```
+
+<Callout type="warn">
+  **Redaction is case-insensitive.** `password`, `Password`, and `PASSWORD` are all matched. Redaction only applies to `attributes` — envelope metadata (actor type, scope type, etc.) is not redacted.
+</Callout>
+
+### Denylist vs Hash
+
+| Strategy | Effect | Use For |
+|----------|--------|---------|
+| Denylist | Completely removes the key-value pair | Secrets, tokens, PII that must not be stored |
+| Hash | Replaces value with SHA-256 hash | PII needed for correlation but not readable |
+
+```typescript
+// Denylist — values that should NEVER leave the system
+denylistKeys: [
+  "password",
+  "secret",
+  "token",
+  "authorization",
+  "apiKey",
+  "cookie",
+  "jwt",
+]
+
+// Hash — PII needed for correlation but not in plain text
+hashKeys: [
+  "email",
+  "ip",
+  "userAgent",
+  "phone",
+  "ssn",
+  "userId",
+]
+```
+
+### Recommended Policies
+
+**Basic** (catch common leaks):
+
+```typescript
+redaction: {
+  denylistKeys: ["password", "token", "secret", "authorization"],
+  hashKeys: ["email", "ip"],
+}
+```
+
+**Strict** (GDPR/HIPAA compliance):
+
+```typescript
+redaction: {
+  denylistKeys: [
+    "password", "secret", "token", "authorization", "cookie",
+    "creditCard", "ssn", "passport", "driverLicense",
+  ],
+  hashKeys: ["email", "ip", "userAgent", "phone", "name", "address"],
+  maxStringLength: 1000, // Aggressive truncation
+}
+```
+
+---
+
+## Attribute Key Naming
+
+To make redaction reliable, follow consistent naming:
+
+```typescript
+// ✅ Good — predictable keys for redaction
+"ctx.user.email"
+"ctx.user.ip"
+"ctx.auth.token"
+"ctx.payment.credit_card"
+
+// ❌ Bad — unpredictable keys that bypass redaction
+"email"           // Too generic
+"user_email"      // Different convention
+"userEmail"       // Different casing
+"token"           // Could collide with non-sensitive "token"
+```
+
+<Callout type="info">
+  Use the `ctx.*` naming convention consistently. This makes redaction rules predictable and prevents sensitive data from slipping through due to naming inconsistencies.
+</Callout>
+
+---
+
+## Next Steps
+
+- [Validation](/docs/telemetry/validation) — Event validation modes and strict mode
+- [Best Practices](/docs/telemetry/best-practices) — Do's and Don'ts for production
+- [Troubleshooting](/docs/telemetry/troubleshooting) — Common errors and solutions

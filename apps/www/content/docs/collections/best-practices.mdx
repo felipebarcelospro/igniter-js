@@ -1,0 +1,324 @@
+---
+title: Best Practices
+description: Do's and Don'ts, proven patterns, anti-patterns to avoid, and performance optimization tips for production collections.
+---
+
+## Best Practices
+
+Guidelines for writing maintainable, performant, and type-safe collections code.
+
+---
+
+## ✅ Do's
+
+### 1. Use Descriptive Collection Names
+
+```typescript
+// ✅ Clear, plural, domain-specific
+const BlogPosts = IgniterCollectionModel.create('posts')
+const ProductPages = IgniterCollectionModel.create('products')
+const UserProfiles = IgniterCollectionModel.create('profiles')
+
+// ❌ Vague or abbreviated
+const P = IgniterCollectionModel.create('p')
+const Data = IgniterCollectionModel.create('data')
+```
+
+### 2. Centralize Schema Definitions
+
+```typescript
+// ✅ Define schemas separately for reuse
+// schemas/post.schema.ts
+export const postSchema = z.object({
+  title: z.string().min(1),
+  published: z.boolean().default(false),
+  tags: z.array(z.string()).default([]),
+});
+
+// collections/posts.ts
+import { postSchema } from '../schemas/post.schema';
+
+const Posts = IgniterCollectionModel.create('posts')
+  .withSchema(postSchema)
+  .build();
+
+// Also use for type exports
+export type Post = z.infer<typeof postSchema>;
+```
+
+### 3. Always Paginate
+
+```typescript
+// ✅ Paginate every list query
+const posts = await docs.posts.findMany({
+  take: 20,
+  skip: (page - 1) * 20,
+  orderBy: { createdAt: 'desc' as const },
+});
+
+// ❌ Loading unbounded results
+const allPosts = await docs.posts.findMany();
+```
+
+### 4. Use Select for Network Efficiency
+
+```typescript
+// ✅ Return only what you need
+const titles = await docs.posts.findMany({
+  select: { id: true, title: true, slug: true },
+  take: 50,
+});
+
+// ❌ Return everything including content
+const posts = await docs.posts.findMany({ take: 50 });
+// Each document includes the full content body
+```
+
+### 5. Handle Errors Gracefully
+
+```typescript
+// ✅ Structured error handling
+import { IgniterCollectionError } from '@igniter-js/collections';
+
+try {
+  await docs.posts.create({ data: { title: 'Hello' } });
+} catch (error) {
+  if (error instanceof IgniterCollectionError) {
+    switch (error.code) {
+      case 'COLLECTION_VALIDATION_ERROR':
+        return { error: 'Invalid data', details: error.details };
+      case 'COLLECTION_HOOK_CANCELLED':
+        return { error: 'Operation rejected by business rules' };
+      default:
+        return { error: 'Internal error' };
+    }
+  }
+  throw error; // Re-throw unexpected errors
+}
+```
+
+### 6. Clean Up Event Subscriptions
+
+```typescript
+// ✅ Store handles for cleanup
+class ContentService {
+  private handles: Array<() => void> = [];
+
+  start() {
+    this.handles.push(
+      docs.on('posts:created', this.onPostCreated).off
+    );
+    this.handles.push(
+      docs.on('posts:deleted', this.onPostDeleted).off
+    );
+  }
+
+  stop() {
+    this.handles.forEach(off => off());
+    this.handles = [];
+  }
+}
+```
+
+### 7. Use Context for Dependency Injection
+
+```typescript
+// ✅ Inject dependencies through context
+const docs = IgniterCollections.create()
+  .withAdapter(adapter)
+  .withContext(async () => ({
+    db: await Database.connect(),
+    cache: new Cache(),
+  }))
+  .addCollection(Posts)
+  .build();
+
+Posts.onCreated(async ({ value, context }) => {
+  const { cache } = context as { cache: Cache };
+  cache.delete('posts:list');
+  return value;
+});
+```
+
+---
+
+## ❌ Don'ts
+
+### 1. Don't Use Hooks for Heavy Async Work
+
+```typescript
+// ❌ Hooks block the operation
+.onCreated(async ({ value }) => {
+  await sendEmail({ to: 'everyone@company.com' }); // Slow!
+  return value;
+})
+
+// ✅ Delegate to background processing
+.onCreated(async ({ value }) => {
+  backgroundQueue.add('post-created', { id: value.id });
+  return value;
+})
+```
+
+### 2. Don't Modify Documents Outside the Manager
+
+```typescript
+// ❌ Direct file manipulation bypasses hooks, validation, and events
+import { writeFile } from 'fs/promises';
+await writeFile('.content/posts/my-post.mdx', rawMarkdown);
+
+// ✅ Always use the manager
+await docs.posts.update({
+  where: { id: 'my-post' },
+  data: { title: 'Updated Title' },
+});
+```
+
+### 3. Don't Create Too Many Sub-Collections
+
+```typescript
+// ❌ Deep nesting makes queries complex
+Posts.collections.create('comments')
+  .collections.create('replies')
+    .collections.create('reactions')
+      .collections.create('emoji') // Too deep!
+
+// ✅ Keep it to 2-3 levels max
+Posts.collections.create('comments')
+  .collections.create('replies')
+```
+
+### 4. Don't Use Zod `transform` in Schemas
+
+```typescript
+// ❌ Transforms break type inference
+const schema = z.object({
+  date: z.string().transform(s => new Date(s)),
+});
+
+// ✅ Transform in hooks instead
+.onCreated(({ value }) => {
+  value.data.parsedDate = new Date(value.data.dateString);
+  return value;
+})
+```
+
+### 5. Don't Query Without Index Considerations
+
+```typescript
+// ❌ Full scan on large collections
+await docs.posts.findMany({
+  where: { author: 'Felipe' },
+});
+
+// ✅ Use pagination + full-text search where possible
+await docs.posts.findMany({
+  where: {
+    author: 'Felipe',
+    search: { term: 'TypeScript' }, // Leverages MiniSearch index
+  },
+  take: 20,
+});
+```
+
+---
+
+## Performance Tips
+
+### Batch Operations
+
+```typescript
+// ✅ Batch creates with Promise.all
+const posts = await Promise.all(
+  importData.map(item =>
+    docs.posts.create({
+      data: {
+        title: item.title,
+        author: item.author,
+        published: false,
+      }
+    })
+  )
+);
+```
+
+### Avoid N+1 with Sub-Collections
+
+```typescript
+// ❌ N+1: fetching comments for each post individually
+const posts = await docs.posts.findMany({ take: 10 });
+for (const post of posts) {
+  const comments = await docs.posts.collections.get('comments').findMany({
+    where: { parentId: post.id },
+  });
+}
+
+// ✅ Use include
+const posts = await docs.posts.findMany({
+  take: 10,
+  include: { comments: true },
+});
+```
+
+### Caching Strategy
+
+```typescript
+let cachedPosts: Post[] | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL = 60_000; // 1 minute
+
+async function getPosts() {
+  if (cachedPosts && Date.now() - cacheTimestamp < CACHE_TTL) {
+    return cachedPosts;
+  }
+
+  cachedPosts = await docs.posts.findMany({
+    where: { published: true },
+    orderBy: { createdAt: 'desc' as const },
+    take: 20,
+  });
+  cacheTimestamp = Date.now();
+  return cachedPosts;
+}
+
+// Invalidate on changes
+docs.on('posts:created', () => { cachedPosts = null; });
+docs.on('posts:updated', () => { cachedPosts = null; });
+```
+
+---
+
+## Project Structure
+
+Recommended file organization for a collections-powered project:
+
+```
+src/
+├── collections/
+│   ├── posts.ts         # Post collection definition
+│   ├── pages.ts         # Page collection definition
+│   └── authors.ts       # Author collection definition
+├── schemas/
+│   ├── post.schema.ts   # Zod schemas (reusable)
+│   ├── page.schema.ts
+│   └── author.schema.ts
+├── views/
+│   ├── dashboard.ts     # Dashboard view definition
+│   └── content-audit.ts # Audit view definition
+├── hooks/
+│   ├── slugify.ts       # Hook: auto-generate slugs
+│   └── audit-log.ts     # Hook: audit trail
+├── adapters/
+│   └── storage.ts       # Adapter factory (env-based)
+└── manager.ts           # Central manager bootstrap
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Framework Integration" description="Next.js, Express, Astro, and Remix examples." href="/docs/collections/framework-integration" />
+  <Card title="Troubleshooting" description="Common errors and how to fix them." href="/docs/collections/troubleshooting" />
+  <Card title="API Reference" description="Complete reference for all builders and managers." href="/docs/collections/api-reference" />
+</Cards>

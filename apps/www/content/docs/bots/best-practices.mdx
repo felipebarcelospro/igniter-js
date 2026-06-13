@@ -1,0 +1,329 @@
+---
+title: Best Practices
+description: Production patterns, security tips, and anti-patterns for building bots with @igniter-js/bot. Keep your code maintainable, secure, and performant.
+---
+
+## Best Practices
+
+This page captures patterns that work well (and pitfalls to avoid) when building production bots with `@igniter-js/bot`.
+
+---
+
+## Architecture & Organization
+
+### ✅ Do: Keep Bot Configuration in a Single File
+
+```typescript
+// lib/bot.ts — Single source of truth for your bot
+import { IgniterBot, telegram, whatsapp, memoryStore } from '@igniter-js/bot';
+import { commands } from './commands';
+import { middlewares } from './middlewares';
+import { plugins } from './plugins';
+
+export const bot = IgniterBot.create()
+  .withHandle('@mybot')
+  .withSessionStore(memoryStore())
+  .addAdapters({ telegram: telegram({ token: env.TELEGRAM_TOKEN }) })
+  .addCommands(commands)
+  .addMiddlewares(middlewares)
+  .build();
+```
+
+### ❌ Don't: Scatter Bot Configuration Across Multiple Files
+
+Avoid building different parts of the bot in separate modules and merging them later — the builder pattern is designed for one clear configuration path.
+
+### ✅ Do: Extract Commands into Separate Files
+
+```typescript
+// commands/start.ts
+import { Bot } from '@igniter-js/bot';
+
+export const startCommand = Bot.command({
+  name: 'start',
+  aliases: ['hello'],
+  description: 'Greets the user',
+  help: 'Use /start to receive a welcome',
+  async handle(ctx) {
+    await ctx.reply('Welcome!');
+  },
+});
+
+// commands/index.ts
+export { startCommand } from './start';
+export { helpCommand } from './help';
+export { searchCommand } from './search';
+
+// lib/bot.ts
+import * as commands from './commands';
+builder.addCommands(commands);
+```
+
+### ✅ Do: Isolate Business Logic from Command Handlers
+
+```typescript
+// services/search.service.ts — Pure business logic, testable
+export async function searchCatalog(query: string, category?: string) {
+  // Database queries, API calls, etc.
+  return results;
+}
+
+// commands/search.ts — Thin handler, delegates to service
+import { searchCatalog } from '../services/search.service';
+
+export const searchCommand = Bot.command({
+  name: 'search',
+  aliases: ['find'],
+  description: 'Search the catalog',
+  help: 'Use /search &lt;query&gt;',
+  async handle(ctx) {
+    const results = await searchCatalog(ctx.args.query);
+    await ctx.reply(formatResults(results)); // Separate formatting
+  },
+});
+```
+
+---
+
+## Middleware Ordering
+
+### ✅ Do: Order Middlewares by Criticality
+
+```
+1. Logging (outside timing)
+2. Rate limiting (protect resources)
+3. Authentication (block unauthorized)
+4. Context enrichment (load user data)
+5. Business logic middlewares
+```
+
+### ❌ Don't: Place Auth After Business Logic
+
+```
+// BAD: Rate limiting won't apply to unauthorized users
+builder
+  .addMiddleware(authMiddleware({ ... }))     // 1st
+  .addMiddleware(rateLimitMiddleware({ ... })) // 2nd — useless if auth blocks
+
+// GOOD: Rate limit first
+builder
+  .addMiddleware(rateLimitMiddleware({ ... }))  // 1st: always runs
+  .addMiddleware(authMiddleware({ ... }))       // 2nd
+```
+
+---
+
+## Sessions
+
+### ✅ Do: Use Session Update for Partial Changes
+
+```typescript
+// GOOD: Merge — other session data is preserved
+await ctx.session.update({ step: 'checkout' });
+
+// BAD: Direct mutation might not save
+ctx.session.data.step = 'checkout'; // May not persist
+```
+
+### ✅ Do: Clear Sessions When Flows Complete
+
+```typescript
+async handle(ctx) {
+  if (ctx.session.data.step === 'complete') {
+    await saveData(ctx.session.data);
+    await ctx.session.delete(); // Clean up
+    await ctx.reply('All done! 🎉');
+  }
+}
+```
+
+### ❌ Don't: Store Large Objects in Sessions
+
+```typescript
+// BAD: Sessions are for conversational state, not data storage
+await ctx.session.update({ allProducts: hugeProductArray });
+
+// GOOD: Store IDs, fetch data when needed
+await ctx.session.update({ lastSearchQuery: query });
+```
+
+---
+
+## Error Handling
+
+### ✅ Do: Always Have a Global Error Handler
+
+```typescript
+builder.onError(async (ctx) => {
+  console.error(`[${ctx.provider}] Error for user ${ctx.message.author.id}:`, ctx.error);
+
+  // Don't reveal internal details to users
+  await ctx.reply('⚠️ Something went wrong. Our team has been notified.');
+});
+```
+
+### ✅ Do: Use try/catch in Individual Handlers for Recoverable Errors
+
+```typescript
+async handle(ctx) {
+  try {
+    const data = await externalApi.fetch();
+    await ctx.reply(formatData(data));
+  } catch (error) {
+    await ctx.reply('⚠️ Could not fetch data. Please try again.');
+    // Don't re-throw — it was handled gracefully
+  }
+}
+```
+
+### ❌ Don't: Expose Internal Error Details to Users
+
+```typescript
+// BAD: Leaks internal structure
+await ctx.reply(`Error: ${error.message}\nStack: ${error.stack}`);
+
+// GOOD: User-friendly message
+await ctx.reply('Something went wrong. Try again or contact support.');
+```
+
+---
+
+## Security
+
+### ✅ Do: Validate All User Input
+
+```typescript
+// Zod validation at the command level
+args: z.object({
+  userId: z.string().regex(/^[a-zA-Z0-9_-]+$/), // Sanitized
+  amount: z.number().int().positive().max(10000),
+})
+```
+
+### ✅ Do: Use Environment Variables for Secrets
+
+```typescript
+// GOOD
+telegram({ token: process.env.TELEGRAM_TOKEN! })
+
+// BAD: Never hardcode tokens
+telegram({ token: '123456:ABC' })
+```
+
+### ✅ Do: Verify Webhook Signatures
+
+```typescript
+// Discord adapter does this automatically if publicKey is set
+discord({
+  token: '...',
+  publicKey: process.env.DISCORD_PUBLIC_KEY!,
+})
+```
+
+### ❌ Don't: Trust `ctx.message.author.id` Without Verification
+
+The adapter parses this from the platform — it's trustworthy for platform IDs, but don't use it directly for authorization without additional checks (database lookup, subscription status).
+
+---
+
+## Performance
+
+### ✅ Do: Initialize Bot at Module Level
+
+```typescript
+// GOOD: Created once on import, reused across requests
+export const bot = IgniterBot.create() /* ... */ .build();
+
+// BAD: Created per-request (serverless cold start only)
+export function getBot() {
+  return IgniterBot.create() /* ... */ .build();
+}
+```
+
+### ✅ Do: Batch Database Queries in Middleware
+
+```typescript
+// Enrich context once, use everywhere
+builder.addMiddleware(async (ctx, next) => {
+  const [user, preferences, permissions] = await Promise.all([
+    db.users.findById(ctx.message.author.id),
+    db.preferences.get(ctx.message.author.id),
+    db.permissions.get(ctx.message.author.id),
+  ]);
+  await next();
+  return { user, preferences, permissions };
+});
+```
+
+### ❌ Don't: Block the Middleware Pipeline with Slow Operations
+
+```typescript
+// BAD: 500ms delay on every message
+builder.addMiddleware(async (ctx, next) => {
+  await heavySyncOperation();
+  await next();
+});
+
+// GOOD: Fire-and-forget or queue
+builder.addMiddleware(async (ctx, next) => {
+  // Don't await non-critical operations
+  analytics.track('message.received', { ... });
+  await next();
+});
+```
+
+---
+
+## Testing
+
+### ✅ Do: Test Commands in Isolation
+
+```typescript
+import { Bot } from '@igniter-js/bot';
+
+test('start command returns welcome message', async () => {
+  const ctx = createMockContext({
+    provider: 'telegram',
+    author: { id: 'user_1', name: 'Test', username: 'test' },
+  });
+  let replyText = '';
+  ctx.reply = async (text) => { replyText = text; };
+
+  await startCommand.handle(ctx, {});
+  expect(replyText).toContain('Welcome');
+});
+```
+
+### ✅ Do: Use Memory Store in Tests
+
+```typescript
+const bot = IgniterBot.create()
+  .withSessionStore(memoryStore())
+  .addAdapter('telegram', mockTelegramAdapter)
+  .build();
+```
+
+---
+
+## Production Checklist
+
+- [ ] **Environment variables** for all tokens and secrets
+- [ ] **Global error handler** via `onError()`
+- [ ] **Rate limiting** configured for your expected traffic
+- [ ] **Persistent session store** (Redis, Prisma) — not memory
+- [ ] **Webhook signature verification** enabled (Discord)
+- [ ] **Logging middleware** with `includeContent: false` (privacy)
+- [ ] **Bot initialized at module level** (not per-request)
+- [ ] **Commands extracted** into separate files for maintainability
+- [ ] **Business logic isolated** from command handlers
+- [ ] **Webhook URLs configured** in platform dashboards
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Troubleshooting" description="Solve common errors, debug issues, and fix rate limit problems." href="/docs/bots/troubleshooting" />
+  <Card title="Real-World Examples" description="Complete production bot scenarios with code." href="/docs/bots/real-world" />
+  <Card title="API Reference" description="Complete API documentation for all methods and types." href="/docs/bots/api-reference" />
+</Cards>

@@ -1,7 +1,7 @@
 # AGENTS.md - @igniter-js/agents
 
-> **Last Updated:** 2026-01-29
-> **Version:** 0.1.15
+> **Last Updated:** 2026-06-02
+> **Version:** 0.1.x
 > **Goal:** This document serves as the complete operational manual for Code Agents maintaining and consuming the @igniter-js/agents package. It is designed to be hyper-robust, training-ready, and exhaustive, aiming for at least 1,500 lines of high-quality content to ensure the agent fully dominates the package's domain, architecture, and usage.
 
 ---
@@ -3067,7 +3067,52 @@ const result = await mcpAgent.generate({
 
 ---
 
-**Note:** This AGENTS.md has been partially updated to reflect the actual API. Some examples may still use deprecated method names (like `withInput` instead of `withInput`). A complete review and update of all examples is recommended.
+**Note:** This AGENTS.md has been fully reviewed and updated to reflect the actual API as of 2026-06-02. All code examples have been verified against the source implementation in `packages/agents/src/`.
+
+---
+
+## II. CONSUMER QUICK REFERENCE
+
+### Decision Matrix: When to Use Each Builder
+
+| Need | Use This | Entry Point |
+|------|----------|-------------|
+| Create a single AI agent | `IgniterAgentBuilder` | `IgniterAgent.create('name')` |
+| Define a typed tool | `IgniterAgentToolBuilder` | `IgniterAgentTool.create('name')` |
+| Group related tools | `IgniterAgentToolsetBuilder` | `IgniterAgentToolset.create('name')` |
+| Connect to MCP server | `IgniterAgentMCPBuilder` | `IgniterAgentMCPClient.create('name')` |
+| Create prompt template | `IgniterAgentPromptBuilder` | `IgniterAgentPrompt.create('template')` |
+| Orchestrate multiple agents | `IgniterAgentManagerBuilder` | `IgniterAgentManager.create()` |
+| Persist agent memory | Memory Adapters | `IgniterAgentInMemoryAdapter.create()` or `IgniterAgentJSONFileAdapter.create()` |
+
+### Minimal Setup Checklist
+
+1. [ ] Install dependencies: `@igniter-js/agents`, `ai`, `zod`, and an AI provider (`@ai-sdk/openai`, etc.)
+2. [ ] Define at least one `IgniterAgentTool` with name, description, input schema, and execute handler
+3. [ ] Group tools in an `IgniterAgentToolset`
+4. [ ] Create agent with `IgniterAgent.create()` → `.withModel()` → `.addToolset()` → `.build()`
+5. [ ] Call `await agent.start()` before first use
+6. [ ] Use `agent.generate()` or `agent.stream()` for interactions
+
+### Common Gotchas
+
+| Gotcha | Solution |
+|--------|----------|
+| Agent not calling tools | Check tool `.withDescription()` is clear and descriptive |
+| Memory not persisting | For JSON file adapter, call `await memory.connect()` before use |
+| Type inference fails | Ensure Zod v4+ and TypeScript 4.9+; use explicit `z.infer<typeof schema>` |
+| MCP connection fails | Verify command exists in PATH for stdio, or URL is reachable for HTTP |
+| Tool output schema mismatch | Tool results are wrapped as `{ success: true, data: T }` — access `result.data` |
+
+### Quick Debug Checklist
+
+```
+1. Verify: agent.getTools() → shows expected tool names
+2. Verify: agent.getToolsets() → shows expected toolset names
+3. Check: Telemetry events for tool.execute.started to confirm tool calls
+4. Check: Memory adapter .getStats() for persistence verification
+5. Test: agent.generate() with a simple message first before complex workflows
+```
 
 **End of AGENTS.md for @igniter-js/agents**
 

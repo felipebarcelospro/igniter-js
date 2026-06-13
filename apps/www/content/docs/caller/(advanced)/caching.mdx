@@ -1,34 +1,90 @@
 ---
 title: Caching
-description: Improve performance with built-in in-memory and persistent caching.
+description: Improve performance with built-in in-memory and persistent caching. Reduce network calls, speed up your UI, and control cache invalidation.
 ---
 
-Caller provides a powerful caching system that works out of the box with in-memory storage, and can be extended to use persistent stores like Redis.
+Caller provides a layered caching system that works out of the box with in-memory storage and can be extended to persistent stores like Redis.
+
+---
+
+## How Caching Works
+
+When you call `.stale(milliseconds)` on a request, Caller:
+
+1. Checks if a cached response exists and is within the stale window
+2. If **found and fresh** → returns cached data immediately (no network call)
+3. If **not found or expired** → makes the network request → caches the result
+
+```typescript
+// First call — network request, cached for 30s
+const { data: fresh } = await api.get('/users')
+  .stale(30_000)
+  .execute();
+
+// Second call (within 30s) — instant cached response
+const { data: cached } = await api.get('/users')
+  .stale(30_000)
+  .execute();
+// No network request made!
+```
+
+---
 
 ## Basic Caching
 
-To enable caching for a request, use the `.stale()` method. This sets the duration (in milliseconds) for which the response is considered fresh.
+The `.stale()` method accepts milliseconds. Simple and predictable:
 
 ```typescript
-// Cache the list of users for 30 seconds
-const { data } = await api.get('/users')
-  .stale(30_000)
+// Cache for 30 seconds
+await api.get('/users').stale(30_000).execute();
+
+// Cache for 5 minutes
+await api.get('/config').stale(300_000).execute();
+
+// Cache for 1 hour
+await api.get('/constants').stale(3_600_000).execute();
+```
+
+### Cache Keys
+
+By default, Caller generates cache keys from the request URL. Use `.cache()` to set a custom key:
+
+```typescript
+// Custom cache key for manual invalidation
+await api.get('/me')
+  .cache('default', 'current-user')
+  .stale(60_000)
+  .execute();
+
+// Same data from a different endpoint can share the cache key
+await api.get('/users/current')
+  .cache('default', 'current-user')
+  .stale(60_000)
   .execute();
 ```
 
-When a request is made within the stale time, Caller returns the data from the cache immediately without making a network request.
+### Fetch Cache Strategy
 
----
+The first parameter to `.cache()` is the native `RequestCache` strategy:
 
-## Cache Keys
-
-By default, Caller generates a cache key based on the full URL (including query parameters). You can override this behavior using the `.cache()` method.
+| Strategy | Behavior |
+|----------|----------|
+| `'default'` | Browser default cache behavior |
+| `'no-store'` | Never cache (bypasses both browser and Caller cache) |
+| `'reload'` | Fetch from network, update cache |
+| `'force-cache'` | Use cache even if stale |
+| `'only-if-cached'` | Only return cached data, error otherwise |
 
 ```typescript
-// Use a custom cache key
-await api.get('/me')
-  .cache('default', 'current-user-profile')
-  .stale(60_000)
+// Force network fetch, bypassing browser cache
+await api.get('/real-time-data')
+  .cache('no-store')
+  .execute();
+
+// Prefer cache for static data
+await api.get('/static-content')
+  .cache('force-cache')
+  .stale(600_000)
   .execute();
 ```
 
@@ -36,61 +92,192 @@ await api.get('/me')
 
 ## Cache Invalidation
 
-You can manually invalidate cache entries when data changes (e.g., after a mutation).
+Invalidate cached entries when data changes (e.g., after a mutation):
 
-### Exact Match
+### Programmatic Invalidation
 
-Invalidate a specific key:
+Use the static `IgniterCallerManager` methods:
 
 ```typescript
 import { IgniterCallerManager } from '@igniter-js/caller';
 
-// After updating a user
-await api.post('/users').body(userData).execute();
+// After creating a user, invalidate the users list
+const { error } = await api.post('/users').body(newUser).execute();
 
-// Invalidate the users list cache
-await IgniterCallerManager.invalidate('/users');
+if (!error) {
+  IgniterCallerManager.on('response', (result, context) => {
+    // React to specific responses
+    if (context.url.includes('/users') && context.method === 'POST') {
+      // Clear cache for this resource
+      console.log('User created — cache should be refreshed');
+    }
+  });
+}
 ```
 
-### Pattern Match
+### React Hook Invalidation
 
-Invalidate all entries matching a glob pattern:
+In React, use the `.invalidate()` method from hooks:
 
-```typescript
-// Invalidate all cache entries starting with /users/
-await IgniterCallerManager.invalidatePattern('/users/*');
+```tsx
+function CreateUserForm() {
+  const main = useCaller('main');
+
+  const handleSubmit = async (data: CreateUserInput) => {
+    const { error } = await main.post('/users').body(data).execute();
+
+    if (!error) {
+      // Invalidate all cached queries for /users
+      main.invalidate('/users');
+    }
+  };
+
+  return <form onSubmit={handleSubmit}>...</form>;
+}
 ```
 
 ---
 
-## Persistent Caching (Redis/Store)
+## Persistent Caching (Redis / Store Adapter)
 
-For server-side applications, you can use a persistent store to share cache across multiple instances or survive restarts.
+For server-side applications, use a persistent store to share cache across instances:
 
 ```typescript
 import { IgniterCaller } from '@igniter-js/caller';
 
-// Assuming you have an Igniter Store adapter
-const store = createMyStoreAdapter();
+// Implement the StoreAdapter interface for your backend
+class RedisStoreAdapter {
+  readonly client: RedisClient;
+
+  constructor(redisUrl: string) {
+    this.client = createRedisClient(redisUrl);
+  }
+
+  async get<T>(key: string): Promise<T | null> {
+    const raw = await this.client.get(key);
+    return raw ? JSON.parse(raw) : null;
+  }
+
+  async set(key: string, value: any, options?: { ttl?: number }): Promise<void> {
+    const serialized = JSON.stringify(value);
+    if (options?.ttl) {
+      await this.client.setex(key, options.ttl, serialized);
+    } else {
+      await this.client.set(key, serialized);
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.client.del(key);
+  }
+
+  async has(key: string): Promise<boolean> {
+    return (await this.client.exists(key)) === 1;
+  }
+}
+
+// Use it
+const redisStore = new RedisStoreAdapter(process.env.REDIS_URL!);
 
 const api = IgniterCaller.create()
-  .withStore(store, {
-    ttl: 3600, // 1 hour default TTL
-    keyPrefix: 'api-cache:',
+  .withBaseUrl('https://api.example.com')
+  .withStore(redisStore, {
+    ttl: 3600,                // 1 hour default TTL
+    keyPrefix: 'api-cache:',  // Redis key prefix
+    fallbackToFetch: true,    // Fall back to in-memory if Redis is down
   })
   .build();
 ```
 
-When a store is configured, Caller will try to get/set data in the store before falling back to in-memory cache.
+### Store Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `ttl` | `3600` | Default TTL in seconds |
+| `keyPrefix` | `'igniter:caller:'` | Prefix for all cache keys |
+| `fallbackToFetch` | `true` | Fall back to in-memory when store is unavailable |
+
+---
+
+## Testing with MockStoreAdapter
+
+Use the built-in mock adapter for testing:
+
+```typescript
+import { MockCallerStoreAdapter } from '@igniter-js/caller/adapters';
+import { IgniterCaller } from '@igniter-js/caller';
+
+describe('Cache behavior', () => {
+  it('uses store for caching', async () => {
+    const store = MockCallerStoreAdapter.create();
+
+    const api = IgniterCaller.create()
+      .withStore(store)
+      .build();
+
+    // First call: cache miss
+    await api.get('/data').stale(30_000).execute();
+
+    // Second call: should hit cache
+    await api.get('/data').stale(30_000).execute();
+
+    // Assert
+    expect(store.calls.set).toBe(1);
+    expect(store.calls.get).toBeGreaterThanOrEqual(1);
+  });
+});
+```
+
+---
+
+## Caching with Telemetry
+
+Monitor cache performance with telemetry events:
+
+```typescript
+import { IgniterCallerTelemetryEvents } from '@igniter-js/caller/telemetry';
+
+// Every cache hit emits: igniter.caller.cache.read.hit
+// Every successful request emits: igniter.caller.request.execute.success (with ctx.cache.hit)
+```
 
 ---
 
 ## Best Practices
 
-<Callout type="info" title="GET Requests Only">
-  Caching is only applied to `GET` and `HEAD` requests. Mutations (`POST`, `PUT`, `PATCH`, `DELETE`) always bypass the cache and should typically trigger invalidations.
+<Callout type="success" title="Caching Guidelines">
+  - **Cache GET requests** — mutations (POST/PUT/PATCH/DELETE) always bypass cache
+  - **Use reasonable stale times** — 5-30s for dynamic data, 5-60min for static data
+  - **Invalidate on mutation** — clear related caches when data changes
+  - **Use custom keys** for data that doesn't map 1:1 to URLs
+  - **Monitor hit rates** with telemetry to tune stale times
 </Callout>
 
-<Callout type="success" title="Telemetry">
-  Use Telemetry to monitor your cache hit rate. Every cache hit emits an `igniter.caller.cache.read.hit` event.
+<Callout type="warn" title="Common Mistakes">
+  - **Don't** cache user-specific data with shared keys — use user-specific cache keys
+  - **Don't** set extremely long stale times for rapidly changing data
+  - **Don't** forget that cache is in-memory by default — restarts clear it
+  - **Don't** use `.stale()` without a store adapter if you need cross-instance caching
 </Callout>
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Retries"
+    description="Handle transient failures with automatic retry logic"
+    href="/docs/caller/retries"
+  />
+  <Card
+    title="Telemetry"
+    description="Monitor cache hit rates and request performance"
+    href="/docs/caller/telemetry"
+  />
+  <Card
+    title="Real-World Examples"
+    description="See caching patterns in production scenarios"
+    href="/docs/caller/real-world-examples"
+  />
+</Cards>

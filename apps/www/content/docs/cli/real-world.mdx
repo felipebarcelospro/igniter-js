@@ -1,0 +1,294 @@
+---
+title: Real-World Scenarios
+description: Production-ready CLI patterns. SaaS startup, microservices, existing projects, CI/CD pipelines, team onboarding, and monorepos — with complete copy-paste commands.
+---
+
+## Real-World Scenarios
+
+This page shows the CLI in action across common production scenarios. Every command is copy-paste ready and grounded in the actual implementation.
+
+---
+
+## Scenario 1: Full-Stack SaaS Startup
+
+**Goal:** Create a Next.js SaaS with PostgreSQL, authentication, background jobs, logging, and telemetry — all from a single command.
+
+```bash
+igniter init my-saas \
+  --template nextjs \
+  --add-ons "database:prisma:postgresql,auth:better-auth:email+magic-link+passkey,jobs,logging,telemetry" \
+  --pm pnpm
+```
+
+**What you get:**
+- Next.js 15 with App Router, Tailwind CSS, and Turbopack
+- Prisma ORM with PostgreSQL (Docker container auto-configured)
+- Better Auth with email, magic link, and passkey plugins
+- BullMQ job queue backed by Redis (Docker container auto-configured)
+- Pino structured logger with console transport
+- OpenTelemetry tracing wiring
+
+**Next steps:**
+
+```bash
+cd my-saas
+igniter dev --cmd "pnpm dev"
+
+# Generate your first feature from the database
+igniter generate feature users --schema prisma:User
+
+# In another terminal, start a worker
+pnpm jobs:worker
+```
+
+---
+
+## Scenario 2: Microservices Architecture
+
+**Goal:** Create three independent services — an API gateway (Express), a worker service (Bun), and a Deno edge function — all using Igniter.js.
+
+### API Gateway (Express)
+
+```bash
+igniter init api-gateway \
+  --template express-rest-api \
+  --add-ons logging,telemetry \
+  --no-docker
+```
+
+### Worker Service (Bun)
+
+```bash
+igniter init worker-service \
+  --template bun-rest-api \
+  --add-ons "database:prisma:postgresql,jobs,logging" \
+  --pm bun
+```
+
+### Edge Function (Deno)
+
+```bash
+igniter init edge-functions \
+  --template deno-rest-api \
+  --add-ons logging \
+  --no-docker --no-git
+```
+
+**Shared patterns:**
+- All services use `logging` for structured output
+- The worker service shares the same database but has its own `igniter.router.ts`
+- Each service can generate callers from the others' OpenAPI specs
+
+```bash
+# Generate a typed caller from the API gateway
+cd worker-service
+igniter generate caller --name gateway --path ../api-gateway/src/docs/openapi.json
+```
+
+---
+
+## Scenario 3: Adding Igniter.js to an Existing Project
+
+**Goal:** Integrate Igniter.js into an existing Next.js project without overwriting any code.
+
+```bash
+cd my-existing-nextjs-app
+
+# Install mode — detects Next.js framework automatically
+igniter init . --mode install \
+  --add-ons "database:prisma:postgresql,auth:better-auth:email" \
+  --pm pnpm
+```
+
+**What happens:**
+- Framework is auto-detected from `next.config.ts`
+- Templates are applied but don't overwrite existing files
+- Dependencies are merged into `package.json`
+- Environment variables are appended to `.env`
+- Docker Compose is updated (if `--no-docker` is not passed)
+
+<Callout type="warn">
+  Install mode does **not** run `create-next-app`. It layers Igniter.js on top of your existing project structure.
+</Callout>
+
+---
+
+## Scenario 4: OpenAPI-First Development
+
+**Goal:** Generate a fully typed Igniter Caller from a third-party API's OpenAPI spec.
+
+```bash
+# From a remote URL
+igniter generate caller --name stripe --url https://api.stripe.com/openapi.json
+
+# From a local file
+igniter generate caller --name internal --path ./docs/internal-api.json
+
+# Multiple callers
+igniter generate caller --name sendgrid --url https://api.sendgrid.com/openapi.json
+igniter generate caller --name github --url https://api.github.com/openapi.json
+```
+
+**Generated structure:**
+
+```
+src/callers/
+├── api.stripe.com/
+│   ├── schema.ts     ← Zod-validated request/response types
+│   └── index.ts      ← Preconfigured Stripe caller
+├── api.sendgrid.com/
+│   ├── schema.ts
+│   └── index.ts
+└── api.github.com/
+    ├── schema.ts
+    └── index.ts
+```
+
+**Usage in your code:**
+
+```typescript
+import { stripeCaller } from '@/callers/api.stripe.com';
+
+const customer = await stripeCaller.post('/v1/customers', {
+  body: { email: 'user@example.com', name: 'John Doe' }
+});
+// Fully typed — customer is inferred from the OpenAPI spec
+```
+
+---
+
+## Scenario 5: CI/CD Pipeline
+
+**Goal:** Automate project creation and schema generation in CI/CD.
+
+### GitHub Actions
+
+```yaml
+name: Generate Client Schema
+
+on:
+  push:
+    paths:
+      - 'src/features/**'
+      - 'src/igniter.router.ts'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install CLI
+        run: pnpm add -g @igniter-js/cli@0.0.1
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Generate schema and docs
+        run: |
+          igniter generate schema
+          igniter generate docs
+
+      - name: Check for changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Schema or docs changed. Commit the updates."
+            exit 1
+          fi
+```
+
+### Dockerfile
+
+```dockerfile
+FROM node:20-alpine AS builder
+RUN npm install -g @igniter-js/cli@0.0.1
+WORKDIR /app
+COPY . .
+RUN igniter generate schema
+RUN igniter generate docs
+RUN pnpm build
+
+FROM node:20-alpine AS runner
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/src/igniter.schema.ts ./src/igniter.schema.ts
+CMD ["pnpm", "start"]
+```
+
+---
+
+## Scenario 6: Team Onboarding
+
+**Goal:** Onboard a new developer in under 60 seconds.
+
+```bash
+# Step 1: Clone the repo
+git clone git@github.com:company/my-saas.git
+
+# Step 2: Run the init command with the team's standard config
+cd my-saas
+igniter init . --mode install --add-ons "database:prisma:postgresql,auth:better-auth:email+magic-link"
+
+# Step 3: Start dev mode
+igniter dev --cmd "pnpm dev"
+
+# Done — the new dev has a running project with:
+# ✅ Database configured (Prisma + PostgreSQL Docker)
+# ✅ Auth wired (Better Auth)
+# ✅ Schema + docs regenerated
+# ✅ Dev server running
+```
+
+**No manual setup required:**
+- No `.env` copy-pasting (handled by add-ons)
+- No `docker-compose.yml` configuration (handled by database add-on)
+- No auth wiring (handled by auth add-on)
+- No schema bootstrapping (handled by dev mode)
+
+---
+
+## Scenario 7: Monorepo with Multiple Packages
+
+**Goal:** Use the CLI in a Turborepo monorepo with multiple Igniter.js apps.
+
+```
+my-monorepo/
+├── apps/
+│   ├── web/          ← Next.js (Igniter.js)
+│   ├── api/          ← Express (Igniter.js)
+│   └── worker/       ← Bun (Igniter.js)
+├── packages/
+│   ├── shared-types/  ← Shared TypeScript types
+│   └── ui/           ← Shared React components
+└── turbo.json
+```
+
+```bash
+# Initialize each app individually
+cd apps/web
+igniter init . --mode install --add-ons logging
+
+cd ../api
+igniter init . --mode install --add-ons "database:prisma:postgresql,logging,telemetry"
+
+cd ../worker
+igniter init . --mode install --add-ons "jobs,logging"
+
+# Generate callers from the API for the web app
+cd apps/web
+igniter generate caller --name api --path ../api/src/docs/openapi.json
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="API Reference" description="Complete reference for every CLI flag, option, and subcommand." href="/docs/cli/api-reference" />
+  <Card title="Best Practices" description="Do's and don'ts for production CLI workflows." href="/docs/cli/best-practices" />
+  <Card title="Troubleshooting" description="Common issues and solutions for init, generate, and dev." href="/docs/cli/troubleshooting" />
+</Cards>

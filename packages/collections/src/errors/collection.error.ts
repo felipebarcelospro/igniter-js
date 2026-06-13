@@ -54,6 +54,8 @@ export const IGNITER_COLLECTION_ERROR_CODES = {
   ACTION_INVALID_PARAMS: "COLLECTION_ACTION_INVALID_PARAMS",
   /** View missing mandatory configuration (e.g., getData) */
   VIEW_INVALID_CONFIGURATION: "COLLECTION_VIEW_INVALID_CONFIGURATION",
+  /** Context factory failed to resolve */
+  CONTEXT_FACTORY_ERROR: "COLLECTION_CONTEXT_FACTORY_ERROR",
 } as const;
 
 /**

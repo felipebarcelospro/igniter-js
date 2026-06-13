@@ -104,30 +104,30 @@ await jobs.email.sendWelcome.dispatch({ input: { email: "user@example.com" } });
 │  • Dispatch & schedule                                       │
 │  • Worker builder                                            │
 │  • Queue & job management                                    │
-│  • Scopes + telemetry + events                               │
+│  • Scopes + telemetry + events + streams                     │
 └────────────┬────────────────────────────────────────────────┘
              │ Adapter contract (IgniterJobsAdapter)
              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      Adapter Layer                           │
-│  Memory Adapter  •  Bun SQLite Adapter  •  BullMQ Adapter     │
+│  Memory Adapter  •  Bun SQLite Adapter  •  BullMQ Adapter    │
 └────────────┬────────────────────────────────────────────────┘
              │
              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                     Queue Backend                            │
-│  In-memory  •  SQLite  •  Redis (BullMQ)                      │
+│  In-memory  •  SQLite  •  Redis (BullMQ)                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Abstractions
 
-- **IgniterJobs Builder** — Configures adapter, context, scopes, and queues.
-- **IgniterQueue Builder** — Defines jobs and cron tasks.
-- **Runtime Accessors** — Dynamic queue/job accessors with typed input.
-- **Adapters** — Backend implementations (memory, sqlite, bullmq).
-- **Telemetry** — Structured, typed events for observability.
-- **Scopes** — Optional tenant isolation for multi-tenant systems.
+- **IgniterJobs Builder** — Configures adapter, context, scopes, and queues. The `withContext()` factory infers context types automatically.
+- **IgniterQueue Builder** — Defines jobs and cron tasks within a queue.
+- **Runtime Accessors** — Dynamic queue/job accessors with typed input inferred from schemas.
+- **Adapters** — Backend implementations (memory, SQLite, BullMQ). All implement the same `IgniterJobsAdapter` interface.
+- **Telemetry** — Structured, typed events for observability. 17 events across job/worker/queue groups.
+- **Scopes** — Optional tenant isolation for multi-tenant systems. Single scope per instance.
 
 ---
 
@@ -152,32 +152,32 @@ await jobs.email.sendWelcome.dispatch({ input: { email: "user@example.com" } });
 15. Queue obliterate
 16. Queue retry all failed
 17. Job inspection
-18. Job retry/remove/promote
+18. Job retry / remove / promote
 19. Move job to failed
 20. Retry many jobs
 21. Remove many jobs
-22. Pause/resume job type
-23. Create a worker
-24. Worker hooks
-25. Worker control
-26. Worker metrics
-27. Search jobs
-28. Search queues
-29. Search workers
-30. Shutdown
-31. Queue defaults
-32. Worker defaults
-33. Auto-start config (stored)
-34. Job priority + delay combo
-35. Remove-on-complete policies
-36. Remove-on-fail policies
-37. Custom metadata pattern
-38. Scoped metadata merge
-39. Standard schema guard
-40. Result mapping pattern
-41. Idempotency guard
-42. Dead-letter alerting
-43. Progress updates
+22. Create a worker
+23. Worker hooks
+24. Worker control
+25. Worker metrics
+26. Search jobs
+27. Search queues
+28. Search workers
+29. Shutdown
+30. Queue defaults
+31. Worker defaults
+32. Auto-start config (stored)
+33. Job priority + delay combo
+34. Remove-on-complete policies
+35. Remove-on-fail policies
+36. Custom metadata pattern
+37. Scoped metadata merge
+38. Standard Schema V1 guard
+39. Result mapping pattern
+40. Idempotency guard
+41. Dead-letter alerting
+42. Progress updates
+43. Typed job streams
 44. Job logs inspection
 45. Queue list with paging
 46. Worker limiter pattern
@@ -185,16 +185,6 @@ await jobs.email.sendWelcome.dispatch({ input: { email: "user@example.com" } });
 48. Graceful shutdown in process
 49. Global events to analytics
 50. Event filtering pattern
-51. Bun SQLite adapter usage
-52. Bun SQLite adapter persistence
-53. Memory adapter testing
-54. BullMQ adapter usage
-55. Custom adapter skeleton
-56. Telemetry integration
-57. Next.js integration
-58. Express integration
-59. Fastify integration
-60. Server-only safety
 
 ### 1) Basic Queue + Job
 
@@ -413,7 +403,7 @@ const worker = await jobs.worker
   .start();
 ```
 
-### 24) Worker Hooks
+### 23) Worker Hooks
 
 ```typescript
 const worker = await jobs.worker
@@ -426,7 +416,7 @@ const worker = await jobs.worker
   .start();
 ```
 
-### 25) Worker Control
+### 24) Worker Control
 
 ```typescript
 await worker.pause();
@@ -434,284 +424,308 @@ await worker.resume();
 await worker.close();
 ```
 
-### 26) Worker Metrics
+### 25) Worker Metrics
 
 ```typescript
 const metrics = await worker.getMetrics();
 console.log(metrics.processed, metrics.failed, metrics.avgDuration);
 ```
 
-### 27) Search Jobs
+### 26) Search Jobs
 
 ```typescript
 const failedJobs = await jobs.search("jobs", {
-  status: ["failed"],
+  status: "failed",
   queue: "email",
   limit: 50,
 });
 ```
 
-### 28) Search Queues
+### 27) Search Queues
 
 ```typescript
-const queues = await jobs.search("queues", { isPaused: false });
+const queues = await jobs.search("queues", {});
 ```
 
-### 29) Search Workers
+### 28) Search Workers
 
 ```typescript
 const workers = await jobs.search("workers", { queue: "email" });
 ```
 
-### 30) Shutdown
+### 29) Shutdown
 
 ```typescript
 await jobs.shutdown();
 ```
 
-### 31) Queue Defaults
+### 30) Queue Defaults
 
 ```typescript
 const jobs = IgniterJobs.create()
   .withAdapter(IgniterJobsMemoryAdapter.create())
   .withService("api")
-  .withEnvironment("development")
+  .withEnvironment("production")
   .withContext(async () => ({ db }))
   .withQueueDefaults({ attempts: 3, removeOnComplete: 100 })
   .addQueue(emailQueue)
   .build();
 ```
 
-### 32) Worker Defaults
+### 31) Worker Defaults
 
 ```typescript
 const jobs = IgniterJobs.create()
   .withAdapter(IgniterJobsMemoryAdapter.create())
   .withService("api")
-  .withEnvironment("development")
+  .withEnvironment("production")
   .withContext(async () => ({ db }))
   .withWorkerDefaults({ concurrency: 5 })
   .addQueue(emailQueue)
   .build();
 ```
 
-### 33) Auto-Start Config (Stored)
+### 32) Auto-Start Config (Stored)
 
 ```typescript
 const jobs = IgniterJobs.create()
   .withAdapter(IgniterJobsMemoryAdapter.create())
   .withService("api")
-  .withEnvironment("development")
+  .withEnvironment("production")
   .withContext(async () => ({ db }))
   .withAutoStartWorker({ queues: ["email"], concurrency: 2 })
   .addQueue(emailQueue)
   .build();
 ```
 
-> Note: Auto-start configuration is stored in runtime config; the core runtime does not start workers automatically.
-
-### 34) Job Priority + Delay Combo
+### 33) Job Priority + Delay Combo
 
 ```typescript
-await jobs.notifications.digest.dispatch({
-  input: { userId: "u_1" },
-  priority: 25,
+await jobs.email.sendWelcome.dispatch({
+  input: { email: "vip@example.com" },
+  priority: 10,
   delay: 30_000,
 });
 ```
 
-### 35) Remove-on-Complete Policies
+### 34) Remove-on-Complete Policies
 
 ```typescript
-const queue = IgniterQueue.create("cleanup")
-  .addJob("purge", {
-    removeOnComplete: 1000,
-    handler: async () => purgeOldItems(),
+const queue = IgniterQueue.create("logs")
+  .addJob("audit", {
+    removeOnComplete: 500,
+    handler: async ({ input }) => {
+      await auditLog.write(input);
+    },
   })
   .build();
 ```
 
-### 36) Remove-on-Fail Policies
+### 35) Remove-on-Fail Policies
 
 ```typescript
-const queue = IgniterQueue.create("sync")
-  .addJob("pull", {
+const queue = IgniterQueue.create("critical")
+  .addJob("payment", {
     removeOnFail: false,
-    handler: async () => pullUpdates(),
+    attempts: 5,
+    handler: async ({ input }) => {
+      await processPayment(input);
+    },
   })
   .build();
 ```
 
-### 37) Custom Metadata Pattern
+### 36) Custom Metadata Pattern
 
 ```typescript
 await jobs.email.sendWelcome.dispatch({
   input: { email: "user@example.com" },
-  metadata: {
-    "ctx.request.id": "req_123",
-    "ctx.user.id": "user_456",
-  },
+  metadata: { source: "signup-flow", campaign: "q1-2026" },
 });
 ```
 
-### 38) Scoped Metadata Merge
+### 37) Scoped Metadata Merge
 
 ```typescript
-const scoped = jobs.scope("organization", "org_123", { plan: "pro" });
-await scoped.email.sendWelcome.dispatch({
-  input: { email: "user@example.com" },
-  metadata: { "ctx.session.id": "sess_9" },
+const orgJobs = jobs.scope("organization", "org_123", { plan: "enterprise" });
+await orgJobs.email.sendWelcome.dispatch({
+  input: { email: "user@org123.com" },
+  metadata: { source: "admin-dashboard" },
 });
 ```
 
-### 39) Standard Schema Guard
+### 38) Standard Schema V1 Guard
 
 ```typescript
-const queue = IgniterQueue.create("webhooks")
-  .addJob("ingest", {
-    input: schema,
-    handler: async ({ input }) => processWebhook(input),
-  })
-  .build();
-```
+import type { StandardSchemaV1 } from "@igniter-js/common";
 
-### 40) Result Mapping Pattern
+const mySchema: StandardSchemaV1<string, string> = {
+  "~standard": { version: 1, vendor: "custom", validate: () => ({ value: "ok" }) },
+};
 
-```typescript
-const queue = IgniterQueue.create("billing")
-  .addJob("charge", {
-    input: z.object({ invoiceId: z.string() }),
+const queue = IgniterQueue.create("validated")
+  .addJob("process", {
+    input: mySchema,
     handler: async ({ input }) => {
-      const chargeId = await chargeInvoice(input.invoiceId);
-      return { chargeId };
+      console.log(input); // type is string
     },
   })
   .build();
 ```
 
-### 41) Idempotency Guard
+### 39) Result Mapping Pattern
+
+```typescript
+const queue = IgniterQueue.create("analytics")
+  .addJob("compute", {
+    input: z.object({ data: z.array(z.number()) }),
+    output: z.object({ sum: z.number(), avg: z.number() }),
+    handler: async ({ input }) => {
+      const sum = input.data.reduce((a, b) => a + b, 0);
+      return { sum, avg: sum / input.data.length };
+    },
+  })
+  .build();
+
+const result = await jobs.analytics.compute.get("job-id").retrieve();
+console.log(result?.result); // { sum: number, avg: number }
+```
+
+### 40) Idempotency Guard
 
 ```typescript
 const queue = IgniterQueue.create("orders")
-  .addJob("confirm", {
+  .addJob("process", {
     input: z.object({ orderId: z.string() }),
     handler: async ({ input, context }) => {
-      if (await context.orders.isConfirmed(input.orderId)) return;
-      await context.orders.confirm(input.orderId);
+      const existing = await context.db.orders.findOne({ id: input.orderId });
+      if (existing?.status === "processed") return;
+      await context.db.orders.update({ id: input.orderId, status: "processed" });
     },
   })
   .build();
 ```
 
-### 42) Dead-Letter Alerting
+### 41) Dead-Letter Alerting
 
 ```typescript
-const queue = IgniterQueue.create("payments")
-  .addJob("capture", {
+const queue = IgniterQueue.create("critical")
+  .addJob("sync", {
     attempts: 3,
-    input: z.object({ paymentId: z.string() }),
-    handler: async ({ input }) => capturePayment(input.paymentId),
+    handler: async ({ input }) => {
+      await externalApi.sync(input.id);
+    },
     onFailure: async ({ error, isFinalAttempt }) => {
       if (isFinalAttempt) {
-        await sendAlert(`Final failure: ${error.message}`);
+        await pagerDuty.alert(`Sync permanently failed: ${error.message}`);
       }
     },
   })
   .build();
 ```
 
-### 43) Progress Updates
+### 42) Progress Updates
 
 ```typescript
-const queue = IgniterQueue.create("import")
-  .addJob("csv", {
-    input: z.object({ fileId: z.string() }),
-    handler: async ({ input }) => {
-      await importCsv(input.fileId);
-      return { ok: true };
-    },
-    onProgress: async ({ progress, message }) => {
-      console.log(progress, message);
+const queue = IgniterQueue.create("imports")
+  .addJob("csvImport", {
+    input: z.object({ fileUrl: z.string() }),
+    handler: async ({ input, job }) => {
+      const rows = await fetchCsv(input.fileUrl);
+      for (let i = 0; i < rows.length; i++) {
+        await processRow(rows[i]);
+        if (i % 100 === 0 && job.updateProgress) {
+          await job.updateProgress(Math.round((i / rows.length) * 100));
+        }
+      }
     },
   })
   .build();
 ```
 
-### 44) Typed Job Streams
+### 43) Typed Job Streams
 
 ```typescript
-const queue = IgniterQueue.create("ai")
-  .addJob("generate", {
+const queue = IgniterQueue.create("uploads")
+  .addJob("processImage", {
+    input: z.object({ url: z.string() }),
     stream: {
-      persistence: { enabled: true, maxEvents: 1000 },
+      persistence: { enabled: true, maxEvents: 100 },
       events: {
-        "text-delta": z.string(),
-        status: z.object({ phase: z.string() }),
-        done: z.object({ finishReason: z.string() }),
+        "resize.started": z.object({ width: z.number(), height: z.number() }),
+        "resize.complete": z.object({ outputUrl: z.string() }),
       },
     },
-    handler: async ({ job }) => {
-      await job.stream.emit("status", { phase: "thinking" });
-      await job.stream.emit("text-delta", "Hello");
-      await job.stream.emit("done", { finishReason: "stop" });
-      return { ok: true };
+    handler: async ({ input, job }) => {
+      await job.stream.emit("resize.started", { width: 800, height: 600 });
+      const result = await resize(input.url, 800, 600);
+      await job.stream.emit("resize.complete", { outputUrl: result.url });
     },
   })
   .build();
 
-const jobId = await jobs.ai.generate.dispatch({ input: {} });
+// Subscribe to stream events for a specific job
+const stream = jobs.uploads.processImage.get("job-id").stream();
+const unsub = await stream.subscribe((event) => {
+  if (event.type === "resize.complete") {
+    updateUI(event.data.outputUrl);
+  }
+});
 
-const off = await jobs.ai.generate
-  .get(jobId)
-  .stream()
-  .subscribe((event) => {
-    console.log(event.type, event.data);
-  });
-
-const history = await jobs.ai.generate.get(jobId).stream().read({ limit: 100 });
-await off();
+// Read persisted events (pagination support)
+const { items, nextCursor, hasMore } = await stream.read({ limit: 20 });
 ```
 
-### 45) Job Logs Inspection
+### 44) Job Logs Inspection
 
 ```typescript
 const logs = await jobs.email.sendWelcome.get("job-id").logs();
-for (const entry of logs) {
-  console.log(entry.level, entry.message, entry.timestamp);
+for (const log of logs) {
+  console.log(`${log.timestamp.toISOString()} [${log.level}] ${log.message}`);
 }
 ```
 
-### 46) Queue List with Paging
+### 45) Queue List with Paging
 
 ```typescript
-const jobsInQueue = await jobs.email.list({
-  status: ["waiting", "active"],
-  limit: 20,
+const pending = await jobs.email.list({
+  status: ["waiting", "delayed"],
+  limit: 25,
   offset: 0,
 });
 ```
 
-### 47) Worker Limiter Pattern
+### 46) Worker Limiter Pattern
 
 ```typescript
 const worker = await jobs.worker
   .create()
-  .addQueue("emails")
-  .withLimiter({ max: 50, duration: 60_000 })
+  .addQueue("external-api")
+  .withLimiter({ max: 100, duration: 60_000 })
   .start();
 ```
 
-### 48) Worker Sharding by Queue
+### 47) Worker Sharding by Queue
 
 ```typescript
-const workerA = await jobs.worker.create().addQueue("email").start();
-const workerB = await jobs.worker.create().addQueue("analytics").start();
+const highPrioWorker = await jobs.worker
+  .create()
+  .addQueue("critical")
+  .withConcurrency(20)
+  .start();
+
+const lowPrioWorker = await jobs.worker
+  .create()
+  .addQueue("analytics")
+  .withConcurrency(5)
+  .start();
 ```
 
-### 49) Graceful Shutdown in Process
+### 48) Graceful Shutdown in Process
 
 ```typescript
-process.on("SIGINT", async () => {
+process.on("SIGTERM", async () => {
+  console.log("Shutting down...");
   await jobs.shutdown();
   process.exit(0);
 });
@@ -720,9 +734,9 @@ process.on("SIGINT", async () => {
 ### 49) Global Events to Analytics
 
 ```typescript
-const unsubscribe = await jobs.subscribe((event) => {
-  analytics.track("job_event", {
-    type: event.type,
+await jobs.subscribe((event) => {
+  analytics.track(`jobs.${event.type}`, {
+    ...event.data,
     timestamp: event.timestamp,
     scope: event.scope,
   });
@@ -732,247 +746,99 @@ const unsubscribe = await jobs.subscribe((event) => {
 ### 50) Event Filtering Pattern
 
 ```typescript
-const unsubscribe = await jobs.subscribe((event) => {
-  if (event.type.endsWith(":failed")) {
-    console.error("Job failed", event.data);
+const unsub = await jobs.email.subscribe((event) => {
+  if (event.type === "email:job:completed") {
+    metrics.increment("email.jobs.completed");
+  }
+  if (event.type === "email:job:failed") {
+    metrics.increment("email.jobs.failed");
   }
 });
 ```
 
-### 51) Bun SQLite Adapter Usage
+---
+
+## 🔌 Adapters
+
+### Adapter Comparison
+
+| Feature | Memory | Bun SQLite | BullMQ |
+|---------|--------|------------|--------|
+| Persistence | ❌ | ✅ | ✅ |
+| Multi-process | ❌ | ❌ | ✅ |
+| Production-ready | ❌ | ✅ (single instance) | ✅ |
+| Cron support | Manual | ✅ | ✅ |
+| Delayed jobs | ✅ | ✅ | ✅ |
+| Job progress | ✅ | ✅ | ✅ |
+| Stream events | ✅ | ✅ | ✅ |
+| Rate limiter | ❌ | ✅ | ✅ |
+| Worker metrics | ✅ | ✅ | ✅ |
+
+### Memory Adapter (Testing & Development)
 
 ```typescript
+import { IgniterJobsMemoryAdapter } from "@igniter-js/jobs/adapters/mock";
+
+const adapter = IgniterJobsMemoryAdapter.create();
+```
+
+- **Persistence:** None. All jobs lost on process exit.
+- **Use:** Unit tests, integration tests, local development.
+- **Limitations:** No multi-process, no persistence, cron requires manual triggers.
+
+### Bun SQLite Adapter (Desktop, CLI, Local Apps)
+
+```typescript
+import { IgniterJobsBunSQLiteAdapter } from "@igniter-js/jobs/adapters/bun";
+
 const adapter = IgniterJobsBunSQLiteAdapter.create({
-  path: "./jobs.sqlite",
+  path: "./data/jobs.db",
   durable: true,
+  heartbeatInterval: 10_000,
+  pollTimeout: 5_000,
+  batchSize: 10,
+  lockDuration: 30_000,
+  maxStalledCount: 1,
 });
 ```
 
-### 52) Bun SQLite Adapter Persistence
+| Option | Default | Description |
+|--------|---------|-------------|
+| `path` | *(required)* | SQLite file path for persistence. |
+| `durable` | `false` | Forces immediate persistence for dispatched jobs. |
+| `heartbeatInterval` | `10000` | Worker heartbeat interval in milliseconds. |
+| `pollTimeout` | `0` | Long-poll timeout while the queue is empty. |
+| `batchSize` | `10` | Number of jobs pulled per worker batch. |
+| `lockDuration` | `30000` | Lock duration for active jobs in milliseconds. |
+| `maxStalledCount` | `1` | Maximum stalled detections before a job fails. |
+
+### BullMQ Adapter (Production Scale)
 
 ```typescript
-const adapter = IgniterJobsBunSQLiteAdapter.create({ path: "./jobs.sqlite" });
-await adapter.dispatch({
-  queue: "emails",
-  jobName: "send",
-  input: { id: "1" },
+import { IgniterJobsBullMQAdapter } from "@igniter-js/jobs/adapters/node";
+import Redis from "ioredis";
+
+const adapter = IgniterJobsBullMQAdapter.create({
+  redis: new Redis({ host: "localhost", port: 6379 }),
 });
-await adapter.shutdown();
-```
-
-### 53) Memory Adapter Testing
-
-```typescript
-const adapter = IgniterJobsMemoryAdapter.create({ maxJobHistory: 500 });
-```
-
-### 54) BullMQ Adapter Usage
-
-```typescript
-const adapter = IgniterJobsBullMQAdapter.create({ redis });
-```
-
-### 55) Custom Adapter Skeleton
-
-```typescript
-class CustomAdapter implements IgniterJobsAdapter {
-  readonly client = {};
-  readonly queues = null as any;
-  async dispatch(params: IgniterJobsAdapterDispatchParams) {
-    return "job-id";
-  }
-  async schedule(params: IgniterJobsAdapterScheduleParams) {
-    return "job-id";
-  }
-  async getJob(jobId: string) {
-    return null;
-  }
-  async getJobState(jobId: string) {
-    return null;
-  }
-  async getJobLogs(jobId: string) {
-    return [];
-  }
-  async getJobProgress(jobId: string) {
-    return 0;
-  }
-  async retryJob(jobId: string) {
-    /* ... */
-  }
-  async removeJob(jobId: string) {
-    /* ... */
-  }
-  async promoteJob(jobId: string) {
-    /* ... */
-  }
-  async moveJobToFailed(jobId: string, reason: string) {
-    /* ... */
-  }
-  async retryManyJobs(jobIds: string[]) {
-    /* ... */
-  }
-  async removeManyJobs(jobIds: string[]) {
-    /* ... */
-  }
-  async getQueueInfo(queue: string) {
-    return null;
-  }
-  async getQueueJobCounts(queue: string) {
-    return {
-      waiting: 0,
-      active: 0,
-      completed: 0,
-      failed: 0,
-      delayed: 0,
-      paused: 0,
-    };
-  }
-  async listQueues() {
-    return [];
-  }
-  async pauseQueue(queue: string) {
-    /* ... */
-  }
-  async resumeQueue(queue: string) {
-    /* ... */
-  }
-  async drainQueue(queue: string) {
-    return 0;
-  }
-  async cleanQueue(queue: string, options: IgniterJobsQueueCleanOptions) {
-    return 0;
-  }
-  async obliterateQueue(queue: string, options?: { force?: boolean }) {
-    /* ... */
-  }
-  async retryAllInQueue(queue: string) {
-    return 0;
-  }
-  async pauseJobType(queue: string, jobName: string) {
-    /* ... */
-  }
-  async resumeJobType(queue: string, jobName: string) {
-    /* ... */
-  }
-  async searchJobs(filter: Record<string, unknown>) {
-    return [];
-  }
-  async searchQueues(filter: Record<string, unknown>) {
-    return [];
-  }
-  async searchWorkers(filter: Record<string, unknown>) {
-    return [];
-  }
-  async createWorker(config: IgniterJobsWorkerBuilderConfig) {
-    return {} as IgniterJobsWorkerHandle;
-  }
-  getWorkers() {
-    return new Map();
-  }
-  async publishEvent(channel: string, payload: unknown) {
-    /* ... */
-  }
-  async subscribeEvent(channel: string, handler: IgniterJobsEventHandler) {
-    return async () => {};
-  }
-  registerJob(
-    queueName: string,
-    jobName: string,
-    definition: IgniterJobDefinition<any, any, any>,
-  ) {
-    /* ... */
-  }
-  registerCron(
-    queueName: string,
-    cronName: string,
-    definition: IgniterCronDefinition<any, any>,
-  ) {
-    /* ... */
-  }
-  async shutdown() {
-    /* ... */
-  }
-}
-```
-
-### 56) Telemetry Integration
-
-```typescript
-const telemetry = IgniterTelemetry.create()
-  .withService("my-api")
-  .withEnvironment("production")
-  .addEvents(IgniterJobsTelemetryEvents)
-  .build();
-```
-
-### 57) Next.js Integration
-
-```typescript
-export async function POST() {
-  const id = await jobs.email.sendWelcome.dispatch({
-    input: { email: "user@example.com" },
-  });
-  return NextResponse.json({ jobId: id });
-}
-```
-
-### 58) Express Integration
-
-```typescript
-app.post("/send", async (_req, res) => {
-  const jobId = await jobs.email.sendWelcome.dispatch({
-    input: { email: "user@example.com" },
-  });
-  res.json({ jobId });
-});
-```
-
-### 59) Fastify Integration
-
-```typescript
-app.post("/send", async (_req, res) => {
-  const jobId = await jobs.email.sendWelcome.dispatch({
-    input: { email: "user@example.com" },
-  });
-  return res.send({ jobId });
-});
-```
-
-### 60) Server-Only Safety
-
-```typescript
-// Import @igniter-js/jobs only in server environments.
-// Client bundles will throw a server-only error from the shim.
 ```
 
 ---
 
 ## 🧠 Input Validation
 
-`@igniter-js/jobs` supports **Standard Schema V1** and **Zod-like** schemas.
-
 ### Standard Schema V1
 
 ```typescript
-import { type StandardSchemaV1 } from "@igniter-js/common";
+import type { StandardSchemaV1 } from "@igniter-js/common";
 
-const schema: StandardSchemaV1<{ email: string }, { email: string }> = {
-  "~standard": {
-    validate: async (value) => {
-      if (!value || typeof (value as any).email !== "string") {
-        return { issues: [{ message: "email is required" }] } as any;
-      }
-      return { value } as any;
-    },
-  },
-};
+declare const emailSchema: StandardSchemaV1<{ email: string }, { email: string }>;
 
 const queue = IgniterQueue.create("email")
-  .addJob("send", {
-    input: schema,
+  .addJob("sendWelcome", {
+    input: emailSchema,
     handler: async ({ input }) => {
-      // input is validated and typed
-      await sendEmail(input.email);
+      console.log(input.email); // type: string
     },
   })
   .build();
@@ -984,10 +850,13 @@ const queue = IgniterQueue.create("email")
 import { z } from "zod";
 
 const queue = IgniterQueue.create("email")
-  .addJob("send", {
-    input: z.object({ email: z.string().email() }),
+  .addJob("sendWelcome", {
+    input: z.object({
+      email: z.string().email(),
+      name: z.string().min(1),
+    }),
     handler: async ({ input }) => {
-      await sendEmail(input.email);
+      console.log(input.email, input.name); // both typed as string
     },
   })
   .build();
@@ -997,36 +866,34 @@ const queue = IgniterQueue.create("email")
 
 ## 🧩 Hooks & Lifecycle
 
-Jobs support lifecycle hooks defined in the job definition:
+IgniterJobs provides four lifecycle hooks on every job definition:
 
-- `onStart`
-- `onProgress`
-- `onSuccess`
-- `onFailure`
+| Hook | Signature | When Called |
+|------|-----------|-------------|
+| `onStart` | `(ctx: HookContext) => void` | Before handler execution. |
+| `onProgress` | `(ctx: HookContext & {progress, message?}) => void` | When `job.updateProgress()` is called. |
+| `onSuccess` | `(ctx: HookContext & {result}) => void` | After handler completes successfully. |
+| `onFailure` | `(ctx: HookContext & {error, isFinalAttempt}) => void` | After handler throws. |
 
 ### Hook Example
 
 ```typescript
-const queue = IgniterQueue.create("billing")
-  .addJob("charge", {
-    input: z.object({ invoiceId: z.string() }),
+const queue = IgniterQueue.create("email")
+  .addJob("sendWelcome", {
+    input: z.object({ email: z.string().email() }),
     handler: async ({ input }) => {
-      return chargeInvoice(input.invoiceId);
+      await sendEmail(input.email);
     },
     onStart: async ({ job }) => {
-      await audit.log("billing.started", { id: job.id });
+      console.log(`Starting job ${job.id}`);
     },
-    onProgress: async ({ progress }) => {
-      await audit.log("billing.progress", { progress });
+    onSuccess: async ({ job, result, duration }) => {
+      console.log(`Job ${job.id} completed in ${duration}ms`);
     },
-    onSuccess: async ({ result }) => {
-      await audit.log("billing.success", { result });
-    },
-    onFailure: async ({ error, isFinalAttempt }) => {
-      await audit.log("billing.failed", {
-        message: error.message,
-        isFinalAttempt,
-      });
+    onFailure: async ({ job, error, isFinalAttempt }) => {
+      if (isFinalAttempt) {
+        await alerting.notify(`Job ${job.id} permanently failed: ${error.message}`);
+      }
     },
   })
   .build();
@@ -1036,24 +903,26 @@ const queue = IgniterQueue.create("billing")
 
 ## ⏱ Scheduling Options
 
-Scheduling options come from `IgniterJobsScheduleOptions` and can be used in `.schedule()`.
-
 ### Cron Scheduling
 
 ```typescript
-await jobs.reports.dailySummary.schedule({
-  input: { timezone: "UTC" },
-  cron: "0 2 * * *",
-  tz: "UTC",
-});
+const queue = IgniterQueue.create("reports")
+  .addCron("dailySummary", {
+    cron: "0 2 * * *",
+    tz: "America/New_York",
+    handler: async ({ context }) => {
+      await context.reports.generateDaily();
+    },
+  })
+  .build();
 ```
 
 ### Fixed Interval
 
 ```typescript
-await jobs.analytics.rollup.schedule({
-  input: { hours: 24 },
-  every: 60 * 60 * 1000,
+await jobs.email.sendWelcome.schedule({
+  input: { email: "user@example.com" },
+  every: 3600_000, // Every hour
   maxExecutions: 24,
 });
 ```
@@ -1061,29 +930,35 @@ await jobs.analytics.rollup.schedule({
 ### Skip Weekends
 
 ```typescript
-await jobs.notifications.weekdayDigest.schedule({
-  input: { userId: "u_1" },
-  cron: "0 8 * * *",
-  skipWeekends: true,
-});
+const queue = IgniterQueue.create("alerts")
+  .addCron("check", {
+    cron: "0 9 * * *",
+    skipWeekends: true,
+    handler: async ({ context }) => {
+      await context.alerts.run();
+    },
+  })
+  .build();
 ```
 
 ### Business Hours Only
 
 ```typescript
-await jobs.support.assign.schedule({
-  input: { ticketId: "t_1" },
-  cron: "*/15 * * * *",
-  onlyBusinessHours: true,
-  businessHours: { start: 9, end: 17, timezone: "America/New_York" },
-});
+const queue = IgniterQueue.create("notifications")
+  .addCron("reminder", {
+    cron: "0 */2 * * *",
+    onlyBusinessHours: true,
+    businessHours: { start: 9, end: 18, timezone: "America/Sao_Paulo" },
+    handler: async ({ context }) => {
+      await context.notifications.sendReminders();
+    },
+  })
+  .build();
 ```
 
 ---
 
 ## 🔭 Telemetry
-
-Telemetry events are exported via the **telemetry subpath**:
 
 ```typescript
 import { IgniterTelemetry } from "@igniter-js/telemetry";
@@ -1096,118 +971,70 @@ const telemetry = IgniterTelemetry.create()
   .build();
 
 const jobs = IgniterJobs.create()
-  .withTelemetry(telemetry)
-  .withAdapter(IgniterJobsMemoryAdapter.create())
+  .withAdapter(adapter)
   .withService("my-api")
   .withEnvironment("production")
   .withContext(async () => ({ db }))
+  .withTelemetry(telemetry)
   .addQueue(emailQueue)
   .build();
 ```
 
 ### Job Telemetry Events
 
-- `igniter.jobs.job.enqueued`
-- `igniter.jobs.job.started`
-- `igniter.jobs.job.completed`
-- `igniter.jobs.job.failed`
-- `igniter.jobs.job.progress`
-- `igniter.jobs.job.scheduled`
-
-> Note: `igniter.jobs.job.retrying` exists in the telemetry schema for future parity, but the runtime does not emit it today.
+| Event | Emitted When |
+|-------|-------------|
+| `igniter.jobs.job.enqueued` | Job dispatched to queue. |
+| `igniter.jobs.job.started` | Worker begins executing job. |
+| `igniter.jobs.job.completed` | Job completes successfully. |
+| `igniter.jobs.job.failed` | Job fails (includes `isFinalAttempt`). |
+| `igniter.jobs.job.progress` | `job.updateProgress()` called. |
+| `igniter.jobs.job.retrying` | Failed job scheduled for retry. |
+| `igniter.jobs.job.scheduled` | Job scheduled with delay or cron. |
 
 ### Worker Telemetry Events
 
-- `igniter.jobs.worker.started`
-- `igniter.jobs.worker.stopped`
-- `igniter.jobs.worker.idle`
-- `igniter.jobs.worker.paused`
-- `igniter.jobs.worker.resumed`
+| Event | Emitted When |
+|-------|-------------|
+| `igniter.jobs.worker.started` | Worker process starts. |
+| `igniter.jobs.worker.stopped` | Worker process stops. |
+| `igniter.jobs.worker.idle` | Worker has no pending jobs. |
+| `igniter.jobs.worker.paused` | Worker paused. |
+| `igniter.jobs.worker.resumed` | Worker resumed. |
 
 ### Queue Telemetry Events
 
-- `igniter.jobs.queue.paused`
-- `igniter.jobs.queue.resumed`
-- `igniter.jobs.queue.drained`
-- `igniter.jobs.queue.cleaned`
-- `igniter.jobs.queue.obliterated`
-
----
-
-## 🔌 Adapters
-
-Adapters implement the `IgniterJobsAdapter` interface and are grouped by runtime:
-
-```typescript
-import { IgniterJobsMemoryAdapter } from "@igniter-js/jobs/adapters/mock";
-import { IgniterJobsBullMQAdapter } from "@igniter-js/jobs/adapters/node";
-import { IgniterJobsBunSQLiteAdapter } from "@igniter-js/jobs/adapters/bun";
-```
-
-### Adapter Comparison
-
-| Adapter | Persistence | Multi-process       | Use Case              |
-| ------- | ----------- | ------------------- | --------------------- |
-| Memory  | ❌          | ❌                  | Unit tests, local dev |
-| SQLite  | ✅          | ⚠️ (single process) | Desktop, CLI, local   |
-| BullMQ  | ✅          | ✅                  | Production scale      |
-
-### Memory Adapter
-
-```typescript
-import { IgniterJobsMemoryAdapter } from "@igniter-js/jobs/adapters/mock";
-
-const adapter = IgniterJobsMemoryAdapter.create();
-```
-
-### Bun SQLite Adapter
-
-```typescript
-import { IgniterJobsBunSQLiteAdapter } from "@igniter-js/jobs/adapters/bun";
-
-const adapter = IgniterJobsBunSQLiteAdapter.create({
-  path: "./data/jobs.sqlite",
-  durable: true,
-});
-```
-
-### BullMQ Adapter
-
-```typescript
-import { IgniterJobsBullMQAdapter } from "@igniter-js/jobs/adapters/node";
-import Redis from "ioredis";
-
-const redis = new Redis(process.env.REDIS_URL);
-const adapter = IgniterJobsBullMQAdapter.create({ redis });
-```
+| Event | Emitted When |
+|-------|-------------|
+| `igniter.jobs.queue.paused` | Queue paused. |
+| `igniter.jobs.queue.resumed` | Queue resumed. |
+| `igniter.jobs.queue.drained` | Queue drained. |
+| `igniter.jobs.queue.cleaned` | Queue cleaned (old jobs removed). |
+| `igniter.jobs.queue.obliterated` | Queue obliterated. |
 
 ---
 
 ## 🧪 Testing
 
-### Bun SQLite Adapter
-
-```typescript
-import { IgniterJobsBunSQLiteAdapter } from "@igniter-js/jobs/adapters/bun";
-
-const adapter = IgniterJobsBunSQLiteAdapter.create({
-  path: "./data/jobs.sqlite",
-  durable: true,
-});
-```
-
 ### Unit Testing with Memory Adapter
 
 ```typescript
-import { describe, it, expect } from "vitest";
 import { IgniterJobs, IgniterQueue } from "@igniter-js/jobs";
 import { IgniterJobsMemoryAdapter } from "@igniter-js/jobs/adapters/mock";
+import { z } from "zod";
+import { describe, it, expect } from "vitest";
 
-describe("jobs", () => {
-  it("dispatches and processes a job", async () => {
-    const queue = IgniterQueue.create("email")
-      .addJob("send", {
-        handler: async ({ input }) => `sent:${(input as any).id}`,
+describe("Email Jobs", () => {
+  it("dispatches and processes a welcome email", async () => {
+    const sent: string[] = [];
+    const mockMailer = { sendWelcome: async (email: string) => { sent.push(email); } };
+
+    const emailQueue = IgniterQueue.create("email")
+      .addJob("sendWelcome", {
+        input: z.object({ email: z.string().email() }),
+        handler: async ({ input, context }) => {
+          await context.mailer.sendWelcome(input.email);
+        },
       })
       .build();
 
@@ -1215,481 +1042,21 @@ describe("jobs", () => {
       .withAdapter(IgniterJobsMemoryAdapter.create())
       .withService("test")
       .withEnvironment("test")
-      .withContext(async () => ({}))
-      .addQueue(queue)
+      .withContext(async () => ({ mailer: mockMailer }))
+      .addQueue(emailQueue)
       .build();
 
     const worker = await jobs.worker.create().addQueue("email").start();
-    const id = await jobs.email.send.dispatch({ input: { id: "1" } });
 
-    await new Promise((r) => setTimeout(r, 20));
+    await jobs.email.sendWelcome.dispatch({ input: { email: "test@example.com" } });
 
-    const job = await jobs.email.send.get(id).retrieve();
-    expect(job?.status).toBe("completed");
+    // Memory adapter processes synchronously
+    expect(sent).toContain("test@example.com");
+
     await worker.close();
   });
 });
 ```
-
-    ---
-
-    ## 📦 Adapter Deep Dives
-
-    ### Memory Adapter
-
-    Use for unit tests and local dev. It stores everything in memory and supports all management APIs.
-
-    Key traits:
-
-    - Fast, deterministic execution
-    - Single-process only
-    - Data lost on restart
-    - Great for CI and tests
-
-    ```typescript
-    const adapter = IgniterJobsMemoryAdapter.create({ maxJobHistory: 1000 });
-    ```
-
-    ### Bun SQLite Adapter
-
-    Use for desktop apps, CLI tools, or local persistence without Redis.
-
-    Key traits:
-
-    - Persistent storage on disk
-    - Single-process local runtime (persistent, but not distributed)
-    - Polling-based worker loop
-    - Great for edge or MCP servers
-
-    ```typescript
-    const adapter = IgniterJobsBunSQLiteAdapter.create({
-      path: "./data/jobs.sqlite",
-      durable: true,
-    });
-    ```
-
-    ### BullMQ Adapter
-
-    Use for production and distributed workers. Wraps `@igniter-js/adapter-bullmq`.
-
-    Key traits:
-
-    - Redis-backed persistence
-    - Distributed workers
-    - Advanced scheduling
-    - Strong throughput
-
-    ```typescript
-    const adapter = IgniterJobsBullMQAdapter.create({ redis });
-    ```
-
-    Known limitations:
-
-    - Pause/resume for a single job type is not supported; pause the whole queue instead.
-
-    ---
-
-    ## 📊 Observability & Events
-
-    ### Event Types
-
-    Jobs events are emitted through the adapter pub/sub channel and are scoped by service, environment, and optional scope.
-
-    Examples:
-
-    - `email:sendWelcome:enqueued`
-    - `email:sendWelcome:started`
-    - `email:sendWelcome:completed`
-    - `email:sendWelcome:failed`
-    - `email:sendWelcome:progress`
-
-    ### Event Channel Composition
-
-    The runtime builds the channel using service, environment, and scope metadata. Scoped instances use a scope-specific channel, ensuring multi-tenant isolation.
-
-    ---
-
-    ## 📈 Performance & Scaling
-
-    ### Queue Sizing Tips
-
-    - Keep payloads small and store large blobs in external storage.
-    - Use `priority` for latency-sensitive work.
-    - Set `attempts` and `delay` to smooth burst failures.
-
-    ### Worker Scaling Tips
-
-    - Start with low `concurrency`, then scale after measuring throughput.
-    - Use `withLimiter()` for API-bound workloads.
-    - Shard by queue when jobs have very different resource needs.
-
-    ### Local Bun SQLite Runtime
-
-    - Use `durable: true` only for jobs that must survive abrupt exits.
-    - Tune `batchSize`, `pollTimeout`, and `heartbeatInterval` for throughput-sensitive workloads.
-
-    ---
-
-    ## 🧾 Error Code Library
-
-    Each error code is defined in `IGNITER_JOBS_ERROR_CODES`.
-
-    ### JOBS_ADAPTER_REQUIRED
-
-    - **Context:** `IgniterJobsBuilder.build()`
-    - **Cause:** Adapter not configured.
-    - **Mitigation:** Always call `.withAdapter()`.
-    - **Solution:**
-      ```typescript
-      IgniterJobs.create().withAdapter(IgniterJobsMemoryAdapter.create())
-      ```
-
-    ### JOBS_SERVICE_REQUIRED
-
-    - **Context:** `IgniterJobsBuilder.build()`
-    - **Cause:** Service name not configured.
-    - **Mitigation:** Always call `.withService()`.
-    - **Solution:**
-      ```typescript
-      IgniterJobs.create().withService("my-api")
-      ```
-
-    ### JOBS_CONTEXT_REQUIRED
-
-    - **Context:** `IgniterJobsBuilder.build()`
-    - **Cause:** Context factory not configured.
-    - **Mitigation:** Always call `.withContext()`.
-    - **Solution:**
-      ```typescript
-      IgniterJobs.create().withContext(async () => ({ db }))
-      ```
-
-    ### JOBS_CONFIGURATION_INVALID
-
-    - **Context:** Builder or runtime validation.
-    - **Cause:** Invalid environment, scope conflicts, or invalid options.
-    - **Mitigation:** Validate inputs and ensure scope consistency.
-    - **Solution:** Check builder inputs, then retry.
-
-    ### JOBS_QUEUE_NOT_FOUND
-
-    - **Context:** Worker builder or adapter dispatch.
-    - **Cause:** Queue name not registered.
-    - **Mitigation:** Ensure `.addQueue()` includes the queue.
-    - **Solution:** Register the queue before building.
-
-    ### JOBS_QUEUE_DUPLICATE
-
-    - **Context:** `IgniterJobsBuilder.addQueue()`
-    - **Cause:** Duplicate queue name.
-    - **Mitigation:** Use unique queue names.
-    - **Solution:** Rename the queue.
-
-    ### JOBS_QUEUE_OPERATION_FAILED
-
-    - **Context:** Adapter queue operations.
-    - **Cause:** Unsupported operation (e.g., BullMQ job-type pause).
-    - **Mitigation:** Use queue-level pause.
-    - **Solution:** Pause the whole queue or adjust worker filters.
-
-    ### JOBS_INVALID_DEFINITION
-
-    - **Context:** Queue builder `addJob()`
-    - **Cause:** Invalid job definition object.
-    - **Mitigation:** Ensure `handler` exists.
-    - **Solution:** Provide a valid job definition.
-
-    ### JOBS_HANDLER_REQUIRED
-
-    - **Context:** Queue builder `addJob()` or `addCron()`
-    - **Cause:** Missing handler function.
-    - **Mitigation:** Provide a valid handler.
-    - **Solution:** Add `handler: async () => { ... }`.
-
-    ### JOBS_DUPLICATE_JOB
-
-    - **Context:** Queue builder `addJob()`
-    - **Cause:** Duplicate job name in same queue.
-    - **Mitigation:** Use unique job names.
-    - **Solution:** Rename the job.
-
-    ### JOBS_NOT_FOUND
-
-    - **Context:** Job retrieval
-    - **Cause:** Invalid job id or retention policy cleaned it.
-    - **Mitigation:** Keep job ids and tune retention.
-    - **Solution:** Re-dispatch or adjust retention settings.
-
-    ### JOBS_NOT_REGISTERED
-
-    - **Context:** Worker execution
-    - **Cause:** Worker executing a job that wasn’t registered.
-    - **Mitigation:** Ensure build() ran and registration completed.
-    - **Solution:** Restart worker with correct config.
-
-    ### JOBS_EXECUTION_FAILED
-
-    - **Context:** Handler execution
-    - **Cause:** Handler throws.
-    - **Mitigation:** Add retries and guard logic.
-    - **Solution:** Fix business logic or add `onFailure`.
-
-    ### JOBS_TIMEOUT
-
-    - **Context:** Adapter-specific worker
-    - **Cause:** Job exceeded timeout.
-    - **Mitigation:** Reduce job scope or increase timeout in adapter.
-    - **Solution:** Split job or adjust adapter settings.
-
-    ### JOBS_CONTEXT_FACTORY_FAILED
-
-    - **Context:** Context factory
-    - **Cause:** Factory threw an error.
-    - **Mitigation:** Make factory resilient and guarded.
-    - **Solution:** Wrap with try/catch and verify dependencies.
-
-    ### JOBS_VALIDATION_FAILED
-
-    - **Context:** Dispatch or execution
-    - **Cause:** Input schema mismatch.
-    - **Mitigation:** Validate before dispatch.
-    - **Solution:** Fix input shape or schema.
-
-    ### JOBS_INVALID_INPUT
-
-    - **Context:** Runtime
-    - **Cause:** Malformed data for job input.
-    - **Mitigation:** Validate upstream.
-    - **Solution:** Fix caller input.
-
-    ### JOBS_INVALID_CRON
-
-    - **Context:** Queue builder `addCron()`
-    - **Cause:** Invalid cron syntax or duplicate name.
-    - **Mitigation:** Validate cron expressions.
-    - **Solution:** Correct cron string.
-
-    ### JOBS_INVALID_SCHEDULE
-
-    - **Context:** `schedule()`
-    - **Cause:** Invalid scheduling params (e.g., past date).
-    - **Mitigation:** Validate dates.
-    - **Solution:** Use future date.
-
-    ### JOBS_SCOPE_ALREADY_DEFINED
-
-    - **Context:** Builder `addScope()`
-    - **Cause:** Multiple scopes defined.
-    - **Mitigation:** Single scope only.
-    - **Solution:** Remove extra scope.
-
-    ### JOBS_WORKER_FAILED
-
-    - **Context:** Worker lifecycle
-    - **Cause:** Adapter or worker error.
-    - **Mitigation:** Monitor worker health.
-    - **Solution:** Restart worker and verify backend.
-
-    ### JOBS_ADAPTER_ERROR
-
-    - **Context:** Adapter operations
-    - **Cause:** Backend failure.
-    - **Mitigation:** Monitor backend health.
-    - **Solution:** Retry or failover.
-
-    ### JOBS_ADAPTER_CONNECTION_FAILED
-
-    - **Context:** Adapter connection
-    - **Cause:** Redis or database unreachable.
-    - **Mitigation:** Check network.
-    - **Solution:** Restore connectivity.
-
-    ### JOBS_SUBSCRIBE_FAILED
-
-    - **Context:** Event subscriptions
-    - **Cause:** Pub/sub connection failure.
-    - **Mitigation:** Reconnect on failures.
-    - **Solution:** Restart subscriber or adapter.
-
-    ---
-
-    ## 📘 Appendix: Field-by-Field Reference
-
-    ### IgniterJobsBuilder State (Conceptual)
-
-    - `adapter`
-    - `service`
-    - `environment`
-    - `contextFactory`
-    - `queues`
-    - `scopeDefinition`
-    - `queueDefaults`
-    - `workerDefaults`
-    - `autoStartWorker`
-    - `logger`
-    - `telemetry`
-
-    ### IgniterJobDefinition Fields
-
-    - `input`
-    - `output`
-    - `queue`
-    - `handler`
-    - `onStart`
-    - `onProgress`
-    - `onSuccess`
-    - `onFailure`
-    - `jobId`
-    - `priority`
-    - `delay`
-    - `attempts`
-    - `removeOnComplete`
-    - `removeOnFail`
-    - `metadata`
-    - `limiter`
-
-    ### IgniterCronDefinition Fields
-
-    - `cron`
-    - `tz`
-    - `maxExecutions`
-    - `skipWeekends`
-    - `onlyBusinessHours`
-    - `businessHours`
-    - `onlyWeekdays`
-    - `skipDates`
-    - `startDate`
-    - `endDate`
-    - `handler`
-
-    ### IgniterJobsScheduleOptions Fields
-
-    - `at`
-    - `delay`
-    - `cron`
-    - `every`
-    - `maxExecutions`
-    - `tz`
-    - `skipWeekends`
-    - `businessHours`
-    - `onlyBusinessHours`
-    - `onlyWeekdays`
-    - `skipDates`
-
-    ### IgniterJobsExecutionContext Fields
-
-    - `input`
-    - `context`
-    - `job.id`
-    - `job.name`
-    - `job.queue`
-    - `job.attemptsMade`
-    - `job.createdAt`
-    - `job.metadata`
-    - `scope`
-
-    ### IgniterJobsHookContext Fields
-
-    - `startedAt`
-    - `duration`
-
-    ### IgniterJobsQueueInfo Fields
-
-    - `name`
-    - `isPaused`
-    - `jobCounts.waiting`
-    - `jobCounts.active`
-    - `jobCounts.completed`
-    - `jobCounts.failed`
-    - `jobCounts.delayed`
-    - `jobCounts.paused`
-
-    ### IgniterJobSearchResult Fields
-
-    - `id`
-    - `name`
-    - `queue`
-    - `status`
-    - `input`
-    - `result`
-    - `error`
-    - `progress`
-    - `attemptsMade`
-    - `priority`
-    - `createdAt`
-    - `startedAt`
-    - `completedAt`
-    - `metadata`
-    - `scope`
-
-    ### IgniterJobsWorkerMetrics Fields
-
-    - `processed`
-    - `failed`
-    - `avgDuration`
-    - `concurrency`
-    - `uptime`
-
-    ### IgniterJobsWorkerHandle Fields
-
-    - `id`
-    - `queues`
-    - `pause()`
-    - `resume()`
-    - `close()`
-    - `isRunning()`
-    - `isPaused()`
-    - `isClosed()`
-    - `getMetrics()`
-
-    ### IgniterJobsAdapter Methods
-
-    - `dispatch()`
-    - `schedule()`
-    - `getJob()`
-    - `getJobState()`
-    - `getJobLogs()`
-    - `getJobProgress()`
-    - `retryJob()`
-    - `removeJob()`
-    - `promoteJob()`
-    - `moveJobToFailed()`
-    - `retryManyJobs()`
-    - `removeManyJobs()`
-    - `getQueueInfo()`
-    - `getQueueJobCounts()`
-    - `listQueues()`
-    - `pauseQueue()`
-    - `resumeQueue()`
-    - `drainQueue()`
-    - `cleanQueue()`
-    - `obliterateQueue()`
-    - `retryAllInQueue()`
-    - `pauseJobType()`
-    - `resumeJobType()`
-    - `searchJobs()`
-    - `searchQueues()`
-    - `searchWorkers()`
-    - `createWorker()`
-    - `getWorkers()`
-    - `publishEvent()`
-    - `subscribeEvent()`
-    - `registerJob()`
-    - `registerCron()`
-    - `shutdown()`
-
-    ### IgniterJobsEvent Fields
-
-    - `type`
-    - `data`
-    - `timestamp`
-    - `scope`
-
-    ### IgniterJobsScopeEntry Fields
-
-    - `type`
-    - `id`
-    - `tags`
 
 ---
 
@@ -1700,31 +1067,56 @@ describe("jobs", () => {
 Cancel unpaid orders after 1 hour.
 
 ```typescript
+interface OrderContext {
+  db: Database;
+  paymentGateway: PaymentGateway;
+}
+
 const ordersQueue = IgniterQueue.create("orders")
   .addJob("cancelUnpaid", {
     input: z.object({ orderId: z.string() }),
     handler: async ({ input, context }) => {
-      await context.orders.cancelIfUnpaid(input.orderId);
+      const order = await context.db.orders.findOne({ id: input.orderId });
+      if (order && order.status === "pending") {
+        await context.paymentGateway.cancel(order.paymentId);
+        await context.db.orders.update({ id: input.orderId, status: "cancelled" });
+      }
     },
   })
   .build();
 
+// Schedule cancellation 1 hour after order creation
 await jobs.orders.cancelUnpaid.schedule({
-  input: { orderId: "ord_123" },
-  delay: 60 * 60 * 1000,
+  input: { orderId: "order_123" },
+  delay: 3600_000,
 });
 ```
 
 ### 2) Fintech: Nightly Reconciliation
 
-Batch reconcile bank transactions every night.
+Verify transactions against bank API at 3 AM.
 
 ```typescript
-const reconQueue = IgniterQueue.create("reconciliation")
-  .addCron("nightly", {
+const reconciliationQueue = IgniterQueue.create("reconciliation")
+  .addCron("nightlyReconcile", {
     cron: "0 3 * * *",
     handler: async ({ context }) => {
-      await context.reconcile.runNightly();
+      const pending = await context.db.transactions.findPending();
+      const batches = chunk(pending, 100);
+      for (const batch of batches) {
+        // Dispatch sub-jobs for each batch
+        await jobs.reconciliation.reconcileBatch.dispatch({ input: { ids: batch.map(t => t.id) } });
+      }
+    },
+  })
+  .addJob("reconcileBatch", {
+    input: z.object({ ids: z.array(z.string()) }),
+    handler: async ({ input, context }) => {
+      for (const id of input.ids) {
+        const txn = await context.db.transactions.findOne({ id });
+        const bankStatus = await context.bankApi.verify(txn.externalId);
+        await context.db.transactions.update({ id, status: bankStatus });
+      }
     },
   })
   .build();
@@ -1732,84 +1124,139 @@ const reconQueue = IgniterQueue.create("reconciliation")
 
 ### 3) SaaS: CSV Import with Progress
 
+Process 100k row CSV per tenant with real-time progress.
+
 ```typescript
 const importQueue = IgniterQueue.create("imports")
-  .addJob("csv", {
-    input: z.object({ fileId: z.string() }),
-    handler: async ({ input, context }) => {
-      const rows = await context.files.readCsv(input.fileId);
-      for (let i = 0; i < rows.length; i++) {
-        await context.imports.processRow(rows[i]);
-        await context.imports.progress(i / rows.length);
+  .addJob("csvImport", {
+    input: z.object({ fileUrl: z.string(), tenantId: z.string() }),
+    stream: {
+      persistence: { enabled: true, maxEvents: 500 },
+      events: {
+        "import.row.processed": z.object({ row: z.number(), total: z.number() }),
+        "import.complete": z.object({ rows: z.number(), duration: z.number() }),
+      },
+    },
+    handler: async ({ input, job, context }) => {
+      const rows = await fetchCsv(input.fileUrl);
+      const total = rows.length;
+      for (let i = 0; i < total; i++) {
+        await context.db.importRow(input.tenantId, rows[i]);
+        if (i % 100 === 0) {
+          await job.stream.emit("import.row.processed", { row: i, total });
+          await job.updateProgress?.(Math.round((i / total) * 100));
+        }
       }
-      return { processed: rows.length };
+      await job.stream.emit("import.complete", { rows: total, duration: Date.now() - start });
     },
   })
   .build();
+
+// Dispatch scoped to tenant
+const tenantJobs = jobs.scope("organization", tenantId);
+const jobId = await tenantJobs.imports.csvImport.dispatch({ input: { fileUrl, tenantId } });
+
+// Monitor progress via streams
+const stream = tenantJobs.imports.csvImport.get(jobId).stream();
+await stream.subscribe((event) => {
+  if (event.type === "import.row.processed") {
+    updateProgressBar(event.data.row, event.data.total);
+  }
+});
 ```
 
 ### 4) Media Platform: Video Transcoding
 
+Generate multiple video qualities after upload with priority queues.
+
 ```typescript
-const mediaQueue = IgniterQueue.create("media")
+const videoQueue = IgniterQueue.create("video")
   .addJob("transcode", {
-    input: z.object({ assetId: z.string(), preset: z.string() }),
-    handler: async ({ input, context }) => {
-      await context.media.transcode(input.assetId, input.preset);
+    input: z.object({ videoUrl: z.string(), qualities: z.array(z.enum(["360p", "720p", "1080p", "4k"])) }),
+    handler: async ({ input, job, context }) => {
+      for (const quality of input.qualities) {
+        await job.stream.emit("transcode.quality.started", { quality });
+        const result = await context.transcoder.process(input.videoUrl, quality);
+        await job.stream.emit("transcode.quality.complete", { quality, outputUrl: result.url });
+      }
+    },
+    onSuccess: async ({ job, result }) => {
+      await notifyUser(job.metadata?.userId, "Video processing complete");
     },
   })
   .build();
 
-await jobs.media.transcode.dispatch({
-  input: { assetId: "vid_1", preset: "1080p" },
-  priority: 10,
+// Dispatch with priority
+await jobs.video.transcode.dispatch({
+  input: { videoUrl: "s3://bucket/raw/video.mp4", qualities: ["720p", "1080p"] },
+  priority: 5,
+  metadata: { userId: "user_456", videoId: "vid_789" },
 });
 ```
 
 ### 5) Healthcare: Appointment Reminders
 
+Send SMS 24h before appointment.
+
 ```typescript
 const remindersQueue = IgniterQueue.create("reminders")
-  .addJob("appointment", {
-    input: z.object({ appointmentId: z.string(), at: z.string() }),
+  .addJob("sendReminder", {
+    input: z.object({ appointmentId: z.string() }),
     handler: async ({ input, context }) => {
-      await context.reminders.sendAppointment(input.appointmentId);
+      const appointment = await context.db.appointments.findOne({ id: input.appointmentId });
+      if (appointment.status === "cancelled") return;
+      await context.smsService.send({
+        to: appointment.patientPhone,
+        body: `Reminder: You have an appointment on ${appointment.date.toDateString()}`,
+      });
+    },
+    onFailure: async ({ error, isFinalAttempt }) => {
+      if (isFinalAttempt) {
+        await context.alerting.notifyOnCall(`SMS reminder failed: ${error.message}`);
+      }
     },
   })
   .build();
 
-await jobs.reminders.appointment.schedule({
-  input: { appointmentId: "apt_1", at: "2026-02-10T10:00:00Z" },
-  at: new Date("2026-02-09T10:00:00Z"),
+// Schedule reminder 24h before appointment
+await jobs.reminders.sendReminder.schedule({
+  input: { appointmentId: "apt_123" },
+  at: new Date(appointment.date.getTime() - 24 * 3600_000),
 });
 ```
 
 ### 6) Marketplace: Fraud Review Queue
 
+High-priority fraud detection with human review.
+
 ```typescript
 const fraudQueue = IgniterQueue.create("fraud")
-  .addJob("review", {
+  .addJob("detect", {
     input: z.object({ transactionId: z.string() }),
     handler: async ({ input, context }) => {
-      await context.risk.reviewTransaction(input.transactionId);
+      const score = await context.fraudEngine.analyze(input.transactionId);
+      if (score > 0.8) {
+        await context.db.transactions.update({ id: input.transactionId, status: "blocked" });
+      } else if (score > 0.5) {
+        await context.db.transactions.update({ id: input.transactionId, status: "review" });
+      }
     },
   })
   .build();
-
-await jobs.fraud.review.dispatch({
-  input: { transactionId: "txn_99" },
-  priority: 100,
-});
 ```
 
 ### 7) DevOps: Cleanup Jobs
 
+Periodic cleanup of stale resources.
+
 ```typescript
-const cleanupQueue = IgniterQueue.create("maintenance")
-  .addCron("cleanupUploads", {
-    cron: "0 4 * * 0",
+const cleanupQueue = IgniterQueue.create("cleanup")
+  .addCron("hourlyCleanup", {
+    cron: "0 * * * *",
     handler: async ({ context }) => {
-      await context.storage.cleanupOrphans();
+      await context.db.sessions.deleteExpired();
+      await context.db.tempFiles.deleteOlderThan({ days: 7 });
+      await context.cache.clearStale();
     },
   })
   .build();
@@ -1822,9 +1269,11 @@ const cleanupQueue = IgniterQueue.create("maintenance")
 ### IgniterJobs (Factory)
 
 ```typescript
-export const IgniterJobs: {
-  create: () => IgniterJobsBuilder<unknown>;
-};
+import { IgniterJobs } from "@igniter-js/jobs";
+
+// Factory namespace. create() returns IgniterJobsBuilder.
+// Context type is inferred from withContext().
+const builder = IgniterJobs.create(); // → IgniterJobsBuilder<unknown>
 ```
 
 ### IgniterJobsBuilder
@@ -1832,588 +1281,324 @@ export const IgniterJobs: {
 ```typescript
 class IgniterJobsBuilder<TContext, TQueues, TScope> {
   static create(): IgniterJobsBuilder<unknown>;
-
-  withAdapter(
-    adapter: IgniterJobsAdapter,
-  ): IgniterJobsBuilder<TContext, TQueues, TScope>;
-  withService(service: string): IgniterJobsBuilder<TContext, TQueues, TScope>;
-  withEnvironment(
-    environment: string,
-  ): IgniterJobsBuilder<TContext, TQueues, TScope>;
-  withContext<TNewContext>(
-    factory: () => TNewContext | Promise<TNewContext>,
-  ): IgniterJobsBuilder<TNewContext, {}, TScope>;
-  addScope(
-    name: string,
-    options?: IgniterJobsScopeOptions,
-  ): IgniterJobsBuilder<TContext, TQueues, TScope | string>;
-  addQueue(
-    queue: IgniterJobsQueue<TContext, any, any> & { name: string },
-  ): IgniterJobsBuilder<TContext, TQueues & Record<string, any>, TScope>;
-  withQueueDefaults(
-    defaults: Partial<IgniterJobDefinition<TContext, any, any>>,
-  ): IgniterJobsBuilder<TContext, TQueues, TScope>;
-  withWorkerDefaults(
-    defaults: Partial<IgniterJobsWorkerBuilderConfig>,
-  ): IgniterJobsBuilder<TContext, TQueues, TScope>;
-  withAutoStartWorker(config: {
-    queues: (keyof TQueues)[];
-    concurrency?: number;
-    limiter?: IgniterJobsLimiter;
-  }): IgniterJobsBuilder<TContext, TQueues, TScope>;
-  withTelemetry(
-    telemetry: IgniterJobsTelemetry,
-  ): IgniterJobsBuilder<TContext, TQueues, TScope>;
-  withLogger(
-    logger: IgniterLogger,
-  ): IgniterJobsBuilder<TContext, TQueues, TScope>;
+  
+  withAdapter(adapter: IgniterJobsAdapter): this;
+  withService(service: string): this;
+  withEnvironment(environment: string): this;
+  withContext<TNewContext>(factory: () => TNewContext | Promise<TNewContext>): IgniterJobsBuilder<TNewContext>;
+  addScope<TNewScope extends string>(name: TNewScope, options?: IgniterJobsScopeOptions): IgniterJobsBuilder<TContext, TQueues, TScope | TNewScope>;
+  addQueue<TName extends string, TQueue>(queue: TQueue & { name: TName }): IgniterJobsBuilder<TContext, TQueues & Record<TName, TQueue>, TScope>;
+  withQueueDefaults(defaults: Partial<IgniterJobDefinition<TContext>>): this;
+  withWorkerDefaults(defaults: Partial<IgniterJobsWorkerBuilderConfig>): this;
+  withAutoStartWorker(config: { queues: string[]; concurrency?: number; limiter?: IgniterJobsLimiter }): this;
+  withTelemetry(telemetry: IgniterJobsTelemetry): this;
+  withLogger(logger: IgniterLogger): this;
   build(): IgniterJobsRuntime<IgniterJobsConfig<TContext, TQueues, TScope>>;
 }
 ```
 
-> Note: `queueDefaults`, `workerDefaults`, and `autoStartWorker` are stored in the runtime configuration.
-
-### IgniterQueue
+### IgniterQueue (Factory)
 
 ```typescript
-class IgniterQueue {
-  static create<const TName extends string>(
-    name: TName,
-  ): IgniterQueueBuilder<unknown, {}, {}, TName>;
-}
+import { IgniterQueue } from "@igniter-js/jobs";
+
+const queue = IgniterQueue.create(name);
 ```
 
 ### IgniterQueueBuilder
 
 ```typescript
 class IgniterQueueBuilder<TContext, TJobs, TCron, TName> {
-  addJob<TJobName extends string, TInput, TResult>(
+  static create<TName extends string>(name: TName): IgniterQueueBuilder<unknown>;
+  
+  addJob<TJobName, TInput, TResult, TStreamEvents>(
     jobName: TJobName,
-    definition: IgniterJobDefinition<TContext, TInput, TResult>,
-  ): IgniterQueueBuilder<
-    TContext,
-    TJobs & Record<TJobName, IgniterJobDefinition<TContext, TInput, TResult>>,
-    TCron,
-    TName
-  >;
-
-  addCron<TCronName extends string, TResult>(
+    definition: IgniterJobDefinition<TContext, TInput, TResult, TStreamEvents>,
+  ): IgniterQueueBuilder<TContext, TJobs & Record<TJobName, IgniterJobDefinition>, TCron, TName>;
+  
+  addCron<TCronName, TResult>(
     cronName: TCronName,
     definition: IgniterCronDefinition<TContext, TResult>,
-  ): IgniterQueueBuilder<
-    TContext,
-    TJobs,
-    TCron & Record<TCronName, IgniterCronDefinition<TContext, TResult>>,
-    TName
-  >;
-
+  ): IgniterQueueBuilder<TContext, TJobs, TCron & Record<TCronName, IgniterCronDefinition>, TName>;
+  
   build(): IgniterJobsQueue<TContext, TJobs, TCron> & { name: TName };
 }
 ```
 
 ### Runtime Methods
 
-```typescript
-interface IgniterJobsRuntime<TConfig> {
-  config: TConfig;
-  subscribe(handler: IgniterJobsEventHandler): Promise<() => Promise<void>>;
-  search(
-    target: "jobs" | "queues" | "workers",
-    filter: Record<string, unknown>,
-  ): Promise<unknown[]>;
-  shutdown(): Promise<void>;
-  worker: { create(): IgniterWorkerBuilder<keyof TConfig["queues"] & string> };
-  scope(
-    type: string,
-    id: string | number,
-    tags?: Record<string, unknown>,
-  ): IgniterJobsRuntime<TConfig>;
-
-  // Queue accessors (dynamic)
-  [queueName: string]: IgniterJobsQueueAccessor<any>;
-}
-```
+| Accessor | Method | Returns |
+|----------|--------|---------|
+| `jobs.<queue>.<job>` | `dispatch(params)` | `Promise<string>` (job ID) |
+| `jobs.<queue>.<job>` | `schedule(params)` | `Promise<string>` (job ID) |
+| `jobs.<queue>.<job>` | `get(id)` | `IgniterJobsJobInstanceAccessor` |
+| `jobs.<queue>.<job>` | `many(ids)` | `IgniterJobsJobManyAccessor` |
+| `jobs.<queue>.<job>` | `subscribe(handler)` | `Promise<() => Promise<void>>` |
+| `jobs.<queue>` | `get()` | `IgniterJobsQueueManagerAccessor` |
+| `jobs.<queue>` | `list(filter?)` | `Promise<IgniterJobSearchResult[]>` |
+| `jobs.<queue>` | `subscribe(handler)` | `Promise<() => Promise<void>>` |
+| `jobs` | `subscribe(handler)` | `Promise<() => Promise<void>>` |
+| `jobs` | `search(target, filter)` | `Promise<unknown[]>` |
+| `jobs` | `shutdown()` | `Promise<void>` |
+| `jobs` | `scope(type, id, tags?)` | `IgniterJobsRuntime` |
 
 ### Queue Accessor
 
+`jobs.<queue>.get()` returns:
+
 ```typescript
-interface IgniterJobsQueueAccessor {
-  get(): {
-    retrieve(): Promise<IgniterJobsQueueInfo | null>;
-    pause(): Promise<void>;
-    resume(): Promise<void>;
-    drain(): Promise<number>;
-    clean(options: IgniterJobsQueueCleanOptions): Promise<number>;
-    obliterate(options?: { force?: boolean }): Promise<void>;
-    retryAll(): Promise<number>;
-  };
-  list(filter?: {
-    status?: IgniterJobStatus[];
-    limit?: number;
-    offset?: number;
-  }): Promise<IgniterJobSearchResult[]>;
-  subscribe(handler: IgniterJobsEventHandler): Promise<() => Promise<void>>;
-  jobs: Record<string, IgniterJobsJobAccessor>;
+{
+  retrieve(): Promise<IgniterJobsQueueInfo | null>;
+  pause(): Promise<void>;
+  resume(): Promise<void>;
+  drain(): Promise<number>;
+  clean(options: IgniterJobsQueueCleanOptions): Promise<number>;
+  obliterate(options?: { force?: boolean }): Promise<void>;
+  retryAll(): Promise<number>;
 }
 ```
 
 ### Job Accessor
 
+`jobs.<queue>.<job>.get(id)` returns:
+
 ```typescript
-interface IgniterJobsJobAccessor<TInput = unknown> {
-  dispatch(params: IgniterJobsDispatchParams<TInput>): Promise<string>;
-  schedule(params: IgniterJobsScheduleParams<TInput>): Promise<string>;
-  get(id: string): {
-    retrieve(): Promise<IgniterJobSearchResult | null>;
-    retry(): Promise<void>;
-    remove(): Promise<void>;
-    promote(): Promise<void>;
-    move(state: "failed", reason: string): Promise<void>;
-    state(): Promise<IgniterJobStatus | null>;
-    progress(): Promise<number>;
-    logs(): Promise<IgniterJobsJobLog[]>;
-  };
-  many(ids: string[]): { retry(): Promise<void>; remove(): Promise<void> };
-  subscribe(handler: IgniterJobsEventHandler): Promise<() => Promise<void>>;
+{
+  retrieve(): Promise<IgniterJobSearchResult | null>;
+  retry(): Promise<void>;
+  remove(): Promise<void>;
+  promote(): Promise<void>;
+  move(state: "failed", reason: string): Promise<void>;
+  state(): Promise<IgniterJobStatus | null>;
+  progress(): Promise<number>;
+  logs(): Promise<{ timestamp: Date; message: string; level: "info" | "warn" | "error" }[]>;
+  stream(): IgniterJobsJobStreamAccessor;
+}
+```
+
+`jobs.<queue>.<job>.many(ids)` returns:
+
+```typescript
+{
+  retry(): Promise<void>;
+  remove(): Promise<void>;
 }
 ```
 
 ### Worker Builder
 
 ```typescript
-interface IgniterJobsWorkerFluentBuilder<TQueueNames extends string> {
-  addQueue(queue: TQueueNames): IgniterJobsWorkerFluentBuilder<TQueueNames>;
-  withConcurrency(
-    concurrency: number,
-  ): IgniterJobsWorkerFluentBuilder<TQueueNames>;
-  withLimiter(
-    limiter: IgniterJobsLimiter,
-  ): IgniterJobsWorkerFluentBuilder<TQueueNames>;
-  onActive(
-    handler: (ctx: { job: IgniterJobSearchResult }) => void | Promise<void>,
-  ): IgniterJobsWorkerFluentBuilder<TQueueNames>;
-  onSuccess(
-    handler: (ctx: {
-      job: IgniterJobSearchResult;
-      result: unknown;
-    }) => void | Promise<void>,
-  ): IgniterJobsWorkerFluentBuilder<TQueueNames>;
-  onFailure(
-    handler: (ctx: {
-      job: IgniterJobSearchResult;
-      error: Error;
-    }) => void | Promise<void>,
-  ): IgniterJobsWorkerFluentBuilder<TQueueNames>;
-  onIdle(
-    handler: () => void | Promise<void>,
-  ): IgniterJobsWorkerFluentBuilder<TQueueNames>;
+class IgniterWorkerBuilder<TAllowedQueues> {
+  addQueue(queue: TAllowedQueues): this;
+  withConcurrency(concurrency: number): this;
+  withLimiter(limiter: IgniterJobsLimiter): this;
+  onActive(handler: (ctx: { job: IgniterJobSearchResult }) => void): this;
+  onSuccess(handler: (ctx: { job: IgniterJobSearchResult; result: unknown }) => void): this;
+  onFailure(handler: (ctx: { job: IgniterJobSearchResult; error: Error }) => void): this;
+  onIdle(handler: () => void): this;
   start(): Promise<IgniterJobsWorkerHandle>;
 }
 ```
 
----
-
-## ⚙️ Configuration Reference
-
-### IgniterJobsBunSQLiteAdapterOptions
+### Worker Handle
 
 ```typescript
-interface IgniterJobsBunSQLiteAdapterOptions {
-  path: string;
-  durable?: boolean;
-  heartbeatInterval?: number;
-  pollTimeout?: number;
-  batchSize?: number;
-  lockDuration?: number;
-  maxStalledCount?: number;
+interface IgniterJobsWorkerHandle {
+  readonly id: string;
+  readonly queues: string[];
+  pause(): Promise<void>;
+  resume(): Promise<void>;
+  close(): Promise<void>;
+  isRunning(): boolean;
+  isPaused(): boolean;
+  isClosed(): boolean;
+  getMetrics(): Promise<IgniterJobsWorkerMetrics>;
 }
 ```
 
-### IgniterJobsScheduleOptions
+### IgniterJobDefinition
 
 ```typescript
-interface IgniterJobsScheduleOptions {
-  at?: Date;
+interface IgniterJobDefinition<TContext, TInput, TResult, TStreamEvents> {
+  input?: TInput;                           // Schema for input validation
+  output?: IgniterJobsSchema;                // Schema for output validation
+  queue?: string;                            // Optional child queue override
+  stream?: IgniterJobsJobStreamDefinition;   // Stream configuration
+  handler: (ctx: IgniterJobsExecutionContext) => Promise<TResult> | TResult;
+  onStart?: (ctx: IgniterJobsHookContext) => void | Promise<void>;
+  onProgress?: (ctx: IgniterJobsHookContext & { progress: number; message?: string }) => void;
+  onSuccess?: (ctx: IgniterJobsHookContext & { result: TResult }) => void;
+  onFailure?: (ctx: IgniterJobsHookContext & { error: Error; isFinalAttempt: boolean }) => void;
+  
+  // InvokeOptions
+  jobId?: string;
+  priority?: number;
   delay?: number;
-  cron?: string;
-  every?: number;
+  attempts?: number;
+  removeOnComplete?: boolean | number;
+  removeOnFail?: boolean | number;
+  metadata?: Record<string, unknown>;
+  limiter?: IgniterJobsLimiter;
+}
+```
+
+### IgniterCronDefinition
+
+```typescript
+interface IgniterCronDefinition<TContext, TResult> {
+  cron: string;                    // Cron expression
+  tz?: string;                     // Timezone
   maxExecutions?: number;
-  tz?: string;
   skipWeekends?: boolean;
-  businessHours?: { start: number; end: number; timezone?: string };
   onlyBusinessHours?: boolean;
-  onlyWeekdays?: number[];
+  businessHours?: { start: number; end: number; timezone?: string };
+  onlyWeekdays?: number[];         // 0=Sunday..6=Saturday
   skipDates?: Array<string | Date>;
+  startDate?: Date;
+  endDate?: Date;
+  handler: (ctx: Omit<IgniterJobsExecutionContext, "input">) => Promise<TResult> | TResult;
 }
 ```
 
 ---
 
-## ✅ Best Practices
+## 🔧 Framework Integration
 
-| Do                     | Why                  | Example                      |
-| ---------------------- | -------------------- | ---------------------------- |
-| ✅ Use input schemas   | Prevent invalid jobs | `input: z.object({ ... })`   |
-| ✅ Keep payloads small | Faster serialization | `{ id: "order_1" }`          |
-| ✅ Use scopes          | Tenant isolation     | `jobs.scope("org", "org_1")` |
-| ✅ Use retries         | Resilience           | `attempts: 5`                |
-| ✅ Use worker hooks    | Observability        | `onFailure(...)`             |
-
-### Anti-Patterns
-
-| Don’t                                 | Why                    | Alternative        |
-| ------------------------------------- | ---------------------- | ------------------ |
-| ❌ Store PII in metadata              | Metadata is observable | Store IDs only     |
-| ❌ Use sync I/O in handlers           | Blocks workers         | Use async I/O      |
-| ❌ Dispatch without schema            | Runtime surprises      | Add `input` schema |
-| ❌ Long-running jobs without progress | No visibility          | Use `onProgress`   |
-
----
-
-## 🧯 Troubleshooting
-
-### JOBS_ADAPTER_REQUIRED
-
-**Cause:** No adapter configured.  
-**Fix:** Call `.withAdapter(...)`.
-
-### JOBS_SERVICE_REQUIRED
-
-**Cause:** Missing service name.  
-**Fix:** Call `.withService("my-service")`.
-
-### JOBS_CONTEXT_REQUIRED
-
-**Cause:** Missing context factory.  
-**Fix:** Call `.withContext(() => ({ ... }))`.
-
-### JOBS_INVALID_SCHEDULE
-
-**Cause:** `at` time is in the past.  
-**Fix:** Use a future date.
-
-### JOBS_QUEUE_OPERATION_FAILED
-
-**Cause:** BullMQ adapter cannot pause a single job type.  
-**Fix:** Pause the entire queue or filter queues per worker.
-
----
-
-## 🧩 Framework Integration
-
-### Next.js API Route
+### Next.js (App Router)
 
 ```typescript
-// app/api/queue/route.ts
-import { NextResponse } from "next/server";
-import { jobs } from "@/lib/jobs";
+// lib/jobs.ts
+import { IgniterJobs, IgniterQueue } from "@igniter-js/jobs";
+import { IgniterJobsBullMQAdapter } from "@igniter-js/jobs/adapters/node";
+import Redis from "ioredis";
 
-export async function POST() {
-  const id = await jobs.email.sendWelcome.dispatch({
-    input: { email: "user@example.com" },
-  });
-  return NextResponse.json({ jobId: id });
+const redis = new Redis(process.env.REDIS_URL!);
+
+const emailQueue = IgniterQueue.create("email")
+  .addJob("sendWelcome", {
+    input: z.object({ email: z.string().email() }),
+    handler: async ({ input, context }) => {
+      await context.resend.emails.send({ to: input.email, subject: "Welcome!" });
+    },
+  })
+  .build();
+
+export const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsBullMQAdapter.create({ redis }))
+  .withService("nextjs-app")
+  .withEnvironment(process.env.NODE_ENV)
+  .withContext(async () => ({ resend }))
+  .addQueue(emailQueue)
+  .build();
+
+// app/api/users/route.ts
+export async function POST(req: Request) {
+  const { email } = await req.json();
+  await jobs.email.sendWelcome.dispatch({ input: { email } });
+  return Response.json({ ok: true });
 }
 ```
 
 ### Express
 
 ```typescript
-import express from "express";
-import { jobs } from "./jobs";
+// services/jobs.ts
+export const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsBullMQAdapter.create({ redis }))
+  .withService("express-api")
+  .withEnvironment(process.env.NODE_ENV || "development")
+  .withContext(async () => ({ db }))
+  .addQueue(emailQueue)
+  .build();
 
-const app = express();
-app.post("/send", async (_req, res) => {
-  const jobId = await jobs.email.sendWelcome.dispatch({
-    input: { email: "user@example.com" },
-  });
-  res.json({ jobId });
+// routes/users.ts
+app.post("/users", async (req, res) => {
+  await jobs.email.sendWelcome.dispatch({ input: { email: req.body.email } });
+  res.json({ ok: true });
 });
 ```
 
 ### Fastify
 
 ```typescript
-import Fastify from "fastify";
-import { jobs } from "./jobs";
+// plugins/jobs.ts
+export default async function jobsPlugin(fastify: FastifyInstance) {
+  const jobs = IgniterJobs.create()
+    .withAdapter(IgniterJobsBullMQAdapter.create({ redis: fastify.redis }))
+    .withService("fastify-api")
+    .withEnvironment(process.env.NODE_ENV || "development")
+    .withContext(async () => ({ db: fastify.db }))
+    .addQueue(emailQueue)
+    .build();
 
-const app = Fastify();
-app.post("/send", async (_req, res) => {
-  const jobId = await jobs.email.sendWelcome.dispatch({
-    input: { email: "user@example.com" },
-  });
-  return res.send({ jobId });
+  fastify.decorate("jobs", jobs);
+}
+
+// routes/users.ts
+fastify.post("/users", async (req) => {
+  await fastify.jobs.email.sendWelcome.dispatch({ input: { email: req.body.email } });
+  return { ok: true };
 });
 ```
 
----
-
-## 🔐 Server-Only Safety
-
-`@igniter-js/jobs` is server-only. Browser builds resolve to a shim that throws an explicit error.  
-Do not import this package in client-side bundles.
-
----
-
-## 🧭 Migration Guides
-
-### Memory → SQLite
+### Server-Only Safety
 
 ```typescript
-import { IgniterJobsBunSQLiteAdapter } from "@igniter-js/jobs/adapters/bun";
+// lib/jobs.server.ts
+import "server-only";
+import { IgniterJobs } from "@igniter-js/jobs";
 
-const adapter = IgniterJobsBunSQLiteAdapter.create({
-  path: "./jobs.sqlite",
-});
-```
-
-### SQLite → BullMQ
-
-```typescript
-import { IgniterJobsBullMQAdapter } from "@igniter-js/jobs/adapters/node";
-import Redis from "ioredis";
-
-const adapter = IgniterJobsBullMQAdapter.create({
-  redis: new Redis(process.env.REDIS_URL),
-});
+// This module can only be imported in server components/API routes.
+// Browser imports will hit the shim export and throw.
+export const jobs = IgniterJobs.create() /* ... */.build();
 ```
 
 ---
 
-## ❓ FAQ
+## ✅ Best Practices
 
-### Which adapter should I use?
-
-- **Memory** — Unit tests and local development.
-- **SQLite** — CLI tools, desktop apps, local environments.
-- **BullMQ** — Production and distributed workers.
-
-### Does `@igniter-js/jobs` require Redis?
-
-No. Redis is only required for the BullMQ adapter.
-
-### Can I use multiple queues in one runtime?
-
-Yes. Add as many queues as you need via `.addQueue(...)`.
-
-### Can I switch adapters later?
-
-Yes. The adapter interface is stable and jobs/queues remain unchanged.
+| Practice | Why | Example |
+|----------|-----|---------|
+| ✅ Small Payloads | Reduces queue overhead. | `input: { id: '123' }` |
+| ✅ Context Injection | Keeps handlers pure and testable. | `withContext(() => ({ db }))` |
+| ✅ Idempotency | Jobs WILL retry. | Check status before acting. |
+| ✅ Schema Validation | Prevents poison pill jobs. | `input: z.object({ id: z.string() })` |
+| ✅ Graceful Shutdown | Prevents data loss. | `await jobs.shutdown()` on SIGTERM |
+| ✅ withContext() First | Required for type inference. | Call before `addQueue()`. |
+| ❌ Sync I/O | Kills worker throughput. | Always use `async` handlers. |
+| ❌ Large Payloads | Bloats the queue. | Store data in DB, pass ID only. |
+| ❌ Mutable Context | Cross-job pollution. | Factory must return fresh instances. |
+| ❌ Ignoring onFailure | Silent data loss. | Always log/alert on final failure. |
 
 ---
 
-## 🧪 Full Example (SQLite + Worker)
+## 🔍 Troubleshooting
 
-```typescript
-import { IgniterJobs, IgniterQueue } from "@igniter-js/jobs";
-import { IgniterJobsBunSQLiteAdapter } from "@igniter-js/jobs/adapters/bun";
-import { z } from "zod";
-
-type AppContext = { uploads: { process: (id: string) => Promise<void> } };
-
-const queue = IgniterQueue.create("uploads")
-  .addJob("process", {
-    input: z.object({ id: z.string() }),
-    handler: async ({ input, context }) => {
-      await context.uploads.process(input.id);
-    },
-  })
-  .build();
-
-const jobs = IgniterJobs.create()
-  .withAdapter(IgniterJobsBunSQLiteAdapter.create({ path: "./jobs.sqlite" }))
-  .withService("uploader")
-  .withEnvironment("local")
-  .withContext(async () => ({ uploads }))
-  .addQueue(queue)
-  .build();
-
-const worker = await jobs.worker.create().addQueue("uploads").start();
-
-const id = await jobs.uploads.process.dispatch({ input: { id: "file_1" } });
-console.log("dispatched", id);
-
-await new Promise((r) => setTimeout(r, 500));
-
-const job = await jobs.uploads.process.get(id).retrieve();
-console.log(job?.status);
-
-await worker.close();
-await jobs.shutdown();
-```
+| Error Code | Cause | Fix |
+|-----------|-------|-----|
+| `JOBS_ADAPTER_REQUIRED` | No adapter set before `build()`. | Call `.withAdapter(adapter)`. |
+| `JOBS_SERVICE_REQUIRED` | No service name set. | Call `.withService("my-api")`. |
+| `JOBS_CONTEXT_REQUIRED` | No context factory set. | Call `.withContext(() => ({ ... }))`. |
+| `JOBS_CONFIGURATION_INVALID` | Invalid config value. | Check environment/concurrency values. |
+| `JOBS_QUEUE_NOT_FOUND` | Queue not registered. | Worker references unregistered queue. |
+| `JOBS_QUEUE_DUPLICATE` | Duplicate queue name. | Use unique queue names. |
+| `JOBS_DUPLICATE_JOB` | Duplicate job name. | Job/cron names must be unique per queue. |
+| `JOBS_HANDLER_REQUIRED` | Missing handler function. | Every job/cron needs a `handler`. |
+| `JOBS_NOT_FOUND` | Job ID not found. | Verify job ID is from a recent dispatch. |
+| `JOBS_VALIDATION_FAILED` | Input doesn't match schema. | Check dispatch input against Zod schema. |
+| `JOBS_INVALID_SCHEDULE` | Scheduled time is in the past. | `at` must be a future date. |
+| `JOBS_SCOPE_ALREADY_DEFINED` | Multiple `addScope()` calls. | Only one scope supported per instance. |
 
 ---
 
-## 📑 Appendix: Event Matrix
+## 📄 License
 
-### Job Events (Runtime)
-
-| Event       | When             | Payload Keys                                                                                   |
-| ----------- | ---------------- | ---------------------------------------------------------------------------------------------- |
-| `enqueued`  | After dispatch   | `jobId`, `queue`, `jobName`                                                                    |
-| `scheduled` | After schedule   | `jobId`, `queue`, `jobName`                                                                    |
-| `started`   | Before handler   | `jobId`, `jobName`, `queue`, `attemptsMade`, `startedAt`                                       |
-| `completed` | After handler    | `jobId`, `jobName`, `queue`, `result`, `duration`, `completedAt`                               |
-| `failed`    | On error         | `jobId`, `jobName`, `queue`, `error`, `attemptsMade`, `isFinalAttempt`, `duration`, `failedAt` |
-| `progress`  | On progress hook | `jobId`, `jobName`, `queue`, `progress`, `message`, `timestamp`                                |
-
-### Telemetry Event Attributes
-
-#### Job Group
-
-- `ctx.job.id`
-- `ctx.job.name`
-- `ctx.job.queue`
-- `ctx.job.priority`
-- `ctx.job.delay`
-- `ctx.job.attempt`
-- `ctx.job.maxAttempts`
-- `ctx.job.duration`
-- `ctx.job.error.message`
-- `ctx.job.error.code`
-- `ctx.job.isFinalAttempt`
-- `ctx.job.progress`
-- `ctx.job.progress.message`
-- `ctx.job.scheduledAt`
-- `ctx.job.cron`
-
-#### Worker Group
-
-- `ctx.worker.id`
-- `ctx.worker.queues`
-- `ctx.worker.concurrency`
-- `ctx.worker.processed`
-- `ctx.worker.failed`
-- `ctx.worker.uptime`
-
-#### Queue Group
-
-- `ctx.queue.name`
-- `ctx.queue.drained.count`
-- `ctx.queue.cleaned.count`
-- `ctx.queue.cleaned.status`
-- `ctx.queue.obliterated.force`
+MIT © Felipe Barcelos
 
 ---
 
-## 📑 Appendix: Adapter API Matrix
+<div align="center">
 
-| API                 | Memory | SQLite | BullMQ |
-| ------------------- | ------ | ------ | ------ |
-| `dispatch()`        | ✅     | ✅     | ✅     |
-| `schedule()`        | ✅     | ✅     | ✅     |
-| `getJob()`          | ✅     | ✅     | ✅     |
-| `getJobState()`     | ✅     | ✅     | ✅     |
-| `getJobLogs()`      | ✅     | ✅     | ✅     |
-| `getJobProgress()`  | ✅     | ✅     | ✅     |
-| `pauseJobType()`    | ✅     | ✅     | ❌     |
-| `resumeJobType()`   | ✅     | ✅     | ❌     |
-| `pauseQueue()`      | ✅     | ✅     | ✅     |
-| `resumeQueue()`     | ✅     | ✅     | ✅     |
-| `drainQueue()`      | ✅     | ✅     | ✅     |
-| `cleanQueue()`      | ✅     | ✅     | ✅     |
-| `obliterateQueue()` | ✅     | ✅     | ✅     |
-| `retryAllInQueue()` | ✅     | ✅     | ✅     |
+**[Documentation](https://igniterjs.com)** • **[GitHub](https://github.com/felipebarcelospro/igniter-js)** • **[Issues](https://github.com/felipebarcelospro/igniter-js/issues)**
 
----
-
-## 📑 Appendix: Method-by-Method Examples
-
-### Adapter `dispatch()`
-
-```typescript
-await adapter.dispatch({
-  queue: "email",
-  jobName: "send",
-  input: { id: "1" },
-  priority: 10,
-});
-```
-
-### Adapter `schedule()`
-
-```typescript
-await adapter.schedule({
-  queue: "email",
-  jobName: "send",
-  input: { id: "1" },
-  delay: 5_000,
-});
-```
-
-### Adapter `getQueueInfo()`
-
-```typescript
-const info = await adapter.getQueueInfo("email");
-```
-
-### Adapter `getQueueJobCounts()`
-
-```typescript
-const counts = await adapter.getQueueJobCounts("email");
-```
-
-### Adapter `pauseQueue()`
-
-```typescript
-await adapter.pauseQueue("email");
-```
-
-### Adapter `resumeQueue()`
-
-```typescript
-await adapter.resumeQueue("email");
-```
-
-### Adapter `retryJob()`
-
-```typescript
-await adapter.retryJob("job-id", "email");
-```
-
-### Adapter `removeJob()`
-
-```typescript
-await adapter.removeJob("job-id", "email");
-```
-
-### Adapter `promoteJob()`
-
-```typescript
-await adapter.promoteJob("job-id", "email");
-```
-
-### Adapter `moveJobToFailed()`
-
-```typescript
-await adapter.moveJobToFailed("job-id", "Manual fail", "email");
-```
-
-### Adapter `publishEvent()`
-
-```typescript
-await adapter.publishEvent("channel", { type: "event", data: {} });
-```
-
-### Adapter `subscribeEvent()`
-
-```typescript
-const unsubscribe = await adapter.subscribeEvent("channel", (payload) => {
-  console.log(payload);
-});
-await unsubscribe();
-```
-
----
-
-## 🤝 Contributing
-
-- Keep TSDoc up-to-date for all public APIs.
-- Add tests for new adapters, utils, and core behaviors.
-- Keep examples accurate and runnable.
-
----
-
-## 📝 License
-
-MIT
+</div>

@@ -1,0 +1,8 @@
+{
+  "title": "Commands",
+  "pages": [
+    "init",
+    "generate",
+    "dev"
+  ]
+}
