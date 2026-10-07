@@ -5,6 +5,11 @@ import { Layers2Icon, PlayCircleIcon, Users2, Users2Icon } from 'lucide-react';
 export function baseOptions(): BaseLayoutProps {
   return {
     githubUrl: 'https://github.com/felipebarcelospro/igniter-js',
+    // Static export has no /api/search backend yet: hide the search button
+    // everywhere instead of showing an empty dialog.
+    searchToggle: {
+      enabled: false,
+    },
     nav: {
       title: (
         // biome-ignore lint/a11y/noStaticElementInteractions: <explanation>
