@@ -10,6 +10,9 @@ const withMDX = createMDX();
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
+  // Render free-tier builders OOM with default worker count (622 static
+  // pages); cap workers the same way as Editaliza when building on Render.
+  ...(process.env.RENDER ? { experimental: { cpus: 2 } } : {}),
   turbopack: {
     root: __dirname,
   },
