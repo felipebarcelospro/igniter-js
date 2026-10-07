@@ -1,7 +1,7 @@
 "use client";
 
 import { useDataPart } from "@ai-sdk-tools/store";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion } from "framer-motion";
 
 interface ChatTitleData {
   chatId: string;

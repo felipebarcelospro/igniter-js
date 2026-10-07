@@ -2,7 +2,7 @@
 
 import { useChatId } from "@ai-sdk-tools/store";
 import { useChatActions } from "@ai-sdk-tools/store";
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 
 const SUGGESTIONS = [

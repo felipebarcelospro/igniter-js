@@ -1,7 +1,7 @@
 "use client";
 
 import { useChatActions, useDataPart } from "@ai-sdk-tools/store";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 
 type SuggestionsData = {
