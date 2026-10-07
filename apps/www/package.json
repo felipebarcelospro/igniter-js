@@ -83,7 +83,10 @@
     "vaul": "1.1.2",
     "zod": "4.1.12",
     "motion-dom": "12.23.23",
-    "motion-utils": "12.23.6"
+    "motion-utils": "12.23.6",
+    "@ai-sdk/react": "2.0.83",
+    "@ai-sdk/provider-utils": "3.0.14",
+    "@ai-sdk/provider": "2.0.0"
   },
   "overrides": {
     "ai": "6.0.67"
