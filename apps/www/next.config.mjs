@@ -9,6 +9,13 @@ const withMDX = createMDX();
 
 /** @type {import('next').NextConfig} */
 const config = {
+  // Static export for free-tier hosting (Render Static Site): no Node
+  // server, no API routes, no image optimization, no rewrites.
+  output: 'export',
+  // Every route becomes a directory with index.html, so a catch-all
+  // file route (e.g. /llms.mdx/docs/agents) never collides with its own
+  // child routes on disk.
+  trailingSlash: true,
   reactStrictMode: true,
   // Render free-tier builders OOM with default worker count (622 static
   // pages); cap workers the same way as Editaliza when building on Render.
@@ -17,65 +24,13 @@ const config = {
     root: __dirname,
   },
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",
         hostname: "*",
       },
     ],
-  },
-  async rewrites() {
-    return [
-      {
-        source: "/blog/:path*.mdx",
-        destination: "/llms.mdx/blog/:path*",
-      },
-      {
-        source: "/docs/:path*.mdx",
-        destination: "/llms.mdx/docs/:path*",
-      },
-      {
-        source: "/learn/:path*.mdx",
-        destination: "/llms.mdx/learn/course/:path*",
-      },
-      {
-        source: "/changelog/:path*.mdx",
-        destination: "/llms.mdx/changelog/:path*",
-      },
-      {
-        source: "/showcase/:path*.mdx",
-        destination: "/llms.mdx/showcase/:path*",
-      },
-      {
-        source: "/templates/:path*.mdx",
-        destination: "/llms.mdx/templates/:path*",
-      },
-      // Also support .md extension
-      {
-        source: "/blog/:path*.md",
-        destination: "/llms.mdx/blog/:path*",
-      },
-      {
-        source: "/docs/:path*.md",
-        destination: "/llms.mdx/docs/:path*",
-      },
-      {
-        source: "/learn/:path*.md",
-        destination: "/llms.mdx/learn/course/:path*",
-      },
-      {
-        source: "/changelog/:path*.md",
-        destination: "/llms.mdx/changelog/:path*",
-      },
-      {
-        source: "/showcase/:path*.md",
-        destination: "/llms.mdx/showcase/:path*",
-      },
-      {
-        source: "/templates/:path*.md",
-        destination: "/llms.mdx/templates/:path*",
-      },
-    ];
   },
 };
 

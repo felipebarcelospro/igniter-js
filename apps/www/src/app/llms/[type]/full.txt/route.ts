@@ -3,6 +3,17 @@ import type { ContentType } from '@/lib/content-manager';
 
 export const revalidate = false;
 
+export function generateStaticParams() {
+  return [
+    'blog',
+    'docs',
+    'changelog',
+    'learn',
+    'showcase',
+    'templates',
+  ].map((type) => ({ type }));
+}
+
 /**
  * Full content route for a specific content type
  */

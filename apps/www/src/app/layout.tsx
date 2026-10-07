@@ -5,7 +5,6 @@ import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { baseOptions } from '@/app/layout.shared';
 import { getDefaultMetadata } from '@/lib/metadata';
 import { GoogleAnalytics } from '@next/third-parties/google';
-import { ChatLayout } from '@/components/lia-chat/chat-layout';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -21,11 +20,7 @@ export default function Layout({ children }: LayoutProps<'/'>) {
       <body className="flex flex-col min-h-screen">
       <RootProvider>
       <HomeLayout {...baseOptions()}>
-        <ChatLayout>
-          
-            {children}
-          
-        </ChatLayout>
+          {children}
         </HomeLayout>
         </RootProvider>
       </body>

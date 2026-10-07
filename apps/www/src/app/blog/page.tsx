@@ -23,7 +23,7 @@ export const metadata: Metadata = generateMetadataWithOG({
   title: `Blog - ${config.projectName}`,
   description: `Latest news, tutorials, and updates from ${config.projectName}. Learn about TypeScript frameworks, AI-native development, and more.`,
   path: '/blog',
-  ogImagePath: '/og/blog.png',
+  ogImagePath: '/og-image.png',
 })
 
 export default async function Page() {

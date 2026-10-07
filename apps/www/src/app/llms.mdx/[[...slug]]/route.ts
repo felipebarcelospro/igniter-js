@@ -17,11 +17,17 @@ export async function GET(
   { params }: { params: Promise<{ slug?: string[] }> }
 ) {
   const resolvedParams = await params;
-  const slug = resolvedParams.slug || [];
-  
-  if (slug.length === 0) {
+  const rawSlug = resolvedParams.slug || [];
+
+  if (rawSlug.length === 0) {
     return notFound();
   }
+
+  // Static-export safe: URLs carry an explicit .md/.mdx suffix on the last
+  // segment (e.g. /llms.mdx/docs/agents.mdx) so handler files never collide
+  // with child-route directories on disk. Strip it before lookup.
+  const slug = [...rawSlug];
+  slug[slug.length - 1] = slug[slug.length - 1].replace(/\.mdx?$|\.md$/, '');
   
   // Determine content type from first segment
   const firstSegment = slug[0];
@@ -105,11 +111,18 @@ export async function generateStaticParams() {
   for (const { type, page } of allPages) {
     const sourceConfig = contentManager.getSourceConfig(type);
     if (!sourceConfig) continue;
-    
+
     // Get the slug segments from the page URL
     const urlPath = page.url.replace(/^\//, '');
     const slugSegments = urlPath.split('/').filter(Boolean);
-    
+
+    // Suffix the last segment so the exported file never collides with
+    // child-route directories (static export writes extensionless files).
+    if (slugSegments.length > 0) {
+      slugSegments[slugSegments.length - 1] =
+        `${slugSegments[slugSegments.length - 1]}.mdx`;
+    }
+
     params.push({
       slug: slugSegments,
     });

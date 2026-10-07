@@ -12,14 +12,14 @@ export async function generateRSSFeed(): Promise<string> {
   const feed = new Feed({
     title: siteMetadata.title,
     description: siteMetadata.description,
-    id: `${baseUrl}/rss`,
-    link: `${baseUrl}/rss`,
+    id: `${baseUrl}/rss.xml`,
+    link: `${baseUrl}/rss.xml`,
     language: 'en-US',
-    image: `${baseUrl}/og/default.png`,
+    image: `${baseUrl}/og-image.png`,
     favicon: `${baseUrl}/favicon.ico`,
     copyright: siteMetadata.copyright,
     feedLinks: {
-      rss: `${baseUrl}/rss`,
+      rss: `${baseUrl}/rss.xml`,
       atom: `${baseUrl}/rss/atom`,
       json: `${baseUrl}/rss/json`,
     },
@@ -69,7 +69,7 @@ export async function generateRSSFeedForType(type: 'blog' | 'docs' | 'changelog'
     id: `${baseUrl}/rss/${type}`,
     link: `${baseUrl}/rss/${type}`,
     language: 'en-US',
-    image: `${baseUrl}/og/default.png`,
+    image: `${baseUrl}/og-image.png`,
     favicon: `${baseUrl}/favicon.ico`,
     copyright: siteMetadata.copyright,
     feedLinks: {

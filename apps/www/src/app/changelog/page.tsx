@@ -29,7 +29,7 @@ export const metadata: Metadata = generateMetadataWithOG({
   title: `Updates - ${config.projectName}`,
   description: `All the latest updates, improvements, and fixes to ${config.projectName}`,
   path: '/updates',
-  ogImagePath: '/og/updates.jpg',
+  ogImagePath: '/og-image.png',
 });
 
 // Package names mapping

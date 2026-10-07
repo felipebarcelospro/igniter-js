@@ -131,8 +131,8 @@ import { IgniterCollectionView } from '@igniter-js/collections';
 | `withTitle(title)` | `string` | Builder | Display title |
 | `withDescription(desc)` | `string` | Builder | View description |
 | `withMetadata(meta)` | `Record<string, any>` | Builder | UI metadata (icon, order, etc.) |
-| `withData(hook)` | `(ctx) => Promise<any>` | Builder | Data hook (required) |
-| `withTree(tree)` | `ViewNode[]` | Builder | Component tree |
+| `withData(hook)` | `(ctx) => Promise<StateModel>` | Builder | Data hook (required); merged into `spec.state` |
+| `withSpec(spec)` | `Spec` | Builder | json-render UI spec (`root`, `elements`, optional `state`) |
 | `addAction(name, action)` | `string, ViewAction` | Builder | Executable action |
 | `build()` | — | `IgniterCollectionViewDefinition` | Build view definition |
 

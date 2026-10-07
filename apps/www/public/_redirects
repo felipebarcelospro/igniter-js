@@ -1,0 +1,14 @@
+# Aliases previously served via next.config rewrites (unsupported in static export)
+/blog/*.mdx  /llms.mdx/blog/:splat  200
+/blog/*.md  /llms.mdx/blog/:splat  200
+/docs/*.mdx  /llms.mdx/docs/:splat  200
+/docs/*.md  /llms.mdx/docs/:splat  200
+/learn/*.mdx  /llms.mdx/learn/course/:splat  200
+/learn/*.md  /llms.mdx/learn/course/:splat  200
+/changelog/*.mdx  /llms.mdx/changelog/:splat  200
+/changelog/*.md  /llms.mdx/changelog/:splat  200
+/showcase/*.mdx  /llms.mdx/showcase/:splat  200
+/showcase/*.md  /llms.mdx/showcase/:splat  200
+/templates/*.mdx  /llms.mdx/templates/:splat  200
+/templates/*.md  /llms.mdx/templates/:splat  200
+/rss  /rss.xml  301

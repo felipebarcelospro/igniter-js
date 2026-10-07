@@ -13,7 +13,7 @@ export const metadata: Metadata = generateMetadataWithOG({
   title: `${config.projectName} - ${config.projectTagline}`,
   description: config.projectDescription,
   path: '/',
-  ogImagePath: '/og/home.png',
+  ogImagePath: '/og-image.png',
 });
 
 export default function HomePage() {

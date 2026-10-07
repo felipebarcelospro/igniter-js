@@ -27,7 +27,7 @@ export const metadata: Metadata = generateMetadataWithOG({
   title: `Showcase - ${config.projectName}`,
   description: `Discover amazing projects built with ${config.projectName}. From startups to enterprise applications, see what developers are creating.`,
   path: '/showcase',
-  ogImagePath: '/og/showcase.png',
+  ogImagePath: '/og-image.png',
 })
 
 export default async function Page() {

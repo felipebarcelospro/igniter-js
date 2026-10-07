@@ -22,9 +22,10 @@ export function generateMetadataWithOG({
   const url = `${baseUrl}${path}`;
   const ogImage = ogImagePath 
     ? `${baseUrl}${ogImagePath}`
-    : `${baseUrl}/og/default.png`;
+    : `${baseUrl}/og-image.png`;
 
   return {
+    metadataBase: new URL(baseUrl),
     title,
     description,
     keywords: [
@@ -90,7 +91,7 @@ export function getDefaultMetadata(): Metadata {
     title: `${config.projectName} - ${config.projectTagline}`,
     description: config.projectDescription,
     path: '/',
-    ogImagePath: '/og/home.png',
+    ogImagePath: '/og-image.png',
   });
 }
 

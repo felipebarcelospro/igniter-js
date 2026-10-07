@@ -1,11 +1,13 @@
 ---
 title: Views
-description: Define data-driven views with component trees, data hooks, and executable actions. Build dashboards, tables, and analytics in pure TypeScript.
+description: Define data-driven views with json-render specs, data hooks, and executable actions. Build dashboards, tables, and analytics in pure TypeScript.
 ---
 
 ## Views
 
 Views are first-class, global objects that define how data is fetched, rendered, and interacted with. They live alongside collections and have unrestricted access to the full manager via the `withData` hook.
+
+Each view carries a **json-render `Spec`** (`root`, `elements`, optional `state`) that client renderers (e.g. `@json-render/react`) consume directly.
 
 ---
 
@@ -17,18 +19,38 @@ A view has four core parts:
 import { IgniterCollectionView } from '@igniter-js/collections';
 
 const DashboardView = IgniterCollectionView.create('dashboard')
-  .withTitle('Analytics Dashboard')           // Display title
-  .withDescription('Key metrics and KPIs')     // Description
-  .withMetadata({ icon: 'chart', order: 1 })   // UI metadata
-  .withData(async ({ manager }) => {           // Data hook
+  .withTitle('Analytics Dashboard')
+  .withDescription('Key metrics and KPIs')
+  .withMetadata({ icon: 'chart', order: 1 })
+  .withData(async ({ manager }) => {
     const posts = await manager.posts.findMany();
     return { posts, total: posts.length };
   })
-  .withTree([                                   // Component tree
-    { component: 'Metric', valuePath: '/total' },
-    { component: 'Table', valuePath: '/posts' },
-  ])
-  .addAction('export', {                        // Actions
+  .withSpec({
+    root: 'stack',
+    elements: {
+      stack: {
+        type: 'Stack',
+        props: { direction: 'vertical', gap: 'md', align: null, justify: null },
+        children: ['metric', 'table'],
+      },
+      metric: {
+        type: 'Metric',
+        props: {
+          label: 'Total',
+          value: { $state: '/total' },
+          format: 'number',
+        },
+        children: [],
+      },
+      table: {
+        type: 'Table',
+        props: { data: { $state: '/posts' } },
+        children: [],
+      },
+    },
+  })
+  .addAction('export', {
     description: 'Export to CSV',
     handler: async ({ manager, params }) => ({ success: true }),
   })
@@ -39,7 +61,7 @@ const DashboardView = IgniterCollectionView.create('dashboard')
 
 ## The Data Hook (`withData`)
 
-The heart of every view. Receives the full `IIgniterCollectionsManager` and returns any data shape you need:
+The heart of every view. Receives the full `IIgniterCollectionsManager` and returns **state fragments** merged into `spec.state` at render time:
 
 ```typescript
 .withData(async ({ manager }) => {
@@ -58,37 +80,66 @@ The heart of every view. Receives the full `IIgniterCollectionsManager` and retu
 })
 ```
 
-The returned object becomes the data context for the component tree. The `valuePath` in each tree node references paths within this data object.
+Bind UI to state with json-render expressions such as `{ $state: '/totalPosts' }` in element `props`. The hook return object is deep-merged into `spec.state` when the view is rendered.
 
 ---
 
-## The Component Tree (`withTree`)
+## The UI Spec (`withSpec`)
 
-The component tree defines the UI structure. Each node has a `component` name and a `valuePath` that binds to data:
+Views use the [json-render](https://github.com/vercel-labs/json-render) format: a flat `elements` map, a `root` key, and optional default `state`. Data bindings use `$state` expressions (JSON Pointer paths into `spec.state`):
 
 ```typescript
-.withTree([
-  {
-    component: 'Section',
-    title: 'Overview',
-    children: [
-      { component: 'Metric', valuePath: '/totalPosts', title: 'Total Posts' },
-      { component: 'Metric', valuePath: '/totalPages', title: 'Pages' },
-      { component: 'Metric', valuePath: '/totalAuthors', title: 'Authors' },
-    ],
+.withSpec({
+  root: 'overview',
+  elements: {
+    overview: {
+      type: 'Stack',
+      props: { direction: 'vertical', gap: 'lg', align: null, justify: null },
+      children: ['metrics', 'recent'],
+    },
+    metrics: {
+      type: 'Stack',
+      props: { direction: 'horizontal', gap: 'md', align: null, justify: null },
+      children: ['totalPosts', 'totalPages', 'totalAuthors'],
+    },
+    totalPosts: {
+      type: 'Metric',
+      props: {
+        label: 'Total Posts',
+        value: { $state: '/totalPosts' },
+        format: 'number',
+      },
+      children: [],
+    },
+    totalPages: {
+      type: 'Metric',
+      props: {
+        label: 'Pages',
+        value: { $state: '/totalPages' },
+        format: 'number',
+      },
+      children: [],
+    },
+    totalAuthors: {
+      type: 'Metric',
+      props: {
+        label: 'Authors',
+        value: { $state: '/totalAuthors' },
+        format: 'number',
+      },
+      children: [],
+    },
+    recent: {
+      type: 'Table',
+      props: { data: { $state: '/recentPosts' } },
+      children: [],
+    },
   },
-  {
-    component: 'Section',
-    title: 'Recent Posts',
-    children: [
-      { component: 'Table', valuePath: '/recentPosts' },
-    ],
-  },
-])
+})
 ```
 
 <Callout type="info">
-  Component names map to the centralized Fractal view component registry. Use `fractal views components` to list all available components and their accepted props.
+  `withSpec` is validated at `build()` (structure) and again after state merge at `render()` (full spec). Component `type` values must match your client component catalog.
 </Callout>
 
 ---
@@ -137,6 +188,18 @@ const DashboardView = IgniterCollectionView.create('dashboard')
   .build();
 ```
 
+Action handlers may return `updates` — JSON Pointer patches applied to `spec.state` on the client:
+
+```typescript
+.addAction('increment', {
+  description: 'Bump counter',
+  handler: async () => ({
+    success: true,
+    updates: { '/count': 1 },
+  }),
+})
+```
+
 ### Action Context
 
 | Field | Type | Description |
@@ -158,18 +221,19 @@ const docs = IgniterCollections.create()
   .addView(DashboardView)
   .build();
 
-// Render a view
 const result = await docs.views.render('dashboard');
 
-console.log(result.data);   // { posts: [...], total: 42 }
-console.log(result.tree);   // Component tree nodes
-console.log(result.meta);   // { title, description, metadata }
+console.log(result.spec);           // Full json-render Spec (structure + merged state)
+console.log(result.spec.state);     // State from getData merged into spec
+console.log(result.view.metadata);  // { icon, order, ... }
+console.log(result.renderedAt);     // ISO timestamp
 
-// Execute an action
 const actionResult = await docs.views.execute('dashboard', 'export', {
   format: 'csv',
 });
 ```
+
+Pass `result.spec` to a json-render client `<Renderer spec={result.spec} />`.
 
 ---
 
@@ -182,6 +246,16 @@ Views can be defined two ways:
 ```typescript
 const view = IgniterCollectionView.create('dashboard')
   .withData(async ({ manager }) => ({ items: [] }))
+  .withSpec({
+    root: 'root',
+    elements: {
+      root: {
+        type: 'Table',
+        props: { data: { $state: '/items' } },
+        children: [],
+      },
+    },
+  })
   .build();
 
 docs.addView(view);
@@ -198,7 +272,16 @@ export default {
     const posts = await manager.posts.findMany();
     return { posts };
   },
-  tree: [{ component: 'Table', valuePath: '/posts' }],
+  spec: {
+    root: 'root',
+    elements: {
+      root: {
+        type: 'Table',
+        props: { data: { $state: '/posts' } },
+        children: [],
+      },
+    },
+  },
 };
 ```
 
@@ -211,7 +294,7 @@ const docs = IgniterCollections.create()
 // Views auto-discovered from .fractal/views/*.view.ts
 ```
 
-Programmatic views take precedence over watched views when there's a name conflict.
+Programmatic views take precedence over watched views when there's a name conflict. Legacy `tree` fields in view files are rejected.
 
 ---
 
@@ -246,31 +329,46 @@ const ContentDashboard = IgniterCollectionView.create('content-dashboard')
       lastUpdated: new Date().toISOString(),
     };
   })
-  .withTree([
-    {
-      component: 'Section',
-      title: 'Overview',
-      children: [
-        { component: 'Metric', valuePath: '/totalPosts', title: 'Total Posts' },
-        { component: 'Metric', valuePath: '/totalPages', title: 'Pages' },
-        { component: 'Metric', valuePath: '/draftCount', title: 'Drafts', variant: 'warning' },
-      ],
+  .withSpec({
+    root: 'dashboard',
+    elements: {
+      dashboard: {
+        type: 'Stack',
+        props: { direction: 'vertical', gap: 'lg', align: null, justify: null },
+        children: ['overview', 'featured', 'recent'],
+      },
+      overview: {
+        type: 'Stack',
+        props: { direction: 'horizontal', gap: 'md', align: null, justify: null },
+        children: ['totalPosts', 'totalPages', 'draftCount'],
+      },
+      totalPosts: {
+        type: 'Metric',
+        props: { label: 'Total Posts', value: { $state: '/totalPosts' }, format: 'number' },
+        children: [],
+      },
+      totalPages: {
+        type: 'Metric',
+        props: { label: 'Pages', value: { $state: '/totalPages' }, format: 'number' },
+        children: [],
+      },
+      draftCount: {
+        type: 'Metric',
+        props: { label: 'Drafts', value: { $state: '/draftCount' }, format: 'number' },
+        children: [],
+      },
+      featured: {
+        type: 'Table',
+        props: { data: { $state: '/featuredPosts' } },
+        children: [],
+      },
+      recent: {
+        type: 'Table',
+        props: { data: { $state: '/recentPosts' } },
+        children: [],
+      },
     },
-    {
-      component: 'Section',
-      title: 'Featured Posts',
-      children: [
-        { component: 'Table', valuePath: '/featuredPosts' },
-      ],
-    },
-    {
-      component: 'Section',
-      title: 'Recent Posts',
-      children: [
-        { component: 'Table', valuePath: '/recentPosts' },
-      ],
-    },
-  ])
+  })
   .addAction('createPost', {
     description: 'Create a new draft post',
     handler: async ({ manager, params }) => {

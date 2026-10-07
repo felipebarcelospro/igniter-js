@@ -126,10 +126,26 @@ export default {
     const posts = await manager.posts.findMany();
     return { posts, total: posts.length };
   },
-  tree: [
-    { component: 'Metric', valuePath: '/total' },
-    { component: 'Table', valuePath: '/posts' },
-  ],
+  spec: {
+    root: 'stack',
+    elements: {
+      stack: {
+        type: 'Stack',
+        props: { direction: 'vertical', gap: 'md', align: null, justify: null },
+        children: ['metric', 'table'],
+      },
+      metric: {
+        type: 'Metric',
+        props: { label: 'Total', value: { $state: '/total' }, format: 'number' },
+        children: [],
+      },
+      table: {
+        type: 'Table',
+        props: { data: { $state: '/posts' } },
+        children: [],
+      },
+    },
+  },
 };
 ```
 

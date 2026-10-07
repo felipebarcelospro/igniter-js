@@ -24,7 +24,7 @@ export const metadata: Metadata = generateMetadataWithOG({
   title: `Templates - ${config.projectName}`,
   description: `Explore a variety of production-ready templates to kickstart your projects with ${config.projectName}. From Next.js to Express, Bun, and more.`,
   path: '/templates',
-  ogImagePath: '/og/templates.png',
+  ogImagePath: '/og-image.png',
 });
 
 export default function TemplatesPage() {

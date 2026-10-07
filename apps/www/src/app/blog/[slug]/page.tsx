@@ -53,7 +53,7 @@ export async function generateMetadata({
     }
   }
 
-  const coverImage = post.data.cover || `/og/blog/${slug}.png`;
+  const coverImage = post.data.cover || '/og-image.png';
 
   return generateMetadataWithOG({
     title: `${post.data.title as string} - ${config.projectName} Blog`,
@@ -62,6 +62,12 @@ export async function generateMetadata({
     ogImagePath: coverImage.startsWith('http') ? undefined : coverImage,
     type: 'article',
   });
+}
+
+export function generateStaticParams() {
+  return source.getPages().map((page) => ({
+    slug: page.slugs[0],
+  }));
 }
 
 export default async function Page({ params }: PageProps<'/blog/[slug]'>) {
