@@ -1329,7 +1329,7 @@ MIT License — see [LICENSE](https://github.com/felipebarcelospro/igniter-js/bl
 
 ## 🔗 Links
 
-- **Documentation:** https://igniterjs.com/docs/mail
+- **Documentation:** https://igniterjs.tryfractal.co/docs/mail
 - **GitHub:** https://github.com/felipebarcelospro/igniter-js
 - **NPM:** https://www.npmjs.com/package/@igniter-js/mail
 - **Issues:** https://github.com/felipebarcelospro/igniter-js/issues

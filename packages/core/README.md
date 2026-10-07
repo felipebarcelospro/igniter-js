@@ -1697,7 +1697,7 @@ export const analyticsPlugin = createIgniterPlugin({
     category: ["analytics"],
     author: "Igniter",
     repository: "https://github.com/felipebarcelospro/igniter-js",
-    documentation: "https://igniterjs.com/docs",
+    documentation: "https://igniterjs.tryfractal.co/docs",
   },
   $controllers: {},
   $actions: {
@@ -2946,7 +2946,7 @@ MIT License - see [LICENSE](https://github.com/felipebarcelospro/igniter-js/blob
 
 ## Links
 
-- **Documentation:** https://igniterjs.com/docs/core
+- **Documentation:** https://igniterjs.tryfractal.co/docs/core
 - **GitHub:** https://github.com/felipebarcelospro/igniter-js
 - **NPM:** https://www.npmjs.com/package/@igniter-js/core
 - **Issues:** https://github.com/felipebarcelospro/igniter-js/issues

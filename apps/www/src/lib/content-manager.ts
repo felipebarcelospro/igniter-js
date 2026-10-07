@@ -2,7 +2,7 @@ import { type InferPageType, loader } from 'fumadocs-core/source';
 import { docs, blog, updates, templates, learn, showcase } from '@/.source';
 import { config } from '@/configs/application';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://igniterjs.com';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://igniterjs.tryfractal.co';
 
 /**
  * Content type definitions

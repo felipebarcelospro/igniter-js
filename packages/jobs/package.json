@@ -79,7 +79,7 @@
   "bugs": {
     "url": "https://github.com/felipebarcelospro/igniter-js/issues"
   },
-  "homepage": "https://igniterjs.com",
+  "homepage": "https://igniterjs.tryfractal.co",
   "dependencies": {
     "@igniter-js/common": ">=0.1.0",
     "@igniter-js/telemetry": ">=0.1.12",

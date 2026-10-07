@@ -2063,7 +2063,7 @@ MIT License - see [LICENSE](https://github.com/felipebarcelospro/igniter-js/blob
 
 ## Links
 
-- **Documentation:** https://igniterjs.com/docs/stpre
+- **Documentation:** https://igniterjs.tryfractal.co/docs/stpre
 - **GitHub:** https://github.com/felipebarcelospro/igniter-js
 - **NPM:** https://www.npmjs.com/package/@igniter-js/stpre
 - **Issues:** https://github.com/felipebarcelospro/igniter-js/issues

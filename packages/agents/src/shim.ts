@@ -56,7 +56,7 @@ SOLUTIONS:
    - Run agent code in Node.js directly
    - Use server-side test runners
 
-For documentation, visit: https://igniterjs.com/docs/agents
+For documentation, visit: https://igniterjs.tryfractal.co/docs/agents
 
 ================================================================================
 `;

@@ -795,7 +795,7 @@ await scoped.connect("slack", config)
 
 - Repository: https://github.com/felipebarcelospro/igniter-js
 - NPM: https://www.npmjs.com/package/@igniter-js/connectors
-- Docs: https://igniterjs.com
+- Docs: https://igniterjs.tryfractal.co
 
 ---
 
@@ -2289,6 +2289,6 @@ const connector = Connector.create()
 
 ## Resources
 
-- [Igniter.js Documentation](https://igniterjs.com)
+- [Igniter.js Documentation](https://igniterjs.tryfractal.co)
 - [GitHub Repository](https://github.com/felipebarcelospro/igniter-js)
 - [NPM Package](https://www.npmjs.com/package/@igniter-js/connectors)

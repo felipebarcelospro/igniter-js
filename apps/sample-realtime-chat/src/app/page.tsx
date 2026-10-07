@@ -14,7 +14,7 @@ export default function Home() {
       <header className="border-b w-full border-x py-1.5 px-3 flex items-center justify-between space-x-4">
         <div className="container mx-auto w-full border-x py-1.5 px-3 flex items-center justify-between space-x-4">
           <div className="flex items-center space-x-2">
-            <img src="https://igniterjs.com/logo-light.svg" alt="" className="h-6" />
+            <img src="https://igniterjs.tryfractal.co/logo-light.svg" alt="" className="h-6" />
           </div>
 
           <div className="flex items-center space-x-4">

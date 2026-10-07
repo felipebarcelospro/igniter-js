@@ -180,7 +180,7 @@ The type-safe client (`src/igniter.client.ts`) and schema (`src/igniter.schema.t
 
 For more detailed information on Igniter.js concepts, refer to the official documentation wiki.
 
--   **[Core Concepts](https://igniterjs.com/docs/core-concepts)**: Understand Actions, Controllers, Context, and the builder pattern.
--   **[Store (Redis)](https://igniterjs.com/docs/advanced-features/store)**: Learn about caching (`get`, `set`) and Pub/Sub (`publish`, `subscribe`).
--   **[Queues (BullMQ)](https://igniterjs.com/docs/advanced-features/queues)**: Learn how to define, schedule, and manage background jobs.
--   **[API Client](https://igniterjs.com/docs/client-side/api-client)**: Understand how the type-safe client is generated for consumers.
+-   **[Core Concepts](https://igniterjs.tryfractal.co/docs/core-concepts)**: Understand Actions, Controllers, Context, and the builder pattern.
+-   **[Store (Redis)](https://igniterjs.tryfractal.co/docs/advanced-features/store)**: Learn about caching (`get`, `set`) and Pub/Sub (`publish`, `subscribe`).
+-   **[Queues (BullMQ)](https://igniterjs.tryfractal.co/docs/advanced-features/queues)**: Learn how to define, schedule, and manage background jobs.
+-   **[API Client](https://igniterjs.tryfractal.co/docs/client-side/api-client)**: Understand how the type-safe client is generated for consumers.

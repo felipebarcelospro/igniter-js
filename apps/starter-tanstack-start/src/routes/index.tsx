@@ -13,7 +13,7 @@ function HomeComponent() {
       <header className="border-b bg-black/5 w-full border-x px-3 flex items-center justify-between space-x-4">
         <div className="border-x w-full py-[0.5rem] px-[1rem] flex items-center justify-between space-x-4">
           <div className="flex items-center space-x-2">
-            <img src="https://igniterjs.com/logo-light.svg" alt="" className="h-5 invert-1 dark:invert-0" />
+            <img src="https://igniterjs.tryfractal.co/logo-light.svg" alt="" className="h-5 invert-1 dark:invert-0" />
           </div>
 
           <div className="flex items-center space-x-4">
@@ -69,7 +69,7 @@ function HomeComponent() {
                     Explore our documentation covering Igniter.js features, API references, and tutorials.
                   </p>
                   <Button variant="outline" className="w-full !mt-8" asChild>
-                    <a href="https://igniterjs.com/docs" target="_blank">
+                    <a href="https://igniterjs.tryfractal.co/docs" target="_blank">
                       Read Docs
                       <ArrowRight className="w-4 h-4 ml-auto" aria-hidden="true" />
                     </a>
@@ -91,7 +91,7 @@ function HomeComponent() {
                     Start your journey with Igniter.js by exploring our quick start guide with step-by-step instructions.
                   </p>
                   <Button variant="outline" className="w-full !mt-8" asChild>
-                    <a href="https://igniterjs.com/docs/getting-started/quick-start-guide" target="_blank">
+                    <a href="https://igniterjs.tryfractal.co/docs/getting-started/quick-start-guide" target="_blank">
                       Get Started
                       <ArrowRight className="w-4 h-4 ml-auto" aria-hidden="true" />
                     </a>

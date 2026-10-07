@@ -35,7 +35,7 @@ SOLUTIONS:
    - Move storage logic to server-side endpoints
    - Use server-side workers or background jobs
 
-For documentation, visit: https://igniterjs.com/docs/storage
+For documentation, visit: https://igniterjs.tryfractal.co/docs/storage
 
 ================================================================================
 `;

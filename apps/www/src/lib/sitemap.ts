@@ -1,6 +1,6 @@
 import { contentManager } from '@/lib/content-manager';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://igniterjs.com';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://igniterjs.tryfractal.co';
 
 /**
  * Generate sitemap.xml for all pages

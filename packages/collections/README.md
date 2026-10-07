@@ -10,7 +10,7 @@
 **Type-safe ORM for content collections**  
 Prisma-like API for Markdown, JSON, and YAML files with schema validation, lifecycle hooks, declarative views, and TypeScript-first configuration.
 
-[Quick Start](#-quick-start) • [Documentation](https://igniterjs.com/docs/collections) • [Examples](#-real-world-examples) • [API Reference](#-api-reference)
+[Quick Start](#-quick-start) • [Documentation](https://igniterjs.tryfractal.co/docs/collections) • [Examples](#-real-world-examples) • [API Reference](#-api-reference)
 
 </div>
 
@@ -1706,13 +1706,13 @@ MIT © [Felipe Barcelos](https://github.com/felipebarcelospro)
 - [@igniter-js/core](../core) — HTTP framework core
 - [@igniter-js/telemetry](../telemetry) — Observability system
 - [@igniter-js/storage](../storage) — File storage abstraction
-- [Igniter.js Documentation](https://igniterjs.com)
+- [Igniter.js Documentation](https://igniterjs.tryfractal.co)
 
 ---
 
 ## 💬 Community & Support
 
-- 📚 [Documentation](https://igniterjs.com/docs/collections)
+- 📚 [Documentation](https://igniterjs.tryfractal.co/docs/collections)
 - 💬 [Discord Community](https://discord.gg/igniterjs)
 - 🐛 [Report Issues](https://github.com/felipebarcelospro/igniter-js/issues)
 - 🔒 [Security Policy](https://github.com/felipebarcelospro/igniter-js/security/policy)

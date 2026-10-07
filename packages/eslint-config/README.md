@@ -104,7 +104,7 @@ MIT License - see the [LICENSE](LICENSE) file for details
 
 ## Support
 
-- 📝 [Documentation](https://igniterjs.com/docs)
+- 📝 [Documentation](https://igniterjs.tryfractal.co/docs)
 - 🐛 [Issue Tracker](https://github.com/felipebarcelospro/igniter-js/issues)
 - 💬 [Discussions](https://github.com/felipebarcelospro/igniter-js/discussions)
 

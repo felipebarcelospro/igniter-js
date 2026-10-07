@@ -600,7 +600,7 @@ npx @igniter-js/mcp-server
 {
 	"tool": "read_as_markdown",
 	"input": {
-		"url": "https://igniterjs.com/docs"
+		"url": "https://igniterjs.tryfractal.co/docs"
 	}
 }
 ```

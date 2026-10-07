@@ -1599,6 +1599,6 @@ MIT © Felipe Barcelos
 
 <div align="center">
 
-**[Documentation](https://igniterjs.com)** • **[GitHub](https://github.com/felipebarcelospro/igniter-js)** • **[Issues](https://github.com/felipebarcelospro/igniter-js/issues)**
+**[Documentation](https://igniterjs.tryfractal.co)** • **[GitHub](https://github.com/felipebarcelospro/igniter-js)** • **[Issues](https://github.com/felipebarcelospro/igniter-js/issues)**
 
 </div>

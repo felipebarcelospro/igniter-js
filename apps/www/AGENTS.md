@@ -815,7 +815,7 @@ bun run lint
 **Environment Variables:**
 ```bash
 # Required
-NEXT_PUBLIC_BASE_URL=https://igniterjs.com
+NEXT_PUBLIC_BASE_URL=https://igniterjs.tryfractal.co
 NEXT_PUBLIC_GA_ID=G-XXXXXXXXXX
 
 # AI/Lia
@@ -1114,7 +1114,7 @@ bunx shadcn@latest add button  # Add shadcn component
 **For questions:**
 - GitHub Issues: https://github.com/felipebarcelospro/igniter-js/issues
 - Discord: https://discord.com/invite/JKGEQpjvJ6
-- Documentation: https://igniterjs.com/docs
+- Documentation: https://igniterjs.tryfractal.co/docs
 
 ---
 

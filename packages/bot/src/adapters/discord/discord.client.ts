@@ -68,7 +68,7 @@ export function createDiscordClient(
     const requestHeaders: Record<string, string> = {
       'Authorization': `Bot ${token}`,
       'Content-Type': 'application/json',
-      'User-Agent': 'DiscordBot (https://igniterjs.com, 1.0)',
+      'User-Agent': 'DiscordBot (https://igniterjs.tryfractal.co, 1.0)',
       ...headers,
     }
     

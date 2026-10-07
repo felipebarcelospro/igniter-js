@@ -381,7 +381,7 @@ const { plugin, controllers } = createBetterAuthPlugin(auth, {
 
 - **Issues**: [GitHub Issues](https://github.com/felipebarcelospro/igniter-js/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/felipebarcelospro/igniter-js/discussions)
-- **Documentation**: [Igniter.js Docs](https://igniterjs.com)
+- **Documentation**: [Igniter.js Docs](https://igniterjs.tryfractal.co)
 
 ---
 

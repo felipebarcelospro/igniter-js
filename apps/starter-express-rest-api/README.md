@@ -137,8 +137,8 @@ This starter comes with a pre-built `example` controller to demonstrate key feat
 To learn more about Igniter.js and its powerful features, check out the official documentation:
 
 -   **[Igniter.js GitHub Repository](https://github.com/felipebarcelospro/igniter-js)**
--   **[Official Documentation](https://igniterjs.com/docs)**
--   **[Core Concepts](https://igniterjs.com/docs/core-concepts)**
+-   **[Official Documentation](https://igniterjs.tryfractal.co/docs)**
+-   **[Core Concepts](https://igniterjs.tryfractal.co/docs/core-concepts)**
 
 ## License
 

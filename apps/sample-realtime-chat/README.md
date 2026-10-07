@@ -1,6 +1,6 @@
 # Igniter.js Real-Time Chat Example
 
-[![Igniter.js](https://img.shields.io/badge/Igniter.js-v1-blue.svg)](https://igniterjs.com/)
+[![Igniter.js](https://img.shields.io/badge/Igniter.js-v1-blue.svg)](https://igniterjs.tryfractal.co/)
 [![Next.js](https://img.shields.io/badge/Next.js-14-blue.svg)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-18-blue.svg)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg)](https://www.typescriptlang.org/)
@@ -154,7 +154,7 @@ src/
 
 To learn more about Igniter.js and its powerful features, check out the official resources:
 
--   **[Igniter.js Website](https://igniterjs.com/)**
+-   **[Igniter.js Website](https://igniterjs.tryfractal.co/)**
 -   **[Igniter.js GitHub Repository](https://github.com/felipebarcelospro/igniter-js)**
 -   **[Follow on X](https://x.com/IgniterJs)**
 

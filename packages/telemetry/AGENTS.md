@@ -838,4 +838,4 @@ All 22 error codes from `IGNITER_TELEMETRY_ERROR_CODES`:
 - [tsup.config.ts](./tsup.config.ts) — Build configuration (dual entry)
 - [vitest.config.ts](./vitest.config.ts) — Test configuration
 - GitHub: [https://github.com/felipebarcelospro/igniter-js](https://github.com/felipebarcelospro/igniter-js)
-- Homepage: [https://igniterjs.com](https://igniterjs.com)
+- Homepage: [https://igniterjs.tryfractal.co](https://igniterjs.tryfractal.co)

@@ -655,7 +655,7 @@ The builder pattern provides better type inference and a more flexible API for c
 3. **Builder Pattern**: New chainable API for progressive configuration
 4. **Type Safety**: Enhanced type inference throughout all handlers
 
-For more detailed guides, please refer to the **[Official Igniter.js Documentation](https://igniterjs.com/docs)**.
+For more detailed guides, please refer to the **[Official Igniter.js Documentation](https://igniterjs.tryfractal.co/docs)**.
 
 ## Contributing
 

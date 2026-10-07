@@ -247,7 +247,7 @@ export class IgniterConnectorManagerBuilder<
    * ```
    *
    * @see {@link ConnectorsTelemetryEvents} for all available events
-   * @see {@link https://igniterjs.com/docs/telemetry} for telemetry documentation
+   * @see {@link https://igniterjs.tryfractal.co/docs/telemetry} for telemetry documentation
    */
   withTelemetry(
     telemetry: IgniterTelemetryManager<any, any, any>,

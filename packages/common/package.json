@@ -47,7 +47,7 @@
   "bugs": {
     "url": "https://github.com/felipebarcelospro/igniter-js/issues"
   },
-  "homepage": "https://igniterjs.com",
+  "homepage": "https://igniterjs.tryfractal.co",
   "devDependencies": {
     "@types/node": "^22.9.0",
     "tsup": "^8.3.5",

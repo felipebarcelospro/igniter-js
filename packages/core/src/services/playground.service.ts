@@ -177,7 +177,7 @@ class ScalarHtmlGenerator implements IPlaygroundHtmlGenerator {
 
   <body>
     <header class="header">
-      <img src="https://igniterjs.com/logo-light.svg" alt="Igniter Logo" />
+      <img src="https://igniterjs.tryfractal.co/logo-light.svg" alt="Igniter Logo" />
 
       <div class="header-actions">
         <div class="social-links">
@@ -194,7 +194,7 @@ class ScalarHtmlGenerator implements IPlaygroundHtmlGenerator {
             </svg>
           </a>
         </div>
-         <a href="https://igniterjs.com" target="_blank" class="docs-link">
+         <a href="https://igniterjs.tryfractal.co" target="_blank" class="docs-link">
             <span>Powered By Igniter.js</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2">
               <path d="M7 17L17 7M17 7H7M17 7V17"/>

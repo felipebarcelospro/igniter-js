@@ -3,7 +3,7 @@ import type { ExampleHelloResponse } from "../example.interfaces";
 
 /**
  * @description Example procedure demonstrating Igniter.js features
- * @see https://igniterjs.com/docs/core/procedures
+ * @see https://igniterjs.tryfractal.co/docs/core/procedures
  */
 export const ExampleProcedure = igniter.procedure({
   name: 'example',

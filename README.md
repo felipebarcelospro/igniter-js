@@ -6,7 +6,7 @@
   [![npm version](https://img.shields.io/npm/v/@igniter-js/core.svg?style=flat)](https://www.npmjs.com/package/@igniter-js/core)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![Documentation](https://img.shields.io/badge/docs-igniterjs.com-brightgreen.svg)](https://igniterjs.com)
+  [![Documentation](https://img.shields.io/badge/docs-igniterjs.tryfractal.co-brightgreen.svg)](https://igniterjs.tryfractal.co)
 </div>
 
 ---
@@ -40,11 +40,11 @@ npm install @igniter-js/core zod
 
 ## 📖 Documentation & Resources
 
-- **📚 [Official Documentation](https://igniterjs.com/docs)** - Complete guides and API reference
-- **🎯 [Getting Started](https://igniterjs.com/docs/getting-started)** - Your first Igniter.js app
-- **📝 [Blog](https://igniterjs.com/blog)** - Latest updates and tutorials
-- **🎨 [Templates](https://igniterjs.com/templates)** - Starter templates and examples
-- **📋 [Changelog](https://igniterjs.com/changelog)** - What's new in each release
+- **📚 [Official Documentation](https://igniterjs.tryfractal.co/docs)** - Complete guides and API reference
+- **🎯 [Getting Started](https://igniterjs.tryfractal.co/docs/getting-started)** - Your first Igniter.js app
+- **📝 [Blog](https://igniterjs.tryfractal.co/blog)** - Latest updates and tutorials
+- **🎨 [Templates](https://igniterjs.tryfractal.co/templates)** - Starter templates and examples
+- **📋 [Changelog](https://igniterjs.tryfractal.co/changelog)** - What's new in each release
 
 ## 🛠️ Development
 
@@ -141,5 +141,5 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 
 <div align="center">
   <p>Made with ❤️ by the Igniter.js team</p>
-  <p><a href="https://igniterjs.com">igniterjs.com</a> • <a href="https://github.com/felipebarcelospro/igniter-js">GitHub</a> • <a href="https://www.npmjs.com/package/@igniter-js/core">npm</a></p>
+  <p><a href="https://igniterjs.tryfractal.co">igniterjs.tryfractal.co</a> • <a href="https://github.com/felipebarcelospro/igniter-js">GitHub</a> • <a href="https://www.npmjs.com/package/@igniter-js/core">npm</a></p>
 </div>

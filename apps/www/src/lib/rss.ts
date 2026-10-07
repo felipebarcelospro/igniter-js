@@ -2,7 +2,7 @@ import { Feed } from 'feed';
 import { contentManager } from '@/lib/content-manager';
 import { config } from '@/configs/application';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://igniterjs.com';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://igniterjs.tryfractal.co';
 
 /**
  * Generate RSS feed for all content types

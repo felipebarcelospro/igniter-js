@@ -29,7 +29,7 @@ Use this when the user asks what documentation is available or wants to explore 
       const content = await response.text();
       
       // Extract page URLs from the content
-      // llms.txt includes URLs in the format: https://igniterjs.com/docs/...
+      // llms.txt includes URLs in the format: https://igniterjs.tryfractal.co/docs/...
       const urlRegex = /https?:\/\/[^\s]+\/docs\/[^\s)]+/g;
       const urls = Array.from(new Set(content.match(urlRegex) || []));
       

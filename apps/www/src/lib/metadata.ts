@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 import { config } from '@/configs/application';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://igniterjs.com';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://igniterjs.tryfractal.co';
 
 /**
  * Helper function to generate default metadata with OpenGraph images

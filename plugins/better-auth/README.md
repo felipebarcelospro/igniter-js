@@ -183,5 +183,5 @@ MIT © [Igniter.js Contributors](https://github.com/felipebarcelospro/igniter-js
 ## 🔗 Links
 
 - [BetterAuth Documentation](https://better-auth.com)
-- [Igniter.js Documentation](https://igniterjs.com)
+- [Igniter.js Documentation](https://igniterjs.tryfractal.co)
 - [GitHub Repository](https://github.com/felipebarcelospro/igniter-js)

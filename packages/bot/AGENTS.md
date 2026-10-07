@@ -1192,7 +1192,7 @@ pnpm build            # Verify build succeeds
 
 ## 18. Related Resources
 
-- [Igniter.js Documentation](https://igniterjs.com)
+- [Igniter.js Documentation](https://igniterjs.tryfractal.co)
 - [Telegram Bot API Docs](https://core.telegram.org/bots/api)
 - [WhatsApp Cloud API Docs](https://developers.facebook.com/docs/whatsapp/cloud-api)
 - [Discord Developer Docs](https://discord.com/developers/docs)

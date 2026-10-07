@@ -488,11 +488,11 @@ This section outlines standard operating procedures for autonomous tasks, ensuri
 
 For more detailed information on Igniter.js concepts, refer to the official documentation.
 
--   **[Igniter.js Official Website](https://igniterjs.com)**: The official website for Igniter.js framework with comprehensive documentation.
+-   **[Igniter.js Official Website](https://igniterjs.tryfractal.co)**: The official website for Igniter.js framework with comprehensive documentation.
 
--   **[LLMs Documentation](https://igniterjs.com/llms.txt)**: Optimized documentation specifically for AI assistants like Lia. This is the single source of truth for the most up-to-date Igniter.js documentation when working with LLMs. Always check this resource during tasks to ensure you're using the most recent APIs and features, as Igniter.js is frequently updated with new functionality.
+-   **[LLMs Documentation](https://igniterjs.tryfractal.co/llms.txt)**: Optimized documentation specifically for AI assistants like Lia. This is the single source of truth for the most up-to-date Igniter.js documentation when working with LLMs. Always check this resource during tasks to ensure you're using the most recent APIs and features, as Igniter.js is frequently updated with new functionality.
 
--   **[Igniter Studio Documentation](https://igniterjs.com/docs/studio)**: Documentation for the Igniter Studio, a web-based playground for testing and exploring your API. The Studio is automatically available at the `/docs` path of your API when running with `igniter dev --docs`.
+-   **[Igniter Studio Documentation](https://igniterjs.tryfractal.co/docs/studio)**: Documentation for the Igniter Studio, a web-based playground for testing and exploring your API. The Studio is automatically available at the `/docs` path of your API when running with `igniter dev --docs`.
 
 The LLMs documentation includes information about:
 
