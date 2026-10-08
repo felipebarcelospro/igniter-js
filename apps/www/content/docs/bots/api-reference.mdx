@@ -206,7 +206,7 @@ type BotErrorHandler<TContext> = (
 
 #### `onCommand(handler: BotEventHandler): this`
 
-Registers a command event listener (called for all commands).
+Registers a command listener. The builder stores this callback, but the current runtime does not emit the `command` event when dispatching commands, so this callback is not currently invoked.
 
 ```typescript
 onCommand(handler: BotEventHandler<TContext>): this
@@ -432,11 +432,16 @@ interface BotCommand<TContext = BotContext, TArgs = any> {
   aliases: string[]
   description: string
   help: string
+  /** Declared in the type but not applied by the runtime. */
   args?: ZodType<TArgs>
-  handle: (ctx: TContext, params: TArgs) => Promise<void>
+  /** Receives raw command params from `message.content.params`. */
+  handle: (ctx: TContext, params: string[]) => Promise<void>
+  /** Declared in the type but not dispatched by the runtime. */
   subcommands?: Record<string, Omit<BotCommand<TContext>, 'name' | 'aliases'>>
 }
 ```
+
+The runtime currently calls `handle(ctx, params)` with the message's raw `string[]` parameters. It does not parse `args` or dispatch the declared `subcommands` property. Validate parameters inside the handler and register flat commands with `addCommandGroup()`.
 
 ---
 

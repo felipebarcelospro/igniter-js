@@ -40,7 +40,7 @@ export async function generateRSSFeed(): Promise<string> {
       title: pageData.title,
       description: pageData.description || '',
       link: `${baseUrl}${pageData.url}`,
-      date: pageData.lastModified || new Date(),
+      date: pageData.publishedAt || pageData.lastModified || new Date(),
       category: [
         {
           name: type.charAt(0).toUpperCase() + type.slice(1),
@@ -93,10 +93,9 @@ export async function generateRSSFeedForType(type: 'blog' | 'docs' | 'changelog'
       title: pageData.title,
       description: pageData.description || '',
       link: `${baseUrl}${pageData.url}`,
-      date: pageData.lastModified || new Date(),
+      date: pageData.publishedAt || pageData.lastModified || new Date(),
     });
   }
 
   return feed.rss2();
 }
-

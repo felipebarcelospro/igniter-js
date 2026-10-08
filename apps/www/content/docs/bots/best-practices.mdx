@@ -62,6 +62,9 @@ builder.addCommands(commands);
 ### ✅ Do: Isolate Business Logic from Command Handlers
 
 ```typescript
+import { Bot } from '@igniter-js/bot';
+import { z } from 'zod';
+
 // services/search.service.ts — Pure business logic, testable
 export async function searchCatalog(query: string, category?: string) {
   // Database queries, API calls, etc.
@@ -76,8 +79,13 @@ export const searchCommand = Bot.command({
   aliases: ['find'],
   description: 'Search the catalog',
   help: 'Use /search &lt;query&gt;',
-  async handle(ctx) {
-    const results = await searchCatalog(ctx.args.query);
+  async handle(ctx, params) {
+    const query = z.string().min(2).safeParse(params[0]);
+    if (!query.success) {
+      await ctx.reply('Use /search <query>.');
+      return;
+    }
+    const results = await searchCatalog(query.data);
     await ctx.reply(formatResults(results)); // Separate formatting
   },
 });
@@ -193,11 +201,27 @@ await ctx.reply('Something went wrong. Try again or contact support.');
 ### ✅ Do: Validate All User Input
 
 ```typescript
-// Zod validation at the command level
-args: z.object({
-  userId: z.string().regex(/^[a-zA-Z0-9_-]+$/), // Sanitized
-  amount: z.number().int().positive().max(10000),
-})
+import { z } from 'zod';
+import { Bot } from '@igniter-js/bot';
+
+const chargeCommand = Bot.command({
+  name: 'charge',
+  aliases: [],
+  description: 'Charge a customer',
+  help: 'Use /charge <user_id> <amount>.',
+  async handle(ctx, params) {
+    // Command handlers receive raw string parameters. Parse them explicitly.
+    const parsed = z.object({
+      userId: z.string().regex(/^[a-zA-Z0-9_-]+$/),
+      amount: z.coerce.number().int().positive().max(10000),
+    }).safeParse({ userId: params[0], amount: params[1] });
+    if (!parsed.success) {
+      await ctx.reply('Use /charge <user_id> <amount>.');
+      return;
+    }
+    await charge(parsed.data.userId, parsed.data.amount);
+  },
+});
 ```
 
 ### ✅ Do: Use Environment Variables for Secrets
@@ -250,7 +274,6 @@ builder.addMiddleware(async (ctx, next) => {
     db.preferences.get(ctx.message.author.id),
     db.permissions.get(ctx.message.author.id),
   ]);
-  await next();
   return { user, preferences, permissions };
 });
 ```
@@ -289,7 +312,7 @@ test('start command returns welcome message', async () => {
   let replyText = '';
   ctx.reply = async (text) => { replyText = text; };
 
-  await startCommand.handle(ctx, {});
+  await startCommand.handle(ctx, []);
   expect(replyText).toContain('Welcome');
 });
 ```
@@ -310,7 +333,7 @@ const bot = IgniterBot.create()
 - [ ] **Environment variables** for all tokens and secrets
 - [ ] **Global error handler** via `onError()`
 - [ ] **Rate limiting** configured for your expected traffic
-- [ ] **Persistent session store** (Redis, Prisma) — not memory
+- [ ] **Persistent session store** — implement a shared store (for example, Redis or Prisma); the package only includes the in-memory store
 - [ ] **Webhook signature verification** enabled (Discord)
 - [ ] **Logging middleware** with `includeContent: false` (privacy)
 - [ ] **Bot initialized at module level** (not per-request)

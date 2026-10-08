@@ -1,74 +1,39 @@
 ---
 title: "@igniter-js/mail"
-description: "Send transactional email with validated templates, provider adapters, and optional queue scheduling."
+description: "Send typed transactional email with schema-validated React Email templates, interchangeable providers, and optional queue scheduling."
 ---
 
-`@igniter-js/mail` gives email templates typed inputs and runtime validation. Its adapters let you choose Resend, Postmark, SendGrid, or SMTP without changing the `mail.send()` call.
+`@igniter-js/mail` centralizes transactional email configuration and sending. Define a template with a Standard Schema-compatible validator and React renderer; the template key and input type are inferred by `mail.send()`.
 
-## Install
+The package includes adapters for Resend, Postmark, SendGrid, SMTP, and in-memory testing. Provider changes do not alter the `send()` call. Queue-based delivery is optional and integrates with the job queue adapter from [Core](/docs/core).
 
-Install the mail package, React Email components, Zod, and the provider you plan to use. This example uses Resend.
-
-<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
-  <Tab value="npm">
-    ```bash
-    npm install @igniter-js/mail @react-email/components react zod resend
-    ```
-  </Tab>
-  <Tab value="pnpm">
-    ```bash
-    pnpm add @igniter-js/mail @react-email/components react zod resend
-    ```
-  </Tab>
-  <Tab value="yarn">
-    ```bash
-    yarn add @igniter-js/mail @react-email/components react zod resend
-    ```
-  </Tab>
-  <Tab value="bun">
-    ```bash
-    bun add @igniter-js/mail @react-email/components react zod resend
-    ```
-  </Tab>
-</Tabs>
-
-Set `MAIL_FROM` and `RESEND_API_KEY` in the server environment before sending mail.
-
-## Create a template and send an email
-
-Define a schema and renderer in the template. The `data` passed to `send()` is inferred from that schema.
-
-```tsx title="src/mail.tsx"
-import { Html, Text } from '@react-email/components'
-import { IgniterMail } from '@igniter-js/mail'
-import { z } from 'zod'
-
-export const mail = IgniterMail.create()
-  .withFrom(process.env.MAIL_FROM!)
-  .withAdapter('resend', process.env.RESEND_API_KEY!)
-  .addTemplate('welcome', {
-    subject: 'Welcome, {{name}}',
-    schema: z.object({ name: z.string() }),
-    render: ({ name }) => (
-      <Html>
-        <Text>Welcome, {name}!</Text>
-      </Html>
-    ),
-  })
-  .build()
-
-await mail.send({
-  to: 'user@example.com',
-  template: 'welcome',
-  data: { name: 'Alex' },
-})
-```
-
-<Callout type="warn" title="Server-only package">
-  Keep mail configuration and sending code on the server. The package includes a browser guard to prevent accidental client-side use.
+<Callout type="warn" title="Server-only">
+  Keep mail configuration and send operations on the server. The package's browser entrypoint intentionally throws to prevent accidental client-side use.
 </Callout>
 
-## Learn more
+## Start here
 
-- [Mail package source and API](https://github.com/felipebarcelospro/igniter-js/tree/main/packages/mail)
-- [Background jobs](/docs/jobs/getting-started) for queue-backed email scheduling
+<Steps>
+  <Step>
+    ### Install the package and provider
+    See [installation](/docs/mail/installation) for common dependencies and provider-specific SDKs.
+  </Step>
+  <Step>
+    ### Create a template and send
+    Follow the [quick start](/docs/mail/quick-start) for a complete typed send flow.
+  </Step>
+  <Step>
+    ### Choose a provider and add delivery behavior
+    Learn about [providers and adapters](/docs/mail/providers) and [queue scheduling and hooks](/docs/mail/scheduling-hooks).
+  </Step>
+</Steps>
+
+## Main package entrypoints
+
+| Import | Use |
+| --- | --- |
+| `@igniter-js/mail` | Mail and template builders, errors, types, utilities, and adapter exports |
+| `@igniter-js/mail/adapters` | Provider adapters and `MockMailAdapter` |
+| `@igniter-js/mail/telemetry` | Mail telemetry event definitions and types |
+
+See the [API reference](/docs/mail/api-reference) for public symbols. For delayed or background work, see [Jobs](/docs/jobs).

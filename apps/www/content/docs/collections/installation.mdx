@@ -42,32 +42,32 @@ The adapter determines where your files are stored. Collections ships with five 
 
 | Adapter | Import Path | Best For |
 |---------|-------------|----------|
-| **NodeFsAdapter** | `@igniter-js/collections/adapters` | Node.js server-side apps, local development |
-| **BunFsAdapter** | `@igniter-js/collections/adapters` | Bun-native apps (uses `Bun.file`, `Bun.write`) |
-| **BunRedisAdapter** | `@igniter-js/collections/adapters` | Distributed systems, multi-process apps |
-| **BunS3Adapter** | `@igniter-js/collections/adapters` | Production deployments, object storage |
-| **MockAdapter** | `@igniter-js/collections/adapters` | Testing and CI environments |
+| **NodeFsAdapter** | `@igniter-js/collections/adapters/node` | Node.js server-side apps, local development |
+| **BunFsAdapter** | `@igniter-js/collections/adapters/bun` | Bun-native apps (uses `Bun.file`, `Bun.write`) |
+| **BunRedisAdapter** | `@igniter-js/collections/adapters/bun` | Distributed systems, multi-process apps |
+| **BunS3Adapter** | `@igniter-js/collections/adapters/bun` | Production deployments, object storage |
+| **IgniterCollectionMockAdapter** | `@igniter-js/collections/adapters/mock` | Testing and CI environments |
 
 ### Quick Adapter Setup
 
 <Tabs items={['Node.js', 'Bun FS', 'Redis', 'S3', 'Mock']}>
   <Tab value="Node.js">
     ```typescript
-    import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+    import { NodeFsAdapter } from '@igniter-js/collections/adapters/node';
 
     const adapter = new NodeFsAdapter();
     ```
   </Tab>
   <Tab value="Bun FS">
     ```typescript
-    import { BunFsAdapter } from '@igniter-js/collections/adapters';
+    import { BunFsAdapter } from '@igniter-js/collections/adapters/bun';
 
     const adapter = new BunFsAdapter();
     ```
   </Tab>
   <Tab value="Redis">
     ```typescript
-    import { BunRedisAdapter } from '@igniter-js/collections/adapters';
+    import { BunRedisAdapter } from '@igniter-js/collections/adapters/bun';
 
     const adapter = new BunRedisAdapter({
       url: process.env.REDIS_URL,
@@ -78,21 +78,19 @@ The adapter determines where your files are stored. Collections ships with five 
   </Tab>
   <Tab value="S3">
     ```typescript
-    import { BunS3Adapter } from '@igniter-js/collections/adapters';
+    import { BunS3Adapter } from '@igniter-js/collections/adapters/bun';
 
     const adapter = new BunS3Adapter({
       bucket: 'my-content-bucket',
       region: 'us-east-1',
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-      },
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
     });
     ```
   </Tab>
   <Tab value="Mock">
     ```typescript
-    import { IgniterCollectionMockAdapter } from '@igniter-js/collections/adapters';
+    import { IgniterCollectionMockAdapter } from '@igniter-js/collections/adapters/mock';
 
     const adapter = new IgniterCollectionMockAdapter();
     // All data stored in memory — perfect for tests
@@ -149,7 +147,7 @@ Collections requires TypeScript 5.6+ for full type inference. Ensure your `tscon
 }
 ```
 
-The `"bundler"` module resolution is required for the `@igniter-js/collections/adapters` sub-path imports to resolve correctly.
+The `"bundler"` module resolution is required for the adapter subpath imports to resolve correctly.
 
 ---
 
@@ -159,7 +157,7 @@ Create a minimal script to verify everything works:
 
 ```typescript title="verify.ts"
 import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters/node';
 import { z } from 'zod';
 
 const Test = IgniterCollectionModel.create('test')

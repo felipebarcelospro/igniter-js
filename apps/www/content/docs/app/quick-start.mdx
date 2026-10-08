@@ -1,0 +1,63 @@
+---
+title: "Quick start"
+description: "Connect a typed Igniter client to a React app, define a page, and render it with TanStack Router."
+---
+
+This example assumes you already have a typed client. See [Core's quick start](/docs/core/quick-start) for creating an API and [Caller](/docs/caller) for client setup.
+
+## Build an app and route
+
+<Steps>
+  <Step>
+    ### Configure the app
+    `withContext` may return a value synchronously or asynchronously. Its result is available in page loaders and trigger handlers.
+
+    ```tsx title="src/app.tsx"
+    import {
+      IgniterApp,
+      IgniterRouter,
+      IgniterRouterProvider,
+    } from '@igniter-js/app'
+    import { client } from './client'
+
+    const app = IgniterApp.create()
+      .withClient(client)
+      .withContext(() => ({ requestStartedAt: Date.now() }))
+      .build()
+    ```
+  </Step>
+  <Step>
+    ### Define a page and build the router
+    A page can set metadata, a loader, and its component. This minimal route only renders a component.
+
+    ```tsx title="src/app.tsx"
+    const homePage = app.page('/')
+      .withMetadata({ title: 'Home', description: 'Welcome.' })
+      .withComponent(() => <main><h1>Welcome</h1></main>)
+      .build()
+
+    const router = IgniterRouter.create(app)
+      .addRoute(homePage)
+      .build()
+
+    export function App() {
+      return <IgniterRouterProvider router={router} />
+    }
+    ```
+  </Step>
+</Steps>
+
+<Callout type="info">
+  `IgniterRouterProvider` wraps TanStack Router's `RouterProvider`. Use TanStack Router's route matching and rendering conventions alongside the Igniter page builder.
+</Callout>
+
+## Add data loading
+
+Use `.withLoader()` to run route work before rendering. The loader receives the app's client, shared context, request details, response helpers, and stores. The page's `.use()` method can bind a typed client procedure to the route; see [routing and loaders](/docs/app/routing).
+
+## Where to go next
+
+- [Routing and page loaders](/docs/app/routing)
+- [Shared state](/docs/app/state)
+- [UI triggers](/docs/app/triggers)
+- [Mutation-backed forms](/docs/app/forms)

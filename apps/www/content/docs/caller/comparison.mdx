@@ -9,21 +9,42 @@ The JavaScript ecosystem has many excellent HTTP clients. This page provides an 
 
 We believe in picking the right tool for the job. Caller excels at type-safe, schema-validated API consumption in TypeScript projects—but it's not always the best choice for every scenario.
 
+Caller derives response types from schemas registered with `.withSchemas()`. The Caller examples on this page that use `/users/:id` assume this schema-backed client; paths without a registered schema do not gain those inferred response types.
+
+```typescript title="Schema-backed Caller client"
+import { IgniterCaller, IgniterCallerSchema } from '@igniter-js/caller'
+import { z } from 'zod'
+
+const schemas = IgniterCallerSchema.create()
+  .path('/users/:id', (path) =>
+    path.get({
+      responses: {
+        200: z.object({ id: z.string(), name: z.string() }),
+      },
+    })
+  )
+  .build()
+
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withSchemas(schemas)
+  .build()
+```
+
 ---
 
 ## Quick Comparison
 
 | Feature | Caller | Axios | ky | ofetch | fetch |
 |---------|--------|-------|-----|--------|-------|
-| **Type Safety** | ✅ Full inference | ⚠️ Manual | ⚠️ Manual | ⚠️ Manual | ❌ None |
+| **Type Safety** | ✅ Schema-based inference | ⚠️ Manual | ⚠️ Manual | ⚠️ Generic type (default `any`) | ❌ None |
 | **Schema Validation** | ✅ Built-in | ❌ | ❌ | ❌ | ❌ |
 | **Fluent API** | ✅ | ❌ | ✅ | ⚠️ Partial | ❌ |
-| **Retries** | ✅ Built-in | ❌ Plugin | ✅ Built-in | ✅ Built-in | ❌ |
-| **Caching** | ✅ Built-in | ❌ | ❌ | ❌ | ❌ |
+| **Retries** | ✅ Available, opt-in | ❌ Plugin | ✅ Built-in | ✅ Built-in | ❌ |
+| **Caching** | ✅ Available, opt-in | ❌ | ❌ | ❌ | ❌ |
 | **React Hooks** | ✅ Built-in | ❌ | ❌ | ❌ | ❌ |
 | **Interceptors** | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **Bundle Size** | ~8kb | ~13kb | ~4kb | ~5kb | 0kb |
-| **Node.js Support** | ✅ | ✅ | ✅ | ✅ | ✅ 18+ |
+| **Node.js Support** | ✅ 22+ (Common dependency) | Package/runtime dependent | Package/runtime dependent | Package/runtime dependent | Built in (Node 18+) |
 | **Browser Support** | Modern | All | Modern | Modern | Modern |
 
 ---
@@ -132,13 +153,13 @@ We believe in picking the right tool for the job. Caller excels at type-safe, sc
       retry: 3,
       retryDelay: 1000,
     });
-    // Type: unknown
+    // Default response type: any. You can provide a generic, but it is not runtime-validated.
     ```
     
     ```typescript title="Caller"
     const { data } = await api.get('/users/:id')
       .params({ id: '123' })
-      .retry({ attempts: 3, baseDelay: 1000 })
+      .retry(3, { baseDelay: 1000 })
       .execute();
     // Type: User (from schema)
     ```
@@ -147,7 +168,7 @@ We believe in picking the right tool for the job. Caller excels at type-safe, sc
   </Accordion>
   
   <Accordion title="Caller vs Native fetch">
-    **fetch** is the standard API built into modern browsers and Node.js 18+. No dependencies needed.
+    **fetch** is the standard API built into modern browsers and Node.js 18+. Caller itself requires Node.js 22 or newer through its `@igniter-js/common` dependency.
     
     ### When to choose fetch
     - You have very simple needs (one or two API calls)
@@ -220,7 +241,10 @@ console.log(user.data.email); // undefined at runtime
 With Caller, your schema is the source of truth:
 
 ```typescript title="Caller Approach"
-// Schema is the source of truth
+import { IgniterCaller, IgniterCallerSchema } from '@igniter-js/caller';
+import { z } from 'zod';
+
+// Define the contract and attach it to the client.
 const schemas = IgniterCallerSchema.create()
   .path('/users/:id', (path) =>
     path.get({
@@ -235,7 +259,12 @@ const schemas = IgniterCallerSchema.create()
   )
   .build();
 
-const { data } = await api.get('/users/:id').execute();
+const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withSchemas(schemas)
+  .build();
+
+const { data } = await api.get('/users/:id').params({ id: '123' }).execute();
 console.log(data.emailAddress); // TypeScript knows the correct field
 ```
 
@@ -244,10 +273,21 @@ console.log(data.emailAddress); // TypeScript knows the correct field
 Caller provides first-class React hooks, while other libraries require external wrappers like TanStack Query:
 
 ```tsx title="Caller React Hooks"
-import { useCaller } from '@igniter-js/caller/client';
+import { IgniterCaller } from '@igniter-js/caller';
+import { IgniterCallerProvider, useIgniterCaller } from '@igniter-js/caller/client';
+import type { ReactNode } from 'react';
+
+const caller = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withSchemas(schemas)
+  .build();
+
+function AppRoot({ children }: { children: ReactNode }) {
+  return <IgniterCallerProvider caller={caller}>{children}</IgniterCallerProvider>;
+}
 
 function UserProfile({ id }: { id: string }) {
-  const api = useCaller('main');
+  const api = useIgniterCaller<typeof caller>();
   
   const { data, isLoading } = api.get('/users/:id')
     .params({ id })
@@ -273,18 +313,18 @@ function UserProfile({ id }: { id: string }) {
 
 ---
 
-## Migration Guides
+## Keep exploring Caller
 
 <Cards>
   <Card
-    title="From Axios"
-    description="Step-by-step guide to migrate from Axios to Caller"
-    href="/docs/caller/migration/axios"
+    title="Quick Start"
+    description="Configure a caller and make your first request."
+    href="/docs/caller/quick-start"
   />
   <Card
-    title="From fetch"
-    description="How to upgrade from native fetch to Caller"
-    href="/docs/caller/migration/fetch"
+    title="React Integration"
+    description="Use the React provider, typed session, and request hooks."
+    href="/docs/caller/react"
   />
 </Cards>
 

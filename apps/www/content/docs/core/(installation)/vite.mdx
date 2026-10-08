@@ -40,31 +40,33 @@ For a complete full-stack setup, we recommend using **TanStack Start** (Vite-pow
   </Tab>
 </Tabs>
 
-Your app runs at `http://localhost:3000`, API at `http://localhost:3000/api/v1`, and docs at `http://localhost:3000/api/v1/docs` 🚀
+Your app runs at `http://localhost:3000`, and the API is at `http://localhost:3000/api/v1`.
+
+Core does not mount an API playground automatically. Configure the separate `@igniter-js/studio` package when you need a UI; see [Core adapters and integrations](/docs/core/adapters).
 
 ### Direct Command
 
-If you prefer to skip the interactive prompts, you can specify your project name and framework directly:
+The CLI asks for a project name and starter during setup. This command starts that interactive flow:
 
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="direct-command">
   <Tab value="npm">
     ```bash
-    npx @igniter-js/cli@latest init my-vite-app --framework tanstack-start
+    npx @igniter-js/cli@latest init my-vite-app
     ```
   </Tab>
   <Tab value="pnpm">
     ```bash
-    pnpm dlx @igniter-js/cli@latest init my-vite-app --framework tanstack-start
+    pnpm dlx @igniter-js/cli@latest init my-vite-app
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn dlx @igniter-js/cli@latest init my-vite-app --framework tanstack-start
+    yarn dlx @igniter-js/cli@latest init my-vite-app
     ```
   </Tab>
   <Tab value="bun">
     ```bash
-    bunx @igniter-js/cli@latest init my-vite-app --framework tanstack-start
+    bunx @igniter-js/cli@latest init my-vite-app
     ```
   </Tab>
 </Tabs>
@@ -179,20 +181,10 @@ Create the main Igniter instance. Create `src/igniter.ts`:
 import { Igniter } from '@igniter-js/core'
 import { createIgniterAppContext } from './igniter.context'
 
-export const igniter = Igniter
-  .context(createIgniterAppContext())
-  .config({
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001',
-    basePATH: import.meta.env.VITE_API_BASE_PATH || '/api/v1',
-  })
-  .docs({
-    info: {
-      title: 'My Vite App API',
-      version: '1.0.0',
-      description: 'Full-stack app with Vite and Igniter.js',
-    }
-  })
-  .create()
+export const igniter = Igniter.create()
+  .withContext(async () => createIgniterAppContext())
+  .withConfig({ basePATH: '/api/v1' })
+  .build();
       ```
 
       Note: Vite uses `import.meta.env` for environment variables, not `process.env`.
@@ -302,11 +294,12 @@ Create a type-safe client. Create `src/igniter.client.ts`:
 ```typescript title="src/igniter.client.ts"
 import { createIgniterClient } from '@igniter-js/core/client'
 import type { AppRouterType } from './igniter.router'
+import { AppRouterSchema } from './igniter.schema'
 
 export const api = createIgniterClient<AppRouterType>({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001',
   basePATH: import.meta.env.VITE_API_BASE_PATH || '/api/v1',
-  router: () => import('./igniter.schema').then(m => m.AppRouterSchema),
+  router: () => AppRouterSchema as unknown as AppRouterType,
 })
 
 export type ApiClient = typeof api
@@ -333,140 +326,6 @@ export function Example() {
 
 ---
 
-## Generating Schema and Docs
-
-Since TanStack Start is a full-stack framework, you'll need to generate the client schema whenever you modify your API.
-
-### When to Generate Schema
-
-<Callout type="error">
-  **Critical:** You MUST run schema generation BEFORE using the client in your frontend. The client depends on the generated schema to function correctly.
-</Callout>
-
-<Callout type="info">
-  Run this command whenever you modify your API structure (add/remove/modify controllers or actions) OR before using the client for the first time.
-</Callout>
-
-### Generate Schema
-
-Run this command whenever you make changes to your API structure:
-
-<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-schema">
-  <Tab value="npm">
-    ```bash
-    npx @igniter-js/cli@latest generate schema
-    ```
-  </Tab>
-  <Tab value="pnpm">
-    ```bash
-    pnpm dlx @igniter-js/cli@latest generate schema
-    ```
-  </Tab>
-  <Tab value="yarn">
-    ```bash
-    yarn dlx @igniter-js/cli@latest generate schema
-    ```
-  </Tab>
-  <Tab value="bun">
-    ```bash
-    bunx @igniter-js/cli@latest generate schema
-    ```
-  </Tab>
-</Tabs>
-
-This creates:
-- `src/igniter.schema.ts` - Type-safe schema for client-side usage
-- `src/docs/openapi.json` - OpenAPI 3.0 specification
-
-### Generate OpenAPI Documentation
-
-To generate or update the OpenAPI specification and interactive documentation:
-
-<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-docs">
-  <Tab value="npm">
-    ```bash
-    npx @igniter-js/cli@latest generate docs
-    ```
-  </Tab>
-  <Tab value="pnpm">
-    ```bash
-    pnpm dlx @igniter-js/cli@latest generate docs
-    ```
-  </Tab>
-  <Tab value="yarn">
-    ```bash
-    yarn dlx @igniter-js/cli@latest generate docs
-    ```
-  </Tab>
-  <Tab value="bun">
-    ```bash
-    bunx @igniter-js/cli@latest generate docs
-    ```
-  </Tab>
-</Tabs>
-
----
-
-## Environment Variables
-
-Create `.env` for Vite environment variables:
-
-```bash title=".env"
-VITE_API_URL=http://localhost:3001
-VITE_API_BASE_PATH=/api/v1
-```
-
-Access in code using `import.meta.env.VITE_*`:
-
-```typescript
-const apiUrl = import.meta.env.VITE_API_URL
-```
-
----
-
-## Production Build
-
-### Build Both Frontend and API
-
-Update `package.json`:
-
-```json
-{
-  "scripts": {
-    "build": "tsc && vite build",
-    "build:api": "tsc --project tsconfig.server.json",
-    "preview": "vite preview"
-  }
-}
-```
-
-Create `tsconfig.server.json` for the API:
-
-```json title="tsconfig.server.json"
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "outDir": "./dist/server",
-    "module": "commonjs",
-    "target": "ES2020"
-  },
-  "include": ["server/**/*", "src/igniter*.ts", "src/features/**/*"]
-}
-```
-
----
-
-## Alternative: TanStack Start
-
-For the best full-stack Vite experience, use **TanStack Start** which includes:
-- Built-in API routes (no separate server needed)
-- File-based routing
-- SSR and streaming
-- Type-safe data loading
-
-See the [TanStack Start guide](/docs/installation/tanstack-start) for details.
-
----
 
 ## Project Structure
 
@@ -501,13 +360,13 @@ See the [TanStack Start guide](/docs/installation/tanstack-start) for details.
 ## Next Steps
 
 <Cards>
-  <Card title="TanStack Start" href="/docs/installation/tanstack-start">
+  <Card title="TanStack Start" href="/docs/core/vite">
     Full-stack framework with built-in API routes
   </Card>
-  <Card title="Client" href="/docs/client">
+  <Card title="Client" href="/docs/core/client">
     Type-safe client with React hooks
   </Card>
-  <Card title="Actions" href="/docs/actions">
+  <Card title="Actions" href="/docs/core/actions">
     Create queries and mutations
   </Card>
 </Cards>

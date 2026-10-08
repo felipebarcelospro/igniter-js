@@ -1,20 +1,22 @@
 {
-  "title": "MCP Server",
+  "title": "MCP Server Adapter",
   "root": true,
   "pages": [
+    "---Get Started---",
     "index",
     "getting-started",
-    "---APIs---",
+    "---Core Concepts---",
     "builder-pattern",
     "function-api",
-    "---Features---",
+    "---Guides---",
     "custom-tools",
     "prompts-resources",
     "oauth",
     "events",
     "---Advanced---",
     "advanced",
-    "best-practices"
+    "best-practices",
+    "---API Reference---",
+    "api-reference"
   ]
 }
-

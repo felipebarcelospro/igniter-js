@@ -7,20 +7,25 @@ description: Diagnose common storage issues with adapters, URLs, policies, and p
 
 <Steps>
   <Step>
-    ### Configuration - Is `IGNITER_STORAGE_URL` set and reachable? URLs are
-    used to strip prefixes—mismatches cause `IGNITER_STORAGE_INVALID_PATH_HOST`.
-    - Did you pick an adapter? Set `.withAdapter(...)` or
-    `IGNITER_STORAGE_ADAPTER`.
+    ### Check configuration
+
+    Set `IGNITER_STORAGE_URL` or call `.withUrl()`. The base URL is used to
+    build public links and resolve full URLs back to keys. Also select an
+    adapter with `.withAdapter(...)` or `IGNITER_STORAGE_ADAPTER`.
   </Step>
   <Step>
-    ### Permissions - S3: bucket exists, policy allows `s3:GetObject` and write
-    access for your credentials. - GCS: service account has storage object
-    admin/read roles for the bucket.
+    ### Check provider permissions
+
+    For S3, confirm bucket access and the IAM permissions required for object
+    writes and public reads if your objects are public. For GCS, confirm the
+    service account can access the bucket and its objects.
   </Step>
   <Step>
-    ### Policies - Size/type violations throw
-    `IGNITER_STORAGE_UPLOAD_POLICY_VIOLATION`. Confirm `contentType` inference
-    or set it explicitly for streams.
+    ### Check upload policies
+
+    Size or type violations throw `IGNITER_STORAGE_UPLOAD_POLICY_VIOLATION`.
+    Confirm MIME inference or pass `contentType` explicitly for buffer and
+    base64 uploads.
   </Step>
 </Steps>
 
@@ -35,4 +40,4 @@ description: Diagnose common storage issues with adapters, URLs, policies, and p
 
 Enable hooks and telemetry to capture failing paths and durations. Error events include `storage.error.code` and `storage.error.message`, making dashboards actionable.
 
-For the full list of codes, see [Error Codes](</docs/storage/(reference)/error-codes>). If you need to change folder structures, review [Migrations & Cleanup](</docs/storage/(guides)/migrations-and-cleanup>).
+For the full list of codes, see [Error Codes](</docs/storage/error-codes>). If you need to change folder structures, review [Migrations & Cleanup](</docs/storage/migrations-and-cleanup>).

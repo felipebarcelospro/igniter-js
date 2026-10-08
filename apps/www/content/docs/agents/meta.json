@@ -1,19 +1,25 @@
 {
   "title": "Agents",
+  "root": true,
   "pages": [
+    "---Get Started---",
     "index",
     "installation",
     "quick-start",
+    "---Core Concepts---",
     "building-agents",
     "tools-toolsets",
     "prompts",
     "memory",
+    "---Guides---",
     "mcp-integration",
     "multi-agent",
     "hooks-telemetry",
     "real-world",
+    "---Advanced---",
     "best-practices",
     "troubleshooting",
+    "---API Reference---",
     "api-reference"
   ]
 }

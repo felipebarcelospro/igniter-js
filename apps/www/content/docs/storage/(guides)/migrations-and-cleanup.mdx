@@ -26,9 +26,19 @@ Combine `list` and `delete` for retention policies:
 ```typescript
 const temp = storage.scope("public").path("temp");
 const files = await temp.list();
-await Promise.all(files.map((f) => temp.delete(f.path)));
+// `list()` reports full resolved keys. This example assumes `storage` has no
+// global `.withPath()` prefix; remove the current manager's known base path
+// before calling `delete()`, which resolves paths relative to `temp`.
+const managerPrefix = "public/temp/";
+const relativePaths = files.map((file) => {
+  if (!file.path.startsWith(managerPrefix)) {
+    throw new Error(`Unexpected storage key: ${file.path}`);
+  }
+  return file.path.slice(managerPrefix.length);
+});
+await Promise.all(relativePaths.map((path) => temp.delete(path)));
 ```
 
 Run these jobs with observability: hooks emit success/error events per deletion, and telemetry attributes (`storage.path`, `storage.duration_ms`, `storage.error.code`) keep dashboards honest.
 
-For more on operations, see [File Operations](</docs/storage/(core-concepts)/file-operations>) and [Hooks & Telemetry](</docs/storage/(core-concepts)/hooks-and-telemetry>).
+For more on operations, see [File Operations](</docs/storage/file-operations>) and [Hooks & Telemetry](</docs/storage/hooks-and-telemetry>).

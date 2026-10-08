@@ -1,0 +1,53 @@
+---
+title: Plugins
+description: Extend an Igniter instance with typed plugins that add context, actions, and controllers.
+---
+
+Core plugins are registered on the immutable builder with `.addPlugin(key, plugin)`. The key becomes the plugin's name in the inferred application type. Use the current `.addPlugin()` method; `.plugins()` is deprecated.
+
+## Register a plugin
+
+The public `@igniter-js/core/plugins` barrel currently exports `ensure` and `audit`. For example, register the audit plugin when building the router:
+
+```ts
+import { Igniter } from '@igniter-js/core'
+import { audit } from '@igniter-js/core/plugins'
+
+export const igniter = Igniter.create()
+  .withContext<{ requestId: string }>()
+  .addPlugin('audit', audit)
+  .build()
+```
+
+The plugin system also supports custom plugin definitions through the plugin types and factories exported from `@igniter-js/core`. A plugin can declare context, actions, controllers, events, and lifecycle behavior; the exact surface depends on its definition.
+
+## Use a plugin from a handler
+
+When a plugin exposes actions, access them through the plugin context in an action handler. The following shows the typed shape; the action name must exist on the plugin you registered.
+
+```ts
+export const users = igniter.controller({
+  path: '/users',
+  actions: {
+    create: igniter.mutation({
+      handler: async ({ context }) => {
+        await context.$plugins.audit.actions.create({ action: 'user:create' })
+        return context.response.created({ ok: true })
+      },
+    }),
+  },
+})
+```
+
+<Callout type="warn" title="Check the plugin contract">
+  The built-in `audit` plugin is an example implementation. Its storage-related actions log mock/demo information; it is not a durable audit database. Supply a plugin with the persistence and retention guarantees your application requires.
+</Callout>
+
+## Built-in plugins
+
+| Export | Source | Notes |
+|---|---|---|
+| `ensure` | `@igniter-js/core/plugins` | Assertion/validation helpers exposed through the plugin context. |
+| `audit` | `@igniter-js/core/plugins` | Example audit actions and event emission; inspect its implementation before using it for production auditing. |
+
+For plugin registration and context typing, see [Builder](/docs/core/builder) and [Context](/docs/core/context).

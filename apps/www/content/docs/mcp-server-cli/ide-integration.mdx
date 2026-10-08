@@ -1,0 +1,71 @@
+---
+title: "IDE Integration and Troubleshooting"
+description: "Connect the stdio MCP Server in VS Code or Claude Code and diagnose common startup and tool-call issues."
+---
+
+## VS Code
+
+Create `.vscode/mcp.json` in the project root. VS Code uses a top-level `servers` object for this file format:
+
+```json
+{
+  "servers": {
+    "igniter": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@igniter-js/mcp-server"],
+      "env": {
+        "GITHUB_TOKEN": "${input:github-token}"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "github-token",
+      "description": "GitHub token for Igniter MCP tools",
+      "password": true
+    }
+  ]
+}
+```
+
+The IDE launches the command in the workspace by default. Remove the `env` and `inputs` entries if you do not use GitHub tools. Open the Command Palette and run **MCP: List Servers** to inspect the connection and server output.
+
+See [VS Code MCP configuration](https://code.visualstudio.com/docs/agents/reference/mcp-configuration) for supported fields and sandbox options.
+
+## Claude Code
+
+Add a project-level `.mcp.json` with the portable `mcpServers` format:
+
+```json
+{
+  "mcpServers": {
+    "igniter": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@igniter-js/mcp-server"]
+    }
+  }
+}
+```
+
+Run `claude mcp list` to inspect configured servers and `/mcp` in a Claude Code session to view connection status. Review and approve project-scoped server configuration when prompted.
+
+See [Claude Code MCP configuration](https://code.claude.com/docs/en/mcp) for client-specific settings.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Server does not start | Confirm Node.js and the package manager's `npx` command are available; inspect the IDE's MCP server output. |
+| Tools do not appear | Reconnect the server and check that the relevant `ENABLE_*_TOOLS` variable is not `false`. |
+| Project files or memory appear in the wrong place | Set the MCP server working directory to the project root; memory resolves upward from `process.cwd()`. |
+| GitHub calls fail or are rate limited | Set `GITHUB_TOKEN` in the server process environment. |
+| Delegation validation fails | Install the selected `gemini`, `claude`, or `codex` CLI and configure its credentials. Use `check_agent_environment` for a report. |
+| A tool call fails despite a valid-looking input | Compare field names with the registered schemas in [Toolsets](/docs/mcp-server-cli/toolsets); some handlers have schema/type drift. |
+| MCP connection breaks after a tool runs | `analyze_file` and `analyze_feature` reach stdout diagnostics in `utils/ast-parsing.ts`; `delegate_to_agent` logs directly, and `DEBUG=true` adds logs in its command runner. Avoid these paths until output is redirected. |
+
+<Callout type="info">
+  MCP servers must reserve stdout for protocol traffic. This package currently has exceptions in the affected tool paths documented above.
+</Callout>

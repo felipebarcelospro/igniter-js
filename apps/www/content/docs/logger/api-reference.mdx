@@ -27,6 +27,7 @@ import type {
   IgniterLoggerConfig,
   IgniterLoggerBuilderState,
   IgniterTransportConfig,
+  IgniterTransportTarget,
   ConsoleTransportOptions,
   FileTransportOptions,
   HttpTransportOptions,
@@ -40,6 +41,13 @@ import {
   type IgniterLoggerErrorCode,
 } from '@igniter-js/logger';
 ```
+
+The root entry exports the builder and manager classes, the `IgniterLogLevel` runtime enum, the error class and error-code object, and the listed type declarations. `IgniterLogger` is a runtime alias of `IgniterLoggerBuilder`; `IgniterTransportTarget` and the remaining interfaces/type aliases exist only at type level. `IIgniterLoggerManager` extends the `IgniterLogger` contract from `@igniter-js/common`.
+
+| Export kind | Root exports |
+|-------------|--------------|
+| Runtime values | `IgniterLogger`, `IgniterLoggerBuilder`, `IgniterLoggerManager`, `IgniterLogLevel`, `IgniterLoggerError`, `IGNITER_LOGGER_ERROR_CODES` |
+| Type-only | `IIgniterLoggerManager`, `IgniterLoggerConfig`, `IgniterLoggerBuilderState`, `IgniterTransportConfig`, `IgniterTransportTarget`, `ConsoleTransportOptions`, `FileTransportOptions`, `HttpTransportOptions`, `IgniterFileTransportRotationOptions`, `IgniterLoggerErrorCode` |
 
 ---
 
@@ -181,7 +189,7 @@ See [Transports](/docs/logger/transports) for all transport options and external
 
 ### `.defineScopes<T>()`
 
-Defines the typed scope shape for child loggers. Changes the generic parameter on the builder.
+Sets the builder's `TScopes` generic parameter. The manager's public `child()` method currently returns `IIgniterLoggerManager` with a non-generic context parameter, so this method does not enforce a scope shape on child calls.
 
 ```typescript
 defineScopes<T extends Record<string, unknown>>(): IgniterLoggerBuilder<T>
@@ -192,7 +200,7 @@ const logger = IgniterLogger.create()
   .defineScopes<{ tenantId: string }>()
   .build();
 
-// TypeScript enforces tenantId on child context
+// `child()` accepts the manager interface's optional context type.
 const child = logger.child('tenant', { tenantId: 't-1' });
 ```
 
@@ -337,7 +345,7 @@ log(
 
 #### `.group(name?)`
 
-Start a log group. Increases indentation level for console output.
+Start a log group. Increases the indentation applied to subsequent message text before it is sent to configured transports.
 
 ```typescript
 group(name?: string): void
@@ -403,7 +411,7 @@ logger.setLevel(IgniterLogLevel.Debug);
 
 #### `.setAppName(appName)`
 
-Change the application name at runtime. Pass `undefined` to clear.
+Update the manager's stored application name. The existing Pino logger's base bindings are not changed; configure `.withAppName()` before `.build()` to affect emitted entries.
 
 ```typescript
 setAppName(appName: string | undefined): void
@@ -411,7 +419,7 @@ setAppName(appName: string | undefined): void
 
 #### `.setComponent(componentName)`
 
-Change the component name at runtime. Pass `undefined` to clear.
+Update the manager's stored component. The existing Pino logger's base bindings are not changed; configure `.withComponent()` before `.build()` to affect emitted entries.
 
 ```typescript
 setComponent(componentName: string | undefined): void
@@ -419,13 +427,15 @@ setComponent(componentName: string | undefined): void
 
 #### `.flush()`
 
-Flush any buffered log entries. Critical before process exit for file and HTTP transports.
+Flush Pino's buffered output. HTTP batches are held in memory; a failed final request can leave entries unsent.
 
 ```typescript
 flush(): Promise<void>
 ```
 
-**Returns:** A Promise that resolves when all buffered logs are written.
+**Returns:** A Promise that resolves when Pino's flush callback completes, or rejects if Pino reports a flush error.
+
+This method does not invoke the HTTP sender's flush or an external transport's flush hook.
 
 ---
 
@@ -462,7 +472,7 @@ enum IgniterLogLevel {
 Configuration descriptor for a transport.
 
 ```typescript
-interface IgniterTransportConfig<TOptions = IgniterTransportOptions> {
+interface IgniterTransportConfig<TOptions = Record<string, unknown>> {
   target: IgniterTransportTarget;
   options?: TOptions;
 }
@@ -478,7 +488,7 @@ interface IgniterTransportConfig<TOptions = IgniterTransportOptions> {
 ```typescript
 interface ConsoleTransportOptions {
   colorize?: boolean;       // default: true
-  pretty?: boolean;          // default: true
+  pretty?: boolean;          // forwarded option; console target remains pino-pretty
   destination?: "stdout" | "stderr" | string;  // default: "stdout"
   translateTime?: string | boolean;  // default: "SYS:standard"
 }
@@ -490,17 +500,19 @@ interface ConsoleTransportOptions {
 interface FileTransportOptions {
   path: string;              // required — destination file path
   mkdir?: boolean;           // default: true — create parent dirs
-  rotation?: boolean | IgniterFileTransportRotationOptions;  // default: false
+  rotation?: boolean | IgniterFileTransportRotationOptions;  // forwarded to pino/file; not implemented here
 }
 ```
+
+The public type also exports `IgniterFileTransportRotationOptions`, but the built-in resolver forwards `rotation` to Pino's `pino/file` target without implementing rotation. Use a dedicated external Pino transport when rotation is required.
 
 ### `IgniterFileTransportRotationOptions`
 
 ```typescript
 interface IgniterFileTransportRotationOptions {
-  maxSizeBytes?: number;     // max file size before rotation
-  maxFiles?: number;         // max rotated files to keep
-  intervalMs?: number;       // rotation interval in ms
+  maxSizeBytes?: number;     // declared option; built-in resolver does not implement rotation
+  maxFiles?: number;         // declared option; built-in resolver does not implement rotation
+  intervalMs?: number;       // declared option; built-in resolver does not implement rotation
 }
 ```
 
@@ -587,6 +599,8 @@ const IGNITER_LOGGER_ERROR_CODES = {
   FLUSH_FAILED: 'FLUSH_FAILED',
 } as const;
 ```
+
+The error class and factory helpers are exported for consumers, but normal manager operations do not use these factories to raise logger errors. Check the specific builder or manager behavior instead of expecting these codes automatically.
 
 | Code | Meaning |
 |------|---------|

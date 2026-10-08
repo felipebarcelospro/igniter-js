@@ -1,11 +1,15 @@
 ---
 title: Webhooks
-description: Handle incoming webhooks with schema validation, signature verification, and typed payloads. Define webhook pipelines inside connector definitions.
+description: Handle incoming webhooks with schema validation and typed payloads. Learn the current request and signature-verification limits.
 ---
 
 ## Webhooks
 
-Connectors can receive and process **incoming webhooks** from external services. Define payload schemas, verification logic, and handler functions right inside your connector definitions — with full type safety.
+Connectors can receive and process **incoming webhooks** from external services. Define a payload schema, an optional verification callback, and a handler inside your connector definition.
+
+<Callout type="warn">
+  The current manager parses requests with `request.json()` and does not pass the original body bytes to `verify` (`rawBody` is `undefined`). Providers such as Stripe and GitHub require the exact raw body for signature checks, so their signature verification cannot be implemented safely through the current `connectors.handle('webhook', request)` path. Do not treat schema validation as signature verification.
+</Callout>
 
 ---
 
@@ -42,12 +46,6 @@ const stripe = IgniterConnector.create()
           break;
       }
     },
-    verify: async (request, config) => {
-      // Verify Stripe signature
-      const sig = request.headers["stripe-signature"] as string;
-      // Use stripe library to verify
-      return verifyStripeWebhook(request.rawBody, sig, config.webhookSecret);
-    },
   })
   .addAction("createPayment", {
     input: z.object({
@@ -70,7 +68,7 @@ const stripe = IgniterConnector.create()
 | `schema` | **Yes** | Zod schema for validating the webhook payload |
 | `handler` | **Yes** | Function called when a valid webhook is received |
 | `description` | No | Human-readable description |
-| `verify` | No | Signature verification function (return `true`/`false`) |
+| `verify` | No | Verification callback returning `true` or `false`. The manager currently passes parsed JSON and headers, but not the raw body bytes required by common HMAC signature schemes. |
 
 ---
 
@@ -85,7 +83,7 @@ handler: async ({
   context,   // From onContext hook (if defined)
   scope,     // Scope type recovered from webhook secret
   identity,  // Scope identifier recovered from webhook secret
-  headers,   // Raw request headers
+  headers,   // Request headers converted to a string record
 }) => {
   // payload.type — typed from schema
   // config.webhookSecret — available for API calls
@@ -142,51 +140,19 @@ The manager:
 
 ## Webhook Verification
 
-The `verify` function authenticates the webhook. The request object contains:
+The `verify` callback receives the following request shape:
 
 ```typescript
 interface IgniterConnectorWebhookRequest {
-  headers: unknown;   // Request headers (Headers object or plain object)
+  headers: unknown;   // Request headers from the Fetch Request
   body: unknown;      // Parsed JSON body
-  rawBody?: string;   // Raw body string (for signature verification)
+  rawBody?: string;   // Declared by the type but not populated by the current manager
   method?: string;    // HTTP method
   url?: string;       // Request URL
 }
 ```
 
-### GitHub Webhook Verification
-
-```typescript
-verify: async (request, config) => {
-  const crypto = await import("crypto");
-  const sig = (request.headers as any)["x-hub-signature-256"] as string;
-  const hmac = crypto.createHmac("sha256", config.webhookSecret);
-  const digest = `sha256=${hmac.update(request.rawBody!).digest("hex")}`;
-  return crypto.timingSafeEqual(
-    Buffer.from(sig),
-    Buffer.from(digest),
-  );
-},
-```
-
-### Stripe Webhook Verification
-
-```typescript
-verify: async (request, config) => {
-  const stripe = new Stripe(config.apiKey);
-  const sig = (request.headers as any)["stripe-signature"] as string;
-  try {
-    stripe.webhooks.constructEvent(
-      request.rawBody!,
-      sig,
-      config.webhookSecret,
-    );
-    return true;
-  } catch {
-    return false;
-  }
-},
-```
+The callback can validate information available in the parsed body or headers, but this is not a substitute for raw-body signature verification. For providers that require raw bytes, verify the signature in framework middleware before calling the connector manager, or wait until the manager forwards the raw body.
 
 ---
 
@@ -255,16 +221,6 @@ const stripeConnector = IgniterConnector.create()
           break;
       }
     },
-    verify: async (request, config) => {
-      const sig = (request.headers as any)["stripe-signature"];
-      try {
-        const stripe = require("stripe")(config.apiKey);
-        stripe.webhooks.constructEvent(
-          request.rawBody, sig, config.webhookSecret
-        );
-        return true;
-      } catch { return false; }
-    },
   })
   .addAction("createCheckout", {
     input: z.object({ priceId: z.string() }),
@@ -289,7 +245,7 @@ export async function POST(
 }
 ```
 
-**✅ That's it.** The manager handles everything: routing, verification, scope recovery, payload validation, and telemetry.
+The manager handles routing, scope recovery, payload validation, and telemetry. Add provider signature verification in middleware that can read the raw request body; the current manager does not expose those bytes to the connector callback.
 
 ---
 

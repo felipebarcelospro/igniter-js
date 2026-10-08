@@ -1,0 +1,54 @@
+---
+title: "Providers and adapters"
+description: "Select a built-in email provider or implement the normalized Igniter mail adapter contract."
+---
+
+`withAdapter()` accepts a provider name and secret for built-in adapters or an `IgniterMailAdapter` instance. All adapters receive a normalized message containing recipient, subject, HTML, and plain text.
+
+## Select a built-in provider
+
+```ts
+const mail = IgniterMail.create()
+  .withFrom(process.env.MAIL_FROM!)
+  .withAdapter('postmark', process.env.POSTMARK_SERVER_TOKEN!)
+  .build()
+```
+
+The supported provider keys are `resend`, `postmark`, `sendgrid`, and `smtp`. The Resend and SMTP adapters use their SDKs; Postmark and SendGrid use `fetch`. Install provider-specific dependencies as described in [installation](/docs/mail/installation).
+
+## Implement an adapter
+
+Implement `send()` and pass the instance to `.withAdapter()` when the built-ins do not fit your delivery setup:
+
+```ts
+import type { IgniterMailAdapter } from '@igniter-js/mail'
+
+const adapter: IgniterMailAdapter = {
+  async send({ to, subject, html, text }) {
+    // Deliver the normalized message using your provider or transport.
+  },
+}
+
+const mail = IgniterMail.create()
+  .withFrom('no-reply@example.com')
+  .withAdapter(adapter)
+  .build()
+```
+
+The adapter contract includes an optional `scheduledAt` field for a provider-level scheduled send. The built-in Resend adapter forwards that field to Resend; the other built-in adapters currently ignore it. The package's `mail.schedule(params, date)` method does not pass this field to the adapter: it enqueues the original send parameters through the configured Igniter job queue, which later calls `mail.send()`. Configure `.withQueue()` before using `mail.schedule()`; without a queue, scheduling throws an error. See [scheduling and hooks](/docs/mail/scheduling-hooks).
+
+## Test with the mock adapter
+
+`MockMailAdapter.create()` records sent messages and calls in memory and exposes a `clear()` helper. Import it from `@igniter-js/mail/adapters`:
+
+```ts
+import { MockMailAdapter } from '@igniter-js/mail/adapters'
+
+const mock = MockMailAdapter.create()
+const mail = IgniterMail.create()
+  .withFrom('test@example.com')
+  .withAdapter(mock)
+  .build()
+```
+
+Register templates before sending as shown in the [quick start](/docs/mail/quick-start). The full adapter list is in the [API reference](/docs/mail/api-reference).

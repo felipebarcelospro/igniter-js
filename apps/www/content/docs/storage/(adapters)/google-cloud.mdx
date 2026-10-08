@@ -5,7 +5,7 @@ description: Connect Igniter Storage to Google Cloud Storage buckets with public
 
 ## Credentials and Environment
 
-Use a service account JSON (file path or base64) plus bucket details. Set env vars or pass credentials directly.
+Provide service account credentials as raw JSON or base64-encoded JSON, plus bucket details. Set environment variables or pass credentials directly. If credentials are omitted, the Google Cloud client uses its normal default credential resolution.
 
 <TypeTable
   type={{
@@ -13,16 +13,6 @@ Use a service account JSON (file path or base64) plus bucket details. Set env va
       type: "string",
       description: "Bucket name",
       required: true,
-    },
-    IGNITER_STORAGE_GOOGLE_REGION: {
-      type: "string",
-      description: "Bucket region",
-      required: false,
-    },
-    IGNITER_STORAGE_GOOGLE_ENDPOINT: {
-      type: "string",
-      description: "Custom endpoint or emulator",
-      required: false,
     },
     IGNITER_STORAGE_GOOGLE_CREDENTIALS_JSON: {
       type: "string",
@@ -45,8 +35,6 @@ import { IgniterStorage } from "@igniter-js/storage";
 export const storage = IgniterStorage.create()
   .withAdapter("google", {
     bucket: process.env.IGNITER_STORAGE_GOOGLE_BUCKET!,
-    region: process.env.IGNITER_STORAGE_GOOGLE_REGION,
-    endpoint: process.env.IGNITER_STORAGE_GOOGLE_ENDPOINT,
     credentialsJson: process.env.IGNITER_STORAGE_GOOGLE_CREDENTIALS_JSON,
     credentialsJsonBase64:
       process.env.IGNITER_STORAGE_GOOGLE_CREDENTIALS_JSON_BASE64,
@@ -60,8 +48,15 @@ export const storage = IgniterStorage.create()
   URLs. Otherwise, pair this adapter with signed URLs at your CDN or edge layer.
 </Callout>
 
-## Emulator and Multi-env
+## Authentication and Paths
 
-Point `IGNITER_STORAGE_GOOGLE_ENDPOINT` to a local emulator for tests. Use `.withPath('/staging')` to isolate environments in the same bucket while keeping URLs stable (`https://cdn.example.com/staging/...`).
+When credentials are omitted, the adapter creates the Google Cloud client without explicit credentials, so the SDK uses Application Default Credentials. Use `.withPath('/staging')` to isolate environments in the same bucket while keeping URLs stable (`https://cdn.example.com/staging/...`).
 
-Next: harden uploads with [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>) or explore lifecycle flows in [Architecture](</docs/storage/(concepts)/architecture>).
+<Callout type="warn">
+  The adapter's credential type and environment parser accept `region` and
+  `endpoint` values, but the current client factory does not pass either value
+  to `@google-cloud/storage`. These settings do not configure a custom endpoint
+  or emulator.
+</Callout>
+
+Next: harden uploads with [Policies & Validation](</docs/storage/policies-and-validation>) or explore lifecycle flows in [Architecture](</docs/storage/architecture>).

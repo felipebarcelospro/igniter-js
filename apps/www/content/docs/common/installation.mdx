@@ -1,0 +1,58 @@
+---
+title: Installation
+description: Install @igniter-js/common and import its runtime error class and shared TypeScript contracts.
+---
+
+## Install
+
+Choose your package manager:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/common
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/common
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/common
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/common
+    ```
+  </Tab>
+</Tabs>
+
+The package manifest declares Node.js `>=22`. Common has no runtime dependencies and exposes a single package entry point, `@igniter-js/common`.
+
+## Import values and types
+
+Import `IgniterError` and `IgniterLogLevel` as runtime values. Import interfaces with `type` so they are erased from emitted JavaScript:
+
+```typescript
+import { IgniterError, IgniterLogLevel } from '@igniter-js/common';
+import type {
+  IgniterLogger,
+  StandardSchemaV1,
+} from '@igniter-js/common';
+```
+
+There are no Common-specific environment variables, setup files, or peer dependencies to configure.
+
+<Callout type="info" title="Using other Igniter packages">
+  Some Igniter packages declare Common as a dependency. Install `@igniter-js/common` directly when your application imports its exports itself.
+</Callout>
+
+## Continue
+
+- [Structured errors](/docs/common/errors)
+- [Logger contract](/docs/common/logger-contract)
+- [Schema contracts](/docs/common/schema-contracts)
+- [Logger package documentation](/docs/logger)

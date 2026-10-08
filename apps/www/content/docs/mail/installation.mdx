@@ -1,0 +1,54 @@
+---
+title: "Installation"
+description: "Install @igniter-js/mail and the runtime dependencies required by your selected provider."
+---
+
+Install the package with React and a Standard Schema-compatible validator. `@react-email/components` is a package dependency and is installed transitively; install it directly when importing its email components in your application.
+
+<Tabs groupId="package-manager" items={['npm', 'pnpm', 'yarn', 'bun']}>
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/mail @react-email/components react zod
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/mail @react-email/components react zod
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/mail @react-email/components react zod
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/mail @react-email/components react zod
+    ```
+  </Tab>
+</Tabs>
+
+## Provider dependencies
+
+Install only the provider SDKs required by the adapter you use:
+
+| Adapter | Additional dependency |
+| --- | --- |
+| Resend | `resend` |
+| SMTP | `nodemailer` (and `@types/nodemailer` for TypeScript projects) |
+| Postmark | None; adapter calls the provider's HTTP API with `fetch` |
+| SendGrid | None; adapter calls the provider's HTTP API with `fetch` |
+| Mock | None; in-memory adapter for tests and local examples |
+
+The package declares React and Zod as peers. Its browser export is a guard that throws, so import and configure it in server-side modules.
+
+## Keep provider credentials on the server
+
+Provide the default sender and API secret through environment variables, not client code:
+
+```bash
+MAIL_FROM=no-reply@example.com
+RESEND_API_KEY=re_...
+```
+
+Continue to the [quick start](/docs/mail/quick-start) to define a template and send it.

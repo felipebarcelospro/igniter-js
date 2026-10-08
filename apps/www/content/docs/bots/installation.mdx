@@ -98,8 +98,8 @@ const dcAdapter = discord({
 });
 ```
 
-<Callout type="info">
-  Discord requires interaction signature verification. Always provide `publicKey` in production, or the adapter will log a warning on every request.
+<Callout type="warn">
+  Discord interaction signatures are verified only when `publicKey` is configured. Without it, the adapter logs a warning and skips verification. Always provide the key in production.
 </Callout>
 
 ### Adapter Capability Comparison
@@ -118,10 +118,10 @@ const dcAdapter = discord({
 | Interactive buttons | ✅ | ✅ (max 3) | ✅ (max 5/row) |
 | Edit messages | ✅ | ❌ | ✅ |
 | Delete messages | ✅ | ❌ | ✅ |
-| Reactions | ❌ | ✅ | ✅ |
+| Reactions | ✅ | ✅ | ✅ |
 | Threads | ❌ | ❌ | ✅ |
 | Webhooks | ✅ | ✅ | ✅ |
-| Long polling | ✅ | ❌ | ❌ |
+| Long polling | Declared capability; no built-in poller | ❌ | ❌ |
 | Slash commands | ❌ (bot commands) | ❌ | ✅ |
 | Groups | ✅ | ✅ | ✅ (servers) |
 | Max message length | 4,096 chars | 4,096 chars | 2,000 chars |

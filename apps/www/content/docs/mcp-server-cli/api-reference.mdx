@@ -1,0 +1,56 @@
+---
+title: MCP Server CLI Reference
+description: Package entry point, environment configuration, and runtime behavior for @igniter-js/mcp-server.
+---
+
+## Package and executable
+
+The `@igniter-js/mcp-server` package exposes the `igniter-mcp` executable. Its entry point starts the server process and connects `StdioServerTransport`; it is a CLI application, not a programmatic library with a root API of exported functions.
+
+```bash
+npx -y @igniter-js/mcp-server
+```
+
+The server registers toolsets unless their individual switch is set to the literal string `false`.
+
+## Toolset switches
+
+| Environment variable | Default | Toolset |
+| --- | --- | --- |
+| `ENABLE_CLI_TOOLS` | Enabled | Development and project CLI operations. |
+| `ENABLE_API_VALIDATION_TOOLS` | Enabled | OpenAPI retrieval and HTTP requests. |
+| `ENABLE_DOCUMENTATION_TOOLS` | Enabled | Documentation retrieval. |
+| `ENABLE_GITHUB_TOOLS` | Enabled | GitHub issues, repository content, and comments. |
+| `ENABLE_FILE_ANALYSIS_TOOLS` | Enabled | File and feature analysis. |
+| `ENABLE_CODE_INVESTIGATION_TOOLS` | Enabled | Symbol search and dependency investigation. |
+| `ENABLE_DEBUGGING_TOOLS` | Enabled | Process, port, and runtime inspection. |
+| `ENABLE_MEMORY_TOOLS` | Enabled | Project memory operations. |
+| `ENABLE_TASK_MANAGEMENT_TOOLS` | Enabled | Project task operations. |
+| `ENABLE_AGENT_DELEGATION_TOOLS` | Enabled | Native coding agent delegation. |
+
+Example: `ENABLE_GITHUB_TOOLS=false` disables GitHub tool registration for that server process. These flags are read during startup.
+
+## Credentials and agent settings
+
+| Variable | Used by | Notes |
+| --- | --- | --- |
+| `GITHUB_TOKEN` | GitHub toolset | Passed to the Octokit client for authenticated GitHub API requests. |
+| `GEMINI_API_KEY` | Gemini delegation | Checked by the provider configuration; Gemini CLI must also be installed and authenticated. |
+| `ANTHROPIC_API_KEY` | Claude delegation | Checked by the provider configuration; Claude Code must also be installed. |
+| `OPENAI_API_KEY` | Codex delegation | Accepted as an API credential; Codex CLI must also be installed. |
+| `OPENAI_CHATGPT_TOKEN` | Codex delegation | Also accepted by the provider validation for ChatGPT authentication. |
+| `DEBUG` | Agent execution | `true` adds debug output. The utility writes masked credential summaries, the executed command, and working directory to stdout; these lines can corrupt the STDIO JSON-RPC stream. Independently, agent delegation emits unconditional `console.log` messages to stdout when a task starts, so delegation itself can corrupt the stream even with `DEBUG` off. Disable `ENABLE_AGENT_DELEGATION_TOOLS` for STDIO clients until those messages are redirected to stderr. The executor also writes the full delegated environment to stderr when debug mode is active, which can expose secrets. |
+
+The executor also sets provider-specific autonomous-mode variables for delegated processes. Its progress/status messages go to stderr. See [Advanced Configuration](/docs/mcp-server-cli/advanced) for the STDIO impact and logging guidance.
+
+## Runtime behavior
+
+- Transport: MCP over standard input/output using `StdioServerTransport`.
+- Server identity: `igniter-mcp-server`, version `0.0.1` in the current entry point.
+- Memory directory: `.github/lia/memories` under the project root detected from the process working directory.
+- Startup: connects the transport, then initializes project memory and requeues interrupted jobs. Initialization failures are written to stderr.
+- Exit: an uncaught startup error is written to stderr and exits with status `1`.
+
+## Import surface
+
+The package manifest defines the `igniter-mcp` binary and `dist/index.js` entry point but no `exports` map. The entry point starts the server as a side effect and does not export a supported programmatic API. Use the executable through an MCP client configuration; use the separate [MCP Server Adapter](/docs/mcp-server) package when exposing an Igniter app router as an HTTP MCP endpoint.

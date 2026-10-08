@@ -1,0 +1,19 @@
+{
+  "title": "Common",
+  "root": true,
+  "pages": [
+    "---Get Started---",
+    "index",
+    "installation",
+    "---Core Concepts---",
+    "errors",
+    "logger-contract",
+    "schema-contracts",
+    "---Guides---",
+    "using-contracts",
+    "---Advanced---",
+    "advanced",
+    "---API Reference---",
+    "api-reference"
+  ]
+}

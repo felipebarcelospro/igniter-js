@@ -5,7 +5,7 @@ description: Install and configure @igniter-js/logger. Runtime requirements, pee
 
 ## Installation
 
-`@igniter-js/logger` works on **Node.js 18+** and **Bun 1.0+**. It bundles Pino v9 and its companion packages (`pino-pretty`, `pino-abstract-transport`) as direct dependencies — no extra installs needed for the built-in transports.
+`@igniter-js/logger` is a server-side package backed by Pino v9. The package manifest does not declare a minimum Node.js or Bun version; use a runtime supported by Pino and by the selected transport. The package bundles `pino`, `pino-pretty`, and `pino-abstract-transport` as direct dependencies.
 
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
   <Tab value="npm">
@@ -31,7 +31,7 @@ description: Install and configure @igniter-js/logger. Runtime requirements, pee
 </Tabs>
 
 <Callout type="info">
-  **No peer dependencies required.** Pino, pino-pretty, and pino-abstract-transport are bundled as direct dependencies. You only need `@igniter-js/logger`.
+  Pino, pino-pretty, and pino-abstract-transport are direct dependencies. The current package manifest does not declare `@igniter-js/common` as a production dependency, even though the Logger entry imports it at runtime for `IgniterLoggerError`. Install both packages explicitly: `npm install @igniter-js/logger @igniter-js/common`.
 </Callout>
 
 ---
@@ -48,7 +48,7 @@ description: Install and configure @igniter-js/logger. Runtime requirements, pee
 }
 ```
 
-Logger uses `pino` and `pino-pretty` internally. The **console transport** (default) works out of the box. The **file transport** relies on `node:fs`. The **HTTP transport** uses the global `fetch` API (available in Node.js 18+).
+Logger uses `pino` and `pino-pretty` internally. The **console transport** (default) works out of the box. The **file transport** uses Pino's `pino/file` target. The **HTTP transport** uses the global `fetch` API and `AbortSignal.timeout()`.
 
 ### Bun
 
@@ -60,17 +60,17 @@ Logger uses `pino` and `pino-pretty` internally. The **console transport** (defa
 }
 ```
 
-All transports work in Bun. The HTTP transport uses Bun's built-in `fetch`. The file transport uses Bun's native filesystem APIs via Pino.
+The package does not declare a Bun version floor. The HTTP transport requires Bun's global `fetch` and `AbortSignal.timeout()`; the file transport is delegated to Pino's `pino/file` target.
 
 <Callout type="warn">
-  **Browser support:** Logger exports a **shim** for browser environments (`browser` field in `package.json`). The shim is a no-op — browser logging is not supported. Use the logger only in server-side runtimes.
+  **Server-only:** The package's `browser` mapping resolves to a shim that throws an error. Do not import `@igniter-js/logger` from browser code; use `console.*` or a browser logging package instead.
 </Callout>
 
 ---
 
 ## TypeScript Configuration
 
-Logger requires TypeScript 5.0+ for the builder generic inference (`defineScopes<T>()`). Ensure your `tsconfig.json` includes:
+The package does not declare a TypeScript minimum version. For a modern Node.js project, a configuration such as this supports the package's ESM exports and strict type checking:
 
 ```json title="tsconfig.json"
 {
@@ -140,9 +140,9 @@ You should see pretty-formatted log output with timestamps and a `✅` success m
 
 ## Version Compatibility
 
-| Logger Version | Pino | Node.js | Bun |
-|----------------|------|---------|-----|
-| 0.1.x | 9.x | 18+ | 1.0+ |
+| Logger Version | Pino | Runtime floor |
+|----------------|------|---------------|
+| 0.1.x | 9.x | Not declared by this package; follow Pino and transport requirements |
 
 ---
 

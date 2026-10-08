@@ -1,0 +1,44 @@
+---
+title: "API reference"
+description: "Public builders, manager methods, provider adapters, errors, and entrypoints in @igniter-js/mail."
+---
+
+## Entry points
+
+| Import | Exports |
+| --- | --- |
+| `@igniter-js/mail` | Builders, manager, errors, public types, utilities, and adapter symbols |
+| `@igniter-js/mail/adapters` | `ResendMailAdapter`, `PostmarkMailAdapter`, `SendGridMailAdapter`, `SmtpMailAdapter`, and `MockMailAdapter` |
+| `@igniter-js/mail/telemetry` | `IgniterMailTelemetryEvents` and its event type |
+
+The package's root entrypoint re-exports the builders, core manager, errors, types, utilities, and adapters. Each provider adapter is also exported from the adapters subpath.
+
+## Builders and manager
+
+| API | Verified behavior |
+| --- | --- |
+| `IgniterMail.create()` / `IgniterMailBuilder.create()` | Starts a mail configuration builder. |
+| `.withFrom(address)` | Sets the default sender required by `.build()`. |
+| `.withAdapter(adapter)` | Uses a custom adapter instance. |
+| `.withAdapter(provider, secret)` | Selects `resend`, `postmark`, `sendgrid`, or `smtp`. |
+| `.withQueue(adapter, options?)` | Enables queue-backed scheduling. |
+| `.addTemplate(key, template)` | Registers a schema-validated template under a typed key. |
+| `.onSendStarted()`, `.onSendSuccess()`, `.onSendError()` | Configure asynchronous send lifecycle callbacks. |
+| `.build()` | Returns a mail manager with `send`, `schedule`, `templates`, and `$Infer`. |
+
+`IgniterMailTemplate.create()` / `IgniterMailTemplateBuilder.create()` provides `.withSubject()`, `.withSchema()`, `.withRender()`, and `.build()` for reusable template construction.
+
+## Manager methods
+
+- `send({ to, template, data, subject? })` validates template data, renders HTML and plain text, and sends through the configured adapter.
+- `schedule(params, date)` enqueues a send for a future date and requires `.withQueue()`.
+- `templates.list()` returns template metadata; `templates.get(key)` returns metadata or `null`; `templates.render(key, variables?)` returns `{ html, text }`.
+- `$Infer` exposes type-level template keys, template payloads, send input, and schedule input.
+
+## Types and errors
+
+Public types include `IgniterMailAdapter`, `IgniterMailAdapterCredentials`, `IgniterMailAdapterSendParams`, `IgniterMailQueueOptions`, `IgniterMailSendParams`, `IgniterMailTemplateBuilt`, and `IgniterMailTemplateMeta`.
+
+`IgniterMailError` is the typed runtime error and exposes `IgniterMailError.is(error)` as a type guard. Its code union is `IgniterMailErrorCode`.
+
+For working examples, see [templates](/docs/mail/templates), [providers](/docs/mail/providers), and [scheduling and hooks](/docs/mail/scheduling-hooks). Source entrypoint: [`packages/mail/src/index.ts`](https://github.com/felipebarcelospro/igniter-js/blob/main/packages/mail/src/index.ts).

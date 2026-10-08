@@ -1,0 +1,65 @@
+---
+title: "Schedule a transactional reminder"
+description: "Enqueue a typed reminder for later delivery through an Igniter job queue adapter."
+---
+
+## Schedule a reminder through the job queue
+
+Use `withQueue()` when a message should be delivered later or processed asynchronously. `mail.schedule()` requires a future `Date`; it calculates the delay and enqueues the template key and payload through the configured `IgniterJobQueueAdapter`.
+
+<Callout type="warn" title="Use a Mail-compatible queue adapter">
+  The queue adapter passed below is an application-provided compatibility adapter. Mail calls `register()` and discards its return value, then invokes the job by its `{queue}.{job}` ID. The repository's BullMQ adapter treats `register()` as a definition factory; `bulkRegister()` is what persists definitions for `invoke()`. Passing the BullMQ adapter directly to `.withQueue()` does not complete Mail's registration flow. Use a wrapper that registers Mail's definition under the same ID before forwarding the delayed invocation. If registration is asynchronous, keep its promise and await it in the wrapper's `invoke()` method; Mail does not await `register()`.
+</Callout>
+
+```tsx
+// src/mail.tsx
+import { Html, Text } from '@react-email/components'
+import { IgniterMail } from '@igniter-js/mail'
+import { z } from 'zod'
+import { mailQueueAdapter } from './mail-queue-adapter'
+
+export const mail = IgniterMail.create()
+  .withFrom(process.env.MAIL_FROM!)
+  .withAdapter('resend', process.env.RESEND_API_KEY!)
+  .withQueue(mailQueueAdapter, {
+    queue: 'transactional-mail',
+    job: 'send',
+    attempts: 5,
+    removeOnComplete: true,
+  })
+  .addTemplate('invoiceReminder', {
+    subject: 'Your invoice is due soon',
+    schema: z.object({ invoiceNumber: z.string(), dueDate: z.string() }),
+    render: ({ invoiceNumber, dueDate }) => (
+      <Html>
+        <Text>Invoice {invoiceNumber} is due on {dueDate}.</Text>
+      </Html>
+    ),
+  })
+  .build()
+
+export async function scheduleInvoiceReminder(input: {
+  to: string
+  invoiceNumber: string
+  dueDate: string
+  sendAt: Date
+}) {
+  await mail.schedule(
+    {
+      to: input.to,
+      template: 'invoiceReminder',
+      data: {
+        invoiceNumber: input.invoiceNumber,
+        dueDate: input.dueDate,
+      },
+    },
+    input.sendAt,
+  )
+}
+```
+
+`mailQueueAdapter` must implement the queue contract expected by Mail and bridge it to the queue provider used by your application. Its `register()` wrapper must persist the handler under the ID formed from the queue and job names; its `invoke()` wrapper must enqueue that ID and forward the delay. When the worker runs the registered handler, it calls `mail.send()`, which validates the template data, renders the message, and sends it through the provider adapter.
+
+The schedule date must be later than the current time. Calling `schedule()` without `.withQueue()` throws `MAIL_PROVIDER_SCHEDULE_QUEUE_NOT_CONFIGURED`; passing a date that is now or in the past throws `MAIL_PROVIDER_SCHEDULE_DATE_INVALID`. Template data is validated when the queued job sends the message, so keep the registered template available to the worker process too.
+
+For immediate delivery and template setup, see the [quick start](/docs/mail/quick-start). To configure queue lifecycle hooks, see [Scheduling and lifecycle hooks](/docs/mail/scheduling-hooks); for provider selection, see [Providers and adapters](/docs/mail/providers) and the [API reference](/docs/mail/api-reference).

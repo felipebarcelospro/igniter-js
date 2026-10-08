@@ -19,8 +19,11 @@ if (!file) {
 List files under the current base path or a sub-prefix; stream files directly from the adapter when you need to pipe data.
 
 ```typescript
-const files = await storage.scope("user", "123").list("invoices/");
-const stream = await storage.stream(files[0].path);
+const userStorage = storage.scope("user", "123");
+const files = await userStorage.list("invoices/");
+// `list()` returns full resolved keys. Read through this scoped manager using
+// the path relative to its base path to avoid applying the scope twice.
+const stream = await userStorage.stream("invoices/receipt.pdf");
 stream.pipe(res);
 ```
 
@@ -48,4 +51,4 @@ await storage.delete("public/old-hero.jpg");
 
 Deletions emit hooks and telemetry; handle failures with typed errors to retry or report. Combine `list` + `delete` for cleanup jobs, and prefer scoped managers so you never delete outside the intended prefix.
 
-Continue to [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>) to enforce rules, or add observability in [Hooks & Telemetry](</docs/storage/(core-concepts)/hooks-and-telemetry>).
+Continue to [Policies & Validation](</docs/storage/policies-and-validation>) to enforce rules, or add observability in [Hooks & Telemetry](</docs/storage/hooks-and-telemetry>).

@@ -1,0 +1,54 @@
+---
+title: Common API Reference
+description: Runtime values and type-only contracts exported from the @igniter-js/common root entry point.
+---
+
+## Package entry point
+
+Import from `@igniter-js/common`. The package root barrel re-exports `IgniterError` and the symbols in its `types` barrel. There are no documented subpath exports.
+
+```ts
+import { IgniterError, IgniterLogLevel } from "@igniter-js/common";
+import type { IgniterLogger, StandardSchemaV1 } from "@igniter-js/common";
+```
+
+## Runtime exports
+
+| Export | Kind | Purpose |
+| --- | --- | --- |
+| `IgniterError` | Class | Structured `Error` with `code`, `statusCode`, optional details/metadata/cause, optional logger integration, and `toJSON()`. |
+| `IgniterLogLevel` | Enum | Runtime string values `FATAL`, `ERROR`, `WARN`, `INFO`, `DEBUG`, and `TRACE` (`fatal`, `error`, `warn`, `info`, `debug`, `trace`). |
+
+### `IgniterError`
+
+```ts
+new IgniterError<TCode extends string = string, TDetails = unknown>(options)
+```
+
+`options` contains required `message: string` and `code: TCode`; optional `statusCode: number`, `causer: string`, `details: TDetails`, `metadata: Record<string, unknown>`, `logger: IgniterLogger`, and `cause: Error`.
+
+The instance exposes `name`, `message`, `code`, `statusCode`, `details`, `metadata`, `causer`, `cause`, and `stackTrace`. `statusCode` defaults to `500`. If `logger` is provided, construction calls `logger.error(message, context)`. `toJSON()` returns `name`, `message`, `code`, `details`, `metadata`, and `stackTrace`; it omits `statusCode` and `cause`.
+
+## Logger contract types
+
+These exports are TypeScript interfaces, not runtime classes or factories.
+
+| Export | Purpose |
+| --- | --- |
+| `IgniterLogger` | Required logging, grouping, child logger, configuration, flush, and separator methods. |
+| `IgniterLoggerOptions` | Optional level, colorization, formatter, `showTimestamp`, app name, component, context, and provider-specific fields. |
+| `IgniterLogEntry` | Structured entry with level, message, optional timestamp/context/error, and additional fields. |
+
+`IgniterLogger` uses the runtime `IgniterLogLevel` enum. Its `log` method has two compatible overload declarations in the source; implementations should support a context value and optional error value.
+
+## Schema contract types
+
+All schema exports are type-only. Each interface has a merged namespace containing associated types and inference helpers.
+
+| Export | Type-level members |
+| --- | --- |
+| `StandardTypedV1<Input, Output>` | `Props`, `Types`, `InferInput`, and `InferOutput`. Supplies optional input/output type metadata under `"~standard".types`. |
+| `StandardSchemaV1<Input, Output>` | `Props`, `Result`, `SuccessResult`, `FailureResult`, `Issue`, `PathSegment`, `Options`, `Types`, `InferInput`, and `InferOutput`. `validate(unknown, options?)` returns a result or promise of a result. |
+| `StandardJSONSchemaV1<Input, Output>` | `Props`, `Converter`, `Target`, `Options`, `Types`, `InferInput`, and `InferOutput`. `jsonSchema.input(options)` and `.output(options)` return records. |
+
+`StandardJSONSchemaV1.Target` names the common targets `draft-2020-12`, `draft-07`, and `openapi-3.0`, while allowing implementation-specific strings. See [Using Shared Contracts](/docs/common/using-contracts) for examples and runtime caveats.

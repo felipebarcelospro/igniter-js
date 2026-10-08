@@ -8,7 +8,7 @@ description: Append, read, and process Redis Streams with consumer groups. Build
 `store.streams` provides a typed interface for Redis Streams — an append-only log data structure perfect for reliable message processing, event sourcing, and log aggregation. Unlike Pub/Sub (fire-and-forget), streams support consumer groups, message acknowledgment, and message replay.
 
 <Callout type="info">
-  Streams are ideal when you need **at-least-once delivery**, message persistence, or the ability to replay events. For simple real-time notifications, use [Pub/Sub](/docs/store/pubsub) instead.
+  Streams persist messages and support consumer groups and acknowledgments. The package does not provide a retry scheduler or pending-message recovery API. For simple real-time notifications, use [Pub/Sub](/docs/store/pubsub) instead.
 </Callout>
 
 ---
@@ -112,22 +112,26 @@ for (const msg of messages) {
 
 ### Acknowledging Messages
 
-After processing, acknowledge messages to remove them from the pending list:
+After processing, acknowledge successful messages. If processing fails, the message remains pending in Redis, but this package's `read()` method only requests new messages (`>`); it does not expose a method to reclaim pending messages.
 
 ```typescript
 const messages = await consumer.read("events", { count: 10 });
+const acked: string[] = [];
 
 for (const msg of messages) {
   try {
     await processMessage(msg.message);
+    acked.push(msg.id);
   } catch (error) {
     console.error(`Failed to process ${msg.id}:`, error);
-    continue; // Don't ack — it will be retried
+    // Leave the message pending for recovery outside this API.
   }
 }
 
-// Acknowledge all successfully processed messages
-await consumer.ack("events", messages.map((m) => m.id));
+// Acknowledge only successful messages
+if (acked.length > 0) {
+  await consumer.ack("events", acked);
+}
 ```
 
 ### Multiple Workers
@@ -280,7 +284,7 @@ Returns: `IgniterStoreStreamConsumerGroup`
 | `stream` | `string` | Stream name |
 | `options.startId` | `string?` | `"0"` for beginning, `"$"` for latest (default: `"0"`) |
 
-**`consumer.read(stream, options?)`** — Read pending messages.
+**`consumer.read(stream, options?)`** — Read new messages for the consumer group. The Redis adapter uses the `>` cursor; pending-message recovery is not exposed.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|

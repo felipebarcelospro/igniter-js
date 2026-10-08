@@ -52,7 +52,7 @@ export const api = IgniterCaller.create()
     };
   })
 
-  // Handle 401s — clear token and retry
+  // Clear the cached token for the next request. This interceptor does not replay the failed request.
   .withResponseInterceptor(async (response) => {
     if (response.status === 401) {
       accessToken = null; // Force token refresh on next request
@@ -71,7 +71,7 @@ const { data: user } = await api.get('/me')
   .stale(30_000) // Cache profile for 30 seconds
   .execute();
 
-// If token expires, it's refreshed automatically
+// If the token expires, a later request can refresh it through getAccessToken().
 const { data: orders } = await api.get('/orders').execute();
 ```
 
@@ -159,6 +159,7 @@ export const UserService = {
   async list(page = 1, limit = 20) {
     const { data, error } = await api.get('/users')
       .params({ page, limit })
+      .cache('default', `users:list:${page}:${limit}`)
       .stale(10_000)
       .execute();
 
@@ -169,6 +170,7 @@ export const UserService = {
   async getById(id: string) {
     const { data, error } = await api.get('/users/:id')
       .params({ id })
+      .cache('default', `user:${id}`)
       .stale(30_000)
       .execute();
 
@@ -235,9 +237,9 @@ class ConflictError extends Error {
 
 ---
 
-## 3. File Upload with Progress
+## 3. File Upload
 
-Handling file uploads with FormData, progress tracking, and timeout management.
+Handling file uploads with FormData and timeout management.
 
 ```typescript title="services/upload.service.ts"
 import { api } from '@/lib/api';
@@ -251,7 +253,6 @@ interface UploadResult {
 
 export async function uploadFile(
   file: File,
-  onProgress?: (percent: number) => void,
 ): Promise<UploadResult> {
   const formData = new FormData();
   formData.append('file', file);
@@ -260,7 +261,6 @@ export async function uploadFile(
   const { data, error } = await api.post('/uploads')
     .body(formData)
     .timeout(120_000) // 2 minutes for large files
-    .retry(2, { retryOnStatus: [502, 503] })
     .execute();
 
   if (error) {
@@ -291,7 +291,7 @@ export async function uploadMultipleFiles(
   return data as UploadResult[];
 }
 
-// Download with progress
+// Download a Blob response
 export async function downloadFile(fileId: string): Promise<Blob> {
   const { data, error } = await api.get('/files/:id/download')
     .params({ id: fileId })
@@ -318,16 +318,10 @@ const stripe = IgniterCaller.create()
     'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}`,
     'Stripe-Version': '2024-06-20',
   })
-  .withRequestInterceptor(async (config) => ({
-    ...config,
-    headers: {
-      ...config.headers,
-      'Idempotency-Key': config.headers?.['Idempotency-Key'] || crypto.randomUUID(),
-    },
-  }))
   .build();
 
 export async function createPaymentIntent(amount: number, currency = 'usd') {
+  const idempotencyKey = crypto.randomUUID();
   const body = new URLSearchParams({
     amount: String(amount),
     currency,
@@ -335,6 +329,7 @@ export async function createPaymentIntent(amount: number, currency = 'usd') {
 
   const { data, error } = await stripe.post('/payment_intents')
     .body(body)
+    .headers({ 'Idempotency-Key': idempotencyKey })
     .headers({ 'Content-Type': 'application/x-www-form-urlencoded' })
     .retry(3, {
       backoff: 'exponential',
@@ -393,6 +388,7 @@ export async function fetchPaginated<T>(
 ): Promise<PaginatedResponse<T>> {
   const { data, error } = await api.get(path)
     .params(params as any)
+    .cache('default', `paginated:${path}:${JSON.stringify(params)}`)
     .stale(15_000)
     .retry(2)
     .execute();
@@ -465,8 +461,8 @@ export async function loadDashboard(): Promise<DashboardData> {
   const [statsRes, ordersRes, usersRes, notifRes] =
     await IgniterCallerManager.batch([
       api.get('/dashboard/stats').stale(30_000).execute(),
-      api.get('/orders').params({ limit: 5, sort: 'recent' }).stale(10_000).execute(),
-      api.get('/users').params({ status: 'active', limit: 10 }).stale(30_000).execute(),
+      api.get('/orders').params({ limit: 5, sort: 'recent' }).cache('default', 'orders:recent:5').stale(10_000).execute(),
+      api.get('/users').params({ status: 'active', limit: 10 }).cache('default', 'users:active:10').stale(30_000).execute(),
       api.get('/notifications').params({ unread: true, limit: 10 }).execute(),
     ]);
 
@@ -483,9 +479,9 @@ export async function loadDashboard(): Promise<DashboardData> {
 async function loadUserContext(userId: string) {
   const [profile, permissions, preferences] =
     await IgniterCallerManager.batch([
-      api.get('/users/:id').params({ id: userId }).execute(),
-      api.get('/users/:id/permissions').params({ id: userId }).execute(),
-      api.get('/users/:id/preferences').params({ id: userId }).stale(60_000).execute(),
+      api.get('/users/:id').params({ id: userId }).cache('default', `user:${userId}`).execute(),
+      api.get('/users/:id/permissions').params({ id: userId }).cache('default', `user-permissions:${userId}`).execute(),
+      api.get('/users/:id/preferences').params({ id: userId }).cache('default', `user-preferences:${userId}`).stale(60_000).execute(),
     ]);
 
   return {
@@ -500,66 +496,44 @@ async function loadUserContext(userId: string) {
 
 ## 7. Optimistic Updates with React
 
-React pattern for optimistic UI updates with rollback on failure.
+For schema-derived operations, the React client provides `setQueryData()` and mutation callbacks for optimistic updates and rollback. This example assumes your schema defines `todos.list` and `todos.update` operation IDs.
 
-```tsx title="components/todo-list.tsx"
-import { useIgniterCaller } from '@igniter-js/caller/client';
+```tsx
+'use client'
 
-const useCaller = useIgniterCaller<{ main: typeof api }>();
+import { useApi } from '@/lib/use-api'
 
-function TodoList() {
-  const main = useCaller('main');
+type Todo = { id: string; title: string; completed: boolean }
 
-  const { data: todos, isLoading, refetch } = main
-    .get('/todos')
-    .useQuery({ staleTime: 5_000 });
+export function TodoToggle({ todo }: { todo: Todo }) {
+  const api = useApi()
+  const list = api.todos.list
+  const update = api.todos.update
 
-  const handleToggle = async (todoId: string, completed: boolean) => {
-    // Optimistically update
-    const previousTodos = todos;
-    // local state update logic here...
-
-    const { error } = await main.patch('/todos/:id')
-      .params({ id: todoId })
-      .body({ completed })
-      .execute();
-
-    if (error) {
-      // Rollback: restore previous state
-      refetch();
-    }
-  };
-
-  const handleDelete = async (todoId: string) => {
-    // Optimistically remove
-    const { error } = await main.delete('/todos/:id')
-      .params({ id: todoId })
-      .execute();
-
-    if (error) {
-      refetch(); // Rollback
-    }
-  };
-
-  if (isLoading) return <div>Loading...</div>;
+  const mutation = update.useMutation<Todo[]>({
+    onMutate: ({ params }) => {
+      const previous = list.getQueryData()
+      if (previous) {
+        list.setQueryData(previous.map((item) =>
+          item.id === params?.id ? { ...item, completed: !item.completed } : item,
+        ))
+      }
+      return previous
+    },
+    onError: (_error, _variables, previous) => {
+      if (previous) list.setQueryData(previous)
+    },
+  })
 
   return (
-    <ul>
-      {todos?.map(todo => (
-        <li key={todo.id}>
-          <input
-            type="checkbox"
-            checked={todo.completed}
-            onChange={() => handleToggle(todo.id, !todo.completed)}
-          />
-          {todo.title}
-          <button onClick={() => handleDelete(todo.id)}>Delete</button>
-        </li>
-      ))}
-    </ul>
-  );
+    <button onClick={() => mutation.mutate({ params: { id: todo.id }, body: { completed: !todo.completed } })}>
+      {mutation.isLoading ? 'Saving…' : todo.completed ? 'Mark incomplete' : 'Mark complete'}
+    </button>
+  )
 }
 ```
+
+Operation paths, response types, and mutation input fields come from the schemas passed to `IgniterCaller.create().withSchemas(...)`. If you do not use operation IDs, use the path-based API and invalidate or refetch the corresponding query after a successful request.
 
 ---
 

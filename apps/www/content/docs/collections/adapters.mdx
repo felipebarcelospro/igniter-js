@@ -26,7 +26,7 @@ Adapters abstract storage operations behind a unified interface. Switch from loc
 The default adapter for Node.js environments. Uses `node:fs/promises` and `fast-glob`.
 
 ```typescript
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters/node';
 
 const adapter = new NodeFsAdapter();
 
@@ -50,7 +50,7 @@ const docs = IgniterCollections.create()
 Optimized for Bun runtime. Uses `Bun.file`, `Bun.write`, and `Bun.Glob` for maximum performance.
 
 ```typescript
-import { BunFsAdapter } from '@igniter-js/collections/adapters';
+import { BunFsAdapter } from '@igniter-js/collections/adapters/bun';
 
 const adapter = new BunFsAdapter();
 
@@ -72,7 +72,7 @@ const docs = IgniterCollections.create()
 Stores documents in Redis for distributed access. Supports key prefixes for namespacing.
 
 ```typescript
-import { BunRedisAdapter } from '@igniter-js/collections/adapters';
+import { BunRedisAdapter } from '@igniter-js/collections/adapters/bun';
 
 const adapter = new BunRedisAdapter({
   url: process.env.REDIS_URL!,
@@ -89,8 +89,8 @@ const docs = IgniterCollections.create()
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `url` | `string` | required | Redis connection URL |
-| `prefix` | `string` | `''` | Key prefix for namespacing |
+| `url` | `string` | `REDIS_URL` or `redis://localhost:6379` | Redis connection URL; an existing Bun Redis client can be passed with `redis` instead. |
+| `prefix` | `string` | `'igniter:collections:'` | Key prefix for namespacing |
 
 ---
 
@@ -99,15 +99,13 @@ const docs = IgniterCollections.create()
 Stores documents in AWS S3 or any S3-compatible object storage.
 
 ```typescript
-import { BunS3Adapter } from '@igniter-js/collections/adapters';
+import { BunS3Adapter } from '@igniter-js/collections/adapters/bun';
 
 const adapter = new BunS3Adapter({
   bucket: 'my-content-bucket',
   region: 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   // Optional: endpoint for S3-compatible services (MinIO, Cloudflare R2)
   endpoint: 'https://s3.amazonaws.com',
 });
@@ -123,9 +121,10 @@ const docs = IgniterCollections.create()
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `bucket` | `string` | required | S3 bucket name |
-| `region` | `string` | required | AWS region |
-| `credentials` | `{ accessKeyId, secretAccessKey }` | required | AWS credentials |
-| `endpoint` | `string` | AWS default | Custom S3 endpoint (MinIO, R2) |
+| `region` | `string` | `'us-east-1'` | AWS region |
+| `accessKeyId` | `string` | `S3_ACCESS_KEY_ID` or `AWS_ACCESS_KEY_ID` | Optional AWS access key ID; can also be resolved from the environment. |
+| `secretAccessKey` | `string` | `S3_SECRET_ACCESS_KEY` or `AWS_SECRET_ACCESS_KEY` | Optional AWS secret access key; can also be resolved from the environment. |
+| `endpoint` | `string` | Bun S3 client default | Custom endpoint; set it for S3-compatible services such as MinIO or R2. |
 
 <Callout type="info">
   **S3-Compatible Storage:** Use the `endpoint` option to connect to MinIO, Cloudflare R2, DigitalOcean Spaces, or any S3-compatible service.
@@ -138,7 +137,7 @@ const docs = IgniterCollections.create()
 In-memory adapter for testing. Tracks all operations via `files` and `calls` properties.
 
 ```typescript
-import { IgniterCollectionMockAdapter } from '@igniter-js/collections/adapters';
+import { IgniterCollectionMockAdapter } from '@igniter-js/collections/adapters/mock';
 
 const mock = new IgniterCollectionMockAdapter();
 

@@ -15,7 +15,7 @@ Before you begin, ensure you have:
 
 - An Igniter.js application with at least one controller and action
 - A Next.js application (or compatible framework)
-- Node.js 18+ installed
+- Node.js 22 or later installed
 
 ---
 
@@ -41,7 +41,7 @@ export const usersController = igniter.controller({
     
     getById: igniter.query({
       path: '/:id',
-      handler: async ({ request, response }) => {
+      handler: async ({ request, context, response }) => {
         const user = await context.db.users.findUnique({
           where: { id: request.params.id },
         });
@@ -56,7 +56,7 @@ export const usersController = igniter.controller({
         email: z.string().email(),
         name: z.string(),
       }),
-      handler: async ({ request, response }) => {
+      handler: async ({ request, context, response }) => {
         const user = await context.db.users.create({
           data: request.body,
         });
@@ -107,8 +107,8 @@ const { handler } = IgniterMcpServer
   })
   .withInstructions(
     "This server provides tools to manage users in the system. " +
-    "Use the users.list tool to get all users, users.getById to get a specific user, " +
-    "and users.create to create a new user."
+    "Use the users_list tool to get all users, users_getById to get a specific user, " +
+    "and users_create to create a new user."
   )
   .build();
 
@@ -195,7 +195,7 @@ After connecting, you can test your MCP server by asking the AI agent:
 
 The AI agent will automatically:
 1. Discover available tools from your MCP server
-2. Select the appropriate tool (`users.list`, `users.getById`, or `users.create`)
+2. Select the appropriate tool (`users_list`, `users_getById`, or `users_create`)
 3. Execute the tool with the correct parameters
 4. Return the result in a natural language response
 

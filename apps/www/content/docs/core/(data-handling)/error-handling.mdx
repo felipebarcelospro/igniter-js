@@ -26,9 +26,8 @@ const getUser = igniter.query({
     if (!user.isActive) {
       throw new IgniterError({
         message: 'User account is inactive',
-        code: 'USER_INACTIVE',
+      code: 'ERR_UNKNOWN_ERROR',
         details: { userId: user.id },
-        log: true
       });
     }
     
@@ -48,9 +47,9 @@ const getUser = igniter.query({
 All errors follow a consistent structure:
 
 ```typescript
-type IgniterResponse<TData, TError> = 
-  | { data: TData; error: null }           // ✅ Success
-  | { data: null; error: TError };         // ❌ Error
+type IgniterResponse<TData, TError> =
+  | { data: TData; error: null }
+  | { data: null; error: TError };
 ```
 
 **Error Response Format:**
@@ -118,23 +117,17 @@ import { IgniterResponseError } from '@igniter-js/core';
 
 const action = igniter.mutation({
   handler: async ({ response }) => {
-    const error = new IgniterResponseError({
-      code: 'ERR_BAD_REQUEST',
-      message: 'Invalid input provided',
-      data: {
-        field: 'email',
-        reason: 'already_exists'
-      }
+    return response.error('ERR_BAD_REQUEST', 'Invalid input provided', {
+      field: 'email',
+      reason: 'already_exists'
     });
-    
-    return response.error(error);
   }
 });
 ```
 
 ### Common Error Codes
 
-Igniter.js defines standard error codes:
+Core response methods use the standard `ERR_*` codes:
 
 | Code | HTTP Status | Method |
 |------|-------------|--------|
@@ -186,7 +179,6 @@ import { IgniterError } from '@igniter-js/core';
 throw new IgniterError({
   message: 'Database connection failed',
   code: 'DATABASE_ERROR',
-  log: true,           // ✅ Logs to console with styled output
   details: {
     host: 'localhost',
     port: 5432
@@ -350,7 +342,7 @@ Igniter.js has a built-in `ErrorHandlerProcessor` that handles all errors:
 
 ### Error Types Handled
 
-1. **Validation Errors** (Zod, Valibot, etc.)
+1. **Validation Errors** from schemas with a `.parse()` method (for example, Zod)
    - Returns 400 with validation details
    - Logged as warnings
    - Tracked in telemetry
@@ -393,77 +385,22 @@ try {
 
 ---
 
-## Custom Error Codes
+## Application Error Details
 
 ### Define Custom Errors
 
 ```typescript
-type CustomErrorCode = 
-  | 'USER_SUSPENDED'
-  | 'QUOTA_EXCEEDED'
-  | 'PAYMENT_REQUIRED'
-  | 'MAINTENANCE_MODE';
-
 const action = igniter.query({
   handler: async ({ response }) => {
-    const error = new IgniterResponseError<CustomErrorCode>({
-      code: 'USER_SUSPENDED',
-      message: 'Your account has been suspended',
-      data: {
-        reason: 'Terms of Service violation',
-        suspendedAt: new Date(),
-        contact: 'support@example.com'
-      }
+    return response.error('ERR_FORBIDDEN', 'Your account has been suspended', {
+      reason: 'Terms of Service violation',
+      contact: 'support@example.com'
     });
-    
-    return response
-      .status(403)
-      .error(error);
   }
 });
 ```
 
-### Reusable Error Factory
-
-```typescript
-// utils/errors.ts
-export const createUserError = (
-  code: 'NOT_FOUND' | 'SUSPENDED' | 'DELETED',
-  userId: string
-) => {
-  const messages = {
-    NOT_FOUND: 'User not found',
-    SUSPENDED: 'User account is suspended',
-    DELETED: 'User account has been deleted'
-  };
-  
-  return new IgniterResponseError({
-    code: `USER_${code}`,
-    message: messages[code],
-    data: { userId }
-  });
-};
-
-// Usage in actions
-const getUser = igniter.query({
-  path: '/users/:id' as const,
-  handler: async ({ request, response, context }) => {
-    const user = await context.db.users.findUnique({
-      where: { id: request.params.id }
-    });
-    
-    if (!user) {
-      return response.error(createUserError('NOT_FOUND', request.params.id));
-    }
-    
-    if (user.status === 'suspended') {
-      return response.error(createUserError('SUSPENDED', user.id));
-    }
-    
-    return response.success({ user });
-  }
-});
-```
+`response.error()` accepts the framework's `ERR_*` error code union. Put application-specific details in the optional `data` argument rather than inventing a new response code.
 
 ---
 
@@ -555,33 +492,33 @@ const action = igniter.query({
     try {
       return await context.db.users.findMany();
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
       if (process.env.NODE_ENV === 'production') {
         // ✅ Generic error in production
-        return response.error(new IgniterResponseError({
-          code: 'ERR_UNKNOWN_ERROR',
-          message: 'An error occurred'
-        }));
+        return response.error('ERR_UNKNOWN_ERROR', 'An error occurred');
       } else {
         // ✅ Detailed error in development
-        return response.error(new IgniterResponseError({
-          code: 'DATABASE_ERROR',
-          message: error.message,
-          data: { stack: error.stack }
-        }));
+        return response.error('ERR_UNKNOWN_ERROR', errorMessage, { stack: errorStack });
       }
     }
   }
 });
 ```
 
-### 5. Log Framework Errors
+### 5. Optional Error Logging
+
+`IgniterError` does not write to the console by default. Its optional `logger` field accepts an `IgniterLogger` implementation supplied by your application.
 
 ```typescript
-// ✅ Good - Logs styled error
+import type { IgniterLogger } from '@igniter-js/common';
+
+declare const appLogger: IgniterLogger; // provided by your application
+
 throw new IgniterError({
   message: 'Redis connection failed',
   code: 'REDIS_ERROR',
-  log: true,  // ✅ Logs to console
+  logger: appLogger,
   details: { host: 'localhost', port: 6379 }
 });
 
@@ -648,10 +585,9 @@ const getExternalData = igniter.query({
       throw new IgniterError({
         message: 'External API request failed',
         code: 'EXTERNAL_API_ERROR',
-        log: true,
         details: {
           url: 'https://api.example.com/data',
-          error: error.message
+          error: error instanceof Error ? error.message : String(error)
         }
       });
     }
@@ -664,19 +600,19 @@ const getExternalData = igniter.query({
 ## Next Steps
 
 <Cards>
-  <Card title="Response Types" href="/docs/response-types">
+  <Card title="Response Types" href="/docs/core/response-types">
     Learn all response methods
   </Card>
   
-  <Card title="Validation" href="/docs/validation">
+  <Card title="Validation" href="/docs/core/validation">
     Validate input with schemas
   </Card>
   
-  <Card title="Procedures" href="/docs/procedures">
+  <Card title="Procedures" href="/docs/core/procedures">
     Handle errors in procedures
   </Card>
   
-  <Card title="Testing" href="/docs/testing">
+  <Card title="Quick Start" href="/docs/core/quick-start">
     Test error handling
   </Card>
 </Cards>

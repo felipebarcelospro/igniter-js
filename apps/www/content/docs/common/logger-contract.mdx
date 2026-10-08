@@ -1,0 +1,61 @@
+---
+title: Logger contract
+description: Implement IgniterLogger to provide a shared logging interface to packages that accept a logger.
+---
+
+## Implement the shared interface
+
+`IgniterLogger` is a TypeScript interface, not a logger implementation. It lets packages accept a provider without coupling to a specific logging library. The contract includes level methods, child loggers, runtime setters, flushing, and small console-style grouping helpers.
+
+```typescript
+import { IgniterLogLevel } from '@igniter-js/common';
+import type { IgniterLogger } from '@igniter-js/common';
+
+const logger: IgniterLogger = {
+  log(level, message, context, error) {
+    console.log({ level, message, context, error });
+  },
+  fatal: (message, error) => console.error(message, error),
+  error: (message, error) => console.error(message, error),
+  warn: (message, ...args) => console.warn(message, ...args),
+  info: (message, ...args) => console.info(message, ...args),
+  debug: (message, ...args) => console.debug(message, ...args),
+  trace: (message, ...args) => console.debug(message, ...args),
+  success: (message, ...args) => console.info(message, ...args),
+  group: (name) => console.group(name),
+  groupEnd: () => console.groupEnd(),
+  child: () => logger,
+  setComponent: () => {},
+  setAppName: () => {},
+  setLevel: () => {},
+  flush: async () => {},
+  separator: () => console.log('----------------'),
+};
+
+logger.log(IgniterLogLevel.INFO, 'Request accepted', { requestId: 'req_1' });
+```
+
+The example is a minimal contract implementation. A production logger should preserve child context, apply the configured minimum level, and flush any buffered output.
+
+## Use the Igniter logger package
+
+For a Pino-backed implementation with built-in console, file, and HTTP transports, use [`@igniter-js/logger`](/docs/logger). Its `IgniterLogger` builder can produce a manager that satisfies the shared `IgniterLogger` interface:
+
+```typescript
+import { IgniterLogger as Logger } from '@igniter-js/logger';
+import type { IgniterLogger } from '@igniter-js/common';
+
+const logger: IgniterLogger = Logger.create()
+  .withAppName('api')
+  .withContext({ region: 'us-east-1' })
+  .build();
+```
+
+<Callout type="info" title="Two similarly named exports">
+  `@igniter-js/common` exports the `IgniterLogger` **interface**. `@igniter-js/logger` exports an `IgniterLogger` **builder alias**. Use `import type` for the Common interface and a value import for the logger builder.
+</Callout>
+
+## Related contracts
+
+- [`IgniterLogEntry`](https://github.com/felipebarcelospro/igniter-js/blob/main/packages/common/src/types/logger.interface.ts) describes a structured entry with a level and message.
+- `IgniterLoggerOptions` describes optional settings such as level, formatter, app name, component, and default context. It is a contract for implementations; Common does not consume these options itself.

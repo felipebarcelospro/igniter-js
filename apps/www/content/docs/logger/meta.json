@@ -2,18 +2,20 @@
   "title": "Logger",
   "root": true,
   "pages": [
-    "---Getting Started---",
+    "---Get Started---",
     "index",
     "installation",
     "quick-start",
     "---Core Concepts---",
     "transports",
     "child-loggers",
+    "---Guides---",
+    "framework-integration",
+    "---Advanced---",
     "advanced",
-    "---Reference---",
-    "api-reference",
     "troubleshooting",
     "best-practices",
-    "framework-integration"
+    "---API Reference---",
+    "api-reference"
   ]
 }

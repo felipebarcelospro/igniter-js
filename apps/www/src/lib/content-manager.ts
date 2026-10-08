@@ -27,6 +27,7 @@ export interface PageData {
   url: string;
   title: string;
   description?: string;
+  publishedAt?: Date;
   lastModified?: Date;
   content?: string;
 }
@@ -113,7 +114,15 @@ export class ContentManager {
   getPages(type: ContentType): InferPageType<ReturnType<typeof loader>>[] {
     const sourceConfig = this.sources.get(type);
     if (!sourceConfig) return [];
-    return sourceConfig.source.getPages();
+    const pages = sourceConfig.source.getPages();
+    if (type === 'blog') {
+      return pages.sort((a, b) => {
+        const dateA = new Date((a.data as any).publishedAt).getTime();
+        const dateB = new Date((b.data as any).publishedAt).getTime();
+        return dateB - dateA || a.slugs.join('/').localeCompare(b.slugs.join('/'));
+      });
+    }
+    return pages;
   }
 
   /**
@@ -168,6 +177,9 @@ ${processed}`;
       url: page.url,
       title: title || '',
       description: description ? description : undefined,
+      publishedAt: (page.data as any).publishedAt
+        ? new Date((page.data as any).publishedAt)
+        : undefined,
       lastModified: (page.data as any).lastModified ? new Date((page.data as any).lastModified) : undefined,
     };
   }
@@ -196,4 +208,3 @@ ${processed}`;
 
 // Singleton instance
 export const contentManager = new ContentManager();
-

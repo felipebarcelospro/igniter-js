@@ -3,6 +3,14 @@ title: API Reference
 description: Quick reference for the storage builder, manager methods, and upload options.
 ---
 
+## Public exports
+
+The package root exports `IgniterStorage`, `IgniterStorageBuilder`, `IgniterStorageManager`, `IgniterStorageAdapter`, `IgniterS3StorageAdapter`, `IgniterS3Adapter`, `IgniterGoogleCloudStorageAdapter`, `IgniterGoogleAdapter`, `MockStorageAdapter`, and `IgniterStorageError`, plus public types for manager, builder, scopes, hooks, files, policies, replacement, and provider credentials. The `@igniter-js/storage/adapters` subpath exports the adapter classes and their credential/options types. The `@igniter-js/storage/telemetry` subpath exports `IgniterStorageTelemetryEvents`. Utilities (`IgniterStoragePath`, `IgniterStorageUrl`, `IgniterStorageMime`, `IgniterStorageEnv`, and `IgniterStorageTryCatch`) are exported from the package root.
+
+<Callout type="info">
+  `.build()` requires both a base URL (`.withUrl()` or `IGNITER_STORAGE_URL`) and an adapter (an adapter instance, `.withAdapter(key, credentials)`, or `IGNITER_STORAGE_ADAPTER`).
+</Callout>
+
 ## Builder
 
 <TypeTable
@@ -13,7 +21,15 @@ description: Quick reference for the storage builder, manager methods, and uploa
     },
     "withAdapterFactories(factories)": {
       type: "IgniterStorageBuilder",
-      description: "Register custom adapter factories keyed by string",
+      description: "Override the built-in s3 or google adapter factories",
+    },
+    "withLogger(logger)": {
+      type: "IgniterStorageBuilder",
+      description: "Set a logger for manager operations",
+    },
+    "withTelemetry(manager)": {
+      type: "IgniterStorageBuilder",
+      description: "Emit typed storage lifecycle events",
     },
     "withUrl(url)": {
       type: "IgniterStorageBuilder",
@@ -35,17 +51,25 @@ description: Quick reference for the storage builder, manager methods, and uploa
       type: "IgniterStorageBuilder",
       description: "Restrict uploads by extension",
     },
+    "onUploadStarted(hook) / onUploadSuccess(hook) / onUploadError(hook)": {
+      type: "IgniterStorageBuilder",
+      description: "Register upload lifecycle callbacks",
+    },
+    "onDeleteStarted(hook) / onDeleteSuccess(hook) / onDeleteError(hook)": {
+      type: "IgniterStorageBuilder",
+      description: "Register delete lifecycle callbacks",
+    },
+    "onCopyStarted(hook) / onCopySuccess(hook) / onCopyError(hook)": {
+      type: "IgniterStorageBuilder",
+      description: "Register copy lifecycle callbacks",
+    },
+    "onMoveStarted(hook) / onMoveSuccess(hook) / onMoveError(hook)": {
+      type: "IgniterStorageBuilder",
+      description: "Register move lifecycle callbacks",
+    },
     "addScope(key, path?)": {
       type: "IgniterStorageBuilder",
       description: 'Register typed scope; path defaults to "/<key>"',
-    },
-    "withLogger(logger)": {
-      type: "IgniterStorageBuilder",
-      description: "Inject logger used by manager",
-    },
-    "withTelemetry(manager)": {
-      type: "IgniterStorageBuilder",
-      description: "Emit typed telemetry events",
     },
     "build()": {
       type: "IgniterStorageManager",
@@ -69,7 +93,7 @@ description: Quick reference for the storage builder, manager methods, and uploa
     },
     "upload(file, destination, options?)": {
       type: "Promise<IgniterStorageFile>",
-      description: "Upload Blob/File/Readable with optional replace strategy",
+      description: "Upload Blob/File/Readable with optional contentType and replace strategy",
     },
     "uploadFromUrl(url, destination, options?)": {
       type: "Promise<IgniterStorageFile>",
@@ -120,7 +144,12 @@ description: Quick reference for the storage builder, manager methods, and uploa
         "Delete matching files before upload; aborts upload on deletion failure",
       required: false,
     },
+    contentType: {
+      type: "string",
+      description: "Explicit MIME type, supported by upload and buffer/base64 helpers",
+      required: false,
+    },
   }}
 />
 
-For errors and recovery patterns, see [Error Codes](</docs/storage/(reference)/error-codes>) and [Troubleshooting](/docs/storage/troubleshooting). For concepts and flows, visit [Architecture](</docs/storage/(concepts)/architecture>).
+For errors and recovery patterns, see [Error Codes](</docs/storage/error-codes>) and [Troubleshooting](/docs/storage/troubleshooting). For concepts and flows, visit [Architecture](</docs/storage/architecture>).

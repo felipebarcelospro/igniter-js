@@ -1,0 +1,19 @@
+{
+  "title": "MCP Server",
+  "root": true,
+  "pages": [
+    "---Get Started---",
+    "index",
+    "installation",
+    "first-run",
+    "---Core Concepts---",
+    "toolsets",
+    "configuration",
+    "---Guides---",
+    "ide-integration",
+    "---Advanced---",
+    "advanced",
+    "---API Reference---",
+    "api-reference"
+  ]
+}

@@ -46,6 +46,8 @@ await supportBot.start();
 
 ```typescript
 // commands/support.ts
+import { Bot } from '@igniter-js/bot';
+
 export const supportCommands = {
   help: Bot.command({
     name: 'help',
@@ -66,11 +68,16 @@ export const supportCommands = {
     aliases: ['report', 'issue'],
     description: 'Create a support ticket',
     help: 'Use /ticket &lt;description&gt; to report an issue',
-    async handle(ctx) {
+    async handle(ctx, params) {
+      const description = params.join(' ').trim();
+      if (!description) {
+        await ctx.reply('Use /ticket <description>.');
+        return;
+      }
       const ticketId = await createSupportTicket({
         userId: ctx.message.author.id,
         platform: ctx.provider,
-        description: ctx.args.description,
+        description,
       });
 
       await ctx.session.update({ activeTicket: ticketId });
@@ -148,21 +155,25 @@ export const shopCommands = {
     aliases: ['find', 'browse'],
     description: 'Search products',
     help: 'Use /search &lt;query&gt; to find products',
-    args: z.object({ query: z.string().min(2) }),
-    async handle(ctx, args) {
+    async handle(ctx, params) {
+      const parsed = z.string().min(2).safeParse(params.join(' '));
+      if (!parsed.success) {
+        await ctx.reply('Use /search <query> to find products.');
+        return;
+      }
       await ctx.sendTyping!();
 
-      const products = await searchProducts(args.query);
+      const products = await searchProducts(parsed.data);
 
       if (products.length === 0) {
-        await ctx.reply(`No products found for "${args.query}".`);
+        await ctx.reply(`No products found for "${parsed.data}".`);
         return;
       }
 
       await ctx.session.update({ searchResults: products.slice(0, 10) });
 
       await ctx.replyWithButtons(
-        `🔍 **${products.length}** results for "${args.query}":\n\n` +
+        `🔍 **${products.length}** results for "${parsed.data}":\n\n` +
         products.slice(0, 5).map((p, i) => `${i + 1}. **${p.name}** — $${p.price}`).join('\n'),
         products.slice(0, 5).map((p, i) => ({
           id: `add_${p.id}`,
@@ -205,7 +216,7 @@ export const shopCommands = {
 
   checkout: Bot.command({
     name: 'checkout',
-    aliases: ['buy', 'order'],
+    aliases: ['buy'],
     description: 'Place your order',
     help: 'Use /checkout to complete your purchase',
     async handle(ctx) {
@@ -233,12 +244,16 @@ export const shopCommands = {
 
   track: Bot.command({
     name: 'track',
-    aliases: ['order'],
+    aliases: ['track-order'],
     description: 'Track an order',
     help: 'Use /track &lt;order_id&gt; to check status',
-    args: z.object({ orderId: z.string() }),
-    async handle(ctx, args) {
-      const order = await getOrder(args.orderId);
+    async handle(ctx, params) {
+      const orderId = z.string().min(1).safeParse(params[0]);
+      if (!orderId.success) {
+        await ctx.reply('Use /track <order_id> to check status.');
+        return;
+      }
+      const order = await getOrder(orderId.data);
 
       if (!order) {
         await ctx.reply('Order not found. Check the ID and try again.');
@@ -301,9 +316,12 @@ const bot = IgniterBot.create()
       aliases: [],
       description: 'Ban a user',
       help: 'Use /mod_ban &lt;user_id&gt; [reason]',
-      async handle(ctx) {
-        await banUser(ctx.args.userId, ctx.args.reason);
-        await ctx.reply(`🚫 User ${ctx.args.userId} banned. Reason: ${ctx.args.reason || 'No reason provided'}`);
+      async handle(ctx, params) {
+        const [userId, ...reasonParts] = params;
+        const reason = reasonParts.join(' ');
+        if (!userId) { await ctx.reply('Use /mod_ban <user_id> [reason].'); return; }
+        await banUser(userId, reason);
+        await ctx.reply(`🚫 User ${userId} banned. Reason: ${reason || 'No reason provided'}`);
       },
     },
     kick: {
@@ -311,9 +329,11 @@ const bot = IgniterBot.create()
       aliases: [],
       description: 'Kick a user',
       help: 'Use /mod_kick &lt;user_id&gt;',
-      async handle(ctx) {
-        await kickUser(ctx.args.userId);
-        await ctx.reply(`👢 User ${ctx.args.userId} kicked.`);
+      async handle(ctx, params) {
+        const [userId] = params;
+        if (!userId) { await ctx.reply('Use /mod_kick <user_id>.'); return; }
+        await kickUser(userId);
+        await ctx.reply(`👢 User ${userId} kicked.`);
       },
     },
     warn: {
@@ -321,9 +341,12 @@ const bot = IgniterBot.create()
       aliases: [],
       description: 'Warn a user',
       help: 'Use /mod_warn &lt;user_id&gt; &lt;reason&gt;',
-      async handle(ctx) {
-        const warning = await addWarning(ctx.args.userId, ctx.args.reason);
-        await ctx.reply(`⚠️ User ${ctx.args.userId} warned (${warning.count}/3). Reason: ${ctx.args.reason}`);
+      async handle(ctx, params) {
+        const [userId, ...reasonParts] = params;
+        const reason = reasonParts.join(' ');
+        if (!userId || !reason) { await ctx.reply('Use /mod_warn <user_id> <reason>.'); return; }
+        const warning = await addWarning(userId, reason);
+        await ctx.reply(`⚠️ User ${userId} warned (${warning.count}/3). Reason: ${reason}`);
       },
     },
     clear: {
@@ -331,9 +354,11 @@ const bot = IgniterBot.create()
       aliases: ['purge'],
       description: 'Clear messages',
       help: 'Use /mod_clear &lt;count&gt;',
-      async handle(ctx) {
-        await clearMessages(ctx.channel.id, ctx.args.count);
-        await ctx.reply(`🧹 Cleared ${ctx.args.count} messages.`);
+      async handle(ctx, params) {
+        const count = z.coerce.number().int().positive().safeParse(params[0]);
+        if (!count.success) { await ctx.reply('Use /mod_clear <count>.'); return; }
+        await clearMessages(ctx.channel.id, count.data);
+        await ctx.reply(`🧹 Cleared ${count.data} messages.`);
       },
     },
   })
@@ -574,13 +599,11 @@ const bot = IgniterBot.create()
       await ctx.reply('Your account is not associated with any organization.');
       return;
     }
-    await next();
     return { tenant };
   })
   .addMiddleware(async (ctx, next) => {
     // Switch database context
     const db = await getTenantDatabase(ctx.tenant.id);
-    await next();
     return { db };
   })
   .build();

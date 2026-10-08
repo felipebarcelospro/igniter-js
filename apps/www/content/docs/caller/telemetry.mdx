@@ -3,7 +3,7 @@ title: Telemetry
 description: Monitor your API health and performance with native telemetry.
 ---
 
-Caller is built with observability as a first-class citizen. It integrates deeply with `@igniter-js/telemetry` to provide tracing and metrics for every request.
+Caller can emit structured lifecycle events through `@igniter-js/telemetry`. These events are not distributed traces or metrics; applications can consume them and forward selected data to their own observability systems.
 
 ## Setup
 
@@ -30,11 +30,11 @@ Caller automatically emits the following events:
 
 | Event | Metadata | Description |
 |-------|----------|-------------|
-| `igniter.caller.request.execute.started` | `method`, `url`, `baseUrl`, `timeoutMs` | Emitted before the fetch starts. |
-| `igniter.caller.request.execute.success` | `method`, `url`, `durationMs`, `status`, `contentType`, `hit` | Emitted on successful response. |
-| `igniter.caller.request.execute.error` | `method`, `url`, `durationMs`, `code`, `message`, `status` | Emitted on HTTP or Network failure. |
-| `igniter.caller.cache.read.hit` | `method`, `url`, `key`, `staleTime` | Emitted when data is retrieved from cache. |
-| `igniter.caller.retry.attempt.started` | `method`, `url`, `attempt`, `maxAttempts`, `delayMs` | Emitted before each retry attempt. |
+| `igniter.caller.request.execute.started` | `ctx.request.*` | Emitted before the fetch starts. |
+| `igniter.caller.request.execute.success` | `ctx.request.*`, `ctx.response.*`, `ctx.cache.*` | Emitted on successful response. |
+| `igniter.caller.request.execute.error` | `ctx.request.*`, `ctx.error.*`, `ctx.response.*` | Emitted on HTTP or network failure. |
+| `igniter.caller.cache.read.hit` | `ctx.request.*`, `ctx.cache.*` | Emitted when data is retrieved from cache. |
+| `igniter.caller.retry.attempt.started` | `ctx.request.*`, `ctx.retry.*` | Emitted before each retry attempt. |
 
 ## Context Injection
 
@@ -47,17 +47,8 @@ Telemetry attributes are automatically prefixed with domain-specific contexts:
 
 ## Custom Telemetry
 
-If you have custom interceptors, you can also manually emit events using the `telemetry` instance provided in the context.
-
-```ts
-api.withRequestInterceptor(async (request, context) => {
-  context.telemetry.emit('my.custom.event', { foo: 'bar' })
-  return request
-})
-```
-
----
+The request interceptors receive request options only; they do not receive a telemetry context. If you need custom events, emit them through your telemetry manager from application code and register their schemas with that manager. Caller’s built-in events and their attributes are listed above.
 
 ## Log Integration
 
-Caller also supports standard logging via `.withLogger()`. Telemetry is preferred for structured data and tracing, while Logger is best for human-readable console output.
+Caller also supports standard logging via `.withLogger()`. Telemetry carries structured lifecycle events, while Logger is best for human-readable log output.

@@ -13,7 +13,7 @@ By the end, you'll have a telemetry instance with typed events, two transports (
 
 ## Step 1 — Define Typed Events
 
-Use `IgniterTelemetryEvents` to create namespaced, schema-validated event registries. Groups help organize related events.
+Use `IgniterTelemetryEvents` to create namespaced event registries with inferred schema types. Groups help organize related events.
 
 ```typescript
 // telemetry/events.ts
@@ -56,7 +56,7 @@ export const BillingEvents = IgniterTelemetryEvents
 ```
 
 <Callout type="info">
-  Zod is optional — you can emit untyped events too. But typed registries give you autocompletion on event names and runtime validation if enabled.
+  Zod is optional — you can emit untyped events too. Registered schemas provide event-name and attribute inference to TypeScript. The current runtime does not validate emitted attributes against those schemas.
 </Callout>
 
 ---
@@ -208,7 +208,7 @@ export async function createInvoice(orgId: string, userId: string) {
 
 ## Step 4 — Graceful Shutdown
 
-Call `shutdown()` before your process exits to flush pending events and clean up transports.
+Call `shutdown()` during graceful process shutdown to ask transports to flush and clean up.
 
 ```typescript
 // server.ts
@@ -228,7 +228,7 @@ process.on("SIGINT", async () => {
 ```
 
 <Callout type="warn">
-  **Always call `shutdown()`** before the process exits. Transports like HTTP may have pending requests, and the Store adapter needs to close Redis connections. Without shutdown, you risk losing buffered events.
+  Call `shutdown()` during graceful shutdown when transports need cleanup. It invokes each adapter's `flush()` and `shutdown()` hooks, but catches hook errors and does not wait for events already being delivered by the asynchronous `emit()` path. It cannot guarantee delivery of every event.
 </Callout>
 
 ---

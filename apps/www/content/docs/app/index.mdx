@@ -1,75 +1,47 @@
 ---
 title: "@igniter-js/app"
-description: "Build type-safe React applications with a client, shared context, reactive state, and TanStack Router."
+description: "Compose a typed React application around an Igniter client, route loaders, shared context, and optional state and triggers."
 ---
 
-`@igniter-js/app` connects an application client and context to pages and routes. It builds on [TanStack Router](https://tanstack.com/router) and adds typed page loaders, metadata, state, and triggers.
+`@igniter-js/app` is the React application shell for an Igniter client. It builds a route tree on [TanStack Router](https://tanstack.com/router), and lets route loaders and components use the same typed client, request context, and configured stores.
 
-## Install
+Use this package when you want your React routes to call a typed Igniter API and share application setup. The root entrypoint includes app and router builders, state, triggers, forms, navigation helpers, and an error boundary. Smaller state, trigger, and form imports are also available as subpaths.
 
-Install the package with React and TanStack Router:
+## Capabilities
 
-<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
-  <Tab value="npm">
-    ```bash
-    npm install @igniter-js/app @tanstack/react-router react react-dom zod
-    ```
-  </Tab>
-  <Tab value="pnpm">
-    ```bash
-    pnpm add @igniter-js/app @tanstack/react-router react react-dom zod
-    ```
-  </Tab>
-  <Tab value="yarn">
-    ```bash
-    yarn add @igniter-js/app @tanstack/react-router react react-dom zod
-    ```
-  </Tab>
-  <Tab value="bun">
-    ```bash
-    bun add @igniter-js/app @tanstack/react-router react react-dom zod
-    ```
-  </Tab>
-</Tabs>
+- Build an app with `.withClient()`, `.withContext()`, `.withStores()`, and optional trigger configuration.
+- Define pages with typed search validation, loaders, metadata, and components.
+- Build a TanStack Router tree and render it through `IgniterRouterProvider`.
+- Add client-side state, UI triggers, and mutation-backed forms when needed.
 
-## Create an app and route
+<Callout type="info">
+  This package is a React application layer. Create the API and its typed client with [@igniter-js/core](/docs/core) and connect the two through `IgniterApp.withClient()`.
+</Callout>
 
-Pass your existing typed client to `IgniterApp`, define a page, then build the router and render it with `IgniterRouterProvider`.
+## Get started
 
-```tsx title="src/app.igniter.tsx"
-import {
-  IgniterApp,
-  IgniterRouter,
-  IgniterRouterProvider,
-} from '@igniter-js/app'
-import { client } from './client'
+<Steps>
+  <Step>
+    ### Install the runtime dependencies
+    Follow the [installation guide](/docs/app/installation) for React, TanStack Router, and Zod.
+  </Step>
+  <Step>
+    ### Build the app and a page
+    The [quick start](/docs/app/quick-start) shows a complete app builder, page, router, and provider.
+  </Step>
+  <Step>
+    ### Add only the features you need
+    Continue with [routing](/docs/app/routing), [state](/docs/app/state), [triggers](/docs/app/triggers), or [forms](/docs/app/forms).
+  </Step>
+</Steps>
 
-const app = IgniterApp.create()
-  .withClient(client)
-  .withContext(() => ({ requestStartedAt: Date.now() }))
-  .build()
+## Package entrypoints
 
-const homePage = app.page('/')
-  .withMetadata({ title: 'Home', description: 'Welcome to the app.' })
-  .withComponent(() => (
-    <main>
-      <h1>Welcome</h1>
-    </main>
-  ))
-  .build()
+| Import | Use |
+| --- | --- |
+| `@igniter-js/app` | App and router builders, UI helpers, state, triggers, and `useForm` |
+| `@igniter-js/app/state` | State builder and state-related exports |
+| `@igniter-js/app/trigger` | Trigger builders and trigger-related exports |
+| `@igniter-js/app/form` | `useForm` and its public types |
 
-const router = IgniterRouter.create(app)
-  .addRoute(homePage)
-  .build()
-
-export function App() {
-  return <IgniterRouterProvider router={router} />
-}
-```
-
-`withContext()` runs for route loads and makes its returned value available to loaders and triggers. The route tree is a TanStack Router instance, so TanStack Router's navigation and rendering model still applies.
-
-## Learn more
-
-- [Application package source and API](https://github.com/felipebarcelospro/igniter-js/tree/main/packages/app)
-- [Core API quick start](/docs/core/quick-start)
+See the [API reference](/docs/app/api-reference) for the verified public exports. For the server API and client setup, start with [Core](/docs/core/quick-start); for API calls and client behavior, see [Caller](/docs/caller).

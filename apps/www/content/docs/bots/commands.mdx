@@ -1,11 +1,11 @@
 ---
 title: Commands
-description: Master the command system — aliases, subcommands, Zod argument validation, command groups, and auto-registration across platforms.
+description: Define commands with aliases, handle raw command parameters safely, group related commands, and register platform commands.
 ---
 
 ## Commands
 
-Commands are the primary way users interact with your bot. The framework provides a full-featured command system with aliases, subcommands, Zod validation, command groups, and automatic platform registration.
+Commands are the primary way users interact with your bot. The framework resolves names and aliases, routes raw command parameters to handlers, supports flat command groups, and passes registered commands to adapters that support platform registration.
 
 ---
 
@@ -31,12 +31,12 @@ builder.addCommand('start', {
 | `aliases` | `string[]` | ✅ | Alternative names. Each must follow the same rules. |
 | `description` | `string` | ✅ | Short description (used for platform registration). |
 | `help` | `string` | ✅ | Detailed help shown on invalid usage. |
-| `args` | `ZodType` | ❌ | Zod schema for validating and typing arguments. |
-| `handle` | `(ctx, args) => Promise<void>` | ✅ | The handler function. |
-| `subcommands` | `Record<string, BotCommand>` | ❌ | Nested subcommands. |
+| `args` | `ZodType<TArgs>` | ❌ | Type-level command argument declaration. The runtime does not parse or validate this schema. |
+| `handle` | `(ctx, params) => Promise<void>` | ✅ | Receives the raw `params` from the normalized command message. |
+| `subcommands` | `Record<string, ...>` | ❌ | Declared in the type, but nested subcommands are not dispatched by the current runtime. Use flat command groups. |
 
-<Callout type="warn">
-  Commands are validated at registration time using `Bot.command()`. Names with slashes, spaces, or missing required fields throw immediately.
+<Callout type="info">
+  `Bot.command()` validates the command definition and name when you create it. Builder methods such as `addCommand()` store the object under a key; they do not run that validation helper for you.
 </Callout>
 
 ---
@@ -57,9 +57,9 @@ builder.addCommand('help', {
 
 ---
 
-## Argument Validation (Zod)
+## Validate Command Input
 
-Use the `args` field to validate and type command arguments:
+Handlers receive the normalized message's raw `params` array. The optional `args` property is part of the command type, but the runtime does not parse it, validate incoming arguments, or pass a parsed object to `handle`. Validate parameters in the handler:
 
 ```typescript
 import { z } from 'zod';
@@ -69,99 +69,45 @@ builder.addCommand('search', {
   aliases: ['find', 's'],
   description: 'Search the catalog',
   help: 'Use /search &lt;query&gt; [category] to find items',
-  args: z.object({
-    query: z.string().min(2).describe('Search query (min 2 chars)'),
-    category: z.enum(['books', 'movies', 'music']).optional(),
-  }),
-  async handle(ctx, args) {
-    // args is fully typed: { query: string; category?: 'books' | 'movies' | 'music' }
-    const results = await searchCatalog(args.query, args.category);
+  async handle(ctx, params) {
+    const parsed = z.object({
+      query: z.string().min(2),
+      category: z.enum(['books', 'movies', 'music']).optional(),
+    }).safeParse({ query: params[0], category: params[1] });
+
+    if (!parsed.success) {
+      await ctx.reply('Use /search <query> [books|movies|music].');
+      return;
+    }
+
+    const { query, category } = parsed.data;
+    const results = await searchCatalog(query, category);
 
     if (results.length === 0) {
-      await ctx.reply(`No results found for "${args.query}".`);
+      await ctx.reply(`No results found for "${query}".`);
       return;
     }
 
     await ctx.reply(
-      `🔍 Found **${results.length}** result(s) for "${args.query}":\n\n` +
+      `🔍 Found **${results.length}** result(s) for "${query}":\n\n` +
       results.map((r, i) => `${i + 1}. ${r.title}`).join('\n'),
     );
   },
 });
 ```
 
-When a user provides invalid arguments, the framework returns a helpful error message automatically:
-
-```
-/invalid usage: search &lt;query&gt; [category]
-
-Use /search &lt;query&gt; [category] to find items
-```
-
 <Callout type="info">
-  The `args` schema uses `z.object()`. Nested objects, arrays, unions, and refinements are all supported — anything Zod can validate works here.
+  `params` comes from the adapter's normalized command message. Tokenization and quoting behavior can differ by platform; treat user input as untrusted and validate it in your handler. The runtime does not automatically use `BotCommand.args`.
 </Callout>
 
 ---
 
-## Subcommands
+## Nested Subcommands
 
-Subcommands create nested command hierarchies. Define them inline or reference externally defined commands:
+`BotCommand` currently declares a `subcommands` property in its TypeScript type, but the message-processing runtime does not dispatch nested commands. Use `addCommandGroup()` to register flat, prefixed commands instead.
 
-```typescript
-builder.addCommand('admin', {
-  name: 'admin',
-  aliases: ['adm'],
-  description: 'Admin commands',
-  help: 'Use /admin &lt;subcommand&gt; for admin operations',
-  subcommands: {
-    ban: {
-      name: 'ban',
-      aliases: ['block'],
-      description: 'Ban a user',
-      help: 'Use /admin ban &lt;user_id&gt;',
-      args: z.object({ userId: z.string() }),
-      async handle(ctx, args) {
-        await banUser(args.userId);
-        await ctx.reply(`🚫 User ${args.userId} has been banned.`);
-      },
-    },
-    kick: {
-      name: 'kick',
-      aliases: ['remove'],
-      description: 'Kick a user',
-      help: 'Use /admin kick &lt;user_id&gt;',
-      args: z.object({ userId: z.string() }),
-      async handle(ctx, args) {
-        await kickUser(args.userId);
-        await ctx.reply(`👢 User ${args.userId} has been kicked.`);
-      },
-    },
-    stats: {
-      name: 'stats',
-      aliases: ['info'],
-      description: 'Show admin stats',
-      help: 'Use /admin stats',
-      async handle(ctx) {
-        const stats = await getAdminStats();
-        await ctx.reply(`📊 **Admin Stats**\n\n${JSON.stringify(stats, null, 2)}`);
-      },
-    },
-  },
-  // The parent command itself has a handler for bare /admin
-  async handle(ctx) {
-    await ctx.reply(
-      '🔧 **Admin Commands:**\n\n' +
-      '/admin ban &lt;user_id&gt; — Ban a user\n' +
-      '/admin kick &lt;user_id&gt; — Kick a user\n' +
-      '/admin stats — Show statistics',
-    );
-  },
-});
-```
-
-<Callout type="info">
-  Subcommands don't need their own `name` or `aliases` — those are inherited from the parent command context.
+<Callout type="warn">
+  Do not rely on `subcommands` to execute handlers. A message such as `/admin ban 123` is dispatched as the top-level `admin` command with remaining tokens in `params`.
 </Callout>
 
 ---
@@ -198,7 +144,7 @@ builder.addCommandGroup('admin', {
 // Results in commands: /admin_ban, /admin_kick, /admin_stats
 ```
 
-Unlike subcommands, command groups create **flat, prefixed commands**. This is useful when platforms don't support nested command structures natively.
+Command groups create **flat, prefixed commands** such as `/admin_ban`. The registered command names and aliases are resolved like other top-level commands.
 
 ---
 
@@ -245,19 +191,19 @@ This is useful for plugin systems, hot-reload during development, or commands th
 
 Commands are automatically registered with platforms that support it:
 
-- **Telegram** — Commands are set via `setMyCommands` API during `init()`
-- **Discord** — Slash commands are registered via the Applications API during `init()`
+- **Telegram** — Commands are set via `setMyCommands` during `init()` when `webhook.url` is configured. Without that URL, adapter initialization returns before command registration.
+- **Discord** — Slash commands are registered globally through the Applications API during `init()`
 - **WhatsApp** — Commands are handled entirely by the framework (no native command system)
 
-<Callout type="warn">
-  Discord slash commands may take up to 1 hour to propagate globally after registration. For development, register them to a specific guild for instant updates.
+<Callout type="info">
+  The current adapter registers commands at the application level. It does not provide a guild-specific registration option.
 </Callout>
 
 ---
 
 ## Creating Commands in Separate Files
 
-Use `Bot.command()` to create commands in separate files with validation:
+Use `Bot.command()` to create a command definition in a separate file. `Bot` is exported from the package root:
 
 ```typescript
 // commands/start.ts
@@ -281,18 +227,18 @@ const bot = IgniterBot.create()
   .build();
 ```
 
-`Bot.command()` validates the command structure at creation time, catching errors early.
+`Bot.command()` validates required fields and command-name constraints at creation time. It does not validate handler input.
 
 ---
 
 ## Best Practices
 
 - ✅ **Use descriptive names** — `search` is better than `s`. Aliases handle shortcuts.
-- ✅ **Always provide help text** — Users will invoke `/command --help` style usage.
-- ✅ **Validate with Zod** — Even simple commands benefit from typed arguments.
+- ✅ **Always provide help text** — The framework uses the command's help text when a handler reports invalid usage; it does not implement a special `/command --help` flag.
+- ✅ **Validate user input in the handler** — Parse the raw `params` array with Zod or another validator before using it.
 - ✅ **Organize related commands with groups** — Keeps your bot configuration readable.
 - ✅ **Keep handlers focused** — Extract business logic into separate functions for testability.
-- ❌ **Don't create too many top-level commands** — Use subcommands or groups for organization.
+- ❌ **Don't assume nested `subcommands` are dispatched** — Use flat command groups for related commands.
 - ❌ **Don't hardcode platform-specific logic** — Use `ctx.provider` to check the current platform only when truly needed.
 
 ---

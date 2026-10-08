@@ -7,7 +7,7 @@ description: Pino-powered structured logging for Igniter.js. Builder-pattern con
 
 `@igniter-js/logger` is a **Pino-backed structured logger** with a builder-pattern API. It wraps Pino's raw performance in a clean, TypeScript-first interface that feels at home in the Igniter.js ecosystem.
 
-You configure a logger once with the builder — log level, app name, component, context, and transports — and get a fully typed manager. No Pino configuration files. No JSON. Just a fluent chain that TypeScript understands.
+You configure a logger once with the builder — log level, app name, component, context, and transports — and get a typed manager. No Pino configuration files are required; use a raw Pino target or external transport when you need JSON-line output.
 
 <Callout type="info">
   Logger delegates internally to **Pino v9** — the fastest Node.js logger. You get Pino's performance and ecosystem (pino-pretty, pino/file, external transports) behind a clean Igniter.js API.
@@ -17,20 +17,19 @@ You configure a logger once with the builder — log level, app name, component,
 
 - **Builder Pattern** — `.create().withLevel().addTransport().build()` — chained configuration with full TypeScript inference
 - **Six Log Levels** — `fatal`, `error`, `warn`, `info`, `debug`, `trace` — plus `success` for positive outcomes
-- **Three Built-in Transports** — console (pino-pretty), file (with rotation), HTTP (async batch delivery)
+- **Three Built-in Transports** — console (`pino-pretty`), file (`pino/file`), and HTTP (asynchronous batch delivery)
 - **External Transports** — use any pino-compatible transport (Logtail, Datadog, Loki, etc.)
 - **Child Loggers** — create scoped loggers with merged context for services, requests, or tenants
-- **Typed Scopes** — `defineScopes<T>()` gives child loggers typed context parameters
 - **Structured Context** — merge default context into every log entry; add per-call context inline
 - **Visual Hierarchy** — `group()`/`groupEnd()` indent log output; `separator()` draws dividers
-- **Runtime Control** — change log level, app name, or component at runtime without recreating the logger
-- **Non-blocking HTTP** — async batching transport with periodic flush and automatic retry
+- **Runtime Control** — change the Pino log level at runtime; app name and component are configured when the logger is built
+- **Non-blocking HTTP** — asynchronous batching transport with periodic and worker-close delivery attempts; failed sends are retained in memory between attempts
 
 ---
 
 ## Architecture
 
-Logger follows the **Igniter.js builder pattern**: a chainable builder produces an immutable manager. The manager wraps a Pino instance, which handles transport resolution and output.
+Logger follows the **Igniter.js builder pattern**: a chainable builder produces a manager around a Pino instance. Builder methods return new builder instances; manager methods such as `setLevel()`, `setAppName()`, and `setComponent()` update the built manager.
 
 ```
 ┌─────────────────────────┐
@@ -40,12 +39,11 @@ Logger follows the **Igniter.js builder pattern**: a chainable builder produces 
 │  .withComponent()       │
 │  .withContext()         │
 │  .addTransport() × N    │
-│  .defineScopes<T>()     │
 │  .build()               │
 └───────────┬─────────────┘
             │ produces
 ┌───────────▼─────────────┐
-│ IgniterLoggerManager    │  ← Immutable, fully typed
+│ IgniterLoggerManager    │  ← Built runtime manager
 │  .info(msg)             │
 │  .error(msg, err)       │
 │  .child(name, ctx)      │
@@ -122,10 +120,10 @@ That's it. One import, one builder call, and you're logging. The default setup g
 | Scenario | What Logger Provides |
 |----------|---------------------|
 | **API Server** | Console transport for development, file transport for audit logs, HTTP transport for centralized log ingestion |
-| **Microservices** | App name and component labels track which service produced each log; typed scopes enforce tenant context |
+| **Microservices** | App name and component labels track which service produced each log; application helpers can require tenant context |
 | **CLI Tools** | `success()` for positive outcomes, `group()` for indented progress, `separator()` for section breaks |
-| **Background Jobs** | File transport with rotation for persistent job logs; `flush()` ensures logs are written before process exit |
-| **Multi-tenant SaaS** | Parent logger with tenant-agnostic config; `.child(tenantId, { tenantId })` creates isolated log streams |
+| **Background Jobs** | File transport for job logs; use `flush()` during graceful shutdown to drain buffered output |
+| **Multi-tenant SaaS** | Use `.child(tenantId, { tenantId })` to add tenant context to child log entries while sharing the configured output |
 | **Serverless Functions** | Minimal cold-start overhead; HTTP transport ships logs to external aggregator before function terminates |
 
 ---

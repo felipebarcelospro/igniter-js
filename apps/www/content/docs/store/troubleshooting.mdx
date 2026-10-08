@@ -59,7 +59,7 @@ const redis = new Redis({
 
 ### `STORE_SCHEMA_VALIDATION_FAILED`
 
-**Symptom:** Publishing or subscribing to events throws validation errors.
+**Symptom:** Publishing an event throws a validation error, or a subscriber does when `validateSubscribe` is enabled.
 
 **Causes:**
 
@@ -87,11 +87,11 @@ const redis = new Redis({
    });
    ```
 
-2. **To disable validation for debugging:**
+2. **To suppress thrown validation errors:**
    ```typescript
-   .addEvents(UserEvents, {
-     throwOnValidationError: false,
-   })
+     .addEvents(UserEvents, {
+       throwOnValidationError: false,
+     })
    ```
 
 ### `STORE_DUPLICATE_NAMESPACE`
@@ -100,16 +100,33 @@ const redis = new Redis({
 
 **Fix:** Each namespace can only be added once. Combine events from the same feature into a single `IgniterStoreEvents` definition:
 ```typescript
+import { z } from "zod";
+import { IgniterStore, IgniterStoreEvents } from "@igniter-js/store";
+import { IgniterStoreMemoryAdapter } from "@igniter-js/store/adapters";
+
 // ✅ Good — single definition per namespace
 const UserEvents = IgniterStoreEvents
   .create("user")
-  .event("created", createdSchema)
-  .event("deleted", deletedSchema)
+  .event("created", z.object({ userId: z.string() }))
+  .event("deleted", z.object({ userId: z.string() }))
   .build();
 
-// ❌ Bad — trying to add the same namespace twice
-store.addEvents(UserEventsCreated);
-store.addEvents(UserEventsDeleted); // Error: duplicate namespace
+// ❌ Bad — registering the same namespace twice on the builder
+const duplicateNamespaceBuilder = IgniterStore.create()
+  .withAdapter(IgniterStoreMemoryAdapter.create())
+  .withService("api");
+
+duplicateNamespaceBuilder.addEvents(
+  IgniterStoreEvents.create("user")
+    .event("created", z.object({ userId: z.string() }))
+    .build(),
+);
+// The second addEvents() call throws STORE_DUPLICATE_NAMESPACE immediately.
+duplicateNamespaceBuilder.addEvents(
+  IgniterStoreEvents.create("user")
+    .event("deleted", z.object({ userId: z.string() }))
+    .build(),
+);
 ```
 
 ---
@@ -237,17 +254,27 @@ This is **normal** and handled automatically. The adapter catches this and treat
 
 ### Messages not being delivered
 
-**Check:** Are you acknowledging messages? Unacknowledged messages stay in the pending list and won't be re-delivered until claimed.
+Unacknowledged messages remain in Redis's pending entries list. The current `consumer.read()` implementation reads new messages (`>`); the package does not expose pending-message recovery or reclaim.
 
 ```typescript
 const messages = await consumer.read("events", { count: 10 });
 
-// ✅ Always ack after processing
+const acked: string[] = [];
 for (const msg of messages) {
-  await processMessage(msg.message);
+  try {
+    await processMessage(msg.message);
+    acked.push(msg.id);
+  } catch (error) {
+    console.error(`Failed to process ${msg.id}:`, error);
+  }
 }
-await consumer.ack("events", messages.map((m) => m.id));
+if (acked.length > 0) {
+  // Acknowledge only successful messages.
+  await consumer.ack("events", acked);
+}
 ```
+
+To recover pending messages, use Redis consumer-group commands or add a separate recovery mechanism; `consumer.read()` will not return them again automatically.
 
 ### Stream grows unbounded
 
@@ -299,5 +326,5 @@ store.events.publish("user:created", {}); // any
 ## Getting Help
 
 - Browse the complete [API reference](/docs/store/api-reference)
-- Check the [package README](https://github.com/igniter-js/igniter-js/blob/main/packages/store/README.md)
+- Check the [package README](https://github.com/felipebarcelospro/igniter-js/blob/main/packages/store/README.md)
 - See [advanced patterns](/docs/store/advanced) for production guidance

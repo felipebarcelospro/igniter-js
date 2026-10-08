@@ -1,0 +1,51 @@
+---
+title: "Quick start"
+description: "Define a validated React Email template and send a typed transactional email with Resend."
+---
+
+This server-side example registers one template, infers its payload from a Zod schema, and sends it through Resend.
+
+<Steps>
+  <Step>
+    ### Create the mail instance
+    `withFrom()` sets the default sender. `withAdapter()` accepts a built-in provider name and secret or an adapter instance.
+
+    ```tsx title="src/mail.tsx"
+    import { Html, Text } from '@react-email/components'
+    import { IgniterMail } from '@igniter-js/mail'
+    import { z } from 'zod'
+
+    export const mail = IgniterMail.create()
+      .withFrom(process.env.MAIL_FROM!)
+      .withAdapter('resend', process.env.RESEND_API_KEY!)
+      .addTemplate('welcome', {
+        subject: 'Welcome',
+        schema: z.object({ name: z.string() }),
+        render: ({ name }) => (
+          <Html>
+            <Text>Welcome, {name}!</Text>
+          </Html>
+        ),
+      })
+      .build()
+    ```
+  </Step>
+  <Step>
+    ### Send the template
+    The template key and `data` shape are inferred from the registered schema. The runtime validates the data, renders HTML and plain text, then sends both to the adapter.
+
+    ```ts
+    await mail.send({
+      to: 'user@example.com',
+      template: 'welcome',
+      data: { name: 'Alex' },
+    })
+    ```
+  </Step>
+</Steps>
+
+The template subject is a literal string; it is not interpolated from template data. You can override it for an individual send with the `subject` field. For alternative providers and custom adapters, see [providers and adapters](/docs/mail/providers). To enqueue a future send, see [scheduling and hooks](/docs/mail/scheduling-hooks).
+
+<Callout type="info">
+  Keep this module on the server. Browser imports are redirected to a guard that throws an error rather than exposing credentials or send operations.
+</Callout>

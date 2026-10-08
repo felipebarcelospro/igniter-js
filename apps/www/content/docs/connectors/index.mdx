@@ -17,7 +17,7 @@ Whether you need to send Telegram messages, connect to Mailchimp via OAuth, rece
 
 - **Type-safe connectors** — Define config schemas (Zod), action signatures, and get full type inference on scoped instances
 - **Multi-tenant scopes** — Isolate integrations per organization, user, workspace, or any custom dimension
-- **OAuth 2.0 with PKCE** — Full OAuth lifecycle: authorization, callback, token refresh, and user info fetching
+- **OAuth primitives** — Authorization URL generation, PKCE, token exchange, refresh, and optional user info parsing. The current callback limitation is documented in [OAuth](/docs/connectors/oauth).
 - **AES-256-GCM encryption** — Sensitive fields (API keys, tokens) encrypted at rest with `IGNITER_SECRET`
 - **Webhook pipelines** — Define, verify, validate, and handle incoming webhooks with schema validation
 - **Adapter system** — Prisma adapter for PostgreSQL/MySQL/SQLite, mock adapter for testing, or build your own

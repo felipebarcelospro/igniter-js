@@ -1,6 +1,6 @@
 ---
 title: Validation
-description: Master input validation in Igniter.js using Zod, Valibot, Yup, or any StandardSchemaV1-compliant library for type-safe request handling.
+description: Validate request bodies and query parameters with schemas that provide the `.parse()` method used by Igniter Core at runtime.
 ---
 
 ## Overview
@@ -44,16 +44,13 @@ const userController = igniter.controller({
 
 ## StandardSchemaV1
 
-Igniter.js uses the **StandardSchemaV1** interface, which means it works with any validation library that implements this standard:
+At runtime, Core calls `.parse()` on the configured body or query schema. Use a validator that exposes this method, such as Zod, or provide a custom schema with a compatible `.parse()` method:
 
-- ✅ **Zod** (most popular)
-- ✅ **Valibot** (lightweight alternative)
-- ✅ **Yup** (with adapter)
-- ✅ **ArkType**
-- ✅ Any custom schema implementing StandardSchemaV1
+- Zod schemas expose `.parse()` and work with this runtime path.
+- A custom validator can be used when it implements the same `.parse()` contract.
 
 <Callout type="info" title="What is StandardSchemaV1?">
-  StandardSchemaV1 is a universal interface for validation libraries. It allows Igniter.js to work with multiple validation libraries without being tied to any specific one.
+  Do not assume every Standard Schema library works at runtime. Core currently invokes `.parse()` for body and query validation; verify that a library exposes a compatible method before using it.
 </Callout>
 
 ---
@@ -393,7 +390,7 @@ const userController = igniter.controller({
         });
         
         if (!invite) {
-          return response.badRequest({ message: 'Invalid invite code' });
+          return response.badRequest('Invalid invite code');
         }
         
         // Create user
@@ -410,36 +407,6 @@ const userController = igniter.controller({
 
 ---
 
-## Using Valibot
-
-Valibot is a lightweight alternative to Zod with similar API:
-
-```typescript
-import * as v from 'valibot';
-
-const CreateUserSchema = v.object({
-  name: v.pipe(v.string(), v.minLength(2)),
-  email: v.pipe(v.string(), v.email()),
-  age: v.pipe(v.number(), v.integer(), v.minValue(18))
-});
-
-const userController = igniter.controller({
-  path: '/users',
-  actions: {
-    create: igniter.mutation({
-      path: '/',
-      method: 'POST',
-      body: CreateUserSchema,  // ✅ Works the same as Zod!
-      handler: async ({ request, response }) => {
-        // ✅ request.body is fully typed
-        const { name, email, age } = request.body;
-      }
-    })
-  }
-});
-```
-
----
 
 ## Schema Reusability
 
@@ -583,24 +550,28 @@ const action = igniter.mutation({
 
 ## Advanced Validation
 
-### Async Refinements
+### Asynchronous Checks
+
+Core runs schema validation through synchronous `.parse()`. Keep schema refinements synchronous; perform database or network checks in the action handler after parsing.
 
 ```typescript
-const CreateUserSchema = z.object({
-  email: z.string().email()
-}).refine(
-  async (data) => {
-    // Check if email already exists
-    const existing = await db.users.findUnique({
-      where: { email: data.email }
+import { z } from 'zod';
+
+const CreateUserSchema = z.object({ email: z.string().email() });
+
+const createUser = igniter.mutation({
+  path: '/users',
+  method: 'POST',
+  body: CreateUserSchema,
+  handler: async ({ request, response, context }) => {
+    const existing = await context.db.users.findUnique({
+      where: { email: request.body.email },
     });
-    return !existing;
+    if (existing) return response.badRequest('Email already in use');
+    const user = await context.db.users.create({ data: request.body });
+    return response.created({ user });
   },
-  {
-    message: "Email already in use",
-    path: ["email"]
-  }
-);
+});
 ```
 
 ### Custom Validators
@@ -625,19 +596,19 @@ const PaymentSchema = z.object({
 ## Next Steps
 
 <Cards>
-  <Card title="Actions" href="/docs/actions">
+  <Card title="Actions" href="/docs/core/actions">
     Use validation in queries and mutations
   </Card>
   
-  <Card title="Error Handling" href="/docs/error-handling">
+  <Card title="Error Handling" href="/docs/core/error-handling">
     Handle validation errors gracefully
   </Card>
   
-  <Card title="Response Types" href="/docs/response-types">
+  <Card title="Response Types" href="/docs/core/response-types">
     Return proper error responses
   </Card>
   
-  <Card title="Testing" href="/docs/testing">
+  <Card title="Quick Start" href="/docs/core/quick-start">
     Test validation logic
   </Card>
 </Cards>

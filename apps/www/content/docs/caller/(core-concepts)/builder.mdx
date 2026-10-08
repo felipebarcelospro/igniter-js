@@ -88,15 +88,15 @@ The HTTP method is locked once you start — you can't change a GET to a POST la
       .execute();
     ```
 
-    **Raw Bodies:** For FormData, Blobs, URLSearchParams, or other types, use the same `.body()` method. Caller detects the body type and sets `Content-Type` automatically.
+    **Raw Bodies:** For FormData, Blobs, URLSearchParams, or other supported Fetch body types, use the same `.body()` method. Caller removes an explicitly supplied `Content-Type` for FormData so Fetch can add the multipart boundary. It does not rewrite the default JSON content type for URLSearchParams.
 
     ```typescript
-    // FormData — Content-Type: multipart/form-data
+    // FormData — Fetch sets multipart/form-data with its boundary.
     const formData = new FormData();
     formData.append('file', file);
     await api.post('/upload').body(formData).execute();
 
-    // URLSearchParams — Content-Type: application/x-www-form-urlencoded
+    // URLSearchParams — set the intended Content-Type explicitly if needed.
     const params = new URLSearchParams({ username: 'john', password: 'secret' });
     await api.post('/login').body(params).execute();
     ```
@@ -153,7 +153,7 @@ The HTTP method is locked once you start — you can't change a GET to a POST la
 
 <Accordions>
   <Accordion title=".retry(maxAttempts, options?)">
-    Configures automatic retry behavior for transient failures. The first parameter is the **number of retry attempts** (total calls = 1 + maxAttempts).
+    Configures retry behavior for transient failures. `maxAttempts` is the total number of attempts, including the initial request. Retries are disabled unless this method is called.
 
     ```typescript
     await api.get('/external-api')
@@ -200,7 +200,7 @@ The HTTP method is locked once you start — you can't change a GET to a POST la
   </Accordion>
 
   <Accordion title=".cache(strategy, key?)">
-    Sets the fetch `RequestCache` strategy and an optional custom cache key for programmatic invalidation.
+    Sets the native Fetch `RequestCache` strategy and an optional cache key. This is separate from Caller response caching through `.stale()`.
 
     ```typescript
     // Standard fetch cache strategies
@@ -219,7 +219,7 @@ The HTTP method is locked once you start — you can't change a GET to a POST la
   </Accordion>
 
   <Accordion title=".stale(milliseconds)">
-    Enables response caching for the specified duration in milliseconds. Subsequent identical requests within the stale window return cached data without a network call.
+    Enables Caller response caching for the specified duration in milliseconds. Cache lookup runs independently of the native Fetch cache mode selected by `.cache()`.
 
     ```typescript
     // Cache for 30 seconds
@@ -240,7 +240,7 @@ The HTTP method is locked once you start — you can't change a GET to a POST la
     ```
 
     <Callout type="info" title="Invalidation">
-      Cache is automatically invalidated after the stale time expires. For programmatic invalidation, use `IgniterCallerManager.on()` to observe mutations and clear relevant keys.
+      Cache is automatically invalidated after the stale time expires. For programmatic invalidation, call `IgniterCallerManager.invalidate(key)` or `.invalidatePattern(pattern)` after a mutation.
     </Callout>
   </Accordion>
 </Accordions>
@@ -251,7 +251,7 @@ The HTTP method is locked once you start — you can't change a GET to a POST la
 
 <Accordions>
   <Accordion title=".responseType<T>(schema?)">
-    Explicitly sets the expected response type for TypeScript inference. If a Zod or StandardSchemaV1 schema is passed, the response is **validated at runtime** (JSON/XML/CSV only). If only a type parameter is provided, it's for typing only with no runtime validation.
+    Explicitly sets the expected response type for TypeScript inference. Supported schemas can validate parsed response data at runtime. If only a type parameter is provided, it is for typing only with no runtime validation.
 
     ```typescript
     import { z } from 'zod';
@@ -261,7 +261,7 @@ The HTTP method is locked once you start — you can't change a GET to a POST la
       name: z.string(),
     });
 
-    // With Zod schema — validates at runtime (only for JSON/XML/CSV)
+    // With a Zod schema — validates supported parsed response data.
     const { data } = await api.get('/users/:id')
       .params({ id: '123' })
       .responseType(UserSchema)
@@ -297,9 +297,10 @@ const result = await api.get('/users').execute();
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `data` | `T \| undefined` | Parsed response body. Undefined on error. |
-| `error` | `IgniterError \| undefined` | Error object. Undefined on success. |
-| `status` | `number \| undefined` | HTTP status code. |
+| `ok` | `boolean` | Discriminates success (`true`) from failure (`false`). |
+| `data` | `T` on success | Parsed response body; present when `ok` is `true`. |
+| `error` | `IgniterCallerError` on failure | Error object; present when `ok` is `false`. |
+| `status` | `number` | HTTP status code. |
 | `headers` | `Headers \| undefined` | Response headers. |
 
 ### Error Handling Patterns

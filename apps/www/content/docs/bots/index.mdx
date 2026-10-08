@@ -17,10 +17,10 @@ You define your bot once using the **builder pattern**, add adapters for each pl
 
 - **Multi-Platform** — Telegram, WhatsApp, Discord, and custom adapters. One codebase, every chat platform.
 - **Fluent Builder API** — `IgniterBot.create().withHandle().addAdapters().addCommand().build()` — fully typed at every step.
-- **Command System** — Slash commands with aliases, subcommands, Zod argument validation, and automatic platform registration.
+- **Command System** — Commands with aliases, handler-level input validation, flat command groups, and adapter-driven platform registration.
 - **Middleware Pipeline** — `auth`, `rateLimit`, `logging` built-in. Extend with custom middleware for any use case.
 - **Plugin Architecture** — Package commands, middlewares, adapters, and hooks into reusable plugins.
-- **Session Management** — Persistent conversational state with pluggable storage (memory, Redis, Prisma).
+- **Session Management** — Per-user, per-channel state with a built-in in-memory store and an interface for custom persistent stores.
 - **Rich Content Types** — Send text, images, video, audio, documents, stickers, location, contacts, polls, and interactive buttons.
 - **Type-Safe Context** — `BotContext` gives you typed access to message, channel, author, session, and reply helpers.
 - **Framework Integration** — Native handlers for Next.js App Router and TanStack Start. Express/Fastify compatible via standard `Request`/`Response`.
@@ -183,7 +183,7 @@ Get a cross-platform bot running in under three minutes.
     Adapters translate between platform-specific APIs and the normalized `BotContext`. Each adapter declares its **capabilities** (supported content types, actions, features, and limits) so the framework can validate operations at runtime.
 
     **First-party adapters:**
-    - **Telegram** — Full support: webhooks, long polling, commands, inline keyboards, all content types
+    - **Telegram** — Webhook setup, bot-command registration, inline keyboards, and supported message content types
     - **WhatsApp** — Cloud API: text, media, interactive buttons, contacts, location
     - **Discord** — Interactions API: slash commands, buttons, embeds, thread support
 
@@ -194,20 +194,26 @@ Get a cross-platform bot running in under three minutes.
     Commands are the primary interaction pattern. They support:
 
     - **Aliases** — `/start`, `/hello`, `/hi` all pointing to the same handler
-    - **Subcommands** — Nested command structures (e.g., `/admin ban`, `/admin kick`)
-    - **Zod Validation** — Type-safe argument parsing with automatic error messages
+    - **Flat command groups** — Prefixed commands such as `/admin_ban`; nested `subcommands` are declared in the type but are not dispatched by the runtime
+    - **Handler-level validation** — Handlers receive raw command `params`; parse and validate them in application code
     - **Automatic Registration** — Commands are auto-registered with platforms that support it (Telegram bot commands, Discord slash commands)
     - **Command Groups** — Prefix commands logically: `builder.addCommandGroup('admin', { ... })`
 
     ```typescript
+    import { z } from 'zod';
+
     builder.addCommand('search', {
       name: 'search',
       aliases: ['find', 's'],
       description: 'Search for items',
       help: 'Use /search &lt;query&gt; to find items',
-      args: z.object({ query: z.string().min(2) }),
-      async handle(ctx, args) {
-        const results = await searchDatabase(args.query);
+      async handle(ctx, params) {
+        const parsed = z.string().min(2).safeParse(params[0]);
+        if (!parsed.success) {
+          await ctx.reply('Use /search <query> to find items.');
+          return;
+        }
+        const results = await searchDatabase(parsed.data);
         await ctx.reply(`Found ${results.length} results.`);
       },
     })
@@ -229,7 +235,7 @@ Get a cross-platform bot running in under three minutes.
 
     **Built-in middlewares:**
     - `authMiddleware` — User/channel allowlists, blocklists, role-based access
-    - `rateLimitMiddleware` — Configurable rate limiting with memory or Redis store
+    - `rateLimitMiddleware` — Configurable rate limiting with the built-in memory store or a custom store such as Redis
     - `loggingMiddleware` — Structured logging with presets (minimal, standard, verbose, production)
   </Accordion>
 
@@ -257,7 +263,7 @@ Get a cross-platform bot running in under three minutes.
     // In-memory (development)
     builder.withSessionStore(memoryStore())
 
-    // Redis (production)
+    // Custom Redis implementation (not included in the package)
     builder.withSessionStore(redisStore(redisClient))
     ```
 
@@ -295,5 +301,5 @@ Bot powers conversational applications across many domains:
   <Card title="Installation" description="Install and configure @igniter-js/bot with the right adapters for your platforms." href="/docs/bots/installation" />
   <Card title="Quick Start" description="Build a production-ready bot in 3 minutes with step-by-step guidance." href="/docs/bots/quick-start" />
   <Card title="Core Concepts" description="Deep dive into the builder, adapters, commands, context, middlewares, and plugins." href="/docs/bots/core-concepts" />
-  <Card title="Commands" description="Master the command system with aliases, subcommands, and Zod validation." href="/docs/bots/commands" />
+  <Card title="Commands" description="Register aliases, flat command groups, and validate raw input in handlers." href="/docs/bots/commands" />
 </Cards>

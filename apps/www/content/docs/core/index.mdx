@@ -16,27 +16,39 @@ What does this mean in practice? When you ask Claude Code to "add authentication
 But being AI-native doesn't mean sacrificing developer experience. In fact, the same principles that make code easy for AI to understand—clarity, explicitness, and strong typing—make it a joy for humans to work with too. You get exceptional IntelliSense, instant error detection, and a framework that guides you toward best practices naturally.
 
 ```typescript
-// Crystal-clear structure that both humans and AI understand instantly
-export const users = igniter.controller({
-  name: 'Users',
-  description: 'Manage user accounts and profiles',
+import { Igniter } from '@igniter-js/core'
+
+type AppContext = {
+  db: {
+    findUser(id: string): Promise<{ id: string; name: string } | null>
+  }
+}
+
+// In-memory stand-in for a database client; replace it with your own implementation.
+const db: AppContext['db'] = {
+  findUser: async (id) => ({ id, name: 'Ada' }),
+}
+
+const igniter = Igniter.create()
+  .withContext(() => ({ db }))
+  .withConfig({ basePATH: '/api/v1' })
+  .build()
+
+const usersController = igniter.controller({
+  name: 'users',
   path: '/users',
   actions: {
     getById: igniter.query({
-      name: 'Get User by ID',
-      description: 'Retrieve a specific user by their ID',
-      path: '/:id' as const,
-      handler: async ({ params }) => {
-        const user = await db.users.findUnique({ where: { id: params.id } })
-        return response.success({ user })
-      }
-    })
-  }
+      path: '/:id',
+      handler: async ({ request, context, response }) => {
+        const user = await context.db.findUser(request.params.id)
+        return user
+          ? response.success({ user })
+          : response.notFound('User not found')
+      },
+    }),
+  },
 })
-
-// Client code is automatically type-safe—no configuration needed
-const { user } = await api.users.getById.query({ id: '123' })
-//     ^? User - TypeScript knows the exact type!
 ```
 
 ## Why Igniter.js?
@@ -104,31 +116,31 @@ Choose your framework to start building:
   <Card
     title="Next.js"
     description="Full-stack React framework with SSR and API routes"
-    href="/docs/installation/nextjs"
+    href="/docs/core/nextjs"
     icon={<NextJsIcon className="size-6" />}
   />
   <Card
     title="Vite"
     description="Lightning-fast build tool for modern web projects"
-    href="/docs/installation/vite"
+    href="/docs/core/vite"
     icon={<ViteIcon className="size-6" />}
   />
   <Card
     title="Express"
     description="Fast, unopinionated web framework for Node.js"
-    href="/docs/installation/express"
+    href="/docs/core/express"
     icon={<ExpressIcon className="size-6" />}
   />
   <Card
     title="Bun"
     description="Fast all-in-one JavaScript runtime and toolkit"
-    href="/docs/installation/bun"
+    href="/docs/core/bun"
     icon={<BunIcon className="size-6" />}
   />
   <Card
     title="Deno"
     description="Secure runtime for JavaScript and TypeScript"
-    href="/docs/installation/deno"
+    href="/docs/core/deno"
     icon={<DenoIcon className="size-6" />}
   />
 </Cards>
@@ -143,12 +155,12 @@ Or use the CLI for a guided setup:
   </Tab>
   <Tab value="pnpm">
     ```bash
-    pnpm @igniter-js/cli@latest init
+    pnpm dlx @igniter-js/cli@latest init
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn @igniter-js/cli@latest init
+    yarn dlx @igniter-js/cli@latest init
     ```
   </Tab>
   <Tab value="bun">
@@ -161,7 +173,7 @@ Or use the CLI for a guided setup:
 <Callout type="info" title="Comparing Frameworks?">
   See how Igniter.js compares to tRPC, Next.js Server Actions, and other frameworks.
   
-  [→ Framework Comparison](/docs/comparison)
+  [→ Framework Comparison](/docs/core/comparison)
 </Callout>
 
 ---
@@ -190,7 +202,7 @@ What makes Lia special is her ability to not just write code, but to **validate,
 - Create GitHub issues and explore library source code
 - Manage tasks with built-in project management tools
 
-[→ Learn more about Lia](/docs/ai/lia)
+[→ Learn more about Lia](/docs/core/lia-overview)
 
 ### MCP Server - Lia's Toolbox
 
@@ -243,7 +255,7 @@ The **Igniter.js MCP Server** is what powers Lia's advanced capabilities. It's a
   </Accordion>
 </Accordions>
 
-[→ Explore MCP Server tools](/docs/ai/mcp-server)
+[→ Explore the MCP Server](/docs/mcp-server-cli)
 
 ### Getting Started with Lia
 

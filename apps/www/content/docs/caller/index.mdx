@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: A type-safe HTTP client for Igniter.js with automatic schema validation, caching, retries, and React integration. Built on native fetch.
+description: A type-safe HTTP client for Igniter.js with schema inference, opt-in response caching and retries, and React integration. Built on Fetch.
 ---
 
 ## The Missing Piece
@@ -8,7 +8,7 @@ description: A type-safe HTTP client for Igniter.js with automatic schema valida
 Every modern application needs to talk to APIs. Whether you're fetching user data, sending form submissions, or syncing with third-party services, HTTP requests are everywhere. But making HTTP requests in TypeScript has always been frustrating:
 
 - **No type safety** — responses are `any` by default, forcing you to cast or define interfaces manually
-- **Boilerplate everywhere** — error handling, retries, and caching require custom code for each request
+- **Boilerplate everywhere** — error handling and request policies often require repeated code
 - **Client/server disconnect** — types defined on the server don't automatically flow to the client
 - **Testing is painful** — mocking fetch or axios requires complex setup
 
@@ -76,7 +76,7 @@ console.log(data?.name);
   </Accordion>
 
   <Accordion title="Built-in Resilience">
-    Production applications need retry logic, timeouts, and fallbacks. Caller provides these out of the box.
+    Caller offers opt-in retry logic, timeouts, and fallback results.
 
     ```typescript
     const { data } = await api.get('/external-service')
@@ -102,23 +102,30 @@ console.log(data?.name);
     await api.post('/users').body(newUser).execute();
     // Next GET /users call will fetch fresh data after stale time expires
     ```
+
+    The default response-cache key is the request URL, so requests with different methods or parameters can collide. Use an explicit key when request identity is not captured by the URL. Pattern invalidation clears in-memory entries; persistent stores need their own pattern cleanup.
   </Accordion>
 
   <Accordion title="React Integration">
     First-class React hooks for data fetching with automatic loading states, refetching, and cache invalidation.
 
     ```tsx
-    function UserProfile({ id }: { id: string }) {
-      const main = useCaller('main');
+    import { IgniterCallerProvider, useIgniterCaller } from '@igniter-js/caller/client';
+    import { api } from '@/lib/api';
 
-      const { data, isLoading, error } = main.get('/users/:id')
-        .params({ id })
-        .useQuery({ staleTime: 30_000 });
+    export function Providers({ children }: { children: React.ReactNode }) {
+      return <IgniterCallerProvider caller={api}>{children}</IgniterCallerProvider>;
+    }
 
-      if (isLoading) return <Skeleton />;
-      if (error) return <ErrorMessage error={error} />;
+    const useApi = () => useIgniterCaller<typeof api>();
 
-      return <h1>{data?.name}</h1>;
+    function UserProfile() {
+      const client = useApi();
+      const { data, isLoading, error } = client.get('/users').useQuery({ staleTime: 30_000 });
+
+      if (isLoading) return <p>Loading…</p>;
+      if (error) return <p>{error.message}</p>;
+      return <pre>{JSON.stringify(data)}</pre>;
     }
     ```
   </Accordion>
@@ -132,7 +139,7 @@ Caller follows a builder pattern similar to other Igniter.js packages:
 
 ```
 IgniterCaller.create()
-  → .withBaseUrl() / .withSchemas() / .withInterceptors()
+  → .withBaseUrl() / .withSchemas() / .withRequestInterceptor() / .withResponseInterceptor()
   → .build()
   → IgniterCallerManager
   → .get() / .post() / .put() / .patch() / .delete()

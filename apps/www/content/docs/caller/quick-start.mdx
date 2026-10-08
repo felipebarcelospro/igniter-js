@@ -79,7 +79,7 @@ This guide walks you through creating your first Caller client and making reques
     ```
 
     <Callout type="warn" title="Never-throw by default">
-      Caller **never throws** on HTTP error statuses (like 404 or 500). Instead, it returns an `error` object in the result envelope. It only throws on network failures or configuration errors.
+      HTTP errors and fetch/network failures are represented in the result envelope returned by `execute()`. Application code can still throw errors after inspecting that result.
     </Callout>
   </Step>
 
@@ -161,10 +161,10 @@ This guide walks you through creating your first Caller client and making reques
 
 ## Adding Resilience
 
-Production applications need to handle transient failures. Caller provides retries, timeouts, and fallbacks out of the box:
+Retries are opt-in. Without `.retry()`, Caller makes one request attempt. A network failure is returned in Caller’s error result rather than thrown by `execute()`.
 
 ```typescript
-// Retry up to 3 times with exponential backoff
+// Make at most 3 total attempts with exponential backoff
 const result = await api.get('/external-service')
   .retry(3, {
     backoff: 'exponential',
@@ -176,9 +176,7 @@ const result = await api.get('/external-service')
   .execute();
 ```
 
-<Callout type="info" title="Retry defaults">
-  By default, Caller retries on status codes `408`, `429`, `500`, `502`, `503`, and `504`. You can customize this with `retryOnStatus`.
-</Callout>
+When retries are configured, the default retryable status list includes `408`, `429`, `500`, `502`, `503`, and `504`. `.retry(3)` means three total attempts, including the initial request.
 
 ---
 
@@ -233,12 +231,12 @@ const api = IgniterCaller.create()
 const user = await api.get('/users/:id')
   .params({ id: '1' })       // ✅ params are typed
   .execute();
-// user.data is typed as { id: number; name: string; email: string } | null
+// user.data is typed as { id: number; name: string; email: string } on success
 
 const created = await api.post('/users')
   .body({ name: 'John', email: 'john@example.com' })  // ✅ body is typed
   .execute();
-// created.data is typed as { id: number; name: string; email: string } | null
+// created.data is typed as { id: number; name: string; email: string } on success
 ```
 
 ---
@@ -278,46 +276,36 @@ switch (result.status) {
 
 ## Using with React
 
-Caller provides first-class React hooks through the `/client` subpath:
+The optional React client uses one Caller manager in `IgniterCallerProvider` and exposes a typed hook.
 
 ```tsx title="app/providers.tsx"
-import { IgniterCallerProvider } from '@igniter-js/caller/client';
-import { api } from '@/lib/api';
+import { IgniterCallerProvider } from '@igniter-js/caller/client'
+import { api } from '@/lib/api'
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <IgniterCallerProvider callers={{ main: api }}>
-      {children}
-    </IgniterCallerProvider>
-  );
+  return <IgniterCallerProvider caller={api}>{children}</IgniterCallerProvider>
 }
 ```
 
-```tsx title="components/user-profile.tsx"
-import { useIgniterCaller } from '@igniter-js/caller/client';
+```tsx title="components/user-list.tsx"
+'use client'
 
-const useCaller = useIgniterCaller<{ main: typeof api }>();
+import { useIgniterCaller } from '@igniter-js/caller/client'
+import type { api } from '@/lib/api'
 
-function UserProfile({ id }: { id: string }) {
-  const main = useCaller('main');
+const useApi = () => useIgniterCaller<typeof api>()
 
-  const { data, isLoading, error, refetch } = main
-    .get('/users/:id')
-    .params({ id })
-    .useQuery({ staleTime: 30_000 });
+export function UserList() {
+  const api = useApi()
+  const { data, isLoading, error, refetch } = api.get('/users').useQuery()
 
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
-
-  return (
-    <div>
-      <h1>{data?.name}</h1>
-      <p>{data?.email}</p>
-      <button onClick={() => refetch()}>Refresh</button>
-    </div>
-  );
+  if (isLoading) return <p>Loading…</p>
+  if (error) return <p>{error.message}</p>
+  return <button onClick={refetch}>{JSON.stringify(data)}</button>
 }
 ```
+
+See [React Integration](/docs/caller/react) for mutations, cache operations, and session-aware requests.
 
 ---
 

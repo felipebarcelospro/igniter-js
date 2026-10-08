@@ -1,0 +1,34 @@
+---
+title: Core Store Events
+description: Use the event schemas exported for Core cache, revalidation, and realtime integrations.
+---
+
+`@igniter-js/core/store` exports `IgniterCoreStoreEvents` and its inferred event registry type. This subpath provides Core's event definitions; it does not create a store adapter or storage backend.
+
+## Register the event schemas
+
+Add the definitions to an `@igniter-js/store` events manager so it can validate and type the Core event namespace alongside your application's events.
+
+```ts
+import { IgniterStore } from '@igniter-js/store'
+import { IgniterStoreMemoryAdapter } from '@igniter-js/store/adapters'
+import { IgniterCoreStoreEvents } from '@igniter-js/core/store'
+
+const store = IgniterStore.create()
+  .withAdapter(IgniterStoreMemoryAdapter.create())
+  .withService('api')
+  .addEvents(IgniterCoreStoreEvents)
+  .build()
+```
+
+`IgniterCoreStoreEvents` defines the `http` namespace and event groups for revalidation requests, cache policy tags, SSE connection lifecycle, SSE delivery, and realtime event publication. The in-memory adapter keeps this minimal example self-contained; choose a production adapter for durable or shared state.
+
+## Type the event registry
+
+```ts
+import type { IgniterCoreStoreEventsRegistry } from '@igniter-js/core/store'
+
+type CoreEvents = IgniterCoreStoreEventsRegistry
+```
+
+Use the separate [`@igniter-js/store` documentation](/docs/store/) for adapter setup and operations. This Core subpath only supplies the event schemas used by Core integrations.

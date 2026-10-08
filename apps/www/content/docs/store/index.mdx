@@ -1,0 +1,37 @@
+---
+title: Store
+description: Type-safe distributed state, events, and streams for modern TypeScript apps. Redis-backed storage with scoped keys, typed Pub/Sub, and stream processing.
+---
+
+## Overview
+
+`@igniter-js/store` is a **standalone, builder-based** distributed store library for TypeScript applications. It provides a unified, type-safe interface for key-value storage, counters, distributed locks (claims), batch operations, typed Pub/Sub events, and Redis Streams — all backed by a pluggable adapter architecture.
+
+<Callout type="info">
+  Store is **not a caching layer glued onto Igniter Core**. It's a fully independent package you can use in any Node.js or Bun application — whether you're building an Express API, a Next.js app, a Fastify service, or a background worker.
+</Callout>
+
+### Key Features
+
+- **Namespaced API** — Clean separation: `store.kv`, `store.counter`, `store.claim`, `store.batch`, `store.events`, `store.streams`, `store.dev`
+- **Typed Events** — Schema-driven Pub/Sub with Standard Schema-compatible schemas, dual API (string + proxy), and typed wildcard subscriptions
+- **Multi-Tenant Scopes** — Isolate data per organization, workspace, or environment with chained scope prefixes
+- **Redis Streams** — Append, range queries, consumer groups with acknowledgment
+- **Distributed Claims** — SETNX-based locks for leader election, cron deduplication
+- **Two Adapters** — Production Redis adapter + in-memory adapter for testing/desktop
+- **Observability** — Built-in telemetry events for every operation (`igniter.store.kv.*`, `igniter.store.stream.*`, etc.)
+
+---
+
+## Next Steps
+
+- Understand the [Store architecture](/docs/store/architecture) and its builder, manager, and adapter roles
+
+- [Install and configure](/docs/store/installation) the package with Redis
+- Master [key-value operations](/docs/store/caching) with cache patterns
+- Build [typed events and Pub/Sub](/docs/store/pubsub) with schema validation
+- Use [counters, claims, and batch operations](/docs/store/atomic-operations)
+- Process [Redis Streams](/docs/store/streams) with consumer groups
+- Configure [tenant and workspace scopes](/docs/store/scopes)
+- Review [telemetry and custom adapters](/docs/store/advanced)
+- Browse the complete [API reference](/docs/store/api-reference)

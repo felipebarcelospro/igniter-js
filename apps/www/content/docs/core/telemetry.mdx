@@ -1,0 +1,36 @@
+---
+title: Core Telemetry Events
+description: Add Igniter Core's typed request-pipeline events to a telemetry manager.
+---
+
+`@igniter-js/core/telemetry` exports `IgniterCoreTelemetryEvents` and the inferred `IgniterCoreTelemetryEvents` registry type. The event namespace is `igniter.core`; it covers HTTP requests, route resolution, body parsing, context construction, middleware, validation, actions, responses, cache/revalidation, realtime, and tracked errors.
+
+## Register the Core events
+
+```ts
+import { IgniterTelemetry } from '@igniter-js/telemetry'
+import { IgniterCoreTelemetryEvents } from '@igniter-js/core/telemetry'
+import { Igniter } from '@igniter-js/core'
+
+const telemetry = IgniterTelemetry.create()
+  .withService('api')
+  .addEvents(IgniterCoreTelemetryEvents)
+  .build()
+
+export const igniter = Igniter.create()
+  .withContext<{ requestId: string }>()
+  .withTelemetry(telemetry)
+  .build()
+```
+
+Core events use names such as `igniter.core.http.request.started` and `igniter.core.action.execute.success`. The schemas intentionally avoid raw request bodies, IP addresses, user agents, and credentials. Keep custom telemetry attributes free of secrets and personal data as well.
+
+## Type the event registry
+
+```ts
+import type { IgniterCoreTelemetryEvents as CoreTelemetryRegistry } from '@igniter-js/core/telemetry'
+
+type CoreEvents = CoreTelemetryRegistry
+```
+
+See [Telemetry](/docs/telemetry) for the telemetry manager and provider setup.

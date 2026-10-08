@@ -1,0 +1,72 @@
+---
+title: "Partition client state by workspace"
+description: "Keep each workspace's editor drafts in its own in-memory and browser-persisted state partition."
+---
+
+## Keep workspace drafts separate
+
+When a user switches workspaces, editor state should follow the active workspace. `withNamespace()` selects the partition, while `IgniterState.router()` exposes a namespace manager that can switch it. With the `memory-partition` strategy, each visited namespace keeps its own in-memory state; `withPersistence()` also stores each partition under a namespace-specific browser storage key.
+
+```tsx
+import { IgniterApp, IgniterState } from '@igniter-js/app'
+
+const editorState = IgniterState.create('editor')
+  .withState({ drafts: {} as Record<string, string> })
+  .withNamespace({
+    resolver: ({ namespaces }) => {
+      const { organizationId, workspaceId } = namespaces
+      return organizationId && workspaceId
+        ? JSON.stringify([organizationId, workspaceId])
+        : undefined
+    },
+    strategy: 'memory-partition',
+  })
+  .withPersistence({
+    enabled: true,
+    key: 'editor-drafts',
+    pick: (state) => ({ drafts: state.drafts }),
+  })
+  .addAction('saveDraft', ({ state }) => (documentId: string, content: string) => {
+    state.set((current) => ({
+      drafts: { ...current.drafts, [documentId]: content },
+    }))
+  })
+  .build()
+
+const appStores = IgniterState.router({
+  prefix: 'admin-console',
+  stores: { editor: editorState },
+})
+
+export const app = IgniterApp.create()
+  .withStores(appStores)
+  .build()
+
+export async function selectWorkspace(organizationId: string, workspaceId: string) {
+  await app.stores.namespace.set((current) => ({
+    ...current,
+    organizationId,
+    workspaceId,
+  }))
+}
+
+export function DraftEditor({ documentId }: { documentId: string }) {
+  const draft = app.stores.editor.useState((state) => state.drafts[documentId] ?? '')
+  const { saveDraft } = app.stores.editor.useActions()
+
+  return (
+    <textarea
+      value={draft}
+      onChange={(event) => saveDraft(documentId, event.currentTarget.value)}
+    />
+  )
+}
+```
+
+The app initializes registered stores during the router's root `beforeLoad`. After the user selects a workspace, await `app.stores.namespace.set(...)`; it synchronizes the stores before the next render reads the active partition. Pass the complete namespace map, as the example does by spreading `current`, so other namespace values remain set. This resolver combines organization and workspace IDs because workspace IDs may only be unique inside their organization; use a stable composite key whenever a single identifier is not globally unique.
+
+<Callout type="warn" title="Client state is not an authorization boundary">
+  Namespace partitioning keeps UI state separate in this browser. It does not authorize API requests or protect tenant data on the server. Resolve the active workspace from authenticated application state and enforce membership and access rules in your API.
+</Callout>
+
+`withPersistence()` uses browser storage and derives its key from the app prefix, active namespace, and configured key. Persist only state that is safe to keep in that browser profile. For basic state stores and browser persistence, see [Application state](/docs/app/state); for the app router lifecycle, see [Routing and loaders](/docs/app/routing) and the [API reference](/docs/app/api-reference).

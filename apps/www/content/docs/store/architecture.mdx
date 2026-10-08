@@ -1,0 +1,42 @@
+---
+title: Architecture and Core Concepts
+description: Understand the Store builder, manager, adapters, namespaces, and operation groups.
+---
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                      Your Application                         │
+│  store.kv.set() • store.events.publish() • store.streams...   │
+└───────────────┬──────────────────────────────────────────────┘
+                │ Typed API + Scopes
+                ▼
+┌──────────────────────────────────────────────────────────────┐
+│                 IgniterStoreManager                           │
+│  KV • Counter • Claim • Batch • Events • Streams • Dev        │
+└───────────────┬──────────────────────────────────────────────┘
+                │ Adapter Contract
+                ▼
+┌──────────────────────────────────────────────────────────────┐
+│              IgniterStoreAdapter (Redis / Memory)             │
+└───────────────┬──────────────────────────────────────────────┘
+                │
+                ▼
+┌──────────────────────────────────────────────────────────────┐
+│                         Redis / Memory                        │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Key Abstractions
+
+| Component | Role |
+|-----------|------|
+| **Builder** (`IgniterStore.create()`) | Immutable, fluent configuration chain |
+| **Manager** (`IgniterStoreManager`) | Runtime API with namespaced operations |
+| **Adapter** (`IgniterStoreAdapter`) | Storage backend contract (Redis, Memory) |
+| **Events** (`IgniterStoreEvents`) | Declarative typed event definitions with Zod |
+| **Scopes** | Multi-tenant isolation via key prefix chaining |
+| **Telemetry** | Optional event emission for every operation |
+
+---

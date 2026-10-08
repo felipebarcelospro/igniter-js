@@ -40,31 +40,33 @@ The fastest way to start is using the official CLI, which scaffolds a complete a
   </Tab>
 </Tabs>
 
-Your app runs at `http://localhost:3000`. API is at `http://localhost:3000/api/v1`, and interactive docs at `http://localhost:3000/api/v1/docs` 🚀
+Your app runs at `http://localhost:3000`; the API is at `http://localhost:3000/api/v1`.
+
+Core does not mount an API playground automatically. Configure the separate `@igniter-js/studio` package when you need a UI; see [Core adapters and integrations](/docs/core/adapters).
 
 ### Direct Command
 
-If you prefer to skip the interactive prompts, you can specify your project name and framework directly:
+The CLI asks for a project name and starter during setup. This command starts that interactive flow:
 
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="direct-command">
   <Tab value="npm">
     ```bash
-    npx @igniter-js/cli@latest init my-nextjs-app --framework nextjs
+    npx @igniter-js/cli@latest init my-nextjs-app
     ```
   </Tab>
   <Tab value="pnpm">
     ```bash
-    pnpm dlx @igniter-js/cli@latest init my-nextjs-app --framework nextjs
+    pnpm dlx @igniter-js/cli@latest init my-nextjs-app
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn dlx @igniter-js/cli@latest init my-nextjs-app --framework nextjs
+    yarn dlx @igniter-js/cli@latest init my-nextjs-app
     ```
   </Tab>
   <Tab value="bun">
     ```bash
-    bunx @igniter-js/cli@latest init my-nextjs-app --framework nextjs
+    bunx @igniter-js/cli@latest init my-nextjs-app
     ```
   </Tab>
 </Tabs>
@@ -154,20 +156,10 @@ Create the main Igniter instance with configuration. Create `src/igniter.ts`:
 import { Igniter } from '@igniter-js/core'
 import { createIgniterAppContext } from './igniter.context'
 
-export const igniter = Igniter
-  .context(createIgniterAppContext())
-  .config({
-    baseURL: process.env.NEXT_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
-    basePATH: process.env.NEXT_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
-  })
-  .docs({
-    info: {
-      title: 'My Next.js API',
-      version: '1.0.0',
-      description: 'API built with Igniter.js',
-    }
-  })
-  .create()
+export const igniter = Igniter.create()
+  .withContext(async () => createIgniterAppContext())
+  .withConfig({ basePATH: '/api/v1' })
+  .build();
       ```
 
       The builder pattern makes it easy to add features later like `.store()` (Redis), `.jobs()` (background tasks), `.logger()`, and `.telemetry()`.
@@ -249,16 +241,12 @@ Create the client for frontend usage at `src/igniter.client.ts`:
 ```typescript title="src/igniter.client.ts"
 import { createIgniterClient } from '@igniter-js/core/client'
 import type { AppRouterType } from './igniter.router'
+import { AppRouterSchema } from './igniter.schema'
 
 export const api = createIgniterClient<AppRouterType>({
   baseURL: process.env.NEXT_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
   basePATH: process.env.NEXT_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
-  router: () => {
-    if (typeof window === 'undefined') {
-      return require('./igniter.router').AppRouter
-    }
-    return require('./igniter.schema').AppRouterSchema
-  },
+  router: () => AppRouterSchema as unknown as AppRouterType,
 })
 
 export type ApiClient = typeof api
@@ -306,123 +294,7 @@ export function ExampleComponent() {
 
 ---
 
-## Generating Schema and Docs
 
-Igniter.js can automatically generate OpenAPI schemas and TypeScript types for your API.
-
-### When to Generate Schema
-
-<Callout type="error">
-  **Critical:** You MUST run schema generation BEFORE using the client in your frontend. The client depends on the generated schema to function correctly.
-</Callout>
-
-<Callout type="info">
-  Run this command whenever you modify your API structure (add/remove/modify controllers or actions) OR before using the client for the first time.
-</Callout>
-
-### Generate Schema
-
-Run this command whenever you make changes to your API structure:
-
-<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-schema">
-  <Tab value="npm">
-    ```bash
-    npx @igniter-js/cli@latest generate schema
-    ```
-  </Tab>
-  <Tab value="pnpm">
-    ```bash
-    pnpm dlx @igniter-js/cli@latest generate schema
-    ```
-  </Tab>
-  <Tab value="yarn">
-    ```bash
-    yarn dlx @igniter-js/cli@latest generate schema
-    ```
-  </Tab>
-  <Tab value="bun">
-    ```bash
-    bunx @igniter-js/cli@latest generate schema
-    ```
-  </Tab>
-</Tabs>
-
-This creates:
-- `src/igniter.schema.ts` - Type-safe schema for client-side usage
-- `src/docs/openapi.json` - OpenAPI 3.0 specification
-
-### Generate OpenAPI Documentation
-
-To generate or update the OpenAPI specification and interactive documentation:
-
-<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-docs">
-  <Tab value="npm">
-    ```bash
-    npx @igniter-js/cli@latest generate docs
-    ```
-  </Tab>
-  <Tab value="pnpm">
-    ```bash
-    pnpm dlx @igniter-js/cli@latest generate docs
-    ```
-  </Tab>
-  <Tab value="yarn">
-    ```bash
-    yarn dlx @igniter-js/cli@latest generate docs
-    ```
-  </Tab>
-  <Tab value="bun">
-    ```bash
-    bunx @igniter-js/cli@latest generate docs
-    ```
-  </Tab>
-</Tabs>
-
-### Update Igniter Config
-
-Import the generated OpenAPI schema in `src/igniter.ts`:
-
-```typescript title="src/igniter.ts"
-import { Igniter } from '@igniter-js/core'
-import { createIgniterAppContext } from './igniter.context'
-import openapi from './docs/openapi.json'
-
-export const igniter = Igniter
-  .context(createIgniterAppContext())
-  .config({
-    baseURL: process.env.NEXT_PUBLIC_IGNITER_API_URL || 'http://localhost:3000',
-    basePATH: process.env.NEXT_PUBLIC_IGNITER_API_BASE_PATH || '/api/v1',
-  })
-  .docs({
-    openapi, // ← Add generated OpenAPI
-    info: {
-      title: 'My Next.js API',
-      version: '1.0.0',
-      description: 'API built with Igniter.js',
-    }
-  })
-  .create()
-```
-
----
-
-## Igniter Studio (API Playground)
-
-Igniter.js includes an interactive API playground called **Igniter Studio**, powered by Scalar. It's automatically available at `/api/v1/docs` when you configure the `.docs()` method.
-
-To access it:
-
-1. Start your dev server: `npm run dev`
-2. Navigate to `http://localhost:3000/api/v1/docs`
-3. You'll see an interactive interface where you can:
-   - Browse all API endpoints
-   - View request/response schemas
-   - Test endpoints directly in the browser
-   - See auto-generated examples
-
-The playground updates automatically as you add new endpoints or modify existing ones. It's perfect for API development and testing without needing external tools like Postman.
-
----
 
 ## Project Structure
 
@@ -463,13 +335,13 @@ Here's the recommended structure:
 ## Next Steps
 
 <Cards>
-  <Card title="Core Concepts" href="/docs/builder">
+  <Card title="Core Concepts" href="/docs/core/builder">
     Learn about Builder, Router, and Controllers
   </Card>
-  <Card title="Actions" href="/docs/actions">
+  <Card title="Actions" href="/docs/core/actions">
     Create queries and mutations with validation
   </Card>
-  <Card title="Client" href="/docs/client">
+  <Card title="Client" href="/docs/core/client">
     Master the type-safe client and hooks
   </Card>
 </Cards>

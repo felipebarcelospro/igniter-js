@@ -1,0 +1,53 @@
+---
+title: Framework Adapters
+description: Mount an Igniter router in Next.js or Express using the public Core adapter exports.
+---
+
+`@igniter-js/core/adapters` exposes helpers for framework integration. The public barrel currently exports the Next.js route handler/config helpers and the Express middleware adapter.
+
+## Next.js
+
+Use `nextRouteHandlerAdapter` in a route handler and `withIgniter` in the Next config when you need the package's server bundling compatibility settings.
+
+```ts title="app/api/[...igniter]/route.ts"
+import { nextRouteHandlerAdapter } from '@igniter-js/core/adapters'
+import { router } from '@/lib/igniter'
+
+export const { GET, POST, PUT, DELETE, PATCH } = nextRouteHandlerAdapter(router)
+```
+
+```ts title="next.config.ts"
+import { withIgniter } from '@igniter-js/core/adapters'
+
+export default withIgniter({})
+```
+
+`nextRouteHandlerAdapter` returns handlers for GET, POST, PUT, DELETE, and PATCH. It forwards each Fetch `Request` to `router.handler()`.
+
+## Express
+
+`expressAdapter` converts an Express request into a Fetch `Request`, invokes a Fetch handler, and writes the returned `Response` to Express.
+
+```ts
+import express from 'express'
+import { expressAdapter } from '@igniter-js/core/adapters'
+import { router } from './igniter'
+
+const app = express()
+app.use(expressAdapter((request) => router.handler(request)))
+```
+
+The adapter expects a handler that returns `Promise<Response>`. Its request-body bridge relies on Node's streaming request support; use the framework guide for the runtime setup and keep this adapter on the server.
+
+## Public exports
+
+| Export | Purpose |
+|---|---|
+| `nextRouteHandlerAdapter(router)` | Creates Next.js route handlers for the supported HTTP methods. |
+| `withIgniter(config?)` | Adds Igniter-compatible server externals and bundler fallbacks to a `NextConfig`. |
+| `getHeadersSafe()` | Reads Next.js request headers on the server and returns empty `Headers` in a browser or when the framework API is unavailable. |
+| `expressAdapter(handler)` | Adapts Express requests/responses to Fetch `Request`/`Response`. |
+
+<Callout type="info" title="Import from the package export">
+  Import these functions from `@igniter-js/core/adapters`. The package manifest exposes the adapter barrel; source-file paths such as `@igniter-js/core/adapters/nextjs` are not separate package exports.
+</Callout>

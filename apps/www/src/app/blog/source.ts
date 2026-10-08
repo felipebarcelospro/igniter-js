@@ -10,6 +10,14 @@ export const source = loader({
   source: blog.toFumadocsSource(),
 })
 
+/** Return blog posts in explicit publication order, newest first. */
+export function getBlogPostsByPublicationDate() {
+  return source.getPages().sort((a, b) => {
+    const dateOrder = b.data.publishedAt.getTime() - a.data.publishedAt.getTime()
+    return dateOrder || a.slugs.join('/').localeCompare(b.slugs.join('/'))
+  })
+}
+
 /**
  * @constant ContentTypeBlogEntry
  * @description Type for the Blog contents

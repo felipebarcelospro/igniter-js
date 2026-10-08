@@ -20,7 +20,7 @@ The fastest way to start is using the official CLI, which scaffolds a complete E
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
   <Tab value="npm">
     ```bash
-    npx create-igniter-app@latest my-app --template express
+    npx @igniter-js/cli@latest init my-app
     cd my-app
     npm install
     npm run dev
@@ -28,7 +28,7 @@ The fastest way to start is using the official CLI, which scaffolds a complete E
   </Tab>
   <Tab value="pnpm">
     ```bash
-    pnpm create igniter-app my-app --template express
+    pnpm dlx @igniter-js/cli@latest init my-app
     cd my-app
     pnpm install
     pnpm dev
@@ -36,7 +36,7 @@ The fastest way to start is using the official CLI, which scaffolds a complete E
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn create igniter-app my-app --template express
+    yarn dlx @igniter-js/cli@latest init my-app
     cd my-app
     yarn install
     yarn dev
@@ -44,7 +44,7 @@ The fastest way to start is using the official CLI, which scaffolds a complete E
   </Tab>
   <Tab value="bun">
     ```bash
-    bunx create-igniter-app my-app --template express
+    bunx @igniter-js/cli@latest init my-app
     cd my-app
     bun install
     bun dev
@@ -52,7 +52,7 @@ The fastest way to start is using the official CLI, which scaffolds a complete E
   </Tab>
 </Tabs>
 
-Your API runs at `http://localhost:3000/api/v1`, and interactive docs at `http://localhost:3000/api/v1/docs` 🚀
+Your API runs at `http://localhost:3000/api/v1`.
 
 ---
 
@@ -64,7 +64,7 @@ Your API runs at `http://localhost:3000/api/v1`, and interactive docs at `http:/
       ### Prerequisites
 
       Before you begin, ensure you have:
-      - **Node.js** 18.0+ (20.0+ recommended)
+      - **Node.js** 22.0+
       - **Express** 4.0+
       - **TypeScript** 5.0+
     </Step>
@@ -141,20 +141,10 @@ Create the main Igniter instance. Create `src/igniter.ts`:
 import { Igniter } from '@igniter-js/core'
 import { createIgniterAppContext } from './igniter.context'
 
-export const igniter = Igniter
-  .context(createIgniterAppContext())
-  .config({
-    baseURL: process.env.IGNITER_API_URL || 'http://localhost:3000',
-    basePATH: process.env.IGNITER_API_BASE_PATH || '/api/v1',
-  })
-  .docs({
-    info: {
-      title: 'My Express API',
-      version: '1.0.0',
-      description: 'REST API built with Express and Igniter.js',
-    }
-  })
-  .create()
+export const igniter = Igniter.create()
+  .withContext(async () => createIgniterAppContext())
+  .withConfig({ basePATH: '/api/v1' })
+  .build()
       ```
     </Step>
 
@@ -300,11 +290,12 @@ Create a type-safe client for consuming your API. Create `src/igniter.client.ts`
 ```typescript title="src/igniter.client.ts"
 import { createIgniterClient } from '@igniter-js/core/client'
 import type { AppRouterType } from './igniter.router'
+import { AppRouterSchema } from './igniter.schema'
 
 export const api = createIgniterClient<AppRouterType>({
   baseURL: process.env.IGNITER_API_URL || 'http://localhost:3000',
   basePATH: process.env.IGNITER_API_BASE_PATH || '/api/v1',
-  router: () => require('./igniter.router').AppRouter,
+  router: () => AppRouterSchema as unknown as AppRouterType,
 })
 
 export type ApiClient = typeof api
@@ -319,23 +310,10 @@ const { message } = await api.example.hello.query()
 
 ---
 
-## Igniter Studio (API Playground)
+## API documentation
 
-Igniter.js includes an interactive API playground called **Igniter Studio**. It's automatically available at `/api/v1/docs` when you configure the `.docs()` method.
+Core does not automatically mount an interactive API playground. If you want a UI, configure the separate `@igniter-js/studio` package with the supported Core Studio integration. See [Core adapters and integrations](/docs/core/adapters) for package boundaries.
 
-To access it:
-
-1. Start your dev server: `npm run dev`
-2. Navigate to `http://localhost:3000/api/v1/docs`
-3. You'll see an interactive interface where you can:
-   - Browse all API endpoints
-   - View request/response schemas
-   - Test endpoints directly
-   - See auto-generated examples
-
-The playground updates automatically as you add endpoints.
-
----
 
 ## Environment Variables
 
@@ -383,13 +361,13 @@ Here's the recommended structure:
 ## Next Steps
 
 <Cards>
-  <Card title="Core Concepts" href="/docs/builder">
+  <Card title="Core Concepts" href="/docs/core/builder">
     Learn about Builder, Router, and Controllers
   </Card>
-  <Card title="Actions" href="/docs/actions">
+  <Card title="Actions" href="/docs/core/actions">
     Create queries and mutations with validation
   </Card>
-  <Card title="Middleware" href="/docs/middleware">
-    Add authentication and custom middleware
+  <Card title="Framework adapters" href="/docs/core/adapters">
+    Mount the Fetch handler in a supported framework
   </Card>
 </Cards>

@@ -5,7 +5,7 @@ description: Store and retrieve data with store.kv. Covers get, set, remove, exi
 
 ## Overview
 
-`store.kv` provides the fundamental key-value interface for `@igniter-js/store`. All values are automatically serialized to JSON by the adapter, so you can store any JSON-serializable data without manual conversion.
+`store.kv` provides the fundamental key-value interface for `@igniter-js/store`. The Redis adapter serializes values with JSON; the memory adapter retains the JavaScript value in process memory. For Redis, store values that `JSON.stringify` can represent and do not expect custom class instances or special values to round-trip unchanged.
 
 <Callout type="info">
   The key format is auto-prefixed by the store: `igniter:store:{service}[:scope...]:kv:{your-key}`. You only provide the logical key — scoping is handled transparently.

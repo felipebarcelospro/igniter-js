@@ -25,6 +25,7 @@ export const blog = defineDocs({
   dir: 'content/blog',
   docs: {
     schema: frontmatterSchema.extend({
+      publishedAt: z.coerce.date(),
       cover: z.string().url().optional(),
       tags: z.array(z.string()).optional(),
     }),

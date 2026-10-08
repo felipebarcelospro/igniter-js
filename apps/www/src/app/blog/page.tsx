@@ -1,5 +1,5 @@
 import { Metadata } from 'next'
-import { source } from './source'
+import { getBlogPostsByPublicationDate } from './source'
 import {
   SitePageHeaderSection,
   SitePageHeaderSectionContainer,
@@ -27,7 +27,7 @@ export const metadata: Metadata = generateMetadataWithOG({
 })
 
 export default async function Page() {
-  const pages = source.getPages()
+  const pages = getBlogPostsByPublicationDate()
 
   return (
     <SitePage>

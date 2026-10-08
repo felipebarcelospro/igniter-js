@@ -1,0 +1,54 @@
+---
+title: "Application state"
+description: "Create reactive state stores, actions, namespaces, and optional browser persistence with @igniter-js/app."
+---
+
+The state API is available from `@igniter-js/app/state` and re-exported from the package root. It provides a builder for state values and actions, plus optional persistence and browser synchronization.
+
+## Define a state store
+
+```tsx
+import { IgniterState } from '@igniter-js/app/state'
+
+export const counterState = IgniterState.create('counter')
+  .withState({ count: 0 })
+  .addAction('increment', ({ state }) => () => {
+    state.set((current) => ({ count: current.count + 1 }))
+  })
+  .build()
+
+function Counter() {
+  const count = counterState.useState((state) => state.count)
+  const actions = counterState.useActions()
+
+  return <button onClick={actions.increment}>{count}</button>
+}
+```
+
+The built instance exposes `init`, `sync`, `useState`, and `useActions`; selectors can be passed to `useState`. Actions are defined with `addAction` and then exposed through `useActions`.
+
+## Configure persistence and namespaces
+
+The builder includes `.withPreload()`, `.withNamespace()`, `.withPersistence()`, and `.withBroadcast()`. Persistence accepts `enabled`, `storage` (`'localstorage'` or `'sessionstorage'`), `key`, and an optional `pick` function that returns the state fields to persist. Broadcast accepts `enabled`, `key`, and an optional `pick` function for the fields sent to other tabs. Calling either builder method enables its feature by default.
+
+```ts
+const preferencesState = IgniterState.create('preferences')
+  .withState({ theme: 'system', compactMode: false })
+  .withPersistence({
+    enabled: true,
+    storage: 'localstorage',
+    key: 'preferences',
+    pick: (state) => ({ theme: state.theme }),
+  })
+  .build()
+```
+
+<Callout type="warn">
+  Persistence uses browser storage, and broadcast uses browser APIs. Enable these options only in browser-capable environments. Choose a storage key that is unique to the state being persisted.
+</Callout>
+
+## Attach stores to the app
+
+`IgniterApp.withStores(stores, handler?)` makes a store collection available to loaders and app integrations. `IgniterState.router({ prefix?, stores })` creates a namespace manager around a store collection; do not pass a collection that already contains the same namespace key.
+
+See [triggers](/docs/app/triggers) for actions that combine app context and stores, or the [API reference](/docs/app/api-reference) for state exports and types.

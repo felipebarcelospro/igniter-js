@@ -11,7 +11,7 @@ Adapters translate between platform-specific APIs and the normalized `BotContext
 
 ## Telegram Adapter
 
-The Telegram adapter supports the **full Bot API surface** — webhooks, long polling, commands, inline keyboards, and all content types.
+The Telegram adapter supports configured webhooks, bot-command registration, inline keyboards, and the message types listed in its capability table. The package does not start a long-polling loop.
 
 ### Configuration
 
@@ -39,12 +39,12 @@ const tg = telegram({
 
 ### Initialization
 
-During `.start()`, the Telegram adapter:
+When `webhook.url` is configured, the Telegram adapter does the following during `.start()`:
 1. Deletes any existing webhook
 2. Registers bot commands via `setMyCommands`
 3. Sets the new webhook with the configured URL and secret
 
-If no `webhook.url` is provided, the adapter skips webhook setup and logs a warning — you can use long polling instead.
+If `webhook.url` is missing, initialization returns before deleting an existing webhook or registering commands. Configure a webhook to receive updates; the package does not start long polling.
 
 ### Inline Keyboards
 
@@ -124,7 +124,7 @@ await ctx.sendTyping!();
 ```
 
 <Callout type="info">
-  Telegram does **not** support message reactions via the Bot API, so `ctx.react()` is not available.
+  Telegram reactions are available on supported Bot API versions. The adapter exposes `ctx.react()` when the platform adapter declares reaction support.
 </Callout>
 
 ---
@@ -255,7 +255,7 @@ async handle(ctx) {
 
 ### Thread Support
 
-Discord supports threads natively. The adapter detects thread context and routes messages accordingly.
+The current Discord adapter normalizes interaction messages and channels, but it does not expose a dedicated thread-routing API. Use the normalized channel data only where your application and the platform interaction provide it.
 
 ### Embeds
 
@@ -277,21 +277,18 @@ const bot = IgniterBot.create()
   .addAdapter('telegram', tg)
   .build();
 
-// Get the adapter's client
-const tgAdapter = bot.getAdapter('telegram');
-const client = tgAdapter?.client;
+// Access the adapter's underlying client through the built bot
+const client = bot.adapter.telegram;
 
 if (client) {
   // Direct Telegram API calls
   const me = await client.get('/getMe');
   const chat = await client.post('/getChat', { chat_id: '123456' });
 
-  // Raw Discord API calls
-  const guild = await client.get('/guilds/123456789');
 }
 ```
 
-The client is pre-configured with the platform's base URL, authentication headers, and content type negotiation. All methods return typed responses.
+The `AdapterClient` methods are generic and default response data to `any`; provide a response type argument when you want typed data. It is the underlying client, so keep platform endpoint paths and provider-specific shapes in your own types.
 
 ---
 

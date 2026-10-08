@@ -1,0 +1,43 @@
+---
+title: "MCP Server CLI"
+description: "Connect an MCP client to Igniter.js development tools, project memory, GitHub, and coding-agent delegation over stdio."
+---
+
+## What this package does
+
+`@igniter-js/mcp-server` is a local, stdio-based MCP server for working with Igniter.js projects. It exposes tools for project commands, API checks, source analysis, documentation, GitHub, task and memory management, debugging, and coding-agent delegation.
+
+The process uses standard input and output for MCP messages. It is launched by an MCP client such as VS Code or Claude Code; it does not start an HTTP server or provide a browser page.
+
+<Callout type="warn" title="This is different from the MCP adapter">
+  This package is a standalone local tool server. [`@igniter-js/adapter-mcp-server`](/docs/mcp-server) turns an Igniter.js application router into MCP tools for remote clients.
+</Callout>
+
+## Start here
+
+1. [Install and connect the server](/docs/mcp-server-cli/installation).
+2. [Run it from your project](/docs/mcp-server-cli/first-run).
+3. Review [available toolsets](/docs/mcp-server-cli/toolsets) and [configuration](/docs/mcp-server-cli/configuration).
+4. Follow the [IDE integration guide](/docs/mcp-server-cli/ide-integration) for VS Code or Claude Code.
+
+## Runtime model
+
+The package is an executable named `igniter-mcp`. On startup it registers its tools, connects an MCP `StdioServerTransport`, resolves the project root from the process working directory, and initializes project memory under `.github/lia/memories`. If it finds interrupted delegation jobs, startup attempts to requeue them.
+
+The server enables each toolset by default. You can disable a set with its `ENABLE_*_TOOLS=false` environment variable. GitHub tools use `GITHUB_TOKEN` when configured. Agent delegation also depends on the selected local coding-agent CLI and its credentials.
+
+## Security model
+
+This server can run shell commands, read and write project files, call GitHub APIs, and launch coding agents. Delegated work runs in YOLO mode; its sandbox behavior depends on the selected provider. Some tools also make network requests to caller-supplied URLs, including `get_openapi_spec`, `make_api_request`, and `read_as_markdown`. `make_api_request` accepts mutating methods. `inspect_runtime_variable` evaluates the supplied expression inside the target JavaScript process, so it can execute code with that process's privileges.
+
+Connect it only to MCP clients, workspaces, URLs, and processes you trust. Keep credentials out of committed configuration, and disable toolsets you do not need. See [Toolsets](/docs/mcp-server-cli/toolsets) for the scope of each tool.
+
+<Callout type="info">
+  The `analyze_file` and `analyze_feature` tools call diagnostics that currently write to stdout. `delegate_to_agent` also writes to stdout, and `DEBUG=true` enables extra stdout logs in its command runner. Since stdout carries MCP messages, these paths can disrupt the stdio session; avoid them until those logs are redirected.
+</Callout>
+
+## Related guides
+
+- [Agents package: connect to MCP servers](/docs/agents/mcp-integration)
+- [MCP Server Adapter: expose your Igniter.js router](/docs/mcp-server)
+- [Model Context Protocol](https://modelcontextprotocol.io/)

@@ -1,454 +1,109 @@
 ---
 title: OAuth Authentication
-description: Secure your MCP server with OAuth authentication and protect resources with Bearer tokens.
+description: Validate bearer tokens for MCP requests and expose protected resource metadata.
 ---
 
-## Overview
+## How authentication works
 
-The MCP Server adapter supports OAuth 2.0 authentication, allowing you to secure your server and control access to your tools and resources. This is especially important when exposing your API to external AI agents.
+The adapter can wrap its request handler with mcp-handler bearer-token validation. Provide an issuer and a <code>verifyToken</code> callback that returns MCP <code>AuthInfo</code> for a valid token or <code>undefined</code> for an invalid token. The callback must return the access token, client ID, and scopes; arbitrary fields such as <code>valid</code> and <code>user</code> are not part of <code>AuthInfo</code>.
 
-<Callout type="warn">
-  If your MCP server contains sensitive data or operations, you should always enable OAuth authentication.
+The adapter does not automatically copy the authenticated user into <code>McpContext.context</code>. If tool handlers need user-specific context, create it in your router's request context factory from the incoming request, using your application's own authentication rules.
+
+<Callout type="warn" title="Verification is required to enforce authentication">
+  The <code>verifyToken</code> option is optional in the type. The adapter only enables the auth wrapper when both OAuth options and <code>verifyToken</code> are supplied. Setting only <code>issuer</code> does not protect tool requests.
 </Callout>
 
----
+## Configure token verification
 
-## Basic OAuth Setup
+Return the <code>AuthInfo</code> shape defined by the MCP SDK. Map the fields to claims from your validated token:
 
-### Builder Pattern
-
-```typescript
+~~~typescript
 import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server';
+import { AppRouter } from '@/igniter.router';
 
 const { handler, auth } = IgniterMcpServer
   .create()
   .router(AppRouter)
   .withOAuth({
-    issuer: 'https://auth.example.com',
-    resourceMetadataPath: '/.well-known/oauth-protected-resource',
-    scopes: ['mcp:read', 'mcp:write'],
-    verifyToken: async ({ request, bearerToken, context }) => {
-      // context is automatically typed from your router!
-      const result = await verifyJWT(bearerToken);
+    issuer: process.env.OAUTH_ISSUER!,
+    scopes: ['mcp:read'],
+    verifyToken: async ({ bearerToken }) => {
+      if (!bearerToken) return undefined;
+
+      const claims = await verifyAccessToken(bearerToken);
+      if (!claims) return undefined;
+
       return {
-        valid: result.valid,
-        user: result.user
+        token: bearerToken,
+        clientId: claims.clientId,
+        scopes: claims.scopes,
+        expiresAt: claims.expiresAt,
+        extra: { subject: claims.subject },
       };
-    }
+    },
   })
   .build();
 
-// Export the handler and OAuth endpoints
 export const GET = handler;
 export const POST = handler;
 export const OPTIONS = auth.cors;
-```
+~~~
 
-### Function API
+<code>verifyAccessToken</code> is application code: it must validate signature, issuer, audience, expiry, and any other claims your system requires. Return <code>undefined</code> when validation fails.
 
-```typescript
-import { createMcpAdapter } from '@igniter-js/adapter-mcp-server';
+## Resource metadata endpoint
 
-const { server, auth } = createMcpAdapter({
-  router: AppRouter,
-  oauth: {
-    issuer: 'https://auth.example.com',
-    resourceMetadataPath: '/.well-known/oauth-protected-resource',
-    scopes: ['mcp:read', 'mcp:write'],
-    verifyToken: async ({ request, bearerToken, context }) => {
-      const result = await verifyJWT(bearerToken);
-      return {
-        valid: result.valid,
-        user: result.user
-      };
-    }
-  }
-});
+The adapter returns a resource metadata handler as <code>auth.resource</code>; it does not install a framework route for you. Expose it at the path configured in <code>resourceMetadataPath</code> and allow the metadata CORS preflight:
 
-export const GET = server;
-export const POST = server;
-export const OPTIONS = auth.cors;
-```
-
----
-
-## OAuth Configuration Options
-
-### issuer (Required)
-
-The OAuth authorization server URL:
-
-```typescript
-withOAuth({
-  issuer: 'https://auth.example.com',
-  // ...
-})
-```
-
-### resourceMetadataPath (Optional)
-
-Path to the OAuth protected resource metadata endpoint. Defaults to `/.well-known/oauth-protected-resource`:
-
-```typescript
-withOAuth({
-  issuer: 'https://auth.example.com',
-  resourceMetadataPath: '/.well-known/oauth-protected-resource',
-  // ...
-})
-```
-
-### scopes (Optional)
-
-Required OAuth scopes:
-
-```typescript
-withOAuth({
-  issuer: 'https://auth.example.com',
-  scopes: ['mcp:read', 'mcp:write'],
-  // ...
-})
-```
-
-### verifyToken (Required)
-
-Function to verify Bearer tokens. Receives the request, bearer token, and context:
-
-```typescript
-withOAuth({
-  issuer: 'https://auth.example.com',
-  verifyToken: async ({ request, bearerToken, context }) => {
-    // Your token verification logic
-    if (!bearerToken) {
-      return undefined; // No token provided
-    }
-    
-    try {
-      const decoded = await verifyJWT(bearerToken);
-      return {
-        valid: true,
-        user: decoded.user,
-        scopes: decoded.scopes,
-      };
-    } catch (error) {
-      return undefined; // Invalid token
-    }
-  }
-})
-```
-
----
-
-## Token Verification
-
-### JWT Verification Example
-
-```typescript
-import jwt from 'jsonwebtoken';
-
-withOAuth({
-  issuer: 'https://auth.example.com',
-  verifyToken: async ({ bearerToken, context }) => {
-    if (!bearerToken) {
-      return undefined;
-    }
-    
-    try {
-      const decoded = jwt.verify(bearerToken, process.env.JWT_SECRET);
-      
-      // Additional validation
-      if (decoded.exp < Date.now() / 1000) {
-        return undefined; // Token expired
-      }
-      
-      return {
-        valid: true,
-        user: {
-          id: decoded.userId,
-          email: decoded.email,
-          roles: decoded.roles,
-        },
-        scopes: decoded.scopes || [],
-      };
-    } catch (error) {
-      return undefined; // Invalid token
-    }
-  }
-})
-```
-
-### Database Token Verification
-
-```typescript
-withOAuth({
-  issuer: 'https://auth.example.com',
-  verifyToken: async ({ bearerToken, context }) => {
-    if (!bearerToken) {
-      return undefined;
-    }
-    
-    // Look up token in database
-    const token = await context.context.db.accessToken.findUnique({
-      where: { token: bearerToken },
-      include: { user: true }
-    });
-    
-    if (!token || token.expiresAt < new Date()) {
-      return undefined; // Token not found or expired
-    }
-    
-    return {
-      valid: true,
-      user: token.user,
-      scopes: token.scopes,
-    };
-  }
-})
-```
-
----
-
-## OAuth Metadata Endpoint
-
-The adapter automatically exposes an OAuth protected resource metadata endpoint. You need to create a route for it:
-
-**Next.js Route:**
-
-```typescript
+~~~typescript
 // src/app/.well-known/oauth-protected-resource/route.ts
 import { auth } from '@/app/api/mcp/[...transport]/route';
 
 export const GET = auth.resource;
 export const OPTIONS = auth.cors;
-```
+~~~
 
-**Express Route:**
+The current adapter fallback for <code>resourceMetadataPath</code> is <code>well-known/oauth-authorization-server</code>. Set an explicit path in <code>withOAuth</code> when your deployment uses a different metadata route.
 
-```typescript
-// Express example
-app.get('/.well-known/oauth-protected-resource', auth.resource);
-app.options('/.well-known/oauth-protected-resource', auth.cors);
-```
+## Function API
 
----
+The function API uses the same options and callback contract:
 
-## Protected Routes
-
-Once OAuth is configured, all MCP requests require a valid Bearer token:
-
-**Request Headers:**
-
-```
-Authorization: Bearer <your-token>
-```
-
-**Unprotected Request:**
-
-```
-GET /api/mcp/sse
-// Returns 401 Unauthorized
-```
-
-**Protected Request:**
-
-```
-GET /api/mcp/sse
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-// Returns 200 OK with MCP response
-```
-
----
-
-## Accessing User Context
-
-In your tool handlers, you can access the authenticated user from the context:
-
-```typescript
-.addTool({
-  name: 'getMyProfile',
-  description: 'Get my user profile',
-  args: {},
-  handler: async (args, context) => {
-    // User is available in context if OAuth is enabled
-    // Note: This requires additional setup to pass user from OAuth to context
-    const user = context.context.user;
-    
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify(user, null, 2)
-      }]
-    };
-  },
-})
-```
-
----
-
-## Complete Example
-
-Here's a complete example with OAuth and user context:
-
-```typescript
-import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server';
-import jwt from 'jsonwebtoken';
-
-const { handler, auth } = IgniterMcpServer
-  .create()
-  .router(AppRouter)
-  .withOAuth({
-    issuer: 'https://auth.example.com',
+~~~typescript
+const { server, auth } = createMcpAdapter({
+  router: AppRouter,
+  oauth: {
+    issuer: process.env.OAUTH_ISSUER!,
     resourceMetadataPath: '/.well-known/oauth-protected-resource',
-    scopes: ['mcp:read', 'mcp:write'],
-    verifyToken: async ({ bearerToken, context }) => {
-      if (!bearerToken) {
-        return undefined;
-      }
-      
-      try {
-        const decoded = jwt.verify(bearerToken, process.env.JWT_SECRET) as any;
-        
-        // You can inject the user into the router context
-        // This requires modifying createMcpContext to include the user
-        
-        return {
-          valid: true,
-          user: {
-            id: decoded.userId,
-            email: decoded.email,
-          },
-          scopes: decoded.scopes || ['mcp:read'],
-        };
-      } catch (error) {
-        return undefined;
-      }
-    }
-  })
-  .build();
+    scopes: ['mcp:read'],
+    verifyToken: async ({ bearerToken }) => {
+      if (!bearerToken) return undefined;
+      const claims = await verifyAccessToken(bearerToken);
+      if (!claims) return undefined;
+      return {
+        token: bearerToken,
+        clientId: claims.clientId,
+        scopes: claims.scopes,
+        expiresAt: claims.expiresAt,
+        extra: { subject: claims.subject },
+      };
+    },
+  },
+});
 
-export const GET = handler;
-export const POST = handler;
+export const GET = server;
+export const POST = server;
 export const OPTIONS = auth.cors;
-```
+~~~
 
----
+## Scopes and application authorization
 
-## Error Responses
+The adapter passes configured <code>scopes</code> to the auth middleware as required scopes. Your verifier should return the scopes granted to the token. Enforce user- and resource-level access in your application; a valid bearer token alone does not authorize every router action.
 
-When authentication fails, the adapter returns proper OAuth error responses:
+Do not assume <code>AuthInfo.extra</code> is copied to tool handler context. Build any user-specific context explicitly in your router's context factory, or perform authorization inside the action using verified application context.
 
-**401 Unauthorized:**
+## Related guides
 
-```
-HTTP/1.1 401 Unauthorized
-WWW-Authenticate: Bearer realm="mcp-server", error="invalid_token"
-```
-
-**403 Forbidden (insufficient scopes):**
-
-```
-HTTP/1.1 403 Forbidden
-WWW-Authenticate: Bearer realm="mcp-server", error="insufficient_scope", scope="mcp:write"
-```
-
----
-
-## Best Practices
-
-### 1. Always Validate Tokens
-
-Never trust tokens without verification:
-
-```typescript
-// ✅ Good
-verifyToken: async ({ bearerToken }) => {
-  if (!bearerToken) return undefined;
-  return await verifyJWT(bearerToken);
-}
-
-// ❌ Bad
-verifyToken: async ({ bearerToken }) => {
-  return { valid: true }; // No validation!
-}
-```
-
-### 2. Check Token Expiration
-
-Always verify token expiration:
-
-```typescript
-verifyToken: async ({ bearerToken }) => {
-  const decoded = await verifyJWT(bearerToken);
-  if (decoded.exp < Date.now() / 1000) {
-    return undefined; // Expired
-  }
-  return { valid: true, user: decoded.user };
-}
-```
-
-### 3. Validate Scopes
-
-Check required scopes for sensitive operations:
-
-```typescript
-verifyToken: async ({ bearerToken }) => {
-  const decoded = await verifyJWT(bearerToken);
-  const hasWriteScope = decoded.scopes?.includes('mcp:write');
-  
-  return {
-    valid: true,
-    user: decoded.user,
-    scopes: decoded.scopes,
-  };
-}
-```
-
-### 4. Use Environment Variables
-
-Store sensitive configuration in environment variables:
-
-```typescript
-withOAuth({
-  issuer: process.env.OAUTH_ISSUER,
-  verifyToken: async ({ bearerToken }) => {
-    return await verifyJWT(bearerToken, process.env.JWT_SECRET);
-  }
-})
-```
-
----
-
-## Troubleshooting
-
-### Token Not Validated
-
-If tokens aren't being validated:
-
-1. Check that `verifyToken` is properly implemented
-2. Verify the Bearer token is being extracted correctly
-3. Check token expiration and signature
-
-### CORS Issues
-
-If you encounter CORS issues:
-
-1. Export the `auth.cors` handler as `OPTIONS`
-2. Ensure CORS headers are properly set
-3. Check browser console for CORS errors
-
-### 401 Responses
-
-If you're getting 401 responses:
-
-1. Verify token format: `Bearer <token>`
-2. Check token expiration
-3. Verify token signature matches your secret
-4. Check `verifyToken` implementation
-
----
-
-## Next Steps
-
-- Learn about [Event Handlers](/docs/mcp-server/events) for monitoring
-- Explore [Advanced Configurations](/docs/mcp-server/advanced)
-- Check out [Best Practices](/docs/mcp-server/best-practices)
-
+- [Event handlers](/docs/mcp-server/events)
+- [Advanced configuration](/docs/mcp-server/advanced)
+- [Best practices](/docs/mcp-server/best-practices)

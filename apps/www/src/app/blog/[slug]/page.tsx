@@ -1,6 +1,6 @@
 import type { Metadata } from 'next/types'
 import { notFound } from 'next/navigation'
-import { source } from '../source'
+import { getBlogPostsByPublicationDate, source } from '../source'
 import {
   SitePage,
   SitePageHeader,
@@ -83,7 +83,9 @@ export default async function Page({ params }: PageProps<'/blog/[slug]'>) {
   const MDX = post.data.body
 
   // Data: Prepare related posts component
-  const related = source.getPages().splice(0, 3)
+  const related = getBlogPostsByPublicationDate()
+    .filter((page) => page.slugs[0] !== slug)
+    .slice(0, 3)
 
   return (
     <SitePage>
@@ -103,9 +105,9 @@ export default async function Page({ params }: PageProps<'/blog/[slug]'>) {
               ]}
             />
             <SitePageHeaderSectionContent className="lg:max-w-[60%] lg:px-8">
-              {post.data.lastModified && (
+              {(post.data.publishedAt || post.data.lastModified) && (
                 <p className="text-muted-foreground mb-1 text-sm">
-                  {DateUtils.formatDate(post.data.lastModified, {
+                  {DateUtils.formatDate(post.data.publishedAt || post.data.lastModified, {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',

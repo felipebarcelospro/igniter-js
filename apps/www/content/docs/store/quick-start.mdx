@@ -1,0 +1,57 @@
+---
+title: Quick Start
+description: Install the Store package, configure Redis, and make your first typed store operations.
+---
+
+## Create and use a store
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/store ioredis zod
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/store ioredis zod
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/store ioredis zod
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/store ioredis zod
+    ```
+  </Tab>
+</Tabs>
+
+```typescript
+import Redis from "ioredis";
+import { IgniterStore } from "@igniter-js/store";
+import { IgniterStoreRedisAdapter } from "@igniter-js/store/adapters";
+
+const redis = new Redis(process.env.REDIS_URL);
+
+const store = IgniterStore.create()
+  .withAdapter(IgniterStoreRedisAdapter.create({ redis }))
+  .withService("api")
+  .build();
+
+// ✅ Key-value
+await store.kv.set("user:123", { name: "Avery" }, { ttl: 3600 });
+const user = await store.kv.get("user:123");
+
+// ✅ Counter
+const views = await store.counter.increment("page-views");
+
+// ✅ Distributed claim
+const claimed = await store.claim.once("job:cleanup", "worker-1", { ttl: 30 });
+
+// ✅ Batch
+const users = await store.batch.get(["user:1", "user:2", "user:3"]);
+```
+
+---

@@ -143,24 +143,11 @@ redis.on("connect", () => console.log("Redis connected"));
 redis.on("error", (err) => console.error("Redis error:", err));
 ```
 
-### Redis Cluster
-
-```typescript
-import { Cluster } from "ioredis";
-
-const cluster = new Cluster(
-  [
-    { host: "127.0.0.1", port: 7000 },
-    { host: "127.0.0.1", port: 7001 },
-    { host: "127.0.0.1", port: 7002 },
-  ],
-  {
-    redisOptions: { password: process.env.REDIS_PASSWORD },
-  }
-);
-
-const adapter = IgniterStoreRedisAdapter.create({ redis: cluster });
-```
+<Callout type="info">
+  `IgniterStoreRedisAdapterOptions.redis` is typed as the standard `Redis`
+  client from `ioredis`. The package does not currently document or guarantee
+  `ioredis` Cluster compatibility.
+</Callout>
 
 ### Using a Redis URL
 

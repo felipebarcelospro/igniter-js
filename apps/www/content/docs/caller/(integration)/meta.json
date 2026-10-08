@@ -2,6 +2,7 @@
   "title": "Integration",
   "pages": [
     "react",
+    "client-state",
     "testing",
     "telemetry"
   ]

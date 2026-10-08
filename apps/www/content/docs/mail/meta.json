@@ -1,4 +1,19 @@
 {
   "title": "Mail",
-  "pages": ["index"]
+  "root": true,
+  "pages": [
+    "---Get Started---",
+    "index",
+    "installation",
+    "quick-start",
+    "---Core Concepts---",
+    "templates",
+    "providers",
+    "---Guides---",
+    "scheduling-hooks",
+    "---Advanced---",
+    "advanced",
+    "---API Reference---",
+    "api-reference"
+  ]
 }

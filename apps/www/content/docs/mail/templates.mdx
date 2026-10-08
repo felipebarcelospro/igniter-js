@@ -1,0 +1,40 @@
+---
+title: "Templates"
+description: "Build reusable email templates with typed input schemas, React Email renderers, and template lookup helpers."
+---
+
+Mail templates combine a default subject, a Standard Schema-compatible input schema, and a React element renderer. `addTemplate()` registers the result under a key; that key and the schema's input type are inferred by `send()`.
+
+## Define a reusable template
+
+Use `IgniterMailTemplate.create()` when you want to keep template construction separate from mail configuration:
+
+```tsx
+import { Html, Text } from '@react-email/components'
+import { IgniterMailTemplate } from '@igniter-js/mail'
+import { z } from 'zod'
+
+export const welcomeTemplate = IgniterMailTemplate.create()
+  .withSubject('Welcome, {{name}}')
+  .withSchema(z.object({ name: z.string() }))
+  .withRender(({ name }) => (
+    <Html>
+      <Text>Welcome, {name}!</Text>
+    </Html>
+  ))
+  .build()
+```
+
+Register the built template with `.addTemplate('welcome', welcomeTemplate)`. The inline object form shown in the [quick start](/docs/mail/quick-start) is also accepted.
+
+## Inspect and render templates
+
+The built mail manager exposes `templates.list()`, `templates.get(id)`, and `templates.render(id, variables)`. `list()` returns metadata for registered templates, `get()` returns metadata or `null` when the key is not registered, and `render()` returns `{ html, text }` after schema validation.
+
+```ts
+const templates = await mail.templates.list()
+const welcome = await mail.templates.get('welcome')
+const preview = await mail.templates.render('welcome', { name: 'Alex' })
+```
+
+Template metadata can include `name`, `description`, `path`, timestamps, and variable names. See the [API reference](/docs/mail/api-reference) for exported template types.

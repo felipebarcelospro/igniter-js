@@ -1,5 +1,5 @@
 ---
-title: MCP Server
+title: MCP Server Adapter
 description: Transform your Igniter.js API into an AI-native MCP server that exposes your endpoints as tools consumable by AI agents and applications.
 ---
 
@@ -19,7 +19,7 @@ The MCP Server adapter transforms your entire Igniter.js API into a **Model Cont
 - **Custom Tools**: Add custom tools beyond your router actions
 - **Prompts & Resources**: Expose prompts and resources for AI agents
 - **OAuth Support**: Secure your MCP server with OAuth authentication
-- **Event Hooks**: Monitor and log all MCP operations
+- **Tool Hooks**: Observe tool calls, successful results, and tool errors
 - **AI-Friendly**: Designed to be easily understood and used by AI agents
 
 ---
@@ -82,7 +82,7 @@ const { handler, auth } = IgniterMcpServer
 
 /**
  * Export the handler for Next.js to handle both GET and POST requests,
- * which are used by different MCP transport methods (like SSE and WebSockets).
+ * for the configured Streamable HTTP and Server-Sent Events transports.
  */
 export const GET = handler;
 export const POST = handler;
@@ -123,7 +123,7 @@ The AI can now discover and call your API actions:
 **AI Prompt:**
 > "List the users in the system."
 
-The MCP adapter will translate this into a call to `users.list` on your backend, execute it, and return the result to the AI.
+The MCP client calls the generated `users_list` tool. The adapter resolves it to the `users.list` router action and returns its result.
 
 ---
 
@@ -135,7 +135,7 @@ The adapter automatically inspects your Igniter.js router and transforms each ac
 
 1. **Router Traversal**: The adapter iterates through all controllers and actions in your router
 2. **Action-to-Tool Mapping**: Each `IgniterAction` (from `igniter.query` or `igniter.mutation`) becomes an MCP tool
-3. **Schema Conversion**: Zod schemas from `body`, `query`, and `params` are converted to JSON Schema for MCP
+3. **Input Schema**: The adapter builds tool inputs from action body and query schemas and derives path parameters from the route path
 4. **Tool Registration**: Tools are registered with the MCP server with sanitized names and descriptions
 
 ### Execution Flow
@@ -144,7 +144,7 @@ When an AI agent calls a tool:
 
 1. **MCP Request**: The adapter receives an HTTP request with the tool name and arguments
 2. **Tool Resolution**: The adapter finds the corresponding Igniter.js action
-3. **Server-Side Invocation**: Uses `router.caller` for direct, type-safe execution (bypasses HTTP stack)
+3. **Server-Side Invocation**: Calls the matching `router.caller` query or mutation directly
 4. **Result Formatting**: Formats the result into MCP-compliant response format
 5. **Response**: Returns the formatted result to the MCP client
 

@@ -96,9 +96,9 @@ export function SiteBlogPostCard({
                 </div>
               )}
 
-              {showDate && post.data.lastModified && (
+              {showDate && (post.data.publishedAt || post.data.lastModified) && (
                 <span className="text-muted-foreground">
-                  {DateUtils.formatDate(post.data.lastModified, {
+                  {DateUtils.formatDate(post.data.publishedAt || post.data.lastModified, {
                     month: 'short',
                     day: 'numeric',
                     year: 'numeric',

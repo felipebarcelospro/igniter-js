@@ -1,4 +1,20 @@
 {
   "title": "App",
-  "pages": ["index"]
+  "root": true,
+  "pages": [
+    "---Get Started---",
+    "index",
+    "installation",
+    "quick-start",
+    "---Core Concepts---",
+    "routing",
+    "state",
+    "---Guides---",
+    "triggers",
+    "forms",
+    "---Advanced---",
+    "advanced",
+    "---API Reference---",
+    "api-reference"
+  ]
 }

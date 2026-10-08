@@ -1,0 +1,48 @@
+---
+title: "Forms"
+description: "Connect React Hook Form validation and submission to a typed Igniter client mutation."
+---
+
+`useForm` combines a Zod schema, React Hook Form, and an Igniter client mutation. It is available from `@igniter-js/app/form` and the package root. Install `react-hook-form` and `@hookform/resolvers` as shown in [installation](/docs/app/installation).
+
+## Create a mutation-backed form
+
+```tsx
+import { useForm } from '@igniter-js/app/form'
+import { z } from 'zod'
+import { client } from './client'
+
+const profileSchema = z.object({
+  displayName: z.string().min(1),
+})
+
+function ProfileForm() {
+  const form = useForm(client, {
+    schema: profileSchema,
+    mutation: 'profile.update',
+    values: { displayName: '' },
+    onResponse: ({ data }) => {
+      console.log('Profile saved', data)
+    },
+  })
+
+  return (
+    <form onSubmit={(event) => { event.preventDefault(); void form.submit() }}>
+      <input {...form.register('displayName')} />
+      <button disabled={form.isLoading}>Save</button>
+    </form>
+  )
+}
+```
+
+`mutation` selects a client controller/action path. When configured, the default mutation payload is `{ body: data, params, query }`; `params` and `query` default to empty objects. If you provide `onSubmit`, its return value replaces that default payload. Without a `mutation`, provide `onSubmit` as the submission handler.
+
+## Form options
+
+The options include `schema`, initial `values`, an optional `mutation` path, `params`, `query`, `mode`, `debounce`, `preventNavigation`, `onSubmit`, and `onResponse`. The default debounce is 1200 ms. The hook uses TanStack Router's navigation blocker when `preventNavigation` is enabled.
+
+The result combines React Hook Form methods (including `register`) with `submit()` and `isLoading`. Use `submit()` as the form's submit handler; it runs validation and then invokes the configured mutation or `onSubmit`. Public option and inference types are listed in the [API reference](/docs/app/api-reference).
+
+<Callout type="info">
+  The mutation path must point to an action exposed by the typed client and support `.mutate()`. See [Caller](/docs/caller) for client construction and typed operations.
+</Callout>

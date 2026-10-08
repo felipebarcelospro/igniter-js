@@ -1,0 +1,98 @@
+---
+title: Jobs API reference
+description: Public builders, runtime accessors, adapter entry points, and types in @igniter-js/jobs.
+---
+
+## Package entry points
+
+The root entry exports the jobs runtime, builders, errors, and public types. Backend adapters are separate package subpaths declared in `packages/jobs/package.json`.
+
+| Import path | Main exports | Purpose |
+| --- | --- | --- |
+| `@igniter-js/jobs` | `IgniterJobs`, `IgniterQueue`, `IgniterJobsBuilder`, `IgniterQueueBuilder`, `IgniterWorkerBuilder`, `IgniterJobsManager`, `IgniterJobsError`, public types | Define queues and jobs, create a runtime, and use its typed accessors. |
+| `@igniter-js/jobs/adapters/mock` | `IgniterJobsMemoryAdapter` | In-memory backend for development and tests. |
+| `@igniter-js/jobs/adapters/bun` | `IgniterJobsBunSQLiteAdapter` | SQLite-backed Bun adapter. |
+| `@igniter-js/jobs/adapters/node` | `IgniterJobsBullMQAdapter` | BullMQ adapter for Node.js and Redis. |
+| `@igniter-js/jobs/telemetry` | `IgniterJobsTelemetryEvents` | Typed Jobs telemetry event definitions. |
+
+## Queue and runtime factories
+
+`IgniterQueue.create(name)` creates a typed queue builder. `IgniterJobs.create()` creates the runtime builder. A queue must be registered before the runtime is built.
+
+```ts
+import { IgniterJobs, IgniterQueue } from "@igniter-js/jobs";
+import { IgniterJobsMemoryAdapter } from "@igniter-js/jobs/adapters/mock";
+import { z } from "zod";
+
+const emailQueue = IgniterQueue.create("email")
+  .addJob("sendWelcome", {
+    input: z.object({ email: z.string().email() }),
+    handler: async ({ input }) => ({ sentTo: input.email }),
+  })
+  .build();
+
+const jobs = IgniterJobs.create()
+  .withAdapter(IgniterJobsMemoryAdapter.create())
+  .withService("api")
+  .withEnvironment("development")
+  .withContext(async () => ({}))
+  .addQueue(emailQueue)
+  .build();
+
+const jobId = await jobs.email.sendWelcome.dispatch({
+  input: { email: "ada@example.com" },
+});
+```
+
+`IgniterQueue.create<const TName extends string>(name: TName)` returns an `IgniterQueueBuilder` whose name and registered jobs remain available to TypeScript. `IgniterJobs.create()` returns an `IgniterJobsBuilder<unknown>`; `withContext(factory)` on the runtime builder infers the handler context and must be called before `addQueue()`.
+
+## Builder methods
+
+### `IgniterQueueBuilder`
+
+| Method | Signature | Purpose |
+| --- | --- | --- |
+| `addJob<TInput, TResult, TStreamEvents>(name, definition)` | `(name: string, definition: IgniterJobDefinition<TContext, TInput, TResult, TStreamEvents>)` | Register a typed job with an optional input schema, handler, dispatch options, stream definition, and lifecycle hooks. |
+| `addCron<TResult>(name, definition)` | `(name: string, definition: IgniterCronDefinition<TContext, TResult>)` | Register a cron task with a cron expression and handler. |
+| `build()` | `(): IgniterJobsQueue<TContext, TJobs, TCron> & { name: TName }` | Produce the queue definition to register on the runtime builder. |
+
+### `IgniterJobsBuilder`
+
+| Method | Signature | Purpose |
+| --- | --- | --- |
+| `withAdapter(adapter)` | `(adapter: IgniterJobsAdapter)` | Select the backend. Required before `build()`. |
+| `withService(service)` | `(service: string)` | Set the service identifier. Required before `build()`. |
+| `withEnvironment(environment)` | `(environment: string)` | Set the environment. Required before `build()`. |
+| `withContext<T>(factory)` | `(factory: () => T \| Promise<T>)` | Provide the context factory before adding queues. Required before `build()`. |
+| `addQueue(queue)` | `(queue: IgniterJobsQueue<TContext, ...>)` | Register a queue. Duplicate names throw `IgniterJobsError`. |
+| `addScope(name, options?)` | `(name: string, options?: IgniterJobsScopeOptions)` | Configure the runtime’s single supported scope. A second scope throws. |
+| `withQueueDefaults(defaults)` | `(defaults: Partial<IgniterJobDefinition<TContext, any, any, any>>)` | Apply default job options. |
+| `withWorkerDefaults(defaults)` | `(defaults: Partial<IgniterJobsWorkerBuilderConfig)` | Apply worker defaults. |
+| `withAutoStartWorker(config)` | `(config: { queues; concurrency?; limiter? })` | Store the worker configuration on the runtime config. Start workers explicitly with `jobs.worker.create().start()`. |
+| `withTelemetry(telemetry)` / `withLogger(logger)` | `(telemetry: IgniterJobsTelemetry)` / `(logger: IgniterLogger)` | Attach observability integrations. |
+| `build()` | `(): IgniterJobsRuntime<...>` | Validate required configuration and return the typed runtime. |
+
+See [getting started](/docs/jobs/getting-started) and [job definitions](/docs/jobs/job-definitions) for the setup sequence and schema behavior.
+
+## Runtime accessors
+
+The runtime is inferred from the registered queues. For each queue and job name, it exposes typed dispatch and scheduling methods:
+
+| Accessor | Public methods |
+| --- | --- |
+| `jobs.<queue>.<job>` | `dispatch(params)`, `schedule(params)`, `get(id)`, `many(ids)`, `subscribe(handler)` |
+| `jobs.<queue>` | `list(filter?)`, `subscribe(handler)`, `get()` |
+| `jobs.<queue>.<job>.get(id)` | `retrieve()`, `retry()`, `remove()`, `promote()`, `move("failed", reason)`, `state()`, `progress()`, `logs()`, `stream()` |
+| `jobs.<queue>.get()` | `retrieve()`, `pause()`, `resume()`, `drain()`, `clean(options)`, `obliterate(options?)`, `retryAll()` |
+| `jobs.worker` | `create()` returns a worker builder. |
+| `jobs` | `subscribe(handler)`, `search(target, filter)`, `shutdown()`, `scope(name, id, tags?)` |
+
+`dispatch({ input, ...options })` returns the job ID. `schedule({ input, ...scheduleOptions })` also returns the job ID; scheduling options include `at`, `delay`, `cron`, `every`, and related recurrence controls. See [scheduling](/docs/jobs/scheduling), [workers](/docs/jobs/workers), [scopes](/docs/jobs/scopes), and [search and monitoring](/docs/jobs/search-and-monitoring).
+
+## Worker builder and types
+
+`jobs.worker.create()` returns an `IgniterWorkerBuilder`. Its chain supports `addQueue(name)`, `withConcurrency(number)`, `withLimiter({ max, duration })`, `onActive(handler)`, `onSuccess(handler)`, `onFailure(handler)`, `onIdle(handler)`, and `start()`. `start()` resolves to an `IgniterJobsWorkerHandle`.
+
+The root entry exports `IgniterJobsAdapter`, `IgniterJobDefinition`, `IgniterCronDefinition`, `IgniterJobsExecutionContext`, lifecycle hook types, dispatch and scheduling params, queue and worker types, stream types, schema inference helpers, and `IgniterJobsError` with `IGNITER_JOBS_ERROR_CODES`. Adapter-specific configuration types include `IgniterJobsBullMQAdapterOptions` and `IgniterJobsBunSQLiteAdapterOptions`.
+
+For streams and subscriptions, see [advanced features](/docs/jobs/advanced-features). The [search and monitoring guide](/docs/jobs/search-and-monitoring) covers runtime inspection and queue management.

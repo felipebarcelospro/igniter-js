@@ -1,6 +1,6 @@
 ---
 title: Quick Start
-description: Create a fully configured logger in 2 minutes. Build with context, transports, and typed scopes — copy-paste ready.
+description: Create a fully configured logger in 2 minutes. Build with context, transports, and child loggers — copy-paste ready.
 ---
 
 ## Quick Start
@@ -99,7 +99,6 @@ This guide walks you from zero to a production-ready logger in under two minutes
         options: {
           path: './logs/app.log',
           mkdir: true,
-          rotation: { maxSizeBytes: 10 * 1024 * 1024 }, // 10 MB
         },
       })
       .addTransport({
@@ -177,21 +176,20 @@ This guide walks you from zero to a production-ready logger in under two minutes
     ```
 
     <Callout type="info">
-      Groups and separators only affect **console output**. File and HTTP transports receive the raw log lines without indentation.
+      The manager adds indentation before sending messages through Pino, so configured file and HTTP transports receive indented messages too. Group headings and separators are log entries sent through every configured target.
     </Callout>
   </Step>
 
   <Step>
     ### Flush Before Exit
 
-    For file and HTTP transports, flush buffered logs before the process exits:
+    Flush Pino's buffered output before the process exits. This does not force the HTTP worker to send its in-memory batch:
 
     ```typescript
     import { IgniterLogger } from '@igniter-js/logger';
 
     const logger = IgniterLogger.create()
       .addTransport({ target: 'file', options: { path: './logs/app.log' } })
-      .addTransport({ target: 'http', options: { url: 'https://logs.example.com/ingest' } })
       .build();
 
     // Graceful shutdown
@@ -218,8 +216,8 @@ You now have a logger that:
 - Merges **default context** (app name, component, region) into every entry
 - Writes to **console, file, and HTTP** simultaneously
 - Supports **child loggers** with scoped context
-- Uses **visual formatting** (groups, separators) for readable console output
-- **Flushes** buffered logs on graceful shutdown
+- Uses **visual formatting** (groups, separators) in emitted log messages
+- **Flushes** Pino's buffered output during graceful shutdown; HTTP delivery remains best-effort and in-memory
 
 ---
 
@@ -227,6 +225,6 @@ You now have a logger that:
 
 <Cards>
   <Card title="Transports" description="Deep dive into every transport target, options, and multi-transport patterns." href="/docs/logger/transports" />
-  <Card title="Child Loggers" description="Typed scopes, context merging, and hierarchical logger patterns." href="/docs/logger/child-loggers" />
+  <Card title="Child Loggers" description="Context merging and hierarchical logger patterns." href="/docs/logger/child-loggers" />
   <Card title="Advanced" description="Runtime level changes, groups, separators, flush, and error handling." href="/docs/logger/advanced" />
 </Cards>

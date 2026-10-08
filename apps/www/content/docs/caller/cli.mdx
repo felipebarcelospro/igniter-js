@@ -12,22 +12,22 @@ Use the `generate caller` command:
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
   <Tab value="npm">
     ```bash
-    npx @igniter-js/cli generate caller --name facebook --url https://api.facebook.com/openapi.json
+    npx @igniter-js/cli generate caller --name example --path ./openapi.json
     ```
   </Tab>
   <Tab value="pnpm">
     ```bash
-    pnpm igniter generate caller --name facebook --url https://api.facebook.com/openapi.json
+    pnpm igniter generate caller --name example --path ./openapi.json
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn igniter generate caller --name facebook --url https://api.facebook.com/openapi.json
+    yarn igniter generate caller --name example --path ./openapi.json
     ```
   </Tab>
   <Tab value="bun">
     ```bash
-    bunx @igniter-js/cli generate caller --name facebook --url https://api.facebook.com/openapi.json
+    bunx @igniter-js/cli generate caller --name example --path ./openapi.json
     ```
   </Tab>
 </Tabs>
@@ -39,7 +39,8 @@ Use the `generate caller` command:
 | `--name` | Prefix for the generated variables and file naming. |
 | `--url` | Remote URL of the OpenAPI JSON/YAML. |
 | `--path` | Local file path to the OpenAPI spec. |
-| `--output`| Override output directory (default: `src/callers/<hostname>`). |
+| `--output` | Override output directory (default: `src/callers/<name>`). |
+| `--only-schemas` | Generate `schema.ts` without writing or replacing `index.ts`. |
 
 ## Generated Assets
 
@@ -51,16 +52,13 @@ The command generates two main files in your project:
 ### Using the Generated Caller
 
 ```ts
-import { facebookCaller } from '@/callers/facebook'
-import type { FacebookCallerSchemas } from '@/callers/facebook/schema'
+import { exampleCaller } from '@/callers/example'
 
 // Making a request (URL is typed!)
-const result = await facebookCaller.get('/me').execute()
+const result = await exampleCaller.get('/me').execute()
 
-// Type inference for responses
-type MeResponse = ReturnType<
-  typeof FacebookCallerSchemas.$Infer.Response<'/me', 'GET', 200>
->
+// The generated schema builder types the response.
+type MeResponse = typeof result.data
 ```
 
 ## Why use CLI Generation?

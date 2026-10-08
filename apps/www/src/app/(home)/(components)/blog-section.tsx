@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { source } from "@/app/blog/source";
+import { getBlogPostsByPublicationDate } from "@/app/blog/source";
 import { BlogGrid } from "./blog-grid";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export async function BlogSection() {
-  const pages = source.getPages();
+  const pages = getBlogPostsByPublicationDate();
   
   // Get only the latest 3 posts
   const serializedPosts = pages.slice(0, 3).map((page) => ({

@@ -1,0 +1,95 @@
+---
+title: Session, Request State, and Persistence
+description: Configure Caller React session resolution, transport overlays, cache reset scopes, and optional browser persistence.
+---
+
+The React client is provided by `@igniter-js/caller/client`. `IgniterCallerProvider` receives one built Caller manager. It can also resolve session data and transport defaults, keep request overlays, emit lifecycle events, and persist query cache state across tabs.
+
+## Provide the caller
+
+```tsx
+import { IgniterCallerProvider } from '@igniter-js/caller/client'
+import { api } from '@/lib/api'
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return <IgniterCallerProvider caller={api}>{children}</IgniterCallerProvider>
+}
+```
+
+Create a typed hook once, then use the generated client inside components:
+
+```ts
+import { useIgniterCaller } from '@igniter-js/caller/client'
+import type { api } from '@/lib/api'
+
+export const useApi = () => useIgniterCaller<typeof api>()
+```
+
+## Resolve a session
+
+The provider's `session.resolve` returns optional transport settings and session `data`. Its strategy can be `ttl` (the default), `mount`, or `every-request`.
+
+```tsx
+<IgniterCallerProvider
+  caller={api}
+  session={{
+    strategy: 'ttl',
+    ttlMs: 30_000,
+    resolve: async () => {
+      const token = await getAccessToken()
+      return {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        data: { authenticated: Boolean(token) },
+      }
+    },
+  }}
+>
+  {children}
+</IgniterCallerProvider>
+```
+
+Inside a component, `api.useSession()` returns session `data`, `error`, `isLoading`, and `set`, `refresh`, and `clear` operations. `api.session` exposes imperative `get`, `set`, `refresh`, and `clear` methods.
+
+## Apply a runtime request overlay
+
+The client `request` API overlays `headers`, `cookies`, `query`, and `credentials` onto requests made through the provider client. These values are runtime transport state and do not mutate the base Caller manager.
+
+```tsx
+function TenantSwitcher({ tenantId }: { tenantId: string }) {
+  const api = useApi()
+
+  function selectTenant() {
+    api.request.set({ headers: { 'X-Tenant-Id': tenantId } })
+  }
+
+  return <button onClick={selectTenant}>Use tenant</button>
+}
+```
+
+## Reset state
+
+`api.reset({ scope })` resets provider-managed state. Supported scopes are `cache`, `session`, `request`, and `all`.
+
+```ts
+const api = useApi()
+
+api.reset({ scope: 'cache' }) // Clear cached queries and refetch observers
+api.reset({ scope: 'session' })
+api.reset({ scope: 'request' })
+api.reset({ scope: 'all' })
+```
+
+## Persist cache across tabs
+
+```tsx
+<IgniterCallerProvider
+  caller={api}
+  persistence={{ enabled: true, storage: 'localStorage', keyPrefix: 'my-app:' }}
+>
+  {children}
+</IgniterCallerProvider>
+```
+
+Persistence is browser storage for the provider cache and optional cross-tab synchronization. The default backend is `localStorage`; `sessionStorage` and a synchronous custom persistence adapter are also supported. Do not store secrets in persisted cache data.
+
+For query and mutation hooks, see [React Integration](/docs/caller/react); for mock configuration, see [Mocking & Testing](/docs/caller/testing).

@@ -113,6 +113,10 @@ All HTTP method helpers accept an optional URL. When schemas are configured, pro
     type: '(url?: string) => RequestBuilder<T>',
     description: 'Creates a HEAD request builder (headers only, no body).',
   },
+  options: {
+    type: '(url?: string) => RequestBuilder<T>',
+    description: 'Creates an OPTIONS request builder.',
+  },
   request: {
     type: '(options: DirectRequestOptions) => Promise<ApiResponse<T>>',
     description: 'Executes a request directly using an options object. Convenience method for dynamic or programmatic requests.',
@@ -123,12 +127,24 @@ All HTTP method helpers accept an optional URL. When schemas are configured, pro
 
 <TypeTable type={{
   on: {
-    type: '(pattern: string | RegExp, callback: (result: ApiResponse, context: { url, method, timestamp }) => void) => () => void',
-    description: 'Registers a global event listener for matching responses. Returns an unsubscribe function. Pattern can be a string or RegExp.',
+    type: '(pattern: string | RegExp, callback: (result: ApiResponse, context: { url: string, method: string, timestamp: number }) => void | Promise<void>) => () => void',
+    description: 'Registers a global listener for responses whose URL matches a string or RegExp pattern. Callback receives (result, { url, method, timestamp }); returns an unsubscribe function.',
   },
   batch: {
-    type: '(requests: Promise<ApiResponse>[]) => Promise<ApiResponse[]>',
-    description: 'Executes multiple requests in parallel using Promise.all semantics. Results preserve the input order.',
+    type: '<T extends readonly Promise<ApiResponse<any>>[]>(requests: [...T]) => Promise<{ [K in keyof T]: Awaited<T[K]> }>',
+    description: 'Awaits a tuple of request promises with Promise.all semantics. Result order and tuple types are preserved.',
+  },
+  invalidate: {
+    type: '(key: string) => Promise<void>',
+    description: 'Clears the Caller cache entry with this key.',
+  },
+  invalidatePattern: {
+    type: '(pattern: string) => Promise<void>',
+    description: 'Clears matching in-memory entries only; persistent stores require manual pattern cleanup.',
+  },
+  off: {
+    type: '(pattern: string | RegExp, callback?: (result: ApiResponse, context: { url: string; method: string; timestamp: number }) => void | Promise<void>) => void',
+    description: 'Removes matching global listeners, optionally limited to one callback.',
   },
 }} />
 
@@ -168,7 +184,7 @@ Fluent per-request API. Returned by `api.get()`, `api.post()`, etc. All methods 
 <TypeTable type={{
   retry: {
     type: '(maxAttempts: number, options?: { backoff?: "linear" | "exponential"; baseDelay?: number; retryOnStatus?: number[] }) => this',
-    description: 'Configures automatic retry on failure. maxAttempts is the number of retry attempts (total attempts = 1 + maxAttempts). Default backoff: linear. Default retryOnStatus: [408, 429, 500, 502, 503, 504].',
+    description: 'Configures retry behavior. maxAttempts is the total request attempts, including the initial request; retries are opt-in. Default backoff: linear. Default retryOnStatus: [408, 429, 500, 502, 503, 504].',
   },
   fallback: {
     type: '(fn: () => T) => this',
@@ -189,7 +205,7 @@ Fluent per-request API. Returned by `api.get()`, `api.post()`, etc. All methods 
 <TypeTable type={{
   responseType: {
     type: '<T>(schema?: ZodSchema<T> | StandardSchemaV1) => RequestBuilder<T>',
-    description: 'Sets the expected response type for TypeScript inference. If a Zod/StandardSchema is passed, the response is validated at runtime (only for JSON/XML/CSV content types). If no schema is passed, it provides type inference only.',
+    description: 'Sets the expected response type for TypeScript inference. A supported schema can validate parsed data at runtime. Without a schema, it provides type inference only.',
   },
 }} />
 
@@ -198,7 +214,7 @@ Fluent per-request API. Returned by `api.get()`, `api.post()`, etc. All methods 
 <TypeTable type={{
   execute: {
     type: '() => Promise<ApiResponse<T>>',
-    description: 'Executes the request. Runs through the full pipeline: cache check → interceptors → validation → fetch (with retry) → parsing → validation → interceptors → cache store → fallback.',
+    description: 'Executes the request. Caller cache lookup is controlled by .stale(); retries run only when configured with .retry().',
   },
 }} />
 
@@ -239,6 +255,7 @@ Defines HTTP methods for a single path:
 | `patch(config)` | `(config: { request?, responses }) => this` | Defines PATCH endpoint |
 | `delete(config)` | `(config: { request?, responses }) => this` | Defines DELETE endpoint |
 | `head(config)` | `(config: { request?, responses }) => this` | Defines HEAD endpoint |
+| `options(config)` | `(config: { request?, responses }) => this` | Defines OPTIONS endpoint |
 | `ref(key)` | `(key: string) => { schema, array(), nullable(), optional(), record() }` | References a registered schema with Zod wrappers |
 | `build()` | `() => TMethods` | Returns the accumulated method map |
 
@@ -255,7 +272,7 @@ Builder for creating typed mock registries for testing.
   },
   withSchemas: {
     type: '(schemas: SchemaMap | SchemaBuildResult) => this',
-    description: 'Associates schemas for typed mock definitions. Mocks validate against schema types.',
+    description: 'Associates schemas for compile-time typed mock definitions. This does not add runtime response validation.',
   },
   mock: {
     type: '(path: string, handlers: MockPathDefinition) => this',
@@ -322,15 +339,19 @@ The standardized response envelope returned by all requests.
 
 <TypeTable type={{
   data: {
-    type: 'T | undefined',
-    description: 'The parsed response data. Undefined if the request failed.',
+    type: 'T (success branch only)',
+    description: 'Parsed response data, present when `ok` is true.',
+  },
+  ok: {
+    type: 'boolean',
+    description: 'Discriminates success (true) from failure (false). Narrow the union with this field before reading data or error.',
   },
   error: {
-    type: 'IgniterError | undefined',
-    description: 'The error object if the request failed. Undefined on success.',
+    type: 'IgniterError (failure branch only)',
+    description: 'Error object, present when `ok` is false.',
   },
   status: {
-    type: 'number | undefined',
+    type: 'number',
     description: 'The HTTP status code of the response.',
   },
   headers: {
@@ -359,6 +380,18 @@ Custom error class extending `IgniterError` for all Caller failures.
   statusText: {
     type: 'string | undefined',
     description: 'HTTP status text from the response.',
+  },
+  statusCode: {
+    type: 'number | undefined',
+    description: 'Optional HTTP status code attached to an error.',
+  },
+  details: {
+    type: 'unknown',
+    description: 'Optional diagnostic details for the failure.',
+  },
+  metadata: {
+    type: 'Record<string, unknown> | undefined',
+    description: 'Additional diagnostic metadata.',
   },
   cause: {
     type: 'Error | undefined',
@@ -397,8 +430,8 @@ Interface for implementing persistent cache stores.
     description: 'Retrieves a cached value by key.',
   },
   set: {
-    type: '(key: string, value: any, options?: { ttl?: number }) => Promise<void>',
-    description: 'Stores a cached value with optional TTL.',
+    type: '(key: string, value: any, options?: { ttl?: number; [key: string]: any }) => Promise<void>',
+    description: 'Stores a cached value with optional TTL and adapter-specific options.',
   },
   delete: {
     type: '(key: string) => Promise<void>',
@@ -415,11 +448,11 @@ Interface for implementing persistent cache stores.
 <TypeTable type={{
   maxAttempts: {
     type: 'number',
-    description: 'Maximum number of retry attempts (default: 1 retry = 2 total attempts).',
+    description: 'Total number of attempts including the initial request (default: 1, so no retry).',
   },
   backoff: {
     type: '"linear" | "exponential"',
-    description: 'Delay strategy. Linear: baseDelay × attempt. Exponential: baseDelay × 2^attempt.',
+    description: 'Delay strategy. Linear delays scale by retry index; exponential uses baseDelay × 2^(retryIndex - 1).',
   },
   baseDelay: {
     type: 'number',
@@ -441,10 +474,6 @@ Interface for implementing persistent cache stores.
   keyPrefix: {
     type: 'string',
     description: 'Prefix for all cache keys (default: igniter:caller:).',
-  },
-  fallbackToFetch: {
-    type: 'boolean',
-    description: 'Fall back to fetch cache when store is unavailable (default: true).',
   },
 }} />
 

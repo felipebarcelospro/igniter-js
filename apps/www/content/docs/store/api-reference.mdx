@@ -7,6 +7,10 @@ description: Complete API reference for @igniter-js/store. All builder methods, 
 
 This document provides the complete API reference for `@igniter-js/store`. Every method and type documented here reflects the actual implementation.
 
+## Public exports
+
+The package root re-exports the manager and builder (`IgniterStore`, `IgniterStoreBuilder`, `IgniterStoreManager`), event builders (`IgniterStoreEvents`, `IgniterStoreEventsBuilder`, `IgniterStoreEventsGroup`, `IgniterStoreEventsGroupBuilder`), key builder (`IgniterStoreKey`, `IgniterStoreKeyBuilder`), errors (`IgniterStoreError`, `IGNITER_STORE_ERROR_CODES`), and public types from the `adapter`, `builder`, `config`, `events`, `manager`, `schema`, `scope`, and `serializer` modules. The adapters subpath exports `IgniterStoreRedisAdapter` and `IgniterStoreMemoryAdapter`; the telemetry subpath exports `IgniterStoreTelemetryEvents`.
+
 ---
 
 ## IgniterStore — Builder
@@ -47,7 +51,7 @@ Sets the service name for key prefix isolation. **Required.**
 
 ### `withSerializer(serializer)`
 
-Sets a custom serializer.
+Stores a serializer in builder configuration. The current manager and built-in Redis and memory adapters do not use this value when reading or writing values; the Redis adapter uses JSON directly and the memory adapter stores values as-is. Do not use this method to change runtime encoding. See [serializer configuration](/docs/store/advanced#serializer-configuration) for details.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -83,7 +87,7 @@ Adds a typed scope definition.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `key` | `string` | Scope key (e.g., `"organization"`) |
-| `options.required` | `boolean?` | Whether scope is required (default: `true`) |
+| `options.required` | `boolean?` | Optional metadata field; currently not enforced at runtime |
 | `options.description` | `string?` | Human-readable description |
 
 ```typescript
@@ -493,7 +497,7 @@ import { IgniterStoreMemoryAdapter } from "@igniter-js/store/adapters";
 IgniterStoreMemoryAdapter.create()
 ```
 
-No constructor options. Supports all operations including streams.
+The factory accepts an optional `{ enableStreams?: boolean }` object for compatibility, but the current memory adapter does not read this option. Streams remain available regardless of the value passed.
 
 ---
 
@@ -515,8 +519,17 @@ All errors extend `IgniterStoreError` (which extends `IgniterError`).
 |------|---------|
 | `STORE_SCOPE_KEY_REQUIRED` | Scope key is required |
 | `STORE_SCOPE_IDENTIFIER_REQUIRED` | Scope identifier is required |
+| `STORE_SCOPE_INVALID` | Scope configuration is invalid |
 | `STORE_INVALID_SCOPE_KEY` | Scope key not defined |
 | `STORE_DUPLICATE_SCOPE` | Scope already defined |
+
+### Key-value Errors
+
+| Code | Message |
+|------|---------|
+| `STORE_KEY_REQUIRED` | Key is required |
+| `STORE_VALUE_REQUIRED` | Value is required |
+| `STORE_TTL_INVALID` | TTL is invalid |
 
 ### Namespace & Event Errors
 
@@ -547,6 +560,7 @@ All errors extend `IgniterStoreError` (which extends `IgniterError`).
 | `STORE_INCREMENT_FAILED` | Increment failed |
 | `STORE_PUBLISH_FAILED` | Publish failed |
 | `STORE_SUBSCRIBE_FAILED` | Subscribe failed |
+| `STORE_UNSUBSCRIBE_FAILED` | Unsubscribe failed |
 
 ### Batch Errors
 
@@ -555,6 +569,13 @@ All errors extend `IgniterStoreError` (which extends `IgniterError`).
 | `STORE_BATCH_FAILED` | Batch operation failed |
 | `STORE_BATCH_KEYS_REQUIRED` | Keys array is required |
 | `STORE_BATCH_ENTRIES_REQUIRED` | Entries array is required |
+
+### Scan Errors
+
+| Code | Message |
+|------|---------|
+| `STORE_SCAN_FAILED` | Scan operation failed |
+| `STORE_SCAN_PATTERN_REQUIRED` | Scan pattern is required |
 
 ### Claim Errors
 
@@ -587,6 +608,7 @@ All errors extend `IgniterStoreError` (which extends `IgniterError`).
 |------|---------|
 | `STORE_CONNECTION_FAILED` | Connection failed |
 | `STORE_NOT_CONNECTED` | Not connected to backend |
+| `STORE_ENVIRONMENT_REQUIRED` | Required environment configuration is missing |
 
 ### Error Handling
 
@@ -631,4 +653,4 @@ Events span every operation namespace: `igniter.store.kv.*`, `igniter.store.coun
 
 - See [troubleshooting](/docs/store/troubleshooting) for common errors
 - Explore [advanced patterns](/docs/store/advanced) for production usage
-- Read the [package README](https://github.com/igniter-js/igniter-js/blob/main/packages/store/README.md) for exhaustive real-world examples
+- Read the [package README](https://github.com/felipebarcelospro/igniter-js/blob/main/packages/store/README.md) for exhaustive real-world examples

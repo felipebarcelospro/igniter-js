@@ -32,7 +32,8 @@ await userFiles.upload(file, "avatar.png"); // /production/users/u_123/avatar.pn
 ```typescript
 const prod = storage.path("assets");
 await prod.upload(file, "logos/app.svg"); // key: production/assets/logos/app.svg
-const url = prod.scope("public").toString; // url generated via baseUrl
+const publicFile = await prod.scope("public").upload(file, "logos/app.svg");
+console.log(publicFile.url); // Generated URL includes the base URL and resolved key.
 ```
 
 ## Patterns to Reuse
@@ -41,4 +42,4 @@ const url = prod.scope("public").toString; // url generated via baseUrl
 - **User content**: `addScope('user', '/users/[identifier]')` to isolate per-user uploads.
 - **Transient files**: `addScope('temp', '/temp')` and clean with `list` + `delete` on a schedule.
 
-Continue to [Uploads & Replace](</docs/storage/(core-concepts)/uploads-and-replace>) to control delivery, or jump to [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>) to enforce sizes and types.
+Continue to [Uploads & Replace](</docs/storage/uploads-and-replace>) to control delivery, or jump to [Policies & Validation](</docs/storage/policies-and-validation>) to enforce sizes and types.

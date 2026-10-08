@@ -1,0 +1,51 @@
+---
+title: "Configuration"
+description: "Configure optional GitHub access, tool groups, project memory, and coding-agent delegation for the MCP Server."
+---
+
+## Environment variables
+
+| Variable | Effect |
+| --- | --- |
+| `GITHUB_TOKEN` | Authenticates Octokit requests for GitHub tools. |
+| `DEBUG` | Set to `true` to enable verbose agent diagnostics. The executor writes the full delegated execution environment, including inherited secrets, to stderr. The command runner writes a masked credential summary, command, and working directory to stdout. |
+| `ENABLE_CLI_TOOLS` | Set to `false` to disable CLI tools. |
+| `ENABLE_API_VALIDATION_TOOLS` | Set to `false` to disable API validation tools. |
+| `ENABLE_DOCUMENTATION_TOOLS` | Set to `false` to disable URL-to-Markdown retrieval. |
+| `ENABLE_GITHUB_TOOLS` | Set to `false` to disable GitHub tools. |
+| `ENABLE_FILE_ANALYSIS_TOOLS` | Set to `false` to disable file-analysis tools. |
+| `ENABLE_CODE_INVESTIGATION_TOOLS` | Set to `false` to disable code-investigation tools. |
+| `ENABLE_DEBUGGING_TOOLS` | Set to `false` to disable process and runtime debugging tools. |
+| `ENABLE_MEMORY_TOOLS` | Set to `false` to disable memory tools. |
+| `ENABLE_TASK_MANAGEMENT_TOOLS` | Set to `false` to disable task tools. |
+| `ENABLE_AGENT_DELEGATION_TOOLS` | Set to `false` to disable agent delegation tools. |
+
+Each toolset is registered unless its flag is exactly the string `false`. Configure variables in the MCP client process environment. Do not commit tokens in shared configuration files.
+
+## Project memory and working directory
+
+The server starts with `process.cwd()` as its initial project root, then searches upward for `.git` or `package.json`. Memory is stored under `.github/lia/memories/` in the resolved project. The client should therefore launch the command from the intended repository.
+
+Memory directories and interrupted delegation jobs are initialized when the server starts. Memory tools can include sensitive records in search results when requested; review project permissions and client access accordingly.
+
+## Agent delegation
+
+The delegation tools support `gemini`, `claude`, and `codex` local CLIs. Configure the corresponding credentials before use:
+
+| Provider | Credential |
+| --- | --- |
+| Gemini CLI | `GEMINI_API_KEY` |
+| Claude Code | `ANTHROPIC_API_KEY` |
+| Codex CLI | `OPENAI_API_KEY` or ChatGPT CLI authentication (`OPENAI_CHATGPT_TOKEN` is checked by environment validation). |
+
+Delegated tasks run in YOLO mode and can read, write, and execute within their working environment. The server's schema exposes sandbox and timeout settings, but only sandbox choice and timeout are used to build the execution configuration; other advertised execution options are not currently passed through. Review [Toolsets](/docs/mcp-server-cli/toolsets) before enabling delegation.
+
+## Limit access
+
+Prefer enabling only the toolsets required for a workflow. GitHub tools include issue creation, updates, closure, comments, and deletion; CLI tools can install and remove dependencies; task and memory tools write to the project. The local MCP client is the appropriate place to provide credentials and any client-supported workspace restrictions.
+
+## URL and runtime trust boundaries
+
+The API validation tools fetch caller-supplied URLs: `get_openapi_spec` accepts an optional URL, and `make_api_request` accepts a URL with `GET`, `POST`, `PUT`, `PATCH`, or `DELETE`. The documentation tool `read_as_markdown` also fetches the supplied URL. These requests can reach remote services and are controlled by tool-call inputs, so do not expose them to untrusted callers or pass URLs you have not reviewed.
+
+`inspect_runtime_variable` evaluates `variable_name` as a JavaScript expression through the inspector protocol in the selected process. The expression runs with that process's privileges; only inspect processes and expressions you trust. `DEBUG=true` writes inherited environment values to stderr and command-runner diagnostics to stdout. Leave it unset unless you need the diagnostics and can protect both output streams.

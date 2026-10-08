@@ -1,29 +1,29 @@
 ---
 title: Overview
-description: Type-safe, session-aware telemetry for Node.js applications. Typed event registries, automatic context correlation, PII redaction, sampling, and pluggable transport adapters.
+description: Session-aware telemetry for Node.js applications. Event registries, context correlation, configurable redaction, sampling, and pluggable transport adapters.
 ---
 
 ## Overview
 
-`@igniter-js/telemetry` is a **type-safe, privacy-first telemetry backbone** for TypeScript applications. It unifies logs, events, and error reporting under a structured, correlated model — with typed event registries, automatic session context, PII redaction, sampling, and pluggable transports.
+`@igniter-js/telemetry` is a session-aware telemetry package for TypeScript applications. It sends structured events through sampling, configurable redaction, and pluggable transports.
 
 Whether you need to instrument a REST API, a background worker, or a Next.js app, telemetry gives you a single, governed pipeline for all observability data.
 
 <Callout type="info">
-  Telemetry is a **fully independent package**. Use it in any Node.js or Bun application — Express, Next.js, Fastify, Hono, or a background worker. No framework lock-in.
+  Telemetry requires Node.js 22 or newer. It can be used with server-side frameworks such as Express, Next.js, Fastify, or Hono, and in background workers. The root import currently requires `@igniter-js/store` because it statically exports the Store adapter.
 </Callout>
 
 ### Key Features
 
-- **Type-safe events** — Define event schemas with Zod, get autocompletion on `emit()` calls, catch invalid events at compile time
+- **Event registries** — Define schemas to infer attributes for registered events; `emit()` also accepts arbitrary string names, and schemas are not checked at runtime
 - **Session correlation** — AsyncLocalStorage-based sessions automatically correlate events across async boundaries without manual context passing
-- **PII protection** — Redact sensitive keys, hash PII fields, and truncate values before events leave the application
+- **Configurable redaction** — Remove or hash selected top-level attribute keys and truncate long strings before events reach transports; key lists are empty by default
 - **Volume control** — Per-level sampling rates, always/never patterns, and event filtering to control costs
 - **Pluggable transports** — 10 built-in adapters (Logger, HTTP, OTLP, Sentry, Slack, Discord, Telegram, Memory, Mock, Store) — or build your own
 - **Three emit modes** — Direct emit, manual session handles, and scoped execution (`session.run()`) — choose the right DX for each scenario
 - **Event groups** — Nest events into namespaced groups for logical organization and discoverable autocompletion
-- **Validation modes** — Validate events in development, production, or never — configurable per registry or globally
-- **Predictable errors** — 22 stable error codes (`TELEMETRY_TRANSPORT_FAILED`, `TELEMETRY_SESSION_ENDED`) for programmatic handling
+- **Validation configuration** — Builder exposes validation settings, but the current manager does not apply them during `emit()`
+- **Typed errors** — An exported telemetry error class and named error-code constants for identifying supported failure cases
 
 ---
 
@@ -53,11 +53,15 @@ Telemetry follows a **builder → manager → transport fan-out** pipeline. Even
 
 Every event passes through: **resolve session → apply sampling → build envelope → apply redaction → fan-out to transports**.
 
+<Callout type="warn">
+  Event schemas provide TypeScript inference for registered names and attributes. Although the builder exposes validation settings, the current runtime does not execute schema or strict-name validation during `emit()`; do not rely on those settings as runtime validation.
+</Callout>
+
 ### Mental Model
 
 | Concept | What it is | Example |
 |---------|-----------|---------|
-| **Builder** | Fluent config chain (immutable) | `IgniterTelemetry.create().withService('api').addTransport(...).build()` |
+| **Builder** | Fluent config chain | `IgniterTelemetry.create().withService('api').addTransport(...).build()` |
 | **Manager** | Runtime emitter with session support | `telemetry.emit('user.login', { ... })` |
 | **Events Registry** | Typed event definitions with Zod schemas | `IgniterTelemetryEvents.namespace('igniter.jobs').event(...).build()` |
 | **Session** | AsyncLocalStorage context for correlation | `telemetry.session().actor('user', 'usr_123').run(...)` |

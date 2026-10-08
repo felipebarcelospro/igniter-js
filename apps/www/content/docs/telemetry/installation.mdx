@@ -30,17 +30,11 @@ description: Install @igniter-js/telemetry via npm, pnpm, yarn, or bun. Set up e
 
 ---
 
-## Peer Dependencies
+## Runtime Dependencies
 
 Telemetry depends on `@igniter-js/common` for the error system and logger interface. This is installed automatically by most package managers.
 
-```json
-{
-  "peerDependencies": {
-    "@igniter-js/common": "*"
-  }
-}
-```
+`@igniter-js/common` is a regular dependency (`>=0.1.0`), so your package manager installs it with Telemetry. The manifest marks `@igniter-js/store` as an optional peer, but the root entry statically re-exports the Store adapter, which imports `@igniter-js/store` at runtime. Install `@igniter-js/store` before importing `@igniter-js/telemetry`, even if you do not plan to use that adapter. The package should make this dependency truly optional in a future source change.
 
 ### Optional Dependencies
 
@@ -49,7 +43,7 @@ Some adapters have additional requirements:
 | Adapter | Peer Dependency | Install |
 |---------|----------------|---------|
 | Sentry | `@sentry/node` | `npm install @sentry/node` |
-| Store | `@igniter-js/store` | `npm install @igniter-js/store` |
+| Store adapter and current root import | `@igniter-js/store` | `npm install @igniter-js/store` |
 | Events (Zod schemas) | `zod` | `npm install zod` |
 
 ---
@@ -93,7 +87,7 @@ Your `tsconfig.json` should target at least:
 ```
 
 <Callout type="info">
-  Telemetry uses `AsyncLocalStorage` from `node:async_hooks`, which requires Node.js 16.4+. The package is tested on Node.js 22+.
+  The package manifest requires Node.js **22 or newer**. Telemetry imports a server-only guard from its main entry point; importing it in a browser throws. Use it from server-side Node.js code.
 </Callout>
 
 ---

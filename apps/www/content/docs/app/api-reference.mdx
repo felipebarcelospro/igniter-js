@@ -1,0 +1,41 @@
+---
+title: "API reference"
+description: "Public exports and import paths provided by @igniter-js/app."
+---
+
+The package root re-exports the app and router APIs, state, triggers, forms, navigation, metadata helpers, and error boundary. The `state`, `trigger`, and `form` subpaths expose the corresponding feature exports.
+
+## Main exports
+
+| Export | Purpose |
+| --- | --- |
+| `IgniterApp` | Configure a client-backed application and build its shared context and integrations. |
+| `IgniterRouter` | Create and build the TanStack Router instance for an app. |
+| `IgniterPage`, `IgniterLayout`, `IgniterMiddleware` | Build route pages, layouts, and middleware. |
+| `IgniterRouterProvider` | Render the configured router in React. |
+| `IgniterLink`, `useIgniterNavigate` | Link and navigate with TanStack Router behavior. |
+| `IgniterResponse` | Redirect or produce a not-found response from route work. |
+| `IgniterErrorBoundary` | Render an error fallback around route UI. |
+| `IgniterState`, `IgniterStateBuilder`, `IgniterStateInstance` | Define and use reactive app state. |
+| `IgniterTrigger`, `IgniterTriggerGroup` | Define trigger groups and their actions. |
+| `useForm` | Bind schema-validated forms to client mutations. |
+| `updateHead`, `restoreHead` | Update and restore document head metadata. |
+
+## Subpath exports
+
+| Import | Public API |
+| --- | --- |
+| `@igniter-js/app/state` | State builder/instance, registry helper, serialization and merge types. |
+| `@igniter-js/app/trigger` | Trigger and trigger-group builders, API and hook types. |
+| `@igniter-js/app/form` | `useForm` and mutation/form inference types. |
+
+## Key types
+
+- `IgniterAppConfig`, `IgniterAppBuilt`, and `IIgniterAppBuilder` describe app configuration and its builder.
+- `IgniterRouterBuildOptions` configures router error handling and matching behavior.
+- `RouteContextAPI` describes loader data, params, search, and refresh helpers available to route components.
+- `IgniterStateConfig`, `IgniterStateNamespaceConfig`, and `IgniterStateNamespaceContext` describe state and namespace configuration.
+- `IgniterTriggerDef`, `IgniterTriggerAPI`, and `IgniterTriggerHookResult` describe trigger definitions and usage.
+- `IgniterUseFormOptions`, `IgniterFormReturn`, and mutation inference types describe form configuration and results.
+
+For task-focused examples, see [routing](/docs/app/routing), [state](/docs/app/state), [triggers](/docs/app/triggers), and [forms](/docs/app/forms). The package's source entrypoint is [`packages/app/src/index.ts`](https://github.com/felipebarcelospro/igniter-js/blob/main/packages/app/src/index.ts).

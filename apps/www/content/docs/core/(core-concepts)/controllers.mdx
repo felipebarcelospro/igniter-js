@@ -97,7 +97,7 @@ const userController = igniter.controller({
         });
         
         if (!user) {
-          return response.notFound({ message: 'User not found' });
+          return response.notFound('User not found');
         }
         
         return response.success({ user });
@@ -335,7 +335,7 @@ const postCommentController = igniter.controller({
         });
         
         if (!comment) {
-          return response.notFound({ message: 'Comment not found' });
+          return response.notFound('Comment not found');
         }
         
         return response.success({ comment });
@@ -394,7 +394,7 @@ function createCrudController<T extends string>(resource: T) {
           });
           
           if (!item) {
-            return response.notFound({ message: `${resource} not found` });
+            return response.notFound(`${resource} not found`);
           }
           
           return response.success({ [resource]: item });
@@ -775,7 +775,7 @@ describe('User Controller', () => {
   });
 
   it('should get user by ID', async () => {
-    const result = await AppRouter.caller.users.getById.query({ id: '1' });
+    const result = await AppRouter.caller.users.getById.query({ params: { id: '1' } });
     
     expect(result.data.user).toBeDefined();
     expect(result.data.user.id).toBe('1');
@@ -810,7 +810,7 @@ describe('User API Integration', () => {
     const userId = created.data.user.id;
     
     // Read
-    const read = await AppRouter.caller.users.getById.query({ id: userId });
+    const read = await AppRouter.caller.users.getById.query({ params: { id: userId } });
     expect(read.data.user.name).toBe('John');
     
     // Update
@@ -825,7 +825,7 @@ describe('User API Integration', () => {
     
     // Verify deletion
     await expect(
-      AppRouter.caller.users.getById.query({ id: userId })
+      AppRouter.caller.users.getById.query({ params: { id: userId } })
     ).rejects.toThrow();
   });
 });
@@ -879,19 +879,19 @@ This updates:
 ## Next Steps
 
 <Cards>
-  <Card title="Actions" href="/docs/actions">
+  <Card title="Actions" href="/docs/core/actions">
     Deep dive into queries and mutations
   </Card>
   
-  <Card title="Procedures" href="/docs/procedures">
+  <Card title="Procedures" href="/docs/core/procedures">
     Add middleware to your actions
   </Card>
   
-  <Card title="Validation" href="/docs/validation">
+  <Card title="Validation" href="/docs/core/validation">
     Master schema validation
   </Card>
   
-  <Card title="Router" href="/docs/router">
+  <Card title="Router" href="/docs/core/router">
     Assemble controllers into a router
   </Card>
 </Cards>

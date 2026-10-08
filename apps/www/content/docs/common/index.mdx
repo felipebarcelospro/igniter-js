@@ -1,0 +1,64 @@
+---
+title: Introduction
+description: Shared error, logger, and schema contracts used across the Igniter.js TypeScript ecosystem.
+---
+
+## What Common provides
+
+`@igniter-js/common` is a small set of shared primitives used by Igniter.js packages. It exports one runtime class, `IgniterError`, plus TypeScript contracts for loggers and schema validators. It does not implement a logger or a schema validator for you.
+
+Use Common when you need a structured error that can cross package boundaries, or when a library accepts a logger or validator without depending on one specific implementation.
+
+<Callout type="info" title="One package entry point">
+  Import runtime values and types from `@igniter-js/common`. The package has no subpath exports and no runtime dependencies.
+</Callout>
+
+## Public exports
+
+| Export | Kind | Use |
+| --- | --- | --- |
+| `IgniterError` | Runtime class | Attach a stable code and optional details to an error. |
+| `IgniterLogLevel` | Runtime enum | Use the shared `fatal`, `error`, `warn`, `info`, `debug`, and `trace` levels. |
+| `IgniterLogger`, `IgniterLogEntry`, `IgniterLoggerOptions` | TypeScript interfaces | Accept or implement a logger through a shared contract. |
+| `StandardTypedV1`, `StandardSchemaV1`, `StandardJSONSchemaV1` | TypeScript interfaces and namespaces | Describe typed schemas, validation results, and JSON Schema converters. |
+
+These are the package's root exports from [`src/index.ts`](https://github.com/felipebarcelospro/igniter-js/blob/main/packages/common/src/index.ts). The schema interfaces provide types only; validation and conversion happen in the implementation supplied by the consumer.
+
+## Quick start
+
+<Steps>
+  <Step>
+    ### Install
+
+    ```bash
+    npm install @igniter-js/common
+    ```
+  </Step>
+  <Step>
+    ### Create a structured error
+
+    ```typescript
+    import { IgniterError } from '@igniter-js/common';
+
+    const error = new IgniterError({
+      message: 'The requested project was not found',
+      code: 'PROJECT_NOT_FOUND',
+      statusCode: 404,
+      details: { projectId: 'prj_123' },
+    });
+
+    console.log(error.code, error.statusCode);
+    ```
+  </Step>
+</Steps>
+
+The error keeps the HTTP status on the instance. Its `toJSON()` output intentionally contains `name`, `message`, `code`, `details`, `metadata`, and `stackTrace`; add `statusCode` yourself when building an HTTP response.
+
+## Where to go next
+
+<Cards>
+  <Card title="Structured errors" description="Create, serialize, and safely return IgniterError values." href="/docs/common/errors" />
+  <Card title="Logger contract" description="Implement the shared logger interface or integrate the Igniter logger." href="/docs/common/logger-contract" />
+  <Card title="Schema contracts" description="Validate values and describe input/output schemas through Standard Schema interfaces." href="/docs/common/schema-contracts" />
+  <Card title="Core error handling" description="See how the Core package handles application errors and HTTP responses." href="/docs/core/error-handling" />
+</Cards>

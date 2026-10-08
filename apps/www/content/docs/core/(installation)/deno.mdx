@@ -5,7 +5,7 @@ description: Build secure, type-safe APIs with Igniter.js and Deno, the modern J
 
 Deno is a modern JavaScript runtime that prioritizes security, developer experience, and web standards. When combined with Igniter.js, you get a secure-by-default environment with native TypeScript support, built-in testing, and automatic code formatting—all without configuration.
 
-This guide shows you how to build production-ready APIs with Deno and Igniter.js. You'll experience Deno's security model with granular permissions, standard library utilities, and native TypeScript execution, all while maintaining Igniter.js's type-safe controllers and automatic API documentation.
+This guide shows how to connect Deno's security model, standard library utilities, and native TypeScript execution with Igniter.js controllers and typed request handling.
 
 <Callout type="info" title="Secure by Default">
   Deno + Igniter.js provides security-first development. Deno requires explicit permissions for file system, network, and environment access—perfect for production deployments.
@@ -40,7 +40,7 @@ The fastest way to start is using the official CLI with Deno's native TypeScript
   </Tab>
 </Tabs>
 
-Your API runs at `http://localhost:8000/api/v1`, and interactive docs at `http://localhost:8000/api/v1/docs` 🚀
+Your API runs at `http://localhost:8000/api/v1`.
 
 ---
 
@@ -119,20 +119,10 @@ Create the main Igniter instance. Create `src/igniter.ts`:
 import { Igniter } from '@igniter-js/core'
 import { createIgniterAppContext } from './igniter.context.ts'
 
-export const igniter = Igniter
-  .context(createIgniterAppContext())
-  .config({
-    baseURL: Deno.env.get('IGNITER_API_URL') || 'http://localhost:8000',
-    basePATH: Deno.env.get('IGNITER_API_BASE_PATH') || '/api/v1',
-  })
-  .docs({
-    info: {
-      title: 'My Deno API',
-      version: '1.0.0',
-      description: 'Secure API built with Deno and Igniter.js',
-    }
-  })
-  .create()
+export const igniter = Igniter.create()
+  .withContext(async () => createIgniterAppContext())
+  .withConfig({ basePATH: '/api/v1' })
+  .build()
       ```
 
       Note: Deno uses `Deno.env.get()` for environment variables with explicit `--allow-env` permission.
@@ -323,14 +313,12 @@ Create a type-safe client for consuming your API. Create `src/igniter.client.ts`
 ```typescript title="src/igniter.client.ts"
 import { createIgniterClient } from '@igniter-js/core/client'
 import type { AppRouterType } from './igniter.router.ts'
+import { AppRouterSchema } from './igniter.schema.ts'
 
 export const api = createIgniterClient<AppRouterType>({
   baseURL: Deno.env.get('IGNITER_API_URL') || 'http://localhost:8000',
   basePATH: Deno.env.get('IGNITER_API_BASE_PATH') || '/api/v1',
-  router: () => {
-    // Dynamic import for Deno
-    return import('./igniter.router.ts').then(m => m.AppRouter)
-  },
+  router: () => AppRouterSchema as unknown as AppRouterType,
 })
 
 export type ApiClient = typeof api
@@ -369,23 +357,10 @@ deno test --allow-net --allow-env
 
 ---
 
-## Igniter Studio (API Playground)
+## API documentation
 
-Igniter.js includes an interactive API playground called **Igniter Studio**. It's automatically available at `/api/v1/docs` when you configure the `.docs()` method.
+Core does not automatically mount an interactive API playground. If you want a UI, configure the separate `@igniter-js/studio` package with the supported Core Studio integration. See [Core adapters and integrations](/docs/core/adapters) for package boundaries.
 
-To access it:
-
-1. Start your dev server: `deno task dev`
-2. Navigate to `http://localhost:8000/api/v1/docs`
-3. You'll see an interactive interface where you can:
-   - Browse all API endpoints
-   - View request/response schemas
-   - Test endpoints directly
-   - See auto-generated examples
-
-The playground updates automatically as you add endpoints.
-
----
 
 ## Production Deployment
 
@@ -453,13 +428,13 @@ Here's the recommended structure:
 ## Next Steps
 
 <Cards>
-  <Card title="Core Concepts" href="/docs/builder">
+  <Card title="Core Concepts" href="/docs/core/builder">
     Learn about Builder, Router, and Controllers
   </Card>
-  <Card title="Actions" href="/docs/actions">
+  <Card title="Actions" href="/docs/core/actions">
     Create queries and mutations with validation
   </Card>
-  <Card title="Deno KV" href="/docs/storage">
-    Use Deno's built-in database
+  <Card title="Storage adapters" href="/docs/storage">
+    Choose a storage backend supported by the storage package
   </Card>
 </Cards>

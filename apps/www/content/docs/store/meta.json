@@ -1,14 +1,23 @@
 {
   "title": "Store",
+  "root": true,
   "pages": [
-    "page",
+    "---Get Started---",
+    "index",
     "installation",
+    "quick-start",
+    "---Core Concepts---",
+    "architecture",
     "caching",
     "pubsub",
     "atomic-operations",
     "streams",
+    "---Guides---",
+    "scopes",
+    "---Advanced---",
     "advanced",
-    "api-reference",
-    "troubleshooting"
+    "troubleshooting",
+    "---API Reference---",
+    "api-reference"
   ]
 }

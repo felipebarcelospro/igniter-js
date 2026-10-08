@@ -1,0 +1,61 @@
+---
+title: "Routing and loaders"
+description: "Create pages and a TanStack Router tree with typed search input, loaders, metadata, and route components."
+---
+
+`IgniterRouter` constructs a TanStack Router instance from the pages built by an `IgniterApp`. The page builder adds Igniter-aware loader inputs and component helpers while retaining TanStack Router's route model.
+
+## Configure the router
+
+Create the router from the built app, add built pages, and optionally customize its base path and defaults:
+
+```tsx
+import { IgniterRouter } from '@igniter-js/app'
+
+const router = IgniterRouter.create(app)
+  .withBasePath('/app')
+  .withDefaultStaleTime(30_000)
+  .addRoute(homePage)
+  .build({ trailingSlash: 'never' })
+```
+
+`build()` accepts `defaultErrorComponent`, `caseSensitive`, and `trailingSlash` (`always`, `never`, or `preserve`).
+
+## Build a page
+
+The page builder supports metadata, route layout, a typed search schema, a loader, and a component. It also provides `.use(procedure)` for binding a client procedure to the route. `.withQuery()` supplies the TypeScript search shape, but the current builder does not install TanStack Router's runtime `validateSearch` option. Validate untrusted URL input in your loader or application code when runtime validation is required.
+
+```tsx
+import { z } from 'zod'
+
+const projectsPage = app.page('/projects')
+  .withMetadata({ title: 'Projects' })
+  .withQuery(z.object({ filter: z.string().optional() }))
+  .withLoader(async ({ client, context, request }) => {
+    return {
+      filter: request.query.filter,
+      startedAt: context.requestStartedAt,
+    }
+  })
+  .withComponent(({ route }) => {
+    const data = route.useLoaderData()
+    const search = route.useSearch()
+    return <main><h1>Projects</h1><p>{search.filter ?? 'All projects'}</p></main>
+  })
+  .build()
+```
+
+Loader arguments include `client`, `context`, `request` (`url`, `query`, and `params`), `response`, and `stores`. The route helper exposed to components includes `useLoaderData()`, `useParams()`, `useSearch()`, and `refresh()`.
+
+<Callout type="warn">
+  Keep loader data serializable. The client, context, response, and stores are available to the loader for work, but should not be returned as route data.
+</Callout>
+
+## Navigation and responses
+
+- `IgniterLink` wraps TanStack Router's `Link`.
+- `useIgniterNavigate()` provides `to`, `back`, `forward`, `refresh`, and `replace` navigation helpers.
+- `IgniterResponse.redirect(url, status?)` and `IgniterResponse.notFound()` throw the corresponding TanStack Router response.
+- `IgniterErrorBoundary` renders an error fallback and can call an optional `onError` callback.
+
+For the minimal setup, see the [quick start](/docs/app/quick-start). The full set of exported router symbols is listed in the [API reference](/docs/app/api-reference).

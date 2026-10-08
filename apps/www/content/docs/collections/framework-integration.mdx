@@ -19,7 +19,7 @@ Create a singleton manager for reuse across requests:
 
 ```typescript title="lib/collections.ts"
 import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters/node';
 import { z } from 'zod';
 
 const Posts = IgniterCollectionModel.create('posts')
@@ -149,7 +149,7 @@ Collections as middleware in an Express application.
 ```typescript title="src/server.ts"
 import express from 'express';
 import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters/node';
 import { z } from 'zod';
 
 const Posts = IgniterCollectionModel.create('posts')
@@ -220,7 +220,7 @@ Collections in Astro with content collections and SSR.
 
 ```typescript title="src/lib/collections.ts"
 import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters/node';
 import { z } from 'zod';
 
 const Posts = IgniterCollectionModel.create('posts')
@@ -291,7 +291,7 @@ Collections as a loader data source in Remix.
 
 ```typescript title="app/lib/collections.server.ts"
 import { IgniterCollections, IgniterCollectionModel } from '@igniter-js/collections';
-import { NodeFsAdapter } from '@igniter-js/collections/adapters';
+import { NodeFsAdapter } from '@igniter-js/collections/adapters/node';
 import { z } from 'zod';
 
 const Posts = IgniterCollectionModel.create('posts')
@@ -313,7 +313,8 @@ export const docs = IgniterCollections.create()
 ```
 
 ```typescript title="app/routes/blog._index.tsx"
-import { json, useLoaderData } from '@remix-run/react';
+import { json } from '@remix-run/node';
+import { useLoaderData } from '@remix-run/react';
 import { docs } from '~/lib/collections.server';
 
 export async function loader() {
@@ -342,7 +343,8 @@ export default function BlogIndex() {
 ```
 
 ```typescript title="app/routes/blog.$slug.tsx"
-import { json, useLoaderData } from '@remix-run/react';
+import { json, type LoaderFunctionArgs } from '@remix-run/node';
+import { useLoaderData } from '@remix-run/react';
 import { docs } from '~/lib/collections.server';
 import { notFound } from 'remix-utils';
 
@@ -404,19 +406,17 @@ export const docs = IgniterCollections.create()
   .build();
 ```
 
-### Edge Runtime (S3 Adapter)
+### Bun Runtime (S3 Adapter)
 
 ```typescript title="lib/collections.ts"
-import { BunS3Adapter } from '@igniter-js/collections/adapters';
+import { BunS3Adapter } from '@igniter-js/collections/adapters/bun';
 
 export const docs = IgniterCollections.create()
   .withAdapter(new BunS3Adapter({
     bucket: process.env.CONTENT_BUCKET!,
     region: process.env.AWS_REGION!,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    },
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   }))
   .addCollection(Posts)
   .build();

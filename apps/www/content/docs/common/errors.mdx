@@ -1,0 +1,59 @@
+---
+title: Structured errors
+description: Use IgniterError for machine-readable error codes, status values, details, causes, and optional logger integration.
+---
+
+## Create an error
+
+`IgniterError` extends JavaScript's `Error` and adds a required `code`, an optional `statusCode`, and optional structured context. Its generics let TypeScript retain a specific code and details shape.
+
+```typescript
+import { IgniterError } from '@igniter-js/common';
+
+type ProjectErrorCode = 'PROJECT_NOT_FOUND' | 'PROJECT_FORBIDDEN';
+
+const error = new IgniterError<ProjectErrorCode, { projectId: string }>({
+  message: 'Project not found',
+  code: 'PROJECT_NOT_FOUND',
+  statusCode: 404,
+  details: { projectId: 'prj_123' },
+});
+
+if (error.code === 'PROJECT_NOT_FOUND') {
+  console.log(error.details?.projectId);
+}
+```
+
+`statusCode` defaults to `500`. `cause` accepts an `Error`; `causer` is an optional string identifying the source. If you pass `logger`, the constructor immediately calls `logger.error()` with the message and structured fields.
+
+## Serialize for an HTTP response
+
+`toJSON()` returns `name`, `message`, `code`, `details`, `metadata`, and `stackTrace`. It does **not** include `statusCode`, `causer`, or `cause`. Include the status separately when creating your response:
+
+```typescript
+const body = {
+  ...error.toJSON(),
+  statusCode: error.statusCode,
+};
+
+return Response.json(body, { status: error.statusCode });
+```
+
+<Callout type="warn" title="Keep sensitive data out of error context">
+  `details` and `metadata` may be logged or returned by your application. Do not put credentials, tokens, or unnecessary personal data in them.
+</Callout>
+
+## API summary
+
+| Member | Behavior |
+| --- | --- |
+| `code` | Required string error identifier; can be narrowed with `TCode`. |
+| `statusCode` | Numeric status value; defaults to `500`. |
+| `details` | Optional value with the `TDetails` type. |
+| `metadata` | Optional `Record<string, unknown>`. |
+| `causer` | Optional string identifying the source. |
+| `cause` | Optional underlying `Error`. |
+| `stackTrace` | Stack captured when the instance is constructed. |
+| `toJSON()` | Serializable object; omits `statusCode`, `causer`, and `cause`. |
+
+For framework-level error handling and response behavior, continue to [Core error handling](/docs/core/error-handling). For the shared log interface, see [Logger contract](/docs/common/logger-contract).

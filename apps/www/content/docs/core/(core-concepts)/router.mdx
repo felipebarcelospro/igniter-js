@@ -20,6 +20,18 @@ export const AppRouter = igniter.router({
 });
 ```
 
+For a composable builder, use `igniter.router.create().addController(...)` and finish with `.build()`:
+
+```typescript
+export const AppRouter = igniter.router
+  .create()
+  .addController('users', userController)
+  .addController('posts', postController)
+  .build();
+```
+
+The object form above remains available for existing applications.
+
 <Callout type="info" title="What is a Router?">
   A Router connects your **controllers** (grouped actions) to HTTP endpoints and provides a **type-safe caller** for server-side invocation without HTTP overhead.
 </Callout>
@@ -139,7 +151,7 @@ export const AppRouter = igniter.router({
 });
 
 // Server-side usage
-const user = await AppRouter.caller.users.getById.query({ id: '123' });
+const user = await AppRouter.caller.users.getById.query({ params: { id: '123' } });
 const post = await AppRouter.caller.posts.create.mutate({
   body: { title: 'Hello', content: 'World' }
 });
@@ -157,7 +169,7 @@ The caller API matches your action types:
 ```typescript
 // Query action (GET)
 const result = await AppRouter.caller.users.list.query();
-const user = await AppRouter.caller.users.getById.query({ id: '123' });
+const user = await AppRouter.caller.users.getById.query({ params: { id: '123' } });
 ```
 
 **For Mutation Actions:**
@@ -485,7 +497,7 @@ describe('User API', () => {
 
   it('should handle not found', async () => {
     await expect(
-      AppRouter.caller.users.getById.query({ id: 'non-existent' })
+      AppRouter.caller.users.getById.query({ params: { id: 'non-existent' } })
     ).rejects.toThrow();
   });
 });
@@ -528,14 +540,14 @@ async function getUsers(): Promise<ReturnType<UsersList['query']>> {
 
 ```typescript
 type AppContext = typeof AppRouter.$Infer.$context;
-// Result: The context type defined in Igniter.context<T>()
+// Result: The context type inferred from .withContext<T>()
 ```
 
 ### Infer Plugins Type
 
 ```typescript
 type AppPlugins = typeof AppRouter.$Infer.$plugins;
-// Result: The plugins type defined in Igniter.plugins<T>()
+// Result: Plugin values are configured with .addPlugin() and inferred in the built router.
 ```
 
 ---
@@ -663,7 +675,7 @@ export const AppRouter = igniter.router({
 
 ```typescript
 try {
-  const result = await AppRouter.caller.users.getById.query({ id: '123' });
+  const result = await AppRouter.caller.users.getById.query({ params: { id: '123' } });
   console.log(result.data.user);
 } catch (error) {
   // Errors are automatically thrown from .caller
@@ -704,19 +716,19 @@ console.log(AppRouter.caller);       // Caller proxy
 Now that you understand routers, dive deeper into the building blocks:
 
 <Cards>
-  <Card title="Controllers" href="/docs/controllers">
+  <Card title="Controllers" href="/docs/core/controllers">
     Learn how to group actions into controllers
   </Card>
   
-  <Card title="Actions" href="/docs/actions">
+  <Card title="Actions" href="/docs/core/actions">
     Create queries and mutations for your endpoints
   </Card>
   
-  <Card title="Context" href="/docs/context">
+  <Card title="Context" href="/docs/core/context">
     Understand static vs dynamic context patterns
   </Card>
   
-  <Card title="Client" href="/docs/client">
+  <Card title="Client" href="/docs/core/client">
     Use the type-safe client in your frontend
   </Card>
 </Cards>

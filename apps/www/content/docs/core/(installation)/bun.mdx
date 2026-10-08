@@ -5,10 +5,10 @@ description: Build blazing-fast, type-safe APIs with Igniter.js and Bun, the all
 
 Bun is a modern JavaScript runtime that's incredibly fast, with built-in bundling, testing, and package management. When combined with Igniter.js, you get exceptional performance with zero configuration—no build tools, no bundlers, just pure speed and developer happiness.
 
-This guide shows you how to build production-ready APIs with Bun and Igniter.js. You'll experience Bun's lightning-fast startup times, instant hot reload, and native TypeScript support, all while maintaining Igniter.js's type-safe controllers and automatic API documentation.
+This guide shows you how to build production-ready APIs with Bun and Igniter.js. You'll experience Bun's lightning-fast startup times, instant hot reload, and native TypeScript support, all while maintaining Igniter.js's type-safe controllers and typed request handling.
 
 <Callout type="success" title="Maximum Performance">
-  Bun + Igniter.js delivers incredible performance out of the box. Bun's runtime is 4x faster than Node.js, with instant startup and built-in TypeScript support.
+  Bun provides fast startup and built-in TypeScript support for running your Igniter.js app.
 </Callout>
 
 ---
@@ -40,32 +40,34 @@ The fastest way to start is using the official CLI with Bun's native speed:
   </Tab>
 </Tabs>
 
-Your API runs at `http://localhost:3000/api/v1`, and interactive docs at `http://localhost:3000/api/v1/docs` 🚀
+Your API runs at `http://localhost:3000/api/v1`.
+
+Core does not mount an API playground automatically. Configure the separate `@igniter-js/studio` package when you need a UI; see [Core adapters and integrations](/docs/core/adapters).
 
 ### Direct Command
 
-If you prefer to skip the interactive prompts, you can specify your project name and framework directly:
+The CLI asks for a project name and starter during setup. This command starts that interactive flow:
 
 #### For REST API
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="direct-command-rest">
   <Tab value="npm">
     ```bash
-    npx @igniter-js/cli@latest init my-bun-api --framework bun-rest-api
+    npx @igniter-js/cli@latest init my-bun-api
     ```
   </Tab>
   <Tab value="pnpm">
     ```bash
-    pnpm dlx @igniter-js/cli@latest init my-bun-api --framework bun-rest-api
+    pnpm dlx @igniter-js/cli@latest init my-bun-api
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn dlx @igniter-js/cli@latest init my-bun-api --framework bun-rest-api
+    yarn dlx @igniter-js/cli@latest init my-bun-api
     ```
   </Tab>
   <Tab value="bun">
     ```bash
-    bunx @igniter-js/cli@latest init my-bun-api --framework bun-rest-api
+    bunx @igniter-js/cli@latest init my-bun-api
     ```
   </Tab>
 </Tabs>
@@ -74,22 +76,22 @@ If you prefer to skip the interactive prompts, you can specify your project name
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="direct-command-react">
   <Tab value="npm">
     ```bash
-    npx @igniter-js/cli@latest init my-bun-app --framework bun-react-app
+    npx @igniter-js/cli@latest init my-bun-app
     ```
   </Tab>
   <Tab value="pnpm">
     ```bash
-    pnpm dlx @igniter-js/cli@latest init my-bun-app --framework bun-react-app
+    pnpm dlx @igniter-js/cli@latest init my-bun-app
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn dlx @igniter-js/cli@latest init my-bun-app --framework bun-react-app
+    yarn dlx @igniter-js/cli@latest init my-bun-app
     ```
   </Tab>
   <Tab value="bun">
     ```bash
-    bunx @igniter-js/cli@latest init my-bun-app --framework bun-react-app
+    bunx @igniter-js/cli@latest init my-bun-app
     ```
   </Tab>
 </Tabs>
@@ -159,20 +161,10 @@ export function createIgniterAppContext(): AppContext {
 import { Igniter } from '@igniter-js/core'
 import { createIgniterAppContext } from './igniter.context'
 
-export const igniter = Igniter
-  .context(createIgniterAppContext())
-  .config({
-    baseURL: process.env.IGNITER_API_URL || 'http://localhost:3000',
-    basePATH: process.env.IGNITER_API_BASE_PATH || '/api/v1',
-  })
-  .docs({
-    info: {
-      title: 'My Bun API',
-      version: '1.0.0',
-      description: 'High-performance API built with Bun and Igniter.js',
-    }
-  })
-  .create()
+export const igniter = Igniter.create()
+  .withContext(async () => createIgniterAppContext())
+  .withConfig({ basePATH: '/api/v1' })
+  .build();
       ```
     </Step>
 
@@ -357,11 +349,12 @@ Create a type-safe client for consuming your API. Create `src/igniter.client.ts`
 ```typescript title="src/igniter.client.ts"
 import { createIgniterClient } from '@igniter-js/core/client'
 import type { AppRouterType } from './igniter.router'
+import { AppRouterSchema } from './igniter.schema'
 
 export const api = createIgniterClient<AppRouterType>({
   baseURL: Bun.env.IGNITER_API_URL || 'http://localhost:3000',
   basePATH: Bun.env.IGNITER_API_BASE_PATH || '/api/v1',
-  router: () => require('./igniter.router').AppRouter,
+  router: () => AppRouterSchema as unknown as AppRouterType,
 })
 
 export type ApiClient = typeof api
@@ -376,97 +369,7 @@ const { message, runtime } = await api.example.hello.query()
 
 ---
 
-## Generating Schema and Docs
 
-For full-stack Bun projects (Bun + React), you'll need to generate the client schema whenever you modify your API.
-
-### When to Generate Schema
-
-<Callout type="error">
-  **Critical:** You MUST run schema generation BEFORE using the client in your frontend. The client depends on the generated schema to function correctly.
-</Callout>
-
-<Callout type="info">
-  Run this command whenever you modify your API structure (add/remove/modify controllers or actions) OR before using the client for the first time.
-</Callout>
-
-### Generate Schema
-
-Run this command whenever you make changes to your API structure:
-
-<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-schema">
-  <Tab value="npm">
-    ```bash
-    npx @igniter-js/cli@latest generate schema
-    ```
-  </Tab>
-  <Tab value="pnpm">
-    ```bash
-    pnpm dlx @igniter-js/cli@latest generate schema
-    ```
-  </Tab>
-  <Tab value="yarn">
-    ```bash
-    yarn dlx @igniter-js/cli@latest generate schema
-    ```
-  </Tab>
-  <Tab value="bun">
-    ```bash
-    bunx @igniter-js/cli@latest generate schema
-    ```
-  </Tab>
-</Tabs>
-
-This creates:
-- `src/igniter.schema.ts` - Type-safe schema for client-side usage
-- `src/docs/openapi.json` - OpenAPI 3.0 specification
-
-### Generate OpenAPI Documentation
-
-To generate or update the OpenAPI specification and interactive documentation:
-
-<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="generate-docs">
-  <Tab value="npm">
-    ```bash
-    npx @igniter-js/cli@latest generate docs
-    ```
-  </Tab>
-  <Tab value="pnpm">
-    ```bash
-    pnpm dlx @igniter-js/cli@latest generate docs
-    ```
-  </Tab>
-  <Tab value="yarn">
-    ```bash
-    yarn dlx @igniter-js/cli@latest generate docs
-    ```
-  </Tab>
-  <Tab value="bun">
-    ```bash
-    bunx @igniter-js/cli@latest generate docs
-    ```
-  </Tab>
-</Tabs>
-
----
-
-## Igniter Studio (API Playground)
-
-Igniter.js includes an interactive API playground called **Igniter Studio**. It's automatically available at `/api/v1/docs` when you configure the `.docs()` method.
-
-To access it:
-
-1. Start your dev server: `bun dev`
-2. Navigate to `http://localhost:3000/api/v1/docs`
-3. You'll see an interactive interface where you can:
-   - Browse all API endpoints
-   - View request/response schemas
-   - Test endpoints directly
-   - See auto-generated examples
-
-The playground updates automatically as you add endpoints.
-
----
 
 ## Performance Tips
 
@@ -531,13 +434,13 @@ Here's the recommended structure:
 ## Next Steps
 
 <Cards>
-  <Card title="Core Concepts" href="/docs/builder">
+  <Card title="Core Concepts" href="/docs/core/builder">
     Learn about Builder, Router, and Controllers
   </Card>
-  <Card title="Actions" href="/docs/actions">
+  <Card title="Actions" href="/docs/core/actions">
     Create queries and mutations with validation
   </Card>
-  <Card title="Database" href="/docs/database">
+  <Card title="Database" href="/docs/core/store">
     Integrate Prisma or Drizzle ORM
   </Card>
 </Cards>

@@ -52,7 +52,7 @@ logger.info('Response sent', { requestId, statusCode: 200 });
 
 ### 4. Flush before process exit
 
-Always flush when using file or HTTP transports:
+Flush during graceful shutdown when you need Pino to drain its buffers. HTTP entries are held in memory and can remain unsent if the endpoint is unavailable:
 
 ```typescript
 // ✅ Good
@@ -85,10 +85,10 @@ const logger = IgniterLogger.create()
   .withLevel(isDev ? IgniterLogLevel.Debug : IgniterLogLevel.Info)
   .withAppName('api');
 
-// Always log to console — pretty in dev, JSON in prod
+// The console target uses pino-pretty in both environments; colorize only controls ANSI colors.
 logger.addTransport({
   target: 'console',
-  options: { pretty: isDev, colorize: isDev },
+  options: { colorize: isDev },
 });
 
 // File + HTTP only in production
@@ -194,10 +194,10 @@ logger.success('Batch complete', { count: largeArray.length });
 
 ### 4. Don't ignore flush
 
-File and HTTP transports buffer output. Without `flush()`, the last log entries are lost on exit:
+Pino transports may buffer output. Flush during graceful shutdown; the built-in HTTP transport retains failed batches only in memory, so a final network failure can still leave entries unsent:
 
 ```typescript
-// ❌ Lost — process exits before buffer is flushed
+// ❌ May exit before Pino flushes buffered output
 logger.info('Process exiting');
 process.exit(0);
 
@@ -284,7 +284,7 @@ logger.child('tenant-id', { tenantId })       // tenant-scoped
 - [ ] Set appropriate log levels per environment (debug in dev, info in prod)
 - [ ] Use HTTP transport `batchSize` of 50+ in production to reduce network calls
 - [ ] Call `flush()` before process exit for file and HTTP transports
-- [ ] Use `pretty: false` in production for faster console output (or drop console entirely)
+- [ ] Remember the built-in `console` target always uses `pino-pretty`; use a raw Pino target or external transport for JSON-line output
 
 ---
 

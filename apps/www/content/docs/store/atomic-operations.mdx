@@ -79,45 +79,28 @@ if (!allowed) {
 }
 ```
 
-### Sliding Window Rate Limiting
+<Callout type="warn">
+  This fixed-window example uses separate increment and expiration calls. If
+  the process stops after the first increment and before setting the TTL, that
+  counter can remain without an expiration. The package does not expose a
+  combined atomic increment-and-expire operation; use a Redis script or another
+  atomic primitive when that failure mode is unacceptable.
+</Callout>
 
-For more precise limiting:
-
-```typescript
-async function slidingWindowRateLimit(
-  identifier: string,
-  limit: number,
-  windowSeconds: number,
-) {
-  const now = Date.now();
-  const windowKey = Math.floor(now / (windowSeconds * 1000));
-  const key = `rate:sliding:${identifier}:${windowKey}`;
-
-  const currentCount = await store.counter.increment(key);
-  if (currentCount === 1) {
-    await store.counter.expire(key, windowSeconds * 2);
-  }
-
-  // Check previous window
-  const prevKey = `rate:sliding:${identifier}:${windowKey - 1}`;
-  const prevCount = await store.kv.get<number>(prevKey) ?? 0;
-
-  // Weighted count
-  const weight = (now % (windowSeconds * 1000)) / (windowSeconds * 1000);
-  const total = currentCount + prevCount * (1 - weight);
-
-  return {
-    allowed: total <= limit,
-    remaining: Math.max(0, Math.floor(limit - total)),
-  };
-}
-```
+`store.counter` supports increment, decrement, and expiration, so it is suited to fixed-window limits. A sliding-window algorithm also needs a way to read the prior window counter; this package does not expose a counter `get()` method. Use a separate algorithm or a storage primitive that supports that read if you need sliding windows.
 
 ---
 
 ## Claims — Distributed Locks (`store.claim`)
 
-`store.claim.once()` uses `SETNX` to atomically acquire a lock. Returns `true` if acquired, `false` if already held.
+`store.claim.once()` uses `SETNX` to atomically acquire a claim. It returns `true` if acquired and `false` if already held. Claims use a separate key namespace from `store.kv`; the public claim API has no release method, so use a TTL and let the claim expire.
+
+<Callout type="warn">
+  Claims support acquisition only: there is no public release, renewal, or
+  compare-owner operation. If work outlives its TTL, another worker can acquire
+  the claim while the first is still running. Keep the TTL above the expected
+  work duration or use a lock service with lease renewal and safe release.
+</Callout>
 
 ```typescript
 const claimed = await store.claim.once(
@@ -127,11 +110,8 @@ const claimed = await store.claim.once(
 );
 
 if (claimed) {
-  try {
-    await performCleanup();
-  } finally {
-    await store.kv.remove("job:cleanup"); // Release
-  }
+  await performCleanup();
+  // The claim expires after its configured TTL; there is no claim.release().
 }
 ```
 
@@ -147,11 +127,9 @@ async function runCronJob(jobName: string, fn: () => Promise<void>) {
     return;
   }
 
-  try {
-    await fn();
-  } finally {
-    await store.kv.remove(lockKey);
-  }
+  // Keep this task within the 55-second TTL. This API has no lease renewal
+  // or explicit release operation.
+  await fn();
 }
 
 // Usage — only one instance runs this per minute
@@ -229,9 +207,9 @@ async function warmPopularUsersCache(userIds: string[]) {
 ### Scanning Keys
 
 ```typescript
-// Scan all user keys
+// `pattern` is a suffix; Store adds its service/scope and `kv` prefixes.
 const result = await store.dev.scan("user:*");
-console.log(result.keys);  // ["user:1", "user:2", ...]
+console.log(result.keys);  // Full adapter keys, including the Store prefix.
 console.log(result.cursor); // "0" if scan is complete
 
 // Paginated scan
@@ -246,22 +224,22 @@ do {
 } while (cursor !== "0");
 ```
 
-### Cleaning Up by Pattern
+### Scanning for Maintenance
 
 ```typescript
-async function deleteByPattern(pattern: string) {
+async function inspectByPattern(pattern: string) {
   let cursor = "0";
   do {
     const result = await store.dev.scan(pattern, { cursor, count: 100 });
-    for (const key of result.keys) {
-      await store.kv.remove(key);
-    }
+    // `keys` are full adapter keys. Do not pass them to `kv.remove()`: that
+    // method adds the Store prefix again. Use scan for inspection, and perform
+    // bulk deletion through your adapter's maintenance API if needed.
+    console.log(result.keys);
     cursor = result.cursor;
   } while (cursor !== "0");
 }
 
-// Delete all cache keys for a tenant
-await deleteByPattern("igniter:store:api:organization:org_123:*");
+await inspectByPattern("user:*");
 ```
 
 ---
@@ -290,6 +268,11 @@ async function trackEndpointHit(endpoint: string) {
 ```
 
 ### Inventory Reservation
+
+The counter API cannot atomically decrement only when the result stays
+non-negative. A decrement followed by a compensating increment can race with
+other reservations, so use a transaction or server-side script for inventory
+that must never oversell.
 
 ```typescript
 async function reserveInventory(productId: string, quantity: number) {

@@ -3,7 +3,7 @@ title: Installation
 description: Get started with Igniter.js by choosing your preferred framework and following the installation guide.
 ---
 
-Choose your framework to get started with Igniter.js. Each guide provides step-by-step instructions tailored to your development environment.
+Choose a runtime or framework guide below. The CLI project initializer presents the available starter templates interactively; it does not expose a `--framework` flag.
 
 ## Framework Guides
 
@@ -13,31 +13,31 @@ Select your framework below for detailed installation and setup instructions:
   <Card
     title="Next.js"
     description="Full-stack React framework with SSR and API routes"
-    href="/docs/nextjs"
+    href="/docs/core/nextjs"
     icon={<NextJsIcon className="size-6" />}
   />
   <Card
-    title="Vite"
-    description="Lightning-fast build tool for modern web projects"
-    href="/docs/vite"
+    title="TanStack Start (Vite)"
+    description="Full-stack React starter powered by Vite"
+    href="/docs/core/vite"
     icon={<ViteIcon className="size-6" />}
   />
   <Card
     title="Express"
     description="Fast, unopinionated web framework for Node.js"
-    href="/docs/express"
+    href="/docs/core/express"
     icon={<ExpressIcon className="size-6" />}
   />
   <Card
     title="Bun"
     description="Fast all-in-one JavaScript runtime and toolkit"
-    href="/docs/bun"
+    href="/docs/core/bun"
     icon={<BunIcon className="size-6" />}
   />
   <Card
     title="Deno"
     description="Secure runtime for JavaScript and TypeScript"
-    href="/docs/deno"
+    href="/docs/core/deno"
     icon={<DenoIcon className="size-6" />}
   />
 </Cards>
@@ -81,11 +81,7 @@ If you're not sure which framework to choose, or want to quickly test Igniter.js
   <Step>
     ### Choose your template
     
-    The CLI will guide you through:
-    - Framework selection (Next.js, Vite, Express, etc.)
-    - TypeScript configuration
-    - Database setup (optional)
-    - Additional features (auth, jobs, etc.)
+    The CLI prompts you to choose a registered starter and then select optional add-ons. The available add-ons are shown by the CLI itself; choices can include database, Redis-backed Store, Jobs, MCP Server, logging, telemetry, bots, auth, and shadcn/ui.
   </Step>
   
   <Step>
@@ -118,10 +114,10 @@ Before installing Igniter.js, ensure you have:
 
 After installation, explore the core concepts:
 
-- [**Builder**](/docs/builder) - Learn how to create your Igniter.js instance
-- [**Router**](/docs/router) - Understand routing and controllers
-- [**Actions**](/docs/actions) - Create queries and mutations
-- [**Client**](/docs/client) - Use the auto-generated type-safe client
+- [**Builder**](/docs/core/builder) - Learn how to create your Igniter.js instance
+- [**Router**](/docs/core/router) - Understand routing and controllers
+- [**Actions**](/docs/core/actions) - Create queries and mutations
+- [**Client**](/docs/core/client) - Use the auto-generated type-safe client
 
 <Callout type="success" title="Need Help?">
   Join our [Discord community](https://discord.gg/igniterjs) or check out [GitHub Discussions](https://github.com/igniterjs/igniter/discussions) for support.

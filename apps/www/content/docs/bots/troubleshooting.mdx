@@ -118,28 +118,24 @@ IgniterBot.create().addAdapter('telegram', telegram({
 
 ### INVALID_COMMAND_PARAMETERS
 
-**Symptom:** Command handler receives unexpected arguments or resolves with an error.
+**Symptom:** A command receives missing or unexpected values.
 
-**Cause:** The `args` Zod schema failed validation against user input.
+**Cause:** Command handlers receive raw string tokens in `params`; the optional `args` schema is not applied by the runtime.
 
-**Fix:**
-1. Check the Zod schema is correct:
-   ```typescript
-   args: z.object({
-     query: z.string(), // Remember: strings without .optional() are required
-   })
-   ```
-2. Test your schema manually:
-   ```typescript
-   import { z } from 'zod';
-   const schema = z.object({ query: z.string().min(2) });
-   schema.parse({ query: 'hi' }); // ✅ passes
-   schema.parse({}); // ❌ throws ZodError
-   ```
-3. Provide clear error messages in `help`:
-   ```typescript
-   help: 'Use /search &lt;query&gt; [category: books|movies|music]',
-   ```
+**Fix:** Validate the parameters in the handler and send a useful usage message when they do not match:
+```typescript
+import { z } from 'zod';
+
+async handle(ctx, params) {
+  const parsed = z.object({ query: z.string().min(2) })
+    .safeParse({ query: params[0] });
+  if (!parsed.success) {
+    await ctx.reply('Use /search <query>.');
+    return;
+  }
+  await search(parsed.data.query);
+}
+```
 
 ---
 
@@ -215,7 +211,7 @@ IgniterBot.create().addAdapter('telegram', telegram({
    // Must be set before .build()
    builder.withSessionStore(memoryStore())
    ```
-3. **If using memory store in production:** It doesn't persist across restarts. Use Redis or Prisma.
+3. **If using the built-in memory store:** It doesn't persist across restarts. Implement a custom shared `BotSessionStore` backed by Redis, Prisma, or another database if sessions must survive restarts.
 
 ---
 
@@ -224,7 +220,7 @@ IgniterBot.create().addAdapter('telegram', telegram({
 **Symptoms:** Sessions expire too quickly in Redis.
 
 **Checklist:**
-1. **Check the TTL in your Redis store implementation** — the default is 24 hours if `expiresAt` is not set.
+1. **Check the TTL in your custom Redis store implementation** — the package provides no Redis session store or default TTL.
 2. **Verify Redis connection is stable** — check for connection drops or timeouts.
 3. **Check for Redis maxmemory eviction** — if `maxmemory-policy` is set to `allkeys-lru`, sessions may be evicted.
 
@@ -255,7 +251,7 @@ IgniterBot.create().addAdapter('telegram', telegram({
      return `${ctx.provider}:${ctx.message.author.id}:${cmd}`;
    }
    ```
-3. **Memory store is per-process** — if you have multiple instances, each has its own counter. Use Redis for shared state.
+3. **Memory store is per-process** — if you have multiple instances, each has its own counter. Implement a shared `RateLimitStore` (for example, backed by Redis) to coordinate counters across instances.
 
 ---
 

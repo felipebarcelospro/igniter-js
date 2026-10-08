@@ -15,7 +15,12 @@ Follow these steps to configure a manager, add scopes, and serve a public URL in
     import { IgniterStorage } from '@igniter-js/storage'
 
     export const storage = IgniterStorage.create()
-      .withAdapter('s3', { bucket: 'my-bucket', region: 'us-east-1' })
+      .withAdapter('s3', {
+        bucket: process.env.IGNITER_STORAGE_S3_BUCKET!,
+        region: process.env.IGNITER_STORAGE_S3_REGION,
+        accessKeyId: process.env.IGNITER_STORAGE_S3_ACCESS_KEY_ID,
+        secretAccessKey: process.env.IGNITER_STORAGE_S3_SECRET_ACCESS_KEY,
+      })
       .withUrl('https://cdn.myapp.com')
       .addScope('public', '/public')
       .addScope('user', '/users/[identifier]')
@@ -86,4 +91,4 @@ try {
 
 ## Next Steps
 
-Design your hierarchy in [Scopes & Paths](</docs/storage/(core-concepts)/scopes-and-paths>), set size/type guardrails in [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>), and add lifecycle hooks in [Hooks & Telemetry](</docs/storage/(core-concepts)/hooks-and-telemetry>).
+Design your hierarchy in [Scopes & Paths](</docs/storage/scopes-and-paths>), set size/type guardrails in [Policies & Validation](</docs/storage/policies-and-validation>), and add lifecycle hooks in [Hooks & Telemetry](</docs/storage/hooks-and-telemetry>).

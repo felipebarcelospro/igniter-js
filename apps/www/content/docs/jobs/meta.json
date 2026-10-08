@@ -2,20 +2,19 @@
   "title": "Jobs",
   "root": true,
   "pages": [
+    "---Get Started---",
     "index",
-    "---Getting Started---",
     "getting-started",
+    "---Core Concepts---",
     "job-definitions",
-    "routers",
-    "---Scheduling---",
+    "scopes",
+    "---Guides---",
     "scheduling",
-    "cron-jobs",
-    "---Operations---",
     "workers",
     "search-and-monitoring",
     "---Advanced---",
     "advanced-features",
-    "multi-tenancy"
+    "---API Reference---",
+    "api-reference"
   ]
 }
-

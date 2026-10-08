@@ -1,0 +1,25 @@
+{
+  "title": "Telemetry",
+  "root": true,
+  "pages": [
+    "---Get Started---",
+    "index",
+    "installation",
+    "getting-started",
+    "---Core Concepts---",
+    "builder-config",
+    "defining-events",
+    "emitting-events",
+    "sessions",
+    "validation",
+    "---Guides---",
+    "adapters",
+    "framework-integration",
+    "sampling-redaction",
+    "---Advanced---",
+    "best-practices",
+    "troubleshooting",
+    "---API Reference---",
+    "api-reference"
+  ]
+}

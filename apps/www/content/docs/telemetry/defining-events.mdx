@@ -1,14 +1,14 @@
 ---
 title: Defining Events
-description: Create typed event registries with IgniterTelemetryEvents — namespaces, groups, Zod schemas, and registry descriptors for full TypeScript inference.
+description: Create typed event registries with IgniterTelemetryEvents — namespaces, groups, schemas, and registry descriptors for TypeScript inference.
 ---
 
 ## Defining Events
 
-`IgniterTelemetryEvents` is the **typed event registry builder**. It creates namespaced, schema-validated event definitions that feed into the telemetry builder — giving you autocompletion on `emit()` calls and optional runtime validation.
+`IgniterTelemetryEvents` is the **typed event registry builder**. It creates namespaced event definitions that feed into the telemetry builder and provide autocompletion and attribute types for `emit()` calls.
 
 <Callout type="info">
-  Typed events are **optional**. You can emit any string event name without a registry. Registries give you autocompletion, documentation, and validation when you need it.
+  Typed events are **optional**. You can emit any string event name without a registry. Registered schemas support TypeScript inference; the current manager does not validate emitted attributes against them at runtime.
 </Callout>
 
 ---
@@ -165,7 +165,7 @@ const telemetry = IgniterTelemetry.create()
 
 ### Validation Options
 
-`addEvents()` accepts optional validation options per registry:
+`addEvents()` accepts optional validation settings. In the current implementation, these settings are merged into builder configuration; they are not applied by the runtime during `emit()` and are not stored independently per registry.
 
 ```typescript
 interface IgniterTelemetryEventsValidationOptions {
@@ -176,10 +176,10 @@ interface IgniterTelemetryEventsValidationOptions {
 
 | Option | Description |
 |--------|-------------|
-| `mode: "development"` | Validate only when `NODE_ENV !== "production"` |
-| `mode: "always"` | Always validate — throw on schema mismatch even in production |
-| `mode: "none"` | Never validate — events pass through regardless |
-| `strict: true` | Throw on unknown event names (events not in any registry) |
+| `mode: "development"` | Stored validation mode; no runtime schema validation is currently performed |
+| `mode: "always"` | Stored validation mode; no runtime schema validation is currently performed |
+| `mode: "none"` | Stored validation mode; no runtime schema validation is currently performed |
+| `strict: true` | Stored strictness setting; unknown-name checks are not currently performed by `emit()` |
 
 ---
 
@@ -259,4 +259,4 @@ Recommended event naming patterns:
 
 - [Builder Configuration](/docs/telemetry/builder-config) — All builder methods and options
 - [Emitting Events](/docs/telemetry/emitting-events) — Attributes, levels, errors, and source metadata
-- [Validation](/docs/telemetry/validation) — Event validation modes and strict mode
+- [Validation](/docs/telemetry/validation) — Current schema typing and runtime validation behavior

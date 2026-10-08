@@ -80,34 +80,29 @@ dbLogger.info('Query executed', { duration: 45 });
 
 ---
 
-## Typed Scopes
+## Scope Generic
 
-Use `.defineScopes<T>()` to enforce typed context on child loggers:
+The builder exposes `.defineScopes<T>()`, but the manager's public `child()` method currently returns `IIgniterLoggerManager`, whose context parameter is not tied to `T`. If an application requires tenant identifiers, put that requirement in a small helper's parameters:
 
 ```typescript
 import { IgniterLogger } from '@igniter-js/logger';
 
-// Define the expected shape for child logger context
 const logger = IgniterLogger.create()
   .withAppName('api')
-  .defineScopes<{
-    tenantId: string;
-    userId?: string;
-  }>()
   .build();
 
-// ✅ TypeScript enforces tenantId
-const tenantLogger = logger.child('tenant', {
-  tenantId: 't-456',
-  userId: 'u-789',
-});
+function createTenantLogger(tenantId: string, userId?: string) {
+  return logger.child('tenant', { tenantId, userId });
+}
 
-// ❌ TypeScript error: missing 'tenantId'
-// const badLogger = logger.child('tenant', { userId: 'u-789' });
+const tenantLogger = createTenantLogger('t-456', 'u-789');
+
+// Direct calls remain permissive, so callers can omit tenantId here.
+logger.child('tenant', { userId: 'u-789' });
 ```
 
-<Callout type="info">
-  `defineScopes<T>()` changes the generic parameter on the builder, which flows into the manager's `child()` signature. Child logger context parameters become **required or optional** based on the scope type.
+<Callout type="warn">
+  `defineScopes<T>()` currently changes only the builder generic; the public manager interface does not enforce the shape on `child()`. Do not rely on it for required fields.
 </Callout>
 
 ---
@@ -148,15 +143,14 @@ Every log entry from this handler carries `requestId`, `method`, and `path` — 
 
 ### Multi-Tenant Logging
 
-Create a child logger per tenant with mandatory tenant context:
+Create a child logger per tenant and enforce required fields in your own helper:
 
 ```typescript
 const logger = IgniterLogger.create()
   .withAppName('saas-api')
-  .defineScopes<{ tenantId: string }>()
   .build();
 
-function getTenantLogger(tenantId: string) {
+function getTenantLogger(tenantId: string): ReturnType<typeof logger.child> {
   return logger.child(tenantId, { tenantId });
 }
 

@@ -1,89 +1,75 @@
 ---
 title: Mocking & Testing
-description: Test your application logic without making real HTTP calls.
+description: Define typed Caller mocks and exercise request code without sending real HTTP requests.
 ---
 
-Testing code that depends on network requests can be difficult and slow. Caller provides `IgniterCallerMock` to create high-fidelity, type-safe mocks of your API.
+Caller supports mock registries that replace matching network requests. The mock builder uses schema paths for TypeScript checking; runtime response validation is configured on the Caller manager with `.withSchemas()`.
 
-## Basic Mocking
-
-You can swap a real caller for a mocked one in your testing environment.
+## Define a schema and mock registry
 
 ```ts
-import { IgniterCaller, IgniterCallerMock } from '@igniter-js/caller'
+import { IgniterCaller, IgniterCallerMock, IgniterCallerSchema } from '@igniter-js/caller'
+import { z } from 'zod'
+
+const schemas = IgniterCallerSchema.create()
+  .path('/users/:id', (path) => path.get({
+    responses: {
+      200: z.object({ id: z.string(), name: z.string() }),
+      403: z.object({ message: z.string() }),
+    },
+  }))
+  .build()
 
 const mock = IgniterCallerMock.create()
+  .withSchemas(schemas)
   .mock('/users/:id', {
     GET: {
       response: { id: '1', name: 'Mock User' },
       status: 200,
-    }
+    },
   })
   .build()
 
 const api = IgniterCaller.create()
+  .withSchemas(schemas, { mode: 'strict' })
   .withMock({ enabled: true, mock })
   .build()
 ```
 
-## Dynamic Mock Handlers
+The mock registry's `.withSchemas()` method supplies compile-time path and response types. The Caller manager's separate `.withSchemas()` call enables runtime request/response schema validation.
 
-If you need logic in your mocks, pass a function instead of an object. The function receives the full request context.
+## Test a request
 
 ```ts
-const mock = IgniterCallerMock.create()
+import { describe, expect, it } from 'vitest'
+
+describe('user API', () => {
+  it('returns the mocked user', async () => {
+    const result = await api.get('/users/:id')
+      .params({ id: '1' })
+      .execute()
+
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.data).toEqual({ id: '1', name: 'Mock User' })
+  })
+})
+```
+
+## Mock an error response
+
+```ts
+const forbiddenMock = IgniterCallerMock.create()
+  .withSchemas(schemas)
   .mock('/users/:id', {
-    GET: (request) => ({
-      response: { id: request.params.id, name: 'User ' + request.params.id },
-      status: 200,
-      delayMs: 100, // Simulate network latency
-    })
+    GET: { status: 403, response: { message: 'No access' } },
   })
   .build()
-```
 
-## Mocking with Schemas
-
-When using schemas, your mock responses are validated against the schema, ensuring your tests catch potential API contract breakages.
-
-```ts
-import { myApiSchemas } from './schema'
-
-const mock = IgniterCallerMock.create()
-  .withSchemas(myApiSchemas)
-  .mock('/me', {
-    GET: { response: { name: 'Lia' } } // This will error if 'name' is not in schema
-  })
+const forbiddenApi = IgniterCaller.create()
+  .withSchemas(schemas, { mode: 'strict' })
+  .withMock({ enabled: true, mock: forbiddenMock })
   .build()
-```
 
-## Using in Vitest/Jest
-
-Common pattern for unit testing:
-
-```ts
-import { describe, it, expect, beforeEach } from 'vitest'
-import { api } from '@/lib/api'
-
-describe('UserService', () => {
-  it('should fetch user correctly', async () => {
-    // Enable mock mode for this test
-    api.config.set('mock', { enabled: true, mock: myTestMock })
-    
-    const user = await UserService.get('1')
-    expect(user.name).toBe('Mock User')
-  })
-})
-```
-
----
-
-## Error Handling
-
-Mocks can also simulate errors:
-
-```ts
-mock.mock('/forbidden', {
-  GET: { status: 403, response: { message: 'No access' } }
-})
+const result = await forbiddenApi.get('/users/:id').params({ id: '1' }).execute()
+if (!result.ok) console.error(result.error.message)
 ```

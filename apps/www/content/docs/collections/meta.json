@@ -2,24 +2,25 @@
   "title": "Collections",
   "root": true,
   "pages": [
-    "---Getting Started---",
+    "---Get Started---",
     "index",
     "installation",
     "---Core Concepts---",
     "defining-collections",
     "crud-operations",
     "querying",
-    "---Advanced Features---",
+    "---Guides---",
     "hooks",
     "events",
     "views",
     "adapters",
     "watcher",
+    "framework-integration",
+    "---Advanced---",
     "advanced",
-    "---Reference---",
-    "api-reference",
-    "troubleshooting",
     "best-practices",
-    "framework-integration"
+    "troubleshooting",
+    "---API Reference---",
+    "api-reference"
   ]
 }

@@ -5,51 +5,27 @@ description: Install @igniter-js/storage, configure credentials, and boot a stor
 
 ## Install Dependencies
 
-Use your package manager to add the storage package. Add provider SDKs when you pick an adapter (AWS SDK for S3, `@google-cloud/storage` for GCS).
+Install the storage package and provider SDKs. The manifest marks the AWS and Google Cloud SDKs as optional peer dependencies, but the package's main builder statically imports both built-in adapter factories. Make both SDKs available when importing the package root, even if this service uses only one provider.
 
 <Tabs items={["npm", "pnpm", "yarn", "bun"]} groupId="package-manager">
   <Tab value="npm">
     ```bash
-    npm install @igniter-js/storage @igniter-js/common
-
-    # S3 (optional)
-    npm install @aws-sdk/client-s3 @aws-sdk/lib-storage
-
-    # Google Cloud (optional)
-    npm install @google-cloud/storage
+    npm install @igniter-js/storage @aws-sdk/client-s3 @aws-sdk/lib-storage @google-cloud/storage
     ```
   </Tab>
   <Tab value="pnpm">
     ```bash
-    pnpm add @igniter-js/storage @igniter-js/common
-
-    # S3 (optional)
-    pnpm add @aws-sdk/client-s3 @aws-sdk/lib-storage
-
-    # Google Cloud (optional)
-    pnpm add @google-cloud/storage
+    pnpm add @igniter-js/storage @aws-sdk/client-s3 @aws-sdk/lib-storage @google-cloud/storage
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn add @igniter-js/storage @igniter-js/common
-
-    # S3 (optional)
-    yarn add @aws-sdk/client-s3 @aws-sdk/lib-storage
-
-    # Google Cloud (optional)
-    yarn add @google-cloud/storage
+    yarn add @igniter-js/storage @aws-sdk/client-s3 @aws-sdk/lib-storage @google-cloud/storage
     ```
   </Tab>
   <Tab value="bun">
     ```bash
-    bun add @igniter-js/storage @igniter-js/common
-
-    # S3 (optional)
-    bun add @aws-sdk/client-s3 @aws-sdk/lib-storage
-
-    # Google Cloud (optional)
-    bun add @google-cloud/storage
+    bun add @igniter-js/storage @aws-sdk/client-s3 @aws-sdk/lib-storage @google-cloud/storage
     ```
   </Tab>
 </Tabs>
@@ -123,4 +99,4 @@ Provide a public CDN/base URL and choose an adapter. You can set credentials in 
 
 ## Next Steps
 
-Move to the [Quick Start](</docs/storage/(getting-started)/quick-start>) to add scopes and return public URLs, then tighten policies in [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>).
+Move to the [Quick Start](</docs/storage/quick-start>) to add scopes and return public URLs, then tighten policies in [Policies & Validation](</docs/storage/policies-and-validation>).

@@ -7,7 +7,7 @@ description: Deep dive into HTTP method handling, automatic content-type detecti
 
 Caller supports all standard HTTP methods and automatically handles response parsing based on content type. You don't need to manually call `.json()` or `.text()`—Caller detects the response format and deserializes it appropriately.
 
-This automatic handling covers JSON, XML, plain text, form data, and binary responses. For cases where automatic detection isn't enough, you have full control over response parsing.
+Caller parses JSON and plain-text responses and handles supported binary bodies. XML responses are returned as text for application-level parsing.
 
 ---
 
@@ -40,9 +40,9 @@ Every HTTP method has specific semantics. Understanding these helps you build co
       .params({ id: '123' })
       .execute();
     
-    // GET requests are cacheable by default
+    // Opt in to Caller response caching with `.stale(milliseconds)`
     const { data } = await api.get('/config')
-      .cache({ ttl: 3600 })
+      .stale(3_600_000)
       .execute();
     ```
     
@@ -73,8 +73,9 @@ Every HTTP method has specific semantics. Understanding these helps you build co
     For critical operations, use idempotency keys to prevent duplicates:
     
     ```typescript
+    const idempotencyKey = crypto.randomUUID();
     const { data } = await api.post('/orders')
-      .headers({ 'X-Idempotency-Key': `order-${userId}-${Date.now()}` })
+      .headers({ 'X-Idempotency-Key': idempotencyKey })
       .body(orderData)
       .execute();
     ```
@@ -160,7 +161,7 @@ Every HTTP method has specific semantics. Understanding these helps you build co
     const { status } = await api.delete('/users/:id')
       .params({ id: '123' })
       .execute();
-    // data will be null for 204 responses
+    // data is undefined for a 204 response.
     ```
   </Accordion>
 </Accordions>
@@ -176,7 +177,7 @@ Caller automatically parses responses based on the `Content-Type` header:
 | `application/json` | `JSON.parse()` | Object/Array |
 | `text/plain` | Raw string | string |
 | `text/html` | Raw string | string |
-| `application/xml` | Parse to object | Object (if parser available) |
+| `application/xml` | Returned as text | string |
 | `multipart/form-data` | FormData | FormData |
 | `application/octet-stream` | Blob | Blob |
 | `image/*`, `video/*`, `audio/*` | Blob | Blob |
@@ -232,13 +233,9 @@ When automatic detection isn't sufficient, explicitly specify the response type:
 Every request returns a standardized response object:
 
 ```typescript
-interface CallerResponse<T> {
-  data: T | null;           // Parsed response body
-  error: CallerError | null; // Error object if failed
-  status: number;           // HTTP status code
-  headers: Headers;         // Response headers
-  isStale: boolean;         // True if from stale cache
-}
+type CallerResponse<T> =
+  | { ok: true; data: T; error?: undefined; status: number; headers?: Headers }
+  | { ok: false; data?: undefined; error: CallerError; status: number; headers?: Headers };
 ```
 
 ### Working with Headers
@@ -247,12 +244,12 @@ interface CallerResponse<T> {
 const { data, headers } = await api.get('/users').execute();
 
 // Read specific headers
-const rateLimitRemaining = headers.get('X-RateLimit-Remaining');
-const etag = headers.get('ETag');
+const rateLimitRemaining = headers?.get('X-RateLimit-Remaining');
+const etag = headers?.get('ETag');
 
 // Check for pagination headers
-const totalCount = parseInt(headers.get('X-Total-Count') || '0');
-const nextPage = headers.get('Link')?.match(/<([^>]+)>; rel="next"/)?.[1];
+const totalCount = parseInt(headers?.get('X-Total-Count') || '0');
+const nextPage = headers?.get('Link')?.match(/<([^>]+)>; rel="next"/)?.[1];
 ```
 
 ### Status Code Handling
@@ -288,7 +285,7 @@ switch (status) {
     console.error('Unprocessable entity:', error?.details);
     break;
   case 429:
-    console.error('Rate limited - retry after', error?.retryAfter);
+    console.error('Rate limited - status code', error?.statusCode);
     break;
   case 500:
   case 502:
@@ -304,15 +301,14 @@ switch (status) {
 
 ### Request Content Types
 
-Caller automatically sets the `Content-Type` header based on the body:
+Caller starts with a JSON content type by default. It removes an explicitly supplied content type for FormData so Fetch can set the multipart boundary. Set a content type yourself for other raw body formats when needed:
 
 | Body Type | Auto Content-Type |
 |-----------|-------------------|
-| Object/Array | `application/json` |
-| FormData | `multipart/form-data` |
-| URLSearchParams | `application/x-www-form-urlencoded` |
-| string | `text/plain` |
-| Blob | Blob's type or `application/octet-stream` |
+| Object/Array | `application/json` (default) |
+| FormData | Fetch supplies `multipart/form-data` and boundary |
+| URLSearchParams | Default JSON header remains unless overridden |
+| string / Blob | Default JSON header remains unless overridden |
 
 Override the automatic detection when needed:
 
@@ -329,6 +325,7 @@ params.append('username', 'john');
 params.append('password', 'secret');
 
 await api.post('/login')
+  .headers({ 'Content-Type': 'application/x-www-form-urlencoded' })
   .body(params)
   .execute();
 ```
@@ -366,20 +363,22 @@ When a request fails (status ≥ 400), Caller populates the `error` property:
 interface CallerError {
   code: string;           // Error code (e.g., 'HTTP_ERROR', 'TIMEOUT')
   message: string;        // Human-readable message
-  status: number;         // HTTP status code
+  statusCode?: number;    // Optional HTTP status code
+  statusText?: string;    // Optional HTTP status text
+  operation: string;      // Caller operation that failed
   details?: unknown;      // API-specific error details
-  retryAfter?: number;    // Seconds to wait (for 429)
+  metadata?: Record<string, unknown>;
 }
 ```
 
 ```typescript
-const { data, error } = await api.get('/users/:id')
+const { data, error, status } = await api.get('/users/:id')
   .params({ id: 'invalid' })
   .execute();
 
 if (error) {
-  console.log(error.code);    // 'HTTP_ERROR'
-  console.log(error.status);  // 404
+  console.log(error.code);    // 'IGNITER_CALLER_HTTP_ERROR'
+  console.log(status);        // HTTP status is top-level on the result envelope
   console.log(error.message); // 'Not Found'
   console.log(error.details); // { reason: 'User does not exist' }
 }

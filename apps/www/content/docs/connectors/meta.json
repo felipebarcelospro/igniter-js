@@ -1,21 +1,27 @@
 {
   "title": "Connectors",
+  "root": true,
   "pages": [
+    "---Get Started---",
     "index",
     "installation",
     "getting-started",
+    "---Core Concepts---",
     "defining-connectors",
     "manager-setup",
     "scopes",
     "actions",
-    "hooks",
     "events",
+    "---Guides---",
+    "hooks",
     "oauth",
     "webhooks",
     "adapters",
     "telemetry",
+    "---Advanced---",
     "best-practices",
     "troubleshooting",
+    "---API Reference---",
     "api-reference"
   ]
 }

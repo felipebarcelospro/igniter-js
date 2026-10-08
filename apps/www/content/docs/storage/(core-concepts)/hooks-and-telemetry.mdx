@@ -23,7 +23,7 @@ const storage = IgniterStorage.create()
   .build();
 ```
 
-Hook payloads include `operation`, `path`, `name`, `extension`, `contentType`, optional `size`, and source details (`file`, `url`, `buffer`, `base64`). Copy/move hooks also receive `from` and `to` paths.
+Upload hook payloads include `operation`, `path`, `name`, `extension`, `contentType`, optional `size`, and a `source` descriptor (`kind` is `file`, `url`, `buffer`, or `base64`; only URL sources include `source.url`). The callback does not receive the file bytes. Copy/move hooks also receive `from` and `to` paths.
 
 <Callout type="info">
   Hooks run before or after adapter calls depending on the suffix: `Started`
@@ -47,4 +47,4 @@ const storage = IgniterStorage.create()
 
 Use `IgniterStorageError.is(error)` to branch on codes (`IGNITER_STORAGE_UPLOAD_FAILED`, `IGNITER_STORAGE_DELETE_FAILED`, `IGNITER_STORAGE_COPY_NOT_SUPPORTED`, etc.). Telemetry emits the same codes so dashboards can surface failing operations quickly.
 
-Continue with provider-specific setup in [Adapters](</docs/storage/(adapters)/index>) or learn about full lifecycle flows in [Architecture](</docs/storage/(concepts)/architecture>).
+Continue with provider-specific setup for [S3](/docs/storage/s3) or [Google Cloud Storage](/docs/storage/google-cloud), or learn about full lifecycle flows in [Architecture](/docs/storage/architecture).

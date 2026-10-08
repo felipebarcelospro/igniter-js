@@ -20,10 +20,10 @@ export function HeroSection() {
           {/* Announcement Banner */}
           <div className="w-fit mb-6 text-sm pb-2 border-b-2 flex flex-row items-center gap-2">
             <span className="text-xs sm:text-sm whitespace-nowrap">
-              Announcing Igniter.js MCP Server.
+              Introducing Igniter.js v1.
             </span>
             <a
-              href="/blog/announcing-igniter-mcp-server"
+              href="/blog/igniterjs-v1-launch"
               className="flex items-center text-primary hover:text-primary/80 transition-colors text-xs sm:text-sm whitespace-nowrap"
             >
               Read the announcement{" "}

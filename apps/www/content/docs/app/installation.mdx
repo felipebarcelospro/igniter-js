@@ -1,0 +1,54 @@
+---
+title: "Installation"
+description: "Install @igniter-js/app with its React, TanStack Router, and Zod peer dependencies."
+---
+
+`@igniter-js/app` declares React, React DOM, TanStack Router, and Zod as peer dependencies. Install them in the application that will render the router.
+
+<Tabs groupId="package-manager" items={['npm', 'pnpm', 'yarn', 'bun']}>
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/app @tanstack/react-router react react-dom zod
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/app @tanstack/react-router react react-dom zod
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/app @tanstack/react-router react react-dom zod
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/app @tanstack/react-router react react-dom zod
+    ```
+  </Tab>
+</Tabs>
+
+## Optional form dependencies
+
+The `useForm` feature integrates React Hook Form, `@hookform/resolvers`, and Zod. Install the first two when using that feature:
+
+```bash
+npm install react-hook-form @hookform/resolvers
+```
+
+The form subpath is `@igniter-js/app/form`; its export is also re-exported from the package root.
+
+## Imports
+
+Use the root import for the app and router. Use the subpath imports when you want to make a feature dependency explicit:
+
+```ts
+import { IgniterApp, IgniterRouter } from '@igniter-js/app'
+import { IgniterState } from '@igniter-js/app/state'
+import { IgniterTrigger } from '@igniter-js/app/trigger'
+import { useForm } from '@igniter-js/app/form'
+```
+
+## Next step
+
+Continue to the [quick start](/docs/app/quick-start) to connect an existing typed client and render a route.

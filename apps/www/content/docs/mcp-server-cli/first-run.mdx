@@ -1,0 +1,50 @@
+---
+title: "First Run"
+description: "Start the MCP server from an Igniter.js project and verify that its tools are available to your client."
+---
+
+## Connect from a project
+
+<Steps>
+  <Step>
+    ### Open the project workspace
+
+    Open the Igniter.js repository or application in an MCP-compatible IDE. The client should launch the server with the project as its working directory so project commands and memory use the correct root.
+  </Step>
+  <Step>
+    ### Add the stdio server
+
+    Configure the client to run `npx -y @igniter-js/mcp-server`. A complete VS Code example is in [IDE integration](/docs/mcp-server-cli/ide-integration).
+  </Step>
+  <Step>
+    ### Confirm the tools appear
+
+    Refresh or reconnect the MCP server in the client. The server registers tools from enabled toolsets; see [Toolsets](/docs/mcp-server-cli/toolsets) for their names.
+  </Step>
+  <Step>
+    ### Start with a tool that does not write project files
+
+    Try `get_openapi_spec` against your local development server. This call does not write project files, but it fetches the URL supplied by the caller. `read_as_markdown` also fetches its caller-supplied URL. Treat URL fetching as network access: only pass destinations you trust. Use write-capable tools only after reviewing their inputs and effects.
+  </Step>
+</Steps>
+
+## Project memory
+
+At startup, the server resolves the project root by walking upward from its working directory until it finds `.git` or `package.json`. It creates a `.github/lia/memories/` directory structure there and attempts to requeue interrupted delegation jobs. Make sure the client starts the process in the workspace you intend to operate on.
+
+Memory tools persist `.mdx` files in that project directory. Task-management tools also store tasks as project memory, so changes remain in the repository workspace.
+
+<Callout type="warn" title="Read-only is limited to workspace writes">
+  The OpenAPI and Markdown tools do not write project files, but their URL inputs are caller-controlled. `make_api_request` can send `POST`, `PUT`, `PATCH`, or `DELETE` requests to its supplied URL. The runtime inspection tool evaluates its expression in the selected process. Review [the security model](/docs/mcp-server-cli#security-model) before using these tools with untrusted clients or targets.
+</Callout>
+
+<Callout type="warn" title="The server can change your workspace">
+  Several tools run package commands, add or remove dependencies, edit GitHub issues, manage project memory, or delegate code changes to an agent. Treat calls as actions with side effects and review their arguments before approval.
+</Callout>
+
+## What to expect
+
+- The server communicates only through stdio; there is no local web URL to open.
+- Startup diagnostics and errors may appear in the MCP client's server output panel.
+- `GITHUB_TOKEN` enables authenticated GitHub access.
+- Agent delegation requires a supported local CLI and the matching provider credentials. See [Configuration](/docs/mcp-server-cli/configuration).

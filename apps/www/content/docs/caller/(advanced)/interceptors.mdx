@@ -137,22 +137,13 @@ async function refreshAccessToken(): Promise<string> {
 ```typescript
 const api = IgniterCaller.create()
   .withRequestInterceptor(async (config) => {
-    const startTime = Date.now();
-
-    // Store start time on the config for use in response interceptor
-    (config as any)._startTime = startTime;
-
     console.log(`→ ${config.method} ${config.url}`);
     return config;
   })
 
   .withResponseInterceptor(async (response) => {
-    const startTime = (response as any)._startTime as number;
-    const duration = startTime ? Date.now() - startTime : undefined;
-
     const emoji = (response.status ?? 0) < 400 ? '✅' : '❌';
-    const timing = duration ? ` (${duration}ms)` : '';
-    console.log(`${emoji} ${response.status}${timing}`);
+    console.log(`${emoji} ${response.status}`);
 
     return response;
   })
@@ -197,15 +188,12 @@ const api = IgniterCaller.create()
 
 Add headers based on request characteristics:
 
+For a retrying mutation, generate an idempotency key once for that operation and pass it to the request builder. Do not generate it inside an interceptor, because interceptors run for each attempt and would produce a different key.
+
 ```typescript
 const api = IgniterCaller.create()
   .withRequestInterceptor(async (config) => {
     const headers: Record<string, string> = {};
-
-    // Add idempotency key for mutating requests
-    if (['POST', 'PUT', 'PATCH'].includes(config.method)) {
-      headers['X-Idempotency-Key'] = crypto.randomUUID();
-    }
 
     // Add version header for specific endpoints
     if (config.url?.startsWith('/v2/')) {
@@ -273,8 +261,8 @@ const api = IgniterCaller.create()
   .build();
 
 // On response:
-// tracingInterceptor response runs first
-// authInterceptor response runs second
+// authInterceptor response runs first
+// tracingInterceptor response runs second
 ```
 
 ---

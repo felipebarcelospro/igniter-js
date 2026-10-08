@@ -173,7 +173,23 @@ For multi-turn conversations where the agent needs to remember past interactions
     })
     console.log('Turn 1:', response.content)
 
-    // Second turn — agent remembers from the first
+    await agent.memory?.saveMessage({
+      chatId: 'chat_memory_001',
+      userId: 'user_001',
+      role: 'user',
+      content: 'My name is Alice and my favorite color is blue.',
+      timestamp: new Date(),
+    })
+    await agent.memory?.saveMessage({
+      chatId: 'chat_memory_001',
+      userId: 'user_001',
+      role: 'assistant',
+      content: response.content,
+      timestamp: new Date(),
+    })
+
+    // The runtime loads stored history, but does not save generated messages
+    // automatically. Save both sides of each turn from your application.
     response = await agent.generate({
       chatId: 'chat_memory_001',
       userId: 'user_001',
@@ -184,12 +200,25 @@ For multi-turn conversations where the agent needs to remember past interactions
       },
     })
     console.log('Turn 2:', response.content)
-    // → "Your name is Alice and your favorite color is blue."
+    await agent.memory?.saveMessage({
+      chatId: 'chat_memory_001',
+      userId: 'user_001',
+      role: 'user',
+      content: "What's my name and favorite color?",
+      timestamp: new Date(),
+    })
+    await agent.memory?.saveMessage({
+      chatId: 'chat_memory_001',
+      userId: 'user_001',
+      role: 'assistant',
+      content: response.content,
+      timestamp: new Date(),
+    })
     ```
   </Step>
 </Steps>
 
-**✅ Success!** The agent maintains context across turns using the memory adapter.
+**✅ Success!** With history enabled, the runtime loads messages your application has saved for the chat before each generation.
 
 ---
 

@@ -1,0 +1,78 @@
+---
+title: "Scope a cache by organization and workspace"
+description: "Use typed nested store scopes to keep cached product data isolated across tenants."
+---
+
+## Build a tenant-scoped cache
+
+Use `addScope()` to declare the scope keys an application may use, then derive a scoped store for each authorized organization and workspace. Every operation made through that scoped instance uses the same Redis adapter and a key prefix containing the scope chain.
+
+```ts
+import Redis from 'ioredis'
+import { IgniterStore } from '@igniter-js/store'
+import { IgniterStoreRedisAdapter } from '@igniter-js/store/adapters'
+
+const redis = new Redis(process.env.REDIS_URL!)
+
+export const store = IgniterStore.create()
+  .withAdapter(IgniterStoreRedisAdapter.create({ redis }))
+  .withService('catalog')
+  .addScope('organization', {
+    required: true,
+    description: 'Organization that owns the catalog',
+  })
+  .addScope('workspace', {
+    required: true,
+    description: 'Workspace within the organization',
+  })
+  .build()
+
+type Product = { id: string; name: string; price: number }
+type ProductRepository = {
+  findForWorkspace(input: {
+    organizationId: string
+    workspaceId: string
+    productId: string
+  }): Promise<Product | null>
+}
+
+export async function getProductForWorkspace(
+  products: ProductRepository,
+  organizationId: string,
+  workspaceId: string,
+  productId: string,
+): Promise<Product | null> {
+  // Resolve and authorize these IDs before calling this function.
+  const workspaceStore = store
+    .scope('organization', organizationId)
+    .scope('workspace', workspaceId)
+  const key = `product:${productId}`
+
+  const cached = await workspaceStore.kv.get<Product>(key)
+  if (cached) return cached
+
+  const product = await products.findForWorkspace({
+    organizationId,
+    workspaceId,
+    productId,
+  })
+  if (!product) return null
+
+  await workspaceStore.kv.set(key, product, { ttl: 300 })
+  return product
+}
+```
+
+For service `catalog`, organization `org_123`, workspace `ws_456`, and product `prod_1`, the Redis key is:
+
+```text
+igniter:store:catalog:organization:org_123:workspace:ws_456:kv:product:prod_1
+```
+
+The root `store` remains unscoped. Only operations made through `workspaceStore` receive the organization and workspace prefixes. Scope identifiers accept strings or numbers; `scope()` returns a new manager, so chaining scopes does not change the original store. Defining scopes narrows the allowed scope keys and validates them at runtime. The `required` option is descriptive metadata and does not force every caller to use a scoped instance.
+
+<Callout type="warn" title="Authorize before scoping">
+  A scope is a key-prefixing mechanism, not an authorization check. Derive organization and workspace IDs from authenticated membership and verify access before making scoped reads or writes. Do not trust tenant IDs supplied by an unverified request.
+</Callout>
+
+See [installation](/docs/store/installation) for Redis setup, [key-value operations](/docs/store/caching) for TTL and cache-aside patterns, [atomic operations](/docs/store/atomic-operations) for counters and claims, and the [API reference](/docs/store/api-reference) for the complete scope and manager signatures.

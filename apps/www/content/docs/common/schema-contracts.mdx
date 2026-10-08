@@ -1,0 +1,65 @@
+---
+title: Schema contracts
+description: Use StandardTypedV1, StandardSchemaV1, and StandardJSONSchemaV1 to describe typed validation and schema conversion.
+---
+
+## Validation contract
+
+`StandardSchemaV1<Input, Output>` describes a schema with a `~standard` property. Its `validate(value, options?)` method accepts unknown input and returns either a successful `{ value }` result or a failed `{ issues }` result. Validation may be synchronous or asynchronous.
+
+```typescript
+import type { StandardSchemaV1 } from '@igniter-js/common';
+
+const positiveNumber: StandardSchemaV1<number> = {
+  '~standard': {
+    version: 1,
+    vendor: 'example',
+    validate(value) {
+      if (typeof value !== 'number' || value <= 0) {
+        return {
+          issues: [{ message: 'Expected a positive number' }],
+        };
+      }
+
+      return { value };
+    },
+  },
+};
+
+const result = await positiveNumber['~standard'].validate(42);
+if ('issues' in result) {
+  console.error(result.issues);
+} else {
+  console.log(result.value);
+}
+```
+
+An issue contains a `message` and may include a `path`. `Options` currently exposes `libraryOptions` for validator-specific settings.
+
+<Callout type="info" title="Common defines the contract, not the validator">
+  This package provides interfaces only. Use a schema library that implements the contract, or implement `validate()` yourself. Igniter packages that accept `StandardSchemaV1` can then work with different validators.
+</Callout>
+
+## Input and output types
+
+`StandardTypedV1<Input, Output>` describes the type-level input and output shape through the optional `~standard.types` property. The `InferInput` and `InferOutput` namespace helpers read those types when a schema supplies them. `StandardSchemaV1` extends the same type metadata and adds validation.
+
+## JSON Schema conversion
+
+`StandardJSONSchemaV1<Input, Output>` describes a schema that provides separate `input(options)` and `output(options)` converters. The target is required; the interface names `draft-2020-12`, `draft-07`, and `openapi-3.0`, while also allowing custom target strings.
+
+```typescript
+import type { StandardJSONSchemaV1 } from '@igniter-js/common';
+
+function getInputJSONSchema(schema: StandardJSONSchemaV1<string>) {
+  return schema['~standard'].jsonSchema.input({ target: 'draft-2020-12' });
+}
+```
+
+The converter is implemented by the schema provider and may throw when it does not support the requested target. Common does not convert schemas at runtime.
+
+## Related guides
+
+- [Core validation](/docs/core/validation) shows how Core consumes schema contracts.
+- [Caller schemas](/docs/caller/schemas) documents request and response validation.
+- [Collections API reference](/docs/collections/api-reference) describes schema-driven collection configuration.

@@ -3,7 +3,7 @@ title: Retries
 description: Handle transient failures with automatic retry logic and backoff strategies. Make your application resilient to network issues and server errors.
 ---
 
-Transient network issues or server overloads can cause temporary failures. Caller's built-in retry system helps make your application more resilient by automatically retrying failed requests with configurable backoff strategies.
+Transient network issues or server overloads can cause temporary failures. Caller supports opt-in retries with configurable backoff strategies; requests are not retried unless `.retry()` is configured.
 
 ---
 
@@ -12,13 +12,13 @@ Transient network issues or server overloads can cause temporary failures. Calle
 Enable retries on any request using `.retry(maxAttempts, options?)`:
 
 ```typescript
-// Retry up to 3 times (4 total attempts including the initial one)
+// Make up to 3 total attempts, including the initial request
 const result = await api.get('/health')
   .retry(3)
   .execute();
 ```
 
-The first parameter `maxAttempts` is the **number of retry attempts** — the initial request is always made, so total attempts = 1 + maxAttempts.
+The first parameter `maxAttempts` is the **total number of request attempts**, including the initial request. For example, `.retry(3)` allows one initial attempt and up to two retries.
 
 ---
 
@@ -40,7 +40,7 @@ await api.get('/external-service')
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `maxAttempts` | number | (required) | Number of retry attempts. 3 = up to 4 total calls. |
+| `maxAttempts` | number | (required) | Total attempts including the initial request. 3 = up to 3 calls. |
 | `backoff` | `'linear'` \| `'exponential'` | `'linear'` | Delay strategy between retries |
 | `baseDelay` | number | `1000` | Initial delay in milliseconds |
 | `retryOnStatus` | number[] | `[408, 429, 500, 502, 503, 504]` | HTTP status codes that trigger retry |
@@ -54,9 +54,8 @@ await api.get('/external-service')
 Delay increases linearly: `baseDelay × attempt`
 
 ```
-Attempt 1 (retry): 1000ms
-Attempt 2 (retry): 2000ms
-Attempt 3 (retry): 3000ms
+Retry 1 (after the initial attempt): 1000ms
+Retry 2: 2000ms
 ```
 
 ```typescript
@@ -70,9 +69,8 @@ await api.get('/api')
 Delay doubles each attempt: `baseDelay × 2^(attempt - 1)`
 
 ```
-Attempt 1 (retry): 1000ms  (1000 × 1)
-Attempt 2 (retry): 2000ms  (1000 × 2)
-Attempt 3 (retry): 4000ms  (1000 × 4)
+Retry 1 (after the initial attempt): 1000ms  (1000 × 1)
+Retry 2: 2000ms  (1000 × 2)
 ```
 
 ```typescript
@@ -89,7 +87,7 @@ await api.get('/api')
 
 ## Default Retry Status Codes
 
-Caller retries on these status codes by default:
+When `.retry()` is configured, Caller retries these status codes by default:
 
 | Status | Meaning | Why retry? |
 |--------|---------|-----------|
@@ -156,8 +154,9 @@ const { data } = await api.get('/third-party/data')
 
 ```typescript
 // ✅ Safe — with idempotency key
+const idempotencyKey = crypto.randomUUID(); // Create once before the retrying request.
 await api.post('/orders')
-  .headers({ 'X-Idempotency-Key': `order-${userId}-${Date.now()}` })
+  .headers({ 'X-Idempotency-Key': idempotencyKey })
   .body(orderData)
   .retry(3)
   .execute();
@@ -183,28 +182,16 @@ await api.post('/orders')
 
 ## Observability
 
-Every retry attempt emits a telemetry event:
+When telemetry is configured, retry attempts emit a structured lifecycle event. This package does not create metrics or spans itself; see [Caller telemetry](/docs/caller/telemetry) to configure and consume these events.
 
 ```typescript
 // Event: igniter.caller.retry.attempt.started
 // Attributes:
 //   ctx.retry.attempt: number     — which attempt (1-based)
-//   ctx.retry.maxAttempts: number — total allowed retries
+//   ctx.retry.maxAttempts: number — total attempts, including the initial request
 //   ctx.retry.delayMs: number     — delay before this attempt
 //   ctx.request.method: string    — HTTP method
 //   ctx.request.url: string       — request URL
-```
-
-```typescript
-import { IgniterCallerTelemetryEvents } from '@igniter-js/caller/telemetry';
-
-// Monitor retry frequency in production
-telemetry.on('igniter.caller.retry.attempt.started', (event) => {
-  metrics.increment('api.retries', {
-    method: event.attributes['ctx.request.method'],
-    attempt: event.attributes['ctx.retry.attempt'],
-  });
-});
 ```
 
 ---
@@ -242,7 +229,7 @@ const { data } = await api.get('/critical-data')
   - **Set reasonable timeouts** — combine `.retry()` with `.timeout()` to avoid hanging
   - **Use fallback values** — `.fallback()` for non-critical data when all retries fail
   - **Monitor retry rates** — high retry frequency indicates a systemic issue
-  - **Keep maxAttempts low** — 3-5 retries is usually enough; beyond that, the service is likely down
+  - **Keep maxAttempts low** — 3-5 total attempts, including the initial request, is usually enough; beyond that, the service is likely down
 </Callout>
 
 <Callout type="warn" title="Common Mistakes">

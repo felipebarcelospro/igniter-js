@@ -1,11 +1,11 @@
 ---
 title: Advanced
-description: Multi-tenant scopes, telemetry integration, custom serializers, and building your own adapters. Advanced patterns for production @igniter-js/store usage.
+description: Multi-tenant scopes, telemetry integration, serializer limitations, and custom adapters for @igniter-js/store.
 ---
 
 ## Overview
 
-This guide covers advanced `@igniter-js/store` features for production applications: multi-tenant isolation with scopes, observability via telemetry, custom serializers, and building custom adapters.
+This guide covers multi-tenant scopes, telemetry, current serializer behavior, and the adapter contract.
 
 ---
 
@@ -25,7 +25,7 @@ const store = IgniterStore.create()
     required: true,
     description: "Organization tenant",
   })
-  .addScope("workspace") // Optional, no description
+  .addScope("workspace") // No description metadata
   .build();
 ```
 
@@ -73,7 +73,7 @@ store.scope("organization", "org_1"); // ✅ OK
 ```
 
 <Callout type="success" title="Best Practice">
-  Define scopes with `addScope()` for type safety. Without definitions, any scope key is accepted at the TypeScript level, but you lose compile-time validation.
+  Define scopes with `addScope()` for type safety and runtime validation. The `required` option is currently metadata only; it does not force callers to enter a scope.
 </Callout>
 
 ### Multi-Tenant Example: SaaS Pricing Cache
@@ -121,7 +121,6 @@ const telemetry = IgniterTelemetry.create()
   .addEvents(IgniterStoreTelemetryEvents)
   .withRedaction({
     denylistKeys: ["value", "message", "payload", "data"],
-    hashKeys: ["ctx.store.key"],
   })
   .build();
 
@@ -162,35 +161,19 @@ Every event includes:
 ```
 
 <Callout type="warn" title="Redaction is critical">
-  Telemetry events may contain key names. Always configure `withRedaction()` to hash or deny-list sensitive fields like `key`, `value`, and `message`. The recommended configuration:
+  Store telemetry includes service, namespace, scope, and event channel context, but does not attach raw key or payload values. If channel names are sensitive or you add application-specific telemetry, configure redaction for those fields.
   ```typescript
   .withRedaction({
     denylistKeys: ["value", "message", "payload", "data"],
-    hashKeys: ["ctx.store.key"],
   })
   ```
 </Callout>
 
 ---
 
-## Custom Serializer
+## Serializer configuration
 
-By default, the Redis adapter uses `JSON.stringify`/`JSON.parse`. Provide a custom serializer for MessagePack or other formats:
-
-```typescript
-import { encode, decode } from "@msgpack/msgpack";
-
-const store = IgniterStore.create()
-  .withAdapter(adapter)
-  .withService("api")
-  .withSerializer({
-    encode: (value: unknown): string =>
-      Buffer.from(encode(value)).toString("base64"),
-    decode: (value: string): unknown =>
-      decode(Buffer.from(value, "base64")),
-  })
-  .build();
-```
+The builder exposes `.withSerializer()` and `IgniterStoreSerializer` types, but the current manager and built-in adapters do not use the configured serializer for store values. The Redis adapter encodes values with JSON directly, and the memory adapter stores values as-is. Do not rely on `.withSerializer()` to change runtime encoding; use a custom adapter if you need another format. See the [API reference](/docs/store/api-reference#withserializerserializer) for the exact configuration status.
 
 ### Serializer Interface
 
@@ -368,4 +351,4 @@ await app.listen({ port: 3000 });
 
 - Browse the complete [API reference](/docs/store/api-reference)
 - See [troubleshooting](/docs/store/troubleshooting) for common errors
-- Read the [package README](https://github.com/igniter-js/igniter-js/blob/main/packages/store/README.md) for exhaustive examples
+- Read the [package README](https://github.com/felipebarcelospro/igniter-js/blob/main/packages/store/README.md) for exhaustive examples

@@ -1,0 +1,87 @@
+---
+title: MCP Server Adapter API Reference
+description: Root exports, builder methods, configuration types, and handler results for @igniter-js/adapter-mcp-server.
+---
+
+## Root exports
+
+Import the adapter from `@igniter-js/adapter-mcp-server`.
+
+| Export | Kind | Description |
+| --- | --- | --- |
+| `IgniterMcpServer` | Runtime class | Fluent, router-typed builder. |
+| `createMcpAdapter` | Runtime function | Creates an MCP request handler from one options object. |
+| `extractParamNamesFromPath` | Runtime function | Extracts `:name` segments from a route path. |
+| `createParamsSchemaFromPath` | Runtime function | Returns a Zod object whose properties map route parameter names to `z.string()` schemas, or `undefined` if the path has no parameters. |
+| `buildFullPath` | Runtime function | Joins controller and action paths. |
+| `inferToolAnnotations` | Runtime function | Infers MCP annotations from an HTTP method and optional action title. |
+| `isReadOnlyMethod`, `isDestructiveMethod`, `isIdempotentMethod` | Runtime functions | Check method semantics used by annotation inference. |
+
+The root also exports the type-only contracts listed below. The SDK types imported internally by the package are not re-exported as an API.
+
+## Builder API
+
+```ts
+IgniterMcpServer.create()
+  .router(router)
+  .withServerInfo({ name, version })
+  .build();
+```
+
+Builder methods return a configured builder: `router`, `withLogger`, `withToolTransform`, `withToolFilter`, `withInstructions`, `withCapabilities`, `withServerInfo`, `withOAuth`, `addTool`, `addPrompt`, `addResource`, `withEvents`, `withResponse`, and `withAdapter`. `build()` requires a router and returns:
+
+```ts
+{
+  handler: (request: Request) => Promise<Response>;
+  auth: {
+    resource: (request: Request) => Promise<Response> | Response;
+    cors: (request: Request) => Promise<Response> | Response;
+  };
+  $Infer: { $context; $tools; $prompts; $resources };
+}
+```
+
+The `$Infer` member carries inferred types for consumers; it is not a request handler. For framework route wiring, see [Getting Started](/docs/mcp-server/getting-started).
+
+## Function API
+
+```ts
+const { server, auth } = createMcpAdapter({ router, serverInfo });
+```
+
+`createMcpAdapter(options)` returns `server(request): Promise<Response>` and `auth.resource(request)` / `auth.cors(request)` handlers. The router is required. Optional settings include server info, instructions, capabilities, tool/prompt/resource registration, OAuth verification, events, response transforms, logger methods, and adapter transport configuration.
+
+<Callout type="warn" title="Configuration spelling in the current API">
+  The options type currently spells the capabilities property `capatibilities`. Use that exact key if setting it; the builder method is spelled `.withCapabilities(...)`.
+</Callout>
+
+## Configuration types
+
+| Type | Purpose |
+| --- | --- |
+| `McpAdapterOptions<TRouter, TContext>` | Function API configuration; router is required. |
+| `McpAdapterSpecificOptions` | `basePath`, streamable HTTP/SSE endpoint paths, Redis URL/config, SSE toggle, max duration, and verbose logging. |
+| `McpServerInfo` | Server `name` and `version`. |
+| `McpToolsOptions<TContext>` | Auto-mapping, naming, predicate filtering, transforms, custom tools, and include/exclude tool paths. |
+| `McpCustomTool<TArgs, TContext>` | Named Zod-argument tool and typed handler. |
+| `McpPromptsOptions<TContext>`, `McpPrompt<TArgs, TContext>` | Custom prompt registrations and handlers. |
+| `McpResourcesOptions<TContext>`, `McpResource<TContext>` | Custom resource registrations. |
+| `McpEventsOptions<TContext>` | Request, tool-call, success, error, and response callback signatures. |
+| `McpResponseOptions<TContext>` | Tool result transform and error-result callbacks. |
+| `McpOAuthConfig<TContext>` | Issuer, metadata path, token verifier, and required scopes. |
+| `McpContext<TContext>` | Router context plus tools, request, timestamp, optional client/server. |
+| `McpToolAnnotations`, `McpToolInfo`, `McpToolConfig`, `McpResponse` | Tool metadata and response contracts. |
+| `ArgsRawShape`, `InferZodRawShape<T>` | Zod argument shape helpers. |
+| `InferMcpContextFromRouter<TRouter>`, `InferToolPaths<TRouter>` | Infer router context and valid `controller.action` paths. |
+| `McpToolNaming`, `McpToolFilter`, `McpToolTransform`, `McpToolFilterMode` | Tool customization callbacks and include/exclude mode. |
+| `IgniterMcpHandler` | Handler shape type exported by the package. |
+
+## Defaults and annotation helpers
+
+The function adapter defaults server info to `{ name: "Igniter MCP Server", version: "1.0.0" }`; adapter paths default to `/api/mcp`, `/api/mcp/stream`, `/api/mcp/sse`, and `/api/mcp/sse/message`. `maxDuration` defaults to `60000` seconds, SSE remains enabled, and verbose logging defaults off. `redisUrl` is forwarded to the MCP handler; the typed nested `adapter.redis` option is currently not forwarded.
+
+The event type includes `onRequest`, `onResponse`, and general `onError` signatures, but the current adapter implementation invokes only `onToolCall`, `onToolSuccess`, and `onToolError`. Custom tools do not pass through those tool event hooks. `response.transform` and `response.onError` are used for router-backed tool execution.
+
+`inferToolAnnotations(method, actionName?)` treats GET as read-only and idempotent, DELETE as destructive and idempotent, PUT as idempotent, and POST/PATCH as non-idempotent mutations. Unknown methods are treated as read-only by the current helper. The helper is a hint generator, not authorization or enforcement.
+
+Path utilities support colon-prefixed names such as `/users/:id`; generated path parameter schemas use `z.string()`. See [Builder Pattern](/docs/mcp-server/builder-pattern), [Function API](/docs/mcp-server/function-api), and [Tool Filtering](/docs/mcp-server/advanced).

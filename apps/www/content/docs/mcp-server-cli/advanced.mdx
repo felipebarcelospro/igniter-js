@@ -1,0 +1,52 @@
+---
+title: Advanced MCP Server Configuration
+description: Control MCP Server toolsets, project memory, and native agent delegation.
+---
+
+## Enable only the toolsets you need
+
+The server registers its toolsets at startup. Each is enabled by default; set its environment switch to the literal string `false` to skip registration.
+
+```bash
+ENABLE_GITHUB_TOOLS=false
+ENABLE_DEBUGGING_TOOLS=false
+```
+
+Available switches are listed in the [configuration reference](/docs/mcp-server-cli/api-reference). These flags hide a toolset from the MCP server; they do not change its code or grant/revoke operating-system permissions.
+
+## Scope project memory
+
+The default memory manager starts from the process working directory, walks upward until it finds `.git` or `package.json`, then stores memory beneath `.github/lia/memories`. If neither marker is found, it falls back to the starting directory.
+
+```text
+.github/lia/memories/
+├── patterns/
+├── decisions/
+├── preferences/
+├── insights/
+└── project/
+```
+
+Run the server with the intended project as its working directory so its memory is associated with the correct repository. Memory initialization and interrupted-job recovery happen after the STDIO connection starts.
+
+## Delegate to a native coding agent
+
+The delegation toolset invokes an installed native CLI. Supported providers are `gemini`, `claude`, and `codex`; install and authenticate the provider CLI separately. The server's provider validation checks the associated environment credentials (`GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENAI_API_KEY`/ChatGPT sign-in) and the provider's YOLO arguments.
+
+Delegated tasks run with the requested working directory when supplied, or the server process working directory otherwise. The executor constructs an autonomous task prompt and invokes the provider CLI; review the permission mode and working directory before enabling delegation in a client.
+
+## Keep STDIO transport clean
+
+STDIO uses stdout for MCP JSON-RPC messages. The server writes its startup memory warning and the executor's progress messages to stderr. Agent delegation currently also calls `console.log` unconditionally while starting a task, so delegation can corrupt the MCP stream even when `DEBUG` is off. Disable `ENABLE_AGENT_DELEGATION_TOOLS` for STDIO clients until those messages are redirected to stderr.
+
+When `DEBUG=true`, the debug utility adds more stdout output: masked credential summaries, the command, and the working directory. These lines can also corrupt the stream. Keep `DEBUG` off for STDIO clients unless stdout is redirected or the logging behavior is corrected.
+
+<Callout type="warn" title="Debug output can include secrets">
+  Alongside the masked stdout summary, the executor writes the full delegated environment to stderr when `DEBUG=true`. That inherited environment can contain credentials. Keep debug mode off when secrets are present, and treat stderr logs as sensitive.
+</Callout>
+
+## Related pages
+
+- [Configure the server](/docs/mcp-server-cli/configuration)
+- [Toolsets](/docs/mcp-server-cli/toolsets)
+- [API reference](/docs/mcp-server-cli/api-reference)

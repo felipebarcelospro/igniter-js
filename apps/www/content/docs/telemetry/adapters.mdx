@@ -16,13 +16,13 @@ Transport adapters are **pluggable destinations** for telemetry events. Each ada
 | Logger | Console/file logging | None | `@igniter-js/telemetry/adapters` |
 | HTTP | Webhook POST to any URL | None | `@igniter-js/telemetry/adapters` |
 | OTLP | OpenTelemetry collector | None | `@igniter-js/telemetry/adapters` |
-| Sentry | Error monitoring | `@sentry/node` | `@igniter-js/telemetry/adapters` |
+| Sentry | Error monitoring | Optional application SDK for the example | `@igniter-js/telemetry/adapters` |
 | Slack | Team notifications | None | `@igniter-js/telemetry/adapters` |
 | Discord | Team notifications | None | `@igniter-js/telemetry/adapters` |
 | Telegram | Team notifications | None | `@igniter-js/telemetry/adapters` |
 | Memory | Testing/debugging | None | `@igniter-js/telemetry/adapters` |
 | Mock | Unit testing | None | `@igniter-js/telemetry/adapters` |
-| Store | Redis Streams persistence | `@igniter-js/store` | `@igniter-js/telemetry/adapters` |
+| Store | Redis Streams persistence | `@igniter-js/store` (required by the current root entry) | `@igniter-js/telemetry/adapters` |
 
 ---
 
@@ -44,7 +44,7 @@ const logger = LoggerTransportAdapter.create({
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `logger` | `object` | required | Any object with `info/warn/error/debug` methods |
-| `format` | `"json" \| "pretty"` | `"pretty"` | Output format |
+| `format` | `"json" \| "pretty"` | `"json"` | Output format |
 | `minLevel` | `string` | `"debug"` | Minimum level to log |
 | `includeTimestamp` | `boolean` | `true` | Include ISO 8601 timestamp |
 
@@ -79,7 +79,6 @@ const http = HttpTransportAdapter.create({
     "X-Service-Name": "billing-api",
   },
   timeout: 4000,    // Request timeout in ms
-  retries: 2,       // Number of retries on failure
 });
 ```
 
@@ -88,7 +87,7 @@ const http = HttpTransportAdapter.create({
 | `url` | `string` | required | Target webhook URL |
 | `headers` | `Record<string, string>` | `{}` | Custom HTTP headers |
 | `timeout` | `number` | `5000` | Request timeout in ms |
-| `retries` | `number` | `0` | Number of retries on failure |
+| `retries` | `number` | `0` | Declared in the config type but not used by this adapter yet; failed requests are logged to `console.error` and are not retried |
 
 ---
 
@@ -113,7 +112,7 @@ const otlp = OtlpTransportAdapter.create({
 | `headers` | `Record<string, string>` | `{}` | Custom headers |
 
 <Callout type="info">
-  The OTLP adapter sends events as **OTLP Logs** over HTTP. Point it at any OTEL collector (Jaeger, Grafana Tempo, Datadog Agent with OTLP ingest).
+  The OTLP adapter sends events as **OTLP Logs** over HTTP. Point it at an OpenTelemetry Collector or another endpoint configured to accept OTLP Logs. This adapter does not export traces.
 </Callout>
 
 ---
@@ -135,10 +134,10 @@ const sentry = SentryTransportAdapter.create({
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `sentry` | `typeof Sentry` | required | Initialized Sentry SDK instance |
+| `sentry` | `any` | required | Caller-provided Sentry SDK object; install and initialize the SDK in your application |
 
 <Callout type="info">
-  The Sentry adapter only forwards **error-level** events. Info, debug, and warn events are ignored. Initialize Sentry with `Sentry.init()` before creating the adapter.
+  Error-level events and events with an `error` field are captured as Sentry exceptions. Other events, including debug, info, and warn, are added as breadcrumbs. Initialize Sentry with `Sentry.init()` before creating the adapter.
 </Callout>
 
 ---
@@ -154,16 +153,16 @@ const slack = SlackTransportAdapter.create({
   webhookUrl: process.env.SLACK_WEBHOOK_URL ?? "",
   minLevel: "error",                    // Only error+ events
   username: "Igniter Bot",
-  iconEmoji: ":rotating_light:",
+  iconEmoji: ":fire:",
 });
 ```
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `webhookUrl` | `string` | required | Slack incoming webhook URL |
-| `minLevel` | `string` | `"warn"` | Minimum event level to post |
+| `minLevel` | `string` | `"error"` | Minimum event level to post |
 | `username` | `string` | `"Igniter Telemetry"` | Bot display name |
-| `iconEmoji` | `string` | `":bar_chart:"` | Bot icon emoji |
+| `iconEmoji` | `string` | `":fire:"` | Bot icon emoji |
 
 ---
 
@@ -176,7 +175,7 @@ import { DiscordTransportAdapter } from "@igniter-js/telemetry/adapters";
 
 const discord = DiscordTransportAdapter.create({
   webhookUrl: process.env.DISCORD_WEBHOOK_URL ?? "",
-  minLevel: "warn",
+  minLevel: "error",
   username: "Igniter Bot",
   avatarUrl: "https://example.com/bot-avatar.png",
 });
@@ -185,7 +184,7 @@ const discord = DiscordTransportAdapter.create({
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `webhookUrl` | `string` | required | Discord webhook URL |
-| `minLevel` | `string` | `"warn"` | Minimum event level |
+| `minLevel` | `string` | `"error"` | Minimum event level |
 | `username` | `string` | `"Igniter Telemetry"` | Bot display name |
 | `avatarUrl` | `string` | — | Bot avatar URL |
 
@@ -234,8 +233,17 @@ telemetry.emit("test.event.two", {
   attributes: { "ctx.value": 2 },
 });
 
-// Inspect captured events
-const events = memory.getEvents();
+// `emit()` schedules transport fan-out and returns void. Wait for the async
+// redaction/delivery work before reading captured events.
+async function waitForEvents(adapter: InMemoryTransportAdapter, count: number) {
+  const deadline = Date.now() + 1000;
+  while (adapter.getEvents().length < count && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return adapter.getEvents();
+}
+
+const events = await waitForEvents(memory, 2);
 console.log(events.length);       // 2
 console.log(events[0].name);      // "test.event.one"
 console.log(events[0].attributes); // { "ctx.value": 1 }
@@ -269,9 +277,19 @@ telemetry.emit("user.created", {
   attributes: { "ctx.user.id": "usr_001" },
 });
 
+// `emit()` is fire-and-forget; wait for the asynchronous transport work.
+async function waitForEvent(adapter: MockTelemetryAdapter) {
+  const deadline = Date.now() + 1000;
+  while (!adapter.getLastEvent() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return adapter.getLastEvent();
+}
+
 // Assertions
-expect(mock.getLastEvent()?.name).toBe("user.created");
-expect(mock.getLastEvent()?.attributes).toEqual({
+const lastEvent = await waitForEvent(mock);
+expect(lastEvent?.name).toBe("user.created");
+expect(lastEvent?.attributes).toEqual({
   "ctx.user.id": "usr_001",
 });
 ```
@@ -289,16 +307,13 @@ expect(mock.getLastEvent()?.attributes).toEqual({
 Persists events to Redis Streams via `@igniter-js/store`. Best for durable event storage and replay.
 
 ```typescript
-import { IgniterStore } from "@igniter-js/store";
+import Redis from "ioredis";
 import { StoreStreamTransportAdapter } from "@igniter-js/telemetry/adapters";
 
-const store = IgniterStore.create()
-  .withAdapter(redisAdapter)
-  .withNamespace("telemetry")
-  .build();
+const redis = new Redis(process.env.REDIS_URL!);
 
 const storeTransport = StoreStreamTransportAdapter.create({
-  store,
+  redis,
   stream: "telemetry:events",
   maxLen: 10000,   // Max stream length (capped)
 });
@@ -306,12 +321,12 @@ const storeTransport = StoreStreamTransportAdapter.create({
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `store` | `IgniterStore` | required | Initialized store instance |
+| `redis` | `Redis` | required | Initialized ioredis client used to construct an internal `@igniter-js/store` adapter |
 | `stream` | `string` | `"telemetry:events"` | Redis Stream key |
 | `maxLen` | `number` | `10000` | Maximum stream length (capped) |
 
 <Callout type="info">
-  The Store adapter requires `@igniter-js/store` as a peer dependency. Install it separately: `npm install @igniter-js/store`.
+  The Store adapter needs an ioredis client. Install it with `npm install ioredis`. Although `@igniter-js/store` is marked as an optional peer, the Telemetry root statically exports this adapter and loads that package at runtime, so install `@igniter-js/store` even when using another adapter. The root export should be changed to make this dependency genuinely optional.
 </Callout>
 
 ---
@@ -337,7 +352,7 @@ telemetry.emit("payment.failed", {
 ```
 
 <Callout type="warn">
-  If **all** transports fail for a given event, telemetry throws `TELEMETRY_TRANSPORT_FAILED`. Individual transport failures are silently logged but do not prevent other transports from receiving the event.
+  `emit()` returns `void` and schedules transport delivery asynchronously. The manager catches delivery failures and reports them through the configured internal logger, if present; callers do not receive a rejected promise. Some built-in adapters also catch and log their own errors, so they do not reach the manager's all-adapters-failed path.
 </Callout>
 
 ---
@@ -398,8 +413,8 @@ const telemetry = IgniterTelemetry.create()
 
 | Method | Required | Description |
 |--------|----------|-------------|
-| `type` | Yes | Unique adapter identifier string |
-| `init(meta)` | No | Called during `.build()` — validate/set up |
+| `type` | Yes | Adapter identifier used in manager logs; duplicate values are not rejected by the builder |
+| `init(meta)` | No | Started by the manager after construction; `.build()` does not wait for completion |
 | `handle(envelope)` | Yes | Process a telemetry event |
 | `flush()` | No | Flush buffered events |
 | `shutdown()` | No | Graceful cleanup |

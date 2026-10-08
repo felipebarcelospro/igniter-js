@@ -1,184 +1,63 @@
 ---
 title: Event Validation
-description: Validate telemetry events against Zod schemas — choose between development-only, always-on, or no validation. Configure strict mode, per-registry options, and understand the validation pipeline.
+description: Understand the event validation settings exposed by Telemetry and the current runtime behavior for registered schemas.
 ---
 
-## Event Validation
+## Event Validation Settings
 
-Validation ensures that emitted events match their registered Zod schemas. It catches typos, missing fields, and wrong types — before events reach your transports.
+The builder exposes `mode` (`"development" | "always" | "none"`) and `strict` options through `.withValidation()` and `.addEvents()`. These values are stored in builder configuration. The current `IgniterTelemetryManager.emit()` implementation does not read them and does not parse event attributes against registered schemas.
 
-<Callout type="info">
-  Validation is **only applied when typed events are registered** via `.addEvents()`. Untyped events (plain string names) are never validated.
+<Callout type="warn">
+  Do not rely on `mode` or `strict` for runtime validation in this release. The exported error identifiers `TELEMETRY_UNKNOWN_EVENT` and `TELEMETRY_SCHEMA_VALIDATION_FAILED` are not raised by the current `emit()` path.
 </Callout>
 
----
+## What Event Registries Provide Today
 
-## Validation Modes
-
-Three modes control when validation runs:
-
-| Mode | Behavior | Use Case |
-|------|----------|----------|
-| `"development"` | Validate only when `NODE_ENV !== "production"` | Catch schema errors in dev, skip in prod for performance |
-| `"always"` | Validate on every emit, including production | Strict schemas must never be violated |
-| `"none"` | Never validate | Untyped events or legacy code |
-
-### Setting Validation Mode
-
-**Per-registry** (recommended for granular control):
+`IgniterTelemetryEvents` stores schema descriptors and exposes inferred event names and attribute types to TypeScript. This catches many mistakes when the application is type-checked, but it does not validate values received from untyped input at runtime.
 
 ```typescript
-const telemetry = IgniterTelemetry.create()
-  .addEvents(BillingEvents, { mode: "always", strict: true })
-  .addEvents(DebugEvents, { mode: "development" })
-  .addEvents(LegacyEvents, { mode: "none" })
-  .addTransport(loggerAdapter)
+import { IgniterTelemetry, IgniterTelemetryEvents } from "@igniter-js/telemetry";
+import { LoggerTransportAdapter } from "@igniter-js/telemetry/adapters";
+import { z } from "zod";
+
+const PaymentEvents = IgniterTelemetryEvents
+  .namespace("billing")
+  .event("succeeded", z.object({ "ctx.payment.id": z.string() }))
   .build();
+
+const telemetry = IgniterTelemetry.create()
+  .addEvents(PaymentEvents)
+  .addTransport(LoggerTransportAdapter.create({ logger: console }))
+  .build();
+
+// TypeScript infers the registered name and required attribute.
+telemetry.emit("billing.succeeded", {
+  attributes: { "ctx.payment.id": "pay_123" },
+});
 ```
 
-**Global** (applies to all registries as default):
+Validate untrusted input with your schema library before calling `emit()`:
+
+```typescript
+const parsed = z.object({ "ctx.payment.id": z.string() }).safeParse(input);
+if (parsed.success) {
+  telemetry.emit("billing.succeeded", { attributes: parsed.data });
+}
+```
+
+## Configuration API
+
+The settings remain available for configuration compatibility, but the current manager does not enforce them during event delivery. `.addEvents(descriptor, options)` merges options into builder-level settings; it does not keep independent validation settings per registry.
 
 ```typescript
 const telemetry = IgniterTelemetry.create()
   .withValidation({ mode: "always", strict: true })
-  .addEvents(BillingEvents)   // Inherits global: always + strict
-  .addTransport(loggerAdapter)
+  .addEvents(PaymentEvents, { mode: "development" })
+  .addTransport(LoggerTransportAdapter.create({ logger: console }))
   .build();
 ```
 
-Per-registry options override global options for that specific registry.
-
----
-
-## Strict Mode
-
-When `strict: true`, emitting an event name that isn't in any registered namespace throws `TELEMETRY_UNKNOWN_EVENT`:
-
-```typescript
-const telemetry = IgniterTelemetry.create()
-  .addEvents(BillingEvents, { mode: "always", strict: true })
-  .addTransport(loggerAdapter)
-  .build();
-
-// ❌ Throws TELEMETRY_UNKNOWN_EVENT — event not in BillingEvents
-telemetry.emit("unknown.event", { attributes: {} });
-```
-
-When `strict: false` (default), unknown events are logged as warnings but not thrown:
-
-```typescript
-const telemetry = IgniterTelemetry.create()
-  .addEvents(BillingEvents, { mode: "development", strict: false })
-  .addTransport(loggerAdapter)
-  .build();
-
-// ⚠️ Logs a warning but does not throw
-telemetry.emit("unknown.event", { attributes: {} });
-```
-
----
-
-## Schema Validation
-
-When an event name is recognized (belongs to a registered namespace), the event's attributes are validated against its Zod schema:
-
-```typescript
-import { z } from "zod";
-import { IgniterTelemetryEvents } from "@igniter-js/telemetry";
-
-const PaymentEvents = IgniterTelemetryEvents
-  .namespace("igniter.payments")
-  .event("succeeded", z.object({
-    "ctx.payment.id": z.string(),
-    "ctx.payment.amount": z.number(),
-  }))
-  .build();
-
-const telemetry = IgniterTelemetry.create()
-  .addEvents(PaymentEvents, { mode: "always" })
-  .addTransport(loggerAdapter)
-  .build();
-
-// ✅ Passes validation
-telemetry.emit("igniter.payments.succeeded", {
-  attributes: {
-    "ctx.payment.id": "pay_123",
-    "ctx.payment.amount": 2999,
-  },
-});
-
-// ❌ Fails validation — missing required field "ctx.payment.id"
-telemetry.emit("igniter.payments.succeeded", {
-  attributes: {
-    "ctx.payment.amount": 2999,
-  },
-});
-```
-
-<Callout type="warn">
-  Schema validation failures throw `TELEMETRY_SCHEMA_VALIDATION_FAILED` with details about which fields failed. In `"development"` mode, this only happens outside of production.
-</Callout>
-
----
-
-## Recommended Configuration
-
-### Development
-
-Catch everything early — validate all events, log unknown events:
-
-```typescript
-withValidation({ mode: "always", strict: false })
-```
-
-### Production
-
-Skip validation for performance, but keep strict mode to catch truly unknown events:
-
-```typescript
-withValidation({ mode: "development", strict: true })
-```
-
-### CI/Testing
-
-Always validate, always be strict:
-
-```typescript
-withValidation({ mode: "always", strict: true })
-```
-
----
-
-## Validation Pipeline
-
-The validation pipeline runs during `emit()`:
-
-```
-emit('event.name', input)
-  ↓
-1. Check if event name exists in any registry? (strict check)
-  ↓  (if strict && unknown) → throw TELEMETRY_UNKNOWN_EVENT
-  ↓
-2. Check validation mode (development | always | none)
-  ↓  (if 'none') → skip validation, emit
-  ↓  (if 'development' && NODE_ENV === 'production') → skip
-  ↓
-3. Look up schema for event name
-  ↓
-4. Validate input.attributes against schema
-  ↓  (if invalid) → throw TELEMETRY_SCHEMA_VALIDATION_FAILED
-  ↓
-5. Emit event
-```
-
----
-
-## Performance Considerations
-
-- **Development mode** has zero runtime cost in production — validation is skipped entirely
-- **Always mode** adds Zod schema parsing overhead on every emit — use only for critical events
-- **Strict mode** adds a registry lookup on every emit — negligible cost
-- Untyped events (events without a registered namespace) **skip validation entirely** regardless of settings
+For current behavior and API details, see [Defining Events](/docs/telemetry/defining-events) and [Builder Configuration](/docs/telemetry/builder-config).
 
 ---
 

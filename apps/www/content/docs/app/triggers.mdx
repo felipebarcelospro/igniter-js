@@ -1,0 +1,58 @@
+---
+title: "Triggers"
+description: "Define typed UI trigger groups and dispatch client actions with validated input."
+---
+
+Triggers expose typed, client-side actions to application components. A trigger group can define metadata, order, schema-validated input, and a loader; the app can then attach the built trigger registry with `.withTriggers()`.
+
+## Define a trigger group
+
+```tsx
+import { IgniterTrigger, IgniterTriggerGroup } from '@igniter-js/app/trigger'
+import { z } from 'zod'
+
+const exportGroup = IgniterTriggerGroup.create('projects')
+  .withOrder(1)
+  .addTrigger({
+    id: 'projects.export',
+    label: 'Export projects',
+    schema: z.object({ projectId: z.string() }),
+    handler: async ({ input, client }) => {
+      return client.projects.export.mutate({ params: { id: input.projectId } })
+    },
+  })
+  .build()
+
+const triggers = IgniterTrigger.create()
+  .addGroup(exportGroup)
+  .build()
+```
+
+Each trigger is registered as a definition object with an `id`, `label`, optional Zod `schema`, and optional `handler`. Dispatch parses input with the schema before calling the handler, which receives that parsed input together with the app client, context, response, and stores. Bind the built registry to the app with `.withTriggers(triggers)` before calling `.build()`.
+
+## Read and dispatch triggers
+
+The app's trigger API supports listing available trigger definitions and dispatching by trigger ID. In React, call the trigger hook with the selected trigger definition:
+
+```tsx
+function ExportButton() {
+  const exportAction = app.triggers.use({ trigger: 'projects.export' })
+
+  return (
+    <button
+      disabled={exportAction.isLoading}
+      onClick={() => exportAction.mutate({ projectId: 'project-123' })}
+    >
+      Export
+    </button>
+  )
+}
+```
+
+The hook result includes `mutate`, `data`, `error`, and `isLoading`; options include `enabled`, `onPressKey`, `onSuccess`, and `onError`. Call `app.triggers.list({ query })` or `app.triggers.dispatch(triggerId, input?)` for imperative access.
+
+<Callout type="warn">
+  A trigger with a `keybind` listens for that shortcut. Without `onPressKey`, the hook dispatches it with empty input, so required input needs to be supplied by an `onPressKey` callback or the trigger should omit its keybind.
+</Callout>
+
+For shared data and state setup, see [application state](/docs/app/state). All trigger-related public types are linked from the [API reference](/docs/app/api-reference).

@@ -1,0 +1,95 @@
+---
+title: Using Shared Contracts
+description: Implement the shared Standard Schema and logger contracts in application code and package integrations.
+---
+
+## Choose the contract you need
+
+`@igniter-js/common` defines small TypeScript contracts that packages can share without depending on a particular validator or logger implementation. The package does not provide a schema validator or logger backend. Import the contract as a type, then supply an implementation from your application or another package.
+
+| Contract | Use it for |
+| --- | --- |
+| `StandardSchemaV1<Input, Output>` | Validate unknown input and return a typed output, synchronously or asynchronously. |
+| `StandardJSONSchemaV1<Input, Output>` | Expose input and output JSON Schema conversion functions. |
+| `IgniterLogger` | Accept a logger with the methods used by Igniter.js packages. |
+
+See [schema contracts](/docs/common/schema-contracts) for the shape and [logger contract](/docs/common/logger-contract) for its method signatures.
+
+## Implement a Standard Schema validator
+
+The Standard Schema contract uses the `"~standard"` property. A successful validation returns `{ value }`; a failure returns `{ issues }`. The validator receives `unknown`, so it should check the input before returning a typed value.
+
+```ts
+import type { StandardSchemaV1 } from "@igniter-js/common";
+
+type UserInput = { email: string };
+
+const userSchema: StandardSchemaV1<UserInput> = {
+  "~standard": {
+    version: 1,
+    vendor: "example",
+    validate(value) {
+      if (
+        typeof value !== "object" ||
+        value === null ||
+        !("email" in value) ||
+        typeof value.email !== "string"
+      ) {
+        return { issues: [{ message: "Expected an object with a string email" }] };
+      }
+
+      return { value: { email: value.email } };
+    },
+  },
+};
+
+const result = await userSchema["~standard"].validate({ email: "ada@example.com" });
+if ("issues" in result) {
+  console.error(result.issues);
+} else {
+  console.log(result.value.email);
+}
+```
+
+`validate` may return a `Promise`, so consumers should await it when they need to support both synchronous and asynchronous implementations. A successful result can also include `issues: undefined`; a failure carries one or more issue objects with a message and optional path.
+
+<Callout type="info" title="Runtime support is consumer-defined">
+  The interface describes a validator contract. It does not adapt arbitrary schema libraries automatically. Check the consuming package's runtime before passing a schema; for example, Core's request validation currently calls `.parse()` on its configured schema. See [Core validation](/docs/core/validation).
+</Callout>
+
+## Keep input and output types distinct
+
+Some validators coerce or transform input. Represent the input and parsed output separately with the two generic parameters:
+
+```ts
+import type { StandardSchemaV1 } from "@igniter-js/common";
+
+type FormInput = { quantity: string };
+type ParsedOrder = { quantity: number };
+
+declare const orderSchema: StandardSchemaV1<FormInput, ParsedOrder>;
+```
+
+The contract also exposes `StandardTypedV1.InferInput<typeof orderSchema>` and `StandardTypedV1.InferOutput<typeof orderSchema>` when the schema's `"~standard".types` property provides those types. That property is optional, so inference helpers require implementations to provide it.
+
+## Publish JSON Schema when a consumer needs it
+
+`StandardJSONSchemaV1` describes conversion functions; it does not implement conversion. The consumer calls `input` or `output` with a target name and receives a JSON-compatible object.
+
+```ts
+import type { StandardJSONSchemaV1 } from "@igniter-js/common";
+
+declare const orderJsonSchema: StandardJSONSchemaV1<{ quantity: number }>;
+
+const inputSchema = orderJsonSchema["~standard"].jsonSchema.input({
+  target: "openapi-3.0",
+});
+```
+
+The target type includes `draft-2020-12`, `draft-07`, and `openapi-3.0`, and accepts other strings for library-specific targets. Support for a target depends on the implementation and conversion can throw when it is unsupported.
+
+## Next steps
+
+- [Install Common](/docs/common/installation)
+- [Read the schema contract reference](/docs/common/schema-contracts)
+- [Use Common errors](/docs/common/errors)

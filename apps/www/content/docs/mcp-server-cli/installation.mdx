@@ -1,0 +1,43 @@
+---
+title: "Installation"
+description: "Install or invoke the Igniter.js MCP Server CLI and understand its local stdio runtime."
+---
+
+## Requirements
+
+The package uses Node.js APIs and starts as a local process. Its manifest does not declare a minimum Node.js version. Your MCP client must support a local stdio server.
+
+## Run with a package manager
+
+You can invoke the published package without adding it to your application dependencies:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npx -y @igniter-js/mcp-server
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm dlx @igniter-js/mcp-server
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn dlx @igniter-js/mcp-server
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bunx @igniter-js/mcp-server
+    ```
+  </Tab>
+</Tabs>
+
+The package manifest maps the `igniter-mcp` executable to its built entry point. The command starts an MCP process and waits for its client over stdio; it is not an interactive terminal command and does not expose an HTTP endpoint.
+
+## Optional GitHub access
+
+Set `GITHUB_TOKEN` in the MCP client process environment to authenticate GitHub operations. Without it, the server still starts, but GitHub requests use an unauthenticated Octokit client and are subject to GitHub's unauthenticated access limits.
+
+See [IDE integration](/docs/mcp-server-cli/ide-integration) to configure the process in a client, or [first run](/docs/mcp-server-cli/first-run) to connect it to a project workspace.

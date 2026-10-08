@@ -44,7 +44,6 @@ const logger = IgniterLogger.create()
   .addTransport({
     target: 'console',
     options: {
-      pretty: true,
       colorize: true,
       translateTime: 'SYS:HH:MM:ss',
     },
@@ -58,14 +57,14 @@ logger.info('Pretty output with colors and timestamps');
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `pretty` | `boolean` | `true` | Enable pretty-printing. Set to `false` for raw JSON output (useful for log aggregators). |
+| `pretty` | `boolean` | — | Present in the options type but does not disable the `pino-pretty` target selected by `console`. Use a raw Pino target or external transport when you need JSON lines. |
 | `colorize` | `boolean` | `true` | Enable ANSI color output. Turn off in CI environments or when piping output. |
 | `translateTime` | `string \| boolean` | `"SYS:standard"` | Time format. Use `"SYS:HH:MM:ss"` for 24h, `false` to disable timestamps. |
-| `destination` | `"stdout" \| "stderr" \| string` | `"stdout"` | Output stream. Use `"stderr"` for errors-only output. |
+| `destination` | `"stdout" \| "stderr" \| string` | `"stdout"` | Output stream. Choosing `"stderr"` redirects the console stream; it does not filter log levels. |
 
 ### Examples
 
-<Tabs items={['Pretty (default)', 'Raw JSON', 'No color']}>
+<Tabs items={['Pretty (default)', 'No color']}>
   <Tab value="Pretty (default)">
     ```typescript
     const logger = IgniterLogger.create()
@@ -73,18 +72,6 @@ logger.info('Pretty output with colors and timestamps');
       .build();
 
     // [12:34:56] INFO: Server started on port 3000
-    ```
-  </Tab>
-  <Tab value="Raw JSON">
-    ```typescript
-    const logger = IgniterLogger.create()
-      .addTransport({
-        target: 'console',
-        options: { pretty: false },
-      })
-      .build();
-
-    // {"level":30,"time":"2026-06-02T12:34:56.789Z","msg":"Server started"}
     ```
   </Tab>
   <Tab value="No color">
@@ -101,11 +88,15 @@ logger.info('Pretty output with colors and timestamps');
   </Tab>
 </Tabs>
 
+<Callout type="info">
+  `colorize: false` only removes ANSI colors; output remains `pino-pretty` text and does not become JSON. Use a raw Pino target or external transport for JSON lines.
+</Callout>
+
 ---
 
 ## File Transport
 
-The file transport writes logs to disk using Pino's built-in `pino/file` target. It supports automatic directory creation and log rotation.
+The file transport writes logs to disk using Pino's built-in `pino/file` target. It creates parent directories by default. Although the exported `FileTransportOptions` type includes a `rotation` field, the resolver forwards that field to `pino/file`; this package does not implement rotation itself. Use an external Pino transport such as `pino-roll` when you need rotation.
 
 ```typescript
 import { IgniterLogger } from '@igniter-js/logger';
@@ -116,10 +107,6 @@ const logger = IgniterLogger.create()
     options: {
       path: './logs/app.log',
       mkdir: true,
-      rotation: {
-        maxSizeBytes: 10 * 1024 * 1024, // 10 MB
-        maxFiles: 5,
-      },
     },
   })
   .build();
@@ -133,20 +120,8 @@ logger.info('Written to file');
 |--------|------|---------|-------------|
 | `path` | `string` | **required** | Destination file path. Absolute or relative to `cwd`. |
 | `mkdir` | `boolean` | `true` | Create parent directories if they don't exist. |
-| `rotation` | `boolean \| IgniterFileTransportRotationOptions` | `false` | Enable log rotation. Pass `true` for defaults, or an object for custom settings. |
-
-### Rotation Options
-
-When `rotation` is enabled (object form):
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `maxSizeBytes` | `number` | — | Maximum file size before rotation. |
-| `maxFiles` | `number` | — | Maximum number of rotated files to retain. |
-| `intervalMs` | `number` | — | Rotation interval in milliseconds. |
-
 <Callout type="warn">
-  Rotation behavior depends on Pino's transport worker. For advanced rotation (compression, custom naming), consider using `pino-roll` as an **external transport**.
+  `rotation` is present in the public type for compatibility, but the built-in resolver does not translate it into a rotation-capable target. Configure rotation through a dedicated external transport instead.
 </Callout>
 
 ### Example: Production File Logging
@@ -162,10 +137,6 @@ const logger = IgniterLogger.create()
     options: {
       path: '/var/log/myapp/app.log',
       mkdir: true,
-      rotation: {
-        maxSizeBytes: 50 * 1024 * 1024, // 50 MB
-        maxFiles: 10,
-      },
     },
   })
   .build();
@@ -210,11 +181,11 @@ logger.info('Sent to remote log aggregator');
 
 1. Each log call pushes an entry into an **in-memory buffer** (async, non-blocking).
 2. When the buffer reaches `batchSize`, or every `flushInterval` ms, entries are sent as a single HTTP POST.
-3. If the request fails (network error or non-2xx), entries are **put back in the buffer** — logs are never lost due to transient failures.
-4. On transport close (process exit), remaining logs are flushed.
+3. If the request fails (network error or non-2xx), entries are put back in the in-memory buffer for another periodic or worker-close attempt. This is not durable storage; a process exit can lose buffered entries.
+4. When Pino closes the transport, it requests a final flush. A failed final request is not persisted outside the process.
 
 <Callout type="info">
-  The HTTP transport uses a **custom Pino transport worker** (`http-pino-transport.ts`) that runs in a separate thread. Your application's event loop is never blocked by log delivery.
+  The HTTP transport uses a **custom Pino transport worker** (`http-pino-transport.ts`). Log calls enqueue entries for asynchronous delivery; network work can still delay transport shutdown while a flush is pending.
 </Callout>
 
 ### HTTP Options
@@ -250,7 +221,7 @@ Any **pino-compatible transport** can be used by passing its package name as the
 ```typescript
 import { IgniterLogger } from '@igniter-js/logger';
 
-// pino-pretty (must be installed separately)
+// pino-pretty is already a direct dependency of @igniter-js/logger.
 const prettyLogger = IgniterLogger.create()
   .addTransport({
     target: 'pino-pretty',
@@ -277,7 +248,7 @@ const remoteLogger = IgniterLogger.create()
 
 | Transport | Install | Use Case |
 |-----------|---------|----------|
-| `pino-pretty` | `npm install pino-pretty` | Advanced pretty-printing with custom color schemes |
+| `pino-pretty` | Included with `@igniter-js/logger` | Advanced pretty-printing with custom color schemes |
 | `@logtail/pino` | `npm install @logtail/pino` | Logtail / Better Stack log management |
 | `pino-datadog-transport` | `npm install pino-datadog-transport` | Datadog log ingestion |
 | `pino-loki` | `npm install pino-loki` | Grafana Loki log aggregation |
@@ -302,19 +273,18 @@ import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
-const logger = IgniterLogger.create()
+// Console uses pino-pretty in both environments; production output is uncolored.
+let builder = IgniterLogger.create()
   .withLevel(isDev ? IgniterLogLevel.Debug : IgniterLogLevel.Info)
-  .withAppName('api');
-
-// Console always — pretty in dev, JSON in prod
-logger.addTransport({
-  target: 'console',
-  options: { pretty: isDev, colorize: isDev },
-});
+  .withAppName('api')
+  .addTransport({
+    target: 'console',
+    options: { colorize: isDev },
+  });
 
 // File only in production
 if (!isDev) {
-  logger.addTransport({
+  builder = builder.addTransport({
     target: 'file',
     options: { path: '/var/log/api/app.log', mkdir: true },
   });
@@ -322,7 +292,7 @@ if (!isDev) {
 
 // HTTP only in production
 if (!isDev) {
-  logger.addTransport({
+  builder = builder.addTransport({
     target: 'http',
     options: {
       url: process.env.LOG_INGEST_URL!,
@@ -331,7 +301,7 @@ if (!isDev) {
   });
 }
 
-const log = logger.build();
+const log = builder.build();
 
 log.info(`Logger started in ${isDev ? 'development' : 'production'} mode`);
 ```

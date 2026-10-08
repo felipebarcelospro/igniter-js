@@ -1,0 +1,93 @@
+---
+title: Core API reference
+description: Public entry points, exports, and principal types in @igniter-js/core.
+---
+
+## Package entry points
+
+The package manifest exposes the root API and five subpaths. Import from these entry points so the selected client or integration surface is explicit.
+
+| Import path | Main exports | Purpose |
+| --- | --- | --- |
+| `@igniter-js/core` | `Igniter`, `IgniterBuilder`, action and router factories, response and request types, middleware, utilities | Build the server API and shared runtime. |
+| `@igniter-js/core/client` | `createIgniterClient`, `IgniterProvider`, `useIgniterQueryClient`, `useRealtime` | Client helpers. The client entry resolves to the browser or server implementation based on the environment. |
+| `@igniter-js/core/adapters` | `nextRouteHandlerAdapter`, `withIgniter`, `getHeadersSafe`, `expressAdapter` | Connect an Igniter router to Next.js or Express. |
+| `@igniter-js/core/plugins` | `ensure`, `Ensure`, `audit`, `AuditEvent` | Built-in validation and audit plugins. |
+| `@igniter-js/core/telemetry` | `IgniterCoreTelemetryEvents` | Core request-pipeline telemetry definitions. |
+| `@igniter-js/core/store` | `IgniterCoreStoreEvents` and `IgniterCoreStoreEventsRegistry` | Core cache, revalidation, SSE, and realtime store event definitions. |
+
+The subpaths above are declared in the package [exports map](https://github.com/felipebarcelospro/igniter-js/blob/main/packages/core/package.json). For setup, start with the [quick start](/docs/core/quick-start).
+
+## Builder and factories
+
+`Igniter` is an alias of `IgniterBuilder`. Start a builder with `Igniter.create()`, configure the shared context and optional services, then call `build()` to receive the typed factories.
+
+```ts
+import { Igniter } from "@igniter-js/core";
+
+const igniter = Igniter.create()
+  .withContext(() => ({
+    db: { user: { findMany: async () => [] as { id: string }[] } },
+  }))
+  .withConfig({ basePATH: "/api" })
+  .build();
+
+const users = igniter.controller({
+  path: "/users",
+  actions: {
+    list: igniter.query({
+      path: "/",
+      handler: async ({ context, response }) =>
+        response.success(await context.db.user.findMany()),
+    }),
+  },
+});
+
+const router = igniter.router.create()
+  .addController("users", users)
+  .build();
+```
+
+The builder’s current configuration methods are `withContext`, `withConfig`, `withStore`, `withLogger`, `withStudio`, `withTelemetry`, and `addPlugin`. Its `build()` result provides `query`, `mutation`, `controller`, `page`, `router.create()`, `procedure`, and `$Infer`. The older aliases `context`, `config`, `store`, `logger`, `jobs`, `telemetry`, `plugins`, `docs`, and the instance method `create()` are deprecated in source; use the current `with*` methods and `build()` instead.
+
+| Export | Signature or input shape | Purpose |
+| --- | --- | --- |
+| `createIgniterQuery` | `createIgniterQuery(options: IgniterQueryOptions)` | Define a GET action with a path, optional query schema and middleware, and a handler. |
+| `createIgniterMutation` | `createIgniterMutation(options: IgniterMutationOptions)` | Define a POST, PUT, PATCH, or DELETE action with optional body/query schemas and middleware. |
+| `createIgniterController` | `createIgniterController({ path, actions, ... })` | Group actions and optional pages under a controller path. The builder’s `controller()` factory preserves inferred context and plugin types. |
+| `createIgniterRouter` | `createIgniterRouter({ context, controllers, config, ... })` | Create the request handler and typed server caller from controllers and router configuration. Prefer `igniter.router.create()` when using the builder API. |
+| `createIgniterProcedure` | `createIgniterProcedure(procedure)` | Wrap a procedure definition for reuse as action middleware. |
+| `createEnhancedProcedureBuilder` | `createEnhancedProcedureBuilder<TContext>()` | Create the enhanced named/options/handler procedure builder. |
+| `createEnhancedProcedureFactories` | `createEnhancedProcedureFactories<TContext>()` | Create the `simple`, `withSchema`, and `fromConfig` procedure helpers. |
+| `createIgniterPage` | `createIgniterPage(options)` | Define a typed page handler with an optional query schema and middleware. |
+
+Read [actions](/docs/core/actions), [controllers](/docs/core/controllers), [procedures](/docs/core/procedures), and [router configuration](/docs/core/router) for behavior and complete examples.
+
+## Router, middleware, and runtime exports
+
+The root entry point also exports these runtime building blocks:
+
+| Export | Purpose |
+| --- | --- |
+| `IgniterRouterBuilder`, `createRouterBuilder` | Fluent router configuration, including controllers, middleware, CORS, rate limits, hooks, and health checks. |
+| `IgniterResponseProcessor` | Builds success, error, stream, and cache-aware responses. |
+| `RequestProcessor`, `RouteResolverProcessor`, `BodyParserProcessor`, `ContextBuilderProcessor`, `MiddlewareExecutorProcessor`, `PageErrorHandler` | Request and page pipeline stages. Most applications use these through the router rather than instantiating them directly. |
+| `createCorsMiddleware`, `createRateLimitMiddleware` | Create the built-in CORS and rate-limit middleware. |
+| `IgniterCookie` | Parse and manage request cookies, including signed values. |
+| `IgniterConsoleLogger`, `createConsoleLogger` | Create the built-in console logger. |
+| `IgniterServer`, `IgniterServerBunAdapter`, `IgniterServerDenoAdapter`, `IgniterServerNodeAdapter` | Start a server using the supported runtime adapters. |
+| `IgniterError` | Shared framework error class re-exported by Core. |
+
+The Next.js adapter exports `nextRouteHandlerAdapter(router)`, `withIgniter(config?)`, and `getHeadersSafe()`. The Express adapter exports `expressAdapter(handler)`, where `handler` receives a Fetch `Request` and returns a `Promise<Response>`. See [framework adapters](/docs/core/adapters) and the [client API](/docs/core/client).
+
+## Public type families
+
+The root entry point re-exports the package types. Frequently used families include:
+
+- **Actions:** `IgniterAction`, `IgniterActionContext`, `IgniterQueryOptions`, `IgniterMutationOptions`, `InferEndpoint`, `QueryMethod`, and `MutationMethod`.
+- **Controllers and routing:** `IgniterControllerConfig`, `IgniterRouter`, `IgniterRouterConfig`, `IgniterRouterCaller`, and router hook types.
+- **Context and plugins:** `ContextCallback`, `IgniterBaseContext`, `InferIgniterContext`, `IgniterPlugin`, and plugin inference helpers.
+- **Schemas and responses:** `StandardSchemaV1`, `IgniterResponseSuccess`, and the typed response error variants.
+- **Runtime integrations:** cookie, logger, server, page, store, telemetry, and realtime interfaces.
+
+For validated request data and response envelopes, see [validation](/docs/core/validation) and [response types](/docs/core/response-types). The [plugin guide](/docs/core/plugins), [store integration](/docs/core/store), and [telemetry guide](/docs/core/telemetry) cover their configuration flows.

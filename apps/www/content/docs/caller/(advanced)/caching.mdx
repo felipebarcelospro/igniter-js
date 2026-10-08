@@ -3,7 +3,7 @@ title: Caching
 description: Improve performance with built-in in-memory and persistent caching. Reduce network calls, speed up your UI, and control cache invalidation.
 ---
 
-Caller provides a layered caching system that works out of the box with in-memory storage and can be extended to persistent stores like Redis.
+Caller provides an opt-in response cache through `.stale()` and can use a configured store adapter for persistence. `.cache()` configures the native Fetch `RequestCache` mode; it is separate from Caller’s response cache.
 
 ---
 
@@ -47,7 +47,7 @@ await api.get('/constants').stale(3_600_000).execute();
 
 ### Cache Keys
 
-By default, Caller generates cache keys from the request URL. Use `.cache()` to set a custom key:
+By default, Caller keys response-cache entries by the request URL. This key does not include the HTTP method or request parameters, so different requests to the same URL can collide. Set an explicit cache key when the request identity needs more detail:
 
 ```typescript
 // Custom cache key for manual invalidation
@@ -70,18 +70,19 @@ The first parameter to `.cache()` is the native `RequestCache` strategy:
 | Strategy | Behavior |
 |----------|----------|
 | `'default'` | Browser default cache behavior |
-| `'no-store'` | Never cache (bypasses both browser and Caller cache) |
-| `'reload'` | Fetch from network, update cache |
-| `'force-cache'` | Use cache even if stale |
-| `'only-if-cached'` | Only return cached data, error otherwise |
+| `'no-store'` | Ask Fetch not to use its HTTP cache |
+| `'reload'` | Ask Fetch to reload its HTTP cache entry |
+| `'force-cache'` | Ask Fetch to use its HTTP cache when available |
+| `'only-if-cached'` | Use Fetch's cache-only behavior where supported |
 
 ```typescript
-// Force network fetch, bypassing browser cache
+// Configure the native Fetch cache mode. This does not bypass a Caller
+// response-cache lookup enabled by .stale().
 await api.get('/real-time-data')
   .cache('no-store')
   .execute();
 
-// Prefer cache for static data
+// Configure Fetch's cache mode separately from Caller response caching.
 await api.get('/static-content')
   .cache('force-cache')
   .stale(600_000)
@@ -92,51 +93,24 @@ await api.get('/static-content')
 
 ## Cache Invalidation
 
-Invalidate cached entries when data changes (e.g., after a mutation):
-
-### Programmatic Invalidation
-
-Use the static `IgniterCallerManager` methods:
+The core manager exposes static `invalidate(key)` and `invalidatePattern(pattern)` methods. Exact-key invalidation deletes that key from the configured store. Pattern invalidation clears matching in-memory entries only; persistent stores need their own manual pattern cleanup. The default Caller cache key is the request URL, so use an explicit key when method or parameters distinguish entries.
 
 ```typescript
-import { IgniterCallerManager } from '@igniter-js/caller';
+import { IgniterCallerManager } from '@igniter-js/caller'
 
-// After creating a user, invalidate the users list
-const { error } = await api.post('/users').body(newUser).execute();
-
-if (!error) {
-  IgniterCallerManager.on('response', (result, context) => {
-    // React to specific responses
-    if (context.url.includes('/users') && context.method === 'POST') {
-      // Clear cache for this resource
-      console.log('User created — cache should be refreshed');
-    }
-  });
-}
+await api.post('/users').body(newUser).execute()
+await IgniterCallerManager.invalidate('/users')
 ```
 
-### React Hook Invalidation
-
-In React, use the `.invalidate()` method from hooks:
+In the React client, each query operation exposes `invalidate(data?)`. For example, after a successful mutation, invalidate the query operation that should refresh:
 
 ```tsx
-function CreateUserForm() {
-  const main = useCaller('main');
-
-  const handleSubmit = async (data: CreateUserInput) => {
-    const { error } = await main.post('/users').body(data).execute();
-
-    if (!error) {
-      // Invalidate all cached queries for /users
-      main.invalidate('/users');
-    }
-  };
-
-  return <form onSubmit={handleSubmit}>...</form>;
-}
+const api = useApi()
+const users = api.get('/users')
+const createUser = api.post('/users').useMutation({
+  onSuccess: () => users.invalidate(),
+})
 ```
-
----
 
 ## Persistent Caching (Redis / Store Adapter)
 
@@ -184,7 +158,6 @@ const api = IgniterCaller.create()
   .withStore(redisStore, {
     ttl: 3600,                // 1 hour default TTL
     keyPrefix: 'api-cache:',  // Redis key prefix
-    fallbackToFetch: true,    // Fall back to in-memory if Redis is down
   })
   .build();
 ```
@@ -195,7 +168,7 @@ const api = IgniterCaller.create()
 |--------|---------|-------------|
 | `ttl` | `3600` | Default TTL in seconds |
 | `keyPrefix` | `'igniter:caller:'` | Prefix for all cache keys |
-| `fallbackToFetch` | `true` | Fall back to in-memory when store is unavailable |
+Caller does not currently fall back to an in-memory cache when the configured store fails; handle store errors in your adapter or application.
 
 ---
 

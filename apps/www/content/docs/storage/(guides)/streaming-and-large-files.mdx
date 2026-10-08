@@ -16,12 +16,10 @@ Ensure your adapter/provider supports ranged requests if you need partial conten
 
 ## Large Uploads
 
-The S3 adapter leverages multipart uploads when given Node streams, making large uploads resilient. Always set or infer `contentType` for correct policies and downstream behavior. Consider a preflight check on size if the source is known before streaming.
+The S3 adapter uses multipart uploads for Node streams. Always set or infer `contentType` for correct policies and downstream behavior. The max-size policy is enforced only when the manager can determine the stream size, so perform a preflight check when the source size is known.
 
 ```typescript
-await storage.scope("public").upload(largeStream, "backups/db.dump", {
-  replace: undefined,
-});
+await storage.scope("public").upload(largeStream, "backups/db.dump");
 ```
 
 <Callout type="info">
@@ -47,10 +45,12 @@ async function uploadWithRetry(
     try {
       return await storage.upload(file, destination);
     } catch (error) {
-      if (IgniterStorageError.is(error)) {
-        if (error.code === "IGNITER_STORAGE_UPLOAD_POLICY_VIOLATION")
-          throw error;
-        if (attempt === maxRetries) throw error;
+      if (
+        !IgniterStorageError.is(error) ||
+        error.code !== "IGNITER_STORAGE_UPLOAD_FAILED" ||
+        attempt === maxRetries
+      ) {
+        throw error;
       }
       await new Promise((resolve) => setTimeout(resolve, attempt * 500));
     }
@@ -58,4 +58,4 @@ async function uploadWithRetry(
 }
 ```
 
-See [Policies & Validation](</docs/storage/(core-concepts)/policies-and-validation>) for size/type guardrails and [File Operations](</docs/storage/(core-concepts)/file-operations>) for more lifecycle actions.
+See [Policies & Validation](</docs/storage/policies-and-validation>) for size/type guardrails and [File Operations](</docs/storage/file-operations>) for more lifecycle actions.

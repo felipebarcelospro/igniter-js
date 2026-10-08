@@ -9,12 +9,12 @@ Before installing Caller, ensure your environment meets these requirements:
 
 | Requirement | Minimum | Notes |
 |-------------|---------|-------|
-| **Node.js** | ≥ 18.0 | Native `fetch` support required |
+| **Node.js** | ≥ 22.0 | Required by the current `@igniter-js/common` runtime dependency |
 | **Bun** | ≥ 1.0 | Alternative runtime |
 | **Deno** | ≥ 1.40 | Alternative runtime |
 | **TypeScript** | ≥ 5.0 | Recommended for full type safety |
 
-Caller works in **any environment** where `fetch` is available: Node.js 18+, Bun, Deno, Cloudflare Workers, Vercel Edge, and modern browsers.
+Caller uses the Fetch API. For Node.js, use version 22 or newer to satisfy the current `@igniter-js/common` runtime requirement. Bun, Deno, edge runtimes, and browsers can be used where their Fetch implementation supports the APIs your application needs.
 
 ---
 
@@ -43,7 +43,7 @@ Caller works in **any environment** where `fetch` is available: Node.js 18+, Bun
   </Tab>
 </Tabs>
 
-`@igniter-js/common` is installed automatically as a peer dependency.
+`@igniter-js/common` is declared as a required dependency and peer dependency by the package.
 
 ---
 
@@ -84,7 +84,7 @@ To use schema-based type inference and runtime validation, install a StandardSch
 
 ### Telemetry
 
-For observability features (request tracing, metrics, event emission):
+For structured lifecycle event emission:
 
 <Tabs groupId="package-manager" items={['npm', 'pnpm', 'yarn', 'bun']}>
   <Tab value="npm">
@@ -111,7 +111,7 @@ For observability features (request tracing, metrics, event emission):
 
 ### React Integration
 
-For React hooks (`useQuery`, `useMutate`), install React alongside Caller:
+For React hooks (`useQuery`, `useMutation`), install React alongside Caller:
 
 <Tabs groupId="package-manager" items={['npm', 'pnpm', 'yarn', 'bun']}>
   <Tab value="npm">
@@ -174,7 +174,7 @@ The `IgniterCallerBuilder` exposes a fluent, immutable API for configuring your 
 | `.withHeaders(headers)` | Default headers merged into every request |
 | `.withCookies(cookies)` | Default cookies (serialized as `Cookie` header) |
 | `.withLogger(logger)` | Logger instance for request lifecycle events |
-| `.withTelemetry(telemetry)` | Telemetry manager for observability |
+| `.withTelemetry(telemetry)` | Telemetry manager for structured lifecycle events |
 | `.withSchemas(schemas, options?)` | Schema-based type safety and runtime validation |
 | `.withRequestInterceptor(fn)` | Transform requests before they are sent |
 | `.withResponseInterceptor(fn)` | Transform responses after they are received |
@@ -317,10 +317,10 @@ If you use path aliases, ensure they resolve correctly:
 
 <Accordions>
   <Accordion title="fetch is not defined">
-    This occurs when running Caller in a Node.js version older than 18, or in an environment that doesn't provide global `fetch`.
+    This occurs when running Caller below the supported Node.js version, or in an environment that doesn't provide global `fetch`.
 
     **Solutions:**
-    1. Upgrade to Node.js 18 or later (recommended)
+    1. Upgrade to Node.js 22 or later
     2. Install a polyfill:
        ```bash
        npm install node-fetch
@@ -360,7 +360,7 @@ If you use path aliases, ensure they resolve correctly:
 
     export default function RootLayout({ children }) {
       return (
-        <IgniterCallerProvider callers={{ main: api }}>
+        <IgniterCallerProvider caller={api}>
           {children}
         </IgniterCallerProvider>
       );
@@ -369,7 +369,7 @@ If you use path aliases, ensure they resolve correctly:
   </Accordion>
 
   <Accordion title="Zod validation fails but data looks correct">
-    Check your validation mode. In `'loose'` mode, Caller logs warnings instead of rejecting the request. In `'none'` mode, no validation happens at all.
+    Check your validation mode. `'soft'` mode records validation issues while continuing, and `'off'` disables schema validation. `'strict'` rejects invalid input.
 
     ```typescript
     // Strict mode — rejects mismatched responses

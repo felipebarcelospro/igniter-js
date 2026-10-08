@@ -1,0 +1,54 @@
+---
+title: "Scheduling and lifecycle hooks"
+description: "Enqueue a future email with a Core job adapter and observe sending through lifecycle hooks."
+---
+
+`mail.schedule(params, date)` enqueues a future send through an `IgniterJobQueueAdapter` configured with `.withQueue()`. The date must be in the future. This uses Igniter's queue integration, rather than provider-side scheduling.
+
+## Configure a queue
+
+```ts
+import { IgniterMail } from '@igniter-js/mail'
+import { queueAdapter } from './queue'
+
+const mail = IgniterMail.create()
+  .withFrom(process.env.MAIL_FROM!)
+  .withAdapter('resend', process.env.RESEND_API_KEY!)
+  .withQueue(queueAdapter, {
+    queue: 'mail',
+    job: 'send',
+    attempts: 3,
+    removeOnComplete: true,
+  })
+  .addTemplate('welcome', welcomeTemplate)
+  .build()
+
+await mail.schedule(
+  { to: 'user@example.com', template: 'welcome', data: { name: 'Alex' } },
+  new Date(Date.now() + 60_000),
+)
+```
+
+The queue adapter comes from [Core](/docs/core), which owns job queue adapter contracts. Queue options include queue and job names, attempts, priority, completion/failure retention, metadata, and limiter configuration.
+
+## Observe send lifecycle
+
+The builder supports asynchronous `onSendStarted`, `onSendSuccess`, and `onSendError` callbacks. Use them for application-level audit or metrics work; the package also accepts optional logger and telemetry integrations.
+
+```ts
+const mail = IgniterMail.create()
+  .withFrom(process.env.MAIL_FROM!)
+  .withAdapter('resend', process.env.RESEND_API_KEY!)
+  .onSendStarted(async ({ to, template }) => {
+    console.info('Sending mail', { to, template })
+  })
+  .onSendSuccess(async ({ to, template }) => {
+    console.info('Mail accepted', { to, template })
+  })
+  .onSendError(async ({ to, template }, error) => {
+    console.error('Mail failed', { to, template, error })
+  })
+  .build()
+```
+
+Avoid putting secrets or unnecessary personal data into logs. For immediate sends, see the [quick start](/docs/mail/quick-start).

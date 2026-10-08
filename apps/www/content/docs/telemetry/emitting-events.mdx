@@ -71,7 +71,7 @@ await telemetry.session()
 
 ## Event Levels
 
-Telemetry supports five severity levels, matching OpenTelemetry conventions:
+Telemetry supports four severity levels:
 
 | Level | Typical Use | Default Sampling |
 |-------|-------------|-----------------|
@@ -79,7 +79,6 @@ Telemetry supports five severity levels, matching OpenTelemetry conventions:
 | `info` | General operational events | 10% |
 | `warn` | Unexpected but handled situations | 100% |
 | `error` | Failures that need attention | 100% |
-| `fatal` | Critical failures requiring immediate action | 100% |
 
 ```typescript
 // Default level is "info"
@@ -90,7 +89,6 @@ telemetry.emit("cache.miss", { level: "debug", ... });
 telemetry.emit("payment.processed", { level: "info", ... });
 telemetry.emit("rate_limit.approaching", { level: "warn", ... });
 telemetry.emit("payment.failed", { level: "error", ... });
-telemetry.emit("database.corrupted", { level: "fatal", ... });
 ```
 
 ---
@@ -167,6 +165,7 @@ telemetry.emit("payment.failed", {
 | `message` | `string` | Human-readable error description |
 | `code` | `string?` | Machine-readable error code |
 | `stack` | `string?` | Stack trace (optional) |
+| `cause` | `string?` | Description of the underlying cause (optional) |
 
 <Callout type="info">
   Error details are preserved in the envelope and can be used by transports like Sentry, Slack, or Discord for rich error reporting.
@@ -208,7 +207,7 @@ Every `emit()` call produces an envelope — a normalized payload sent to all tr
 interface IgniterTelemetryEnvelope {
   name: string;              // Event name
   time: string;              // ISO 8601 timestamp
-  level: string;             // debug | info | warn | error | fatal
+  level: "debug" | "info" | "warn" | "error";
   service: string;           // From withService()
   environment: string;       // From withEnvironment()
   version?: string;          // From withVersion()
@@ -216,19 +215,20 @@ interface IgniterTelemetryEnvelope {
   actor?: {                  // From session or emit input
     type: string;
     id?: string;
-    tags?: Record<string, unknown>;
+    tags?: Record<string, string | number | boolean>;
   };
   scope?: {                  // From session or emit input
     type: string;
     id: string;
-    tags?: Record<string, unknown>;
+    tags?: Record<string, string | number | boolean>;
   };
-  attributes?: Record<string, unknown>;  // Redacted
+  attributes?: Record<string, string | number | boolean | null | undefined>;  // Redacted
   error?: {
     name: string;
     message: string;
     code?: string;
     stack?: string;
+    cause?: string;
   };
   source?: {
     causer?: string;
@@ -272,7 +272,7 @@ telemetry.emit("historical.event", {
 
 ## Flushing and Shutdown
 
-For transports that buffer events (like HTTP with retries), you can explicitly flush:
+For transports that buffer events, you can ask them to flush:
 
 ```typescript
 // Flush pending events without shutting down
@@ -283,7 +283,7 @@ await telemetry.shutdown();
 ```
 
 <Callout type="warn">
-  **Always call `shutdown()`** before process exit. Transports may have buffered events or open connections that need cleanup.
+  Call `shutdown()` during graceful shutdown to invoke each adapter's flush and cleanup hooks. Hook errors are caught and logged when an internal logger is configured; this does not wait for event deliveries already running asynchronously.
 </Callout>
 
 ---

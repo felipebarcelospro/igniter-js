@@ -1,6 +1,6 @@
 ---
 title: Sessions
-description: Persist conversational state across messages. Use in-memory storage for development, or plug in Redis, Prisma, or any custom backend for production.
+description: Persist conversational state across messages. Use the built-in in-memory store for development, or implement a Redis, Prisma, or other custom backend for production.
 ---
 
 ## Sessions
@@ -19,11 +19,9 @@ Session Loader (auto-loads from store)
 Middleware Pipeline
     ↓
 Command Handler (reads/writes ctx.session)
-    ↓
-Session Auto-Save (persists changes after handler completes)
 ```
 
-Sessions are keyed by `userId:channelId` — each user has a separate session per chat.
+Sessions are keyed by the pair `userId` and `channelId` — each user has a separate session per chat. Calling `ctx.session.update()` writes the updated session to the configured store immediately; the runtime does not wait until the handler completes to save it.
 
 ---
 
@@ -182,7 +180,7 @@ builder.withSessionStore(store);
 
 Features:
 - In-memory `Map` storage — fast but ephemeral
-- Automatic expired session cleanup
+- Periodic cleanup of expired sessions that have an `expiresAt` timestamp
 - `store.size()` to check active session count
 - `store.destroy()` to stop cleanup interval
 
@@ -333,7 +331,7 @@ class PrismaSessionStore implements BotSessionStore {
 
 ## Session Expiration
 
-Set `expiresAt` on sessions for automatic cleanup:
+Set `expiresAt` on a session if your custom store should expire it. The built-in memory store only cleans sessions with an explicit expiry:
 
 ```typescript
 async handle(ctx) {
@@ -356,7 +354,7 @@ The memory store includes a background cleanup interval. Custom stores should ha
 
 - ✅ **Use `ctx.session.update()`** instead of modifying `ctx.session.data` directly — it auto-saves
 - ✅ **Set expiration** for time-sensitive flows (checkout, verification codes)
-- ✅ **Use a persistent store** (Redis, Prisma) in production — memory store loses data on restart
+- ✅ **Use a custom persistent store** (for example, Redis or Prisma) in production — the built-in memory store loses data on restart
 - ✅ **Keep session data small** — avoid storing large objects; use IDs and fetch from database
 - ✅ **Clear sessions** when a flow completes (`ctx.session.delete()`)
 - ❌ **Don't store sensitive data** in sessions without encryption

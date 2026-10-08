@@ -1,0 +1,94 @@
+---
+title: Advanced Common Patterns
+description: Apply Common's error, logger, and schema contracts across package boundaries.
+---
+
+## Preserve structured errors across boundaries
+
+Use `IgniterError` when a failure needs a stable code and optional structured details. Keep the code useful to callers, and keep details and metadata free of secrets or private data because downstream loggers may record them.
+
+```ts
+import { IgniterError } from "@igniter-js/common";
+
+function normalizeFailure(error: unknown): IgniterError {
+  if (error instanceof IgniterError) return error;
+
+  return new IgniterError({
+    message: "The operation could not be completed",
+    code: "OPERATION_FAILED",
+    statusCode: 500,
+    cause: error instanceof Error ? error : undefined,
+  });
+}
+```
+
+`statusCode` defaults to `500`. `toJSON()` returns the name, message, code, details, metadata, and stack trace; it does **not** include `statusCode` or `cause`. Include those explicitly if your own transport format requires them.
+
+## Attach a logger only at the integration boundary
+
+The `IgniterLogger` interface lets a package use an application logger without taking a dependency on its implementation. Pass the logger into `IgniterError` only when you want construction to emit an error entry. Avoid logging the same failure again in an outer handler unless that second entry adds useful context.
+
+```ts
+import { IgniterError } from "@igniter-js/common";
+import type { IgniterLogger } from "@igniter-js/common";
+
+export function makeMissingUserError(logger: IgniterLogger) {
+  return new IgniterError({
+    message: "User was not found",
+    code: "USER_NOT_FOUND",
+    statusCode: 404,
+    details: { entity: "user" },
+    logger,
+  });
+}
+```
+
+The logger contract requires `flush(): Promise<void>` and `child(componentName, context?)`, in addition to the log-level methods and configuration setters. See [the complete logger contract](/docs/common/logger-contract).
+
+## Adapt a schema without weakening its types
+
+When wrapping a validator, keep the boundary input as `unknown` and preserve its parsed output type. Return the contract's issue list rather than throwing for ordinary validation failures.
+
+```ts
+import type { StandardSchemaV1 } from "@igniter-js/common";
+
+type Input = { count: string };
+type Output = { count: number };
+
+function makeCountSchema(): StandardSchemaV1<Input, Output> {
+  return {
+    "~standard": {
+      version: 1,
+      vendor: "count-example",
+      validate(value) {
+        if (typeof value !== "object" || value === null || !("count" in value)) {
+          return { issues: [{ message: "Expected count" }] };
+        }
+
+        const count = Number(value.count);
+        if (!Number.isFinite(count)) {
+          return { issues: [{ message: "Count must be numeric", path: ["count"] }] };
+        }
+
+        return { value: { count } };
+      },
+    },
+  };
+}
+```
+
+If an integration requires asynchronous validation, return a promise from `validate`; callers using the contract should await either form. Do not assume every Igniter.js consumer supports asynchronous validators: confirm its implementation first.
+
+## Keep contract implementations small
+
+- Give error codes stable, domain-specific names and keep `details` serializable.
+- Treat `IgniterLogger` as a behavioral interface; the methods' output format belongs to the logger implementation.
+- Implement only the Standard Schema capabilities that the consuming library actually uses.
+- Use `StandardJSONSchemaV1` only when a consumer needs schema conversion; its methods and target support are implementation-defined.
+
+## Related guides
+
+- [Using shared contracts](/docs/common/using-contracts)
+- [Errors](/docs/common/errors)
+- [Schema contracts](/docs/common/schema-contracts)
+- [Core validation](/docs/core/validation)

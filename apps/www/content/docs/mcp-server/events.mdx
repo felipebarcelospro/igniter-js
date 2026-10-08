@@ -1,501 +1,88 @@
 ---
 title: Event Handlers
-description: Monitor and log MCP operations using comprehensive event hooks for observability and debugging.
+description: Observe calls to router-backed MCP tools with the adapter's supported tool hooks.
 ---
 
-## Overview
+## Supported tool events
 
-The MCP Server adapter provides comprehensive event hooks that allow you to monitor, log, and respond to all MCP operations. This is essential for debugging, analytics, and maintaining observability of your MCP server.
+The adapter invokes three event callbacks around automatically mapped router tools: <code>onToolCall</code>, <code>onToolSuccess</code>, and <code>onToolError</code>. It does not currently invoke request-wide, response-wide, or general adapter error hooks. Custom tools do not pass through these callbacks.
 
----
+<Callout type="info" title="Scope">
+  These hooks run only for actions mapped from the Igniter router. Put authorization and request-wide controls in your route middleware or application layer.
+</Callout>
 
-## Available Events
+## Configure the hooks
 
-The adapter supports the following events:
+The function API and builder accept the same <code>McpEventsOptions</code> object:
 
-- `onRequest` - Called when any MCP request is received
-- `onResponse` - Called when a response is sent
-- `onToolCall` - Called when a tool is invoked
-- `onToolSuccess` - Called when a tool completes successfully
-- `onToolError` - Called when a tool fails
-- `onError` - Called on general adapter errors
-
----
-
-## Setting Up Event Handlers
-
-### Builder Pattern
-
-```typescript
+~~~typescript
 import { IgniterMcpServer } from '@igniter-js/adapter-mcp-server';
+import { AppRouter } from '@/igniter.router';
 
 const { handler } = IgniterMcpServer
   .create()
   .router(AppRouter)
   .withEvents({
-    onRequest: async (request, context) => {
-      console.log('MCP request received:', request.url);
-    },
-    onResponse: async (response, context) => {
-      console.log('MCP response sent');
-    },
     onToolCall: async (toolName, args, context) => {
-      console.log(`Tool called: ${toolName}`, args);
+      console.info('Starting MCP tool', {
+        toolName,
+        client: context.client,
+        timestamp: context.timestamp,
+      });
     },
     onToolSuccess: async (toolName, result, duration, context) => {
-      console.log(`Tool ${toolName} completed in ${duration}ms`);
+      console.info('MCP tool completed', { toolName, duration });
     },
     onToolError: async (toolName, error, context) => {
-      console.error(`Tool ${toolName} failed:`, error);
+      console.error('MCP tool failed', { toolName, message: error.message });
     },
-    onError: async (error, context) => {
-      console.error('MCP adapter error:', error);
-    }
   })
   .build();
-```
 
-### Function API
+export const GET = handler;
+export const POST = handler;
+~~~
 
-```typescript
-import { createMcpAdapter } from '@igniter-js/adapter-mcp-server';
+For the function API, pass the same callbacks under <code>events</code>:
 
+~~~typescript
 const { server } = createMcpAdapter({
   router: AppRouter,
   events: {
-    onRequest: async (request, context) => {
-      console.log('MCP request received:', request.url);
-    },
-    onResponse: async (response, context) => {
-      console.log('MCP response sent');
-    },
     onToolCall: async (toolName, args, context) => {
-      console.log(`Tool called: ${toolName}`, args);
+      await audit.record({ toolName, args, timestamp: context.timestamp });
     },
-    onToolSuccess: async (toolName, result, duration, context) => {
-      console.log(`Tool ${toolName} completed in ${duration}ms`);
+    onToolSuccess: async (toolName, result, duration) => {
+      await metrics.record('mcp.tool.duration', duration, { toolName });
     },
-    onToolError: async (toolName, error, context) => {
-      console.error(`Tool ${toolName} failed:`, error);
+    onToolError: async (toolName, error) => {
+      await errorTracker.capture(error, { toolName });
     },
-    onError: async (error, context) => {
-      console.error('MCP adapter error:', error);
-    }
-  }
-});
-```
-
----
-
-## Event Details
-
-### onRequest
-
-Called when any MCP request is received:
-
-```typescript
-onRequest: async (request, context) => {
-  // request: The incoming Request object
-  // context: MCP context with router context, tools, etc.
-  
-  console.log('Request URL:', request.url);
-  console.log('Request method:', request.method);
-  console.log('Request headers:', Object.fromEntries(request.headers));
-  
-  // Log to analytics
-  await analytics.track('mcp_request', {
-    url: request.url,
-    method: request.method,
-    timestamp: context.timestamp,
-  });
-}
-```
-
----
-
-### onResponse
-
-Called when a response is sent:
-
-```typescript
-onResponse: async (response, context) => {
-  // response: The response that was sent
-  // context: MCP context
-  
-  console.log('Response status:', response.status);
-  console.log('Response headers:', Object.fromEntries(response.headers));
-  
-  // Log response metrics
-  await metrics.record('mcp_response', {
-    status: response.status,
-    timestamp: context.timestamp,
-  });
-}
-```
-
----
-
-### onToolCall
-
-Called when a tool is invoked (before execution):
-
-```typescript
-onToolCall: async (toolName, args, context) => {
-  // toolName: Name of the tool being called
-  // args: Arguments passed to the tool
-  // context: MCP context
-  
-  console.log(`Tool called: ${toolName}`);
-  console.log('Arguments:', args);
-  
-  // Log to audit trail
-  await audit.log({
-    type: 'tool_call',
-    tool: toolName,
-    args: sanitizeArgs(args), // Remove sensitive data
-    timestamp: context.timestamp,
-    client: context.client,
-  });
-  
-  // Rate limiting check
-  const rateLimitKey = `mcp:tool:${toolName}:${context.client}`;
-  const isRateLimited = await checkRateLimit(rateLimitKey);
-  
-  if (isRateLimited) {
-    throw new Error('Rate limit exceeded');
-  }
-}
-```
-
----
-
-### onToolSuccess
-
-Called when a tool completes successfully:
-
-```typescript
-onToolSuccess: async (toolName, result, duration, context) => {
-  // toolName: Name of the tool
-  // result: Tool execution result
-  // duration: Execution time in milliseconds
-  // context: MCP context
-  
-  console.log(`Tool ${toolName} completed in ${duration}ms`);
-  
-  // Log performance metrics
-  await metrics.record('tool_execution', {
-    tool: toolName,
-    duration,
-    success: true,
-    timestamp: context.timestamp,
-  });
-  
-  // Alert on slow executions
-  if (duration > 5000) {
-    await alerts.send({
-      type: 'slow_tool_execution',
-      tool: toolName,
-      duration,
-    });
-  }
-}
-```
-
----
-
-### onToolError
-
-Called when a tool fails:
-
-```typescript
-onToolError: async (toolName, error, context) => {
-  // toolName: Name of the tool that failed
-  // error: The error that occurred
-  // context: MCP context
-  
-  console.error(`Tool ${toolName} failed:`, error);
-  
-  // Log error to monitoring service
-  await monitoring.logError({
-    tool: toolName,
-    error: error.message,
-    stack: error.stack,
-    timestamp: context.timestamp,
-  });
-  
-  // Send alert for critical failures
-  if (isCriticalTool(toolName)) {
-    await alerts.send({
-      type: 'critical_tool_failure',
-      tool: toolName,
-      error: error.message,
-    });
-  }
-  
-  // Update error tracking
-  await errorTracking.increment({
-    tool: toolName,
-    errorType: error.constructor.name,
-  });
-}
-```
-
----
-
-### onError
-
-Called on general adapter errors (not tool-specific):
-
-```typescript
-onError: async (error, context) => {
-  // error: The error that occurred
-  // context: MCP context
-  
-  console.error('MCP adapter error:', error);
-  
-  // Log to error tracking service
-  await errorTracking.log({
-    error: error.message,
-    stack: error.stack,
-    context: {
-      url: context.request?.url,
-      method: context.request?.method,
-      timestamp: context.timestamp,
-    },
-  });
-  
-  // Send critical alert
-  await alerts.send({
-    type: 'mcp_adapter_error',
-    error: error.message,
-    severity: 'critical',
-  });
-}
-```
-
----
-
-## Practical Examples
-
-### Example 1: Request Logging
-
-```typescript
-.withEvents({
-  onRequest: async (request, context) => {
-    const logEntry = {
-      timestamp: new Date().toISOString(),
-      method: request.method,
-      url: request.url,
-      userAgent: request.headers.get('user-agent'),
-      ip: request.headers.get('x-forwarded-for') || 'unknown',
-    };
-    
-    // Log to file or database
-    await logger.info('MCP Request', logEntry);
-  }
-})
-```
-
-### Example 2: Performance Monitoring
-
-```typescript
-.withEvents({
-  onToolSuccess: async (toolName, result, duration, context) => {
-    // Track execution times
-    await metrics.histogram('tool_execution_duration', duration, {
-      tool: toolName,
-    });
-    
-    // Track success rate
-    await metrics.increment('tool_executions_total', {
-      tool: toolName,
-      status: 'success',
-    });
-    
-    // Alert on slow tools
-    if (duration > 10000) {
-      await alerts.warn(`Tool ${toolName} took ${duration}ms to execute`);
-    }
   },
-  onToolError: async (toolName, error, context) => {
-    // Track error rate
-    await metrics.increment('tool_executions_total', {
-      tool: toolName,
-      status: 'error',
-    });
-  }
-})
-```
+});
 
-### Example 3: Audit Trail
+export const GET = server;
+export const POST = server;
+~~~
 
-```typescript
-.withEvents({
-  onToolCall: async (toolName, args, context) => {
-    // Create audit log entry
-    await audit.create({
-      action: 'tool_call',
-      tool: toolName,
-      user: context.context.user?.id || 'anonymous',
-      args: sanitizeForAudit(args),
-      timestamp: new Date(),
-      ip: context.request.headers.get('x-forwarded-for'),
-    });
-  }
-})
-```
+## Callback order
 
-### Example 4: Rate Limiting
+For a router-backed tool call, the adapter calls <code>onToolCall</code> before invoking the Igniter action. If the action completes, it calls <code>onToolSuccess</code> with the result and elapsed milliseconds. If the hook or action throws, it calls <code>onToolError</code>, then returns the configured error response or its default error result.
 
-```typescript
-.withEvents({
-  onToolCall: async (toolName, args, context) => {
-    const clientId = context.client || 'unknown';
-    const rateLimitKey = `mcp:${clientId}:${toolName}`;
-    
-    const remaining = await rateLimiter.check(rateLimitKey, {
-      limit: 100, // 100 calls per window
-      window: 60000, // 1 minute window
-    });
-    
-    if (remaining < 0) {
-      throw new Error('Rate limit exceeded. Please try again later.');
-    }
-    
-    // Set rate limit headers in response
-    context.request.headers.set('X-RateLimit-Remaining', remaining.toString());
-  }
-})
-```
+Throwing from <code>onToolCall</code> prevents the action from running. This can be used as a tool-level guard, but use route middleware for controls that must apply to every transport request.
 
-### Example 5: Error Tracking and Alerting
+## Context and safe logging
 
-```typescript
-.withEvents({
-  onToolError: async (toolName, error, context) => {
-    // Track error frequency
-    const errorKey = `error:${toolName}:${error.constructor.name}`;
-    const count = await errorCounter.increment(errorKey);
-    
-    // Alert if error threshold exceeded
-    if (count > 10) {
-      await alerts.send({
-        type: 'high_error_rate',
-        tool: toolName,
-        error: error.message,
-        count,
-      });
-    }
-    
-    // Log to error tracking service
-    await sentry.captureException(error, {
-      tags: {
-        tool: toolName,
-        component: 'mcp_adapter',
-      },
-      extra: {
-        args: context.request.body,
-        name: toolName,
-      },
-    });
-  }
-})
-```
+Each callback receives an <code>McpContext</code> containing the router context, the request, a timestamp, client user-agent information, and the adapter's tool list. The <code>client</code> value is the request's user-agent header or <code>unknown</code>; it is not an authenticated user or a stable client identity.
 
----
+Treat tool arguments and router context as potentially sensitive. Redact credentials and personal data before logging. Do not treat the incoming request body as parsed tool arguments; use the <code>args</code> parameter supplied to <code>onToolCall</code>.
 
-## Context in Event Handlers
+## Unsupported event properties
 
-All event handlers receive a `context` object with:
+The public options type currently also declares <code>onRequest</code>, <code>onResponse</code>, and <code>onError</code>, but the adapter does not call them. Use your framework's middleware or route wrapper for request/response instrumentation until those hooks are implemented.
 
-```typescript
-interface McpContext {
-  context: TContext; // Your router's context
-  tools: McpToolInfo[]; // Available tools
-  request: Request; // Current request
-  timestamp: number; // Request timestamp
-  client?: string; // Client identifier
-  server?: McpServer; // MCP server instance
-}
-```
+## Related guides
 
----
-
-## Best Practices
-
-### 1. Keep Handlers Async
-
-All event handlers are async and should use `await` for any async operations:
-
-```typescript
-// ✅ Good
-onToolCall: async (toolName, args, context) => {
-  await logger.log(toolName, args);
-}
-
-// ❌ Bad - Synchronous operations can block
-onToolCall: (toolName, args, context) => {
-  fs.writeFileSync('log.txt', toolName); // Blocks!
-}
-```
-
-### 2. Don't Throw in Handlers
-
-Event handlers shouldn't throw errors. Handle errors gracefully:
-
-```typescript
-// ✅ Good
-onToolCall: async (toolName, args, context) => {
-  try {
-    await logger.log(toolName, args);
-  } catch (error) {
-    console.error('Failed to log:', error);
-    // Don't throw - just log the error
-  }
-}
-
-// ❌ Bad - Throwing can break the flow
-onToolCall: async (toolName, args, context) => {
-  await logger.log(toolName, args); // If this throws, tool won't execute!
-}
-```
-
-### 3. Sanitize Sensitive Data
-
-Remove sensitive information before logging:
-
-```typescript
-onToolCall: async (toolName, args, context) => {
-  const sanitized = sanitizeArgs(args, {
-    removeFields: ['password', 'token', 'secret'],
-    maskFields: ['email', 'creditCard'],
-  });
-  
-  await logger.log(toolName, sanitized);
-}
-```
-
-### 4. Use Structured Logging
-
-Use structured logging for better queryability:
-
-```typescript
-onToolCall: async (toolName, args, context) => {
-  await logger.info({
-    event: 'tool_call',
-    tool: toolName,
-    args: sanitizeArgs(args),
-    timestamp: context.timestamp,
-    client: context.client,
-  });
-}
-```
-
----
-
-## Next Steps
-
-- Explore [Advanced Configurations](/docs/mcp-server/advanced)
-- Check out [Best Practices](/docs/mcp-server/best-practices)
-- Learn about [OAuth](/docs/mcp-server/oauth) for securing your server
-
+- [Advanced configuration](/docs/mcp-server/advanced)
+- [Best practices](/docs/mcp-server/best-practices)
+- [OAuth authentication](/docs/mcp-server/oauth)

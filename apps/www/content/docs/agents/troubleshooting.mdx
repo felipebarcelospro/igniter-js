@@ -162,7 +162,7 @@ if (agent.memory) {
 import { IgniterAgentJSONFileAdapter } from '@igniter-js/agents'
 
 const adapter = IgniterAgentJSONFileAdapter.create({
-  filePath: './data/agent-memory.json',
+  dataDir: './data/agent-memory',
 })
 
 // For multi-server: build a Redis adapter (see Memory docs)

@@ -90,7 +90,7 @@ const api = IgniterCaller.create()
 const { data } = await api.get('/users/:id')
   .params({ id: '1' })
   .execute();
-// data: { id: number; name: string; email: string } | null
+// data: { id: number; name: string; email: string } on success
 ```
 
 ---
@@ -237,8 +237,8 @@ const api = IgniterCaller.create()
 | Mode | Behavior |
 |------|----------|
 | `'strict'` | **(Default)** Rejects the request if the response doesn't match the schema. Returns a `IGNITER_CALLER_RESPONSE_VALIDATION_FAILED` error. |
-| `'loose'` | Logs a warning but still returns the data if validation fails. Useful during migration. |
-| `'none'` | Disables all runtime validation. TypeScript inference still works. |
+| `'soft'` | Records validation issues while allowing processing to continue. Useful during migration. |
+| `'off'` | Disables runtime schema validation. TypeScript inference still works. |
 
 ```typescript
 // Strict mode (default) — fails on schema mismatch
@@ -246,9 +246,9 @@ const strict = IgniterCaller.create()
   .withSchemas(schemas, { mode: 'strict' })
   .build();
 
-// Loose mode — warns but continues
-const loose = IgniterCaller.create()
-  .withSchemas(schemas, { mode: 'loose' })
+// Soft mode — records issues and continues
+const soft = IgniterCaller.create()
+  .withSchemas(schemas, { mode: 'soft' })
   .build();
 ```
 
@@ -397,7 +397,7 @@ export const userPaths = {
 
 <Callout type="success" title="Schema Design Guidelines">
   - **Use strict mode in production** — catches API contract mismatches before they cause subtle bugs
-  - **Use loose mode during development** — helpful when iterating on APIs that aren't final
+  - **Use soft mode during migration** — records issues while allowing requests to continue
   - **Register shared schemas** — avoid duplicating User, Error, and Pagination schemas across paths
   - **Define error schemas** — always include error responses (400, 401, 404, 500) for comprehensive typing
   - **Use path parameters** — `:id` in URL patterns provides typed params and automatic matching

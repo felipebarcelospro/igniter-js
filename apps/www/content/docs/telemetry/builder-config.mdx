@@ -19,7 +19,7 @@ The `IgniterTelemetry.create()` builder is a **fluent, immutable configuration c
 | `.addActor(key, options?)` | Register actor type | Optional |
 | `.addScope(key, options?)` | Register scope type | Optional |
 | `.addEvents(descriptor, options?)` | Register typed events | Optional |
-| `.addTransport(adapter)` | Add transport adapter | At least one |
+| `.addTransport(adapter)` | Add transport adapter | Optional by implementation |
 | `.withSampling(policy)` | Configure sampling | Optional |
 | `.withRedaction(policy)` | Configure redaction | Optional |
 | `.withValidation(options)` | Global validation options | Optional |
@@ -153,14 +153,14 @@ const telemetry = IgniterTelemetry.create()
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `descriptor` | `IgniterTelemetryEventsDescriptor` | Built event registry |
-| `options.mode` | `"development" \| "always" \| "none"` | Validation mode (default: `"development"`) |
-| `options.strict` | `boolean` | Throw on unknown events (default: `false`) |
+| `options.mode` | `"development" \| "always" \| "none"` | Stored validation mode (default: `"development"`); not enforced by `emit()` currently |
+| `options.strict` | `boolean` | Stored strict-name setting (default: `false`); not enforced by `emit()` currently |
 
 ---
 
 ## `addTransport(adapter)`
 
-Adds a transport adapter. You must add **at least one** transport before calling `.build()`.
+Adds a transport adapter. The builder accepts zero or more adapters; with none configured, events have no destination.
 
 ```typescript
 const telemetry = IgniterTelemetry.create()
@@ -234,7 +234,7 @@ const telemetry = IgniterTelemetry.create()
 
 ## `withValidation(options)`
 
-Sets global event validation options. Overrides per-registry defaults.
+Stores event validation options in builder configuration. The current runtime does not consume these options during `emit()`.
 
 ```typescript
 const telemetry = IgniterTelemetry.create()
@@ -245,8 +245,8 @@ const telemetry = IgniterTelemetry.create()
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `mode` | `"development" \| "always" \| "none"` | `"development"` | When to validate |
-| `strict` | `boolean` | `false` | Throw on unknown events |
+| `mode` | `"development" \| "always" \| "none"` | `"development"` | Stored validation mode; not enforced by `emit()` currently |
+| `strict` | `boolean` | `false` | Stored strict-name setting; not enforced by `emit()` currently |
 
 ---
 
@@ -255,23 +255,27 @@ const telemetry = IgniterTelemetry.create()
 Sets an internal logger for the telemetry manager to report its own operational events (init, transport errors, etc.).
 
 ```typescript
-import { IgniterLogger } from "@igniter-js/common";
+import { IgniterLogger } from "@igniter-js/logger";
+
+const logger = IgniterLogger.create()
+  .withAppName("telemetry")
+  .build();
 
 const telemetry = IgniterTelemetry.create()
-  .withLogger(IgniterLogger.create({ name: "telemetry" }))
+  .withLogger(logger)
   .addTransport(loggerAdapter)
   .build();
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `logger` | `IgniterLogger` | Logger instance from `@igniter-js/common` |
+| `logger` | `IgniterLogger` | Built logger implementing the shared contract |
 
 ---
 
 ## `build()`
 
-Creates the runtime `IgniterTelemetryManager` instance. This is the **final method** in the chain.
+Creates the runtime `IgniterTelemetryManager` instance. This is the **final method** in the chain. The manager starts adapter initialization asynchronously; `.build()` does not wait for the `init()` hooks.
 
 ```typescript
 const telemetry = IgniterTelemetry.create()
@@ -284,7 +288,11 @@ During `.build()`:
 1. Merges config with defaults
 2. Logs initialization info (if logger is set)
 3. Creates the manager instance
-4. Initializes all transports (`adapter.init()`)
+4. Starts adapter initialization (`adapter.init()`) without waiting for it to finish
+
+<Callout type="warn">
+  An `init()` failure is logged when an internal logger is configured, then rejects the background initialization promise with `TELEMETRY_TRANSPORT_INIT_FAILED`. Since `.build()` does not await that promise, callers cannot catch initialization failure from the `.build()` call.
+</Callout>
 
 ---
 
@@ -311,7 +319,7 @@ console.log(config.sampling);    // { debugRate: 0.01, infoRate: 0.1, ... }
 
 ## Global Validation
 
-You can set validation globally via `.withValidation()`, which applies to all events:
+You can store validation settings globally via `.withValidation()`. `addEvents()` options merge into the same builder-level validation state; the current runtime does not enforce this configuration during `emit()`:
 
 ```typescript
 const telemetry = IgniterTelemetry.create()
@@ -322,7 +330,7 @@ const telemetry = IgniterTelemetry.create()
   .build();
 ```
 
-Per-registry options override global options for that specific registry.
+The latest options supplied through `.withValidation()` or `.addEvents()` become the builder-level settings; they are not tracked separately for each registry.
 
 ---
 
@@ -330,4 +338,4 @@ Per-registry options override global options for that specific registry.
 
 - [Emitting Events](/docs/telemetry/emitting-events) — Three emit modes, attributes, levels, and errors
 - [Sessions](/docs/telemetry/sessions) — Session lifecycle and scoped execution
-- [Validation](/docs/telemetry/validation) — Deep dive into event validation
+- [Validation](/docs/telemetry/validation) — Current schema typing and runtime validation behavior

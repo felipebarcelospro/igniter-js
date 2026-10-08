@@ -23,7 +23,7 @@ Alias for `IgniterTelemetryBuilder`. Creates and configures telemetry instances.
 
 ### Builder Methods
 
-All builder methods are immutable — each returns a new builder instance.
+Builder configuration methods return new builder instances. `buildConfig()` applies the default service name to the current builder when none was set.
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
@@ -86,26 +86,27 @@ Returned by `.build()`. The runtime instance for emitting events.
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `.emit(name, input?)` | `(name: string, input?: EmitInput) => void` | Emit an event |
+| `.emit(name, input?)` | `(name: string, input?: EmitInput) => void` | Emit an event; arbitrary string names are accepted |
 | `.session()` | `() => IgniterTelemetrySession` | Create a new session |
-| `.flush()` | `() => Promise<void>` | Flush all transport buffers |
-| `.shutdown()` | `() => Promise<void>` | Graceful shutdown |
+| `.flush()` | `() => Promise<void>` | Invoke each adapter's optional flush hook; errors are caught and logged when a logger is configured |
+| `.shutdown()` | `() => Promise<void>` | Invoke flush and adapter shutdown hooks; does not wait for in-flight `emit()` deliveries |
 
 ### EmitInput
 
 ```typescript
 interface IgniterTelemetryEmitInput {
-  level?: "debug" | "info" | "warn" | "error" | "fatal";
+  level?: "debug" | "info" | "warn" | "error";
   time?: string;
   sessionId?: string;
-  actor?: { type: string; id?: string; tags?: Record<string, unknown> };
-  scope?: { type: string; id: string; tags?: Record<string, unknown> };
-  attributes?: Record<string, unknown>;
+  actor?: { type: string; id?: string; tags?: Record<string, string | number | boolean> };
+  scope?: { type: string; id: string; tags?: Record<string, string | number | boolean> };
+  attributes?: IgniterTelemetryAttributes;
   error?: {
     name: string;
     message: string;
     code?: string;
     stack?: string;
+    cause?: string;
   };
   source?: {
     causer?: string;
@@ -127,7 +128,7 @@ Created via `telemetry.session()`. Provides context binding and scoped execution
 |--------|-----------|-------------|
 | `.actor(type, id?, tags?)` | `(type: string, id?: string, tags?: Tags) => this` | Set actor |
 | `.scope(type, id, tags?)` | `(type: string, id: string, tags?: Tags) => this` | Set scope |
-| `.attributes(attrs)` | `(attrs: Record<string, unknown>) => this` | Merge attributes |
+| `.attributes(attrs)` | `(attrs: IgniterTelemetryAttributes) => this` | Merge primitive-valued attributes |
 | `.id(sessionId)` | `(sessionId: string) => this` | Set custom session ID |
 | `.emit(name, input?)` | `(name: string, input?: EmitInput) => void` | Emit with session context |
 | `.run(fn)` | `(fn: () => Promise<T> \| T) => Promise<T>` | Scoped execution |
@@ -146,7 +147,7 @@ Created via `telemetry.session()`. Provides context binding and scoped execution
 
 **Import:** `import { IgniterTelemetryEvents } from "@igniter-js/telemetry"`
 
-Creates typed event registries with Zod schema validation.
+Creates typed event registries that retain schema descriptors for TypeScript inference. The current runtime does not validate emitted attributes against these schemas.
 
 ### Methods
 
@@ -179,7 +180,7 @@ Creates typed event registries with Zod schema validation.
 ```typescript
 LoggerTransportAdapter.create(options: {
   logger: { info, warn, error, debug };  // Required
-  format?: "json" | "pretty";            // Default: "pretty"
+  format?: "json" | "pretty";            // Default: "json"
   minLevel?: string;                       // Default: "debug"
   includeTimestamp?: boolean;              // Default: true
 })
@@ -192,14 +193,14 @@ HttpTransportAdapter.create(options: {
   url: string;                             // Required
   headers?: Record<string, string>;        // Default: {}
   timeout?: number;                        // Default: 5000
-  retries?: number;                        // Default: 0
+  retries?: number;                        // Declared; currently unused by the HTTP adapter
 })
 ```
 
 ### OtlpTransportAdapter
 
 ```typescript
-OtltpTransportAdapter.create(options: {
+OtlpTransportAdapter.create(options: {
   url: string;                             // Required
   headers?: Record<string, string>;        // Default: {}
 })
@@ -209,7 +210,7 @@ OtltpTransportAdapter.create(options: {
 
 ```typescript
 SentryTransportAdapter.create(options: {
-  sentry: typeof Sentry;                   // Required
+  sentry: any;                              // Required; pass the imported Sentry SDK object
 })
 ```
 
@@ -218,9 +219,9 @@ SentryTransportAdapter.create(options: {
 ```typescript
 SlackTransportAdapter.create(options: {
   webhookUrl: string;                      // Required
-  minLevel?: string;                       // Default: "warn"
+  minLevel?: string;                       // Default: "error"
   username?: string;                       // Default: "Igniter Telemetry"
-  iconEmoji?: string;                      // Default: ":bar_chart:"
+  iconEmoji?: string;                      // Default: ":fire:"
 })
 ```
 
@@ -229,7 +230,7 @@ SlackTransportAdapter.create(options: {
 ```typescript
 DiscordTransportAdapter.create(options: {
   webhookUrl: string;                      // Required
-  minLevel?: string;                       // Default: "warn"
+  minLevel?: string;                       // Default: "error"
   username?: string;                       // Default: "Igniter Telemetry"
   avatarUrl?: string;
 })
@@ -269,10 +270,14 @@ MockTelemetryAdapter.create()
 ### StoreStreamTransportAdapter
 
 ```typescript
+import Redis from "ioredis";
+
 StoreStreamTransportAdapter.create(options: {
-  store: IgniterStore;                     // Required
+  redis: Redis;                             // Required ioredis client
   stream?: string;                         // Default: "telemetry:events"
   maxLen?: number;                         // Default: 10000
+  approximate?: boolean;                   // Default: true
+  streamBuilder?: (envelope: Envelope) => string;
 })
 ```
 
@@ -283,8 +288,8 @@ StoreStreamTransportAdapter.create(options: {
 ```typescript
 interface IgniterTelemetryTransportAdapter {
   readonly type: string;
-  init?(meta: TransportMeta): Promise<void>;
-  handle(envelope: Envelope): Promise<void>;
+  init?(meta: TransportMeta): Promise<void> | void;
+  handle(envelope: Envelope): Promise<void> | void;
   flush?(): Promise<void>;
   shutdown?(): Promise<void>;
 }
@@ -331,15 +336,18 @@ interface IgniterTelemetryRedactionPolicy {
 interface IgniterTelemetryEnvelope {
   name: string;
   time: string;
-  level: "debug" | "info" | "warn" | "error" | "fatal";
+  level: "debug" | "info" | "warn" | "error";
   service: string;
   environment: string;
   version?: string;
   sessionId: string;
-  actor?: { type: string; id?: string; tags?: Record<string, unknown> };
-  scope?: { type: string; id: string; tags?: Record<string, unknown> };
-  attributes?: Record<string, unknown>;
-  error?: { name: string; message: string; code?: string; stack?: string };
+  traceId?: string;
+  spanId?: string;
+  parentSpanId?: string;
+  actor?: IgniterTelemetryActor;
+  scope?: IgniterTelemetryScope;
+  attributes?: IgniterTelemetryAttributes;
+  error?: IgniterTelemetryErrorInfo;
   source?: { causer?: string; file?: string; line?: number };
 }
 ```
@@ -363,8 +371,6 @@ TELEMETRY_TRANSPORT_INIT_FAILED
 
 // Events
 TELEMETRY_INVALID_EVENT_NAME
-TELEMETRY_UNKNOWN_EVENT
-TELEMETRY_DUPLICATE_EVENT
 
 // Schema & Validation
 TELEMETRY_SCHEMA_VALIDATION_FAILED
@@ -374,18 +380,14 @@ TELEMETRY_DUPLICATE_NAMESPACE
 
 // Sessions
 TELEMETRY_SESSION_ENDED
-TELEMETRY_SESSION_INVALID
 
 // Scope & Actor
 TELEMETRY_DUPLICATE_SCOPE
-TELEMETRY_INVALID_SCOPE
 TELEMETRY_DUPLICATE_ACTOR
-TELEMETRY_INVALID_ACTOR
 
-// Emit & Runtime
-TELEMETRY_EMIT_FAILED
-TELEMETRY_RUNTIME_NOT_INITIALIZED
 ```
+
+The exported error-code object also includes identifiers the current runtime does not raise on normal public flows: `TELEMETRY_SERVICE_REQUIRED`, `TELEMETRY_ENVIRONMENT_REQUIRED`, `TELEMETRY_CONFIGURATION_INVALID`, `TELEMETRY_UNKNOWN_EVENT`, `TELEMETRY_DUPLICATE_EVENT`, `TELEMETRY_SCHEMA_VALIDATION_FAILED`, `TELEMETRY_SESSION_INVALID`, `TELEMETRY_INVALID_SCOPE`, `TELEMETRY_INVALID_ACTOR`, `TELEMETRY_EMIT_FAILED`, and `TELEMETRY_RUNTIME_NOT_INITIALIZED`. `emit()` accepts arbitrary string names, and duplicate event keys in a registry overwrite earlier entries. See [Troubleshooting](/docs/telemetry/troubleshooting) for source-reachable cases.
 
 ### Error Class
 
@@ -402,11 +404,66 @@ class IgniterTelemetryError extends IgniterError {
 ## Event Levels
 
 ```typescript
-type IgniterTelemetryLevel = "debug" | "info" | "warn" | "error" | "fatal";
+type IgniterTelemetryLevel = "debug" | "info" | "warn" | "error";
 
 // Level priority values (used internally for minLevel filtering)
-IGNITER_TELEMETRY_LEVEL_PRIORITY = { debug: 10, info: 20, warn: 30, error: 40, fatal: 50 }
+IGNITER_TELEMETRY_LEVEL_PRIORITY = { debug: 0, info: 1, warn: 2, error: 3 }
 ```
+
+---
+
+## Utility Exports
+
+These classes and constants are runtime exports from the package root and their source barrels (`utils` or `types`). The package manifest exposes the root and adapter subpaths; it does not define a `./utils` or `./types` package subpath, so import these names from `@igniter-js/telemetry`.
+
+| Runtime export | Public methods | Purpose |
+|---------------|----------------|---------|
+| `IgniterTelemetryId` | `generateSessionId()`, `generateSpanId()`, `generateTraceId()`, `isValidSessionId(id)` | Create IDs and check session ID format |
+| `IgniterTelemetryKeyValidator` | `validateKey(key, context)` | Reject empty keys, spaces, and reserved prefixes |
+| `IgniterTelemetryValidator` | `validate(name, context)`, `validateEventName(name, context)`, `validateNamespace(namespace)` | Validate event/group and namespace names |
+| `IgniterTelemetryRedaction` | `createRedactor(policy?)`, `createSyncRedactor(policy?)`, `redactEnvelope(envelope, policy?)` | Redact attributes or an envelope |
+| `IgniterTelemetrySampling` | `matchesPattern(pattern, eventName)`, `shouldSample(policy, eventName, level)`, `createSampler(policy?)` | Match event patterns and produce sampling decisions |
+| `IGNITER_TELEMETRY_DEFAULT_REDACTION_POLICY` | — | Default denylist/hash lists and maximum string length |
+| `IGNITER_TELEMETRY_DEFAULT_SAMPLING_POLICY` | — | Default per-level rates and pattern lists |
+| `IGNITER_TELEMETRY_LEVELS`, `IGNITER_TELEMETRY_LEVEL_PRIORITY`, `isIgniterTelemetryLevel(value)` | — | Runtime level list, priorities, and type guard |
+
+The policy constants have type `Required<IgniterTelemetryRedactionPolicy>` and `Required<IgniterTelemetrySamplingPolicy>`. Import the corresponding policy interfaces with `import type`.
+
+---
+
+## Supporting Type Exports
+
+The package root re-exports these declarations from `src/types`. They are TypeScript-only exports and should be imported with `import type`; they do not create runtime values.
+
+| Area | Exported types |
+|------|----------------|
+| Builder and configuration | `IgniterTelemetryBuilderState`, `IgniterTelemetryActorOptions`, `IgniterTelemetryScopeOptions`, `IgniterTelemetryConfig` |
+| Manager and input | `IIgniterTelemetryManager`, `IgniterTelemetryEmitInput`, `IgniterTelemetryActorInput`, `IgniterTelemetryScopeInput` |
+| Envelope | `IgniterTelemetryTags`, `IgniterTelemetryAttributes`, `IgniterTelemetryActor`, `IgniterTelemetryScope`, `IgniterTelemetryErrorInfo`, `IgniterTelemetrySource`, `IgniterTelemetryEnvelope` |
+| Event schemas and registry | `IgniterTelemetryBaseSchema`, `IgniterTelemetryEventSchema`, `IgniterTelemetryEventDescriptor`, `IgniterTelemetryEventsMap`, `IgniterTelemetryEventsRegistry`, `IgniterTelemetryFlattenEventKeys`, `IgniterTelemetryFlattenRegistryKeys`, `IgniterTelemetryGetEventSchema`, `IgniterTelemetryInferEventSchema`, `IgniterTelemetryEventsValidationOptions`, `IgniterTelemetryEventsDescriptor` |
+| Levels and policies | `IgniterTelemetryLevel`, `IgniterTelemetryRedactionPolicy`, `IgniterTelemetrySamplingPolicy` |
+| Session | `IgniterTelemetrySessionState`, `IgniterSessionEmitCallback`, `IIgniterTelemetrySession` |
+| Transport | `IgniterTelemetryTransportType`, `IgniterTelemetryTransportMeta`, `IgniterTelemetryTransportAdapter`, `IgniterTelemetryTransportConfig` |
+| Errors | `IgniterTelemetryErrorCode`, `IgniterTelemetryErrorPayload` |
+
+`IgniterTelemetryError`, the error-code object, utility classes, level constants, and level guard are runtime exports. Adapter classes and adapter option types are also exported from `@igniter-js/telemetry/adapters`.
+
+### Adapter Configuration Types
+
+Import these type-only interfaces from `@igniter-js/telemetry/adapters`:
+
+| Adapter | Configuration type |
+|---------|--------------------|
+| Logger | `LoggerTransportConfig` |
+| HTTP | `HttpTransportConfig` |
+| OTLP Logs | `OtlpTransportConfig` |
+| Sentry | `SentryTransportConfig` |
+| Slack | `SlackTransportConfig` |
+| Discord | `DiscordTransportConfig` |
+| Telegram | `TelegramTransportConfig` |
+| Store stream | `StoreStreamTransportConfig` |
+
+Memory and Mock adapters have no configuration interface. `FileTransportConfig` belongs to an adapter module that is not re-exported by the public adapters barrel.
 
 ---
 

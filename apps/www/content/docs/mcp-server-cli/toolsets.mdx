@@ -1,0 +1,48 @@
+---
+title: "Toolsets"
+description: "Browse the MCP tools registered by the Igniter.js MCP Server and the input fields declared by their schemas."
+---
+
+## Tool groups
+
+All tool groups are enabled by default. Set the matching environment variable to the exact string `false` to disable a group. Input names below match the Zod schemas registered in `packages/mcp-server/src/toolsets/`; optional fields are marked `?`.
+
+| Tool group | Tools and declared inputs |
+| --- | --- |
+| **CLI** | `start_dev_server(port?, watch?)`; `build_project(mode?)`; `run_tests(filter?, watch?)`; `generate_feature(name, schema?)`; `generate_schema` (currently registers no input schema); `add_package_dependency(package_name, version?, dev_dependency?)`; `remove_package_dependency(package_name)`. |
+| **API validation** | `get_openapi_spec(url?)`; `make_api_request(method, url, headers?, body?, timeout?)`. |
+| **Documentation** | `read_as_markdown(url)`. |
+| **GitHub** | `search_github_issues(query, repository?, state?, labels?, sort?, order?, per_page?)`; `create_github_issue(title, body, repository?, labels?, assignees?)`; `get_github_issue(issueNumber, repository?)`; `search_github_code(query, repository?, language?, filename?)`; `read_github_file(owner, repo, path, ref?)`; `list_github_repository_content(owner, repo, path?, ref?)`; `update_github_issue(issueNumber, repository?, title?, body?, labels?, assignees?, state?, milestone?)`; `close_github_issue(issueNumber, repository?)`; `list_github_issue_comments(issueNumber, repository?, per_page?, page?)`; `create_github_issue_comment(issueNumber, body, repository?)`; `update_github_issue_comment(commentId, body, repository?)`; `delete_github_issue_comment(commentId, repository?)`. |
+| **File analysis** | `analyze_file(filePath, includeErrors?, projectRoot?)`; `analyze_feature(featurePath, projectRoot, includeStats?)`. |
+| **Code investigation** | `find_implementation(symbol, filePath, projectRoot?)`; `explore_source(filePath, symbol?, includeContext?)`; `trace_dependency_chain(symbol, startFile, maxDepth?)`. |
+| **Debugging** | `get_process_info(process_id)`; `inspect_runtime_variable(process_id, variable_name, debug_port?, file_path?)`; `list_processes_on_port(port, protocol?)`. |
+| **Memory** | `store_memory(type?, title, content, category?, confidence?, tags?, related_memories?)`; `search_memories(text?, tags?, type?, confidence_min?, confidence_max?, include_sensitive?)`; `relate_memories(from_type, from_id, to_type, to_id, relationship_type, strength?, confidence?)`; `visualize_memory_graph(center_type, center_id, depth?)`; `reflect_on_memories(title?, content?, tags?)`. |
+| **Task management** | `list_tasks(status?, priority?, feature_id?, assignee?, include_subtasks?)`; `update_task_status(task_id, new_status, notes?)`; `get_task_statistics(assignee?, feature_id?, include_delegation_insights?)`; `create_task(title, content, feature_id?, priority?, assignee?, estimated_hours?, due_date?, dependencies?, tags?, context_files?)`; `delete_task(task_id, handle_dependencies?)`; `reorder_tasks(scope_id, task_order)`. |
+| **Agent delegation** | `delegate_to_agent(task_id, agent_type, execution_mode?, execution_config?, context?)`; `check_delegation_status(task_id)`; `list_active_delegations(include_recent?, max_results?)`; `cancel_delegation(task_id)`; `find_delegation_candidates(complexity_threshold?, independence_required?, max_estimated_hours?, assignee_filter?, required_tags?, exclude_tags?)`; `monitor_agent_tasks(agent_type?, task_filter?, include_logs?, log_lines?, include_analytics?)`; `check_agent_environment(check_docker?, check_api_keys?, check_models?, detailed_report?, debug_env?)`; `setup_agent_environment(platform?, format?, include_docker?, include_api_setup?)`. |
+
+## Disable groups you do not need
+
+The environment flags are `ENABLE_CLI_TOOLS`, `ENABLE_API_VALIDATION_TOOLS`, `ENABLE_DOCUMENTATION_TOOLS`, `ENABLE_GITHUB_TOOLS`, `ENABLE_FILE_ANALYSIS_TOOLS`, `ENABLE_CODE_INVESTIGATION_TOOLS`, `ENABLE_DEBUGGING_TOOLS`, `ENABLE_MEMORY_TOOLS`, `ENABLE_TASK_MANAGEMENT_TOOLS`, and `ENABLE_AGENT_DELEGATION_TOOLS`.
+
+For example, to disable GitHub and agent delegation in a client configuration:
+
+```json
+{
+  "env": {
+    "ENABLE_GITHUB_TOOLS": "false",
+    "ENABLE_AGENT_DELEGATION_TOOLS": "false"
+  }
+}
+```
+
+## Current schema limitations
+
+`generate_schema` currently has no declared input schema even though its handler reads options such as `output`, `watch`, `docs`, and `docsOutput`; clients therefore cannot discover those fields from the registered tool schema. `store_memory` marks `type` optional in its schema, but provide it because the memory manager needs a type to choose the storage location.
+
+`analyze_feature` declares `includeStats` with a default, but its handler does not consume that value. Supplying `includeStats: false` currently does not disable the statistics in the result.
+
+<Callout type="warn">
+  `delegate_to_agent` runs delegated work in YOLO mode. `execution_config.network_access`, `fresh_environment`, and `proxy` appear in its input schema but are not forwarded to the runtime configuration in the current implementation. Do not treat those inputs as enforced isolation controls.
+</Callout>
+
+The API and documentation toolsets accept arbitrary caller-supplied URLs. `make_api_request` supports mutating HTTP methods, and `inspect_runtime_variable` evaluates an expression in the target process. Connect these tools only to clients and destinations you trust; see [Configuration](/docs/mcp-server-cli/configuration#limit-access).

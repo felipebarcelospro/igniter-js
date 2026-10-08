@@ -5,7 +5,7 @@ description: Persistent memory for agent conversations. Working memory, chat his
 
 ## Memory System
 
-The memory system enables agents to maintain context across multiple conversation turns. It provides three layers of persistence: **working memory** (key-value state), **chat history** (message logs), and **chat sessions** (conversation metadata). All layers are backed by pluggable adapters.
+The memory system provides three storage capabilities: **working memory** (key-value state), **chat history** (message logs), and **chat sessions** (conversation metadata). All layers are backed by pluggable adapters. When history is enabled, the runtime loads stored messages before generation, but it does not automatically save the current user or assistant messages. Save them through `agent.memory.saveMessage()` in your application after each turn.
 
 ---
 
@@ -94,7 +94,7 @@ console.log(memory?.updatedAt)
 ```
 
 <Callout type="info">
-  Working memory is automatically injected into the agent's context before each generation call, so the AI can reference it in its responses.
+  Enabling working memory adds an internal tool the model can use to update stored notes. The runtime does not automatically retrieve and inject the stored content into each prompt. Load it in your application and pass it through your prompt or context when needed.
 </Callout>
 
 ---
@@ -104,8 +104,32 @@ console.log(memory?.updatedAt)
 The memory system manages full conversation persistence:
 
 ```typescript
-// Messages are automatically saved during generation
-// You can also query them:
+// History is loaded automatically when enabled, but messages are not
+// automatically written. Persist each turn from your application:
+const userMessage = 'How do I configure authentication?'
+const result = await agent.generate({
+  chatId: 'chat_123',
+  userId: 'user_001',
+  context: {},
+  message: { role: 'user', content: userMessage },
+})
+
+await agent.memory.saveMessage({
+  chatId: 'chat_123',
+  userId: 'user_001',
+  role: 'user',
+  content: userMessage,
+  timestamp: new Date(),
+})
+await agent.memory.saveMessage({
+  chatId: 'chat_123',
+  userId: 'user_001',
+  role: 'assistant',
+  content: result.content,
+  timestamp: new Date(),
+})
+
+// On the next generate() call, stored messages are loaded as history.
 const messages = await agent.memory.getMessages({
   chatId: 'chat_123',
   limit: 50,
@@ -159,7 +183,7 @@ For single-machine production deployments. Data persists to a JSON file.
 import { IgniterAgentJSONFileAdapter } from '@igniter-js/agents'
 
 const adapter = IgniterAgentJSONFileAdapter.create({
-  filePath: './data/agent-memory.json',
+  dataDir: './data/agent-memory',
   namespace: 'prod',
 })
 

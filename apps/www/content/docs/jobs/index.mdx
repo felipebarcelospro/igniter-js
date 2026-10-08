@@ -8,8 +8,8 @@ The **Jobs** package in Igniter.js brings type-safe background job processing to
 ## Key Features
 
 - **Type-Safe Builders** — Fluent API with full type inference for queues, jobs, input schemas, and results
-- **Adapter-Agnostic** — BullMQ, Bun SQLite, and in-memory adapters — same API, any backend
-- **Cron & Delayed Scheduling** — Dispatch immediately, with a delay, at a specific time, or on a cron schedule
+- **Adapter Options** — BullMQ and Bun SQLite for persistent queues, plus an in-memory adapter for local development and tests
+- **Scheduling** — Dispatch immediately, after a delay, at a specific time, or on a cron schedule with a cron-capable adapter
 - **Worker Management** — Create workers with per-queue concurrency control, rate limiters, and lifecycle hooks
 - **Job Lifecycle Hooks** — `onStart`, `onSuccess`, `onFailure`, and `onProgress` hooks on every job
 - **Typed Job Streams** — Emit, subscribe, and read typed per-job event streams (great for LLM-chunking, progress, logs)
@@ -58,22 +58,14 @@ const emailQueue = IgniterQueue.create('email')
       return { sent: true }
     },
   })
-  .addCron('dailyDigest', {
-    cron: '0 9 * * *',
-    handler: async ({ context }) => {
-      await context.emailService.sendDailyDigest()
-    },
-  })
   .build()
 
 // 2. Create the jobs runtime
 const jobs = IgniterJobs.create()
   .withAdapter(IgniterJobsMemoryAdapter.create())
   .withService('my-api')
-  .withEnvironment('production')
-  .withContext(async () => ({
-    emailService: new EmailService(),
-  }))
+  .withEnvironment('development')
+  .withContext(async () => ({}))
   .addQueue(emailQueue)
   .build()
 
@@ -88,6 +80,10 @@ await jobs.worker.create()
   .withConcurrency(5)
   .start()
 ```
+
+<Callout type="info" title="Memory adapter limits">
+  The in-memory adapter is intended for local development and tests. It can dispatch immediate and future-dated jobs, but it has no cron engine; cron definitions will not run automatically. Use the Bun SQLite or BullMQ adapter for recurring schedules. See [Scheduling](/docs/jobs/scheduling) for setup.
+</Callout>
 
 <Callout type="info" title="What's Next?">
   Ready to dive in? Start with the [Getting Started](/docs/jobs/getting-started) guide to set up your first job, or explore [Job Definitions](/docs/jobs/job-definitions) to understand how queues and jobs are structured.
@@ -109,7 +105,7 @@ This documentation is organized into logical sections:
 
 ## Related Resources
 
-- **[Store Documentation](/docs/store)** — The Redis adapter used by the jobs system
-- **[Context](/docs/context)** — How application context works with jobs
+- **[Store Documentation](/docs/store/)** — The Redis adapter used by the jobs system
+- **[Context](/docs/core/context)** — How application context works with jobs
 - **[Telemetry](/docs/telemetry)** — Telemetry integration for observability
 - **[GitHub Repository](https://github.com/felipebarcelospro/igniter-js)** — Source code and examples

@@ -28,7 +28,7 @@ IgniterBot.create()
   → .onMessage()         // Event listeners
   → .onError()           // Error handling
   → .onStart()           // Startup hooks
-  → .onCommand()         // Command execution hooks
+  → .onCommand()         // Registered hook (currently not emitted by command dispatch)
   → .build()             // Materialize into immutable Bot instance
 ```
 
@@ -122,13 +122,13 @@ const capabilities = {
   actions: {
     edit: true,        // Can edit messages
     delete: true,      // Can delete messages
-    react: false,      // Can add reactions
+    react: true,       // Can add reactions
     pin: true,         // Can pin messages
     thread: false,     // Has thread support
   },
   features: {
     webhooks: true,    // Supports webhooks
-    longPolling: true, // Supports long polling
+    longPolling: true,  // Telegram capability flag; the package does not start a poller
     commands: true,    // Has native command support
     mentions: true,    // Supports @mentions
     groups: true,      // Supports group chats
@@ -379,7 +379,7 @@ builder.onError(async (ctx) => {
 ## Next Steps
 
 <Cards>
-  <Card title="Commands" description="Master aliases, subcommands, and Zod validation." href="/docs/bots/commands" />
+  <Card title="Commands" description="Register aliases and flat command groups; validate raw input in handlers." href="/docs/bots/commands" />
   <Card title="Adapters" description="Deep dive into Telegram, WhatsApp, and Discord adapters." href="/docs/bots/adapters" />
   <Card title="Middlewares" description="Auth, rate-limiting, logging, and custom middleware patterns." href="/docs/bots/middlewares" />
 </Cards>

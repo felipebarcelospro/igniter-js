@@ -16,6 +16,7 @@ Logger integrates with any Node.js framework. These patterns cover the most comm
 ```typescript
 import express from 'express';
 import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
+import type { IgniterLoggerManager } from '@igniter-js/logger';
 
 const logger = IgniterLogger.create()
   .withAppName('express-api')
@@ -41,7 +42,7 @@ import type { Request, Response, NextFunction } from 'express';
 declare global {
   namespace Express {
     interface Request {
-      logger: ReturnType<typeof IgniterLogger.create>;
+      logger: IgniterLoggerManager;
     }
   }
 }
@@ -161,7 +162,7 @@ export function middleware(request: NextRequest) {
 ```
 
 <Callout type="info">
-  Logger works in **server-side contexts** — API routes, Server Actions, `getServerSideProps`. It does not work in Edge Runtime or browser components. For Edge logging, use the HTTP transport and call the endpoint from your edge function.
+  Logger works in supported **Node.js server contexts** — API routes, Server Actions, and `getServerSideProps`. The package depends on Pino and resolves a throwing browser shim, so it is not suitable for browser components or Edge runtimes. For Edge logging, send a request directly to a logging endpoint using the runtime's `fetch` API.
 </Callout>
 
 ### Server Actions
@@ -447,7 +448,7 @@ export function createLogger(appName: string) {
 
   builder.addTransport({
     target: 'console',
-    options: { pretty: isDev, colorize: isDev },
+    options: { colorize: isDev },
   });
 
   if (!isDev && !isTest) {
@@ -474,7 +475,7 @@ import { IgniterLogger, IgniterLogLevel } from '@igniter-js/logger';
 
 export const testLogger = IgniterLogger.create()
   .withLevel(IgniterLogLevel.Fatal)  // suppress all but fatal in tests
-  .addTransport({ target: 'console', options: { pretty: false } })
+  .addTransport({ target: 'console', options: { colorize: false } })
   .build();
 ```
 

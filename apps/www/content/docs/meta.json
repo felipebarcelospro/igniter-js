@@ -3,15 +3,18 @@
     "core",
     "app",
     "caller",
-    "mail",
-    "collections",
-    "connectors",
-    "logger",
-    "cli",
     "store",
     "jobs",
-    "mcp-server",
+    "collections",
+    "storage",
+    "mail",
     "bots",
-    "telemetry"
+    "agents",
+    "connectors",
+    "logger",
+    "telemetry",
+    "common",
+    "mcp-server-cli",
+    "mcp-server"
   ]
 }

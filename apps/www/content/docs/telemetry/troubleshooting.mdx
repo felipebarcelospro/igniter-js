@@ -11,39 +11,32 @@ This guide covers the most common issues, their error codes, and step-by-step so
 
 ## Error Code Reference
 
-Telemetry uses 22 stable error codes. Use them for programmatic error handling.
+The package exports error-code identifiers, but not every declared code is currently raised by the runtime. Validation-related codes are not produced by `emit()`, and transport delivery errors are caught by its asynchronous path. Treat the tables as source-level identifiers, not a guarantee that each failure reaches the caller.
 
-### Configuration Errors
+### Configuration
 
-| Code | Cause | Solution |
-|------|-------|----------|
-| `TELEMETRY_SERVICE_REQUIRED` | Service name not set | Call `.withService("my-api")` before `.build()` |
-| `TELEMETRY_ENVIRONMENT_REQUIRED` | Environment not set | Call `.withEnvironment("production")` before `.build()` |
-| `TELEMETRY_CONFIGURATION_INVALID` | Invalid config state | Check all builder methods. Verify no conflicting options. |
+The builder defaults the service to `"igniter-app"` and environment to `"development"`. The corresponding `SERVICE_REQUIRED`, `ENVIRONMENT_REQUIRED`, and `CONFIGURATION_INVALID` identifiers are exported, but the current builder does not raise them for these defaults.
 
 ### Transport Errors
 
 | Code | Cause | Solution |
 |------|-------|----------|
 | `TELEMETRY_INVALID_TRANSPORT` | Falsy transport passed to `.addTransport()` | Pass a valid adapter instance |
-| `TELEMETRY_TRANSPORT_FAILED` | All transports failed for an event | Check transport configs (URLs, tokens). Check network connectivity. |
-| `TELEMETRY_TRANSPORT_INIT_FAILED` | Transport failed during `.build()` initialization | Fix the failing transport or remove it |
+| `TELEMETRY_TRANSPORT_FAILED` | Internal error created when every adapter rejects; `emit()` catches it asynchronously | Inspect logs from `.withLogger()` and adapter-specific error handling |
+| `TELEMETRY_TRANSPORT_INIT_FAILED` | Adapter `init()` rejects in a background promise started by `.build()` | Validate adapter setup before serving traffic; `.build()` does not await initialization |
 
 ### Event Errors
 
 | Code | Cause | Solution |
 |------|-------|----------|
-| `TELEMETRY_INVALID_EVENT_NAME` | Event name format is invalid | Use dot-separated names: `"namespace.group.action"` |
-| `TELEMETRY_UNKNOWN_EVENT` | Emitting unregistered event in strict mode | Register the event or disable strict mode |
-| `TELEMETRY_DUPLICATE_EVENT` | Event name already registered in namespace | Use unique event names within a namespace |
+| `TELEMETRY_INVALID_EVENT_NAME` | Event name is empty or contains spaces, colons, or a reserved prefix | Use a non-empty name without spaces or colons; dots are the convention for namespacing |
 
-### Schema & Validation Errors
+### Namespace Errors
 
 | Code | Cause | Solution |
 |------|-------|----------|
-| `TELEMETRY_SCHEMA_VALIDATION_FAILED` | Event attributes don't match Zod schema | Check attribute names and types against registered schema |
-| `TELEMETRY_INVALID_NAMESPACE` | Namespace format is invalid | Use dot-separated names: `"igniter.feature"` |
-| `TELEMETRY_RESERVED_NAMESPACE` | Using a reserved namespace prefix | Avoid `igniter.*` unless part of an Igniter.js integration |
+| `TELEMETRY_INVALID_NAMESPACE` | Namespace is empty or contains spaces or colons | Use a non-empty namespace without spaces or colons |
+| `TELEMETRY_RESERVED_NAMESPACE` | Event or group name begins with `__` or `__internal` | Choose an event or group name without those reserved prefixes |
 | `TELEMETRY_DUPLICATE_NAMESPACE` | Same namespace registered twice | Merge events into a single namespace or use different namespaces |
 
 ### Session Errors
@@ -51,23 +44,13 @@ Telemetry uses 22 stable error codes. Use them for programmatic error handling.
 | Code | Cause | Solution |
 |------|-------|----------|
 | `TELEMETRY_SESSION_ENDED` | Modifying or emitting after `.end()` | Create a new session if needed |
-| `TELEMETRY_SESSION_INVALID` | Session in invalid state | Create a fresh session |
 
 ### Scope & Actor Errors
 
 | Code | Cause | Solution |
 |------|-------|----------|
 | `TELEMETRY_DUPLICATE_SCOPE` | Same scope key added twice | Use unique scope keys |
-| `TELEMETRY_INVALID_SCOPE` | Scope key is invalid | Use alphanumeric scope keys |
 | `TELEMETRY_DUPLICATE_ACTOR` | Same actor key added twice | Use unique actor keys |
-| `TELEMETRY_INVALID_ACTOR` | Actor key is invalid | Use alphanumeric actor keys |
-
-### Emit & Runtime Errors
-
-| Code | Cause | Solution |
-|------|-------|----------|
-| `TELEMETRY_EMIT_FAILED` | Emit pipeline failed | Check transports are healthy. Check event attributes. |
-| `TELEMETRY_RUNTIME_NOT_INITIALIZED` | Manager not built yet | Call `.build()` before using the manager |
 
 ---
 
@@ -97,19 +80,19 @@ LoggerTransportAdapter.create({ logger: console, minLevel: "debug" })
 
 ---
 
-### 2. "TELEMETRY_TRANSPORT_FAILED — all transports failed"
+### 2. Events are not delivered to a transport
 
-**Symptom:** Events throw because every transport failed.
+**Symptom:** Events are not delivered although `emit()` returned.
 
 **Likely causes:**
 
 - **Network issues.** HTTP/OTLP adapters can't reach their endpoints.
 - **Invalid credentials.** Slack/Discord/Telegram webhook URLs are wrong or expired.
-- **Missing peer dependency.** Sentry adapter needs `@sentry/node` installed.
+- **Sentry SDK not configured in the application.** Install and initialize the Sentry SDK used by your app, then pass its exported SDK object to the adapter.
 
 **Solutions:**
 
-1. Test each transport individually — remove all but one, verify it works
+1. Inspect adapter logs and test each transport individually — `emit()` returns `void` and does not expose asynchronous delivery errors
 2. Check environment variables are set in the running process
 3. Add a Logger transport as a fallback:
 
@@ -148,33 +131,18 @@ const AuthEvents = IgniterTelemetryEvents
 
 ---
 
-### 4. "TELEMETRY_SCHEMA_VALIDATION_FAILED — event validation failed"
+### 4. Validate untrusted event attributes
 
-**Symptom:** Emitting typed events throws schema validation errors.
-
-**Likely causes:**
-
-- **Missing required attributes.** Check your Zod schema for required fields.
-- **Wrong attribute types.** Schema expects `z.number()` but you passed a string.
-- **Attribute key mismatch.** Schema uses `"ctx.order.id"` but you emitted `"orderId"`.
-
-**Fix:**
+The current telemetry manager does not parse registered schemas at runtime. TypeScript catches mismatches in checked source, but values from requests, files, or other untyped inputs must be validated by application code before `emit()`:
 
 ```typescript
-// Check the schema definition
-const schema = z.object({
-  "ctx.order.id": z.string(),        // Required, string
-  "ctx.order.total": z.number(),     // Required, number
-  "ctx.order.currency": z.string().length(3).optional(), // Optional
-});
+const parsed = orderSchema.safeParse(input);
+if (!parsed.success) {
+  return { ok: false, issues: parsed.error.issues };
+}
 
-// Match your emit exactly:
 telemetry.emit("igniter.orders.completed", {
-  attributes: {
-    "ctx.order.id": "ord_123",       // ✅ string
-    "ctx.order.total": 2999,         // ✅ number (not "2999")
-    "ctx.order.currency": "usd",     // ✅ optional, 3 chars
-  },
+  attributes: parsed.data,
 });
 ```
 
@@ -207,7 +175,7 @@ await newSession.end();
 **Likely causes:**
 
 - **Case mismatch.** Redaction is case-insensitive — but your key might use a different convention.
-- **Nested keys not matched.** Redaction matches top-level attribute keys only. If your attribute value is an object containing a sensitive field, it won't be redacted.
+- **Nested data is not an event attribute value.** `IgniterTelemetryAttributes` accepts primitive values (including `null`), so flatten nested data into attribute keys before emitting.
 
 ```typescript
 // ✅ Works — top-level key matched
@@ -215,12 +183,8 @@ attributes: {
   "ctx.auth.password": "s3cret!"   // Removed!
 }
 
-// ❌ Doesn't work — password is nested inside an object value
-attributes: {
-  "ctx.auth": {
-    password: "s3cret!"            // NOT removed — it's inside an object
-  }
-}
+// ❌ Nested object values do not match IgniterTelemetryAttributes
+attributes: { "ctx.auth": { password: "s3cret!" } }
 ```
 
 **Fix:** Always flatten sensitive data to top-level attribute keys:
@@ -259,12 +223,12 @@ attributes: {
 When something isn't working, run through this checklist:
 
 1. **Is `.build()` called?** The manager is only created after `.build()`.
-2. **Is at least one transport added?** Without transports, events go nowhere.
+2. **Is a transport added?** The builder accepts no transports; without one, events go nowhere.
 3. **Are events being sampled out?** Set all rates to 1.0 temporarily.
-4. **Is strict mode hiding errors?** Set `strict: false` to log instead of throw.
+4. **Are you relying on strict or schema validation?** These settings are not currently enforced by `emit()`; validate untrusted values in application code.
 5. **Are environment variables set?** Check `process.env` for transport credentials.
 6. **Is the logger configured?** Add `.withLogger(...)` to see internal telemetry logs.
-7. **Is `shutdown()` called on exit?** Buffered events may be lost without it.
+7. **Is `shutdown()` called on exit?** This invokes adapter cleanup hooks but does not guarantee delivery of events already in flight.
 
 ---
 

@@ -1,24 +1,25 @@
 {
-  "title": "Bot",
+  "title": "Bots",
   "root": true,
   "pages": [
-    "---Getting Started---",
+    "---Get Started---",
     "index",
     "installation",
     "quick-start",
     "---Core Concepts---",
     "core-concepts",
     "commands",
-    "adapters",
     "middlewares",
     "plugins",
     "sessions",
-    "---Integration---",
+    "---Guides---",
+    "adapters",
     "framework-integration",
     "real-world",
-    "---Reference---",
-    "api-reference",
+    "---Advanced---",
     "best-practices",
-    "troubleshooting"
+    "troubleshooting",
+    "---API Reference---",
+    "api-reference"
   ]
 }

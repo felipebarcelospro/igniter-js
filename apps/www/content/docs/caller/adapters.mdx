@@ -1,0 +1,78 @@
+---
+title: Response Adapters
+description: Preserve wire responses or map Igniter Core response envelopes to Caller result data.
+---
+
+Caller response adapters transform parsed response bodies after schema validation. The public `@igniter-js/caller/adapters` export includes the identity adapter, the Igniter Core envelope adapter, and the mock store adapter.
+
+## Igniter Core API responses
+
+Igniter Core returns a `{ data, error }` envelope. `IgniterCallerCoreAdapter` unwraps successful envelopes so `result.data` is the inner data value, and maps error envelopes to Caller errors.
+
+```ts
+import { IgniterCaller } from '@igniter-js/caller'
+import { IgniterCallerCoreAdapter } from '@igniter-js/caller/adapters'
+
+export const api = IgniterCaller.create()
+  .withBaseUrl('https://api.example.com')
+  .withAdapter(IgniterCallerCoreAdapter.create())
+  .build()
+```
+
+The adapter is explicit; Caller uses the identity behavior by default. With identity behavior, a successful wire body remains intact in `result.data`.
+
+## Custom adapters
+
+Implement `IgniterCallerResponseAdapter` when an API uses another response envelope. Adapters expose a stable `kind`, transform success bodies, and map error bodies. Caller validates wire schemas before applying the adapter.
+
+```ts
+import type {
+  IgniterCallerAdaptContext,
+  IgniterCallerResponseAdapter,
+} from '@igniter-js/caller'
+import { IgniterCallerError } from '@igniter-js/caller'
+
+class ApiEnvelopeAdapter implements IgniterCallerResponseAdapter<'api-envelope'> {
+  readonly kind = 'api-envelope' as const
+
+  adaptSuccess(body: unknown, _context: IgniterCallerAdaptContext) {
+    if (body && typeof body === 'object' && 'result' in body) {
+      return body.result
+    }
+    return body
+  }
+
+  adaptError(body: unknown, context: IgniterCallerAdaptContext) {
+    return new IgniterCallerError(
+      {
+        code: 'IGNITER_CALLER_UNKNOWN_ERROR',
+        operation: 'execute',
+        message: context.message ?? `Request failed with status ${context.status}`,
+        statusCode: context.status,
+        details: body,
+      },
+    )
+  }
+}
+
+const api = IgniterCaller.create()
+  .withAdapter(new ApiEnvelopeAdapter())
+  .build()
+```
+
+Implementations should preserve useful HTTP status and request context in errors. See the exported adapter interface for the exact error constructor shape used by your installed version.
+
+## Mock store adapter
+
+`MockCallerStoreAdapter.create()` provides an in-memory store implementation for tests. It tracks calls and operation history. It is not persistent and should not be used as a production cache backend.
+
+```ts
+import { IgniterCaller, MockCallerStoreAdapter } from '@igniter-js/caller'
+
+const store = MockCallerStoreAdapter.create()
+const api = IgniterCaller.create()
+  .withStore(store)
+  .build()
+```
+
+Use `.stale(milliseconds)` on requests to enable Caller cache behavior. For shared or durable storage, pass an adapter that implements the `IgniterCallerStoreAdapter` contract.

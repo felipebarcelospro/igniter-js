@@ -13,10 +13,11 @@ Beyond basic logging, Logger provides visual formatting tools, runtime control, 
 
 ### Groups
 
-Use `group()` and `groupEnd()` to create indented sections in console output:
+Use `group()` and `groupEnd()` to create indented sections in log messages:
 
 ```typescript
 import { IgniterLogger } from '@igniter-js/logger';
+import type { IgniterLoggerManager } from '@igniter-js/logger';
 
 const logger = IgniterLogger.create()
   .addTransport({ target: 'console', options: { pretty: true } })
@@ -72,7 +73,7 @@ Output:
 ```
 
 <Callout type="info">
-  Groups only affect **console output**. File and HTTP transports receive the raw messages without indentation.
+  The manager adds indentation to each message before sending it through Pino, so configured file and HTTP transports receive the indented message too. Group headings and separators are also emitted as log entries; each target formats those entries in its own way.
 </Callout>
 
 ### Separators
@@ -136,17 +137,20 @@ logger.setLevel(IgniterLogLevel.Debug);
 logger.debug('Now logged');      // Visible after level change
 ```
 
-### Changing App Name and Component
+### App Name and Component Setters
 
-Update `appName` and `component` at runtime:
+The manager exposes setters for `appName` and `component`:
 
 ```typescript
 logger.setAppName('worker-v2');
 logger.setComponent('scheduler');
 
 logger.info('Running job');
-// Includes appName=worker-v2, component=scheduler
 ```
+
+<Callout type="warn">
+  In the current implementation, these setters update the manager's stored config but do not update Pino's already-created base bindings. Configure these values with `.withAppName()` and `.withComponent()` before `.build()` to ensure they appear in log entries.
+</Callout>
 
 Pass `undefined` to clear:
 
@@ -167,7 +171,7 @@ logger.log('info', 'Operation complete', { duration: 42 });
 
 // Evaluates level dynamically
 function logAtDynamicLevel(
-  logger: ReturnType<typeof IgniterLogger.create>,
+  logger: IgniterLoggerManager,
   severity: 'low' | 'high',
   message: string,
 ) {
@@ -200,14 +204,13 @@ log(
 
 ### Graceful Shutdown
 
-For file and HTTP transports, flush buffered logs before process exit:
+Flush Pino's buffered output before process exit. The HTTP transport batches independently and `logger.flush()` does not invoke transport-specific flush hooks:
 
 ```typescript
 import { IgniterLogger } from '@igniter-js/logger';
 
 const logger = IgniterLogger.create()
   .addTransport({ target: 'file', options: { path: './logs/app.log' } })
-  .addTransport({ target: 'http', options: { url: process.env.LOG_URL! } })
   .build();
 
 // SIGTERM (e.g., Docker stop, Kubernetes pod termination)
@@ -236,11 +239,11 @@ process.on('beforeExit', async () => {
 |-----------|----------|
 | **Console** | No-op (console writes are synchronous). |
 | **File** | Flushes Pino's internal buffer to disk. |
-| **HTTP** | Sends all buffered log entries to the remote endpoint immediately. |
-| **External** | Delegates to the transport's flush mechanism if available. |
+| **HTTP** | Flushes Pino's main stream only. The HTTP worker batches independently on its threshold and interval, and attempts delivery when it closes. |
+| **External** | No transport-specific flush method is called by `logger.flush()`. |
 
 <Callout type="warn">
-  **Always call `flush()` before process exit** when using file or HTTP transports. Unflushed logs are lost. The HTTP transport timer uses `.unref()` — it won't keep the process alive.
+  Call `flush()` during graceful shutdown when you need to drain Pino's buffers. It does not guarantee delivery of an HTTP batch; entries are held in memory and the worker's timer uses `.unref()`, so the process can exit with entries unsent.
 </Callout>
 
 ---
@@ -262,10 +265,10 @@ try {
 
 ### Logger Errors Are Non-Fatal
 
-Logger never throws from `log()`, `info()`, `error()`, etc. Transport failures are handled silently:
+Log methods return synchronously and do not report asynchronous transport delivery failures to the caller. Transport setup can still fail while building the logger, and failed HTTP delivery is retained for a later periodic or worker-close attempt:
 
 ```typescript
-// Even with an invalid file path, logging won't crash your app
+// File target initialization can fail when the logger is built
 const logger = IgniterLogger.create()
   .addTransport({
     target: 'file',
@@ -274,7 +277,7 @@ const logger = IgniterLogger.create()
   .build();
 
 logger.info('Application still running');
-// No exception thrown — the file transport may fail silently
+// Delivery failures are handled by the transport, not returned from this call
 ```
 
 ### Custom Error Classes

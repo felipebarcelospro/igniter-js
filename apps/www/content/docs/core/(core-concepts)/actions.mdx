@@ -36,7 +36,7 @@ const userController = igniter.controller({
       path: '/',
       method: 'POST',
       body: CreateUserSchema,
-      handler: async ({ request, response }) => {
+      handler: async ({ request, context, response }) => {
         const user = await context.db.users.create(request.body);
         return response.created({ user });
       }
@@ -93,7 +93,7 @@ const userController = igniter.controller({
         });
 
         if (!user) {
-          return response.notFound({ message: 'User not found' });
+          return response.notFound('User not found');
         }
 
         return response.success({ user });
@@ -165,7 +165,7 @@ const userController = igniter.controller({
   },
   query: {
     type: 'StandardSchemaV1',
-    description: 'Query parameters validation schema (Zod, Valibot, Yup)',
+    description: 'Query parameters schema; Core runtime validation calls its .parse() method (for example, a Zod schema).',
     required: false
   },
   use: {
@@ -447,7 +447,7 @@ handler: async ({ request }) => {
 
 ```typescript
 handler: async ({ context }) => {
-  // Access app context (defined in Igniter.context())
+  // Access the app context configured with Igniter.create().withContext(...)
   const users = await context.db.users.findMany();
   
   // Access user (if using dynamic context)
@@ -471,19 +471,19 @@ handler: async ({ response }) => {
   return response.created({ user: newUser });
   
   // 404 Not Found
-  return response.notFound({ message: 'User not found' });
+  return response.notFound('User not found');
   
   // 400 Bad Request
-  return response.badRequest({ message: 'Invalid input' });
+  return response.badRequest('Invalid input');
   
   // 401 Unauthorized
-  return response.unauthorized({ message: 'Authentication required' });
+  return response.unauthorized('Authentication required');
   
   // 500 Internal Server Error
-  return response.error({ message: 'Something went wrong' });
+  return response.error('ERR_UNKNOWN_ERROR', 'Something went wrong');
   
   // Custom response
-  return response.json({ custom: 'data' }, { status: 418 });
+  return response.status(418).json({ custom: 'data' });
 }
 ```
 
@@ -626,7 +626,7 @@ const userController = igniter.controller({
         });
 
         if (!invite) {
-          return response.badRequest({ message: 'Invalid invite code' });
+          return response.badRequest('Invalid invite code');
         }
 
         // Create user
@@ -702,7 +702,7 @@ const userController = igniter.controller({
         
         if (!user) {
           // ✅ Option 1: Return error response
-          return response.notFound({ message: 'User not found' });
+          return response.notFound('User not found');
         }
         
         // ✅ Option 2: Throw error (caught automatically)
@@ -733,10 +733,10 @@ const handler = async ({ request, response }) => {
     return response.success({ user });
   } catch (error) {
     if (error instanceof UserNotFoundError) {
-      return response.notFound({ message: error.message });
+      return response.notFound(error.message);
     }
     
-    return response.error({ message: 'Unexpected error' });
+    return response.error('ERR_UNKNOWN_ERROR', 'Unexpected error');
   }
 };
 ```
@@ -886,19 +886,19 @@ This updates:
 ## Next Steps
 
 <Cards>
-  <Card title="Controllers" href="/docs/controllers">
+  <Card title="Controllers" href="/docs/core/controllers">
     Group actions into logical controllers
   </Card>
   
-  <Card title="Procedures" href="/docs/procedures">
+  <Card title="Procedures" href="/docs/core/procedures">
     Create reusable middleware logic
   </Card>
   
-  <Card title="Validation" href="/docs/validation">
+  <Card title="Validation" href="/docs/core/validation">
     Deep dive into schema validation
   </Card>
   
-  <Card title="Response Types" href="/docs/response-types">
+  <Card title="Response Types" href="/docs/core/response-types">
     Master all response helper methods
   </Card>
 </Cards>
