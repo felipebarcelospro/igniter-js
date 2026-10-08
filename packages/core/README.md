@@ -569,7 +569,7 @@ const jobsRouter = createJobsRouter({
 import { createJobsProxy } from "@igniter-js/core";
 
 const proxy = createJobsProxy(jobsRouter.jobs, jobsRouter.registry, jobs.invoke, jobs.management);
-await proxy.email.send.enqueue({ to: "dev@igniterjs.com" });
+await proxy.email.send.enqueue({ to: "dev@tryfractal.co" });
 ```
 
 ### 35) Optional telemetry

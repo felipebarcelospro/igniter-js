@@ -27,7 +27,7 @@ export const igniter = Igniter
       description: 'A sample realtime chat application built with Igniter.js',
       contact: {
         name: 'Igniter.js',
-        email: 'team@igniterjs.com',
+        email: 'team@tryfractal.co',
         url: 'https://github.com/felipebarcelospro/igniter-js'
       },
       license: {
