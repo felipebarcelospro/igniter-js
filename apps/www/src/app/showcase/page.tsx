@@ -32,7 +32,9 @@ export const metadata: Metadata = generateMetadataWithOG({
 
 export default async function Page() {
   const pages = source.getPages()
-  const showcases = toSerializableShowcases(pages)
+  const showcases = toSerializableShowcases(pages).sort(
+    (a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured)),
+  )
 
   return (
     <SitePage>
