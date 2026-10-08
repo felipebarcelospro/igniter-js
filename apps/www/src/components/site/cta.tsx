@@ -67,7 +67,7 @@ export function CTASection({ className }: { className?: string }) {
 
           <div className="relative mx-auto w-full max-w-screen-2xl px-3 lg:px-10">
             <div className="mx-auto flex max-w-lg flex-col items-center gap-6 text-center">
-              <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground font-mono">
+              <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" className="size-4">
                   <g fill="currentColor">
                     <polyline fill="none" points="5.25 12.5 1.75 9 5.25 5.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5"></polyline>
@@ -75,10 +75,10 @@ export function CTASection({ className }: { className?: string }) {
                     <line fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" x1="7.5" x2="10.5" y1="15.25" y2="2.75"></line>
                   </g>
                 </svg>
-                Built for Developers
+                Start building with Igniter.js
               </span>
-              <h2 className="text-3xl text-foreground leading-tight font-mono">
-                Build faster with a modern tech stack for <b>Developers</b> and <b>Code Agents</b>
+              <h2 className="text-3xl text-foreground leading-tight">
+                Build your TypeScript backend with typed APIs, jobs, and AI tools.
               </h2>
 
               <div className="flex justify-center gap-4 mt-8">

@@ -113,7 +113,7 @@ function BlogPostCard({ post }: { post: SerializedBlogPost }) {
           </div>
 
           <div className="grow mt-20 flex flex-col justify-end">
-            <h2 className="text-sm font-mono leading-8 font-bold mb-2 text-foreground group-hover:text-primary transition-colors">
+            <h2 className="text-sm leading-8 font-bold mb-2 text-foreground group-hover:text-primary transition-colors">
               {post.title}
             </h2>
           </div>
@@ -125,7 +125,7 @@ function BlogPostCard({ post }: { post: SerializedBlogPost }) {
               alt={config.creator.name}
               className="w-6 h-6 rounded-full"
             />
-            <span className="text-xs font-mono text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {config.creator.name}
             </span>
           </div>

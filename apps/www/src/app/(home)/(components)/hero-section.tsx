@@ -1,12 +1,10 @@
 "use client";
 
-import { InstallCommand } from "@/components/site/install-command";
 import { SupportedFrameworks } from "@/components/site/supported-frameworks";
-import { TechBadge } from "@/components/site/tech-badge";
 import { Button } from "@/components/ui/button";
 import { config } from "@/configs/application";
 import { motion } from "framer-motion";
-import { ArrowDown, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 
 export function HeroSection() {
   return (
@@ -34,7 +32,7 @@ export function HeroSection() {
           </div>
 
           <motion.h1
-            className="tracking-tight text-xl sm:text-2xl max-w-xl mb-8 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent"
+            className="tracking-tight text-3xl sm:text-4xl max-w-2xl mb-8 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent"
             variants={{
               hidden: { opacity: 0, y: 20 },
               visible: { opacity: 1, y: 0 },
@@ -42,6 +40,13 @@ export function HeroSection() {
           >
             {config.projectTagline}
           </motion.h1>
+
+          <p className="max-w-2xl -mt-4 mb-8 text-base sm:text-lg leading-relaxed text-muted-foreground">
+            Build typed APIs and add backend capabilities through modular
+            packages. Consistent conventions and package-specific guidance give
+            coding agents context to contribute while you direct and review the
+            work.
+          </p>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 sm:gap-4 mb-8 lg:mb-12">
             <Button

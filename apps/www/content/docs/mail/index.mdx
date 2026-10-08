@@ -1,0 +1,74 @@
+---
+title: "@igniter-js/mail"
+description: "Send transactional email with validated templates, provider adapters, and optional queue scheduling."
+---
+
+`@igniter-js/mail` gives email templates typed inputs and runtime validation. Its adapters let you choose Resend, Postmark, SendGrid, or SMTP without changing the `mail.send()` call.
+
+## Install
+
+Install the mail package, React Email components, Zod, and the provider you plan to use. This example uses Resend.
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']} groupId="package-manager">
+  <Tab value="npm">
+    ```bash
+    npm install @igniter-js/mail @react-email/components react zod resend
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @igniter-js/mail @react-email/components react zod resend
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @igniter-js/mail @react-email/components react zod resend
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @igniter-js/mail @react-email/components react zod resend
+    ```
+  </Tab>
+</Tabs>
+
+Set `MAIL_FROM` and `RESEND_API_KEY` in the server environment before sending mail.
+
+## Create a template and send an email
+
+Define a schema and renderer in the template. The `data` passed to `send()` is inferred from that schema.
+
+```tsx title="src/mail.tsx"
+import { Html, Text } from '@react-email/components'
+import { IgniterMail } from '@igniter-js/mail'
+import { z } from 'zod'
+
+export const mail = IgniterMail.create()
+  .withFrom(process.env.MAIL_FROM!)
+  .withAdapter('resend', process.env.RESEND_API_KEY!)
+  .addTemplate('welcome', {
+    subject: 'Welcome, {{name}}',
+    schema: z.object({ name: z.string() }),
+    render: ({ name }) => (
+      <Html>
+        <Text>Welcome, {name}!</Text>
+      </Html>
+    ),
+  })
+  .build()
+
+await mail.send({
+  to: 'user@example.com',
+  template: 'welcome',
+  data: { name: 'Alex' },
+})
+```
+
+<Callout type="warn" title="Server-only package">
+  Keep mail configuration and sending code on the server. The package includes a browser guard to prevent accidental client-side use.
+</Callout>
+
+## Learn more
+
+- [Mail package source and API](https://github.com/felipebarcelospro/igniter-js/tree/main/packages/mail)
+- [Background jobs](/docs/jobs/getting-started) for queue-backed email scheduling

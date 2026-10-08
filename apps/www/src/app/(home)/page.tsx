@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { Metadata } from 'next';
 import { HeroSection } from './(components)/hero-section';
 import { FeaturesSection } from './(components)/features-section';
@@ -8,6 +7,7 @@ import { CTASection } from '@/components/site/cta';
 import { TryItOut } from './(components)/try-it-out';
 import { generateMetadataWithOG } from '@/lib/metadata';
 import { config } from '@/configs/application';
+import { FooterSection } from './(components)/footer-section';
 
 export const metadata: Metadata = generateMetadataWithOG({
   title: `${config.projectName} - ${config.projectTagline}`,
@@ -27,6 +27,7 @@ export default function HomePage() {
       <BackendSection />
       <BlogSection />
       <CTASection className='rounded-t-none' />
+      <FooterSection />
     </div>
   );
 }

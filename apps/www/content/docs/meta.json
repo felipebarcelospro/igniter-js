@@ -1,7 +1,9 @@
 {
   "pages": [
     "core",
+    "app",
     "caller",
+    "mail",
     "collections",
     "connectors",
     "logger",

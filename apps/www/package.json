@@ -15,7 +15,7 @@
     "@ai-sdk-tools/devtools": "1.0.0 ",
     "@ai-sdk-tools/memory": "1.0.0 ",
     "@ai-sdk-tools/store": "1.0.0 ",
-    "@ai-sdk/google": "2.0.25",
+    "@ai-sdk/google": "3.0.131",
     "@hookform/resolvers": "5.2.2",
     "@igniter-js/bot": "0.2.0-alpha.5",
     "@igniter-js/core": "0.2.94",
@@ -51,7 +51,7 @@
     "@upstash/ratelimit": "2.0.6",
     "@upstash/redis": "1.35.6",
     "@xyflow/react": "12.9.1",
-    "ai": "6.0.67",
+    "ai": "6.0.302",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
@@ -64,9 +64,9 @@
     "fumadocs-ui": "16.0.2",
     "input-otp": "1.4.2",
     "lucide-react": "0.548.0",
-    "mermaid": "11.12.1",
-    "nanoid": "5.1.6",
-    "next": "16.2.4",
+    "mermaid": "11.16.1",
+    "nanoid": "5.1.16",
+    "next": "16.3.8",
     "next-themes": "0.4.6",
     "react": "19.2.0",
     "react-day-picker": "9.11.1",
@@ -85,12 +85,14 @@
     "zod": "4.1.12",
     "motion-dom": "12.23.23",
     "motion-utils": "12.23.6",
-    "@ai-sdk/react": "2.0.83",
-    "@ai-sdk/provider-utils": "3.0.14",
-    "@ai-sdk/provider": "2.0.0"
+    "@ai-sdk/react": "3.0.305",
+    "@ai-sdk/provider-utils": "4.0.57",
+    "@ai-sdk/provider": "3.0.18"
   },
   "overrides": {
-    "ai": "6.0.67"
+    "ai": "6.0.302",
+    "katex": "0.18.2",
+    "nanoid": "5.1.16"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.15",
@@ -99,7 +101,7 @@
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "@types/three": "0.180.0",
-    "postcss": "8.5.6",
+    "postcss": "8.5.23",
     "tailwindcss": "4.1.15",
     "tw-animate-css": "1.4.0",
     "typescript": "5.9.3"

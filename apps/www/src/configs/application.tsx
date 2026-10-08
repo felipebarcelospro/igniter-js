@@ -1,12 +1,12 @@
 import {
   Bot,
   Clock,
+  Code2,
   Database,
-  Layers,
-  MessageCircle,
+  HardDrive,
+  Network,
+  PanelsTopLeft,
   Plug,
-  Server,
-  Wrench,
 } from "lucide-react";
 import { type Config } from "./types";
 
@@ -14,9 +14,9 @@ export const config: Config = {
   // General
   projectName: "Igniter.js",
   projectDescription:
-    "The first AI-native TypeScript framework — architected for human-AI collaboration. Feature-sliced modules, deep TypeScript inference, and built-in training for 15+ Code Agents (Cursor, Claude Code, Copilot) create a low-entropy environment where both developers and AI work seamlessly. MCP-native APIs, AI agent orchestration, type-safe RPC, background jobs, multi-platform bots, and framework-agnostic runtime support — built for the next era of development.",
+    "The first TypeScript backend framework built for AI-assisted development. Igniter.js combines typed APIs, modular backend packages, consistent conventions, and package-specific guidance for coding agents—while developers stay in control.",
   projectTagline:
-    "The AI-Native TypeScript Framework: Low-Entropy Architecture for Developers and Code Agents",
+    "The first TypeScript backend framework built for AI-assisted development",
 
   // Links
   githubUrl: "https://github.com/felipebarcelospro/igniter-js",
@@ -33,55 +33,55 @@ export const config: Config = {
     role: "Creator of Igniter.js",
   },
 
-  // Features — 8 competitive differentiators aligned with the AI-native narrative
+  // Features — outcome-oriented pillars grounded in the Igniter.js ecosystem
   features: [
     {
-      title: "AI-Native Low-Entropy Architecture",
+      title: "Coding context",
       description:
-        "The first framework built for AI-assisted development. Feature-sliced, predictable, and fully typed — zero friction for developers and Code Agents alike.",
-      icon: <Layers className="size-4" />,
-    },
-    {
-      title: "MCP-Native API Server & Protocol",
-      description:
-        "Expose any API as an MCP server instantly. Zero boilerplate — AI agents consume your application logic natively, like any other MCP tool.",
-      icon: <Server className="size-4" />,
-    },
-    {
-      title: "AI Agent Framework & Orchestration",
-      description:
-        "Production-grade multi-agent orchestration with tools, memory, and telemetry. The only backend framework with AI agents baked in.",
+        "Package-specific guides document APIs, patterns, and workflows for coding agents to follow.",
       icon: <Bot className="size-4" />,
     },
     {
-      title: "Type-Safe RPC & Transport Layer",
+      title: "Typed HTTP client",
       description:
-        "Define once, get fully-typed clients across Next.js, Express, Bun, Hono, and Deno. Pure TypeScript inference — no code generation.",
-      icon: <Wrench className="size-4" />,
+        "Define typed queries and mutations, then call them with inferred request and response types.",
+      icon: <Code2 className="size-4" />,
     },
     {
-      title: "Background Jobs & CRON Scheduling",
+      title: "Framework adapters",
       description:
-        "Persistent queues with CRON, retries, and concurrency. Type-safe and production-ready — in-memory, SQLite, or BullMQ.",
+        "Connect Igniter routes to supported frameworks, including Next.js and Express.",
+      icon: <PanelsTopLeft className="size-4" />,
+    },
+    {
+      title: "Background jobs",
+      description:
+        "Define jobs with typed inputs, then process them with queue adapters, scheduling, and workers.",
       icon: <Clock className="size-4" />,
     },
     {
-      title: "Multi-Platform Bot Framework",
+      title: "Store adapters",
       description:
-        "Build once, deploy to Telegram, WhatsApp, and Discord. One codebase with built-in middleware and AI agent integration.",
-      icon: <MessageCircle className="size-4" />,
+        "Use a shared store API with supported adapters for application state and data access.",
+      icon: <Database className="size-4" />,
     },
     {
-      title: "Multi-Tenant Connector Engine",
+      title: "Storage and collections",
       description:
-        "Type-safe, multi-tenant integrations with OAuth, encryption, and webhooks. Built for SaaS platforms that connect to everything.",
+        "Manage files through storage adapters and define data collections from schemas.",
+      icon: <HardDrive className="size-4" />,
+    },
+    {
+      title: "Connectors and messaging",
+      description:
+        "Build external service connections, messaging bots, and provider-backed email workflows.",
       icon: <Plug className="size-4" />,
     },
     {
-      title: "Multi-Adapter Data & Storage",
+      title: "AI agents and MCP",
       description:
-        "Unified data layer across Redis, SQLite, and in-memory. File storage for local and S3. Switch adapters without changing code.",
-      icon: <Database className="size-4" />,
+        "Compose AI agents with reusable tools and expose router actions to MCP-compatible clients.",
+      icon: <Network className="size-4" />,
     },
   ],
 
@@ -90,32 +90,32 @@ export const config: Config = {
     {
       question: "What makes Igniter.js different from other frameworks?",
       answer:
-        "Igniter.js is the first AI-native TypeScript framework. While every other framework designs for humans alone, Igniter.js optimizes for human-AI collaboration. Our feature-sliced architecture, comprehensive type inference, and predictable conventions create a low-entropy environment that both developers and Code Agents navigate effortlessly. Beyond that, we ship features no competitor offers: MCP-native APIs, built-in AI agent orchestration, multi-platform bots, and multi-tenant connector management — all type-safe, all framework-agnostic.",
+        "Igniter.js is designed for teams building TypeScript backends with AI coding agents. Consistent package patterns and agent-facing guides give coding tools project context, while typed APIs and modular packages help developers extend the backend one capability at a time.",
     },
     {
       question: "Can I use Igniter.js with my existing framework?",
       answer:
-        "Yes! Igniter.js is framework-agnostic and works with any modern runtime or framework including Next.js, Express, Hono, Bun, and more. It's built on standard Web Request and Response APIs, so it integrates seamlessly with your existing tech stack without requiring major architectural changes.",
+        "Core provides adapters for frameworks including Next.js and Express. See the adapter documentation for setup details and supported integrations.",
     },
     {
       question: "How does the end-to-end type safety work?",
       answer:
-        "Igniter.js leverages TypeScript's type system to provide compile-time guarantees across your entire application. When you define your API on the server, the client automatically gets fully-typed methods with IntelliSense and auto-completion. No schemas to share, no code generation — just pure TypeScript inference that AI agents can navigate as easily as humans.",
+        "Igniter.js uses TypeScript inference across API definitions and its caller package. The exact types available depend on the API and client configuration you build.",
     },
     {
       question: "Is Igniter.js suitable for production applications?",
       answer:
-        "Absolutely! Igniter.js is built with production workloads in mind, offering features like dependency injection, middleware support, real-time capabilities, background job processing, and comprehensive error handling. The framework is designed to scale with your application needs while maintaining the predictability that makes AI agents effective.",
+        "Igniter.js provides building blocks for HTTP APIs, middleware, real-time features, and background jobs. Review the package guides to choose the adapters and deployment setup that fit your workload.",
     },
     {
       question: "Is Igniter.js optimized for AI Code Agents?",
       answer:
-        "Yes — and that's the founding principle of the framework. Igniter.js is the only framework designed from day one for AI-assisted development. Every architectural decision — feature-sliced modules, consistent naming conventions, comprehensive TypeScript inference — reduces cognitive load for both humans and AI agents. We provide built-in training context for 15+ Code Agents (Cursor, Claude Code, Copilot, and more), so agents understand your codebase instantly. The result: fewer hallucinations, faster task completion, and a development experience where AI truly amplifies your productivity.",
+        "The repository includes package-specific guidance for coding agents, and the ecosystem includes agent and MCP packages. These tools support AI-assisted workflows; they do not replace developer review.",
     },
     {
       question: "How do I get started with Igniter.js?",
       answer:
-        "Getting started is simple! Use 'npx igniter init' to create a new project, or install manually with npm/yarn. Our comprehensive documentation includes tutorials, examples, and best practices to help you get up and running quickly. You can have a working API — with AI agent support — in minutes.",
+        "Start with the Core quick-start guide to create a typed API, then add ecosystem packages as your application needs them.",
     },
   ],
 
